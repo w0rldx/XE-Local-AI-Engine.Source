@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>31bd0c1c-d903-4e54-bae9-df0140eb36bd</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="Microsoft.Agents.AI"/>
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions"/>
+    <PackageReference Include="Microsoft.Agents.AI.Hosting"/>
+    <PackageReference Include="Microsoft.Extensions.AI"/>
+  </ItemGroup>
+
+</Project>
