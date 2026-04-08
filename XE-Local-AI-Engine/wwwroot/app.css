@@ -28,3 +28,51 @@
 .components-reconnect-show {
     display: block;
 }
+
+/* Local Chat styles */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 240px);
+    overflow-y: auto;
+    padding: 16px;
+    gap: 12px;
+}
+
+.chat-bubble-user {
+    display: flex;
+    justify-content: flex-end;
+    max-width: 100%;
+}
+
+.chat-bubble-user .mud-paper {
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.chat-bubble-assistant {
+    display: flex;
+    justify-content: flex-start;
+    max-width: 100%;
+}
+
+.chat-bubble-assistant .mud-paper {
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.chat-input-area {
+    position: sticky;
+    bottom: 0;
+    padding: 16px;
+    background: inherit;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.typing-indicator {
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
