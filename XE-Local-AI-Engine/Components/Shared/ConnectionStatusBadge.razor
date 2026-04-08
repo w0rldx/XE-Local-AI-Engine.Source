@@ -1,0 +1,64 @@
+@using XE_Local_AI_Engine.Services.Connection
+@implements IDisposable
+@inject IWorkerHubConnection WorkerHubConnection
+
+<span class="connection-status-badge @GetBadgeClass()" title="@GetTooltip()">
+    <span class="connection-status-badge__indicator"></span>
+    <span>@GetLabel()</span>
+</span>
+
+@code {
+    protected override void OnInitialized()
+    {
+        WorkerHubConnection.StateChanged += OnStateChanged;
+    }
+
+    public void Dispose()
+    {
+        WorkerHubConnection.StateChanged -= OnStateChanged;
+    }
+
+    private void OnStateChanged(object? sender, WorkerConnectionStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetLabel()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "Connected",
+            WorkerConnectionState.Connecting => "Connecting",
+            WorkerConnectionState.Reconnecting => "Reconnecting",
+            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Error => "Error",
+            _ => "Offline",
+        };
+    }
+
+    private string GetBadgeClass()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "connection-status-badge--connected",
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => "connection-status-badge--pending",
+            WorkerConnectionState.Error => "connection-status-badge--error",
+            _ => "connection-status-badge--offline",
+        };
+    }
+
+    private string GetTooltip()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "Worker is connected to the Central Platform.",
+            WorkerConnectionState.Connecting => "Worker is connecting to the Central Platform.",
+            WorkerConnectionState.Reconnecting => "Worker is attempting to reconnect to the Central Platform.",
+            WorkerConnectionState.Pairing => "Worker pairing is currently in progress.",
+            WorkerConnectionState.Error => "Worker connection encountered an error.",
+            _ => "Worker is not connected to the Central Platform.",
+        };
+    }
+}

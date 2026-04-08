@@ -1,101 +1,136 @@
 @page "/"
-@using Microsoft.Agents.AI
-@using Microsoft.AspNetCore.Components.Web
-@inject AIAgent Agent
-@inject ILogger<Home> Logger
+@using XE_Local_AI_Engine.Components.Shared
+@using XE_Local_AI_Engine.Services.Auth
+@using XE_Local_AI_Engine.Services.Connection
+@implements IDisposable
 @rendermode @(new InteractiveServerRenderMode(false))
+@inject IWorkerHubConnection WorkerHubConnection
+@inject ConnectionState ConnectionState
+@inject ITokenStore TokenStore
 
-<PageTitle>Claude Chat - MAF</PageTitle>
+<PageTitle>Worker Node Home</PageTitle>
 
-<div class="chat-container">
-    <div class="chat-header">
-        <h1>💬 Claude Chat</h1>
-        <p class="subtitle">Powered by Microsoft Agent Framework & Microsoft Foundry</p>
-    </div>
+<section class="dashboard-page">
+    <header class="dashboard-page__header">
+        <div>
+            <p class="dashboard-page__eyebrow">Worker Node</p>
+            <h1>Welcome to the worker console</h1>
+            <p class="dashboard-page__description">Use the worker dashboard to pair this node, inspect capabilities, and monitor live invocations from the Central Platform.</p>
+        </div>
 
-    <div class="chat-messages">
-        @foreach (var message in _messages)
-        {
-            <div class="message @message.Role">
-                <div class="message-role">@(message.Role == "user" ? "You" : "Claude")</div>
-                <div class="message-content">@message.Content</div>
+        <ConnectionStatusBadge />
+    </header>
+
+    <div class="dashboard-grid">
+        <section class="dashboard-card">
+            <div class="dashboard-card__header">
+                <h2>Current status</h2>
+                <p>Quick summary of pairing and connection health.</p>
             </div>
-        }
-        @if (_isLoading)
-        {
-            <div class="message assistant">
-                <div class="message-role">Claude</div>
-                <div class="message-content">
-                    <span class="typing-indicator">Thinking...</span>
+
+            <dl class="dashboard-metadata">
+                <div>
+                    <dt>Pairing</dt>
+                    <dd>@(TokenStore.IsPaired ? "Paired" : "Not paired")</dd>
                 </div>
-            </div>
-        }
-    </div>
+                <div>
+                    <dt>Connection</dt>
+                    <dd>@GetConnectionLabel()</dd>
+                </div>
+                <div>
+                    <dt>Token expiry</dt>
+                    <dd>@GetTokenExpiryLabel()</dd>
+                </div>
+                <div>
+                    <dt>Last update</dt>
+                    <dd>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</dd>
+                </div>
+            </dl>
 
-    <div class="chat-input-container">
-        <textarea @bind="_userInput" @bind:event="oninput" @onkeydown="HandleKeyDown"
-                  placeholder="Type your message here..." rows="3" disabled="@_isLoading" class="chat-input"></textarea>
-        <button @onclick="SendMessage" disabled="@(_isLoading || string.IsNullOrWhiteSpace(_userInput))"
-                class="btn btn-primary send-button">
-            Send
-        </button>
+            @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
+            {
+                <p class="dashboard-inline-error">Last error: @ConnectionState.LastError</p>
+            }
+        </section>
+
+        <section class="dashboard-card">
+            <div class="dashboard-card__header">
+                <h2>Where to go next</h2>
+                <p>Open the area that matches the task you want to perform.</p>
+            </div>
+
+            <div class="route-not-found__actions">
+                <a class="route-not-found__link" href="/dashboard">Open dashboard</a>
+                <a class="route-not-found__link route-not-found__link--secondary" href="/pairing">Open pairing wizard</a>
+                <a class="route-not-found__link route-not-found__link--secondary" href="/invocations">Open invocation monitor</a>
+            </div>
+        </section>
     </div>
-</div>
+</section>
 
 @code {
-    private readonly List<ChatMessage> _messages = new();
-    private string _userInput = string.Empty;
-    private bool _isLoading;
-
-    private sealed record ChatMessage(string Role, string Content);
-
-    private async Task SendMessage()
+    protected override void OnInitialized()
     {
-        if (string.IsNullOrWhiteSpace(_userInput) || _isLoading)
-            return;
-
-        var userMessage = _userInput.Trim();
-        _userInput = string.Empty;
-
-        // Add user message
-        _messages.Add(new ChatMessage("user", userMessage));
-        StateHasChanged();
-        await ScrollToBottom();
-
-        // Get AI response
-        _isLoading = true;
-        StateHasChanged();
-
-        try
-        {
-            var response = await Agent.RunAsync(userMessage);
-            _messages.Add(new ChatMessage("assistant", response.Text));
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error getting AI response");
-            _messages.Add(new ChatMessage("assistant", "Sorry, I encountered an error. Please try again."));
-        }
-        finally
-        {
-            _isLoading = false;
-            StateHasChanged();
-            await ScrollToBottom();
-        }
+        WorkerHubConnection.StateChanged += OnStateChanged;
+        TokenStore.TokensChanged += OnTokensChanged;
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
+    public void Dispose()
     {
-        if (e.Key == "Enter" && !e.ShiftKey)
+        WorkerHubConnection.StateChanged -= OnStateChanged;
+        TokenStore.TokensChanged -= OnTokensChanged;
+    }
+
+    private void OnStateChanged(object? sender, WorkerConnectionStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTokensChanged(object? sender, EventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetConnectionLabel()
+    {
+        return WorkerHubConnection.State switch
         {
-            await SendMessage();
-        }
+            WorkerConnectionState.Connected => "Connected",
+            WorkerConnectionState.Connecting => "Connecting",
+            WorkerConnectionState.Reconnecting => "Reconnecting",
+            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Error => "Error",
+            _ => "Offline",
+        };
     }
 
-    private static async Task ScrollToBottom()
+    private string GetTokenExpiryLabel()
     {
-        await Task.Delay(100); // Give UI time to render
-        // Note: In production, use JSInterop to scroll
-    }
+        if (!TokenStore.IsPaired)
+        {
+            return "No token stored";
+        }
 
+        if (TokenStore.TokenExpiresAt is not { } expiresAt)
+        {
+            return "Unknown";
+        }
+
+        var localExpiry = expiresAt.ToLocalTime().ToString("g");
+        if (TokenStore.IsTokenExpired)
+        {
+            return $"Expired ({localExpiry})";
+        }
+
+        if (TokenStore.IsTokenExpiringSoon)
+        {
+            return $"Expiring soon ({localExpiry})";
+        }
+
+        return localExpiry;
+    }
 }

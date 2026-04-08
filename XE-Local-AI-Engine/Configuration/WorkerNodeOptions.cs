@@ -1,0 +1,20 @@
+namespace XE_Local_AI_Engine.Configuration
+{
+    using System.ComponentModel.DataAnnotations;
+
+    public sealed class WorkerNodeOptions
+    {
+        public const string SectionName = "WorkerNode";
+
+        [Required]
+        public required string NodeName { get; set; }
+
+        [Range(1, 100)]
+        public int MaxResponseSizeMb { get; set; } = 10;
+
+        public string DeadLetterQueuePath { get; set; } = "dead-letter-queue";
+
+        [Range(1, 60)]
+        public int MaxPendingToolCallAgeMinutes { get; set; } = 5;
+    }
+}

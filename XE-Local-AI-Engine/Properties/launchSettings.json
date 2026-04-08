@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "MAF-AIWebChatApp-FoundryClaude": {
+    "XE-Local-AI-Engine": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {

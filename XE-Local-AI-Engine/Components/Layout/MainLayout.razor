@@ -1,7 +1,25 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using XE_Local_AI_Engine.Components.Shared
 @inherits LayoutComponentBase
 
-<div class="page">
-    <main>
+<div class="page shell-layout">
+    <header class="shell-layout__header">
+        <div>
+            <p class="shell-layout__eyebrow">XE Local AI Engine</p>
+            <h1 class="shell-layout__title">Worker Node Console</h1>
+        </div>
+
+        <ConnectionStatusBadge />
+    </header>
+
+    <nav class="shell-layout__nav" aria-label="Primary">
+        <NavLink href="/" Match="NavLinkMatch.All" class="shell-layout__nav-link">Home</NavLink>
+        <NavLink href="/pairing" class="shell-layout__nav-link">Pairing</NavLink>
+        <NavLink href="/dashboard" class="shell-layout__nav-link">Dashboard</NavLink>
+        <NavLink href="/invocations" class="shell-layout__nav-link">Invocations</NavLink>
+    </nav>
+
+    <main class="shell-layout__main">
         <article class="content px-4">
             @Body
         </article>
