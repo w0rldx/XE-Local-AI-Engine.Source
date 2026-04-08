@@ -16,5 +16,8 @@ namespace XE_Local_AI_Engine.Configuration
 
         [Range(1, 60)]
         public int MaxPendingToolCallAgeMinutes { get; set; } = 5;
+
+        [Range(1, 3600)]
+        public int CleanupIntervalSeconds { get; set; } = 60;
     }
 }

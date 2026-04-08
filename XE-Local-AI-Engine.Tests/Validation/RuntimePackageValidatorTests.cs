@@ -1,0 +1,223 @@
+namespace XE_Local_AI_Engine.Tests.Validation;
+
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Configuration;
+using XE_Local_AI_Engine.Models;
+using XE_Local_AI_Engine.Models.Enums;
+using XE_Local_AI_Engine.Services.Validation;
+using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
+
+public sealed class RuntimePackageValidatorTests
+{
+    private readonly RuntimePackageValidator _validator;
+
+    public RuntimePackageValidatorTests()
+    {
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            MaxSystemPromptSizeKb = 1,
+            MaxMessageSizeKb = 1,
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$",
+        });
+
+        _validator = new RuntimePackageValidator(new ModelNameValidator(securityOptions), securityOptions);
+    }
+
+    [Test]
+    public void Validate_WhenPackageIsValid_ReturnsValid()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.True(result.IsValid);
+        AssertEx.Empty(result.Errors);
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptIsNull_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with { ResolvedSystemPrompt = null! };
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptExceedsLimit_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid()
+            .WithSystemPrompt(new string('a', 1025))
+            .Build();
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptContainsNullByte_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithSystemPrompt("abc\0def").Build());
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptContainsScriptTag_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithSystemPrompt("<script>alert(1)</script>").Build());
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptContainsDoctype_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithSystemPrompt("<!DOCTYPE html>").Build());
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
+    public void Validate_WhenSystemPromptContainsXmlDeclaration_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithSystemPrompt("<?xml version=\"1.0\"?>").Build());
+
+        AssertErrorContains(result, "system prompt");
+    }
+
+    [Test]
+    public void Validate_WhenModelNameIsInvalid_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithModel("foo/bar").Build());
+
+        AssertErrorContains(result, "model identifier");
+    }
+
+    [Test]
+    public void Validate_WhenModelNameIsNull_ReturnsValid()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithModel(null).Build());
+
+        AssertEx.True(result.IsValid);
+    }
+
+    [Test]
+    public void Validate_WhenMessageExceedsLimit_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string('b', 1025)).Build());
+
+        AssertErrorContains(result, "conversation message");
+    }
+
+    [Test]
+    public void Validate_WhenMessageContainsNullByte_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage("abc\0def").Build());
+
+        AssertErrorContains(result, "conversation message");
+    }
+
+    [Test]
+    public void Validate_WhenConversationContextIsNull_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with { ConversationContext = null! };
+
+        var exception = AssertEx.ThrowsAsync<ArgumentNullException>(() => Task.FromResult(_validator.Validate(package))).GetAwaiter().GetResult();
+        AssertEx.Equal("conversationContext", exception.ParamName);
+    }
+
+    [Test]
+    public void Validate_WhenInvocationTimeoutIsBelowMinimum_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 0).Build());
+
+        AssertErrorContains(result, "timeout");
+    }
+
+    [Test]
+    public void Validate_WhenToolCallTimeoutIsBelowMinimum_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithTimeout(toolCallSeconds: 0).Build());
+
+        AssertErrorContains(result, "timeout");
+    }
+
+    [Test]
+    public void Validate_WhenConfigHashIsEmpty_ReturnsError()
+    {
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithConfigHash(string.Empty).Build());
+
+        AssertErrorContains(result, "integrity");
+    }
+
+    [Test]
+    public void Validate_WhenAllowedToolHasBlankName_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            AllowedTools =
+            [
+                new AllowedToolDto
+                {
+                    Id = Guid.NewGuid(),
+                    Name = string.Empty,
+                    Location = ToolLocation.ApiSide,
+                },
+            ],
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "tool definition");
+    }
+
+    [Test]
+    public void Validate_WhenMultipleFieldsAreInvalid_ReturnsAllErrors()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ResolvedSystemPrompt = "<script>alert(1)</script>",
+            ModelProfile = "foo/bar",
+            ConfigHash = string.Empty,
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = "bad\0message",
+                    SortOrder = 0,
+                },
+            ],
+            AllowedTools =
+            [
+                new AllowedToolDto
+                {
+                    Id = Guid.NewGuid(),
+                    Name = string.Empty,
+                    Location = ToolLocation.ApiSide,
+                },
+            ],
+            Timeouts = new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 0,
+                ToolCallTimeoutSeconds = 0,
+                StreamIdleTimeoutSeconds = 0,
+            },
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertEx.False(result.IsValid);
+        AssertEx.True(result.Errors.Count >= 5);
+    }
+
+    private static void AssertErrorContains(Services.Invocation.RuntimePackageValidationResult result, string expectedText)
+    {
+        AssertEx.False(result.IsValid);
+        AssertEx.NotEmpty(result.Errors);
+        AssertEx.Contains(result.Errors, error => error.Contains(expectedText, StringComparison.OrdinalIgnoreCase));
+    }
+}

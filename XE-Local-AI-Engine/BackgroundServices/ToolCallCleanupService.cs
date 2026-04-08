@@ -27,7 +27,7 @@ namespace XE_Local_AI_Engine.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var cleanupInterval = TimeSpan.FromMinutes(1);
+            var cleanupInterval = TimeSpan.FromSeconds(_workerNodeOptions.Value.CleanupIntervalSeconds);
 
             while (!stoppingToken.IsCancellationRequested)
             {

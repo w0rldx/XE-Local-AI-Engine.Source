@@ -11,8 +11,10 @@ using XE_Local_AI_Engine.HealthChecks;
 using XE_Local_AI_Engine.Services.Capabilities;
 using XE_Local_AI_Engine.Services.Auth;
 using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Services.DeadLetter;
 using XE_Local_AI_Engine.Services.Events;
 using XE_Local_AI_Engine.Services.Invocation;
+using XE_Local_AI_Engine.Services.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,26 +48,29 @@ builder.Services.AddSingleton<ITokenStore, TokenStore>();
 builder.Services.AddSingleton<IPairingService, PairingService>();
 builder.Services.AddSingleton<ConnectionState>();
 builder.Services.AddSingleton(sp => new Lazy<IHubMessageSender>(() => sp.GetRequiredService<IHubMessageSender>()));
+builder.Services.AddSingleton<ModelNameValidator>();
+builder.Services.AddSingleton<IRuntimePackageValidator, RuntimePackageValidator>();
 builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
 builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
 builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
 builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
+builder.Services.AddSingleton<DeadLetterFlushService>();
 builder.Services.AddSingleton<WorkerHubConnection>(sp =>
 {
     var connection = ActivatorUtilities.CreateInstance<WorkerHubConnection>(sp);
-    var dispatcher = sp.GetRequiredService<IWorkerEventDispatcher>();
+    var dispatcher = new Lazy<IWorkerEventDispatcher>(() => sp.GetRequiredService<IWorkerEventDispatcher>());
     var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("WorkerHubConnectionEventBindings");
 
     connection.InvocationAssignedReceived += (_, args) =>
-        DispatchSafely(dispatcher.DispatchInvocationAssignedAsync(args.RuntimePackage), logger, nameof(dispatcher.DispatchInvocationAssignedAsync));
+        DispatchSafely(dispatcher.Value.DispatchInvocationAssignedAsync(args.RuntimePackage), logger, nameof(IWorkerEventDispatcher.DispatchInvocationAssignedAsync));
     connection.ToolCallResultReceived += (_, args) =>
-        DispatchSafely(dispatcher.DispatchToolCallResultAsync(args.ToolCallResult), logger, nameof(dispatcher.DispatchToolCallResultAsync));
+        DispatchSafely(dispatcher.Value.DispatchToolCallResultAsync(args.ToolCallResult), logger, nameof(IWorkerEventDispatcher.DispatchToolCallResultAsync));
     connection.DisconnectRequestedReceived += (_, args) =>
-        DispatchSafely(dispatcher.DispatchDisconnectRequestedAsync(args.DisconnectRequest), logger, nameof(dispatcher.DispatchDisconnectRequestedAsync));
+        DispatchSafely(dispatcher.Value.DispatchDisconnectRequestedAsync(args.DisconnectRequest), logger, nameof(IWorkerEventDispatcher.DispatchDisconnectRequestedAsync));
     connection.ApprovalResolvedReceived += (_, args) =>
-        DispatchSafely(dispatcher.DispatchApprovalResolvedAsync(args.ApprovalResolution), logger, nameof(dispatcher.DispatchApprovalResolvedAsync));
+        DispatchSafely(dispatcher.Value.DispatchApprovalResolvedAsync(args.ApprovalResolution), logger, nameof(IWorkerEventDispatcher.DispatchApprovalResolvedAsync));
     connection.InvocationCancelledReceived += (_, args) =>
-        DispatchSafely(dispatcher.DispatchInvocationCancelledAsync(args.Cancellation), logger, nameof(dispatcher.DispatchInvocationCancelledAsync));
+        DispatchSafely(dispatcher.Value.DispatchInvocationCancelledAsync(args.Cancellation), logger, nameof(IWorkerEventDispatcher.DispatchInvocationCancelledAsync));
 
     return connection;
 });

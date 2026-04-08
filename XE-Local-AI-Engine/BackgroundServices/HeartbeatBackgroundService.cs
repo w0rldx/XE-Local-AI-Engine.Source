@@ -12,6 +12,8 @@ namespace XE_Local_AI_Engine.BackgroundServices
 
     public sealed class HeartbeatBackgroundService : BackgroundService
     {
+        public static TimeSpan TestDelayOverride { get; set; } = TimeSpan.Zero;
+
         private readonly IWorkerHubConnection _hubConnection;
         private readonly ITokenStore _tokenStore;
         private readonly IOptions<CentralPlatformOptions> _options;
@@ -37,7 +39,8 @@ namespace XE_Local_AI_Engine.BackgroundServices
             {
                 try
                 {
-                    await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+                    var delay = TestDelayOverride > TimeSpan.Zero ? TestDelayOverride : interval;
+                    await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {

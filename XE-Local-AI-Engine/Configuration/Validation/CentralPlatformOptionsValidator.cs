@@ -31,7 +31,17 @@ namespace XE_Local_AI_Engine.Configuration.Validation
 
         private static bool IsRelativePath(string path)
         {
-            return path.Length > 0 && path[0] == '/' && !Uri.TryCreate(path, UriKind.Absolute, out _);
+            if (string.IsNullOrWhiteSpace(path) || path[0] != '/')
+            {
+                return false;
+            }
+
+            if (path.StartsWith("//", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return !path.Contains("://", StringComparison.Ordinal);
         }
     }
 

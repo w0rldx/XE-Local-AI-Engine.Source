@@ -11,6 +11,8 @@
       <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
       <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
       <PackageReference Include="Microsoft.Testing.Platform" />
+      <PackageReference Include="NSubstitute" />
+      <PackageReference Include="OllamaSharp" />
       <PackageReference Include="TUnit" />
     </ItemGroup>
 

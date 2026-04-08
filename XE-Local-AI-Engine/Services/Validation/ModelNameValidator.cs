@@ -36,7 +36,7 @@ namespace XE_Local_AI_Engine.Services.Validation
                 return "Invalid model identifier";
             }
 
-            if (Uri.TryCreate(modelName, UriKind.Absolute, out _))
+            if (modelName.Contains("://", StringComparison.Ordinal))
             {
                 return "Invalid model identifier";
             }
