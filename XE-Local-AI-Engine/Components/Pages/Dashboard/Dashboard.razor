@@ -1,0 +1,341 @@
+@page "/dashboard"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using XE_Local_AI_Engine.Models
+@using XE_Local_AI_Engine.Services.Auth
+@using XE_Local_AI_Engine.Services.Capabilities
+@using XE_Local_AI_Engine.Services.Connection
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IWorkerHubConnection WorkerHubConnection
+@inject ConnectionState ConnectionState
+@inject ITokenStore TokenStore
+@inject ICapabilityReporter CapabilityReporter
+@inject ILogger<Dashboard> Logger
+
+<PageTitle>Worker Dashboard</PageTitle>
+
+<section class="dashboard-page">
+    <header class="dashboard-page__header">
+        <div>
+            <p class="dashboard-page__eyebrow">Worker Node</p>
+            <h1>Connection dashboard</h1>
+            <p class="dashboard-page__description">Monitor pairing state, connection health, and locally detected capabilities.</p>
+        </div>
+
+        <span class="dashboard-status-badge @GetStatusBadgeClass()">@GetConnectionLabel()</span>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+    {
+        <div class="dashboard-alert dashboard-alert--success" role="status">@_actionMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="dashboard-alert dashboard-alert--error" role="alert">@_errorMessage</div>
+    }
+
+    <div class="dashboard-grid">
+        <section class="dashboard-card">
+            <div class="dashboard-card__header">
+                <h2>Connection</h2>
+                <p>Connect or disconnect the worker from the Central Platform.</p>
+            </div>
+
+            <dl class="dashboard-metadata">
+                <div>
+                    <dt>Pairing status</dt>
+                    <dd>@(TokenStore.IsPaired ? "Paired" : "Not paired")</dd>
+                </div>
+                <div>
+                    <dt>Connection state</dt>
+                    <dd>@GetConnectionLabel()</dd>
+                </div>
+                <div>
+                    <dt>Token expiry</dt>
+                    <dd>@GetTokenExpiryLabel()</dd>
+                </div>
+                <div>
+                    <dt>Last update</dt>
+                    <dd>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</dd>
+                </div>
+            </dl>
+
+            @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
+            {
+                <p class="dashboard-inline-error">Last error: @ConnectionState.LastError</p>
+            }
+
+            <div class="dashboard-actions">
+                <button class="dashboard-button" @onclick="ConnectAsync" disabled="@(!CanConnect || _isConnecting)">
+                    @(_isConnecting ? "Connecting..." : "Connect")
+                </button>
+                <button class="dashboard-button dashboard-button--secondary" @onclick="DisconnectAsync" disabled="@(!CanDisconnect || _isDisconnecting)">
+                    @(_isDisconnecting ? "Disconnecting..." : "Disconnect")
+                </button>
+            </div>
+        </section>
+
+        <section class="dashboard-card">
+            <div class="dashboard-card__header">
+                <h2>Capabilities</h2>
+                <p>Current hardware and local model snapshot from this machine.</p>
+            </div>
+
+            <div class="dashboard-actions">
+                <button class="dashboard-button dashboard-button--secondary" @onclick="RefreshCapabilitiesAsync" disabled="@_isRefreshingCapabilities">
+                    @(_isRefreshingCapabilities ? "Refreshing..." : "Refresh snapshot")
+                </button>
+            </div>
+
+            @if (_capabilities is null)
+            {
+                <p class="dashboard-placeholder">Capability snapshot not loaded yet.</p>
+            }
+            else
+            {
+                <dl class="dashboard-metadata">
+                    <div>
+                        <dt>RAM</dt>
+                        <dd>@FormatMemory(_capabilities.RamMb)</dd>
+                    </div>
+                    <div>
+                        <dt>GPU</dt>
+                        <dd>@(_capabilities.GpuName ?? "Not detected")</dd>
+                    </div>
+                    <div>
+                        <dt>VRAM</dt>
+                        <dd>@FormatMemory(_capabilities.VramMb)</dd>
+                    </div>
+                    <div>
+                        <dt>CUDA</dt>
+                        <dd>@(_capabilities.CudaAvailable ? "Available" : "Unavailable")</dd>
+                    </div>
+                    <div>
+                        <dt>CPU</dt>
+                        <dd>@(_capabilities.CpuClass ?? "Unknown")</dd>
+                    </div>
+                    <div>
+                        <dt>System score</dt>
+                        <dd>@(_capabilities.SystemScoreClass ?? "Unknown")</dd>
+                    </div>
+                </dl>
+
+                <div class="dashboard-list-block">
+                    <h3>Installed models</h3>
+                    @if (_capabilities.InstalledModels.Count == 0)
+                    {
+                        <p class="dashboard-placeholder">No local Ollama models detected.</p>
+                    }
+                    else
+                    {
+                        <div class="dashboard-tag-list">
+                            @foreach (var model in _capabilities.InstalledModels)
+                            {
+                                <span class="dashboard-tag">@model</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="dashboard-list-block">
+                    <h3>Supported capabilities</h3>
+                    <div class="dashboard-tag-list">
+                        @foreach (var capability in _capabilities.SupportedCapabilities)
+                        {
+                            <span class="dashboard-tag dashboard-tag--accent">@capability</span>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+    </div>
+</section>
+
+@code {
+    private ClientCapabilities? _capabilities;
+    private bool _isConnecting;
+    private bool _isDisconnecting;
+    private bool _isRefreshingCapabilities;
+    private string? _actionMessage;
+    private string? _errorMessage;
+
+    private bool CanConnect =>
+        TokenStore.IsPaired &&
+        !TokenStore.IsTokenExpired &&
+        WorkerHubConnection.State is WorkerConnectionState.Disconnected or WorkerConnectionState.Error;
+
+    private bool CanDisconnect =>
+        WorkerHubConnection.State is WorkerConnectionState.Connected or WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        WorkerHubConnection.StateChanged += OnStateChanged;
+        TokenStore.TokensChanged += OnTokensChanged;
+
+        await RefreshCapabilitiesAsync();
+    }
+
+    public void Dispose()
+    {
+        WorkerHubConnection.StateChanged -= OnStateChanged;
+        TokenStore.TokensChanged -= OnTokensChanged;
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (!CanConnect || _isConnecting)
+        {
+            return;
+        }
+
+        _isConnecting = true;
+        ClearMessages();
+
+        try
+        {
+            await WorkerHubConnection.ConnectAsync();
+            _actionMessage = "Worker connected to the Central Platform.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard connect action failed.");
+            _errorMessage = exception.Message;
+        }
+        finally
+        {
+            _isConnecting = false;
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        if (!CanDisconnect || _isDisconnecting)
+        {
+            return;
+        }
+
+        _isDisconnecting = true;
+        ClearMessages();
+
+        try
+        {
+            await WorkerHubConnection.DisconnectAsync();
+            _actionMessage = "Worker disconnected from the Central Platform.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard disconnect action failed.");
+            _errorMessage = exception.Message;
+        }
+        finally
+        {
+            _isDisconnecting = false;
+        }
+    }
+
+    private async Task RefreshCapabilitiesAsync()
+    {
+        if (_isRefreshingCapabilities)
+        {
+            return;
+        }
+
+        _isRefreshingCapabilities = true;
+        ClearMessages();
+
+        try
+        {
+            _capabilities = await CapabilityReporter.DetectCapabilitiesAsync();
+            _actionMessage = "Capability snapshot refreshed.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard capability refresh failed.");
+            _errorMessage = "Unable to detect local worker capabilities right now.";
+        }
+        finally
+        {
+            _isRefreshingCapabilities = false;
+        }
+    }
+
+    private void OnStateChanged(object? sender, WorkerConnectionStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTokensChanged(object? sender, EventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetConnectionLabel()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "Connected",
+            WorkerConnectionState.Connecting => "Connecting",
+            WorkerConnectionState.Reconnecting => "Reconnecting",
+            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Error => "Error",
+            _ => "Disconnected",
+        };
+    }
+
+    private string GetStatusBadgeClass()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "dashboard-status-badge--connected",
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => "dashboard-status-badge--pending",
+            WorkerConnectionState.Error => "dashboard-status-badge--error",
+            _ => "dashboard-status-badge--disconnected",
+        };
+    }
+
+    private string GetTokenExpiryLabel()
+    {
+        if (!TokenStore.IsPaired)
+        {
+            return "No token stored";
+        }
+
+        var expiresAt = TokenStore.TokenExpiresAt;
+        if (expiresAt is null)
+        {
+            return "Unknown";
+        }
+
+        var localExpiry = expiresAt.Value.ToLocalTime().ToString("g");
+        if (TokenStore.IsTokenExpired)
+        {
+            return $"Expired ({localExpiry})";
+        }
+
+        if (TokenStore.IsTokenExpiringSoon)
+        {
+            return $"Expiring soon ({localExpiry})";
+        }
+
+        return localExpiry;
+    }
+
+    private static string FormatMemory(long? memoryMb)
+    {
+        return memoryMb is > 0
+            ? $"{memoryMb.Value / 1024d:0.0} GB"
+            : "Unknown";
+    }
+
+    private void ClearMessages()
+    {
+        _actionMessage = null;
+        _errorMessage = null;
+    }
+}

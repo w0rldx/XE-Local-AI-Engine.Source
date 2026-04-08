@@ -1,0 +1,70 @@
+@using XE_Local_AI_Engine.Models.Enums
+@using XE_Local_AI_Engine.Services.Events
+
+<article class="invocation-card">
+    <header class="invocation-card__header">
+        <div>
+            <h3 class="invocation-card__title">@Title</h3>
+            <p class="invocation-card__subtitle">Started @State.StartedAt.ToLocalTime().ToString("g")</p>
+        </div>
+
+        <span class="dashboard-status-badge @GetStatusBadgeClass()">@GetStatusLabel()</span>
+    </header>
+
+    <dl class="dashboard-metadata">
+        <div>
+            <dt>Invocation ID</dt>
+            <dd>@State.InvocationId</dd>
+        </div>
+        <div>
+            <dt>Conversation ID</dt>
+            <dd>@State.ConversationId</dd>
+        </div>
+        <div>
+            <dt>Model</dt>
+            <dd>@(State.ModelUsed ?? "Unknown")</dd>
+        </div>
+    </dl>
+
+    @if (!string.IsNullOrWhiteSpace(State.Error))
+    {
+        <p class="dashboard-inline-error">@State.Error</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(State.StreamedContent))
+    {
+        <pre class="invocation-monitor__output invocation-monitor__output--card">@State.StreamedContent</pre>
+    }
+</article>
+
+@code {
+    [Parameter]
+    public required InvocationState State { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Invocation";
+
+    private string GetStatusLabel()
+    {
+        return State.Status switch
+        {
+            InvocationStatus.Assigned => "Assigned",
+            InvocationStatus.Running => "Running",
+            InvocationStatus.Completed => "Completed",
+            InvocationStatus.Failed => "Failed",
+            InvocationStatus.Cancelled => "Cancelled",
+            _ => "Pending",
+        };
+    }
+
+    private string GetStatusBadgeClass()
+    {
+        return State.Status switch
+        {
+            InvocationStatus.Assigned or InvocationStatus.Running => "dashboard-status-badge--pending",
+            InvocationStatus.Completed => "dashboard-status-badge--connected",
+            InvocationStatus.Failed or InvocationStatus.Cancelled => "dashboard-status-badge--error",
+            _ => "dashboard-status-badge--disconnected",
+        };
+    }
+}

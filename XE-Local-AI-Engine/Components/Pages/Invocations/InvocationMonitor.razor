@@ -1,0 +1,214 @@
+@page "/invocations"
+@using XE_Local_AI_Engine.Models.Enums
+@using XE_Local_AI_Engine.Services.Events
+@using XE_Local_AI_Engine.Services.Invocation
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IWorkerEventDispatcher WorkerEventDispatcher
+@inject IInvocationRunner InvocationRunner
+@inject ILogger<InvocationMonitor> Logger
+
+<PageTitle>Invocation Monitor</PageTitle>
+
+<section class="dashboard-page">
+    <header class="dashboard-page__header">
+        <div>
+            <p class="dashboard-page__eyebrow">Worker Node</p>
+            <h1>Invocation monitor</h1>
+            <p class="dashboard-page__description">Track the current invocation, inspect live streamed output, and cancel a running execution.</p>
+        </div>
+
+        <span class="dashboard-status-badge @GetInvocationBadgeClass()">@GetInvocationLabel()</span>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+    {
+        <div class="dashboard-alert dashboard-alert--success" role="status">@_actionMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="dashboard-alert dashboard-alert--error" role="alert">@_errorMessage</div>
+    }
+
+    <div class="dashboard-grid">
+        <section class="dashboard-card">
+            <div class="dashboard-card__header">
+                <h2>Current invocation</h2>
+                <p>Shows the active invocation received from the Central Platform.</p>
+            </div>
+
+            @if (_currentInvocation is null)
+            {
+                <p class="dashboard-placeholder">No invocation has been assigned yet.</p>
+            }
+            else
+            {
+                <dl class="dashboard-metadata">
+                    <div>
+                        <dt>Invocation ID</dt>
+                        <dd>@_currentInvocation.InvocationId</dd>
+                    </div>
+                    <div>
+                        <dt>Conversation ID</dt>
+                        <dd>@_currentInvocation.ConversationId</dd>
+                    </div>
+                    <div>
+                        <dt>Status</dt>
+                        <dd>@GetInvocationLabel()</dd>
+                    </div>
+                    <div>
+                        <dt>Started</dt>
+                        <dd>@_currentInvocation.StartedAt.ToLocalTime().ToString("g")</dd>
+                    </div>
+                    <div>
+                        <dt>Model</dt>
+                        <dd>@(_currentInvocation.ModelUsed ?? "Unknown")</dd>
+                    </div>
+                </dl>
+
+                @if (!string.IsNullOrWhiteSpace(_currentInvocation.Error))
+                {
+                    <p class="dashboard-inline-error">Last error: @_currentInvocation.Error</p>
+                }
+
+                <div class="dashboard-actions">
+                    <button class="dashboard-button dashboard-button--secondary" @onclick="CancelInvocationAsync" disabled="@(!CanCancel || _isCancelling)">
+                        @(_isCancelling ? "Cancelling..." : "Cancel invocation")
+                    </button>
+                </div>
+            }
+        </section>
+
+        <section class="dashboard-card">
+            <div class="dashboard-card__header">
+                <h2>Live output</h2>
+                <p>Streaming output from the current invocation as it arrives.</p>
+            </div>
+
+            @if (_currentInvocation is null)
+            {
+                <p class="dashboard-placeholder">Live output will appear here when an invocation starts.</p>
+            }
+            else if (string.IsNullOrWhiteSpace(_currentInvocation.StreamedContent))
+            {
+                <p class="dashboard-placeholder">Waiting for streamed content...</p>
+            }
+            else
+            {
+                <pre class="invocation-monitor__output">@_currentInvocation.StreamedContent</pre>
+            }
+        </section>
+    </div>
+</section>
+
+@code {
+    private InvocationState? _currentInvocation;
+    private bool _isCancelling;
+    private string? _actionMessage;
+    private string? _errorMessage;
+
+    private bool CanCancel =>
+        _currentInvocation is not null &&
+        _currentInvocation.Status is InvocationStatus.Assigned or InvocationStatus.Running;
+
+    protected override void OnInitialized()
+    {
+        _currentInvocation = Clone(WorkerEventDispatcher.CurrentInvocation);
+        WorkerEventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+    }
+
+    public void Dispose()
+    {
+        WorkerEventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+    }
+
+    private Task CancelInvocationAsync()
+    {
+        if (!CanCancel || _isCancelling || _currentInvocation is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _isCancelling = true;
+        _actionMessage = null;
+        _errorMessage = null;
+
+        try
+        {
+            InvocationRunner.Cancel(_currentInvocation.InvocationId);
+            _actionMessage = "Cancellation requested for the current invocation.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Invocation cancellation request failed.");
+            _errorMessage = "Unable to cancel the current invocation.";
+        }
+        finally
+        {
+            _isCancelling = false;
+        }
+
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _currentInvocation = Clone(eventArgs.State);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetInvocationLabel()
+    {
+        if (_currentInvocation is null)
+        {
+            return "Idle";
+        }
+
+        return _currentInvocation.Status switch
+        {
+            InvocationStatus.Assigned => "Assigned",
+            InvocationStatus.Running => "Running",
+            InvocationStatus.Completed => "Completed",
+            InvocationStatus.Failed => "Failed",
+            InvocationStatus.Cancelled => "Cancelled",
+            _ => "Pending",
+        };
+    }
+
+    private string GetInvocationBadgeClass()
+    {
+        if (_currentInvocation is null)
+        {
+            return "dashboard-status-badge--disconnected";
+        }
+
+        return _currentInvocation.Status switch
+        {
+            InvocationStatus.Assigned or InvocationStatus.Running => "dashboard-status-badge--pending",
+            InvocationStatus.Completed => "dashboard-status-badge--connected",
+            InvocationStatus.Failed or InvocationStatus.Cancelled => "dashboard-status-badge--error",
+            _ => "dashboard-status-badge--disconnected",
+        };
+    }
+
+    private static InvocationState? Clone(InvocationState? state)
+    {
+        if (state is null)
+        {
+            return null;
+        }
+
+        return new InvocationState
+        {
+            InvocationId = state.InvocationId,
+            ConversationId = state.ConversationId,
+            Status = state.Status,
+            StreamedContent = state.StreamedContent,
+            StartedAt = state.StartedAt,
+            Error = state.Error,
+            ModelUsed = state.ModelUsed,
+        };
+    }
+}

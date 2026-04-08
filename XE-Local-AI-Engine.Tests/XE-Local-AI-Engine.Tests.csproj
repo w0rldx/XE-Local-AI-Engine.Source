@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <RootNamespace>XE_Local_AI_Engine.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+      <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+      <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+      <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+      <PackageReference Include="Microsoft.Testing.Platform" />
+      <PackageReference Include="TUnit" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\XE-Local-AI-Engine\XE-Local-AI-Engine.csproj" />
+    </ItemGroup>
+
+</Project>

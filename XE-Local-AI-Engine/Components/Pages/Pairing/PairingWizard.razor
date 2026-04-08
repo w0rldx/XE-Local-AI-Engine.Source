@@ -1,0 +1,131 @@
+@page "/pairing"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Options
+@using XE_Local_AI_Engine.Configuration
+@using XE_Local_AI_Engine.Services.Auth
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IPairingService PairingService
+@inject IOptions<WorkerNodeOptions> WorkerNodeOptions
+@inject ILogger<PairingWizard> Logger
+
+<PageTitle>Worker Pairing</PageTitle>
+
+<section class="pairing-page">
+    <header class="pairing-page__header">
+        <p class="pairing-page__eyebrow">Worker Node</p>
+        <h1>Pair this node with the Central Platform</h1>
+        <p class="pairing-page__description">
+            Enter the pairing token from the Central Platform to store worker credentials securely on this machine.
+        </p>
+    </header>
+
+    <div class="pairing-page__content">
+        <section class="pairing-card">
+            <h2>Pairing details</h2>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="pairing-alert pairing-alert--success" role="status">@_statusMessage</div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <div class="pairing-alert pairing-alert--error" role="alert">@_errorMessage</div>
+            }
+
+            <EditForm Model="_form" OnValidSubmit="HandlePairAsync" class="pairing-form">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="pairing-form__field">
+                    <label for="pairing-token">Pairing token</label>
+                    <InputText id="pairing-token"
+                               @bind-Value="_form.PairingToken"
+                               class="pairing-form__input"
+                               autocomplete="off"
+                               disabled="@_isSubmitting" />
+                    <small>Tokens are single-use and issued from the Central Platform admin UI.</small>
+                </div>
+
+                <div class="pairing-form__field">
+                    <label for="node-name">Node name</label>
+                    <InputText id="node-name"
+                               @bind-Value="_form.NodeName"
+                               class="pairing-form__input"
+                               readonly />
+                    <small>This value is currently sourced from <code>WorkerNode:NodeName</code> in configuration.</small>
+                </div>
+
+                <button type="submit" class="pairing-form__submit" disabled="@_isSubmitting">
+                    @(_isSubmitting ? "Pairing..." : "Pair worker")
+                </button>
+            </EditForm>
+        </section>
+
+        <aside class="pairing-card pairing-card--secondary">
+            <h2>Before you start</h2>
+            <ul>
+                <li>Make sure the Central Platform API is reachable from this worker.</li>
+                <li>Use a fresh pairing token from the platform administrator.</li>
+                <li>Keep the configured node name stable so the platform can identify this machine.</li>
+            </ul>
+        </aside>
+    </div>
+</section>
+
+@code {
+    private readonly PairingFormModel _form = new();
+    private bool _isSubmitting;
+    private string? _errorMessage;
+    private string? _statusMessage;
+
+    protected override void OnInitialized()
+    {
+        _form.NodeName = WorkerNodeOptions.Value.NodeName;
+    }
+
+    private async Task HandlePairAsync()
+    {
+        if (_isSubmitting)
+        {
+            return;
+        }
+
+        _isSubmitting = true;
+        _errorMessage = null;
+        _statusMessage = null;
+
+        try
+        {
+            await PairingService.PairAsync(_form.PairingToken);
+            _statusMessage = "Pairing completed successfully. Stored credentials are ready for connection setup.";
+            _form.PairingToken = string.Empty;
+        }
+        catch (PairingException exception)
+        {
+            Logger.LogWarning(exception, "Pairing attempt failed for worker node {NodeName}.", _form.NodeName);
+            _errorMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unexpected error while pairing worker node {NodeName}.", _form.NodeName);
+            _errorMessage = "An unexpected error occurred while pairing this worker.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private sealed class PairingFormModel
+    {
+        [Required]
+        [StringLength(512, MinimumLength = 6)]
+        public string PairingToken { get; set; } = string.Empty;
+
+        public string NodeName { get; set; } = string.Empty;
+    }
+}
