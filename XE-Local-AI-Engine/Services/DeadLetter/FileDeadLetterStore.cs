@@ -149,8 +149,9 @@ namespace XE_Local_AI_Engine.Services.DeadLetter
                     MaxQueueSizeBytes,
                     fileInfo.Name);
 
+                var fileLength = fileInfo.Length;
                 fileInfo.Delete();
-                currentSizeBytes -= fileInfo.Length;
+                currentSizeBytes -= fileLength;
 
                 if (currentSizeBytes <= MaxQueueSizeBytes)
                 {

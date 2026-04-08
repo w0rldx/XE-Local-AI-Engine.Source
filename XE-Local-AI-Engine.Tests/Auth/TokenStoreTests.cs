@@ -1,0 +1,189 @@
+namespace XE_Local_AI_Engine.Tests.Auth;
+
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using XE_Local_AI_Engine.Services.Auth;
+using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
+
+public sealed class TokenStoreTests : IDisposable
+{
+    private readonly string _contentRootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_contentRootPath))
+        {
+            Directory.Delete(_contentRootPath, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task IsPaired_WhenNothingStored_ReturnsFalse()
+    {
+        using var tokenStore = CreateTokenStore();
+
+        AssertEx.False(tokenStore.IsPaired);
+        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
+    }
+
+    [Test]
+    public async Task StoreTokensAsync_WhenResponseIsValid_SetsPairedState()
+    {
+        using var tokenStore = CreateTokenStore();
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+        AssertEx.True(tokenStore.IsPaired);
+    }
+
+    [Test]
+    public async Task GetAccessTokenAsync_AfterStore_ReturnsStoredToken()
+    {
+        using var tokenStore = CreateTokenStore();
+        var response = PairClientResponseBuilder.Valid().WithToken(CreateJwt(DateTimeOffset.UtcNow.AddDays(2))).Build();
+
+        await tokenStore.StoreTokensAsync(response);
+
+        AssertEx.Equal(response.AccessToken, await tokenStore.GetAccessTokenAsync());
+    }
+
+    [Test]
+    public async Task GetClientNodeIdAsync_AfterStore_ReturnsStoredIdentifier()
+    {
+        using var tokenStore = CreateTokenStore();
+        var clientNodeId = Guid.NewGuid();
+        var response = PairClientResponseBuilder.Valid().WithClientNodeId(clientNodeId).Build();
+
+        await tokenStore.StoreTokensAsync(response);
+
+        AssertEx.Equal(clientNodeId, await tokenStore.GetClientNodeIdAsync());
+    }
+
+    [Test]
+    public async Task IsTokenExpired_WhenExpiryIsPast_ReturnsTrue()
+    {
+        using var tokenStore = CreateTokenStore();
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().WithToken(CreateJwt(expiresAt)).WithExpiresAt(expiresAt).Build());
+
+        AssertEx.True(tokenStore.IsTokenExpired);
+        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
+    }
+
+    [Test]
+    public async Task IsTokenExpiringSoon_WhenExpiryWithinThreshold_ReturnsTrue()
+    {
+        using var tokenStore = CreateTokenStore();
+        var expiresAt = DateTimeOffset.UtcNow.AddHours(12);
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().WithToken(CreateJwt(expiresAt)).WithExpiresAt(expiresAt).Build());
+
+        AssertEx.True(tokenStore.IsTokenExpiringSoon);
+    }
+
+    [Test]
+    public async Task ClearTokensAsync_WhenTokensExist_RemovesState()
+    {
+        using var tokenStore = CreateTokenStore();
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+        await tokenStore.ClearTokensAsync();
+
+        AssertEx.False(tokenStore.IsPaired);
+        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
+        AssertEx.Null(await tokenStore.GetClientNodeIdAsync());
+    }
+
+    [Test]
+    public async Task StoreTokensAsync_RaisesTokensChangedEventOnce()
+    {
+        using var tokenStore = CreateTokenStore();
+        var eventCount = 0;
+        tokenStore.TokensChanged += (_, _) => eventCount++;
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+        AssertEx.Equal(1, eventCount);
+    }
+
+    [Test]
+    public async Task HandleKeyRotationAsync_WhenDecryptionFails_ClearsTokens()
+    {
+        var protector = Substitute.For<IDataProtector>();
+        protector.CreateProtector(Arg.Any<string>()).Returns(protector);
+        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("boom"));
+
+        using var tokenStore = CreateTokenStore(protector);
+        await File.WriteAllBytesAsync(GetCredentialsPath(), [1, 2, 3]);
+
+        await tokenStore.HandleKeyRotationAsync();
+
+        AssertEx.False(tokenStore.IsPaired);
+        AssertEx.False(File.Exists(GetCredentialsPath()));
+    }
+
+    [Test]
+    public async Task GetAccessTokenAsync_WhenCredentialFileIsCorrupted_ReturnsNull()
+    {
+        Directory.CreateDirectory(_contentRootPath);
+        await File.WriteAllTextAsync(GetCredentialsPath(), "not-json");
+        using var tokenStore = CreateTokenStore();
+
+        AssertEx.Null(await tokenStore.GetAccessTokenAsync());
+    }
+
+    [Test]
+    public void Dispose_WhenCalled_DoesNotThrow()
+    {
+        var tokenStore = CreateTokenStore();
+
+        tokenStore.Dispose();
+    }
+
+    [Test]
+    public async Task StoreTokensAsync_WhenJwtIsMalformed_UsesResponseExpiry()
+    {
+        using var tokenStore = CreateTokenStore();
+        var expiresAt = DateTimeOffset.UtcNow.AddDays(30);
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().WithToken("not-a-jwt").WithExpiresAt(expiresAt).Build());
+
+        AssertEx.Equal(expiresAt, tokenStore.TokenExpiresAt);
+    }
+
+    private TokenStore CreateTokenStore(IDataProtectionProvider? dataProtectionProvider = null)
+    {
+        Directory.CreateDirectory(_contentRootPath);
+
+        var hostEnvironment = Substitute.For<IHostEnvironment>();
+        hostEnvironment.ContentRootPath.Returns(_contentRootPath);
+
+        return new TokenStore(
+            dataProtectionProvider ?? new MockDataProtector(),
+            hostEnvironment,
+            NullLogger<TokenStore>.Instance);
+    }
+
+    private string GetCredentialsPath() => Path.Combine(_contentRootPath, "worker-credentials.enc");
+
+    private static string CreateJwt(DateTimeOffset expiresAt)
+    {
+        var header = Base64UrlEncode("{\"alg\":\"none\"}");
+        var payload = Base64UrlEncode($"{{\"exp\":{expiresAt.ToUnixTimeSeconds()}}}");
+        return $"{header}.{payload}.";
+    }
+
+    private static string Base64UrlEncode(string value)
+    {
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+}

@@ -7,6 +7,7 @@ namespace XE_Local_AI_Engine.Services.Capabilities
     using System.Globalization;
     using System.IO;
     using System.Linq;
+    using System.Net.Http;
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Extensions.AI;
@@ -79,9 +80,17 @@ namespace XE_Local_AI_Engine.Services.Capabilities
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!await _ollamaClient.IsRunningAsync(CancellationToken.None).ConfigureAwait(false))
+            try
             {
-                _logger.LogWarning("Ollama is not reachable during capability preflight.");
+                if (!await _ollamaClient.IsRunningAsync(CancellationToken.None).ConfigureAwait(false))
+                {
+                    _logger.LogWarning("Ollama is not reachable during capability preflight.");
+                    return false;
+                }
+            }
+            catch (HttpRequestException exception)
+            {
+                _logger.LogWarning(exception, "Ollama preflight failed because the local endpoint is unreachable.");
                 return false;
             }
 
@@ -125,14 +134,22 @@ namespace XE_Local_AI_Engine.Services.Capabilities
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var models = await _ollamaClient.ListLocalModelsAsync(CancellationToken.None).ConfigureAwait(false);
-            return models
-                .Select(model => model.Name?.Trim())
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .Cast<string>()
-                .ToArray();
+            try
+            {
+                var models = await _ollamaClient.ListLocalModelsAsync(CancellationToken.None).ConfigureAwait(false);
+                return models
+                    .Select(model => model.Name?.Trim())
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .Cast<string>()
+                    .ToArray();
+            }
+            catch (HttpRequestException exception)
+            {
+                _logger.LogWarning(exception, "Failed to query installed Ollama models.");
+                return [];
+            }
         }
 
         private static IReadOnlyList<string> DetermineSupportedCapabilities(IReadOnlyList<string> installedModels)

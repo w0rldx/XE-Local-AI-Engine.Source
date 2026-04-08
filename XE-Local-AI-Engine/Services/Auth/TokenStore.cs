@@ -198,6 +198,13 @@ namespace XE_Local_AI_Engine.Services.Auth
                 RaiseTokensChanged();
                 return null;
             }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Worker credentials could not be read. Clearing stored credentials and requiring re-pairing.");
+                ClearCredentialsFileBestEffort();
+                RaiseTokensChanged();
+                return null;
+            }
         }
 
         private void RaiseTokensChanged()

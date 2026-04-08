@@ -13,6 +13,7 @@ namespace XE_Local_AI_Engine.BackgroundServices
     public sealed class AutoConnectBackgroundService : BackgroundService
     {
         private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(2);
+        public static TimeSpan TestStartupDelayOverride { get; set; } = TimeSpan.Zero;
 
         private readonly IWorkerHubConnection _hubConnection;
         private readonly ITokenStore _tokenStore;
@@ -46,7 +47,8 @@ namespace XE_Local_AI_Engine.BackgroundServices
 
             try
             {
-                await Task.Delay(StartupDelay, linkedToken).ConfigureAwait(false);
+                var startupDelay = TestStartupDelayOverride > TimeSpan.Zero ? TestStartupDelayOverride : StartupDelay;
+                await Task.Delay(startupDelay, linkedToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
             {
