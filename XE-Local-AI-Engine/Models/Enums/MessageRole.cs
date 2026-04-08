@@ -1,10 +1,9 @@
-namespace XE_Local_AI_Engine.Models.Enums
+namespace XE_Local_AI_Engine.Models.Enums;
+
+public enum MessageRole
 {
-    public enum MessageRole
-    {
-        System = 0,
-        User = 1,
-        Assistant = 2,
-        Tool = 3,
-    }
+    System = 0,
+    User = 1,
+    Assistant = 2,
+    Tool = 3
 }

@@ -1,29 +1,25 @@
-namespace XE_Local_AI_Engine.Services.Auth
+namespace XE_Local_AI_Engine.Services.Auth;
+
+using XE_Local_AI_Engine.Models;
+
+public interface ITokenStore
 {
-    using System;
-    using System.Threading.Tasks;
-    using XE_Local_AI_Engine.Models;
+    bool IsPaired { get; }
 
-    public interface ITokenStore
-    {
-        Task<string?> GetAccessTokenAsync();
+    bool IsTokenExpired { get; }
 
-        Task<Guid?> GetClientNodeIdAsync();
+    bool IsTokenExpiringSoon { get; }
 
-        Task StoreTokensAsync(PairClientResponse pairingResponse);
+    DateTimeOffset? TokenExpiresAt { get; }
+    Task<string?> GetAccessTokenAsync();
 
-        Task ClearTokensAsync();
+    Task<Guid?> GetClientNodeIdAsync();
 
-        Task HandleKeyRotationAsync();
+    Task StoreTokensAsync(PairClientResponse pairingResponse);
 
-        bool IsPaired { get; }
+    Task ClearTokensAsync();
 
-        bool IsTokenExpired { get; }
+    Task HandleKeyRotationAsync();
 
-        bool IsTokenExpiringSoon { get; }
-
-        DateTimeOffset? TokenExpiresAt { get; }
-
-        event EventHandler? TokensChanged;
-    }
+    event EventHandler? TokensChanged;
 }

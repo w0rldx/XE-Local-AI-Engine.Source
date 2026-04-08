@@ -1,6 +1,5 @@
 @using XE_Local_AI_Engine.Models.Enums
 @using XE_Local_AI_Engine.Services.Events
-
 <article class="invocation-card">
     <header class="invocation-card__header">
         <div>
@@ -38,11 +37,9 @@
 </article>
 
 @code {
-    [Parameter]
-    public required InvocationState State { get; set; }
+    [Parameter] public required InvocationState State { get; set; }
 
-    [Parameter]
-    public string Title { get; set; } = "Invocation";
+    [Parameter] public string Title { get; set; } = "Invocation";
 
     private string GetStatusLabel()
     {
@@ -53,7 +50,7 @@
             InvocationStatus.Completed => "Completed",
             InvocationStatus.Failed => "Failed",
             InvocationStatus.Cancelled => "Cancelled",
-            _ => "Pending",
+            _ => "Pending"
         };
     }
 
@@ -64,7 +61,8 @@
             InvocationStatus.Assigned or InvocationStatus.Running => "dashboard-status-badge--pending",
             InvocationStatus.Completed => "dashboard-status-badge--connected",
             InvocationStatus.Failed or InvocationStatus.Cancelled => "dashboard-status-badge--error",
-            _ => "dashboard-status-badge--disconnected",
+            _ => "dashboard-status-badge--disconnected"
         };
     }
+
 }

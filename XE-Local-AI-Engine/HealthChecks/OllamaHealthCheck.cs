@@ -1,32 +1,28 @@
-namespace XE_Local_AI_Engine.HealthChecks
+namespace XE_Local_AI_Engine.HealthChecks;
+
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OllamaSharp;
+
+public sealed class OllamaHealthCheck : IHealthCheck
 {
-    using System;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.Extensions.AI;
-    using Microsoft.Extensions.Diagnostics.HealthChecks;
-    using OllamaSharp;
+    private readonly OllamaApiClient _ollamaClient;
 
-    public sealed class OllamaHealthCheck : IHealthCheck
+    public OllamaHealthCheck(IChatClient chatClient)
     {
-        private readonly OllamaApiClient _ollamaClient;
+        ArgumentNullException.ThrowIfNull(chatClient);
 
-        public OllamaHealthCheck(IChatClient chatClient)
-        {
-            ArgumentNullException.ThrowIfNull(chatClient);
+        _ollamaClient = chatClient as OllamaApiClient
+                        ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for Ollama health checks.");
+    }
 
-            _ollamaClient = chatClient as OllamaApiClient
-                ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for Ollama health checks.");
-        }
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
 
-        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var isRunning = await _ollamaClient.IsRunningAsync(CancellationToken.None).ConfigureAwait(false);
-            return isRunning
-                ? HealthCheckResult.Healthy("Ollama is reachable.")
-                : HealthCheckResult.Unhealthy("Ollama is unavailable.");
-        }
+        var isRunning = await _ollamaClient.IsRunningAsync(CancellationToken.None).ConfigureAwait(false);
+        return isRunning
+            ? HealthCheckResult.Healthy("Ollama is reachable.")
+            : HealthCheckResult.Unhealthy("Ollama is unavailable.");
     }
 }

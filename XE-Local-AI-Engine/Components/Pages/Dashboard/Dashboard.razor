@@ -1,10 +1,4 @@
 @page "/dashboard"
-@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Web
-@using XE_Local_AI_Engine.Models
-@using XE_Local_AI_Engine.Services.Auth
-@using XE_Local_AI_Engine.Services.Capabilities
-@using XE_Local_AI_Engine.Services.Connection
 @implements IDisposable
 @rendermode @(new InteractiveServerRenderMode(false))
 @inject IWorkerHubConnection WorkerHubConnection
@@ -284,7 +278,7 @@
             WorkerConnectionState.Reconnecting => "Reconnecting",
             WorkerConnectionState.Pairing => "Pairing",
             WorkerConnectionState.Error => "Error",
-            _ => "Disconnected",
+            _ => "Disconnected"
         };
     }
 
@@ -295,7 +289,7 @@
             WorkerConnectionState.Connected => "dashboard-status-badge--connected",
             WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => "dashboard-status-badge--pending",
             WorkerConnectionState.Error => "dashboard-status-badge--error",
-            _ => "dashboard-status-badge--disconnected",
+            _ => "dashboard-status-badge--disconnected"
         };
     }
 
@@ -338,4 +332,5 @@
         _actionMessage = null;
         _errorMessage = null;
     }
+
 }

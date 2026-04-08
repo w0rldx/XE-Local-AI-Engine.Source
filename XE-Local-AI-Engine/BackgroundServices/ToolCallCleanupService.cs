@@ -1,54 +1,47 @@
-namespace XE_Local_AI_Engine.BackgroundServices
+namespace XE_Local_AI_Engine.BackgroundServices;
+
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Configuration;
+using XE_Local_AI_Engine.Services.Invocation;
+
+public sealed class ToolCallCleanupService : BackgroundService
 {
-    using System;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.Extensions.Hosting;
-    using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-    using XE_Local_AI_Engine.Configuration;
-    using XE_Local_AI_Engine.Services.Invocation;
+    private readonly IInvocationRunner _invocationRunner;
+    private readonly ILogger<ToolCallCleanupService> _logger;
+    private readonly IOptions<WorkerNodeOptions> _workerNodeOptions;
 
-    public sealed class ToolCallCleanupService : BackgroundService
+    public ToolCallCleanupService(IInvocationRunner invocationRunner,
+        IOptions<WorkerNodeOptions> workerNodeOptions,
+        ILogger<ToolCallCleanupService> logger)
     {
-        private readonly IInvocationRunner _invocationRunner;
-        private readonly IOptions<WorkerNodeOptions> _workerNodeOptions;
-        private readonly ILogger<ToolCallCleanupService> _logger;
+        _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
+        _workerNodeOptions = workerNodeOptions ?? throw new ArgumentNullException(nameof(workerNodeOptions));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        public ToolCallCleanupService(
-            IInvocationRunner invocationRunner,
-            IOptions<WorkerNodeOptions> workerNodeOptions,
-            ILogger<ToolCallCleanupService> logger)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var cleanupInterval = TimeSpan.FromSeconds(_workerNodeOptions.Value.CleanupIntervalSeconds);
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-            _workerNodeOptions = workerNodeOptions ?? throw new ArgumentNullException(nameof(workerNodeOptions));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            var cleanupInterval = TimeSpan.FromSeconds(_workerNodeOptions.Value.CleanupIntervalSeconds);
-
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    await Task.Delay(cleanupInterval, stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
+                await Task.Delay(cleanupInterval, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
 
-                try
-                {
-                    var maxAge = TimeSpan.FromMinutes(_workerNodeOptions.Value.MaxPendingToolCallAgeMinutes);
-                    _invocationRunner.CleanupStaleToolCalls(maxAge);
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogWarning(exception, "Failed to clean up stale tool call state.");
-                }
+            try
+            {
+                var maxAge = TimeSpan.FromMinutes(_workerNodeOptions.Value.MaxPendingToolCallAgeMinutes);
+                _invocationRunner.CleanupStaleToolCalls(maxAge);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Failed to clean up stale tool call state.");
             }
         }
     }

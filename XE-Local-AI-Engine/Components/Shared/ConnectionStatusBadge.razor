@@ -1,4 +1,3 @@
-@using XE_Local_AI_Engine.Services.Connection
 @implements IDisposable
 @inject IWorkerHubConnection WorkerHubConnection
 
@@ -8,6 +7,7 @@
 </span>
 
 @code {
+
     protected override void OnInitialized()
     {
         WorkerHubConnection.StateChanged += OnStateChanged;
@@ -34,7 +34,7 @@
             WorkerConnectionState.Reconnecting => "Reconnecting",
             WorkerConnectionState.Pairing => "Pairing",
             WorkerConnectionState.Error => "Error",
-            _ => "Offline",
+            _ => "Offline"
         };
     }
 
@@ -45,7 +45,7 @@
             WorkerConnectionState.Connected => "connection-status-badge--connected",
             WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => "connection-status-badge--pending",
             WorkerConnectionState.Error => "connection-status-badge--error",
-            _ => "connection-status-badge--offline",
+            _ => "connection-status-badge--offline"
         };
     }
 
@@ -58,7 +58,8 @@
             WorkerConnectionState.Reconnecting => "Worker is attempting to reconnect to the Central Platform.",
             WorkerConnectionState.Pairing => "Worker pairing is currently in progress.",
             WorkerConnectionState.Error => "Worker connection encountered an error.",
-            _ => "Worker is not connected to the Central Platform.",
+            _ => "Worker is not connected to the Central Platform."
         };
     }
+
 }

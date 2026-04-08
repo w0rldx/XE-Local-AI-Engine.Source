@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Components;
 using XE_Local_AI_Engine.Configuration;
 using XE_Local_AI_Engine.Configuration.Validation;
 using XE_Local_AI_Engine.HealthChecks;
-using XE_Local_AI_Engine.Services.Capabilities;
 using XE_Local_AI_Engine.Services.Auth;
+using XE_Local_AI_Engine.Services.Capabilities;
 using XE_Local_AI_Engine.Services.Connection;
 using XE_Local_AI_Engine.Services.DeadLetter;
 using XE_Local_AI_Engine.Services.Events;
@@ -23,21 +23,21 @@ builder.Services.AddRazorComponents()
        .AddInteractiveServerComponents();
 
 builder.Services.AddOptions<CentralPlatformOptions>()
-    .Bind(builder.Configuration.GetSection(CentralPlatformOptions.SectionName))
-    .ValidateOnStart();
+       .Bind(builder.Configuration.GetSection(CentralPlatformOptions.SectionName))
+       .ValidateOnStart();
 builder.Services.AddOptions<WorkerNodeOptions>()
-    .Bind(builder.Configuration.GetSection(WorkerNodeOptions.SectionName))
-    .ValidateOnStart();
+       .Bind(builder.Configuration.GetSection(WorkerNodeOptions.SectionName))
+       .ValidateOnStart();
 builder.Services.AddOptions<SecurityOptions>()
-    .Bind(builder.Configuration.GetSection(SecurityOptions.SectionName))
-    .ValidateOnStart();
+       .Bind(builder.Configuration.GetSection(SecurityOptions.SectionName))
+       .ValidateOnStart();
 
 builder.Services.AddSingleton<IValidateOptions<CentralPlatformOptions>, CentralPlatformOptionsValidator>();
 builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();
 builder.Services.AddSingleton<IValidateOptions<SecurityOptions>, SecurityOptionsValidator>();
 
 var centralPlatformBaseUrl = builder.Configuration.GetValue<string>("CentralPlatform:BaseUrl")
-    ?? throw new InvalidOperationException("CentralPlatform:BaseUrl is required.");
+                             ?? throw new InvalidOperationException("CentralPlatform:BaseUrl is required.");
 
 builder.Services.AddHttpClient("CentralPlatformApi", client =>
 {
@@ -54,6 +54,7 @@ builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
 builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
 builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
 builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
+builder.Services.AddSingleton<IDeadLetterStore, FileDeadLetterStore>();
 builder.Services.AddSingleton<DeadLetterFlushService>();
 builder.Services.AddSingleton<WorkerHubConnection>(sp =>
 {
@@ -80,8 +81,8 @@ builder.Services.AddHostedService<HeartbeatBackgroundService>();
 builder.Services.AddHostedService<AutoConnectBackgroundService>();
 builder.Services.AddHostedService<ToolCallCleanupService>();
 builder.Services.AddHealthChecks()
-    .AddCheck<WorkerHealthCheck>("worker_health")
-    .AddCheck<OllamaHealthCheck>("ollama_health", failureStatus: HealthStatus.Unhealthy);
+       .AddCheck<WorkerHealthCheck>("worker_health")
+       .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy);
 
 // Load configuration
 var ollamaEndpoint = builder.Configuration.GetValue<string>("Ollama:Endpoint") ?? "http://127.0.0.1:11434";
@@ -130,8 +131,7 @@ static void DispatchSafely(Task dispatchTask, ILogger logger, string operationNa
     ArgumentNullException.ThrowIfNull(logger);
     ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
 
-    _ = dispatchTask.ContinueWith(
-        static (task, state) =>
+    _ = dispatchTask.ContinueWith(static (task, state) =>
         {
             var (continuationLogger, dispatchOperationName) = ((ILogger Logger, string OperationName))state!;
             if (task.IsFaulted)

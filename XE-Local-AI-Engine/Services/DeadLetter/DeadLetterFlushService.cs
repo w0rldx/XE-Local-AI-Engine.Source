@@ -1,62 +1,55 @@
-namespace XE_Local_AI_Engine.Services.DeadLetter
+namespace XE_Local_AI_Engine.Services.DeadLetter;
+
+using XE_Local_AI_Engine.Services.Connection;
+
+public sealed class DeadLetterFlushService
 {
-    using System;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.Extensions.Logging;
-    using XE_Local_AI_Engine.Services.Connection;
+    private readonly IDeadLetterStore _deadLetterStore;
+    private readonly Lazy<IHubMessageSender> _hubMessageSender;
+    private readonly ILogger<DeadLetterFlushService> _logger;
 
-    public sealed class DeadLetterFlushService
+    public DeadLetterFlushService(IDeadLetterStore deadLetterStore,
+        Lazy<IHubMessageSender> hubMessageSender,
+        ILogger<DeadLetterFlushService> logger)
     {
-        private readonly IDeadLetterStore _deadLetterStore;
-        private readonly Lazy<IHubMessageSender> _hubMessageSender;
-        private readonly ILogger<DeadLetterFlushService> _logger;
+        _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
+        _hubMessageSender = hubMessageSender ?? throw new ArgumentNullException(nameof(hubMessageSender));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        public DeadLetterFlushService(
-            IDeadLetterStore deadLetterStore,
-            Lazy<IHubMessageSender> hubMessageSender,
-            ILogger<DeadLetterFlushService> logger)
+    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        var pendingEntries = await _deadLetterStore.GetPendingAsync(cancellationToken).ConfigureAwait(false);
+        if (pendingEntries.Count == 0)
         {
-            _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
-            _hubMessageSender = hubMessageSender ?? throw new ArgumentNullException(nameof(hubMessageSender));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _logger.LogDebug("Dead letter flush skipped because no pending entries were found.");
+            return;
         }
 
-        public async Task FlushAsync(CancellationToken cancellationToken = default)
+        _logger.LogInformation("Flushing {PendingEntryCount} dead letter entries.", pendingEntries.Count);
+
+        foreach (var pendingEntry in pendingEntries)
         {
-            var pendingEntries = await _deadLetterStore.GetPendingAsync(cancellationToken).ConfigureAwait(false);
-            if (pendingEntries.Count == 0)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
             {
-                _logger.LogDebug("Dead letter flush skipped because no pending entries were found.");
+                await _hubMessageSender.Value
+                                       .SendInvocationFailedAsync(pendingEntry, cancellationToken)
+                                       .ConfigureAwait(false);
+
+                await _deadLetterStore.RemoveAsync(pendingEntry.InvocationId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception,
+                    "Dead letter flush stopped after failing to resend invocation failure for {InvocationId}.",
+                    pendingEntry.InvocationId);
+
                 return;
             }
-
-            _logger.LogInformation("Flushing {PendingEntryCount} dead letter entries.", pendingEntries.Count);
-
-            foreach (var pendingEntry in pendingEntries)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    await _hubMessageSender.Value
-                        .SendInvocationFailedAsync(pendingEntry, cancellationToken)
-                        .ConfigureAwait(false);
-
-                    await _deadLetterStore.RemoveAsync(pendingEntry.InvocationId, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogWarning(
-                        exception,
-                        "Dead letter flush stopped after failing to resend invocation failure for {InvocationId}.",
-                        pendingEntry.InvocationId);
-
-                    return;
-                }
-            }
-
-            _logger.LogInformation("Dead letter flush completed successfully.");
         }
+
+        _logger.LogInformation("Dead letter flush completed successfully.");
     }
 }

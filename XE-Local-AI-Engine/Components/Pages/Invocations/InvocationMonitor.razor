@@ -173,7 +173,7 @@
             InvocationStatus.Completed => "Completed",
             InvocationStatus.Failed => "Failed",
             InvocationStatus.Cancelled => "Cancelled",
-            _ => "Pending",
+            _ => "Pending"
         };
     }
 
@@ -189,7 +189,7 @@
             InvocationStatus.Assigned or InvocationStatus.Running => "dashboard-status-badge--pending",
             InvocationStatus.Completed => "dashboard-status-badge--connected",
             InvocationStatus.Failed or InvocationStatus.Cancelled => "dashboard-status-badge--error",
-            _ => "dashboard-status-badge--disconnected",
+            _ => "dashboard-status-badge--disconnected"
         };
     }
 
@@ -208,7 +208,8 @@
             StreamedContent = state.StreamedContent,
             StartedAt = state.StartedAt,
             Error = state.Error,
-            ModelUsed = state.ModelUsed,
+            ModelUsed = state.ModelUsed
         };
     }
+
 }

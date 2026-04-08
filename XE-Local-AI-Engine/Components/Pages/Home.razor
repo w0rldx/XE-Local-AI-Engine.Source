@@ -1,7 +1,4 @@
 @page "/"
-@using XE_Local_AI_Engine.Components.Shared
-@using XE_Local_AI_Engine.Services.Auth
-@using XE_Local_AI_Engine.Services.Connection
 @implements IDisposable
 @rendermode @(new InteractiveServerRenderMode(false))
 @inject IWorkerHubConnection WorkerHubConnection
@@ -18,7 +15,7 @@
             <p class="dashboard-page__description">Use the worker dashboard to pair this node, inspect capabilities, and monitor live invocations from the Central Platform.</p>
         </div>
 
-        <ConnectionStatusBadge />
+        <ConnectionStatusBadge/>
     </header>
 
     <div class="dashboard-grid">
@@ -69,6 +66,7 @@
 </section>
 
 @code {
+
     protected override void OnInitialized()
     {
         WorkerHubConnection.StateChanged += OnStateChanged;
@@ -104,7 +102,7 @@
             WorkerConnectionState.Reconnecting => "Reconnecting",
             WorkerConnectionState.Pairing => "Pairing",
             WorkerConnectionState.Error => "Error",
-            _ => "Offline",
+            _ => "Offline"
         };
     }
 
@@ -133,4 +131,5 @@
 
         return localExpiry;
     }
+
 }
