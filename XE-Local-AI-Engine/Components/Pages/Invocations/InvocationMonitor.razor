@@ -10,97 +10,94 @@
 
 <PageTitle>Invocation Monitor</PageTitle>
 
-<section class="dashboard-page">
-    <header class="dashboard-page__header">
-        <div>
-            <p class="dashboard-page__eyebrow">Worker Node</p>
-            <h1>Invocation monitor</h1>
-            <p class="dashboard-page__description">Track the current invocation, inspect live streamed output, and cancel a running execution.</p>
-        </div>
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4">Invocation monitor</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Track the current invocation, inspect live streamed output, and cancel a running execution.</MudText>
+<MudChip T="string" Color="@GetInvocationChipColor()" Size="Size.Small">@GetInvocationLabel()</MudChip>
 
-        <span class="dashboard-status-badge @GetInvocationBadgeClass()">@GetInvocationLabel()</span>
-    </header>
+@if (!string.IsNullOrWhiteSpace(_actionMessage))
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@_actionMessage</MudAlert>
+}
 
-    @if (!string.IsNullOrWhiteSpace(_actionMessage))
-    {
-        <div class="dashboard-alert dashboard-alert--success" role="status">@_actionMessage</div>
-    }
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+}
 
-    @if (!string.IsNullOrWhiteSpace(_errorMessage))
-    {
-        <div class="dashboard-alert dashboard-alert--error" role="alert">@_errorMessage</div>
-    }
+<MudGrid Spacing="4" Class="mt-4">
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Current invocation</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Shows the active invocation received from the Central Platform.</MudText>
 
-    <div class="dashboard-grid">
-        <section class="dashboard-card">
-            <div class="dashboard-card__header">
-                <h2>Current invocation</h2>
-                <p>Shows the active invocation received from the Central Platform.</p>
-            </div>
-
-            @if (_currentInvocation is null)
-            {
-                <p class="dashboard-placeholder">No invocation has been assigned yet.</p>
-            }
-            else
-            {
-                <dl class="dashboard-metadata">
-                    <div>
-                        <dt>Invocation ID</dt>
-                        <dd>@_currentInvocation.InvocationId</dd>
-                    </div>
-                    <div>
-                        <dt>Conversation ID</dt>
-                        <dd>@_currentInvocation.ConversationId</dd>
-                    </div>
-                    <div>
-                        <dt>Status</dt>
-                        <dd>@GetInvocationLabel()</dd>
-                    </div>
-                    <div>
-                        <dt>Started</dt>
-                        <dd>@_currentInvocation.StartedAt.ToLocalTime().ToString("g")</dd>
-                    </div>
-                    <div>
-                        <dt>Model</dt>
-                        <dd>@(_currentInvocation.ModelUsed ?? "Unknown")</dd>
-                    </div>
-                </dl>
-
-                @if (!string.IsNullOrWhiteSpace(_currentInvocation.Error))
+                @if (_currentInvocation is null)
                 {
-                    <p class="dashboard-inline-error">Last error: @_currentInvocation.Error</p>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No invocation has been assigned yet.</MudText>
                 }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <tbody>
+                            <tr>
+                                <td><strong>Invocation ID</strong></td>
+                                <td>@_currentInvocation.InvocationId</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Conversation ID</strong></td>
+                                <td>@_currentInvocation.ConversationId</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Status</strong></td>
+                                <td>@GetInvocationLabel()</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Started</strong></td>
+                                <td>@_currentInvocation.StartedAt.ToLocalTime().ToString("g")</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Model</strong></td>
+                                <td>@(_currentInvocation.ModelUsed ?? "Unknown")</td>
+                            </tr>
+                        </tbody>
+                    </MudSimpleTable>
 
-                <div class="dashboard-actions">
-                    <button class="dashboard-button dashboard-button--secondary" @onclick="CancelInvocationAsync" disabled="@(!CanCancel || _isCancelling)">
-                        @(_isCancelling ? "Cancelling..." : "Cancel invocation")
-                    </button>
-                </div>
-            }
-        </section>
+                    @if (!string.IsNullOrWhiteSpace(_currentInvocation.Error))
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @_currentInvocation.Error</MudAlert>
+                    }
 
-        <section class="dashboard-card">
-            <div class="dashboard-card__header">
-                <h2>Live output</h2>
-                <p>Streaming output from the current invocation as it arrives.</p>
-            </div>
+                    <div class="mt-4">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelInvocationAsync" Disabled="@(!CanCancel || _isCancelling)">@(_isCancelling ? "Cancelling..." : "Cancel invocation")</MudButton>
+                    </div>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
 
-            @if (_currentInvocation is null)
-            {
-                <p class="dashboard-placeholder">Live output will appear here when an invocation starts.</p>
-            }
-            else if (string.IsNullOrWhiteSpace(_currentInvocation.StreamedContent))
-            {
-                <p class="dashboard-placeholder">Waiting for streamed content...</p>
-            }
-            else
-            {
-                <pre class="invocation-monitor__output">@_currentInvocation.StreamedContent</pre>
-            }
-        </section>
-    </div>
-</section>
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Live output</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Streaming output from the current invocation as it arrives.</MudText>
+
+                @if (_currentInvocation is null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Live output will appear here when an invocation starts.</MudText>
+                }
+                else if (string.IsNullOrWhiteSpace(_currentInvocation.StreamedContent))
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Waiting for streamed content...</MudText>
+                }
+                else
+                {
+                    <MudPaper Class="pa-4 mt-2" Style="font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto;" Elevation="0" Outlined="true">@_currentInvocation.StreamedContent</MudPaper>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
 
 @code {
     private InvocationState? _currentInvocation;
@@ -177,19 +174,15 @@
         };
     }
 
-    private string GetInvocationBadgeClass()
+    private Color GetInvocationChipColor()
     {
-        if (_currentInvocation is null)
-        {
-            return "dashboard-status-badge--disconnected";
-        }
-
+        if (_currentInvocation is null) return Color.Default;
         return _currentInvocation.Status switch
         {
-            InvocationStatus.Assigned or InvocationStatus.Running => "dashboard-status-badge--pending",
-            InvocationStatus.Completed => "dashboard-status-badge--connected",
-            InvocationStatus.Failed or InvocationStatus.Cancelled => "dashboard-status-badge--error",
-            _ => "dashboard-status-badge--disconnected"
+            InvocationStatus.Assigned or InvocationStatus.Running => Color.Warning,
+            InvocationStatus.Completed => Color.Success,
+            InvocationStatus.Failed or InvocationStatus.Cancelled => Color.Error,
+            _ => Color.Default
         };
     }
 

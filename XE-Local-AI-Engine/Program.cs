@@ -1,6 +1,7 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
 using XE_Local_AI_Engine.BackgroundServices;
@@ -14,6 +15,7 @@ using XE_Local_AI_Engine.Services.Connection;
 using XE_Local_AI_Engine.Services.DeadLetter;
 using XE_Local_AI_Engine.Services.Events;
 using XE_Local_AI_Engine.Services.Invocation;
+using MudBlazor.Services;
 using XE_Local_AI_Engine.Services.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
        .AddInteractiveServerComponents();
+builder.Services.AddMudServices();
 
 builder.Services.AddOptions<CentralPlatformOptions>()
        .Bind(builder.Configuration.GetSection(CentralPlatformOptions.SectionName))
@@ -39,10 +42,22 @@ builder.Services.AddSingleton<IValidateOptions<SecurityOptions>, SecurityOptions
 var centralPlatformBaseUrl = builder.Configuration.GetValue<string>("CentralPlatform:BaseUrl")
                              ?? throw new InvalidOperationException("CentralPlatform:BaseUrl is required.");
 
+if (!centralPlatformBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        Console.WriteLine("WARNING: CentralPlatform:BaseUrl is not HTTPS. Tokens may be transmitted in plaintext.");
+    }
+    else
+    {
+        throw new InvalidOperationException("CentralPlatform:BaseUrl must use HTTPS in non-development environments.");
+    }
+}
+
 builder.Services.AddHttpClient("CentralPlatformApi", client =>
 {
     client.BaseAddress = new Uri(centralPlatformBaseUrl, UriKind.Absolute);
-});
+}).AddStandardResilienceHandler();
 
 builder.Services.AddSingleton<ITokenStore, TokenStore>();
 builder.Services.AddSingleton<IPairingService, PairingService>();

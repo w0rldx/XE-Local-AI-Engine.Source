@@ -86,6 +86,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             }
 
             await SendWorkerHelloAsync(clientNodeId.Value, cancellationToken).ConfigureAwait(false);
+            await _capabilityReporter.Value.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
             _connectionState.TransitionTo(WorkerConnectionState.Connected);
         }
         catch (Exception exception)
@@ -204,6 +205,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                              httpOptions.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
                          })
                          .WithAutomaticReconnect(options.ReconnectDelaysMs.Select(ms => TimeSpan.FromMilliseconds(ms)).ToArray())
+                         .WithStatefulReconnect()
                          .AddJsonProtocol(jsonOptions =>
                          {
                              jsonOptions.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
