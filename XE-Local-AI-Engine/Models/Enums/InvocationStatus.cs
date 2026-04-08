@@ -1,12 +1,11 @@
-namespace XE_Local_AI_Engine.Models.Enums
+namespace XE_Local_AI_Engine.Models.Enums;
+
+public enum InvocationStatus
 {
-    public enum InvocationStatus
-    {
-        Pending = 0,
-        Assigned = 1,
-        Running = 2,
-        Completed = 3,
-        Failed = 4,
-        Cancelled = 5,
-    }
+    Pending = 0,
+    Assigned = 1,
+    Running = 2,
+    Completed = 3,
+    Failed = 4,
+    Cancelled = 5
 }

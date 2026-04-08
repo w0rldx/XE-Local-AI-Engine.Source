@@ -1,52 +1,50 @@
-namespace XE_Local_AI_Engine.Services.Validation
+namespace XE_Local_AI_Engine.Services.Validation;
+
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Configuration;
+
+public sealed class ModelNameValidator
 {
-    using System;
-    using System.Text.RegularExpressions;
-    using Microsoft.Extensions.Options;
-    using XE_Local_AI_Engine.Configuration;
+    private readonly Regex _allowedPattern;
 
-    public sealed partial class ModelNameValidator
+    public ModelNameValidator(IOptions<SecurityOptions> securityOptions)
     {
-        private readonly Regex _allowedPattern;
+        ArgumentNullException.ThrowIfNull(securityOptions);
 
-        public ModelNameValidator(IOptions<SecurityOptions> securityOptions)
+        var pattern = securityOptions.Value.AllowedModelNamePattern;
+        _allowedPattern = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+    }
+
+    public string? GetValidationError(string? modelName)
+    {
+        if (string.IsNullOrWhiteSpace(modelName))
         {
-            ArgumentNullException.ThrowIfNull(securityOptions);
-
-            var pattern = securityOptions.Value.AllowedModelNamePattern;
-            _allowedPattern = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+            return null;
         }
 
-        public string? GetValidationError(string? modelName)
+        if (modelName.Length > 100)
         {
-            if (string.IsNullOrWhiteSpace(modelName))
-            {
-                return null;
-            }
-
-            if (modelName.Length > 100)
-            {
-                return "Invalid model identifier";
-            }
-
-            if (modelName.Contains("..", StringComparison.Ordinal) ||
-                modelName.Contains('/', StringComparison.Ordinal) ||
-                modelName.Contains('\\', StringComparison.Ordinal))
-            {
-                return "Invalid model identifier";
-            }
-
-            if (modelName.Contains("://", StringComparison.Ordinal))
-            {
-                return "Invalid model identifier";
-            }
-
-            return _allowedPattern.IsMatch(modelName) ? null : "Invalid model identifier";
+            return "Invalid model identifier";
         }
 
-        public bool IsValid(string? modelName)
+        if (modelName.Contains("..", StringComparison.Ordinal) ||
+            modelName.Contains('/', StringComparison.Ordinal) ||
+            modelName.Contains('\\', StringComparison.Ordinal))
         {
-            return GetValidationError(modelName) is null;
+            return "Invalid model identifier";
         }
+
+        if (modelName.Contains("://", StringComparison.Ordinal))
+        {
+            return "Invalid model identifier";
+        }
+
+        return _allowedPattern.IsMatch(modelName) ? null : "Invalid model identifier";
+    }
+
+    public bool IsValid(string? modelName)
+    {
+        return GetValidationError(modelName) is null;
     }
 }

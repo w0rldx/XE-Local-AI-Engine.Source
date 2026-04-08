@@ -1,75 +1,68 @@
-namespace XE_Local_AI_Engine.BackgroundServices
+namespace XE_Local_AI_Engine.BackgroundServices;
+
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Configuration;
+using XE_Local_AI_Engine.Services.Auth;
+using XE_Local_AI_Engine.Services.Connection;
+
+public sealed class HeartbeatBackgroundService : BackgroundService
 {
-    using System;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.Extensions.Hosting;
-    using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-    using XE_Local_AI_Engine.Configuration;
-    using XE_Local_AI_Engine.Services.Auth;
-    using XE_Local_AI_Engine.Services.Connection;
+    private readonly IWorkerHubConnection _hubConnection;
+    private readonly ILogger<HeartbeatBackgroundService> _logger;
+    private readonly IOptions<CentralPlatformOptions> _options;
+    private readonly ITokenStore _tokenStore;
 
-    public sealed class HeartbeatBackgroundService : BackgroundService
+    public HeartbeatBackgroundService(IWorkerHubConnection hubConnection,
+        ITokenStore tokenStore,
+        IOptions<CentralPlatformOptions> options,
+        ILogger<HeartbeatBackgroundService> logger)
     {
-        public static TimeSpan TestDelayOverride { get; set; } = TimeSpan.Zero;
+        _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
+        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        private readonly IWorkerHubConnection _hubConnection;
-        private readonly ITokenStore _tokenStore;
-        private readonly IOptions<CentralPlatformOptions> _options;
-        private readonly ILogger<HeartbeatBackgroundService> _logger;
+    public static TimeSpan TestDelayOverride { get; set; } = TimeSpan.Zero;
 
-        public HeartbeatBackgroundService(
-            IWorkerHubConnection hubConnection,
-            ITokenStore tokenStore,
-            IOptions<CentralPlatformOptions> options,
-            ILogger<HeartbeatBackgroundService> logger)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var interval = TimeSpan.FromSeconds(_options.Value.HeartbeatIntervalSeconds);
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
-            _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            var interval = TimeSpan.FromSeconds(_options.Value.HeartbeatIntervalSeconds);
-
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var delay = TestDelayOverride > TimeSpan.Zero ? TestDelayOverride : interval;
-                    await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
+                var delay = TestDelayOverride > TimeSpan.Zero ? TestDelayOverride : interval;
+                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
 
-                if (_hubConnection.State != WorkerConnectionState.Connected)
-                {
-                    continue;
-                }
+            if (_hubConnection.State != WorkerConnectionState.Connected)
+            {
+                continue;
+            }
 
-                var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
-                if (clientNodeId is null)
-                {
-                    continue;
-                }
+            var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
+            if (clientNodeId is null)
+            {
+                continue;
+            }
 
-                try
-                {
-                    await _hubConnection.SendHeartbeatAsync(clientNodeId.Value, stoppingToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogWarning(exception, "Failed to send heartbeat.");
-                }
+            try
+            {
+                await _hubConnection.SendHeartbeatAsync(clientNodeId.Value, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Failed to send heartbeat.");
             }
         }
     }

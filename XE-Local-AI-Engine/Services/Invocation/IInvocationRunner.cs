@@ -1,22 +1,18 @@
-namespace XE_Local_AI_Engine.Services.Invocation
+namespace XE_Local_AI_Engine.Services.Invocation;
+
+using XE_Local_AI_Engine.Models;
+
+public interface IInvocationRunner
 {
-    using System;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using XE_Local_AI_Engine.Models;
+    Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default);
 
-    public interface IInvocationRunner
-    {
-        Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default);
+    Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default);
 
-        Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default);
+    void Cancel(Guid invocationId);
 
-        void Cancel(Guid invocationId);
+    void CancelAll();
 
-        void CancelAll();
+    void CleanupStaleToolCalls(TimeSpan maxAge);
 
-        void CleanupStaleToolCalls(TimeSpan maxAge);
-
-        void ResolveToolCallResult(ToolCallResultEvent evt);
-    }
+    void ResolveToolCallResult(ToolCallResultEvent evt);
 }

@@ -1,11 +1,7 @@
 @page "/pairing"
 @using System.ComponentModel.DataAnnotations
-@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Forms
-@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Options
 @using XE_Local_AI_Engine.Configuration
-@using XE_Local_AI_Engine.Services.Auth
 @rendermode @(new InteractiveServerRenderMode(false))
 @inject IPairingService PairingService
 @inject IOptions<WorkerNodeOptions> WorkerNodeOptions
@@ -37,8 +33,8 @@
             }
 
             <EditForm Model="_form" OnValidSubmit="HandlePairAsync" class="pairing-form">
-                <DataAnnotationsValidator />
-                <ValidationSummary />
+                <DataAnnotationsValidator/>
+                <ValidationSummary/>
 
                 <div class="pairing-form__field">
                     <label for="pairing-token">Pairing token</label>
@@ -46,7 +42,7 @@
                                @bind-Value="_form.PairingToken"
                                class="pairing-form__input"
                                autocomplete="off"
-                               disabled="@_isSubmitting" />
+                               disabled="@_isSubmitting"/>
                     <small>Tokens are single-use and issued from the Central Platform admin UI.</small>
                 </div>
 
@@ -55,7 +51,7 @@
                     <InputText id="node-name"
                                @bind-Value="_form.NodeName"
                                class="pairing-form__input"
-                               readonly />
+                               readonly/>
                     <small>This value is currently sourced from <code>WorkerNode:NodeName</code> in configuration.</small>
                 </div>
 
@@ -128,4 +124,5 @@
 
         public string NodeName { get; set; } = string.Empty;
     }
+
 }

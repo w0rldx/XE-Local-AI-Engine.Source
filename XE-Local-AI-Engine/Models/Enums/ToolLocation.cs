@@ -1,8 +1,7 @@
-namespace XE_Local_AI_Engine.Models.Enums
+namespace XE_Local_AI_Engine.Models.Enums;
+
+public enum ToolLocation
 {
-    public enum ToolLocation
-    {
-        ApiSide = 0,
-        ClientLocal = 1,
-    }
+    ApiSide = 0,
+    ClientLocal = 1
 }

@@ -1,378 +1,363 @@
-namespace XE_Local_AI_Engine.Services.Invocation
+namespace XE_Local_AI_Engine.Services.Invocation;
+
+using System.Collections.Concurrent;
+using System.Text;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Configuration;
+using XE_Local_AI_Engine.Models;
+using XE_Local_AI_Engine.Models.Enums;
+using XE_Local_AI_Engine.Services.Capabilities;
+using XE_Local_AI_Engine.Services.Connection;
+
+public sealed class InvocationRunner : IInvocationRunner
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Collections.Concurrent;
-    using System.Linq;
-    using System.Text;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.Extensions.AI;
-    using Microsoft.Extensions.Configuration;
-    using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-    using XE_Local_AI_Engine.Configuration;
-    using XE_Local_AI_Engine.Models;
-    using XE_Local_AI_Engine.Models.Enums;
-    using XE_Local_AI_Engine.Services.Capabilities;
-    using XE_Local_AI_Engine.Services.Connection;
+    private readonly ICapabilityReporter _capabilityReporter;
+    private readonly IChatClient _chatClient;
+    private readonly string _defaultModel;
+    private readonly Lazy<IHubMessageSender> _hubSender;
+    private readonly ILogger<InvocationRunner> _logger;
+    private readonly TimeSpan _maxPendingToolCallAge;
+    private readonly int _maxResponseSizeBytes;
 
-    public sealed class InvocationRunner : IInvocationRunner
+    private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
+    private readonly IRuntimePackageValidator _runtimePackageValidator;
+    private readonly object _syncRoot = new();
+    private Guid? _currentInvocationId;
+
+    private CancellationTokenSource? _invocationCancellationTokenSource;
+
+    public InvocationRunner(Lazy<IHubMessageSender> hubSender,
+        IChatClient chatClient,
+        IRuntimePackageValidator runtimePackageValidator,
+        ICapabilityReporter capabilityReporter,
+        IConfiguration configuration,
+        IOptions<WorkerNodeOptions> workerOptions,
+        ILogger<InvocationRunner> logger)
     {
-        private readonly object _syncRoot = new();
-        private readonly Lazy<IHubMessageSender> _hubSender;
-        private readonly IChatClient _chatClient;
-        private readonly IRuntimePackageValidator _runtimePackageValidator;
-        private readonly ICapabilityReporter _capabilityReporter;
-        private readonly ILogger<InvocationRunner> _logger;
-        private readonly string _defaultModel;
-        private readonly int _maxResponseSizeBytes;
-        private readonly TimeSpan _maxPendingToolCallAge;
+        _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
+        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
+        _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
+        _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(workerOptions);
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
+        _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
+                        ?? throw new InvalidOperationException("Ollama:ChatModel is required for invocation execution.");
+        _maxResponseSizeBytes = workerOptions.Value.MaxResponseSizeMb * 1024 * 1024;
+        _maxPendingToolCallAge = TimeSpan.FromMinutes(workerOptions.Value.MaxPendingToolCallAgeMinutes);
+    }
 
-        private CancellationTokenSource? _invocationCancellationTokenSource;
-        private Guid? _currentInvocationId;
+    public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(package);
 
-        public InvocationRunner(
-            Lazy<IHubMessageSender> hubSender,
-            IChatClient chatClient,
-            IRuntimePackageValidator runtimePackageValidator,
-            ICapabilityReporter capabilityReporter,
-            IConfiguration configuration,
-            IOptions<WorkerNodeOptions> workerOptions,
-            ILogger<InvocationRunner> logger)
+        var validationResult = _runtimePackageValidator.Validate(package);
+        if (!validationResult.IsValid)
         {
-            _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
-            _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-            _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
-            _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
-            ArgumentNullException.ThrowIfNull(configuration);
-            ArgumentNullException.ThrowIfNull(workerOptions);
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-            _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
-                ?? throw new InvalidOperationException("Ollama:ChatModel is required for invocation execution.");
-            _maxResponseSizeBytes = workerOptions.Value.MaxResponseSizeMb * 1024 * 1024;
-            _maxPendingToolCallAge = TimeSpan.FromMinutes(workerOptions.Value.MaxPendingToolCallAgeMinutes);
+            throw new InvalidOperationException(string.Join("; ", validationResult.Errors));
         }
 
-        public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+        var sender = _hubSender.Value;
+
+        RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
+
+        try
         {
-            ArgumentNullException.ThrowIfNull(package);
+            var invocationToken = GetInvocationCancellationToken();
+            var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
+            var messages = BuildChatMessages(package);
+            var responseBuilder = new StringBuilder();
+            var streamedChunkCount = 0;
+            var totalResponseBytes = 0;
 
-            var validationResult = _runtimePackageValidator.Validate(package);
-            if (!validationResult.IsValid)
+            await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
+
+            var chatOptions = new ChatOptions
             {
-                throw new InvalidOperationException(string.Join("; ", validationResult.Errors));
-            }
+                ModelId = resolvedModel
+            };
 
-            var sender = _hubSender.Value;
-
-            RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
-
-            try
+            await foreach (var update in _chatClient.GetStreamingResponseAsync(messages, chatOptions, invocationToken).ConfigureAwait(false))
             {
-                var invocationToken = GetInvocationCancellationToken();
-                var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
-                var messages = BuildChatMessages(package);
-                var responseBuilder = new StringBuilder();
-                var streamedChunkCount = 0;
-                var totalResponseBytes = 0;
-
-                await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
-
-                var chatOptions = new ChatOptions
-                {
-                    ModelId = resolvedModel,
-                };
-
-                await foreach (var update in _chatClient.GetStreamingResponseAsync(messages, chatOptions, invocationToken).ConfigureAwait(false))
-                {
-                    var chunk = update.Text;
-                    if (string.IsNullOrEmpty(chunk))
-                    {
-                        continue;
-                    }
-
-                    streamedChunkCount++;
-                    totalResponseBytes += Encoding.UTF8.GetByteCount(chunk);
-
-                    if (totalResponseBytes > _maxResponseSizeBytes)
-                    {
-                        throw new InvalidOperationException($"Response size exceeded maximum of {_maxResponseSizeBytes / (1024 * 1024)}MB");
-                    }
-
-                    responseBuilder.Append(chunk);
-
-                    await sender.SendTokenStreamChunkAsync(package.InvocationId, chunk, isComplete: false, invocationToken).ConfigureAwait(false);
-                }
-
-                await sender.SendTokenStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
-                await sender.SendInvocationCompletedAsync(
-                    new InvocationCompletedPayload
-                    {
-                        InvocationId = package.InvocationId,
-                        FinalContent = responseBuilder.ToString(),
-                        ModelUsed = resolvedModel,
-                        TokensUsed = streamedChunkCount,
-                    },
-                    invocationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
-            {
-                await TrySendFailureAsync(sender, package.InvocationId, "Invocation timed out or was cancelled").ConfigureAwait(false);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
-                await TrySendFailureAsync(sender, package.InvocationId, exception.Message).ConfigureAwait(false);
-            }
-            finally
-            {
-                ClearActiveInvocation(package.InvocationId);
-            }
-        }
-
-        public void Cancel(Guid invocationId)
-        {
-            CancellationTokenSource? invocationCancellationTokenSource = null;
-
-            lock (_syncRoot)
-            {
-                if (_currentInvocationId == invocationId)
-                {
-                    invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                }
-            }
-
-            invocationCancellationTokenSource?.Cancel();
-        }
-
-        public async Task<string> ExecuteApiToolCallAsync(
-            Guid invocationId,
-            string toolName,
-            string parameters,
-            CancellationToken cancellationToken = default)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
-            ArgumentNullException.ThrowIfNull(parameters);
-
-            var requestId = Guid.NewGuid().ToString("N");
-            var completion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var pendingToolCall = new PendingToolCall(DateTimeOffset.UtcNow, completion);
-            var sender = _hubSender.Value;
-
-            if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
-            {
-                throw new InvalidOperationException("Failed to register pending tool call.");
-            }
-
-            try
-            {
-                await sender.SendToolCallRequestAsync(
-                    new ToolCallRequestPayload
-                    {
-                        InvocationId = invocationId,
-                        RequestId = requestId,
-                        ToolName = toolName,
-                        Parameters = parameters,
-                    },
-                    cancellationToken).ConfigureAwait(false);
-
-                using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
-
-                var result = await completion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(result.Error))
-                {
-                    throw new InvalidOperationException($"Tool call '{toolName}' failed: {result.Error}");
-                }
-
-                return result.Result;
-            }
-            finally
-            {
-                _pendingToolCalls.TryRemove(requestId, out _);
-            }
-        }
-
-        public void CancelAll()
-        {
-            CancellationTokenSource? invocationCancellationTokenSource;
-
-            lock (_syncRoot)
-            {
-                invocationCancellationTokenSource = _invocationCancellationTokenSource;
-            }
-
-            invocationCancellationTokenSource?.Cancel();
-
-            foreach (var pendingToolCall in _pendingToolCalls)
-            {
-                if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-                {
-                    removedPendingToolCall.Completion.TrySetCanceled();
-                }
-            }
-        }
-
-        public void CleanupStaleToolCalls(TimeSpan maxAge)
-        {
-            var cutoff = DateTimeOffset.UtcNow - maxAge;
-
-            foreach (var pendingToolCall in _pendingToolCalls)
-            {
-                if (pendingToolCall.Value.CreatedAt >= cutoff)
+                var chunk = update.Text;
+                if (string.IsNullOrEmpty(chunk))
                 {
                     continue;
                 }
 
-                if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+                streamedChunkCount++;
+                totalResponseBytes += Encoding.UTF8.GetByteCount(chunk);
+
+                if (totalResponseBytes > _maxResponseSizeBytes)
                 {
-                    removedPendingToolCall.Completion.TrySetException(new TimeoutException("Tool call timed out during cleanup."));
-                }
-            }
-        }
-
-        public void ResolveToolCallResult(ToolCallResultEvent evt)
-        {
-            ArgumentNullException.ThrowIfNull(evt);
-
-            if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
-            {
-                pendingToolCall.Completion.TrySetResult(evt);
-            }
-        }
-
-        private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
-        {
-            if (await _capabilityReporter.VerifyOllamaAndModelAsync(requestedModel, cancellationToken).ConfigureAwait(false))
-            {
-                return string.IsNullOrWhiteSpace(requestedModel) ? _defaultModel : requestedModel.Trim();
-            }
-
-            if (string.IsNullOrWhiteSpace(requestedModel))
-            {
-                throw new InvalidOperationException("Ollama is unavailable or the default model is not installed.");
-            }
-
-            _logger.LogWarning(
-                "Requested model '{RequestedModel}' could not be verified. Falling back to '{FallbackModel}'.",
-                requestedModel,
-                _defaultModel);
-
-            return _defaultModel;
-        }
-
-        private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
-        {
-            var messages = new List<ChatMessage>
-            {
-                new(ChatRole.System, package.ResolvedSystemPrompt),
-            };
-
-            messages.AddRange(
-                package.ConversationContext
-                    .OrderBy(message => message.SortOrder)
-                    .Select(CreateChatMessage));
-
-            return messages;
-        }
-
-        private static ChatMessage CreateChatMessage(ConversationMessageDto message)
-        {
-            ArgumentNullException.ThrowIfNull(message);
-            return new ChatMessage(MapRole(message.Role), message.Content);
-        }
-
-        private static ChatRole MapRole(MessageRole role)
-        {
-            return role switch
-            {
-                MessageRole.System => ChatRole.System,
-                MessageRole.User => ChatRole.User,
-                MessageRole.Assistant => ChatRole.Assistant,
-                MessageRole.Tool => ChatRole.Tool,
-                _ => throw new InvalidOperationException($"Unsupported message role: {role}"),
-            };
-        }
-
-        private async Task TrySendFailureAsync(IHubMessageSender sender, Guid invocationId, string error)
-        {
-            try
-            {
-                await sender.SendInvocationFailedAsync(
-                    new InvocationFailedPayload
-                    {
-                        InvocationId = invocationId,
-                        Error = error,
-                    },
-                    CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}.", invocationId);
-            }
-        }
-
-        private void RegisterActiveInvocation(Guid invocationId, int timeoutSeconds, CancellationToken cancellationToken)
-        {
-            lock (_syncRoot)
-            {
-                if (_currentInvocationId is not null)
-                {
-                    throw new InvalidOperationException("Worker is busy with another invocation");
+                    throw new InvalidOperationException($"Response size exceeded maximum of {_maxResponseSizeBytes / (1024 * 1024)}MB");
                 }
 
-                _currentInvocationId = invocationId;
-                _invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                _invocationCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            }
-        }
+                responseBuilder.Append(chunk);
 
-        private CancellationToken GetInvocationCancellationToken()
-        {
-            lock (_syncRoot)
-            {
-                if (_invocationCancellationTokenSource is null)
+                await sender.SendTokenStreamChunkAsync(package.InvocationId, chunk, false, invocationToken).ConfigureAwait(false);
+            }
+
+            await sender.SendTokenStreamChunkAsync(package.InvocationId, string.Empty, true, invocationToken).ConfigureAwait(false);
+            await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
                 {
-                    throw new InvalidOperationException("No active invocation is registered.");
-                }
-
-                return _invocationCancellationTokenSource.Token;
-            }
+                    InvocationId = package.InvocationId,
+                    FinalContent = responseBuilder.ToString(),
+                    ModelUsed = resolvedModel,
+                    TokensUsed = streamedChunkCount
+                },
+                invocationToken).ConfigureAwait(false);
         }
-
-        private bool IsCurrentInvocation(Guid invocationId)
+        catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
-            lock (_syncRoot)
-            {
-                return _currentInvocationId == invocationId;
-            }
+            await TrySendFailureAsync(sender, package.InvocationId, "Invocation timed out or was cancelled").ConfigureAwait(false);
         }
-
-        private void ClearActiveInvocation(Guid invocationId)
+        catch (Exception exception)
         {
-            CancellationTokenSource? invocationCancellationTokenSource = null;
-
-            lock (_syncRoot)
-            {
-                if (_currentInvocationId != invocationId)
-                {
-                    return;
-                }
-
-                invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                _invocationCancellationTokenSource = null;
-                _currentInvocationId = null;
-            }
-
-            invocationCancellationTokenSource?.Dispose();
+            _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
+            await TrySendFailureAsync(sender, package.InvocationId, exception.Message).ConfigureAwait(false);
         }
-
-        private sealed record PendingToolCall(
-            DateTimeOffset CreatedAt,
-            TaskCompletionSource<ToolCallResultEvent> Completion);
+        finally
+        {
+            ClearActiveInvocation(package.InvocationId);
+        }
     }
+
+    public void Cancel(Guid invocationId)
+    {
+        CancellationTokenSource? invocationCancellationTokenSource = null;
+
+        lock (_syncRoot)
+        {
+            if (_currentInvocationId == invocationId)
+            {
+                invocationCancellationTokenSource = _invocationCancellationTokenSource;
+            }
+        }
+
+        invocationCancellationTokenSource?.Cancel();
+    }
+
+    public async Task<string> ExecuteApiToolCallAsync(Guid invocationId,
+        string toolName,
+        string parameters,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+        ArgumentNullException.ThrowIfNull(parameters);
+
+        var requestId = Guid.NewGuid().ToString("N");
+        var completion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingToolCall = new PendingToolCall(DateTimeOffset.UtcNow, completion);
+        var sender = _hubSender.Value;
+
+        if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
+        {
+            throw new InvalidOperationException("Failed to register pending tool call.");
+        }
+
+        try
+        {
+            await sender.SendToolCallRequestAsync(new ToolCallRequestPayload
+                {
+                    InvocationId = invocationId,
+                    RequestId = requestId,
+                    ToolName = toolName,
+                    Parameters = parameters
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+
+            var result = await completion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(result.Error))
+            {
+                throw new InvalidOperationException($"Tool call '{toolName}' failed: {result.Error}");
+            }
+
+            return result.Result;
+        }
+        finally
+        {
+            _pendingToolCalls.TryRemove(requestId, out _);
+        }
+    }
+
+    public void CancelAll()
+    {
+        CancellationTokenSource? invocationCancellationTokenSource;
+
+        lock (_syncRoot)
+        {
+            invocationCancellationTokenSource = _invocationCancellationTokenSource;
+        }
+
+        invocationCancellationTokenSource?.Cancel();
+
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                removedPendingToolCall.Completion.TrySetCanceled();
+            }
+        }
+    }
+
+    public void CleanupStaleToolCalls(TimeSpan maxAge)
+    {
+        var cutoff = DateTimeOffset.UtcNow - maxAge;
+
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (pendingToolCall.Value.CreatedAt >= cutoff)
+            {
+                continue;
+            }
+
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                removedPendingToolCall.Completion.TrySetException(new TimeoutException("Tool call timed out during cleanup."));
+            }
+        }
+    }
+
+    public void ResolveToolCallResult(ToolCallResultEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
+        {
+            pendingToolCall.Completion.TrySetResult(evt);
+        }
+    }
+
+    private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
+    {
+        if (await _capabilityReporter.VerifyOllamaAndModelAsync(requestedModel, cancellationToken).ConfigureAwait(false))
+        {
+            return string.IsNullOrWhiteSpace(requestedModel) ? _defaultModel : requestedModel.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(requestedModel))
+        {
+            throw new InvalidOperationException("Ollama is unavailable or the default model is not installed.");
+        }
+
+        _logger.LogWarning("Requested model '{RequestedModel}' could not be verified. Falling back to '{FallbackModel}'.",
+            requestedModel,
+            _defaultModel);
+
+        return _defaultModel;
+    }
+
+    private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
+    {
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.System, package.ResolvedSystemPrompt)
+        };
+
+        messages.AddRange(package.ConversationContext
+                                 .OrderBy(message => message.SortOrder)
+                                 .Select(CreateChatMessage));
+
+        return messages;
+    }
+
+    private static ChatMessage CreateChatMessage(ConversationMessageDto message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return new ChatMessage(MapRole(message.Role), message.Content);
+    }
+
+    private static ChatRole MapRole(MessageRole role)
+    {
+        return role switch
+        {
+            MessageRole.System => ChatRole.System,
+            MessageRole.User => ChatRole.User,
+            MessageRole.Assistant => ChatRole.Assistant,
+            MessageRole.Tool => ChatRole.Tool,
+            _ => throw new InvalidOperationException($"Unsupported message role: {role}")
+        };
+    }
+
+    private async Task TrySendFailureAsync(IHubMessageSender sender, Guid invocationId, string error)
+    {
+        try
+        {
+            await sender.SendInvocationFailedAsync(new InvocationFailedPayload
+                {
+                    InvocationId = invocationId,
+                    Error = error
+                },
+                CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}.", invocationId);
+        }
+    }
+
+    private void RegisterActiveInvocation(Guid invocationId, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        lock (_syncRoot)
+        {
+            if (_currentInvocationId is not null)
+            {
+                throw new InvalidOperationException("Worker is busy with another invocation");
+            }
+
+            _currentInvocationId = invocationId;
+            _invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _invocationCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        }
+    }
+
+    private CancellationToken GetInvocationCancellationToken()
+    {
+        lock (_syncRoot)
+        {
+            if (_invocationCancellationTokenSource is null)
+            {
+                throw new InvalidOperationException("No active invocation is registered.");
+            }
+
+            return _invocationCancellationTokenSource.Token;
+        }
+    }
+
+    private bool IsCurrentInvocation(Guid invocationId)
+    {
+        lock (_syncRoot)
+        {
+            return _currentInvocationId == invocationId;
+        }
+    }
+
+    private void ClearActiveInvocation(Guid invocationId)
+    {
+        CancellationTokenSource? invocationCancellationTokenSource = null;
+
+        lock (_syncRoot)
+        {
+            if (_currentInvocationId != invocationId)
+            {
+                return;
+            }
+
+            invocationCancellationTokenSource = _invocationCancellationTokenSource;
+            _invocationCancellationTokenSource = null;
+            _currentInvocationId = null;
+        }
+
+        invocationCancellationTokenSource?.Dispose();
+    }
+
+    private sealed record PendingToolCall(
+        DateTimeOffset CreatedAt,
+        TaskCompletionSource<ToolCallResultEvent> Completion);
 }
