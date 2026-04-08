@@ -1,10 +1,9 @@
 @implements IDisposable
 @inject IWorkerHubConnection WorkerHubConnection
 
-<span class="connection-status-badge @GetBadgeClass()" title="@GetTooltip()">
-    <span class="connection-status-badge__indicator"></span>
-    <span>@GetLabel()</span>
-</span>
+<MudChip T="string" Color="@GetChipColor()" Icon="@GetIcon()" Size="Size.Small">
+    @GetLabel()
+</MudChip>
 
 @code {
 
@@ -38,27 +37,26 @@
         };
     }
 
-    private string GetBadgeClass()
+    private Color GetChipColor()
     {
         return WorkerHubConnection.State switch
         {
-            WorkerConnectionState.Connected => "connection-status-badge--connected",
-            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => "connection-status-badge--pending",
-            WorkerConnectionState.Error => "connection-status-badge--error",
-            _ => "connection-status-badge--offline"
+            WorkerConnectionState.Connected => Color.Success,
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => Color.Warning,
+            WorkerConnectionState.Error => Color.Error,
+            _ => Color.Default
         };
     }
 
-    private string GetTooltip()
+    private string GetIcon()
     {
         return WorkerHubConnection.State switch
         {
-            WorkerConnectionState.Connected => "Worker is connected to the Central Platform.",
-            WorkerConnectionState.Connecting => "Worker is connecting to the Central Platform.",
-            WorkerConnectionState.Reconnecting => "Worker is attempting to reconnect to the Central Platform.",
-            WorkerConnectionState.Pairing => "Worker pairing is currently in progress.",
-            WorkerConnectionState.Error => "Worker connection encountered an error.",
-            _ => "Worker is not connected to the Central Platform."
+            WorkerConnectionState.Connected => Icons.Material.Filled.CheckCircle,
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting => Icons.Material.Filled.Sync,
+            WorkerConnectionState.Pairing => Icons.Material.Filled.Link,
+            WorkerConnectionState.Error => Icons.Material.Filled.Error,
+            _ => Icons.Material.Filled.WifiOff
         };
     }
 

@@ -9,11 +9,13 @@ using XE_Local_AI_Engine.Models;
 using XE_Local_AI_Engine.Models.Enums;
 using XE_Local_AI_Engine.Services.Capabilities;
 using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Services.DeadLetter;
 
 public sealed class InvocationRunner : IInvocationRunner
 {
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IChatClient _chatClient;
+    private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly ILogger<InvocationRunner> _logger;
@@ -31,6 +33,7 @@ public sealed class InvocationRunner : IInvocationRunner
         IChatClient chatClient,
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
+        IDeadLetterStore deadLetterStore,
         IConfiguration configuration,
         IOptions<WorkerNodeOptions> workerOptions,
         ILogger<InvocationRunner> logger)
@@ -39,6 +42,7 @@ public sealed class InvocationRunner : IInvocationRunner
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
+        _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(workerOptions);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -298,7 +302,12 @@ public sealed class InvocationRunner : IInvocationRunner
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}.", invocationId);
+            _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}. Enqueueing to dead letter store.", invocationId);
+            await _deadLetterStore.EnqueueAsync(new InvocationFailedPayload
+            {
+                InvocationId = invocationId,
+                Error = error
+            }, CancellationToken.None).ConfigureAwait(false);
         }
     }
 

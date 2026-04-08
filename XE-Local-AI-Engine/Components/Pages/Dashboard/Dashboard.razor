@@ -9,143 +9,128 @@
 
 <PageTitle>Worker Dashboard</PageTitle>
 
-<section class="dashboard-page">
-    <header class="dashboard-page__header">
-        <div>
-            <p class="dashboard-page__eyebrow">Worker Node</p>
-            <h1>Connection dashboard</h1>
-            <p class="dashboard-page__description">Monitor pairing state, connection health, and locally detected capabilities.</p>
-        </div>
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4">Connection dashboard</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Monitor pairing state, connection health, and locally detected capabilities.</MudText>
+<MudChip T="string" Color="@GetConnectionChipColor()" Size="Size.Small">@GetConnectionLabel()</MudChip>
 
-        <span class="dashboard-status-badge @GetStatusBadgeClass()">@GetConnectionLabel()</span>
-    </header>
+@if (!string.IsNullOrWhiteSpace(_actionMessage))
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@_actionMessage</MudAlert>
+}
 
-    @if (!string.IsNullOrWhiteSpace(_actionMessage))
-    {
-        <div class="dashboard-alert dashboard-alert--success" role="status">@_actionMessage</div>
-    }
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+}
 
-    @if (!string.IsNullOrWhiteSpace(_errorMessage))
-    {
-        <div class="dashboard-alert dashboard-alert--error" role="alert">@_errorMessage</div>
-    }
+<MudGrid Spacing="4" Class="mt-4">
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5">Connection</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Connect or disconnect the worker from the Central Platform.</MudText>
 
-    <div class="dashboard-grid">
-        <section class="dashboard-card">
-            <div class="dashboard-card__header">
-                <h2>Connection</h2>
-                <p>Connect or disconnect the worker from the Central Platform.</p>
-            </div>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                        <tr>
+                            <td>Pairing status</td>
+                            <td>@(TokenStore.IsPaired ? "Paired" : "Not paired")</td>
+                        </tr>
+                        <tr>
+                            <td>Connection state</td>
+                            <td>@GetConnectionLabel()</td>
+                        </tr>
+                        <tr>
+                            <td>Token expiry</td>
+                            <td>@GetTokenExpiryLabel()</td>
+                        </tr>
+                        <tr>
+                            <td>Last update</td>
+                            <td>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
 
-            <dl class="dashboard-metadata">
-                <div>
-                    <dt>Pairing status</dt>
-                    <dd>@(TokenStore.IsPaired ? "Paired" : "Not paired")</dd>
-                </div>
-                <div>
-                    <dt>Connection state</dt>
-                    <dd>@GetConnectionLabel()</dd>
-                </div>
-                <div>
-                    <dt>Token expiry</dt>
-                    <dd>@GetTokenExpiryLabel()</dd>
-                </div>
-                <div>
-                    <dt>Last update</dt>
-                    <dd>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</dd>
-                </div>
-            </dl>
+                @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @ConnectionState.LastError</MudAlert>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConnectAsync" Disabled="@(!CanConnect || _isConnecting)">@(_isConnecting ? "Connecting..." : "Connect")</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DisconnectAsync" Disabled="@(!CanDisconnect || _isDisconnecting)">@(_isDisconnecting ? "Disconnecting..." : "Disconnect")</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
 
-            @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
-            {
-                <p class="dashboard-inline-error">Last error: @ConnectionState.LastError</p>
-            }
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5">Capabilities</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Current hardware and local model snapshot from this machine.</MudText>
 
-            <div class="dashboard-actions">
-                <button class="dashboard-button" @onclick="ConnectAsync" disabled="@(!CanConnect || _isConnecting)">
-                    @(_isConnecting ? "Connecting..." : "Connect")
-                </button>
-                <button class="dashboard-button dashboard-button--secondary" @onclick="DisconnectAsync" disabled="@(!CanDisconnect || _isDisconnecting)">
-                    @(_isDisconnecting ? "Disconnecting..." : "Disconnect")
-                </button>
-            </div>
-        </section>
+                @if (_capabilities is null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Capability snapshot not loaded yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <tbody>
+                            <tr>
+                                <td>RAM</td>
+                                <td>@FormatMemory(_capabilities.RamMb)</td>
+                            </tr>
+                            <tr>
+                                <td>GPU</td>
+                                <td>@(_capabilities.GpuName ?? "Not detected")</td>
+                            </tr>
+                            <tr>
+                                <td>VRAM</td>
+                                <td>@FormatMemory(_capabilities.VramMb)</td>
+                            </tr>
+                            <tr>
+                                <td>CUDA</td>
+                                <td>@(_capabilities.CudaAvailable ? "Available" : "Unavailable")</td>
+                            </tr>
+                            <tr>
+                                <td>CPU</td>
+                                <td>@(_capabilities.CpuClass ?? "Unknown")</td>
+                            </tr>
+                            <tr>
+                                <td>System score</td>
+                                <td>@(_capabilities.SystemScoreClass ?? "Unknown")</td>
+                            </tr>
+                        </tbody>
+                    </MudSimpleTable>
 
-        <section class="dashboard-card">
-            <div class="dashboard-card__header">
-                <h2>Capabilities</h2>
-                <p>Current hardware and local model snapshot from this machine.</p>
-            </div>
-
-            <div class="dashboard-actions">
-                <button class="dashboard-button dashboard-button--secondary" @onclick="RefreshCapabilitiesAsync" disabled="@_isRefreshingCapabilities">
-                    @(_isRefreshingCapabilities ? "Refreshing..." : "Refresh snapshot")
-                </button>
-            </div>
-
-            @if (_capabilities is null)
-            {
-                <p class="dashboard-placeholder">Capability snapshot not loaded yet.</p>
-            }
-            else
-            {
-                <dl class="dashboard-metadata">
-                    <div>
-                        <dt>RAM</dt>
-                        <dd>@FormatMemory(_capabilities.RamMb)</dd>
-                    </div>
-                    <div>
-                        <dt>GPU</dt>
-                        <dd>@(_capabilities.GpuName ?? "Not detected")</dd>
-                    </div>
-                    <div>
-                        <dt>VRAM</dt>
-                        <dd>@FormatMemory(_capabilities.VramMb)</dd>
-                    </div>
-                    <div>
-                        <dt>CUDA</dt>
-                        <dd>@(_capabilities.CudaAvailable ? "Available" : "Unavailable")</dd>
-                    </div>
-                    <div>
-                        <dt>CPU</dt>
-                        <dd>@(_capabilities.CpuClass ?? "Unknown")</dd>
-                    </div>
-                    <div>
-                        <dt>System score</dt>
-                        <dd>@(_capabilities.SystemScoreClass ?? "Unknown")</dd>
-                    </div>
-                </dl>
-
-                <div class="dashboard-list-block">
-                    <h3>Installed models</h3>
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Installed models</MudText>
                     @if (_capabilities.InstalledModels.Count == 0)
                     {
-                        <p class="dashboard-placeholder">No local Ollama models detected.</p>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No local Ollama models detected.</MudText>
                     }
                     else
                     {
-                        <div class="dashboard-tag-list">
-                            @foreach (var model in _capabilities.InstalledModels)
-                            {
-                                <span class="dashboard-tag">@model</span>
-                            }
-                        </div>
-                    }
-                </div>
-
-                <div class="dashboard-list-block">
-                    <h3>Supported capabilities</h3>
-                    <div class="dashboard-tag-list">
-                        @foreach (var capability in _capabilities.SupportedCapabilities)
+                        @foreach (var model in _capabilities.InstalledModels)
                         {
-                            <span class="dashboard-tag dashboard-tag--accent">@capability</span>
+                            <MudChip T="string" Size="Size.Small">@model</MudChip>
                         }
-                    </div>
-                </div>
-            }
-        </section>
-    </div>
-</section>
+                    }
+
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Supported capabilities</MudText>
+                    @foreach (var capability in _capabilities.SupportedCapabilities)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary">@capability</MudChip>
+                    }
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Outlined" OnClick="RefreshCapabilitiesAsync" Disabled="_isRefreshingCapabilities">@(_isRefreshingCapabilities ? "Refreshing..." : "Refresh snapshot")</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+</MudGrid>
 
 @code {
     private ClientCapabilities? _capabilities;
@@ -282,14 +267,14 @@
         };
     }
 
-    private string GetStatusBadgeClass()
+    private Color GetConnectionChipColor()
     {
         return WorkerHubConnection.State switch
         {
-            WorkerConnectionState.Connected => "dashboard-status-badge--connected",
-            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => "dashboard-status-badge--pending",
-            WorkerConnectionState.Error => "dashboard-status-badge--error",
-            _ => "dashboard-status-badge--disconnected"
+            WorkerConnectionState.Connected => Color.Success,
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => Color.Warning,
+            WorkerConnectionState.Error => Color.Error,
+            _ => Color.Default
         };
     }
 

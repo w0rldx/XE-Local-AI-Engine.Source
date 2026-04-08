@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Models;
 using XE_Local_AI_Engine.Models.Enums;
 using XE_Local_AI_Engine.Services.Capabilities;
 using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Services.DeadLetter;
 using XE_Local_AI_Engine.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -278,6 +279,7 @@ public sealed class InvocationRunnerTests
             resolvedChatClient,
             resolvedValidator,
             resolvedCapabilityReporter,
+            Substitute.For<IDeadLetterStore>(),
             configuration,
             Options.Create(workerOptions ?? new WorkerNodeOptions { NodeName = "worker", MaxResponseSizeMb = 10, MaxPendingToolCallAgeMinutes = 5 }),
             NullLogger<InvocationRunner>.Instance);

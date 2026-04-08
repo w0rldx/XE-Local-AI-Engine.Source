@@ -1,40 +1,46 @@
 @using XE_Local_AI_Engine.Models.Enums
 @using XE_Local_AI_Engine.Services.Events
-<article class="invocation-card">
-    <header class="invocation-card__header">
-        <div>
-            <h3 class="invocation-card__title">@Title</h3>
-            <p class="invocation-card__subtitle">Started @State.StartedAt.ToLocalTime().ToString("g")</p>
-        </div>
 
-        <span class="dashboard-status-badge @GetStatusBadgeClass()">@GetStatusLabel()</span>
-    </header>
+<MudCard Class="mb-4">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6">@Title</MudText>
+            <MudText Typo="Typo.body2">Started @State.StartedAt.ToLocalTime().ToString("g")</MudText>
+        </CardHeaderContent>
+        <CardHeaderActions>
+            <MudChip T="string" Color="@GetStatusChipColor()" Size="Size.Small">@GetStatusLabel()</MudChip>
+        </CardHeaderActions>
+    </MudCardHeader>
 
-    <dl class="dashboard-metadata">
-        <div>
-            <dt>Invocation ID</dt>
-            <dd>@State.InvocationId</dd>
-        </div>
-        <div>
-            <dt>Conversation ID</dt>
-            <dd>@State.ConversationId</dd>
-        </div>
-        <div>
-            <dt>Model</dt>
-            <dd>@(State.ModelUsed ?? "Unknown")</dd>
-        </div>
-    </dl>
+    <MudCardContent>
+        <MudSimpleTable Dense="true">
+            <tbody>
+                <tr>
+                    <td><strong>Invocation ID</strong></td>
+                    <td>@State.InvocationId</td>
+                </tr>
+                <tr>
+                    <td><strong>Conversation ID</strong></td>
+                    <td>@State.ConversationId</td>
+                </tr>
+                <tr>
+                    <td><strong>Model</strong></td>
+                    <td>@(State.ModelUsed ?? "Unknown")</td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
 
-    @if (!string.IsNullOrWhiteSpace(State.Error))
-    {
-        <p class="dashboard-inline-error">@State.Error</p>
-    }
+        @if (!string.IsNullOrWhiteSpace(State.Error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@State.Error</MudAlert>
+        }
 
-    @if (!string.IsNullOrWhiteSpace(State.StreamedContent))
-    {
-        <pre class="invocation-monitor__output invocation-monitor__output--card">@State.StreamedContent</pre>
-    }
-</article>
+        @if (!string.IsNullOrWhiteSpace(State.StreamedContent))
+        {
+            <MudPaper Class="pa-4 mt-2" Style="font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto;" Elevation="0" Outlined="true">@State.StreamedContent</MudPaper>
+        }
+    </MudCardContent>
+</MudCard>
 
 @code {
     [Parameter] public required InvocationState State { get; set; }
@@ -54,14 +60,14 @@
         };
     }
 
-    private string GetStatusBadgeClass()
+    private Color GetStatusChipColor()
     {
         return State.Status switch
         {
-            InvocationStatus.Assigned or InvocationStatus.Running => "dashboard-status-badge--pending",
-            InvocationStatus.Completed => "dashboard-status-badge--connected",
-            InvocationStatus.Failed or InvocationStatus.Cancelled => "dashboard-status-badge--error",
-            _ => "dashboard-status-badge--disconnected"
+            InvocationStatus.Assigned or InvocationStatus.Running => Color.Warning,
+            InvocationStatus.Completed => Color.Success,
+            InvocationStatus.Failed or InvocationStatus.Cancelled => Color.Error,
+            _ => Color.Default
         };
     }
 

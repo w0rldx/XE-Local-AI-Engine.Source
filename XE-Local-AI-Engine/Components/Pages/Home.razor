@@ -7,63 +7,49 @@
 
 <PageTitle>Worker Node Home</PageTitle>
 
-<section class="dashboard-page">
-    <header class="dashboard-page__header">
-        <div>
-            <p class="dashboard-page__eyebrow">Worker Node</p>
-            <h1>Welcome to the worker console</h1>
-            <p class="dashboard-page__description">Use the worker dashboard to pair this node, inspect capabilities, and monitor live invocations from the Central Platform.</p>
-        </div>
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">Welcome to the worker console</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Use the worker dashboard to pair this node, inspect capabilities, and monitor live invocations from the Central Platform.</MudText>
 
-        <ConnectionStatusBadge/>
-    </header>
+<ConnectionStatusBadge/>
 
-    <div class="dashboard-grid">
-        <section class="dashboard-card">
-            <div class="dashboard-card__header">
-                <h2>Current status</h2>
-                <p>Quick summary of pairing and connection health.</p>
-            </div>
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Current status</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3">Quick summary of pairing and connection health.</MudText>
 
-            <dl class="dashboard-metadata">
-                <div>
-                    <dt>Pairing</dt>
-                    <dd>@(TokenStore.IsPaired ? "Paired" : "Not paired")</dd>
-                </div>
-                <div>
-                    <dt>Connection</dt>
-                    <dd>@GetConnectionLabel()</dd>
-                </div>
-                <div>
-                    <dt>Token expiry</dt>
-                    <dd>@GetTokenExpiryLabel()</dd>
-                </div>
-                <div>
-                    <dt>Last update</dt>
-                    <dd>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</dd>
-                </div>
-            </dl>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                        <tr><td>Pairing</td><td>@(TokenStore.IsPaired ? "Paired" : "Not paired")</td></tr>
+                        <tr><td>Connection</td><td>@GetConnectionLabel()</td></tr>
+                        <tr><td>Token expiry</td><td>@GetTokenExpiryLabel()</td></tr>
+                        <tr><td>Last update</td><td>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</td></tr>
+                    </tbody>
+                </MudSimpleTable>
 
-            @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
-            {
-                <p class="dashboard-inline-error">Last error: @ConnectionState.LastError</p>
-            }
-        </section>
+                @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @ConnectionState.LastError</MudAlert>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
 
-        <section class="dashboard-card">
-            <div class="dashboard-card__header">
-                <h2>Where to go next</h2>
-                <p>Open the area that matches the task you want to perform.</p>
-            </div>
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Where to go next</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3">Open the area that matches the task you want to perform.</MudText>
 
-            <div class="route-not-found__actions">
-                <a class="route-not-found__link" href="/dashboard">Open dashboard</a>
-                <a class="route-not-found__link route-not-found__link--secondary" href="/pairing">Open pairing wizard</a>
-                <a class="route-not-found__link route-not-found__link--secondary" href="/invocations">Open invocation monitor</a>
-            </div>
-        </section>
-    </div>
-</section>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard" Class="mr-2">Open dashboard</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/pairing" Class="mr-2">Open pairing wizard</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/invocations">Open invocation monitor</MudButton>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
 
 @code {
 

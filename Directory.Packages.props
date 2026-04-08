@@ -9,8 +9,10 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.6.2" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.2.1" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.1" />
+    <PackageVersion Include="MudBlazor" Version="9.3.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.25" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.4.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.4.0" />
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.0.0-preview.260108.1" />
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.0.0-preview.260108.1" />
     <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.0.0-preview.260108.1" />

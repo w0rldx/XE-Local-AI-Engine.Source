@@ -1,31 +1,51 @@
 @inherits LayoutComponentBase
 
-<div class="page shell-layout">
-    <header class="shell-layout__header">
-        <div>
-            <p class="shell-layout__eyebrow">XE Local AI Engine</p>
-            <h1 class="shell-layout__title">Worker Node Console</h1>
-        </div>
+<MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode"/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
 
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="@(() => _drawerOpen = !_drawerOpen)"/>
+        <MudText Typo="Typo.h6" Class="ml-2">XE Local AI Engine</MudText>
+        <MudSpacer/>
         <ConnectionStatusBadge/>
-    </header>
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Color="Color.Inherit"
+                       OnClick="@(() => _isDarkMode = !_isDarkMode)"/>
+    </MudAppBar>
 
-    <nav class="shell-layout__nav" aria-label="Primary">
-        <NavLink href="/" Match="NavLinkMatch.All" class="shell-layout__nav-link">Home</NavLink>
-        <NavLink href="/pairing" class="shell-layout__nav-link">Pairing</NavLink>
-        <NavLink href="/dashboard" class="shell-layout__nav-link">Dashboard</NavLink>
-        <NavLink href="/invocations" class="shell-layout__nav-link">Invocations</NavLink>
-    </nav>
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Mini" OpenMiniOnHover="true">
+        <MudNavMenu>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+            <MudNavLink Href="/pairing" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Link">Pairing</MudNavLink>
+            <MudNavLink Href="/dashboard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/invocations" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Terminal">Invocations</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
 
-    <main class="shell-layout__main">
-        <article class="content px-4">
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-4">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
-</div>
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode;
+    private MudThemeProvider _mudThemeProvider = null!;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
+            StateHasChanged();
+        }
+    }
+}
