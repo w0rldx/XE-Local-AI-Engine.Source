@@ -8,10 +8,10 @@
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet"/>
     <link rel="stylesheet" href="app.css"/>
     <link rel="stylesheet" href="XE-Local-AI-Engine.styles.css"/>
-    <HeadOutlet/>
+    <HeadOutlet @rendermode="new InteractiveServerRenderMode(false)"/>
 </head>
 <body>
-<Routes/>
+<Routes @rendermode="new InteractiveServerRenderMode(false)"/>
 <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 <script src="_framework/blazor.web.js"></script>
 </body>

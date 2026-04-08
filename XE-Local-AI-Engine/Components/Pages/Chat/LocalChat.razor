@@ -1,0 +1,249 @@
+@page "/chat"
+@rendermode @(new InteractiveServerRenderMode(false))
+@implements IDisposable
+
+@inject LocalChatService ChatService
+@inject IOllamaModelService ModelService
+@inject IDialogService DialogService
+
+<PageTitle>Local Chat</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @* Top bar *@
+    <MudPaper Elevation="2" Class="pa-3 mb-3">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudSelect T="string"
+                           Value="_selectedModel"
+                           ValueChanged="OnModelChanged"
+                           Label="Model"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Style="min-width: 220px;"
+                           Disabled="@(_isStreaming || !_isOllamaAvailable)">
+                    @foreach (var model in _availableModels)
+                    {
+                        <MudSelectItem Value="@model">@model</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudChip T="string"
+                         Color="@(_isOllamaAvailable ? Color.Success : Color.Error)"
+                         Size="Size.Small">
+                    @(_isOllamaAvailable ? "Online" : "Offline")
+                </MudChip>
+            </MudStack>
+            <MudButton StartIcon="@Icons.Material.Filled.DeleteSweep"
+                       Color="Color.Default"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small"
+                       OnClick="ClearChat"
+                       Disabled="@_isStreaming">
+                Clear
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @* Chat area *@
+    <MudPaper Elevation="1" Class="chat-container" id="chat-container">
+        @if (!_isOllamaAvailable)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-2">
+                Ollama is not available. Please ensure Ollama is running and accessible.
+            </MudAlert>
+        }
+        @if (_messages.Count == 0)
+        {
+            <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height: 100%; opacity: 0.5;">
+                <MudIcon Icon="@Icons.Material.Filled.Chat" Size="Size.Large" />
+                <MudText Typo="Typo.body1">Start a conversation...</MudText>
+            </MudStack>
+        }
+        @foreach (var msg in _messages)
+        {
+            if (msg.Role == "user")
+            {
+                <div class="chat-bubble-user">
+                    <MudPaper Elevation="1" Class="pa-3" Style="background-color: var(--mud-palette-primary); color: white; border-radius: 16px 16px 4px 16px; max-width: 70%; word-wrap: break-word;">
+                        @msg.Content
+                    </MudPaper>
+                </div>
+            }
+            else
+            {
+                <div class="chat-bubble-assistant">
+                    <MudPaper Elevation="1" Class="pa-3" Style="border-radius: 16px 16px 16px 4px; max-width: 70%; word-wrap: break-word;">
+                        @if (msg.IsStreaming && string.IsNullOrEmpty(msg.Content))
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            @msg.Content
+                            @if (msg.IsStreaming)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ml-1" Style="vertical-align: middle;" />
+                            }
+                        }
+                    </MudPaper>
+                </div>
+            }
+        }
+        <div @ref="_chatBottom"></div>
+    </MudPaper>
+
+    @* Input area *@
+    <MudPaper Elevation="2" Class="chat-input-area mt-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudTextField @bind-Value="_userInput"
+                          Placeholder="Type a message..."
+                          Variant="Variant.Outlined"
+                          FullWidth="true"
+                          Disabled="@(_isStreaming || !_isOllamaAvailable)"
+                          OnKeyDown="OnKeyDown"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@Icons.Material.Filled.Send"
+                          OnAdornmentClick="SendMessage"
+                          AdornmentColor="Color.Primary" />
+            @if (_isStreaming)
+            {
+                <MudButton Color="Color.Error"
+                           Variant="Variant.Outlined"
+                           Size="Size.Medium"
+                           OnClick="CancelStreaming"
+                           StartIcon="@Icons.Material.Filled.Stop">
+                    Cancel
+                </MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private readonly List<ChatBubble> _messages = new();
+    private string _userInput = "";
+    private bool _isStreaming;
+    private bool _isOllamaAvailable;
+    private string _selectedModel = "";
+    private List<string> _availableModels = new();
+    private CancellationTokenSource? _cts;
+    private ElementReference _chatBottom;
+
+    private sealed class ChatBubble
+    {
+        public string Role { get; set; } = "";
+        public string Content { get; set; } = "";
+        public bool IsStreaming { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isOllamaAvailable = await ModelService.IsAvailableAsync();
+        if (_isOllamaAvailable)
+        {
+            var models = await ModelService.ListLocalModelsAsync();
+            _availableModels = models.Select(m => m.Name).ToList();
+            _selectedModel = ChatService.SelectedModel;
+            if (!_availableModels.Contains(_selectedModel) && _availableModels.Count > 0)
+            {
+                _selectedModel = _availableModels[0];
+                ChatService.SelectedModel = _selectedModel;
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_messages.Count > 0)
+        {
+            try
+            {
+                await _chatBottom.FocusAsync();
+            }
+            catch
+            {
+                // scroll not critical
+            }
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_userInput) || _isStreaming) return;
+
+        var userMsg = _userInput.Trim();
+        _userInput = "";
+        _messages.Add(new ChatBubble { Role = "user", Content = userMsg });
+
+        var assistantBubble = new ChatBubble { Role = "assistant", Content = "", IsStreaming = true };
+        _messages.Add(assistantBubble);
+
+        _isStreaming = true;
+        _cts = new CancellationTokenSource();
+        StateHasChanged();
+
+        try
+        {
+            await foreach (var token in ChatService.SendMessageAsync(userMsg, _cts.Token))
+            {
+                assistantBubble.Content = string.Concat(assistantBubble.Content, token);
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            assistantBubble.Content += " [cancelled]";
+        }
+        catch (Exception ex)
+        {
+            assistantBubble.Content = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            assistantBubble.IsStreaming = false;
+            _isStreaming = false;
+            _cts?.Dispose();
+            _cts = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task OnModelChanged(string newModel)
+    {
+        if (newModel == _selectedModel) return;
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Switch Model",
+            "Switching models requires GPU memory reload. The current model will be unloaded and the new model loaded. This may take 10-30 seconds for large models. Continue?",
+            yesText: "Switch",
+            cancelText: "Cancel");
+        if (confirmed ?? false)
+        {
+            _selectedModel = newModel;
+            ChatService.SelectedModel = newModel;
+        }
+    }
+
+    private void ClearChat()
+    {
+        _messages.Clear();
+        ChatService.ClearHistory();
+    }
+
+    private void CancelStreaming()
+    {
+        _cts?.Cancel();
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

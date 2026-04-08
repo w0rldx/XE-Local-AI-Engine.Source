@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Services.DeadLetter;
 using XE_Local_AI_Engine.Services.Events;
 using XE_Local_AI_Engine.Services.Invocation;
 using MudBlazor.Services;
+using XE_Local_AI_Engine.Services.Chat;
 using XE_Local_AI_Engine.Services.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -71,6 +72,9 @@ builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
 builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
 builder.Services.AddSingleton<IDeadLetterStore, FileDeadLetterStore>();
 builder.Services.AddSingleton<DeadLetterFlushService>();
+builder.Services.AddSingleton<ILocalToolExecutor, LocalToolExecutor>();
+builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
+builder.Services.AddScoped<LocalChatService>();
 builder.Services.AddSingleton<WorkerHubConnection>(sp =>
 {
     var connection = ActivatorUtilities.CreateInstance<WorkerHubConnection>(sp);
