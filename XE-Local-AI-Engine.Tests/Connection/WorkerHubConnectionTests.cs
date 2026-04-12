@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Tests.Connection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Services.Capabilities;
-using XE_Local_AI_Engine.Services.Connection;
-using XE_Local_AI_Engine.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -48,14 +48,15 @@ public sealed class WorkerHubConnectionTests
     {
         var deadLetterStore = Substitute.For<IDeadLetterStore>();
         var sender = new MockHubMessageSender();
-        var flushService = new DeadLetterFlushService(
-            deadLetterStore,
+        var flushService = new DeadLetterFlushService(deadLetterStore,
             new Lazy<IHubMessageSender>(() => sender),
             NullLogger<DeadLetterFlushService>.Instance);
 
-        return new WorkerHubConnection(
-            tokenStore,
-            Options.Create(new CentralPlatformOptions { BaseUrl = "https://test.example.com" }),
+        return new WorkerHubConnection(tokenStore,
+            Options.Create(new CentralPlatformOptions
+            {
+                BaseUrl = "https://test.example.com"
+            }),
             new ConnectionState(),
             new Lazy<ICapabilityReporter>(() => Substitute.For<ICapabilityReporter>()),
             flushService,

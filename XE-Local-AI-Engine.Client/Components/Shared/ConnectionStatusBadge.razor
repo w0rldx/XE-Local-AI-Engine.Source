@@ -1,0 +1,64 @@
+@using XE_Local_AI_Engine.Client.Services.Connection
+@implements IDisposable
+@inject IWorkerHubConnection WorkerHubConnection
+
+<MudChip T="string" Color="@GetChipColor()" Icon="@GetIcon()" Size="Size.Small">
+    @GetLabel()
+</MudChip>
+
+@code {
+
+    protected override void OnInitialized()
+    {
+        WorkerHubConnection.StateChanged += OnStateChanged;
+    }
+
+    public void Dispose()
+    {
+        WorkerHubConnection.StateChanged -= OnStateChanged;
+    }
+
+    private void OnStateChanged(object? sender, WorkerConnectionStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetLabel()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "Connected",
+            WorkerConnectionState.Connecting => "Connecting",
+            WorkerConnectionState.Reconnecting => "Reconnecting",
+            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Error => "Error",
+            _ => "Offline"
+        };
+    }
+
+    private Color GetChipColor()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => Color.Success,
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => Color.Warning,
+            WorkerConnectionState.Error => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetIcon()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => Icons.Material.Filled.CheckCircle,
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting => Icons.Material.Filled.Sync,
+            WorkerConnectionState.Pairing => Icons.Material.Filled.Link,
+            WorkerConnectionState.Error => Icons.Material.Filled.Error,
+            _ => Icons.Material.Filled.WifiOff
+        };
+    }
+
+}

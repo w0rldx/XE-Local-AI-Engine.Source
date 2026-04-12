@@ -1,12 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Capabilities;
 
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Services.Capabilities;
-using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -97,16 +96,16 @@ public sealed class CapabilityReporterTests
     private static CapabilityReporterTestContext CreateContext()
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Ollama:ChatModel"] = "qwen3.5:9b",
-            })
-            .Build();
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["Ollama:ChatModel"] = "qwen3.5:9b"
+                            })
+                            .Build();
 
         var handler = new MockOllamaHttpHandler();
         var httpClient = new HttpClient(handler)
         {
-            BaseAddress = new Uri("http://fake-ollama/"),
+            BaseAddress = new Uri("http://fake-ollama/")
         };
 
         var chatClient = new OllamaApiClient(httpClient);
@@ -118,8 +117,7 @@ public sealed class CapabilityReporterTests
 
     private sealed class CapabilityReporterTestContext : IDisposable
     {
-        public CapabilityReporterTestContext(
-            MockOllamaHttpHandler handler,
+        public CapabilityReporterTestContext(MockOllamaHttpHandler handler,
             HttpClient httpClient,
             OllamaApiClient chatClient,
             MockWorkerHubConnection hubConnection,
@@ -157,12 +155,12 @@ public sealed class CapabilityReporterTests
 
     private sealed class MockWorkerHubConnection : IWorkerHubConnection
     {
-        private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
-        private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
-        private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
-        private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
         private EventHandler<ApprovalResolvedReceivedEventArgs>? _approvalResolvedReceived;
+        private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
+        private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
         private EventHandler<InvocationCancelledReceivedEventArgs>? _invocationCancelledReceived;
+        private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
+        private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
 
         public int SendCapabilitiesCallCount { get; private set; }
 
@@ -206,11 +204,20 @@ public sealed class CapabilityReporterTests
             remove => _invocationCancelledReceived -= value;
         }
 
-        public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ConnectAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DisconnectAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
         public Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default)
         {
@@ -219,20 +226,44 @@ public sealed class CapabilityReporterTests
             return Task.CompletedTask;
         }
 
-        public Task SendHeartbeatAsync(Guid clientNodeId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendHeartbeatAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendApprovalRequestAsync(ApprovalRequestPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendApprovalRequestAsync(ApprovalRequestPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendInvocationCompletedAsync(InvocationCompletedPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendInvocationCompletedAsync(InvocationCompletedPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 }

@@ -1,0 +1,327 @@
+@page "/dashboard"
+@using XE_Local_AI_Engine.Client.Models
+@using XE_Local_AI_Engine.Client.Services.Auth
+@using XE_Local_AI_Engine.Client.Services.Capabilities
+@using XE_Local_AI_Engine.Client.Services.Connection
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IWorkerHubConnection WorkerHubConnection
+@inject ConnectionState ConnectionState
+@inject ITokenStore TokenStore
+@inject ICapabilityReporter CapabilityReporter
+@inject ILogger<Dashboard> Logger
+
+<PageTitle>Worker Dashboard</PageTitle>
+
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4">Connection dashboard</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Monitor pairing state, connection health, and locally detected capabilities.</MudText>
+<MudChip T="string" Color="@GetConnectionChipColor()" Size="Size.Small">@GetConnectionLabel()</MudChip>
+
+@if (!string.IsNullOrWhiteSpace(_actionMessage))
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@_actionMessage</MudAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+}
+
+<MudGrid Spacing="4" Class="mt-4">
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5">Connection</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Connect or disconnect the worker from the Central Platform.</MudText>
+
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                    <tr>
+                        <td>Pairing status</td>
+                        <td>@(TokenStore.IsPaired ? "Paired" : "Not paired")</td>
+                    </tr>
+                    <tr>
+                        <td>Connection state</td>
+                        <td>@GetConnectionLabel()</td>
+                    </tr>
+                    <tr>
+                        <td>Token expiry</td>
+                        <td>@GetTokenExpiryLabel()</td>
+                    </tr>
+                    <tr>
+                        <td>Last update</td>
+                        <td>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</td>
+                    </tr>
+                    </tbody>
+                </MudSimpleTable>
+
+                @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @ConnectionState.LastError</MudAlert>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConnectAsync" Disabled="@(!CanConnect || _isConnecting)">@(_isConnecting ? "Connecting..." : "Connect")</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DisconnectAsync"
+                           Disabled="@(!CanDisconnect || _isDisconnecting)">@(_isDisconnecting ? "Disconnecting..." : "Disconnect")</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5">Capabilities</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Current hardware and local model snapshot from this machine.</MudText>
+
+                @if (_capabilities is null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Capability snapshot not loaded yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <tbody>
+                        <tr>
+                            <td>RAM</td>
+                            <td>@FormatMemory(_capabilities.RamMb)</td>
+                        </tr>
+                        <tr>
+                            <td>GPU</td>
+                            <td>@(_capabilities.GpuName ?? "Not detected")</td>
+                        </tr>
+                        <tr>
+                            <td>VRAM</td>
+                            <td>@FormatMemory(_capabilities.VramMb)</td>
+                        </tr>
+                        <tr>
+                            <td>CUDA</td>
+                            <td>@(_capabilities.CudaAvailable ? "Available" : "Unavailable")</td>
+                        </tr>
+                        <tr>
+                            <td>CPU</td>
+                            <td>@(_capabilities.CpuClass ?? "Unknown")</td>
+                        </tr>
+                        <tr>
+                            <td>System score</td>
+                            <td>@(_capabilities.SystemScoreClass ?? "Unknown")</td>
+                        </tr>
+                        </tbody>
+                    </MudSimpleTable>
+
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Installed models</MudText>
+                    @if (_capabilities.InstalledModels.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No local Ollama models detected.</MudText>
+                    }
+                    else
+                    {
+                        @foreach (var model in _capabilities.InstalledModels)
+                        {
+                            <MudChip T="string" Size="Size.Small">@model</MudChip>
+                        }
+                    }
+
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Supported capabilities</MudText>
+                    @foreach (var capability in _capabilities.SupportedCapabilities)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary">@capability</MudChip>
+                    }
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Outlined" OnClick="RefreshCapabilitiesAsync"
+                           Disabled="_isRefreshingCapabilities">@(_isRefreshingCapabilities ? "Refreshing..." : "Refresh snapshot")</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private ClientCapabilities? _capabilities;
+    private bool _isConnecting;
+    private bool _isDisconnecting;
+    private bool _isRefreshingCapabilities;
+    private string? _actionMessage;
+    private string? _errorMessage;
+
+    private bool CanConnect =>
+        TokenStore.IsPaired &&
+        !TokenStore.IsTokenExpired &&
+        WorkerHubConnection.State is WorkerConnectionState.Disconnected or WorkerConnectionState.Error;
+
+    private bool CanDisconnect =>
+        WorkerHubConnection.State is WorkerConnectionState.Connected or WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        WorkerHubConnection.StateChanged += OnStateChanged;
+        TokenStore.TokensChanged += OnTokensChanged;
+
+        await RefreshCapabilitiesAsync();
+    }
+
+    public void Dispose()
+    {
+        WorkerHubConnection.StateChanged -= OnStateChanged;
+        TokenStore.TokensChanged -= OnTokensChanged;
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (!CanConnect || _isConnecting)
+        {
+            return;
+        }
+
+        _isConnecting = true;
+        ClearMessages();
+
+        try
+        {
+            await WorkerHubConnection.ConnectAsync();
+            _actionMessage = "Worker connected to the Central Platform.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard connect action failed.");
+            _errorMessage = exception.Message;
+        }
+        finally
+        {
+            _isConnecting = false;
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        if (!CanDisconnect || _isDisconnecting)
+        {
+            return;
+        }
+
+        _isDisconnecting = true;
+        ClearMessages();
+
+        try
+        {
+            await WorkerHubConnection.DisconnectAsync();
+            _actionMessage = "Worker disconnected from the Central Platform.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard disconnect action failed.");
+            _errorMessage = exception.Message;
+        }
+        finally
+        {
+            _isDisconnecting = false;
+        }
+    }
+
+    private async Task RefreshCapabilitiesAsync()
+    {
+        if (_isRefreshingCapabilities)
+        {
+            return;
+        }
+
+        _isRefreshingCapabilities = true;
+        ClearMessages();
+
+        try
+        {
+            _capabilities = await CapabilityReporter.DetectCapabilitiesAsync();
+            _actionMessage = "Capability snapshot refreshed.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard capability refresh failed.");
+            _errorMessage = "Unable to detect local worker capabilities right now.";
+        }
+        finally
+        {
+            _isRefreshingCapabilities = false;
+        }
+    }
+
+    private void OnStateChanged(object? sender, WorkerConnectionStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTokensChanged(object? sender, EventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetConnectionLabel()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "Connected",
+            WorkerConnectionState.Connecting => "Connecting",
+            WorkerConnectionState.Reconnecting => "Reconnecting",
+            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Error => "Error",
+            _ => "Disconnected"
+        };
+    }
+
+    private Color GetConnectionChipColor()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => Color.Success,
+            WorkerConnectionState.Connecting or WorkerConnectionState.Reconnecting or WorkerConnectionState.Pairing => Color.Warning,
+            WorkerConnectionState.Error => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetTokenExpiryLabel()
+    {
+        if (!TokenStore.IsPaired)
+        {
+            return "No token stored";
+        }
+
+        var expiresAt = TokenStore.TokenExpiresAt;
+        if (expiresAt is null)
+        {
+            return "Unknown";
+        }
+
+        var localExpiry = expiresAt.Value.ToLocalTime().ToString("g");
+        if (TokenStore.IsTokenExpired)
+        {
+            return $"Expired ({localExpiry})";
+        }
+
+        if (TokenStore.IsTokenExpiringSoon)
+        {
+            return $"Expiring soon ({localExpiry})";
+        }
+
+        return localExpiry;
+    }
+
+    private static string FormatMemory(long? memoryMb)
+    {
+        return memoryMb is > 0
+            ? $"{memoryMb.Value / 1024d:0.0} GB"
+            : "Unknown";
+    }
+
+    private void ClearMessages()
+    {
+        _actionMessage = null;
+        _errorMessage = null;
+    }
+
+}

@@ -360,3 +360,6 @@ repomix-output.*
 # context files
 node-compile-cache/
 v8-compile-cache-1000/
+
+# Worker Credentials
+*worker-credentials.enc

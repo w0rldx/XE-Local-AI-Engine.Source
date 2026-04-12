@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Validation;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Models.Enums;
-using XE_Local_AI_Engine.Services.Validation;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -18,7 +19,7 @@ public sealed class RuntimePackageValidatorTests
         {
             MaxSystemPromptSizeKb = 1,
             MaxMessageSizeKb = 1,
-            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$",
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
         });
 
         _validator = new RuntimePackageValidator(new ModelNameValidator(securityOptions), securityOptions);
@@ -36,7 +37,10 @@ public sealed class RuntimePackageValidatorTests
     [Test]
     public void Validate_WhenSystemPromptIsNull_ReturnsError()
     {
-        var package = RuntimePackageBuilder.Valid().Build() with { ResolvedSystemPrompt = null! };
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ResolvedSystemPrompt = null!
+        };
 
         var result = _validator.Validate(package);
 
@@ -47,8 +51,8 @@ public sealed class RuntimePackageValidatorTests
     public void Validate_WhenSystemPromptExceedsLimit_ReturnsError()
     {
         var package = RuntimePackageBuilder.Valid()
-            .WithSystemPrompt(new string('a', 1025))
-            .Build();
+                                           .WithSystemPrompt(new string('a', 1025))
+                                           .Build();
 
         var result = _validator.Validate(package);
 
@@ -122,7 +126,10 @@ public sealed class RuntimePackageValidatorTests
     [Test]
     public void Validate_WhenConversationContextIsNull_ReturnsError()
     {
-        var package = RuntimePackageBuilder.Valid().Build() with { ConversationContext = null! };
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ConversationContext = null!
+        };
 
         var exception = AssertEx.ThrowsAsync<ArgumentNullException>(() => Task.FromResult(_validator.Validate(package))).GetAwaiter().GetResult();
         AssertEx.Equal("conversationContext", exception.ParamName);
@@ -131,7 +138,7 @@ public sealed class RuntimePackageValidatorTests
     [Test]
     public void Validate_WhenInvocationTimeoutIsBelowMinimum_ReturnsError()
     {
-        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 0).Build());
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithTimeout(0).Build());
 
         AssertErrorContains(result, "timeout");
     }
@@ -163,9 +170,9 @@ public sealed class RuntimePackageValidatorTests
                 {
                     Id = Guid.NewGuid(),
                     Name = string.Empty,
-                    Location = ToolLocation.ApiSide,
-                },
-            ],
+                    Location = ToolLocation.ApiSide
+                }
+            ]
         };
 
         var result = _validator.Validate(package);
@@ -188,8 +195,8 @@ public sealed class RuntimePackageValidatorTests
                     Id = Guid.NewGuid(),
                     Role = MessageRole.User,
                     Content = "bad\0message",
-                    SortOrder = 0,
-                },
+                    SortOrder = 0
+                }
             ],
             AllowedTools =
             [
@@ -197,15 +204,15 @@ public sealed class RuntimePackageValidatorTests
                 {
                     Id = Guid.NewGuid(),
                     Name = string.Empty,
-                    Location = ToolLocation.ApiSide,
-                },
+                    Location = ToolLocation.ApiSide
+                }
             ],
             Timeouts = new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 0,
                 ToolCallTimeoutSeconds = 0,
-                StreamIdleTimeoutSeconds = 0,
-            },
+                StreamIdleTimeoutSeconds = 0
+            }
         };
 
         var result = _validator.Validate(package);
@@ -214,7 +221,7 @@ public sealed class RuntimePackageValidatorTests
         AssertEx.True(result.Errors.Count >= 5);
     }
 
-    private static void AssertErrorContains(Services.Invocation.RuntimePackageValidationResult result, string expectedText)
+    private static void AssertErrorContains(RuntimePackageValidationResult result, string expectedText)
     {
         AssertEx.False(result.IsValid);
         AssertEx.NotEmpty(result.Errors);

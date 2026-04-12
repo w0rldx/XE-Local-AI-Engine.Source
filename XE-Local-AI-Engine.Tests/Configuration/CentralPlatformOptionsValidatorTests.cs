@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Configuration;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class CentralPlatformOptionsValidatorTests
@@ -12,7 +12,7 @@ public sealed class CentralPlatformOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(name: null, CreateValidOptions());
+        var result = _validator.Validate(null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -24,7 +24,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.BaseUrl = string.Empty;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "BaseUrl");
     }
@@ -35,7 +35,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.HeartbeatIntervalSeconds = 4;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "HeartbeatIntervalSeconds");
     }
@@ -46,7 +46,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.HeartbeatIntervalSeconds = 301;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "HeartbeatIntervalSeconds");
     }
@@ -57,7 +57,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxReconnectAttempts = 0;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxReconnectAttempts");
     }
@@ -68,7 +68,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxReconnectAttempts = 101;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxReconnectAttempts");
     }
@@ -79,7 +79,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxSignalRMessageSizeKb = 15;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxSignalRMessageSizeKb");
     }
@@ -90,7 +90,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxSignalRMessageSizeKb = 1025;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxSignalRMessageSizeKb");
     }
@@ -99,7 +99,7 @@ public sealed class CentralPlatformOptionsValidatorTests
     {
         return new CentralPlatformOptions
         {
-            BaseUrl = "https://test.example.com",
+            BaseUrl = "https://test.example.com"
         };
     }
 

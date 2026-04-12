@@ -2,10 +2,10 @@ namespace XE_Local_AI_Engine.Tests.Events;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Models.Enums;
-using XE_Local_AI_Engine.Services.Events;
-using XE_Local_AI_Engine.Services.Invocation;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -84,7 +84,11 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
-        var evt = new ToolCallResultEvent { RequestId = "req-1", Result = "ok" };
+        var evt = new ToolCallResultEvent
+        {
+            RequestId = "req-1",
+            Result = "ok"
+        };
 
         await dispatcher.DispatchToolCallResultAsync(evt);
 
@@ -97,7 +101,11 @@ public sealed class WorkerEventDispatcherTests
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
 
-        await dispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent { RequestId = "req-1", Approved = true });
+        await dispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent
+        {
+            RequestId = "req-1",
+            Approved = true
+        });
 
         runner.DidNotReceive().Cancel(Arg.Any<Guid>());
         runner.DidNotReceive().CancelAll();
@@ -116,7 +124,7 @@ public sealed class WorkerEventDispatcherTests
         await dispatcher.DispatchInvocationCancelledAsync(new InvocationCancelledEvent
         {
             InvocationId = package.InvocationId,
-            Reason = "cancelled",
+            Reason = "cancelled"
         });
 
         runner.Received(1).Cancel(package.InvocationId);
@@ -128,7 +136,10 @@ public sealed class WorkerEventDispatcherTests
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
 
-        await dispatcher.DispatchDisconnectRequestedAsync(new DisconnectRequestedEvent { Reason = "shutdown" });
+        await dispatcher.DispatchDisconnectRequestedAsync(new DisconnectRequestedEvent
+        {
+            Reason = "shutdown"
+        });
 
         runner.Received(1).CancelAll();
     }
@@ -138,7 +149,7 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         runner.RunAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromException(new InvalidOperationException("boom")));
+              .Returns(_ => Task.FromException(new InvalidOperationException("boom")));
 
         var dispatcher = CreateDispatcher(runner);
         var package = RuntimePackageBuilder.Valid().Build();

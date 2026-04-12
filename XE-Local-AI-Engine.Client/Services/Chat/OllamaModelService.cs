@@ -1,0 +1,77 @@
+namespace XE_Local_AI_Engine.Client.Services.Chat;
+
+using System.Runtime.CompilerServices;
+using Microsoft.Extensions.AI;
+using OllamaSharp;
+using OllamaSharp.Models;
+
+public sealed class OllamaModelService : IOllamaModelService, IDisposable
+{
+    private readonly OllamaApiClient _ollamaClient;
+    private readonly SemaphoreSlim _pullSemaphore = new(1, 1);
+
+    public OllamaModelService(IChatClient chatClient)
+    {
+        ArgumentNullException.ThrowIfNull(chatClient);
+        _ollamaClient = chatClient as OllamaApiClient
+                        ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for model management.");
+    }
+
+    public void Dispose()
+    {
+        _pullSemaphore.Dispose();
+    }
+
+    public Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+    {
+        return _ollamaClient.ListLocalModelsAsync(ct);
+    }
+
+    public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        return _ollamaClient.ShowModelAsync(modelName, ct);
+    }
+
+    public async IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName,
+        [EnumeratorCancellation]
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        await _pullSemaphore.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await foreach (var response in _ollamaClient.PullModelAsync(modelName, ct).ConfigureAwait(false))
+            {
+                if (response is not null)
+                {
+                    yield return response;
+                }
+            }
+        }
+        finally
+        {
+            _pullSemaphore.Release();
+        }
+    }
+
+    public Task DeleteModelAsync(string modelName, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        return _ollamaClient.DeleteModelAsync(modelName, ct);
+    }
+
+    public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}

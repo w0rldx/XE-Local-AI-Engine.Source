@@ -6,9 +6,9 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Services.Auth;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -22,7 +22,7 @@ public sealed class PairingServiceTests
         var tokenStore = MockTokenStore.Unpaired();
         var service = CreateService(tokenStore, _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = JsonContent.Create(expected),
+            Content = JsonContent.Create(expected)
         }));
 
         var result = await service.PairAsync("pair-token");
@@ -76,7 +76,7 @@ public sealed class PairingServiceTests
     {
         var service = CreateService(MockTokenStore.Unpaired(), _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("null"),
+            Content = new StringContent("null")
         }));
 
         await AssertEx.ThrowsAsync<PairingException>(() => service.PairAsync("pair-token"));
@@ -87,14 +87,13 @@ public sealed class PairingServiceTests
     {
         PairClientRequest? captured = null;
         var response = PairClientResponseBuilder.Valid().Build();
-        var service = CreateService(
-            MockTokenStore.Unpaired(),
+        var service = CreateService(MockTokenStore.Unpaired(),
             async request =>
             {
                 captured = await request.Content!.ReadFromJsonAsync<PairClientRequest>();
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = JsonContent.Create(response),
+                    Content = JsonContent.Create(response)
                 };
             });
 
@@ -116,21 +115,25 @@ public sealed class PairingServiceTests
         AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
     }
 
-    private static PairingService CreateService(
-        ITokenStore tokenStore,
+    private static PairingService CreateService(ITokenStore tokenStore,
         Func<HttpRequestMessage, Task<HttpResponseMessage>> handler)
     {
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
         httpClientFactory.CreateClient("CentralPlatformApi").Returns(_ => new HttpClient(new DelegateHttpMessageHandler(handler))
         {
-            BaseAddress = new Uri("https://test.example.com"),
+            BaseAddress = new Uri("https://test.example.com")
         });
 
-        return new PairingService(
-            httpClientFactory,
+        return new PairingService(httpClientFactory,
             tokenStore,
-            Options.Create(new CentralPlatformOptions { BaseUrl = "https://test.example.com" }),
-            Options.Create(new WorkerNodeOptions { NodeName = "worker-node-test" }),
+            Options.Create(new CentralPlatformOptions
+            {
+                BaseUrl = "https://test.example.com"
+            }),
+            Options.Create(new WorkerNodeOptions
+            {
+                NodeName = "worker-node-test"
+            }),
             NullLogger<PairingService>.Instance);
     }
 
@@ -138,7 +141,10 @@ public sealed class PairingServiceTests
     {
         return Task.FromResult(new HttpResponseMessage(statusCode)
         {
-            Content = new StringContent(JsonSerializer.Serialize(new { error = statusCode.ToString() })),
+            Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                error = statusCode.ToString()
+            }))
         });
     }
 

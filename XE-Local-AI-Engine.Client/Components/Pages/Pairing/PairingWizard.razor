@@ -1,0 +1,116 @@
+@page "/pairing"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.Extensions.Options
+@using XE_Local_AI_Engine.Client.Configuration
+@using XE_Local_AI_Engine.Client.Services.Auth
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IPairingService PairingService
+@inject IOptions<WorkerNodeOptions> WorkerNodeOptions
+@inject ILogger<PairingWizard> Logger
+
+<PageTitle>Worker Pairing</PageTitle>
+
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">Pair this node with the Central Platform</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Enter the pairing token from the Central Platform to store worker credentials securely on this machine.</MudText>
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="7">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-4">Pairing details</MudText>
+
+                @if (!string.IsNullOrWhiteSpace(_statusMessage))
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@_statusMessage</MudAlert>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+                }
+
+                <EditForm Model="_form" OnValidSubmit="HandlePairAsync">
+                    <DataAnnotationsValidator/>
+                    <ValidationSummary/>
+
+                    <MudTextField @bind-Value="_form.PairingToken" Label="Pairing token" Variant="Variant.Outlined" Disabled="_isSubmitting"
+                                  UserAttributes='@(new Dictionary<string, object> { { "autocomplete", "off" } })' HelperText="Tokens are single-use and issued from the Central Platform admin UI."/>
+
+                    <MudTextField @bind-Value="_form.NodeName" Label="Node name" Variant="Variant.Outlined" ReadOnly="true"
+                                  HelperText="This value is sourced from WorkerNode:NodeName in configuration."/>
+
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSubmitting" FullWidth="true"
+                               Class="mt-4">@(_isSubmitting ? "Pairing..." : "Pair worker")</MudButton>
+                </EditForm>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" md="5">
+        <MudCard Outlined="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">Before you start</MudText>
+                <MudList T="string" Dense="true">
+                    <MudListItem Icon="@Icons.Material.Filled.Check">Make sure the Central Platform API is reachable from this worker.</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check">Use a fresh pairing token from the platform administrator.</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check">Keep the configured node name stable so the platform can identify this machine.</MudListItem>
+                </MudList>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private readonly PairingFormModel _form = new();
+    private bool _isSubmitting;
+    private string? _errorMessage;
+    private string? _statusMessage;
+
+    protected override void OnInitialized()
+    {
+        _form.NodeName = WorkerNodeOptions.Value.NodeName;
+    }
+
+    private async Task HandlePairAsync()
+    {
+        if (_isSubmitting)
+        {
+            return;
+        }
+
+        _isSubmitting = true;
+        _errorMessage = null;
+        _statusMessage = null;
+
+        try
+        {
+            await PairingService.PairAsync(_form.PairingToken);
+            _statusMessage = "Pairing completed successfully. Stored credentials are ready for connection setup.";
+            _form.PairingToken = string.Empty;
+        }
+        catch (PairingException exception)
+        {
+            Logger.LogWarning(exception, "Pairing attempt failed for worker node {NodeName}.", _form.NodeName);
+            _errorMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unexpected error while pairing worker node {NodeName}.", _form.NodeName);
+            _errorMessage = "An unexpected error occurred while pairing this worker.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private sealed class PairingFormModel
+    {
+        [Required]
+        [StringLength(512, MinimumLength = 6)]
+        public string PairingToken { get; set; } = string.Empty;
+
+        public string NodeName { get; set; } = string.Empty;
+    }
+
+}

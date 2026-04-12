@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Configuration;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class SecurityOptionsValidatorTests
@@ -12,7 +12,7 @@ public sealed class SecurityOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(name: null, CreateValidOptions());
+        var result = _validator.Validate(null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -24,7 +24,7 @@ public sealed class SecurityOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxSystemPromptSizeKb = 0;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxSystemPromptSizeKb");
     }
@@ -35,12 +35,15 @@ public sealed class SecurityOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxMessageSizeKb = 0;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxMessageSizeKb");
     }
 
-    private static SecurityOptions CreateValidOptions() => new();
+    private static SecurityOptions CreateValidOptions()
+    {
+        return new SecurityOptions();
+    }
 
     private static void AssertFailureContains(ValidateOptionsResult result, string expectedText)
     {

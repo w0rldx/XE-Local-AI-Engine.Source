@@ -6,8 +6,8 @@ using System.Net.Http.Json;
 public sealed class MockOllamaHttpHandler : HttpMessageHandler
 {
     private readonly object _sync = new();
-    private Exception? _nextException;
     private string[] _models = [];
+    private Exception? _nextException;
 
     public void SetModelsResponse(params string[] models)
     {
@@ -40,18 +40,20 @@ public sealed class MockOllamaHttpHandler : HttpMessageHandler
         if (string.Equals(path, "/api/tags", StringComparison.OrdinalIgnoreCase))
         {
             var models = GetModelsSnapshot()
-                .Select(name => new MockOllamaModel(name))
-                .ToArray();
+                         .Select(name => new MockOllamaModel(name))
+                         .ToArray();
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new MockOllamaTagsResponse(models)),
+                Content = JsonContent.Create(new MockOllamaTagsResponse(models))
             });
         }
 
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = JsonContent.Create(new { }),
+            Content = JsonContent.Create(new
+            {
+            })
         });
     }
 

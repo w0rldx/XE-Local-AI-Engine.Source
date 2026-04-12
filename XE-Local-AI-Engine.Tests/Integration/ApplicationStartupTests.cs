@@ -3,12 +3,11 @@ namespace XE_Local_AI_Engine.Tests.Integration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using TUnit.Core;
-using XE_Local_AI_Engine.Services.Auth;
-using XE_Local_AI_Engine.Services.Capabilities;
-using XE_Local_AI_Engine.Services.Connection;
-using XE_Local_AI_Engine.Services.DeadLetter;
-using XE_Local_AI_Engine.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -71,7 +70,7 @@ public sealed class ApplicationStartupTests
     {
         await using var invalidBaseFactory = new TestingWebAppFactory
         {
-            SkipDefaultBaseUrlOverride = true,
+            SkipDefaultBaseUrlOverride = true
         };
 
         await using var invalidFactory = invalidBaseFactory.WithWebHostBuilder(builder =>
@@ -80,7 +79,7 @@ public sealed class ApplicationStartupTests
             {
                 configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["CentralPlatform:BaseUrl"] = string.Empty,
+                    ["CentralPlatform:BaseUrl"] = string.Empty
                 });
             });
         });

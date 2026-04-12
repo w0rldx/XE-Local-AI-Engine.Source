@@ -1,20 +1,19 @@
 namespace XE_Local_AI_Engine.Tests;
 
-using Microsoft.Extensions.AI;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using OllamaSharp;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.BackgroundServices;
-using XE_Local_AI_Engine.Services.Auth;
-using XE_Local_AI_Engine.Services.DeadLetter;
-using XE_Local_AI_Engine.Tests.Testing.Mocks;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
@@ -58,7 +57,7 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
                 return new OllamaApiClient(new HttpClient(handler)
                 {
-                    BaseAddress = new Uri("http://fake-ollama/"),
+                    BaseAddress = new Uri("http://fake-ollama/")
                 });
             });
 

@@ -1,0 +1,135 @@
+@page "/"
+@using XE_Local_AI_Engine.Client.Services.Auth
+@using XE_Local_AI_Engine.Client.Services.Connection
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IWorkerHubConnection WorkerHubConnection
+@inject ConnectionState ConnectionState
+@inject ITokenStore TokenStore
+
+<PageTitle>Worker Node Home</PageTitle>
+
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">Welcome to the worker console</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Use the worker dashboard to pair this node, inspect capabilities, and monitor live invocations from the Central Platform.</MudText>
+
+<ConnectionStatusBadge/>
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Current status</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3">Quick summary of pairing and connection health.</MudText>
+
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                    <tr>
+                        <td>Pairing</td>
+                        <td>@(TokenStore.IsPaired ? "Paired" : "Not paired")</td>
+                    </tr>
+                    <tr>
+                        <td>Connection</td>
+                        <td>@GetConnectionLabel()</td>
+                    </tr>
+                    <tr>
+                        <td>Token expiry</td>
+                        <td>@GetTokenExpiryLabel()</td>
+                    </tr>
+                    <tr>
+                        <td>Last update</td>
+                        <td>@ConnectionState.LastUpdatedAt.ToLocalTime().ToString("g")</td>
+                    </tr>
+                    </tbody>
+                </MudSimpleTable>
+
+                @if (!string.IsNullOrWhiteSpace(ConnectionState.LastError))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @ConnectionState.LastError</MudAlert>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6">Where to go next</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3">Open the area that matches the task you want to perform.</MudText>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard" Class="mr-2">Open dashboard</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/pairing" Class="mr-2">Open pairing wizard</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/invocations">Open invocation monitor</MudButton>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+
+    protected override void OnInitialized()
+    {
+        WorkerHubConnection.StateChanged += OnStateChanged;
+        TokenStore.TokensChanged += OnTokensChanged;
+    }
+
+    public void Dispose()
+    {
+        WorkerHubConnection.StateChanged -= OnStateChanged;
+        TokenStore.TokensChanged -= OnTokensChanged;
+    }
+
+    private void OnStateChanged(object? sender, WorkerConnectionStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTokensChanged(object? sender, EventArgs eventArgs)
+    {
+        _ = sender;
+        _ = eventArgs;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string GetConnectionLabel()
+    {
+        return WorkerHubConnection.State switch
+        {
+            WorkerConnectionState.Connected => "Connected",
+            WorkerConnectionState.Connecting => "Connecting",
+            WorkerConnectionState.Reconnecting => "Reconnecting",
+            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Error => "Error",
+            _ => "Offline"
+        };
+    }
+
+    private string GetTokenExpiryLabel()
+    {
+        if (!TokenStore.IsPaired)
+        {
+            return "No token stored";
+        }
+
+        if (TokenStore.TokenExpiresAt is not { } expiresAt)
+        {
+            return "Unknown";
+        }
+
+        var localExpiry = expiresAt.ToLocalTime().ToString("g");
+        if (TokenStore.IsTokenExpired)
+        {
+            return $"Expired ({localExpiry})";
+        }
+
+        if (TokenStore.IsTokenExpiringSoon)
+        {
+            return $"Expiring soon ({localExpiry})";
+        }
+
+        return localExpiry;
+    }
+
+}
