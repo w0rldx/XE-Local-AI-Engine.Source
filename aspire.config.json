@@ -1,0 +1,6 @@
+{
+  "appHost": {
+    "language": "csharp",
+    "path": "XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj"
+  }
+}
