@@ -6,7 +6,7 @@
         <File Path="README.md" />
     </Folder>
     <Folder Name="/Src/">
-        <Project Path="XE-Local-AI-Engine/XE-Local-AI-Engine.csproj" />
+        <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj" />
     </Folder>
     <Folder Name="/Tests/">
         <Project Path="XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj" />

@@ -1,23 +1,23 @@
 namespace XE_Local_AI_Engine.Tests.Testing.Builders;
 
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Models.Enums;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 
 public sealed class RuntimePackageBuilder
 {
-    private readonly List<ConversationMessageDto> _conversationContext = [];
     private readonly List<AllowedToolDto> _allowedTools = [];
+    private readonly List<ConversationMessageDto> _conversationContext = [];
     private readonly List<string> _requestedCapabilities = [];
     private readonly Dictionary<string, object> _toolPolicies = [];
+    private int _agentDefinitionVersion = 1;
+    private Guid _clientNodeId = Guid.NewGuid();
+    private string _configHash = "test-config-hash";
+    private Guid _conversationId = Guid.NewGuid();
 
     private Guid _invocationId = Guid.NewGuid();
-    private Guid _conversationId = Guid.NewGuid();
-    private Guid _clientNodeId = Guid.NewGuid();
-    private int _agentDefinitionVersion = 1;
-    private string _resolvedSystemPrompt = "You are helpful.";
     private string? _modelProfile = "qwen3.5:9b";
+    private string _resolvedSystemPrompt = "You are helpful.";
     private TimeoutSettings _timeouts = new();
-    private string _configHash = "test-config-hash";
 
     private RuntimePackageBuilder()
     {
@@ -26,11 +26,14 @@ public sealed class RuntimePackageBuilder
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
             Content = "Hello",
-            SortOrder = 0,
+            SortOrder = 0
         });
     }
 
-    public static RuntimePackageBuilder Valid() => new();
+    public static RuntimePackageBuilder Valid()
+    {
+        return new RuntimePackageBuilder();
+    }
 
     public RuntimePackageBuilder WithInvocationId(Guid invocationId)
     {
@@ -78,14 +81,13 @@ public sealed class RuntimePackageBuilder
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
             Content = content,
-            SortOrder = 0,
+            SortOrder = 0
         });
 
         return this;
     }
 
-    public RuntimePackageBuilder WithConversationMessage(
-        MessageRole role,
+    public RuntimePackageBuilder WithConversationMessage(MessageRole role,
         string content,
         int sortOrder,
         string? toolCalls = null,
@@ -102,14 +104,13 @@ public sealed class RuntimePackageBuilder
             ToolCalls = toolCalls,
             ToolResults = toolResults,
             ModelUsed = modelUsed,
-            SortOrder = sortOrder,
+            SortOrder = sortOrder
         });
 
         return this;
     }
 
-    public RuntimePackageBuilder WithAllowedTool(
-        string name,
+    public RuntimePackageBuilder WithAllowedTool(string name,
         ToolLocation location = ToolLocation.ApiSide,
         string? parameterSchema = null)
     {
@@ -120,7 +121,7 @@ public sealed class RuntimePackageBuilder
             Id = Guid.NewGuid(),
             Name = name,
             Location = location,
-            ParameterSchema = parameterSchema,
+            ParameterSchema = parameterSchema
         });
 
         return this;
@@ -147,7 +148,7 @@ public sealed class RuntimePackageBuilder
         {
             InvocationTimeoutSeconds = invocationSeconds,
             ToolCallTimeoutSeconds = toolCallSeconds,
-            StreamIdleTimeoutSeconds = streamIdleSeconds,
+            StreamIdleTimeoutSeconds = streamIdleSeconds
         };
 
         return this;
@@ -175,7 +176,7 @@ public sealed class RuntimePackageBuilder
             ModelProfile = _modelProfile,
             RequestedCapabilities = _requestedCapabilities.Count == 0 ? null : [.. _requestedCapabilities],
             Timeouts = _timeouts,
-            ConfigHash = _configHash,
+            ConfigHash = _configHash
         };
     }
 }

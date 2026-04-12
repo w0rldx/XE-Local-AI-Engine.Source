@@ -16,6 +16,6 @@ internal static class BackgroundServiceTestHelper
         }
 
         return method.Invoke(service, [cancellationToken]) as Task
-            ?? throw new InvalidOperationException($"ExecuteAsync on {service.GetType().FullName} did not return a Task.");
+               ?? throw new InvalidOperationException($"ExecuteAsync on {service.GetType().FullName} did not return a Task.");
     }
 }

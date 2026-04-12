@@ -1,19 +1,22 @@
 namespace XE_Local_AI_Engine.Tests.Testing.Builders;
 
-using XE_Local_AI_Engine.Models;
+using XE_Local_AI_Engine.Client.Models;
 
 public sealed class PairClientResponseBuilder
 {
-    private Guid _clientNodeId = Guid.NewGuid();
     private string _accessToken = "eyJhbGciOiJub25lIn0.eyJleHAiOjQxMDI0NDQ4MDB9.";
-    private string _refreshToken = "test-refresh-token";
+    private Guid _clientNodeId = Guid.NewGuid();
     private DateTimeOffset _expiresAt = DateTimeOffset.UtcNow.AddDays(30);
+    private string _refreshToken = "test-refresh-token";
 
     private PairClientResponseBuilder()
     {
     }
 
-    public static PairClientResponseBuilder Valid() => new();
+    public static PairClientResponseBuilder Valid()
+    {
+        return new PairClientResponseBuilder();
+    }
 
     public PairClientResponseBuilder WithClientNodeId(Guid clientNodeId)
     {
@@ -48,7 +51,7 @@ public sealed class PairClientResponseBuilder
             ClientNodeId = _clientNodeId,
             AccessToken = _accessToken,
             RefreshToken = _refreshToken,
-            ExpiresAt = _expiresAt,
+            ExpiresAt = _expiresAt
         };
     }
 }

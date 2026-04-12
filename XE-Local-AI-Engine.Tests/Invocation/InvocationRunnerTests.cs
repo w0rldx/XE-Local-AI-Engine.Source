@@ -6,13 +6,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Models.Enums;
-using XE_Local_AI_Engine.Services.Capabilities;
-using XE_Local_AI_Engine.Services.Connection;
-using XE_Local_AI_Engine.Services.DeadLetter;
-using XE_Local_AI_Engine.Services.Invocation;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -79,9 +79,9 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var chatClient = Substitute.For<IChatClient>();
         chatClient.GetStreamingResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions>(), Arg.Any<CancellationToken>())
-            .Returns(_ => ThrowingUpdates(new InvalidOperationException("chat failed")));
+                  .Returns(_ => ThrowingUpdates(new InvalidOperationException("chat failed")));
 
-        var runner = CreateRunner(sender, chatClient: chatClient);
+        var runner = CreateRunner(sender, chatClient);
         var package = RuntimePackageBuilder.Valid().Build();
 
         await runner.RunAsync(package);
@@ -114,13 +114,13 @@ public sealed class InvocationRunnerTests
         List<ChatMessage>? capturedMessages = null;
         var chatClient = Substitute.For<IChatClient>();
         chatClient.GetStreamingResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                capturedMessages = callInfo.Arg<IEnumerable<ChatMessage>>().ToList();
-                return CreateUpdates("ok");
-            });
+                  .Returns(callInfo =>
+                  {
+                      capturedMessages = callInfo.Arg<IEnumerable<ChatMessage>>().ToList();
+                      return CreateUpdates("ok");
+                  });
 
-        var runner = CreateRunner(sender, chatClient: chatClient);
+        var runner = CreateRunner(sender, chatClient);
 
         await runner.RunAsync(RuntimePackageBuilder.Valid().WithSystemPrompt("system prompt").Build());
 
@@ -136,19 +136,19 @@ public sealed class InvocationRunnerTests
         List<ChatMessage>? capturedMessages = null;
         var chatClient = Substitute.For<IChatClient>();
         chatClient.GetStreamingResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                capturedMessages = callInfo.Arg<IEnumerable<ChatMessage>>().ToList();
-                return CreateUpdates("ok");
-            });
+                  .Returns(callInfo =>
+                  {
+                      capturedMessages = callInfo.Arg<IEnumerable<ChatMessage>>().ToList();
+                      return CreateUpdates("ok");
+                  });
 
         var package = RuntimePackageBuilder.Valid()
-            .WithUserMessage("late")
-            .WithConversationMessage(MessageRole.Assistant, "middle", sortOrder: 1)
-            .WithConversationMessage(MessageRole.User, "early", sortOrder: -1)
-            .Build();
+                                           .WithUserMessage("late")
+                                           .WithConversationMessage(MessageRole.Assistant, "middle", 1)
+                                           .WithConversationMessage(MessageRole.User, "early", -1)
+                                           .Build();
 
-        var runner = CreateRunner(sender, chatClient: chatClient);
+        var runner = CreateRunner(sender, chatClient);
         await runner.RunAsync(package);
 
         var messages = AssertEx.NotNull(capturedMessages);
@@ -162,7 +162,12 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_ExceedsMaxResponseSize_SendsInvocationFailed()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions { NodeName = "worker", MaxResponseSizeMb = 1, MaxPendingToolCallAgeMinutes = 5 }, chatUpdates: CreateUpdates(new string('x', (1024 * 1024) + 1)));
+        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 1,
+            MaxPendingToolCallAgeMinutes = 5
+        }, chatUpdates: CreateUpdates(new string('x', (1024 * 1024) + 1)));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await runner.RunAsync(package);
@@ -218,7 +223,7 @@ public sealed class InvocationRunnerTests
         runner.ResolveToolCallResult(new ToolCallResultEvent
         {
             RequestId = requestId,
-            Result = "done",
+            Result = "done"
         });
 
         AssertEx.Equal("done", await task);
@@ -228,7 +233,12 @@ public sealed class InvocationRunnerTests
     public async Task ExecuteApiToolCallAsync_WhenTimedOut_ThrowsTaskCanceledException()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions { NodeName = "worker", MaxResponseSizeMb = 10, MaxPendingToolCallAgeMinutes = 0 });
+        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 10,
+            MaxPendingToolCallAgeMinutes = 0
+        });
 
         await AssertEx.ThrowsAsync<TaskCanceledException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
     }
@@ -237,7 +247,12 @@ public sealed class InvocationRunnerTests
     public async Task CleanupStaleToolCalls_RemovesEntriesOlderThanMaxAge()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions { NodeName = "worker", MaxResponseSizeMb = 10, MaxPendingToolCallAgeMinutes = 5 });
+        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 10,
+            MaxPendingToolCallAgeMinutes = 5
+        });
 
         var task = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
         await Task.Delay(20);
@@ -246,8 +261,7 @@ public sealed class InvocationRunnerTests
         await AssertEx.ThrowsAsync<TimeoutException>(() => task);
     }
 
-    private static InvocationRunner CreateRunner(
-        MockHubMessageSender sender,
+    private static InvocationRunner CreateRunner(MockHubMessageSender sender,
         IChatClient? chatClient = null,
         IRuntimePackageValidator? validator = null,
         ICapabilityReporter? capabilityReporter = null,
@@ -258,7 +272,7 @@ public sealed class InvocationRunnerTests
         if (chatUpdates is not null)
         {
             resolvedChatClient.GetStreamingResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions>(), Arg.Any<CancellationToken>())
-                .Returns(chatUpdates);
+                              .Returns(chatUpdates);
         }
 
         var resolvedValidator = validator ?? Substitute.For<IRuntimePackageValidator>();
@@ -271,17 +285,24 @@ public sealed class InvocationRunnerTests
         resolvedCapabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
 
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["Ollama:ChatModel"] = "qwen3.5:9b" })
-            .Build();
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["Ollama:ChatModel"] = "qwen3.5:9b"
+                            })
+                            .Build();
 
-        return new InvocationRunner(
-            new Lazy<IHubMessageSender>(() => sender),
+        return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
             resolvedChatClient,
             resolvedValidator,
             resolvedCapabilityReporter,
             Substitute.For<IDeadLetterStore>(),
             configuration,
-            Options.Create(workerOptions ?? new WorkerNodeOptions { NodeName = "worker", MaxResponseSizeMb = 10, MaxPendingToolCallAgeMinutes = 5 }),
+            Options.Create(workerOptions ?? new WorkerNodeOptions
+            {
+                NodeName = "worker",
+                MaxResponseSizeMb = 10,
+                MaxPendingToolCallAgeMinutes = 5
+            }),
             NullLogger<InvocationRunner>.Instance);
     }
 

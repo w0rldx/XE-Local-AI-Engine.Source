@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Validation;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Services.Validation;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ModelNameValidatorTests

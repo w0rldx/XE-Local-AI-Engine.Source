@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.BackgroundServices;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Client.BackgroundServices;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -91,7 +91,7 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
         try
         {
             hubConnection.SendHeartbeatAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                .Returns(_ => throw new InvalidOperationException("boom"));
+                         .Returns(_ => throw new InvalidOperationException("boom"));
 
             using var service = CreateService(hubConnection, MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)));
             using var cancellationTokenSource = new CancellationTokenSource();
@@ -136,10 +136,13 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
 
     private static HeartbeatBackgroundService CreateService(IWorkerHubConnection hubConnection, MockTokenStore tokenStore)
     {
-        return new HeartbeatBackgroundService(
-            hubConnection,
+        return new HeartbeatBackgroundService(hubConnection,
             tokenStore,
-            Options.Create(new CentralPlatformOptions { BaseUrl = "https://test.example.com", HeartbeatIntervalSeconds = 1 }),
+            Options.Create(new CentralPlatformOptions
+            {
+                BaseUrl = "https://test.example.com",
+                HeartbeatIntervalSeconds = 1
+            }),
             NullLogger<HeartbeatBackgroundService>.Instance);
     }
 }

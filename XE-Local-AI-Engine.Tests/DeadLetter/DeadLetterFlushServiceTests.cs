@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Tests.DeadLetter;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Services.Connection;
-using XE_Local_AI_Engine.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -26,7 +26,11 @@ public sealed class DeadLetterFlushServiceTests
     [Test]
     public async Task FlushAsync_WithPendingItems_CallsSenderForEach()
     {
-        var payloads = new[] { CreatePayload(), CreatePayload() };
+        var payloads = new[]
+        {
+            CreatePayload(),
+            CreatePayload()
+        };
         var store = Substitute.For<IDeadLetterStore>();
         store.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>(payloads));
         var sender = new MockHubMessageSender();
@@ -53,7 +57,11 @@ public sealed class DeadLetterFlushServiceTests
     [Test]
     public async Task FlushAsync_WhenSendThrows_StopsProcessingRemainingItems()
     {
-        var payloads = new[] { CreatePayload(), CreatePayload() };
+        var payloads = new[]
+        {
+            CreatePayload(),
+            CreatePayload()
+        };
         var store = Substitute.For<IDeadLetterStore>();
         store.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>(payloads));
         var sender = new MockHubMessageSender();
@@ -84,8 +92,7 @@ public sealed class DeadLetterFlushServiceTests
 
     private static DeadLetterFlushService CreateService(IDeadLetterStore store, MockHubMessageSender sender)
     {
-        return new DeadLetterFlushService(
-            store,
+        return new DeadLetterFlushService(store,
             new Lazy<IHubMessageSender>(() => sender),
             NullLogger<DeadLetterFlushService>.Instance);
     }
@@ -95,7 +102,7 @@ public sealed class DeadLetterFlushServiceTests
         return new InvocationFailedPayload
         {
             InvocationId = Guid.NewGuid(),
-            Error = "boom",
+            Error = "boom"
         };
     }
 }

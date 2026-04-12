@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Testing.Mocks;
 
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Connection;
 
 public sealed class MockHubMessageSender : IHubMessageSender
 {
@@ -20,16 +20,6 @@ public sealed class MockHubMessageSender : IHubMessageSender
 
     public List<InvocationFailedPayload> SentFailures { get; } = [];
 
-    public void ThrowOnNextSend(Exception exception)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-
-        lock (_sync)
-        {
-            _nextException = exception;
-        }
-    }
-
     public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -46,7 +36,7 @@ public sealed class MockHubMessageSender : IHubMessageSender
         {
             InvocationId = invocationId,
             Token = token,
-            IsComplete = isComplete,
+            IsComplete = isComplete
         });
 
         return Task.CompletedTask;
@@ -86,6 +76,16 @@ public sealed class MockHubMessageSender : IHubMessageSender
         ThrowIfScheduled();
         SentFailures.Add(payload);
         return Task.CompletedTask;
+    }
+
+    public void ThrowOnNextSend(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        lock (_sync)
+        {
+            _nextException = exception;
+        }
     }
 
     private void ThrowIfScheduled()

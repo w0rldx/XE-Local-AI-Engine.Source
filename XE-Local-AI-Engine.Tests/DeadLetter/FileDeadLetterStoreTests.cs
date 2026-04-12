@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Tests.DeadLetter;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class FileDeadLetterStoreTests : IDisposable
@@ -15,7 +15,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
     {
         if (Directory.Exists(_queuePath))
         {
-            Directory.Delete(_queuePath, recursive: true);
+            Directory.Delete(_queuePath, true);
         }
     }
 
@@ -87,7 +87,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
 
         var pending = await store.GetPendingAsync();
         AssertEx.Contains(pending, entry => entry.InvocationId == payload.InvocationId);
-        AssertEx.True(store.GetCurrentSizeBytes() <= (100L * 1024 * 1024));
+        AssertEx.True(store.GetCurrentSizeBytes() <= 100L * 1024 * 1024);
     }
 
     [Test]
@@ -119,7 +119,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
     public async Task EnqueueAsync_CreatesDirectoryIfNotExists()
     {
         using var store = CreateStore();
-        Directory.Delete(_queuePath, recursive: true);
+        Directory.Delete(_queuePath, true);
 
         await store.EnqueueAsync(CreatePayload());
 
@@ -128,11 +128,10 @@ public sealed class FileDeadLetterStoreTests : IDisposable
 
     private FileDeadLetterStore CreateStore()
     {
-        return new FileDeadLetterStore(
-            Options.Create(new WorkerNodeOptions
+        return new FileDeadLetterStore(Options.Create(new WorkerNodeOptions
             {
                 NodeName = "worker",
-                DeadLetterQueuePath = _queuePath,
+                DeadLetterQueuePath = _queuePath
             }),
             NullLogger<FileDeadLetterStore>.Instance);
     }
@@ -142,7 +141,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
         return new InvocationFailedPayload
         {
             InvocationId = Guid.NewGuid(),
-            Error = "boom",
+            Error = "boom"
         };
     }
 }

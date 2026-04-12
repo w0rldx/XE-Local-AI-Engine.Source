@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Configuration;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class WorkerNodeOptionsValidatorTests
@@ -12,7 +12,7 @@ public sealed class WorkerNodeOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(name: null, CreateValidOptions());
+        var result = _validator.Validate(null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -24,7 +24,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.NodeName = string.Empty;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "NodeName");
     }
@@ -35,7 +35,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxResponseSizeMb = 0;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxResponseSizeMb");
     }
@@ -46,7 +46,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxPendingToolCallAgeMinutes = 0;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }
@@ -57,7 +57,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxPendingToolCallAgeMinutes = 61;
 
-        var result = _validator.Validate(name: null, options);
+        var result = _validator.Validate(null, options);
 
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }
@@ -66,7 +66,7 @@ public sealed class WorkerNodeOptionsValidatorTests
     {
         return new WorkerNodeOptions
         {
-            NodeName = "worker-node-test",
+            NodeName = "worker-node-test"
         };
     }
 

@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.BackgroundServices;
-using XE_Local_AI_Engine.Configuration;
-using XE_Local_AI_Engine.Models;
-using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Client.BackgroundServices;
+using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -89,16 +89,20 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
         var hubConnection = new MockWorkerHubConnection
         {
-            ConnectException = new InvalidOperationException("boom"),
+            ConnectException = new InvalidOperationException("boom")
         };
 
         try
         {
-            using var service = CreateService(
-                hubConnection,
+            using var service = CreateService(hubConnection,
                 MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
                 CreateApplicationLifetime(),
-                new CentralPlatformOptions { BaseUrl = "https://test.example.com", MaxReconnectAttempts = 3, ReconnectDelaysMs = [1, 1, 1] });
+                new CentralPlatformOptions
+                {
+                    BaseUrl = "https://test.example.com",
+                    MaxReconnectAttempts = 3,
+                    ReconnectDelaysMs = [1, 1, 1]
+                });
             using var cancellationTokenSource = new CancellationTokenSource();
             cancellationTokenSource.CancelAfter(200);
 
@@ -146,28 +150,31 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         return new MockHostApplicationLifetime();
     }
 
-    private static AutoConnectBackgroundService CreateService(
-        IWorkerHubConnection hubConnection,
+    private static AutoConnectBackgroundService CreateService(IWorkerHubConnection hubConnection,
         MockTokenStore tokenStore,
         IHostApplicationLifetime applicationLifetime,
         CentralPlatformOptions? options = null)
     {
-        return new AutoConnectBackgroundService(
-            hubConnection,
+        return new AutoConnectBackgroundService(hubConnection,
             tokenStore,
             applicationLifetime,
-            Options.Create(options ?? new CentralPlatformOptions { BaseUrl = "https://test.example.com", MaxReconnectAttempts = 3, ReconnectDelaysMs = [10, 10, 10] }),
+            Options.Create(options ?? new CentralPlatformOptions
+            {
+                BaseUrl = "https://test.example.com",
+                MaxReconnectAttempts = 3,
+                ReconnectDelaysMs = [10, 10, 10]
+            }),
             NullLogger<AutoConnectBackgroundService>.Instance);
     }
 
     private sealed class MockWorkerHubConnection : IWorkerHubConnection
     {
-        private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
-        private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
-        private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
-        private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
         private EventHandler<ApprovalResolvedReceivedEventArgs>? _approvalResolvedReceived;
+        private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
+        private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
         private EventHandler<InvocationCancelledReceivedEventArgs>? _invocationCancelledReceived;
+        private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
+        private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
 
         public int ConnectAsyncCallCount { get; private set; }
 
@@ -230,16 +237,56 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             DisconnectAsyncCallCount++;
             return Task.CompletedTask;
         }
-        public Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendHeartbeatAsync(Guid clientNodeId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendApprovalRequestAsync(ApprovalRequestPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendInvocationCompletedAsync(InvocationCompletedPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendHeartbeatAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendApprovalRequestAsync(ApprovalRequestPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendInvocationCompletedAsync(InvocationCompletedPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class MockHostApplicationLifetime : IHostApplicationLifetime

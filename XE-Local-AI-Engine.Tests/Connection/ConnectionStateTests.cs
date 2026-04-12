@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Connection;
 
-using XE_Local_AI_Engine.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ConnectionStateTests

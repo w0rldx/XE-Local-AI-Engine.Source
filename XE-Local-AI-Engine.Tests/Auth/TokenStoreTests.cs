@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Auth;
 
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -18,7 +19,7 @@ public sealed class TokenStoreTests : IDisposable
     {
         if (Directory.Exists(_contentRootPath))
         {
-            Directory.Delete(_contentRootPath, recursive: true);
+            Directory.Delete(_contentRootPath, true);
         }
     }
 
@@ -164,13 +165,15 @@ public sealed class TokenStoreTests : IDisposable
         var hostEnvironment = Substitute.For<IHostEnvironment>();
         hostEnvironment.ContentRootPath.Returns(_contentRootPath);
 
-        return new TokenStore(
-            dataProtectionProvider ?? new MockDataProtector(),
+        return new TokenStore(dataProtectionProvider ?? new MockDataProtector(),
             hostEnvironment,
             NullLogger<TokenStore>.Instance);
     }
 
-    private string GetCredentialsPath() => Path.Combine(_contentRootPath, "worker-credentials.enc");
+    private string GetCredentialsPath()
+    {
+        return Path.Combine(_contentRootPath, "worker-credentials.enc");
+    }
 
     private static string CreateJwt(DateTimeOffset expiresAt)
     {
@@ -181,9 +184,9 @@ public sealed class TokenStoreTests : IDisposable
 
     private static string Base64UrlEncode(string value)
     {
-        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value))
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
+                      .TrimEnd('=')
+                      .Replace('+', '-')
+                      .Replace('/', '_');
     }
 }
