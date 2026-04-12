@@ -1,12 +1,15 @@
 <Solution>
     <Folder Name="/Solution Items/">
+        <File Path=".editorconfig" />
         <File Path="Directory.Build.props" />
         <File Path="Directory.Packages.props" />
         <File Path="global.json" />
         <File Path="README.md" />
     </Folder>
     <Folder Name="/Src/">
+        <Project Path="XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj" />
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj" />
+        <Project Path="XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj" />
     </Folder>
     <Folder Name="/Tests/">
         <Project Path="XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj" />

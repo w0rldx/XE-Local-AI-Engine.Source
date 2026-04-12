@@ -14,6 +14,18 @@
     <PackageReference Include="Microsoft.Agents.AI.Hosting"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
+    <PackageReference Include="Serilog"/>
+    <PackageReference Include="Serilog.AspNetCore"/>
+    <PackageReference Include="Serilog.Enrichers.Environment"/>
+    <PackageReference Include="Serilog.Enrichers.Process"/>
+    <PackageReference Include="Serilog.Enrichers.Thread"/>
+    <PackageReference Include="Serilog.Expressions"/>
+    <PackageReference Include="Serilog.Settings.Configuration"/>
+    <PackageReference Include="Serilog.Sinks.Console"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
   </ItemGroup>
 
 </Project>
