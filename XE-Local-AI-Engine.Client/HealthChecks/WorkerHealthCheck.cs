@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.HealthChecks;
 
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -8,20 +7,17 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 
 public sealed class WorkerHealthCheck : IHealthCheck
 {
-    private readonly OllamaApiClient _ollamaClient;
+    private readonly IOllamaApiClient _ollamaClient;
     private readonly ITokenStore _tokenStore;
     private readonly IWorkerHubConnection _workerHubConnection;
 
     public WorkerHealthCheck(ITokenStore tokenStore,
         IWorkerHubConnection workerHubConnection,
-        IChatClient chatClient)
+        IOllamaApiClient ollamaClient)
     {
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _workerHubConnection = workerHubConnection ?? throw new ArgumentNullException(nameof(workerHubConnection));
-        ArgumentNullException.ThrowIfNull(chatClient);
-
-        _ollamaClient = chatClient as OllamaApiClient
-                        ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for worker health checks.");
+        _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
