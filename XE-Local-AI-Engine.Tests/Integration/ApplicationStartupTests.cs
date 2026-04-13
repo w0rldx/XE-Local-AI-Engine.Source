@@ -98,4 +98,5 @@ public sealed class ApplicationStartupTests
 
         AssertEx.NotNull(exception);
     }
+
 }

@@ -4,6 +4,8 @@ using Projects;
 var builder = DistributedApplication.CreateBuilder(args);
 
 var ollama = builder.AddOllama("ollama")
+                    .WithImageTag("latest")
+                    .WithGPUSupport()
                     .WithDataVolume();
 
 var chatModel = ollama.AddModel("chat", "qwen3.5:9b");

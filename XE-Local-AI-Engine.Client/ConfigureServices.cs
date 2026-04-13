@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
+using System.Data.Common;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -115,10 +116,27 @@ public static class ConfigureServices
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);
 
-        builder.AddOllamaApiClient("chat")
-               .AddChatClient();
+        builder.AddOllamaApiClient("chat");
         builder.AddOllamaApiClient("embeddings")
                .AddEmbeddingGenerator();
+
+        builder.Services.AddSingleton<IChatClient>(_ =>
+        {
+            var (chatEndpoint, chatModel) = ResolveChatConnectionSettings(configuration);
+
+#pragma warning disable CA2000 // Lifetime is managed by the DI container.
+            var httpClient = new HttpClient
+            {
+                BaseAddress = chatEndpoint,
+                Timeout = TimeSpan.FromMinutes(5)
+            };
+
+            return new OllamaApiClient(httpClient)
+            {
+                SelectedModel = chatModel
+            };
+#pragma warning restore CA2000
+        });
 
         // Register AI Agent with dependency injection
         builder.Services.AddSingleton<AIAgent>(sp =>
@@ -127,7 +145,7 @@ public static class ConfigureServices
             logger.LogInformation("Configuring AI Agent with Ollama chat client.");
 
             var chatClient = sp.GetRequiredService<IChatClient>();
-            return chatClient.CreateAIAgent(name: "ClaudeChat",
+            return chatClient.AsAIAgent(name: "ClaudeChat",
                 instructions: "You are a helpful and friendly AI assistant.");
         });
     }
@@ -151,5 +169,34 @@ public static class ConfigureServices
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted,
             TaskScheduler.Default);
+    }
+
+    private static (Uri Endpoint, string Model) ResolveChatConnectionSettings(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var connectionString = configuration.GetConnectionString("chat");
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            var connectionStringBuilder = new DbConnectionStringBuilder
+            {
+                ConnectionString = connectionString
+            };
+
+            if (connectionStringBuilder.TryGetValue("Endpoint", out var endpointValue)
+                && endpointValue is string endpoint
+                && Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri)
+                && connectionStringBuilder.TryGetValue("Model", out var modelValue)
+                && modelValue is string model
+                && !string.IsNullOrWhiteSpace(model))
+            {
+                return (endpointUri, model);
+            }
+        }
+
+        var fallbackEndpoint = configuration.GetValue<string>("Ollama:Endpoint") ?? "http://127.0.0.1:11434";
+        var fallbackModel = configuration.GetValue<string>("Ollama:ChatModel") ?? "qwen3.5:9b";
+
+        return (new Uri(fallbackEndpoint, UriKind.Absolute), fallbackModel);
     }
 }

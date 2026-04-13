@@ -80,7 +80,7 @@ static Serilog.ILogger CreateStartupLogger(IHostEnvironment environment)
     var loggerConfiguration = new LoggerConfiguration()
                               .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                               .Enrich.FromLogContext()
-                              .WriteTo.Console();
+                              .WriteTo.Console(outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}");
 
 #pragma warning disable CA2000 // Ownership is transferred to Log.Logger and released via Log.CloseAndFlushAsync in finally.
     return environment.IsEnvironment("Testing")
