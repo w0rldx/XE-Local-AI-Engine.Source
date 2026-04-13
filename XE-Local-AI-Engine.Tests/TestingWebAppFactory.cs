@@ -31,8 +31,14 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Testing");
+
         _ = builder.ConfigureTestServices(services =>
         {
+            var runLocalIntegration = string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
             services.RemoveAll<IHostedService>();
 
             if (!SkipDefaultBaseUrlOverride)
@@ -49,20 +55,26 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
 
-            services.RemoveAll<IChatClient>();
-            services.AddSingleton<IChatClient>(_ =>
+            if (!runLocalIntegration)
             {
-                var handler = new MockOllamaHttpHandler();
-                handler.SetModelsResponse();
-
-                return new OllamaApiClient(new HttpClient(handler)
+                services.RemoveAll<IOllamaApiClient>();
+                services.RemoveAll<IChatClient>();
+                services.AddSingleton<OllamaApiClient>(_ =>
                 {
-                    BaseAddress = new Uri("http://fake-ollama/")
-                });
-            });
+                    var handler = new MockOllamaHttpHandler();
+                    handler.SetModelsResponse();
 
-            services.RemoveAll<IHttpClientFactory>();
-            services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());
+                    return new OllamaApiClient(new HttpClient(handler)
+                    {
+                        BaseAddress = new Uri("http://fake-ollama/")
+                    });
+                });
+                services.AddSingleton<IOllamaApiClient>(sp => sp.GetRequiredService<OllamaApiClient>());
+                services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<OllamaApiClient>());
+
+                services.RemoveAll<IHttpClientFactory>();
+                services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());
+            }
         });
 
         base.ConfigureWebHost(builder);

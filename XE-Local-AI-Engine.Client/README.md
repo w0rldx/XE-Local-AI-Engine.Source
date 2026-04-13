@@ -174,6 +174,19 @@ private async Task SendMessage()
 
 ## Deployment Considerations
 
+### Deployment (non-Aspire)
+
+The same Client binary can run under Aspire locally or against a standalone Ollama instance without code changes. For non-Aspire deployments, provide the Ollama endpoints and model bindings through connection-string environment variables instead of `appsettings.json`:
+
+```bash
+export ConnectionStrings__chat="Endpoint=http://ollama:11434;Model=qwen3.5:9b"
+export ConnectionStrings__embeddings="Endpoint=http://ollama:11434;Model=nomic-embed-text"
+
+dotnet run --project XE-Local-AI-Engine.Client --no-launch-profile
+```
+
+For local standalone testing, replace `http://ollama:11434` with `http://localhost:11434`.
+
 ### Production Deployment
 
 For production use, consider:

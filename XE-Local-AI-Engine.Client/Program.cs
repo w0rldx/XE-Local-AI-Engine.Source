@@ -4,17 +4,11 @@ using Serilog.Events;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Components;
 
-
-// Initialize Logger this is done before creating the builder to catch startup errors
-Log.Logger = new LoggerConfiguration()
-             .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-             .Enrich.FromLogContext()
-             .WriteTo.Console()
-             .CreateBootstrapLogger();
-
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    Log.Logger = CreateStartupLogger(builder.Environment);
 
     // Services
     builder.AddServices(builder.Configuration);
@@ -71,9 +65,33 @@ catch (HostAbortedException)
 catch (Exception ex)
 {
     Log.Fatal(ex, "The Application failed to start");
+    throw;
 }
 finally
 {
     Log.Information("Application Stopping");
     await Log.CloseAndFlushAsync();
+}
+
+static Serilog.ILogger CreateStartupLogger(IHostEnvironment environment)
+{
+    ArgumentNullException.ThrowIfNull(environment);
+
+    var loggerConfiguration = new LoggerConfiguration()
+                              .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+                              .Enrich.FromLogContext()
+                              .WriteTo.Console();
+
+#pragma warning disable CA2000 // Ownership is transferred to Log.Logger and released via Log.CloseAndFlushAsync in finally.
+    return environment.IsEnvironment("Testing")
+        ? loggerConfiguration.CreateLogger()
+        : loggerConfiguration.CreateBootstrapLogger();
+#pragma warning restore CA2000
+}
+
+public partial class Program
+{
+    protected Program()
+    {
+    }
 }

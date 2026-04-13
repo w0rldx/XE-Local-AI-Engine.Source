@@ -16,20 +16,18 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private readonly IWorkerHubConnection _hubConnection;
     private readonly ILogger<CapabilityReporter> _logger;
 
-    private readonly OllamaApiClient _ollamaClient;
+    private readonly IOllamaApiClient _ollamaClient;
 
-    public CapabilityReporter(IChatClient chatClient,
+    public CapabilityReporter(IOllamaApiClient ollamaClient,
         IConfiguration configuration,
         IWorkerHubConnection hubConnection,
         ILogger<CapabilityReporter> logger)
     {
-        ArgumentNullException.ThrowIfNull(chatClient);
+        _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         ArgumentNullException.ThrowIfNull(configuration);
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _ollamaClient = chatClient as OllamaApiClient
-                        ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for capability reporting.");
         _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
                         ?? throw new InvalidOperationException("Ollama:ChatModel is required for capability reporting.");
     }
