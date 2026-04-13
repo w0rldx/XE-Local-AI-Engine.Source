@@ -1,20 +1,11 @@
 namespace XE_Local_AI_Engine.Client.HealthChecks;
 
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OllamaSharp;
 
-public sealed class OllamaHealthCheck : IHealthCheck
+public sealed class OllamaHealthCheck(IOllamaApiClient ollamaClient) : IHealthCheck
 {
-    private readonly OllamaApiClient _ollamaClient;
-
-    public OllamaHealthCheck(IChatClient chatClient)
-    {
-        ArgumentNullException.ThrowIfNull(chatClient);
-
-        _ollamaClient = chatClient as OllamaApiClient
-                        ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for Ollama health checks.");
-    }
+    private readonly IOllamaApiClient _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {

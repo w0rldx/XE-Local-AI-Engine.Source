@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="MudBlazor"/>
     <PackageReference Include="OllamaSharp"/>

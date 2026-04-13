@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using OllamaSharp;
@@ -16,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Validation;
@@ -83,6 +85,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<ILocalToolExecutor, LocalToolExecutor>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
+        builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
         builder.Services.AddScoped<LocalChatService>();
         builder.Services.AddSingleton<WorkerHubConnection>(sp =>
         {
@@ -112,22 +115,16 @@ public static class ConfigureServices
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);
 
-        // Load configuration
-        var ollamaEndpoint = configuration.GetValue<string>("Ollama:Endpoint") ?? "http://127.0.0.1:11434";
-        var chatModel = configuration.GetValue<string>("Ollama:ChatModel") ?? "qwen3.5:9b";
-        var ollamaUri = new Uri(ollamaEndpoint);
+        builder.AddOllamaApiClient("chat")
+               .AddChatClient();
+        builder.AddOllamaApiClient("embeddings")
+               .AddEmbeddingGenerator();
 
-#pragma warning disable CA2000 // Dispose objects before losing scope - lifetime managed by DI container
-        IChatClient ollamaApiClient = new OllamaApiClient(ollamaUri, chatModel);
-#pragma warning restore CA2000
-
-        builder.Services.AddSingleton<IChatClient>(_ => ollamaApiClient);
-
-// Register AI Agent with dependency injection
+        // Register AI Agent with dependency injection
         builder.Services.AddSingleton<AIAgent>(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<Program>>();
-            logger.LogInformation("Configuring AI Agent with Claude model '{Model}'", chatModel);
+            logger.LogInformation("Configuring AI Agent with Ollama chat client.");
 
             var chatClient = sp.GetRequiredService<IChatClient>();
             return chatClient.CreateAIAgent(name: "ClaudeChat",

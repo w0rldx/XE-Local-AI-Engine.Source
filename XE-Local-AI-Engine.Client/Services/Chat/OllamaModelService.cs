@@ -1,20 +1,17 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using System.Runtime.CompilerServices;
-using Microsoft.Extensions.AI;
 using OllamaSharp;
 using OllamaSharp.Models;
 
 public sealed class OllamaModelService : IOllamaModelService, IDisposable
 {
-    private readonly OllamaApiClient _ollamaClient;
+    private readonly IOllamaApiClient _ollamaClient;
     private readonly SemaphoreSlim _pullSemaphore = new(1, 1);
 
-    public OllamaModelService(IChatClient chatClient)
+    public OllamaModelService(IOllamaApiClient ollamaClient)
     {
-        ArgumentNullException.ThrowIfNull(chatClient);
-        _ollamaClient = chatClient as OllamaApiClient
-                        ?? throw new InvalidOperationException("The registered IChatClient must be an OllamaApiClient for model management.");
+        _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
     }
 
     public void Dispose()
