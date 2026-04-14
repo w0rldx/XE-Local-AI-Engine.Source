@@ -1,10 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Integration;
 
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using TUnit.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class EmbeddingSmokeTests

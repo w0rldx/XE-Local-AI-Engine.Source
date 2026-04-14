@@ -1,23 +1,22 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <AssemblyName>XE_Local_AI_Engine.AI.Agent.Tests</AssemblyName>
     <OutputType>Exe</OutputType>
-    <RootNamespace>XE_Local_AI_Engine.Tests</RootNamespace>
+    <RootNamespace>XE_Local_AI_Engine.AI.Agent.Tests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
-    <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
     <PackageReference Include="Microsoft.Testing.Platform"/>
     <PackageReference Include="NSubstitute"/>
-    <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TUnit"/>
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
+    <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\AssertEx.cs" Link="Testing\AssertEx.cs"/>
   </ItemGroup>
 
 </Project>

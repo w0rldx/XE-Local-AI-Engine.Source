@@ -1,4 +1,3 @@
-using Aspire.Hosting;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -11,7 +10,7 @@ var ollama = builder.AddOllama("ollama")
 var chatModel = ollama.AddModel("chat", "qwen3.5:9b");
 var embeddingsModel = ollama.AddModel("embeddings", "nomic-embed-text");
 
-builder.AddProject<XE_Local_AI_Engine_Client>("app", launchProfileName: "https")
+builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
        .WithExternalHttpEndpoints()
        .WithUrlForEndpoint("https", url => url.DisplayText = "XE Local AI Engine (https)")
        .WithUrlForEndpoint("http", url => url.DisplayText = "XE Local AI Engine (http)")

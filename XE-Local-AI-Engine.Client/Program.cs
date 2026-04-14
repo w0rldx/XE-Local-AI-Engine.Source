@@ -1,12 +1,23 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 using Serilog.Events;
+using Serilog.Sinks.SystemConsole.Themes;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Components;
+using ILogger = Serilog.ILogger;
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    builder.Logging.ClearProviders();
+
+    builder.Host.UseDefaultServiceProvider((context, options) =>
+    {
+        var isDevelopment = context.HostingEnvironment.IsDevelopment();
+        options.ValidateScopes = isDevelopment;
+        options.ValidateOnBuild = isDevelopment;
+    });
 
     Log.Logger = CreateStartupLogger(builder.Environment);
 
@@ -73,14 +84,16 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
-static Serilog.ILogger CreateStartupLogger(IHostEnvironment environment)
+static ILogger CreateStartupLogger(IHostEnvironment environment)
 {
     ArgumentNullException.ThrowIfNull(environment);
+
+    const string ConsoleOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 
     var loggerConfiguration = new LoggerConfiguration()
                               .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
                               .Enrich.FromLogContext()
-                              .WriteTo.Console(outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}");
+                              .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
 
 #pragma warning disable CA2000 // Ownership is transferred to Log.Logger and released via Log.CloseAndFlushAsync in finally.
     return environment.IsEnvironment("Testing")

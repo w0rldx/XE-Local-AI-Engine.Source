@@ -1,7 +1,6 @@
 namespace Microsoft.Extensions.Hosting;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
@@ -55,10 +54,10 @@ public static class Extensions
                    .WithTracing(tracing =>
                    {
                        tracing.AddSource(builder.Environment.ApplicationName)
+                              .AddSource("XE.LocalAiEngine.AI.Agent")
                               .AddAspNetCoreInstrumentation(tracing =>
                                   tracing.Filter = context =>
-                                      !context.Request.Path.StartsWithSegments("/health/live", StringComparison.CurrentCulture)
-                              )
+                                      !context.Request.Path.StartsWithSegments("/health/live", StringComparison.CurrentCulture))
                               .AddHttpClientInstrumentation();
                    });
 

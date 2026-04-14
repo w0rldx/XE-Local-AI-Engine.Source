@@ -1,0 +1,49 @@
+namespace XE_Local_AI_Engine.AI.Agent.DependencyInjection;
+
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Configuration.Validation;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Tools;
+
+public static class AgentServiceCollectionExtensions
+{
+    public static IServiceCollection AddLocalAiAgentRuntime(this IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        _ = services.AddOptions<LocalChatAgentOptions>()
+                    .Bind(configuration.GetSection(LocalChatAgentOptions.Section))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
+        _ = services.AddOptions<InvocationAgentOptions>()
+                    .Bind(configuration.GetSection(InvocationAgentOptions.Section))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
+        _ = services.AddSingleton<IValidateOptions<LocalChatAgentOptions>, LocalChatAgentOptionsValidator>();
+        _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
+
+        // Requires a prior IChatClient registration in the host composition root.
+        _ = services.Decorate<IChatClient>((inner, serviceProvider) =>
+            inner.AsBuilder()
+                 .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
+                 .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>())
+                 .Build());
+
+        _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
+        _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();
+        _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
+        _ = services.AddScoped<ILocalAgentChatService, LocalAgentChatService>();
+
+        return services;
+    }
+}

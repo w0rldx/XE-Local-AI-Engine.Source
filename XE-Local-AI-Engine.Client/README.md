@@ -176,7 +176,8 @@ private async Task SendMessage()
 
 ### Deployment (non-Aspire)
 
-The same Client binary can run under Aspire locally or against a standalone Ollama instance without code changes. For non-Aspire deployments, provide the Ollama endpoints and model bindings through connection-string environment variables instead of `appsettings.json`:
+The same Client binary can run under Aspire locally or against a standalone Ollama instance without code changes. For non-Aspire deployments, provide the Ollama endpoints and model bindings through
+connection-string environment variables instead of `appsettings.json`:
 
 ```bash
 export ConnectionStrings__chat="Endpoint=http://ollama:11434;Model=qwen3.5:9b"

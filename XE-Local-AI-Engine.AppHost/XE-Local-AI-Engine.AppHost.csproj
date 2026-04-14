@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj" />
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
   </ItemGroup>
 
   <ItemGroup>

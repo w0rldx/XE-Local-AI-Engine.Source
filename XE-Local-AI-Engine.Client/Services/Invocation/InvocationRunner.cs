@@ -2,8 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -13,11 +16,17 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 
 public sealed class InvocationRunner : IInvocationRunner
 {
+    private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
+    private const string ProviderUnavailableMessage = "Provider unreachable.";
+
+    private static readonly Regex FrameworkExceptionNamePattern =
+        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant);
+
     private readonly ICapabilityReporter _capabilityReporter;
-    private readonly IChatClient _chatClient;
     private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
     private readonly Lazy<IHubMessageSender> _hubSender;
+    private readonly IInvocationAgentFactory _invocationAgentFactory;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
@@ -25,12 +34,15 @@ public sealed class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly IRuntimePackageValidator _runtimePackageValidator;
     private readonly object _syncRoot = new();
+
     private Guid? _currentInvocationId;
 
     private CancellationTokenSource? _invocationCancellationTokenSource;
+    private bool _timeoutTriggered;
+    private bool _userCancelRequested;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
-        IChatClient chatClient,
+        IInvocationAgentFactory invocationAgentFactory,
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
         IDeadLetterStore deadLetterStore,
@@ -39,7 +51,7 @@ public sealed class InvocationRunner : IInvocationRunner
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
-        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
+        _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
@@ -47,8 +59,9 @@ public sealed class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(workerOptions);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
-                        ?? throw new InvalidOperationException("Ollama:ChatModel is required for invocation execution.");
+        _defaultModel = configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
+                        ?? configuration.GetValue<string>("Ollama:ChatModel")
+                        ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required for invocation execution.");
         _maxResponseSizeBytes = workerOptions.Value.MaxResponseSizeMb * 1024 * 1024;
         _maxPendingToolCallAge = TimeSpan.FromMinutes(workerOptions.Value.MaxPendingToolCallAgeMinutes);
     }
@@ -71,19 +84,16 @@ public sealed class InvocationRunner : IInvocationRunner
         {
             var invocationToken = GetInvocationCancellationToken();
             var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
-            var messages = BuildChatMessages(package);
             var responseBuilder = new StringBuilder();
             var streamedChunkCount = 0;
             var totalResponseBytes = 0;
 
             await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
 
-            var chatOptions = new ChatOptions
-            {
-                ModelId = resolvedModel
-            };
+            var definition = BuildInvocationDefinition(package, resolvedModel);
+            await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
 
-            await foreach (var update in _chatClient.GetStreamingResponseAsync(messages, chatOptions, invocationToken).ConfigureAwait(false))
+            await foreach (var update in agentContext.Agent.RunStreamingAsync(agentContext.SeedMessages, null, null, invocationToken).ConfigureAwait(false))
             {
                 var chunk = update.Text;
                 if (string.IsNullOrEmpty(chunk))
@@ -116,12 +126,14 @@ public sealed class InvocationRunner : IInvocationRunner
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
-            await TrySendFailureAsync(sender, package.InvocationId, "Invocation timed out or was cancelled").ConfigureAwait(false);
+            CancelPendingToolCalls(package.InvocationId);
+            await TrySendFailureAsync(sender, package.InvocationId, "Invocation timed out or was cancelled", ClassifyCancellation()).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
-            await TrySendFailureAsync(sender, package.InvocationId, exception.Message).ConfigureAwait(false);
+            var (failureCategory, message) = MapFailure(exception);
+            await TrySendFailureAsync(sender, package.InvocationId, message, failureCategory).ConfigureAwait(false);
         }
         finally
         {
@@ -138,10 +150,12 @@ public sealed class InvocationRunner : IInvocationRunner
             if (_currentInvocationId == invocationId)
             {
                 invocationCancellationTokenSource = _invocationCancellationTokenSource;
+                _userCancelRequested = true;
             }
         }
 
         invocationCancellationTokenSource?.Cancel();
+        CancelPendingToolCalls(invocationId);
     }
 
     public async Task<string> ExecuteApiToolCallAsync(Guid invocationId,
@@ -154,7 +168,7 @@ public sealed class InvocationRunner : IInvocationRunner
 
         var requestId = Guid.NewGuid().ToString("N");
         var completion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall(DateTimeOffset.UtcNow, completion);
+        var pendingToolCall = new PendingToolCall(invocationId, DateTimeOffset.UtcNow, completion);
         var sender = _hubSender.Value;
 
         if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
@@ -179,10 +193,18 @@ public sealed class InvocationRunner : IInvocationRunner
             var result = await completion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(result.Error))
             {
-                throw new InvalidOperationException($"Tool call '{toolName}' failed: {result.Error}");
+                throw new WorkerToolCallException(toolName, result.Error);
             }
 
             return result.Result;
+        }
+        catch (TimeoutException timeoutException)
+        {
+            throw new WorkerToolCallException(toolName, timeoutException.Message, timeoutException);
+        }
+        catch (OperationCanceledException operationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new WorkerToolCallException(toolName, "Tool call timed out waiting for a result.", operationCanceledException);
         }
         finally
         {
@@ -257,24 +279,31 @@ public sealed class InvocationRunner : IInvocationRunner
         return _defaultModel;
     }
 
-    private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
+    private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package, string resolvedModel)
     {
-        var messages = new List<ChatMessage>
-        {
-            new(ChatRole.System, package.ResolvedSystemPrompt)
-        };
+        var messages = BuildChatMessages(package);
 
-        messages.AddRange(package.ConversationContext
-                                 .OrderBy(message => message.SortOrder)
-                                 .Select(CreateChatMessage));
-
-        return messages;
+        return new InvocationAgentDefinition(resolvedModel,
+            package.ResolvedSystemPrompt,
+            BuildInvocationTools(package),
+            messages);
     }
 
-    private static ChatMessage CreateChatMessage(ConversationMessageDto message)
+    private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
     {
-        ArgumentNullException.ThrowIfNull(message);
-        return new ChatMessage(MapRole(message.Role), message.Content);
+        return package.ConversationContext
+                      .OrderBy(message => message.SortOrder)
+                      .Select(static message => new ChatMessage(MapRole(message.Role), message.Content))
+                      .ToList();
+    }
+
+    private IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)
+    {
+        return package.AllowedTools
+                      .Where(static tool => tool.Location == ToolLocation.ApiSide)
+                      .Select(tool => InvocationToolBridge.Create(tool.Name,
+                          (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, cancellationToken)))
+                      .ToList();
     }
 
     private static ChatRole MapRole(MessageRole role)
@@ -289,14 +318,15 @@ public sealed class InvocationRunner : IInvocationRunner
         };
     }
 
-    private async Task TrySendFailureAsync(IHubMessageSender sender, Guid invocationId, string error)
+    private async Task TrySendFailureAsync(IHubMessageSender sender, Guid invocationId, string error, FailureCategory failureCategory)
     {
         try
         {
             await sender.SendInvocationFailedAsync(new InvocationFailedPayload
                 {
                     InvocationId = invocationId,
-                    Error = error
+                    Error = error,
+                    FailureCategory = failureCategory.ToString()
                 },
                 CancellationToken.None).ConfigureAwait(false);
         }
@@ -306,8 +336,84 @@ public sealed class InvocationRunner : IInvocationRunner
             await _deadLetterStore.EnqueueAsync(new InvocationFailedPayload
             {
                 InvocationId = invocationId,
-                Error = error
+                Error = error,
+                FailureCategory = failureCategory.ToString()
             }, CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+
+    private FailureCategory ClassifyCancellation()
+    {
+        lock (_syncRoot)
+        {
+            if (_userCancelRequested)
+            {
+                return FailureCategory.Cancelled;
+            }
+
+            return _timeoutTriggered ? FailureCategory.Timeout : FailureCategory.Cancelled;
+        }
+    }
+
+    private static (FailureCategory Category, string Message) MapFailure(Exception exception)
+    {
+        return exception switch
+        {
+            TimeoutException timeoutException => (FailureCategory.Timeout, timeoutException.Message),
+            WorkerToolCallException => (FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
+            NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
+            InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>
+                (FailureCategory.Unexpected, invalidOperationException.Message),
+            HttpRequestException => (FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
+            _ when IsAgentRuntimeException(exception) => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
+            _ => (FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))
+        };
+    }
+
+    private static string RedactAgentRuntimeMessage(string message)
+    {
+        var sanitizedMessage = FrameworkExceptionNamePattern.Replace(message, string.Empty);
+        sanitizedMessage = Regex.Replace(sanitizedMessage, @"\s{2,}", " ").Trim(' ', ':', '-', ',', ';');
+
+        return string.IsNullOrWhiteSpace(sanitizedMessage)
+            ? "Agent runtime error."
+            : $"Agent runtime error: {sanitizedMessage}";
+    }
+
+    private static bool IsAgentRuntimeException(Exception exception)
+    {
+        var type = exception.GetType();
+        var fullName = type.FullName ?? string.Empty;
+
+        return fullName.StartsWith("Microsoft.Agents.AI.", StringComparison.Ordinal)
+               || string.Equals(type.Name, "AgentException", StringComparison.Ordinal)
+               || string.Equals(type.Name, "ChatClientAgentException", StringComparison.Ordinal)
+               || messageContainsFrameworkTypeName(exception.Message);
+
+        static bool messageContainsFrameworkTypeName(string message)
+        {
+            return FrameworkExceptionNamePattern.IsMatch(message);
+        }
+    }
+
+    private static string TruncateUnexpectedMessage(string message)
+    {
+        return message.Length > 512 ? message[..512] : message;
+    }
+
+    private void CancelPendingToolCalls(Guid invocationId)
+    {
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (pendingToolCall.Value.InvocationId != invocationId)
+            {
+                continue;
+            }
+
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                removedPendingToolCall.Completion.TrySetCanceled();
+            }
         }
     }
 
@@ -321,7 +427,19 @@ public sealed class InvocationRunner : IInvocationRunner
             }
 
             _currentInvocationId = invocationId;
+            _userCancelRequested = false;
+            _timeoutTriggered = false;
             _invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _invocationCancellationTokenSource.Token.Register(() =>
+            {
+                lock (_syncRoot)
+                {
+                    if (!_userCancelRequested)
+                    {
+                        _timeoutTriggered = true;
+                    }
+                }
+            });
             _invocationCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         }
     }
@@ -361,12 +479,23 @@ public sealed class InvocationRunner : IInvocationRunner
             invocationCancellationTokenSource = _invocationCancellationTokenSource;
             _invocationCancellationTokenSource = null;
             _currentInvocationId = null;
+            _userCancelRequested = false;
+            _timeoutTriggered = false;
         }
 
         invocationCancellationTokenSource?.Dispose();
     }
 
     private sealed record PendingToolCall(
+        Guid InvocationId,
         DateTimeOffset CreatedAt,
         TaskCompletionSource<ToolCallResultEvent> Completion);
+
+    public sealed class WorkerToolCallException : Exception
+    {
+        public WorkerToolCallException(string toolName, string message, Exception? innerException = null)
+            : base($"Tool call '{toolName}' failed: {message}", innerException)
+        {
+        }
+    }
 }
