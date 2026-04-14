@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
-using XE_Local_AI_Engine.Client.Models.Enums;
-
 public sealed record RuntimePackage
 {
     public required Guid InvocationId { get; init; }
@@ -27,41 +25,4 @@ public sealed record RuntimePackage
     public required TimeoutSettings Timeouts { get; init; }
 
     public required string ConfigHash { get; init; }
-}
-
-public sealed record ConversationMessageDto
-{
-    public required Guid Id { get; init; }
-
-    public required MessageRole Role { get; init; }
-
-    public required string Content { get; init; }
-
-    public string? ToolCalls { get; init; }
-
-    public string? ToolResults { get; init; }
-
-    public string? ModelUsed { get; init; }
-
-    public required int SortOrder { get; init; }
-}
-
-public sealed record AllowedToolDto
-{
-    public required Guid Id { get; init; }
-
-    public required string Name { get; init; }
-
-    public required ToolLocation Location { get; init; }
-
-    public string? ParameterSchema { get; init; }
-}
-
-public sealed record TimeoutSettings
-{
-    public int InvocationTimeoutSeconds { get; init; } = 300;
-
-    public int ToolCallTimeoutSeconds { get; init; } = 30;
-
-    public int StreamIdleTimeoutSeconds { get; init; } = 60;
 }

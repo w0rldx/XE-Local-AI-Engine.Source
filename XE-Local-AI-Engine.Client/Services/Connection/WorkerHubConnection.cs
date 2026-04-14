@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -317,26 +318,5 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         var baseUri = new Uri(options.BaseUrl, UriKind.Absolute);
         return new Uri(baseUri, options.HubPath).ToString();
-    }
-}
-
-public class WorkerNotPairedException : InvalidOperationException
-{
-    public WorkerNotPairedException()
-        : base("Worker is not paired with the Central Platform.")
-    {
-    }
-
-    public WorkerNotPairedException(string message)
-        : base(message)
-    {
-    }
-}
-
-public sealed class WorkerTokenExpiredException : InvalidOperationException
-{
-    public WorkerTokenExpiredException()
-        : base("Worker token has expired. Re-pairing is required.")
-    {
     }
 }

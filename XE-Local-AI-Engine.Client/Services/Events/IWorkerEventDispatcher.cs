@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Events;
 
 public interface IWorkerEventDispatcher
 {
@@ -16,14 +17,4 @@ public interface IWorkerEventDispatcher
     Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt);
 
     Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt);
-}
-
-public sealed class InvocationStateChangedEventArgs : EventArgs
-{
-    public InvocationStateChangedEventArgs(InvocationState state)
-    {
-        State = state ?? throw new ArgumentNullException(nameof(state));
-    }
-
-    public InvocationState State { get; }
 }

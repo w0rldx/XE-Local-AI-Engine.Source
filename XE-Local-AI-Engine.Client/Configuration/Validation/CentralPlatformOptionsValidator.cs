@@ -42,13 +42,3 @@ public sealed class CentralPlatformOptionsValidator : IValidateOptions<CentralPl
         return !path.Contains("://", StringComparison.Ordinal);
     }
 }
-
-internal static class ValidationEnumerableExtensions
-{
-    public static IEnumerable<string> AppendIf(this IEnumerable<string> source,
-        bool condition,
-        string error)
-    {
-        return condition ? source.Append(error) : source;
-    }
-}

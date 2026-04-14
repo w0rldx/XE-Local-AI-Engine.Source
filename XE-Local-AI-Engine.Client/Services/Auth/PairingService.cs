@@ -114,35 +114,3 @@ public sealed class PairingService : IPairingService
             : $"Pairing failed: {errorBody}");
     }
 }
-
-public class PairingException : Exception
-{
-    public PairingException(string message)
-        : base(message)
-    {
-    }
-}
-
-public sealed class PairingTokenInvalidException : PairingException
-{
-    public PairingTokenInvalidException(string message)
-        : base(message)
-    {
-    }
-}
-
-public sealed class PairingTokenExpiredException : PairingException
-{
-    public PairingTokenExpiredException(string message)
-        : base(message)
-    {
-    }
-}
-
-public sealed class PairingTokenUsedException : PairingException
-{
-    public PairingTokenUsedException(string message)
-        : base(message)
-    {
-    }
-}
