@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;

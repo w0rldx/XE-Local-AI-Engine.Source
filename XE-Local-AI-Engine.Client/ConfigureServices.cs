@@ -37,7 +37,6 @@ public static class ConfigureServices
                                                                    .Enrich.FromLogContext()
                                                                    .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate));
 
-        builder.AddServiceDefaults();
         builder.Services.AddRazorComponents()
                .AddInteractiveServerComponents();
         builder.Services.AddMudServices();

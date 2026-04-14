@@ -19,7 +19,10 @@ try
 
     Log.Logger = builder.Environment.CreateStartupLogger();
 
-    // Services
+    // Aspire services
+    builder.AddServiceDefaults();
+
+    // Add services to the container.
     builder.AddServices(builder.Configuration);
 
     var app = builder.Build();
@@ -82,9 +85,12 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
-public partial class Program
+namespace XE_Local_AI_Engine.Client
 {
-    protected Program()
+    public partial class Program
     {
+        protected Program()
+        {
+        }
     }
 }
