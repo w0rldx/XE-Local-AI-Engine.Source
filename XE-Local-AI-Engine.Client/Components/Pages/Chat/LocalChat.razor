@@ -1,9 +1,10 @@
 @page "/chat"
 @rendermode @(new InteractiveServerRenderMode(false))
+@using XE_Local_AI_Engine.AI.Agent.Chat
 @using XE_Local_AI_Engine.Client.Services.Chat
-@implements IDisposable
+@implements IAsyncDisposable
 
-@inject LocalChatService ChatService
+@inject ILocalAgentChatService ChatService
 @inject IOllamaModelService ModelService
 @inject IDialogService DialogService
 
@@ -147,7 +148,7 @@
             if (!_availableModels.Contains(_selectedModel) && _availableModels.Count > 0)
             {
                 _selectedModel = _availableModels[0];
-                ChatService.SelectedModel = _selectedModel;
+                await ChatService.SetModelAsync(_selectedModel);
             }
         }
     }
@@ -227,14 +228,14 @@
         if (confirmed ?? false)
         {
             _selectedModel = newModel;
-            ChatService.SelectedModel = newModel;
+            await ChatService.SetModelAsync(newModel);
         }
     }
 
-    private void ClearChat()
+    private async Task ClearChat()
     {
         _messages.Clear();
-        ChatService.ClearHistory();
+        await ChatService.ResetSessionAsync();
     }
 
     private void CancelStreaming()
@@ -242,10 +243,15 @@
         _cts?.Cancel();
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _cts?.Cancel();
-        _cts?.Dispose();
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+            _cts.Dispose();
+        }
+
+        await ChatService.DisposeAsync();
     }
 
 }

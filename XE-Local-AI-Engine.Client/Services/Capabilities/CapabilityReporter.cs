@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Capabilities;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using Microsoft.Extensions.AI;
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -28,8 +27,9 @@ public sealed class CapabilityReporter : ICapabilityReporter
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
-                        ?? throw new InvalidOperationException("Ollama:ChatModel is required for capability reporting.");
+        _defaultModel = configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
+                        ?? configuration.GetValue<string>("Ollama:ChatModel")
+                        ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required for capability reporting.");
     }
 
     public async Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)

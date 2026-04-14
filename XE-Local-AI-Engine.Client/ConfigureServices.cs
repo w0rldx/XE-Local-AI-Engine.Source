@@ -1,14 +1,14 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using OllamaSharp;
 using Serilog;
+using Serilog.Sinks.SystemConsole.Themes;
+using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
@@ -22,16 +22,20 @@ using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using ILogger = ILogger;
 
 public static class ConfigureServices
 {
+    private const string ConsoleOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         // Serilog
         _ = builder.Services.AddSerilog((serviceCollection, lc) => lc
                                                                    .ReadFrom.Configuration(configuration)
                                                                    .ReadFrom.Services(serviceCollection)
-                                                                   .Enrich.FromLogContext());
+                                                                   .Enrich.FromLogContext()
+                                                                   .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate));
 
         builder.AddServiceDefaults();
         builder.Services.AddRazorComponents()
@@ -84,10 +88,8 @@ public static class ConfigureServices
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
         builder.Services.AddSingleton<IDeadLetterStore, FileDeadLetterStore>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
-        builder.Services.AddSingleton<ILocalToolExecutor, LocalToolExecutor>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
-        builder.Services.AddScoped<LocalChatService>();
         builder.Services.AddSingleton<WorkerHubConnection>(sp =>
         {
             var connection = ActivatorUtilities.CreateInstance<WorkerHubConnection>(sp);
@@ -138,19 +140,10 @@ public static class ConfigureServices
 #pragma warning restore CA2000
         });
 
-        // Register AI Agent with dependency injection
-        builder.Services.AddSingleton<AIAgent>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<Program>>();
-            logger.LogInformation("Configuring AI Agent with Ollama chat client.");
-
-            var chatClient = sp.GetRequiredService<IChatClient>();
-            return chatClient.AsAIAgent(name: "ClaudeChat",
-                instructions: "You are a helpful and friendly AI assistant.");
-        });
+        builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
     }
 
-    private static void DispatchSafely(Task dispatchTask, Microsoft.Extensions.Logging.ILogger logger, string operationName)
+    private static void DispatchSafely(Task dispatchTask, ILogger logger, string operationName)
     {
         ArgumentNullException.ThrowIfNull(dispatchTask);
         ArgumentNullException.ThrowIfNull(logger);
@@ -158,7 +151,7 @@ public static class ConfigureServices
 
         _ = dispatchTask.ContinueWith(static (task, state) =>
             {
-                var (continuationLogger, dispatchOperationName) = ((ILogger Logger, string OperationName))state!;
+                var (continuationLogger, dispatchOperationName) = ((Serilog.ILogger Logger, string OperationName))state!;
 
                 if (task.IsFaulted)
                 {
@@ -195,7 +188,9 @@ public static class ConfigureServices
         }
 
         var fallbackEndpoint = configuration.GetValue<string>("Ollama:Endpoint") ?? "http://127.0.0.1:11434";
-        var fallbackModel = configuration.GetValue<string>("Ollama:ChatModel") ?? "qwen3.5:9b";
+        var fallbackModel = configuration.GetValue<string>("Ollama:ChatModel")
+                            ?? configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
+                            ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required.");
 
         return (new Uri(fallbackEndpoint, UriKind.Absolute), fallbackModel);
     }

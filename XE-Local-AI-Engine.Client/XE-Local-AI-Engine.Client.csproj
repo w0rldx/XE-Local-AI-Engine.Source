@@ -8,13 +8,10 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
+    <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="MudBlazor"/>
     <PackageReference Include="OllamaSharp"/>
-    <PackageReference Include="Microsoft.Agents.AI"/>
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions"/>
-    <PackageReference Include="Microsoft.Agents.AI.Hosting"/>
-    <PackageReference Include="Microsoft.Extensions.AI"/>
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="Serilog.AspNetCore"/>
     <PackageReference Include="Serilog.Enrichers.Environment"/>
@@ -26,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
   </ItemGroup>
 
