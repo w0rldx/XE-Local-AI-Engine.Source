@@ -46,7 +46,7 @@ public sealed class EmbeddingSmokeTests
         var embedding = embeddings[0];
 
         AssertEx.True(embedding.Dimensions > 0, "Expected a non-empty embedding vector.");
-        AssertEx.Equal(768, embedding.Dimensions, "Expected nomic-embed-text to produce 768 dimensions.");
+        AssertEx.Equal(4096, embedding.Dimensions, "Expected qwen3-embedding:0.6b to produce 4096 dimensions.");
         AssertEx.True(embedding.Vector.Length == embedding.Dimensions, "Expected vector length to match the embedding dimensions.");
     }
 }

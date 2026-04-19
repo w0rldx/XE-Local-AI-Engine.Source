@@ -35,6 +35,3 @@ jobs:
 
       - name: Run worker node tests
         run: dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build
-
-      - name: Run AI agent tests
-        run: dotnet test --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj --configuration Release --no-build

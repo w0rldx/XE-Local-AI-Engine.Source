@@ -14,7 +14,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ReturnsContextWithSeedMessages()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:9b",
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [],
             [new ChatMessage(ChatRole.User, "hello")]);
@@ -35,7 +35,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WithNonEmptyTools_IgnoresToolsAndReturnsContext()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:9b",
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [InvocationToolBridge.Create("echo", (input, _) => Task.FromResult(input))],
             []);
@@ -52,7 +52,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_OrdersConversationContext_WhenBuildingSeedMessages()
     {
-        var definition = new InvocationAgentDefinition("qwen3.5:9b",
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [],
             [

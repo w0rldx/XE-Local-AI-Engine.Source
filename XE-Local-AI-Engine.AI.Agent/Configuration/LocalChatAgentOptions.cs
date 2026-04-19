@@ -10,7 +10,7 @@ public sealed class LocalChatAgentOptions
     public string AgentName { get; set; } = "XeLocalAgent";
 
     [Required]
-    public string DefaultModel { get; set; } = "qwen3.5:9b";
+    public string DefaultModel { get; set; } = "qwen3.5:0.8b";
 
     [Required]
     public string InstructionsResource { get; set; } = "XE_Local_AI_Engine.AI.Agent.Instructions.LocalChatDefault.txt";

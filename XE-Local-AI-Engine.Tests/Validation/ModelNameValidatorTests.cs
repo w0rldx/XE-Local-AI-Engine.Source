@@ -36,7 +36,7 @@ public sealed class ModelNameValidatorTests
     [Test]
     public void IsValid_WhenNameContainsColon_ReturnsTrue()
     {
-        AssertEx.True(_validator.IsValid("qwen3.5:9b"));
+        AssertEx.True(_validator.IsValid("qwen3.5:0.8b"));
     }
 
     [Test]
@@ -84,7 +84,7 @@ public sealed class ModelNameValidatorTests
     [Test]
     public void GetValidationError_WhenNameIsValid_ReturnsNull()
     {
-        AssertEx.Null(_validator.GetValidationError("qwen3.5:9b"));
+        AssertEx.Null(_validator.GetValidationError("qwen3.5:0.8b"));
     }
 
     [Test]

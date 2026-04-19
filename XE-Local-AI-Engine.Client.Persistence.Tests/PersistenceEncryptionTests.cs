@@ -174,6 +174,23 @@ public sealed class PersistenceEncryptionTests : IDisposable
     }
 
     [Test]
+    public void NodeSqliteKeyHolder_WhenSecretMissing_ThrowsHelpfulStartupMessage()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var exception = AssertEx.Throws<InvalidOperationException>(() =>
+        {
+            _ = new NodeSqliteKeyHolder(
+                Options.Create(new WorkerNodeOptions { NodeName = "worker-node-gamma" }),
+                configuration);
+        });
+
+        AssertEx.True(exception.Message.Contains("Parameters:node-sqlite-key", StringComparison.Ordinal));
+        AssertEx.True(exception.Message.Contains("dotnet user-secrets set", StringComparison.Ordinal));
+        AssertEx.True(exception.Message.Contains("XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj", StringComparison.Ordinal));
+    }
+
+    [Test]
     public void PersistenceAssembly_WhenScanned_DoesNotExposeRatchetArtifacts()
     {
         var prohibitedNames = new[]
