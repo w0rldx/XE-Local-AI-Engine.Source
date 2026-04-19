@@ -1,0 +1,40 @@
+name: build-and-test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore solution
+        run: dotnet restore XE-Local-AI-Engine.slnx
+
+      - name: Build solution
+        run: dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+
+      - name: Run client persistence tests (fences included)
+        run: dotnet test --project XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj --configuration Release --no-build
+
+      - name: Run worker node tests
+        run: dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build
+
+      - name: Run AI agent tests
+        run: dotnet test --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj --configuration Release --no-build
