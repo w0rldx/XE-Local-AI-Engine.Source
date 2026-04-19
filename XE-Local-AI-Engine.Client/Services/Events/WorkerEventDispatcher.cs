@@ -1,20 +1,42 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
 public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 {
+    private const string AadMismatchReason = "aad-mismatch";
+    private const string RetiredKeyReason = "retired-key";
+    private static readonly JsonSerializerOptions RuntimePackageSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
+
+    private readonly IEnvelopeCryptoService _envelopeCryptoService;
+    private readonly Lazy<IHubMessageSender> _hubMessageSender;
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
+    private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly object _syncRoot = new();
 
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
+        IEnvelopeCryptoService envelopeCryptoService,
+        Lazy<IHubMessageSender> hubMessageSender,
+        INodeKeyRegistry nodeKeyRegistry,
         ILogger<WorkerEventDispatcher> logger)
     {
         _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
+        _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
+        _hubMessageSender = hubMessageSender ?? throw new ArgumentNullException(nameof(hubMessageSender));
+        _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -22,9 +44,52 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public InvocationState? CurrentInvocation { get; private set; }
 
-    public async Task DispatchInvocationAssignedAsync(RuntimePackage package)
+    public async Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package)
     {
         ArgumentNullException.ThrowIfNull(package);
+
+        NodeKeyResolution resolution;
+
+        try
+        {
+            resolution = _nodeKeyRegistry.Resolve(_nodeKeyRegistry.ActiveKeyId);
+        }
+        catch (InvalidOperationException exception)
+        {
+            _logger.LogWarning(exception, "No active node key is available to decrypt message {MessageId}.", package.MessageId);
+            return;
+        }
+
+        if (!resolution.IsResolved || resolution.PrivateKey is null)
+        {
+            if (resolution.Status == NodeKeyLookupStatus.RetiredExpired)
+            {
+                await EmitInvocationKeyMismatchAsync(package.MessageId,
+                    RetiredKeyReason,
+                    resolution.KeyIdUsed ?? resolution.RequestedKeyId).ConfigureAwait(false);
+                return;
+            }
+
+            throw new InvalidOperationException("No active node key is available to decrypt the invocation envelope.");
+        }
+
+        EnvelopeDecryptionResult decryptionResult;
+
+        try
+        {
+            decryptionResult = _envelopeCryptoService.DecryptRuntimePackage(package, resolution.PrivateKey);
+        }
+        catch (InvalidOperationException exception) when (IsAadMismatch(exception))
+        {
+            await EmitInvocationKeyMismatchAsync(package.MessageId,
+                AadMismatchReason,
+                resolution.KeyIdUsed ?? resolution.RequestedKeyId).ConfigureAwait(false);
+            return;
+        }
+
+        using var _ = decryptionResult;
+        var runtimePackage = JsonSerializer.Deserialize<RuntimePackage>(decryptionResult.Plaintext.Span, RuntimePackageSerializerOptions)
+                             ?? throw new InvalidOperationException("Encrypted runtime package payload could not be deserialized.");
 
         InvocationState snapshot;
 
@@ -33,7 +98,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             if (IsInvocationActive(CurrentInvocation))
             {
                 _logger.LogWarning("Ignoring invocation assignment for {InvocationId} because invocation {CurrentInvocationId} is still active.",
-                    package.InvocationId,
+                    runtimePackage.InvocationId,
                     CurrentInvocation!.InvocationId);
 
                 return;
@@ -41,20 +106,25 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
             CurrentInvocation = new InvocationState
             {
-                InvocationId = package.InvocationId,
-                ConversationId = package.ConversationId,
+                InvocationId = runtimePackage.InvocationId,
+                ConversationId = runtimePackage.ConversationId,
                 Status = InvocationStatus.Assigned,
                 StartedAt = DateTimeOffset.UtcNow,
-                ModelUsed = package.ModelProfile
+                ModelUsed = runtimePackage.ModelProfile
             };
 
             snapshot = Clone(CurrentInvocation);
         }
 
-        _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", package.InvocationId);
+        _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);
         PublishStateChanged(snapshot);
 
-        await RunInvocationAsync(package).ConfigureAwait(false);
+        using var context = InvocationExecutionContext.Create(runtimePackage,
+            package.MessageId,
+            package.EpochVersion,
+            decryptionResult.EpochKey);
+
+        await RunInvocationAsync(context).ConfigureAwait(false);
     }
 
     public Task DispatchToolCallResultAsync(ToolCallResultEvent evt)
@@ -151,8 +221,24 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         return state is not null && state.Status is InvocationStatus.Assigned or InvocationStatus.Running;
     }
 
-    private async Task RunInvocationAsync(RuntimePackage package)
+    private async Task EmitInvocationKeyMismatchAsync(Guid messageId, string reason, string nodeKeyIdUsed)
     {
+        _logger.LogWarning("Emitting invocation key mismatch for {MessageId}. Reason: {Reason}, key: {NodeKeyIdUsed}",
+            messageId,
+            reason,
+            nodeKeyIdUsed);
+        await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed).ConfigureAwait(false);
+    }
+
+    private static bool IsAadMismatch(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("AAD", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task RunInvocationAsync(InvocationExecutionContext context)
+    {
+        var package = context.Package;
+
         UpdateInvocation(package.InvocationId,
             static state =>
             {
@@ -162,7 +248,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
         try
         {
-            await _invocationRunner.RunAsync(package).ConfigureAwait(false);
+            await _invocationRunner.RunAsync(context).ConfigureAwait(false);
 
             UpdateInvocation(package.InvocationId,
                 static state =>

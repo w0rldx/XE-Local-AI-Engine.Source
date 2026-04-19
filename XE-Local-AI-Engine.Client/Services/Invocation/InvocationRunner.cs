@@ -10,10 +10,12 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
 public sealed class InvocationRunner : IInvocationRunner
 {
@@ -28,6 +30,7 @@ public sealed class InvocationRunner : IInvocationRunner
     private readonly string _defaultModel;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
+    private readonly IEnvelopeCryptoService _envelopeCryptoService;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
@@ -44,6 +47,7 @@ public sealed class InvocationRunner : IInvocationRunner
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         IInvocationAgentFactory invocationAgentFactory,
+        IEnvelopeCryptoService envelopeCryptoService,
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
         IDeadLetterStore deadLetterStore,
@@ -53,6 +57,7 @@ public sealed class InvocationRunner : IInvocationRunner
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
+        _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
@@ -69,7 +74,15 @@ public sealed class InvocationRunner : IInvocationRunner
 
     public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(package);
+        using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
+        await RunAsync(context, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var package = context.Package;
 
         var validationResult = _runtimePackageValidator.Validate(package);
         if (!validationResult.IsValid)
@@ -87,6 +100,7 @@ public sealed class InvocationRunner : IInvocationRunner
             var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
             var responseBuilder = new StringBuilder();
             var streamedChunkCount = 0;
+            long sequence = 0;
             var totalResponseBytes = 0;
 
             await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
@@ -103,6 +117,7 @@ public sealed class InvocationRunner : IInvocationRunner
                 }
 
                 streamedChunkCount++;
+                sequence++;
                 totalResponseBytes += Encoding.UTF8.GetByteCount(chunk);
 
                 if (totalResponseBytes > _maxResponseSizeBytes)
@@ -112,29 +127,37 @@ public sealed class InvocationRunner : IInvocationRunner
 
                 responseBuilder.Append(chunk);
 
-                await sender.SendTokenStreamChunkAsync(package.InvocationId, chunk, false, invocationToken).ConfigureAwait(false);
+                await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
+                        context.MessageId,
+                        context.EpochVersion,
+                        context.EpochKey.Span,
+                        Encoding.UTF8.GetBytes(chunk),
+                        sequence),
+                    invocationToken).ConfigureAwait(false);
             }
 
-            await sender.SendTokenStreamChunkAsync(package.InvocationId, string.Empty, true, invocationToken).ConfigureAwait(false);
-            await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
-                {
-                    InvocationId = package.InvocationId,
-                    FinalContent = responseBuilder.ToString(),
-                    ModelUsed = resolvedModel,
-                    TokensUsed = streamedChunkCount
-                },
+            await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
+                    context.MessageId,
+                    context.EpochVersion,
+                    context.EpochKey.Span,
+                    Encoding.UTF8.GetBytes(responseBuilder.ToString()),
+                    sequence,
+                    new Dictionary<string, long>
+                    {
+                        ["tokensUsed"] = streamedChunkCount
+                    }),
                 invocationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
             CancelPendingToolCalls(package.InvocationId);
-            await TrySendFailureAsync(sender, package.InvocationId, "Invocation timed out or was cancelled", ClassifyCancellation()).ConfigureAwait(false);
+            await TrySendFailureAsync(sender, context, "Invocation timed out or was cancelled", ClassifyCancellation()).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
             var (failureCategory, message) = MapFailure(exception);
-            await TrySendFailureAsync(sender, package.InvocationId, message, failureCategory).ConfigureAwait(false);
+            await TrySendFailureAsync(sender, context, message, failureCategory).ConfigureAwait(false);
         }
         finally
         {
@@ -319,13 +342,18 @@ public sealed class InvocationRunner : IInvocationRunner
         };
     }
 
-    private async Task TrySendFailureAsync(IHubMessageSender sender, Guid invocationId, string error, FailureCategory failureCategory)
+    private async Task TrySendFailureAsync(IHubMessageSender sender,
+        InvocationExecutionContext context,
+        string error,
+        FailureCategory failureCategory)
     {
         try
         {
-            await sender.SendInvocationFailedAsync(new InvocationFailedPayload
+            await sender.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
                 {
-                    InvocationId = invocationId,
+                    ConversationId = context.Package.ConversationId,
+                    MessageId = context.MessageId,
+                    EpochVersion = context.EpochVersion,
                     Error = error,
                     FailureCategory = failureCategory.ToString()
                 },
@@ -333,10 +361,10 @@ public sealed class InvocationRunner : IInvocationRunner
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}. Enqueueing to dead letter store.", invocationId);
+            _logger.LogWarning(exception, "Failed to report invocation failure to the API for {InvocationId}. Enqueueing to dead letter store.", context.Package.InvocationId);
             await _deadLetterStore.EnqueueAsync(new InvocationFailedPayload
             {
-                InvocationId = invocationId,
+                InvocationId = context.Package.InvocationId,
                 Error = error,
                 FailureCategory = failureCategory.ToString()
             }, CancellationToken.None).ConfigureAwait(false);

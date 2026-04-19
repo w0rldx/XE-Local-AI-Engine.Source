@@ -90,7 +90,7 @@ public sealed class ToolCallCleanupServiceTests
             _cleanupSignal.Dispose();
         }
 
-        public Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+        public Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

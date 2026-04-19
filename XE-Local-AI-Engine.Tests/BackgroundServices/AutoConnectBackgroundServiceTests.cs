@@ -6,10 +6,12 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+[NotInParallel(nameof(AutoConnectBackgroundServiceTests))]
 public sealed class AutoConnectBackgroundServiceTests : IDisposable
 {
     public void Dispose()
@@ -27,7 +29,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         {
             using var service = CreateService(hubConnection, MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)), CreateApplicationLifetime());
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(200);
+            cancellationTokenSource.CancelAfter(1000);
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
@@ -49,7 +51,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         {
             using var service = CreateService(hubConnection, MockTokenStore.Unpaired(), CreateApplicationLifetime());
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(200);
+            cancellationTokenSource.CancelAfter(1000);
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
@@ -71,7 +73,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         {
             using var service = CreateService(hubConnection, MockTokenStore.WithExpiredToken(), CreateApplicationLifetime());
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(200);
+            cancellationTokenSource.CancelAfter(1000);
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
@@ -100,15 +102,17 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
                 new CentralPlatformOptions
                 {
                     BaseUrl = "https://test.example.com",
-                    MaxReconnectAttempts = 3,
-                    ReconnectDelaysMs = [1, 1, 1]
+                    ReconnectBackoffBaseMs = 1,
+                    ReconnectBackoffMaxMs = 1,
+                    ReconnectBackoffJitterMs = 0,
+                    ReconnectMaxAttempts = 3
                 });
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(200);
+            cancellationTokenSource.CancelAfter(1000);
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(3, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(4, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -161,8 +165,10 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             Options.Create(options ?? new CentralPlatformOptions
             {
                 BaseUrl = "https://test.example.com",
-                MaxReconnectAttempts = 3,
-                ReconnectDelaysMs = [10, 10, 10]
+                ReconnectBackoffBaseMs = 10,
+                ReconnectBackoffMaxMs = 10,
+                ReconnectBackoffJitterMs = 0,
+                ReconnectMaxAttempts = 3
             }),
             NullLogger<AutoConnectBackgroundService>.Instance);
     }
@@ -173,6 +179,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
         private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
         private EventHandler<InvocationCancelledReceivedEventArgs>? _invocationCancelledReceived;
+        private EventHandler<ConversationPurgedReceivedEventArgs>? _conversationPurgedReceived;
         private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
         private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
 
@@ -220,6 +227,12 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             remove => _invocationCancelledReceived -= value;
         }
 
+        public event EventHandler<ConversationPurgedReceivedEventArgs>? ConversationPurgedReceived
+        {
+            add => _conversationPurgedReceived += value;
+            remove => _conversationPurgedReceived -= value;
+        }
+
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
             ConnectAsyncCallCount++;
@@ -243,6 +256,14 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task SendInvocationKeyMismatchAsync(Guid messageId,
+            string reason,
+            string nodeKeyIdUsed,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -253,7 +274,27 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendEncryptedChunkAsync(EncryptedChunkEnvelopeV1 payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendEncryptedCompletedAsync(EncryptedCompletedEnvelopeV1 payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendEncryptedFailedAsync(EncryptedFailedEnvelopeV1 payload, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

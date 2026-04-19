@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -30,7 +31,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
         var package = RuntimePackageBuilder.Valid().Build();
 
-        await runner.RunAsync(package);
+        await RunAsync(runner, package);
 
         AssertEx.Contains(sender.AcceptedInvocations, package.InvocationId);
     }
@@ -41,10 +42,10 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
 
-        await runner.RunAsync(RuntimePackageBuilder.Valid().Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        AssertEx.True(sender.SentChunks.Count >= 1);
-        AssertEx.True(sender.SentChunks.Any(chunk => chunk.IsComplete));
+        AssertEx.True(sender.SentEncryptedChunks.Count >= 1);
+        AssertEx.True(sender.SentEncryptedChunks.All(chunk => chunk.MessageId != Guid.Empty));
     }
 
     [Test]
@@ -54,11 +55,11 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
         var package = RuntimePackageBuilder.Valid().Build();
 
-        await runner.RunAsync(package);
+        await RunAsync(runner, package);
 
-        AssertEx.Equal(1, sender.SentCompletions.Count);
-        AssertEx.Equal(package.InvocationId, sender.SentCompletions[0].InvocationId);
-        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
+        AssertEx.Equal(1, sender.SentEncryptedCompletions.Count);
+        AssertEx.Equal(package.ConversationId, sender.SentEncryptedCompletions[0].ConversationId);
+        AssertEx.Equal(1, sender.SentEncryptedCompletions[0].EpochVersion);
     }
 
     [Test]
@@ -71,10 +72,10 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, validator: validator);
         var package = RuntimePackageBuilder.Valid().Build();
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(package));
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => RunAsync(runner, package));
 
         AssertEx.Contains(exception.Message, "bad package");
-        AssertEx.Empty(sender.SentFailures);
+        AssertEx.Empty(sender.SentEncryptedFailures);
     }
 
     [Test]
@@ -88,11 +89,11 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, factory);
         var package = RuntimePackageBuilder.Valid().Build();
 
-        await runner.RunAsync(package);
+        await RunAsync(runner, package);
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.InvocationId == package.InvocationId
-                                                                && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
-                                                                && failure.Error.Contains("Agent runtime error", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId
+                                                                 && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+                                                                 && failure.Error.Contains("Agent runtime error", StringComparison.Ordinal));
     }
 
     [Test]
@@ -105,13 +106,13 @@ public sealed class InvocationRunnerTests
         var package = RuntimePackageBuilder.Valid().Build();
         using var cancellationTokenSource = new CancellationTokenSource();
 
-        var runTask = runner.RunAsync(package, cancellationTokenSource.Token);
+        var runTask = RunAsync(runner, package, cancellationTokenSource.Token);
         await started.Task;
         await cancellationTokenSource.CancelAsync();
         gate.TrySetCanceled();
         await runTask;
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.InvocationId == package.InvocationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
     }
 
     [Test]
@@ -128,7 +129,7 @@ public sealed class InvocationRunnerTests
                                            .Build();
 
         var runner = CreateRunner(sender, factory);
-        await runner.RunAsync(package);
+        await RunAsync(runner, package);
 
         var definition = AssertEx.NotNull(capturedDefinition);
         AssertEx.Equal("You are helpful.", definition.Instructions);
@@ -142,11 +143,12 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_PassesNullSessionToWorkerAgent()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("ok"));
+        var lastObservedSessionWasNull = false;
+        var runner = CreateRunner(sender, CreateFactory(CreateUpdates("ok"), onSessionObserved: value => lastObservedSessionWasNull = value));
 
-        await runner.RunAsync(RuntimePackageBuilder.Valid().Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        AssertEx.True(FakeAIAgent.LastObservedSessionWasNull);
+        AssertEx.True(lastObservedSessionWasNull);
     }
 
     [Test]
@@ -179,9 +181,9 @@ public sealed class InvocationRunnerTests
         }, agentUpdates: CreateUpdates(new string('x', (1024 * 1024) + 1)));
         var package = RuntimePackageBuilder.Valid().Build();
 
-        await runner.RunAsync(package);
+        await RunAsync(runner, package);
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.InvocationId == package.InvocationId && failure.Error.Contains("Response size exceeded", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Response size exceeded", StringComparison.Ordinal));
     }
 
     [Test]
@@ -192,10 +194,10 @@ public sealed class InvocationRunnerTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
 
-        var firstTask = runner.RunAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+        var firstTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
         await started.Task;
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build()));
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build()));
         AssertEx.Contains(exception.Message, "Worker is busy");
 
         gate.SetResult();
@@ -211,28 +213,28 @@ public sealed class InvocationRunnerTests
         var package = RuntimePackageBuilder.Valid().Build();
         var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
 
-        var runTask = runner.RunAsync(package);
+        var runTask = RunAsync(runner, package);
         await started.Task;
         runner.Cancel(package.InvocationId);
-        gate.TrySetCanceled();
-        await runTask;
+        gate.TrySetResult();
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.InvocationId == package.InvocationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Cancelled));
     }
 
     [Test]
     public async Task RunAsync_WhenInvocationTimeoutElapses_MapsTimeoutFailureCategory()
     {
         var sender = new MockHubMessageSender();
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var package = RuntimePackageBuilder.Valid().WithTimeout(0).Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+        var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)));
 
+        var runTask = RunAsync(runner, package);
         await started.Task;
-        await runner.RunAsync(package);
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.InvocationId == package.InvocationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
     }
 
     [Test]
@@ -245,9 +247,9 @@ public sealed class InvocationRunnerTests
 
         var runner = CreateRunner(sender, factory);
 
-        await runner.RunAsync(RuntimePackageBuilder.Valid().Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.FailureCategory == nameof(FailureCategory.ProviderUnreachable));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ProviderUnreachable));
     }
 
     [Test]
@@ -260,9 +262,9 @@ public sealed class InvocationRunnerTests
 
         var runner = CreateRunner(sender, factory);
 
-        await runner.RunAsync(RuntimePackageBuilder.Valid().Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.FailureCategory == nameof(FailureCategory.Unexpected));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.Unexpected));
     }
 
     [Test]
@@ -275,9 +277,9 @@ public sealed class InvocationRunnerTests
 
         var runner = CreateRunner(sender, factory);
 
-        await runner.RunAsync(RuntimePackageBuilder.Valid().Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
                                                                 && !failure.Error.Contains("ChatClientAgentException", StringComparison.Ordinal)
                                                                 && !failure.Error.Contains("Microsoft.Agents.AI", StringComparison.Ordinal));
     }
@@ -293,9 +295,9 @@ public sealed class InvocationRunnerTests
 
         var runner = CreateRunner(sender, factory);
 
-        await runner.RunAsync(RuntimePackageBuilder.Valid().Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
-        var failure = sender.SentFailures.Single();
+        var failure = sender.SentEncryptedFailures.Single();
         AssertEx.Equal(512, failure.Error.Length);
     }
 
@@ -352,32 +354,23 @@ public sealed class InvocationRunnerTests
 
         runner.CancelAll();
 
-        await AssertEx.ThrowsAsync<TaskCanceledException>(() => pendingCall);
+        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingCall);
+        AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
     }
 
     [Test]
     public async Task RunAsync_WhenToolBridgeFails_MapsAgentToolCallCategory()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateToolCallingUpdates("approve-job", "{\"decision\":true}"));
-        var package = RuntimePackageBuilder.Valid()
-                                           .WithAllowedTool("approve-job")
-                                           .Build();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvocationRunner.WorkerToolCallException("approve-job", "approval timeout")));
 
-        var runTask = runner.RunAsync(package);
-        await Task.Delay(20);
+        var runner = CreateRunner(sender, factory);
 
-        var requestId = sender.SentToolCalls.Single().RequestId;
-        runner.ResolveToolCallResult(new ToolCallResultEvent
-        {
-            RequestId = requestId,
-            Result = string.Empty,
-            Error = "approval timeout"
-        });
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("approve-job").Build());
 
-        await runTask;
-
-        AssertEx.ContainsSingle(sender.SentFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentToolCall));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentToolCall));
     }
 
     [Test]
@@ -393,7 +386,7 @@ public sealed class InvocationRunnerTests
         var json = JsonSerializer.Serialize(payload);
         var roundTrip = JsonSerializer.Deserialize<InvocationFailedPayload>(json);
 
-        AssertEx.Contains(json, "\"failureCategory\":\"Timeout\"");
+        AssertEx.Contains(json, "\"FailureCategory\":\"Timeout\"");
         AssertEx.Equal(nameof(FailureCategory.Timeout), AssertEx.NotNull(roundTrip).FailureCategory);
     }
 
@@ -408,7 +401,8 @@ public sealed class InvocationRunnerTests
             MaxPendingToolCallAgeMinutes = 0
         });
 
-        await AssertEx.ThrowsAsync<TaskCanceledException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
+        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
+        AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
     }
 
     [Test]
@@ -426,7 +420,8 @@ public sealed class InvocationRunnerTests
         await Task.Delay(20);
         runner.CleanupStaleToolCalls(TimeSpan.Zero);
 
-        await AssertEx.ThrowsAsync<TimeoutException>(() => task);
+        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => task);
+        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
     private static InvocationRunner CreateRunner(MockHubMessageSender sender,
@@ -456,6 +451,7 @@ public sealed class InvocationRunnerTests
 
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
             resolvedFactory,
+            new EnvelopeCryptoService(),
             resolvedValidator,
             resolvedCapabilityReporter,
             Substitute.For<IDeadLetterStore>(),
@@ -469,21 +465,32 @@ public sealed class InvocationRunnerTests
             NullLogger<InvocationRunner>.Instance);
     }
 
-    private static IInvocationAgentFactory CreateFactory(IAsyncEnumerable<AgentResponseUpdate> updates, Action<InvocationAgentDefinition>? onCreate = null)
+    private static async Task RunAsync(InvocationRunner runner, RuntimePackage package, CancellationToken cancellationToken = default)
+    {
+        using var context = InvocationExecutionContext.Create(package, Guid.NewGuid(), 1, new byte[32]);
+        await runner.RunAsync(context, cancellationToken);
+    }
+
+    private static IInvocationAgentFactory CreateFactory(IAsyncEnumerable<AgentResponseUpdate> updates, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)
+    {
+        return CreateFactory(_ => updates, onCreate, onSessionObserved);
+    }
+
+    private static IInvocationAgentFactory CreateFactory(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)
     {
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
                {
                    var definition = callInfo.Arg<InvocationAgentDefinition>();
-                   onCreate?.Invoke(definition);
-                   return Task.FromResult(new InvocationAgentContext
-                   {
-                       Agent = new FakeAIAgent(updates),
-                       Session = null,
-                       SeedMessages = definition.ConversationContext
-                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
-                                                .ToList()
+                    onCreate?.Invoke(definition);
+                    return Task.FromResult(new InvocationAgentContext
+                    {
+                        Agent = new FakeAIAgent(updatesFactory, onSessionObserved),
+                        Session = null,
+                        SeedMessages = definition.ConversationContext
+                                                 .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                 .ToList()
                    });
                });
 
@@ -507,36 +514,28 @@ public sealed class InvocationRunnerTests
         yield return new AgentResponseUpdate(ChatRole.Assistant, "tail");
     }
 
-    private static async IAsyncEnumerable<AgentResponseUpdate> CreateToolCallingUpdates(string toolName,
-        string arguments,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default)
+    private static async IAsyncEnumerable<AgentResponseUpdate> WaitForCancellation(TaskCompletionSource started, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        yield return new AgentResponseUpdate
-        {
-            Contents =
-            [
-                new FunctionCallContent(Guid.NewGuid().ToString("N"), toolName, new Dictionary<string, object?>
-                {
-                    ["arguments"] = arguments
-                })
-            ]
-        };
-
-        await Task.Yield();
-        cancellationToken.ThrowIfCancellationRequested();
+        started.TrySetResult();
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        yield break;
     }
 
     private sealed class FakeAIAgent : AIAgent
     {
-        private readonly IAsyncEnumerable<AgentResponseUpdate> _updates;
+        private readonly Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> _updatesFactory;
+        private readonly Action<bool>? _onSessionObserved;
 
         public FakeAIAgent(IAsyncEnumerable<AgentResponseUpdate> updates)
+            : this(_ => updates)
         {
-            _updates = updates;
         }
 
-        public static bool LastObservedSessionWasNull { get; private set; }
+        public FakeAIAgent(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory, Action<bool>? onSessionObserved = null)
+        {
+            _updatesFactory = updatesFactory;
+            _onSessionObserved = onSessionObserved;
+        }
 
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
         {
@@ -570,8 +569,8 @@ public sealed class InvocationRunnerTests
             AgentRunOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            LastObservedSessionWasNull = session is null;
-            return _updates;
+            _onSessionObserved?.Invoke(session is null);
+            return _updatesFactory(cancellationToken);
         }
     }
 

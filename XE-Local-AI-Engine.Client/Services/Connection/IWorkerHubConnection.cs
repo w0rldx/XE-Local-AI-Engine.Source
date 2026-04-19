@@ -18,6 +18,8 @@ public interface IWorkerHubConnection : IHubMessageSender, IAsyncDisposable
 
     event EventHandler<InvocationCancelledReceivedEventArgs>? InvocationCancelledReceived;
 
+    event EventHandler<ConversationPurgedReceivedEventArgs>? ConversationPurgedReceived;
+
     Task ConnectAsync(CancellationToken cancellationToken = default);
 
     Task DisconnectAsync(CancellationToken cancellationToken = default);

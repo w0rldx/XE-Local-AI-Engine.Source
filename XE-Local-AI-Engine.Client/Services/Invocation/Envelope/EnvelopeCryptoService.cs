@@ -1,0 +1,217 @@
+namespace XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
+using NSec.Cryptography;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Engines;
+using Org.BouncyCastle.Crypto.Parameters;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
+
+public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
+{
+    private const int AadLength = 36;
+    private const int EpochKeyLength = 32;
+    private const int NonceLength = 12;
+    private const int TagLength = 16;
+    private static readonly byte[] NodeWrapInfo = Encoding.UTF8.GetBytes("c0re-node-wrap|v1");
+
+    public EnvelopeDecryptionResult DecryptRuntimePackage(EncryptedRuntimePackageDto package, Key nodePrivateKey)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(nodePrivateKey);
+
+        var expectedAad = BuildEnvelopeAad(package.ConversationId, package.MessageId, package.EpochVersion);
+        var actualAad = package.Aad.Span;
+
+        if (actualAad.Length != AadLength || !CryptographicOperations.FixedTimeEquals(actualAad, expectedAad))
+        {
+            throw new InvalidOperationException("Encrypted runtime package AAD did not match the expected envelope metadata.");
+        }
+
+        ValidateWrappedPayload(package.ContentIv.Span, package.Ciphertext.Span, package.NodeWrappedEpochKey.Span, package.ClientEphemeralPublicKey.Span);
+
+        var epochKey = UnwrapEpochKey(package.NodeWrappedEpochKey.Span, package.ClientEphemeralPublicKey.Span, nodePrivateKey);
+
+        try
+        {
+            var plaintext = DecryptPayload(package.ContentIv.Span, package.Ciphertext.Span, epochKey, expectedAad);
+            return new EnvelopeDecryptionResult(plaintext, epochKey);
+        }
+        catch
+        {
+            CryptographicOperations.ZeroMemory(epochKey);
+            throw;
+        }
+    }
+
+    public EncryptedChunkEnvelopeV1 EncryptChunk(Guid conversationId,
+        Guid messageId,
+        int epochVersion,
+        ReadOnlySpan<byte> epochKey,
+        ReadOnlySpan<byte> plaintext,
+        long sequence)
+    {
+        var (nonce, ciphertext) = EncryptPayload(plaintext, epochKey, BuildEnvelopeAad(conversationId, messageId, epochVersion));
+
+        return new EncryptedChunkEnvelopeV1
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            EpochVersion = epochVersion,
+            ChunkIv = nonce,
+            ChunkCiphertext = ciphertext,
+            Sequence = sequence
+        };
+    }
+
+    public EncryptedCompletedEnvelopeV1 EncryptCompleted(Guid conversationId,
+        Guid messageId,
+        int epochVersion,
+        ReadOnlySpan<byte> epochKey,
+        ReadOnlySpan<byte> plaintext,
+        long totalSequence,
+        IReadOnlyDictionary<string, long> tokenCounts)
+    {
+        ArgumentNullException.ThrowIfNull(tokenCounts);
+
+        var (nonce, ciphertext) = EncryptPayload(plaintext, epochKey, BuildEnvelopeAad(conversationId, messageId, epochVersion));
+
+        return new EncryptedCompletedEnvelopeV1
+        {
+            ConversationId = conversationId,
+            MessageId = messageId,
+            EpochVersion = epochVersion,
+            FinalIv = nonce,
+            FinalCiphertext = ciphertext,
+            TotalSequence = totalSequence,
+            TokenCounts = tokenCounts
+        };
+    }
+
+    private static void ValidateWrappedPayload(ReadOnlySpan<byte> nonce,
+        ReadOnlySpan<byte> ciphertext,
+        ReadOnlySpan<byte> wrappedEpochKey,
+        ReadOnlySpan<byte> clientEphemeralPublicKey)
+    {
+        if (nonce.Length != NonceLength)
+        {
+            throw new InvalidOperationException($"Envelope nonce must be {NonceLength} bytes.");
+        }
+
+        if (ciphertext.Length <= TagLength)
+        {
+            throw new InvalidOperationException("Envelope ciphertext must include at least one byte of plaintext plus the authentication tag.");
+        }
+
+        if (wrappedEpochKey.IsEmpty)
+        {
+            throw new InvalidOperationException("Wrapped epoch key is required.");
+        }
+
+        if (clientEphemeralPublicKey.IsEmpty)
+        {
+            throw new InvalidOperationException("Client ephemeral public key is required.");
+        }
+    }
+
+    private static byte[] UnwrapEpochKey(ReadOnlySpan<byte> wrappedEpochKey, ReadOnlySpan<byte> clientEphemeralPublicKey, Key nodePrivateKey)
+    {
+        var algorithm = KeyAgreementAlgorithm.X25519;
+        var publicKey = PublicKey.Import(algorithm, clientEphemeralPublicKey, KeyBlobFormat.RawPublicKey);
+        var creationParameters = new SharedSecretCreationParameters
+        {
+            ExportPolicy = KeyExportPolicies.AllowPlaintextExport
+        };
+
+        using var sharedSecret = algorithm.Agree(nodePrivateKey, publicKey, creationParameters)
+                                 ?? throw new CryptographicException("X25519 key agreement failed for the provided client ephemeral public key.");
+
+        var sharedSecretBytes = sharedSecret.Export(SharedSecretBlobFormat.RawSharedSecret);
+        var wrapKey = new byte[EpochKeyLength];
+
+        try
+        {
+            HKDF.DeriveKey(HashAlgorithmName.SHA256, sharedSecretBytes, wrapKey, ReadOnlySpan<byte>.Empty, NodeWrapInfo);
+            return UnwrapKeyWithAesKw(wrappedEpochKey, wrapKey);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(sharedSecretBytes);
+            CryptographicOperations.ZeroMemory(wrapKey);
+        }
+    }
+
+    private static byte[] UnwrapKeyWithAesKw(ReadOnlySpan<byte> wrappedEpochKey, ReadOnlySpan<byte> wrapKey)
+    {
+        IWrapper wrapEngine = new Rfc3394WrapEngine(new AesEngine());
+        wrapEngine.Init(false, new KeyParameter(wrapKey.ToArray()));
+
+        var epochKey = wrapEngine.Unwrap(wrappedEpochKey.ToArray(), 0, wrappedEpochKey.Length);
+        if (epochKey.Length != EpochKeyLength)
+        {
+            CryptographicOperations.ZeroMemory(epochKey);
+            throw new InvalidOperationException($"Unwrapped epoch key must be {EpochKeyLength} bytes.");
+        }
+
+        return epochKey;
+    }
+
+    private static (byte[] Nonce, byte[] Ciphertext) EncryptPayload(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> epochKey, byte[] aad)
+    {
+        ValidateEpochKey(epochKey);
+
+        var nonce = new byte[NonceLength];
+        var ciphertext = new byte[plaintext.Length];
+        var tag = new byte[TagLength];
+        var combined = new byte[ciphertext.Length + tag.Length];
+
+        RandomNumberGenerator.Fill(nonce);
+
+        using var aesGcm = new AesGcm(epochKey, TagLength);
+        aesGcm.Encrypt(nonce, plaintext, ciphertext, tag, aad);
+
+        ciphertext.CopyTo(combined, 0);
+        tag.CopyTo(combined, ciphertext.Length);
+        return (nonce, combined);
+    }
+
+    private static byte[] DecryptPayload(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> ciphertextWithTag, ReadOnlySpan<byte> epochKey, byte[] aad)
+    {
+        ValidateEpochKey(epochKey);
+
+        var ciphertextLength = ciphertextWithTag.Length - TagLength;
+        var plaintext = new byte[ciphertextLength];
+        var ciphertext = ciphertextWithTag[..ciphertextLength];
+        var tag = ciphertextWithTag[^TagLength..];
+
+        using var aesGcm = new AesGcm(epochKey, TagLength);
+        aesGcm.Decrypt(nonce, ciphertext, tag, plaintext, aad);
+        return plaintext;
+    }
+
+    private static void ValidateEpochKey(ReadOnlySpan<byte> epochKey)
+    {
+        if (epochKey.Length != EpochKeyLength)
+        {
+            throw new InvalidOperationException($"Epoch key must be {EpochKeyLength} bytes.");
+        }
+    }
+
+    private static byte[] BuildEnvelopeAad(Guid conversationId, Guid messageId, int epochVersion)
+    {
+        var conversationBytes = conversationId.ToByteArray(bigEndian: true);
+        var messageBytes = messageId.ToByteArray(bigEndian: true);
+        var epochBytes = new byte[sizeof(int)];
+        var aad = new byte[AadLength];
+
+        BinaryPrimitives.WriteInt32BigEndian(epochBytes, epochVersion);
+
+        conversationBytes.CopyTo(aad, 0);
+        messageBytes.CopyTo(aad, conversationBytes.Length);
+        epochBytes.CopyTo(aad, conversationBytes.Length + messageBytes.Length);
+
+        return aad;
+    }
+}

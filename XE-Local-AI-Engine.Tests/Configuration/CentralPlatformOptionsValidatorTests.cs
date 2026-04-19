@@ -52,25 +52,26 @@ public sealed class CentralPlatformOptionsValidatorTests
     }
 
     [Test]
-    public void Validate_WhenMaxReconnectAttemptsIsZero_ReturnsFailure()
+    public void Validate_WhenReconnectBackoffMaxIsLessThanBase_ReturnsFailure()
     {
         var options = CreateValidOptions();
-        options.MaxReconnectAttempts = 0;
+        options.ReconnectBackoffBaseMs = 2000;
+        options.ReconnectBackoffMaxMs = 1000;
 
         var result = _validator.Validate(null, options);
 
-        AssertFailureContains(result, "MaxReconnectAttempts");
+        AssertFailureContains(result, "ReconnectBackoffMaxMs");
     }
 
     [Test]
-    public void Validate_WhenMaxReconnectAttemptsExceedsLimit_ReturnsFailure()
+    public void Validate_WhenReconnectMaxAttemptsExceedsLimit_ReturnsFailure()
     {
         var options = CreateValidOptions();
-        options.MaxReconnectAttempts = 101;
+        options.ReconnectMaxAttempts = 101;
 
         var result = _validator.Validate(null, options);
 
-        AssertFailureContains(result, "MaxReconnectAttempts");
+        AssertFailureContains(result, "ReconnectMaxAttempts");
     }
 
     [Test]

@@ -16,10 +16,19 @@ public sealed class CentralPlatformOptions
     [Range(5, 300)]
     public int HeartbeatIntervalSeconds { get; set; } = 30;
 
-    public IReadOnlyList<int> ReconnectDelaysMs { get; init; } = [0, 2000, 5000, 10000, 30000];
+    public IReadOnlyList<int> ReconnectDelaysMs { get; init; } = [];
 
-    [Range(1, 100)]
-    public int MaxReconnectAttempts { get; set; } = 10;
+    [Range(1, 30000)]
+    public int ReconnectBackoffBaseMs { get; set; } = 1000;
+
+    [Range(1, 120000)]
+    public int ReconnectBackoffMaxMs { get; set; } = 30000;
+
+    [Range(0, 10000)]
+    public int ReconnectBackoffJitterMs { get; set; } = 500;
+
+    [Range(0, 100)]
+    public int ReconnectMaxAttempts { get; set; } = 0;
 
     [Range(16, 1024)]
     public int MaxSignalRMessageSizeKb { get; set; } = 128;

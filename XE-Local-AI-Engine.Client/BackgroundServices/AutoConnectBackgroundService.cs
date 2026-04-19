@@ -61,16 +61,22 @@ public sealed class AutoConnectBackgroundService : BackgroundService
             return;
         }
 
-        var reconnectDelays = _options.Value.ReconnectDelaysMs;
-        var maxAttempts = _options.Value.MaxReconnectAttempts;
+        var options = _options.Value;
+        var retryPolicy = new WorkerReconnectPolicy(options);
 
-        for (var attempt = 0; attempt < maxAttempts && !linkedToken.IsCancellationRequested; attempt++)
+        if (options.ReconnectDelaysMs.Count > 0)
+        {
+            _logger.LogWarning("CentralPlatform:ReconnectDelaysMs is deprecated and ignored. Use ReconnectBackoffBaseMs/ReconnectBackoffMaxMs/ReconnectBackoffJitterMs/ReconnectMaxAttempts instead.");
+        }
+
+        var attempt = 0;
+        while (!linkedToken.IsCancellationRequested)
         {
             try
             {
-                _logger.LogInformation("Connecting to Central Platform automatically (attempt {Attempt}/{MaxAttempts}).",
+                _logger.LogInformation("Connecting to Central Platform automatically (attempt {Attempt}{AttemptSuffix}).",
                     attempt + 1,
-                    maxAttempts);
+                    options.ReconnectMaxAttempts == 0 ? string.Empty : $"/{options.ReconnectMaxAttempts}");
 
                 await _hubConnection.ConnectAsync(linkedToken).ConfigureAwait(false);
 
@@ -83,26 +89,31 @@ public sealed class AutoConnectBackgroundService : BackgroundService
             }
             catch (Exception exception)
             {
-                var delayMilliseconds = GetRetryDelayMilliseconds(reconnectDelays, attempt);
+                var delay = retryPolicy.GetDelay(attempt);
+                if (delay is null)
+                {
+                    break;
+                }
 
                 _logger.LogWarning(exception,
                     "Auto-connect attempt {Attempt} failed. Retrying in {DelayMilliseconds}ms.",
                     attempt + 1,
-                    delayMilliseconds);
+                    delay.Value.TotalMilliseconds);
 
                 try
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(delayMilliseconds), linkedToken).ConfigureAwait(false);
+                    await Task.Delay(delay.Value, linkedToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
                 {
                     return;
                 }
+
+                attempt++;
             }
         }
 
-        _logger.LogError("Auto-connect failed after {MaxAttempts} attempts. Connect manually via the dashboard.",
-            maxAttempts);
+        _logger.LogError("Auto-connect failed after exhausting the configured initial-connect retry policy. Connect manually via the dashboard.");
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -123,17 +134,4 @@ public sealed class AutoConnectBackgroundService : BackgroundService
         _ = _shutdownSignal.CancelAsync();
     }
 
-    private static int GetRetryDelayMilliseconds(IReadOnlyList<int> reconnectDelays, int attempt)
-    {
-        ArgumentNullException.ThrowIfNull(reconnectDelays);
-
-        if (reconnectDelays.Count == 0)
-        {
-            return 1000;
-        }
-
-        return attempt < reconnectDelays.Count
-            ? reconnectDelays[attempt]
-            : reconnectDelays[^1];
-    }
 }

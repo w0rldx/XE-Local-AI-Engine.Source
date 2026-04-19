@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -21,6 +22,9 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using ILogger = ILogger;
 
@@ -76,16 +80,22 @@ public static class ConfigureServices
         }).AddStandardResilienceHandler();
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
+        builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
         builder.Services.AddSingleton<ConnectionState>();
         builder.Services.AddSingleton(sp => new Lazy<IHubMessageSender>(() => sp.GetRequiredService<IHubMessageSender>()));
         builder.Services.AddSingleton<ModelNameValidator>();
         builder.Services.AddSingleton<IRuntimePackageValidator, RuntimePackageValidator>();
+        builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
         builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
         builder.Services.AddSingleton<IDeadLetterStore, FileDeadLetterStore>();
+        builder.Services.AddSingleton<INodeSqliteKeyHolder, NodeSqliteKeyHolder>();
+        builder.Services.AddScoped<NodeEncryptionSaveChangesInterceptor>();
+        builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
+        builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
@@ -96,7 +106,7 @@ public static class ConfigureServices
             var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("WorkerHubConnectionEventBindings");
 
             connection.InvocationAssignedReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchInvocationAssignedAsync(args.RuntimePackage), logger, nameof(IWorkerEventDispatcher.DispatchInvocationAssignedAsync));
+                DispatchSafely(dispatcher.Value.DispatchInvocationAssignedAsync(args.EncryptedRuntimePackage), logger, nameof(IWorkerEventDispatcher.DispatchInvocationAssignedAsync));
             connection.ToolCallResultReceived += (_, args) =>
                 DispatchSafely(dispatcher.Value.DispatchToolCallResultAsync(args.ToolCallResult), logger, nameof(IWorkerEventDispatcher.DispatchToolCallResultAsync));
             connection.DisconnectRequestedReceived += (_, args) =>
@@ -110,12 +120,25 @@ public static class ConfigureServices
         });
         builder.Services.AddSingleton<IWorkerHubConnection>(sp => sp.GetRequiredService<WorkerHubConnection>());
         builder.Services.AddSingleton<IHubMessageSender>(sp => sp.GetRequiredService<WorkerHubConnection>());
+        builder.Services.AddSingleton<ICertPinStore, CertPinStore>();
         builder.Services.AddHostedService<HeartbeatBackgroundService>();
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddHostedService<RetentionSweeperService>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);
+
+        builder.Services.AddDbContext<NodeChatDbContext>((serviceProvider, options) =>
+        {
+            var connectionString = configuration.GetConnectionString("node-sqlite")
+                                   ?? throw new InvalidOperationException("Connection string 'node-sqlite' is required.");
+
+            options.UseSqlite(connectionString)
+                .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                    serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+        });
 
         builder.AddOllamaApiClient("chat");
         builder.AddOllamaApiClient("embeddings")

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Models.Events;
 
 public interface IInvocationRunner
 {
-    Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default);
+    Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default);
 
     Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default);
 
