@@ -445,7 +445,7 @@ public sealed class InvocationRunnerTests
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
                             {
-                                ["Ollama:ChatModel"] = "qwen3.5:9b"
+                                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
                             })
                             .Build();
 

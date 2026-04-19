@@ -180,8 +180,8 @@ The same Client binary can run under Aspire locally or against a standalone Olla
 connection-string environment variables instead of `appsettings.json`:
 
 ```bash
-export ConnectionStrings__chat="Endpoint=http://ollama:11434;Model=qwen3.5:9b"
-export ConnectionStrings__embeddings="Endpoint=http://ollama:11434;Model=nomic-embed-text"
+export ConnectionStrings__chat="Endpoint=http://ollama:11434;Model=qwen3.5:0.8b"
+export ConnectionStrings__embeddings="Endpoint=http://ollama:11434;Model=qwen3-embedding:0.6b"
 
 dotnet run --project XE-Local-AI-Engine.Client --no-launch-profile
 ```

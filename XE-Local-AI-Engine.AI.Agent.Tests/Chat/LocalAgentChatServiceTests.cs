@@ -105,7 +105,7 @@ public sealed class LocalAgentChatServiceTests
 
         await sut.ResetSessionAsync();
 
-        AssertEx.Equal("qwen3.5:9b", sut.SelectedModel);
+        AssertEx.Equal("qwen3.5:0.8b", sut.SelectedModel);
         AssertEx.False(logger.Messages.Any(message => message.Contains("AgentSessionReset", StringComparison.Ordinal)));
     }
 

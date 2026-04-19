@@ -16,7 +16,7 @@ public sealed class CapabilityReporterTests
     public async Task DetectCapabilitiesAsync_ReturnsNonNullResult()
     {
         using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:9b");
+        context.Handler.SetModelsResponse("qwen3.5:0.8b");
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
@@ -27,11 +27,11 @@ public sealed class CapabilityReporterTests
     public async Task DetectCapabilitiesAsync_PopulatesInstalledModels()
     {
         using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:9b", "llava:latest");
+        context.Handler.SetModelsResponse("qwen3.5:0.8b", "llava:latest");
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
-        AssertEx.Contains(result.InstalledModels, "qwen3.5:9b");
+        AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Contains(result.InstalledModels, "llava:latest");
         AssertEx.Contains(result.SupportedCapabilities, "vision");
     }
@@ -52,9 +52,9 @@ public sealed class CapabilityReporterTests
     public async Task VerifyOllamaAndModelAsync_WhenModelInList_ReturnsTrue()
     {
         using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:9b");
+        context.Handler.SetModelsResponse("qwen3.5:0.8b");
 
-        var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:9b");
+        var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
 
         AssertEx.True(result);
     }
@@ -76,7 +76,7 @@ public sealed class CapabilityReporterTests
         using var context = CreateContext();
         context.Handler.ThrowOnNextRequest(new HttpRequestException("offline"));
 
-        var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:9b");
+        var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
 
         AssertEx.False(result);
     }
@@ -85,13 +85,13 @@ public sealed class CapabilityReporterTests
     public async Task ReportToApiAsync_CallsSendCapabilitiesAsync()
     {
         using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:9b");
+        context.Handler.SetModelsResponse("qwen3.5:0.8b");
 
         await context.Reporter.ReportToApiAsync();
 
         AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
         AssertEx.NotNull(context.HubConnection.LastCapabilities);
-        AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:9b");
+        AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
     }
 
     private static CapabilityReporterTestContext CreateContext()
@@ -99,7 +99,7 @@ public sealed class CapabilityReporterTests
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
                             {
-                                ["Ollama:ChatModel"] = "qwen3.5:9b"
+                                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
                             })
                             .Build();
 

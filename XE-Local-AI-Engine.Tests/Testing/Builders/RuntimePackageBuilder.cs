@@ -15,7 +15,7 @@ public sealed class RuntimePackageBuilder
     private Guid _conversationId = Guid.NewGuid();
 
     private Guid _invocationId = Guid.NewGuid();
-    private string? _modelProfile = "qwen3.5:9b";
+    private string? _modelProfile = "qwen3.5:0.8b";
     private string _resolvedSystemPrompt = "You are helpful.";
     private TimeoutSettings _timeouts = new();
 

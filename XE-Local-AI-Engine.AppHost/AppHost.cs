@@ -6,11 +6,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var ollama = builder.AddOllama("ollama")
                     .WithImageTag("latest")
-                    .WithGPUSupport()
                     .WithDataVolume();
 
-var chatModel = ollama.AddModel("chat", "qwen3.5:9b");
-var embeddingsModel = ollama.AddModel("embeddings", "nomic-embed-text");
+var chatModel = ollama.AddModel("chat", "qwen3.5:0.8b");
+var embeddingsModel = ollama.AddModel("embeddings", "qwen3-embedding:0.6b");
 
 var nodeSqliteKey = builder.AddParameter("node-sqlite-key", secret: true);
 var nodeSqlitePath = Path.Combine(builder.AppHostDirectory, ".data", "node-sqlite");

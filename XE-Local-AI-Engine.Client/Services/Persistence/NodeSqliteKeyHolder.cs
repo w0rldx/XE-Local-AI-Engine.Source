@@ -12,6 +12,7 @@ public sealed class NodeSqliteKeyHolder : INodeSqliteKeyHolder
     private const string EnvVarName = "XE_NODE_SQLITE_KEY";
     private const string SecretFilePath = "/run/secrets/node-sqlite-key";
     private const string AspireParameterPath = "Parameters:node-sqlite-key";
+    private const string AppHostSecretsProjectPath = "XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj";
     private static readonly byte[] EmptySalt = [];
 
     private byte[]? _key;
@@ -88,7 +89,8 @@ public sealed class NodeSqliteKeyHolder : INodeSqliteKeyHolder
             return DecodeBase64Secret(aspireParameter, AspireParameterPath);
         }
 
-        throw new InvalidOperationException($"A node SQLite operator secret must be provided via '{EnvVarName}', '{SecretFilePath}', or '{AspireParameterPath}'.");
+        throw new InvalidOperationException(
+            $"A node SQLite operator secret is required. Provide a base64-encoded 32-byte value via '{EnvVarName}', provide a raw 32-byte secret file at '{SecretFilePath}', or set the Aspire AppHost user-secret '{AspireParameterPath}'. For local Aspire runs, use: dotnet user-secrets set \"{AspireParameterPath}\" \"<base64-32-byte-secret>\" --project \"{AppHostSecretsProjectPath}\".");
     }
 
     private static byte[] DecodeBase64Secret(string base64Value, string sourceName)
