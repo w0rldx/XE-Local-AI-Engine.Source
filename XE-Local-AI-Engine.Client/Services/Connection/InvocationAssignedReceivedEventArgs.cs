@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection;
 
-using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 
 public sealed class InvocationAssignedReceivedEventArgs : EventArgs
 {
-    public InvocationAssignedReceivedEventArgs(RuntimePackage runtimePackage)
+    public InvocationAssignedReceivedEventArgs(EncryptedRuntimePackageDto runtimePackage)
     {
-        RuntimePackage = runtimePackage ?? throw new ArgumentNullException(nameof(runtimePackage));
+        EncryptedRuntimePackage = runtimePackage ?? throw new ArgumentNullException(nameof(runtimePackage));
     }
 
-    public RuntimePackage RuntimePackage { get; }
+    public EncryptedRuntimePackageDto EncryptedRuntimePackage { get; }
 }

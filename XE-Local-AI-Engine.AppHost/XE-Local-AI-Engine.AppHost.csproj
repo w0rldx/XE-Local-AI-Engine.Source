@@ -15,5 +15,6 @@
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost"/>
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama"/>
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Sqlite"/>
   </ItemGroup>
 </Project>

@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ToolInvocationObservabilityChatClientTests
 {

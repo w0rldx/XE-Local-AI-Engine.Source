@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.AI.Agent.Tests;
+namespace XE_Local_AI_Engine.Tests.Testing;
 
 internal static class AssertEx
 {

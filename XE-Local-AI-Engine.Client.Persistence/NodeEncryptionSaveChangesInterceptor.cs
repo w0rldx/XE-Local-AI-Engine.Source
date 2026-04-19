@@ -1,0 +1,170 @@
+namespace XE_Local_AI_Engine.Client.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using XE_Local_AI_Engine.Client.Persistence.Cryptography;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+
+public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesInterceptor
+{
+    private readonly Dictionary<DbContext, List<TrackedEncryptedProperty>> _pendingRestores = [];
+
+    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    {
+        EncryptTrackedPayloads(eventData.Context);
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        EncryptTrackedPayloads(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+    {
+        RestoreTrackedPayloads(eventData.Context);
+        return result;
+    }
+
+    public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData,
+        int result,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RestoreTrackedPayloads(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public override void SaveChangesFailed(DbContextErrorEventData eventData)
+    {
+        RestoreTrackedPayloads(eventData.Context);
+    }
+
+    public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RestoreTrackedPayloads(eventData.Context);
+        return Task.CompletedTask;
+    }
+
+    private void EncryptTrackedPayloads(DbContext? context)
+    {
+        if (context is not NodeChatDbContext nodeContext)
+        {
+            return;
+        }
+
+        var trackedProperties = new List<TrackedEncryptedProperty>();
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<NodeMessage>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.ConversationId, entry.Entity.MessageId, "content", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.MetadataJson), entry.Entity.ConversationId, entry.Entity.MessageId, "metadata_json", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<NodeToolEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.PlaintextArgs), entry.Entity.ConversationId, entry.Entity.ToolCallId, "plaintext_args", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.PlaintextResult), entry.Entity.ConversationId, entry.Entity.ToolCallId, "plaintext_result", trackedProperties);
+        }
+
+        if (trackedProperties.Count > 0)
+        {
+            _pendingRestores[nodeContext] = trackedProperties;
+        }
+    }
+
+    private void RestoreTrackedPayloads(DbContext? context)
+    {
+        if (context is null || !_pendingRestores.Remove(context, out var trackedProperties))
+        {
+            return;
+        }
+
+        foreach (var trackedProperty in trackedProperties)
+        {
+            if (trackedProperty.PropertyEntry.EntityEntry.State == EntityState.Detached)
+            {
+                continue;
+            }
+
+            trackedProperty.PropertyEntry.CurrentValue = trackedProperty.Plaintext.ToArray();
+            trackedProperty.PropertyEntry.OriginalValue = trackedProperty.Plaintext.ToArray();
+            trackedProperty.PropertyEntry.IsModified = false;
+        }
+    }
+
+    private static void EncryptRequiredProperty<TEntity>(EntityEntry<TEntity> entry,
+        PropertyEntry<TEntity, byte[]> propertyEntry,
+        Guid conversationId,
+        Guid recordId,
+        string columnName,
+        ICollection<TrackedEncryptedProperty> trackedProperties)
+        where TEntity : class
+    {
+        if (entry.State is not EntityState.Added and not EntityState.Modified)
+        {
+            return;
+        }
+
+        if (entry.State == EntityState.Modified && !propertyEntry.IsModified)
+        {
+            return;
+        }
+
+        var plaintext = propertyEntry.CurrentValue;
+        var context = (NodeChatDbContext)entry.Context;
+        var plaintextCopy = plaintext.ToArray();
+
+        propertyEntry.CurrentValue = NodePayloadProtector.Encrypt(plaintextCopy,
+            context.NodeEncryptionKey.Span,
+            conversationId,
+            recordId,
+            columnName);
+
+        trackedProperties.Add(new TrackedEncryptedProperty(propertyEntry, plaintextCopy));
+    }
+
+    private static void EncryptOptionalProperty<TEntity>(EntityEntry<TEntity> entry,
+        PropertyEntry<TEntity, byte[]?> propertyEntry,
+        Guid conversationId,
+        Guid recordId,
+        string columnName,
+        ICollection<TrackedEncryptedProperty> trackedProperties)
+        where TEntity : class
+    {
+        if (entry.State is not EntityState.Added and not EntityState.Modified)
+        {
+            return;
+        }
+
+        if (entry.State == EntityState.Modified && !propertyEntry.IsModified)
+        {
+            return;
+        }
+
+        var plaintext = propertyEntry.CurrentValue;
+        if (plaintext is null)
+        {
+            return;
+        }
+
+        var context = (NodeChatDbContext)entry.Context;
+        var plaintextCopy = plaintext.ToArray();
+
+        propertyEntry.CurrentValue = NodePayloadProtector.Encrypt(plaintextCopy,
+            context.NodeEncryptionKey.Span,
+            conversationId,
+            recordId,
+            columnName);
+
+        trackedProperties.Add(new TrackedEncryptedProperty(propertyEntry, plaintextCopy));
+    }
+
+    private sealed record TrackedEncryptedProperty(PropertyEntry PropertyEntry, byte[] Plaintext);
+}

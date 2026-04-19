@@ -3,10 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Connection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.Http.Connections.Client;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -20,6 +22,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private readonly ILogger<WorkerHubConnection> _logger;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
     private readonly ITokenStore _tokenStore;
+    private readonly Action<HttpConnectionOptions>? _configureHttpConnectionOptions;
 
     private HubConnection? _hubConnection;
 
@@ -28,7 +31,8 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         ConnectionState connectionState,
         Lazy<ICapabilityReporter> capabilityReporter,
         DeadLetterFlushService deadLetterFlushService,
-        ILogger<WorkerHubConnection> logger)
+        ILogger<WorkerHubConnection> logger,
+        Action<HttpConnectionOptions>? configureHttpConnectionOptions = null)
     {
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _platformOptions = platformOptions ?? throw new ArgumentNullException(nameof(platformOptions));
@@ -36,6 +40,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _deadLetterFlushService = deadLetterFlushService ?? throw new ArgumentNullException(nameof(deadLetterFlushService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configureHttpConnectionOptions = configureHttpConnectionOptions;
 
         _connectionState.StateChanged += OnConnectionStateChanged;
     }
@@ -51,6 +56,8 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     public event EventHandler<ApprovalResolvedReceivedEventArgs>? ApprovalResolvedReceived;
 
     public event EventHandler<InvocationCancelledReceivedEventArgs>? InvocationCancelledReceived;
+
+    public event EventHandler<ConversationPurgedReceivedEventArgs>? ConversationPurgedReceived;
 
     public WorkerConnectionState State => _connectionState.Current;
 
@@ -144,12 +151,50 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             cancellationToken);
     }
 
+    public Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return SendAsync("SendPurgeConversationAsync", conversationId, cancellationToken);
+    }
+
+    public Task SendInvocationKeyMismatchAsync(Guid messageId, string reason, string nodeKeyIdUsed, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeKeyIdUsed);
+
+        return SendAsync("InvocationKeyMismatch",
+            new InvocationKeyMismatchPayload
+            {
+                MessageId = messageId,
+                Reason = reason,
+                NodeKeyIdUsed = nodeKeyIdUsed
+            },
+            cancellationToken);
+    }
+
     public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
     {
         return SendAsync("InvocationAccepted", new
         {
             InvocationId = invocationId
         }, cancellationToken);
+    }
+
+    public Task SendEncryptedChunkAsync(EncryptedChunkEnvelopeV1 payload, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        return SendAsync("SendEncryptedChunkAsync", payload, cancellationToken);
+    }
+
+    public Task SendEncryptedCompletedAsync(EncryptedCompletedEnvelopeV1 payload, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        return SendAsync("SendEncryptedCompletedAsync", payload, cancellationToken);
+    }
+
+    public Task SendEncryptedFailedAsync(EncryptedFailedEnvelopeV1 payload, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        return SendAsync("SendEncryptedFailedAsync", payload, cancellationToken);
     }
 
     public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
@@ -201,12 +246,12 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         var connection = new HubConnectionBuilder()
                          .WithUrl(hubUrl, httpOptions =>
-                         {
-                             httpOptions.AccessTokenProvider = GetRequiredAccessTokenAsync;
-                             httpOptions.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
-                         })
-                         .WithAutomaticReconnect(options.ReconnectDelaysMs.Select(ms => TimeSpan.FromMilliseconds(ms)).ToArray())
-                         .WithStatefulReconnect()
+                          {
+                              httpOptions.AccessTokenProvider = GetRequiredAccessTokenAsync;
+                              httpOptions.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                              _configureHttpConnectionOptions?.Invoke(httpOptions);
+                          })
+                         .WithAutomaticReconnect(new WorkerReconnectPolicy(options))
                          .AddJsonProtocol(jsonOptions =>
                          {
                              jsonOptions.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -229,7 +274,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private void RegisterEventHandlers(HubConnection connection)
     {
-        connection.On<RuntimePackage>("InvocationAssigned",
+        connection.On<EncryptedRuntimePackageDto>("InvocationAssigned",
             package => InvocationAssignedReceived?.Invoke(this, new InvocationAssignedReceivedEventArgs(package)));
         connection.On<ToolCallResultEvent>("ToolCallResult",
             evt => ToolCallResultReceived?.Invoke(this, new ToolCallResultReceivedEventArgs(evt)));
@@ -239,6 +284,12 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             evt => ApprovalResolvedReceived?.Invoke(this, new ApprovalResolvedReceivedEventArgs(evt)));
         connection.On<InvocationCancelledEvent>("InvocationCancelled",
             evt => InvocationCancelledReceived?.Invoke(this, new InvocationCancelledReceivedEventArgs(evt)));
+        connection.On<Guid>("ConversationPurged",
+            conversationId => ConversationPurgedReceived?.Invoke(this,
+                new ConversationPurgedReceivedEventArgs(new ConversationPurgedEvent
+                {
+                    ConversationId = conversationId
+                })));
     }
 
     private async Task<string?> GetRequiredAccessTokenAsync()

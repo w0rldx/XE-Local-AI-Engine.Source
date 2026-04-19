@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -159,6 +160,7 @@ public sealed class CapabilityReporterTests
         private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
         private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
         private EventHandler<InvocationCancelledReceivedEventArgs>? _invocationCancelledReceived;
+        private EventHandler<ConversationPurgedReceivedEventArgs>? _conversationPurgedReceived;
         private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
         private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
 
@@ -204,6 +206,12 @@ public sealed class CapabilityReporterTests
             remove => _invocationCancelledReceived -= value;
         }
 
+        public event EventHandler<ConversationPurgedReceivedEventArgs>? ConversationPurgedReceived
+        {
+            add => _conversationPurgedReceived += value;
+            remove => _conversationPurgedReceived -= value;
+        }
+
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -231,7 +239,35 @@ public sealed class CapabilityReporterTests
             return Task.CompletedTask;
         }
 
+        public Task SendInvocationKeyMismatchAsync(Guid messageId,
+            string reason,
+            string nodeKeyIdUsed,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendEncryptedChunkAsync(EncryptedChunkEnvelopeV1 payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendEncryptedCompletedAsync(EncryptedCompletedEnvelopeV1 payload, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SendEncryptedFailedAsync(EncryptedFailedEnvelopeV1 payload, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
