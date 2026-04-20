@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Components;
+using XE_Local_AI_Engine.Client.Persistence;
 
 try
 {
@@ -26,6 +28,8 @@ try
     builder.AddServices(builder.Configuration);
 
     var app = builder.Build();
+
+    await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
 
     app.UseSerilogRequestLogging();
 
@@ -83,6 +87,16 @@ finally
 {
     Log.Information("Application Stopping");
     await Log.CloseAndFlushAsync();
+}
+
+static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    await using var scope = services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+
+    await dbContext.Database.MigrateAsync().ConfigureAwait(false);
 }
 
 namespace XE_Local_AI_Engine.Client
