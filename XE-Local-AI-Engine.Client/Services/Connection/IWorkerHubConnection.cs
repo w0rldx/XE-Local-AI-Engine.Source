@@ -26,6 +26,8 @@ public interface IWorkerHubConnection : IHubMessageSender, IAsyncDisposable
 
     Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default);
 
+    Task SendWorkerKeyRegisteredAsync(Guid keyId, string publicKey, string popSignature, string popChallenge, CancellationToken cancellationToken = default);
+
     Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default);
 
     Task SendHeartbeatAsync(Guid clientNodeId, CancellationToken cancellationToken = default);

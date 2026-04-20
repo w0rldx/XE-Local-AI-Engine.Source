@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
+using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -20,6 +21,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private readonly ConnectionState _connectionState;
     private readonly DeadLetterFlushService _deadLetterFlushService;
     private readonly ILogger<WorkerHubConnection> _logger;
+    private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
     private readonly ITokenStore _tokenStore;
     private readonly Action<HttpConnectionOptions>? _configureHttpConnectionOptions;
@@ -31,6 +33,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         ConnectionState connectionState,
         Lazy<ICapabilityReporter> capabilityReporter,
         DeadLetterFlushService deadLetterFlushService,
+        INodeKeyRegistry nodeKeyRegistry,
         ILogger<WorkerHubConnection> logger,
         Action<HttpConnectionOptions>? configureHttpConnectionOptions = null)
     {
@@ -39,6 +42,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _deadLetterFlushService = deadLetterFlushService ?? throw new ArgumentNullException(nameof(deadLetterFlushService));
+        _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configureHttpConnectionOptions = configureHttpConnectionOptions;
 
@@ -95,6 +99,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
             await SendWorkerHelloAsync(clientNodeId.Value, cancellationToken).ConfigureAwait(false);
             await _capabilityReporter.Value.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
+            await RegisterNodeKeyAsync(cancellationToken).ConfigureAwait(false);
             _connectionState.TransitionTo(WorkerConnectionState.Connected);
         }
         catch (Exception exception)
@@ -131,6 +136,17 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         return SendAsync("WorkerHello", new WorkerHelloPayload
         {
             ClientNodeId = clientNodeId
+        }, cancellationToken);
+    }
+
+    public Task SendWorkerKeyRegisteredAsync(Guid keyId, string publicKey, string popSignature, string popChallenge, CancellationToken cancellationToken = default)
+    {
+        return SendAsync("WorkerKeyRegistered", new WorkerKeyRegisteredPayload
+        {
+            KeyId = keyId,
+            PublicKey = publicKey,
+            PopSignature = popSignature,
+            PopChallenge = popChallenge
         }, cancellationToken);
     }
 
@@ -292,6 +308,22 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                 })));
     }
 
+    private async Task RegisterNodeKeyAsync(CancellationToken cancellationToken = default)
+    {
+        var keyId = Guid.NewGuid();
+#pragma warning disable CA2000 // NodeKeyRegistry takes ownership and disposes the key
+        var privateKey = Key.Create(KeyAgreementAlgorithm.X25519, new KeyCreationParameters { ExportPolicy = KeyExportPolicies.AllowPlaintextExport });
+#pragma warning restore CA2000
+        _nodeKeyRegistry.Rotate(keyId.ToString("N"), privateKey);
+
+        var publicKeyBytes = _nodeKeyRegistry.ActivePublicKey.Export(KeyBlobFormat.RawPublicKey);
+        var publicKeyBase64 = Convert.ToBase64String(publicKeyBytes);
+        var popChallenge = keyId.ToString("N");
+        var popSignature = publicKeyBase64;
+
+        await SendWorkerKeyRegisteredAsync(keyId, publicKeyBase64, popSignature, popChallenge, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<string?> GetRequiredAccessTokenAsync()
     {
         var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
@@ -352,6 +384,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         {
             await SendWorkerHelloAsync(clientNodeId.Value).ConfigureAwait(false);
             await _capabilityReporter.Value.ReportToApiAsync().ConfigureAwait(false);
+            await RegisterNodeKeyAsync().ConfigureAwait(false);
             await _deadLetterFlushService.FlushAsync().ConfigureAwait(false);
         }
 
