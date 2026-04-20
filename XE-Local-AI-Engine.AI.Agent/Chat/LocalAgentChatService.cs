@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -13,6 +14,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class LocalAgentChatService : ILocalAgentChatService
 {
+    private const string EmptyResponseFallback = "The model completed without returning visible text. Please try again or choose a different model.";
     private readonly IChatClient _chatClient;
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILogger<LocalAgentChatService> _logger;
@@ -106,6 +108,7 @@ internal sealed class LocalAgentChatService : ILocalAgentChatService
         ChatClientAgent agent;
         AgentSession session;
         var modelId = SelectedModel;
+        var nonTextUpdateCount = 0;
         var tokenCount = 0;
         var stopwatch = Stopwatch.StartNew();
 
@@ -132,12 +135,11 @@ internal sealed class LocalAgentChatService : ILocalAgentChatService
             });
 
             await using var updates = agent.RunStreamingAsync(userMessage, session, runOptions, cancellationToken)
-                                           .Select(static update => update.Text)
                                            .GetAsyncEnumerator(cancellationToken);
 
             while (true)
             {
-                string? text;
+                AgentResponseUpdate update;
 
                 try
                 {
@@ -146,7 +148,7 @@ internal sealed class LocalAgentChatService : ILocalAgentChatService
                         break;
                     }
 
-                    text = updates.Current;
+                    update = updates.Current;
                 }
                 catch (Exception exception)
                 {
@@ -155,6 +157,13 @@ internal sealed class LocalAgentChatService : ILocalAgentChatService
                     throw;
                 }
 
+                if (HasNonTextContent(update))
+                {
+                    nonTextUpdateCount++;
+                    _logger.LogInformation("AgentRunReceivedNonTextUpdate {ModelId} {AgentName} {ContentTypes}", modelId, _options.AgentName, GetContentTypes(update));
+                }
+
+                var text = update.Text;
                 if (string.IsNullOrEmpty(text))
                 {
                     continue;
@@ -162,6 +171,13 @@ internal sealed class LocalAgentChatService : ILocalAgentChatService
 
                 tokenCount++;
                 yield return text;
+            }
+
+            if (tokenCount == 0)
+            {
+                _logger.LogWarning("AgentRunCompletedWithoutVisibleText {ModelId} {AgentName} {NonTextUpdateCount}", modelId, _options.AgentName, nonTextUpdateCount);
+                yield return EmptyResponseFallback;
+                tokenCount++;
             }
 
             stopwatch.Stop();
@@ -253,5 +269,19 @@ internal sealed class LocalAgentChatService : ILocalAgentChatService
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private static bool HasNonTextContent(AgentResponseUpdate update)
+    {
+        return update.Contents.Any(static content => content is not TextContent);
+    }
+
+    private static string GetContentTypes(AgentResponseUpdate update)
+    {
+        var contentTypes = update.Contents.Select(static content => content.GetType().Name)
+                                 .Distinct(StringComparer.Ordinal)
+                                 .ToArray();
+
+        return contentTypes.Length == 0 ? "None" : string.Join(",", contentTypes);
     }
 }

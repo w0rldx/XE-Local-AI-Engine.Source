@@ -135,6 +135,44 @@ public sealed class LocalAgentChatServiceTests
         AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunFailed", StringComparison.Ordinal));
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenStreamHasNoVisibleText_YieldsFallbackMessage()
+    {
+        using var chatClient = new FakeChatClient(_ => Task.FromResult<IReadOnlyList<ChatResponseUpdate>>([
+            new ChatResponseUpdate { Contents = [] }
+        ]));
+        var logger = new ListLogger<LocalAgentChatService>();
+        await using var sut = CreateSut(chatClient, logger);
+
+        var updates = await CollectAsync(sut.SendMessageAsync("hello"));
+
+        AssertEx.Equal(1, updates.Count);
+        AssertEx.Contains(updates[0], "without returning visible text");
+        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunCompletedWithoutVisibleText", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenStreamHasNonTextContent_LogsNonTextUpdate()
+    {
+        using var chatClient = new FakeChatClient(_ => Task.FromResult<IReadOnlyList<ChatResponseUpdate>>([
+            new ChatResponseUpdate
+            {
+                Contents =
+                [
+                    new FunctionCallContent("call-1", "approve-job", new Dictionary<string, object?>())
+                ]
+            }
+        ]));
+        var logger = new ListLogger<LocalAgentChatService>();
+        await using var sut = CreateSut(chatClient, logger);
+
+        var updates = await CollectAsync(sut.SendMessageAsync("hello"));
+
+        AssertEx.Equal(1, updates.Count);
+        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunReceivedNonTextUpdate", StringComparison.Ordinal)
+                                                            && message.Contains("FunctionCallContent", StringComparison.Ordinal));
+    }
+
     private static ILocalAgentChatService CreateSut(FakeChatClient chatClient, ILogger<LocalAgentChatService> logger)
     {
         var options = new LocalChatAgentOptions();
@@ -161,6 +199,18 @@ public sealed class LocalAgentChatServiceTests
         {
             GC.KeepAlive(text);
         }
+    }
+
+    private static async Task<List<string>> CollectAsync(IAsyncEnumerable<string> updates)
+    {
+        var values = new List<string>();
+
+        await foreach (var text in updates)
+        {
+            values.Add(text);
+        }
+
+        return values;
     }
 
     private sealed class FakeServiceProvider : IServiceProvider
@@ -191,9 +241,18 @@ public sealed class LocalAgentChatServiceTests
 
     private sealed class FakeChatClient : IChatClient
     {
-        private readonly Func<CancellationToken, Task<IReadOnlyList<string>>>? _onStream;
+        private readonly Func<CancellationToken, Task<IReadOnlyList<ChatResponseUpdate>>>? _onStream;
 
-        public FakeChatClient(Func<CancellationToken, Task<IReadOnlyList<string>>>? onStream = null)
+        public FakeChatClient(Func<CancellationToken, Task<IReadOnlyList<string>>>? onStream)
+            : this(onStream is null ? null : async cancellationToken =>
+            {
+                var chunks = await onStream(cancellationToken);
+                return chunks.Select(static chunk => new ChatResponseUpdate(ChatRole.Assistant, chunk)).ToArray();
+            })
+        {
+        }
+
+        public FakeChatClient(Func<CancellationToken, Task<IReadOnlyList<ChatResponseUpdate>>>? onStream = null)
         {
             _onStream = onStream;
         }
@@ -212,13 +271,13 @@ public sealed class LocalAgentChatServiceTests
         {
             Requests.Add(new ChatRequestRecord(messages.ToList(), options));
 
-            var chunks = _onStream is null
-                ? ["ok"]
+            var updates = _onStream is null
+                ? [new ChatResponseUpdate(ChatRole.Assistant, "ok")]
                 : await _onStream(cancellationToken);
 
-            foreach (var chunk in chunks)
+            foreach (var update in updates)
             {
-                yield return new ChatResponseUpdate(ChatRole.Assistant, chunk);
+                yield return update;
             }
         }
 
