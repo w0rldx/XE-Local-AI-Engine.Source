@@ -290,8 +290,47 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private void RegisterEventHandlers(HubConnection connection)
     {
-        connection.On<EncryptedRuntimePackageDto>("InvocationAssigned",
-            package => InvocationAssignedReceived?.Invoke(this, new InvocationAssignedReceivedEventArgs(package)));
+        connection.On<JsonElement>("InvocationAssigned",
+            raw =>
+            {
+                _logger.LogInformation(
+                    "InvocationAssigned raw frame received. RawJson={RawJson}",
+                    raw.GetRawText());
+
+                EncryptedRuntimePackageDto package;
+                try
+                {
+                    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                    {
+                        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+                    };
+                    package = raw.Deserialize<EncryptedRuntimePackageDto>(options)
+                              ?? throw new InvalidOperationException("Deserialized EncryptedRuntimePackageDto was null.");
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception,
+                        "InvocationAssigned manual deserialization failed. RawJson={RawJson}",
+                        raw.GetRawText());
+                    return;
+                }
+
+                _logger.LogInformation(
+                    "InvocationAssigned typed binding succeeded. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
+                    package.InvocationId,
+                    package.ConversationId,
+                    package.MessageId,
+                    package.EpochVersion);
+
+                var handler = InvocationAssignedReceived;
+                if (handler is null)
+                {
+                    _logger.LogWarning("InvocationAssigned received but no handler subscribed. InvocationId={InvocationId}", package.InvocationId);
+                    return;
+                }
+
+                handler.Invoke(this, new InvocationAssignedReceivedEventArgs(package));
+            });
         connection.On<ToolCallResultEvent>("ToolCallResult",
             evt => ToolCallResultReceived?.Invoke(this, new ToolCallResultReceivedEventArgs(evt)));
         connection.On<DisconnectRequestedEvent>("DisconnectRequested",

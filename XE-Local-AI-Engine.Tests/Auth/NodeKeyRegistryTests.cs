@@ -71,6 +71,45 @@ public sealed class NodeKeyRegistryTests
         AssertEx.Null(result.PrivateKey);
     }
 
+    [Test]
+    public void ResolveGraceEligible_WhenKeyRotates_ReturnsActiveThenRetiredKeys()
+    {
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        using var registry = new NodeKeyRegistry(timeProvider);
+        using var firstKey = Key.Create(KeyAgreementAlgorithm.X25519);
+        using var secondKey = Key.Create(KeyAgreementAlgorithm.X25519);
+
+        registry.Rotate("node-key-1", firstKey);
+        registry.Rotate("node-key-2", secondKey);
+
+        var resolutions = registry.ResolveGraceEligible();
+
+        AssertEx.Equal(2, resolutions.Count);
+        AssertEx.Equal(NodeKeyLookupStatus.Active, resolutions[0].Status);
+        AssertEx.Equal("node-key-2", resolutions[0].KeyIdUsed);
+        AssertEx.Equal(NodeKeyLookupStatus.Retired, resolutions[1].Status);
+        AssertEx.Equal("node-key-1", resolutions[1].KeyIdUsed);
+    }
+
+    [Test]
+    public void ResolveGraceEligible_WhenRetiredGraceWindowExpires_ExcludesExpiredRetiredKeys()
+    {
+        var timeProvider = new MutableTimeProvider(new DateTimeOffset(2026, 4, 19, 12, 0, 0, TimeSpan.Zero));
+        using var registry = new NodeKeyRegistry(timeProvider);
+        using var firstKey = Key.Create(KeyAgreementAlgorithm.X25519);
+        using var secondKey = Key.Create(KeyAgreementAlgorithm.X25519);
+
+        registry.Rotate("node-key-1", firstKey);
+        registry.Rotate("node-key-2", secondKey);
+        timeProvider.Advance(TimeSpan.FromMinutes(5).Add(TimeSpan.FromSeconds(1)));
+
+        var resolutions = registry.ResolveGraceEligible();
+
+        AssertEx.Equal(1, resolutions.Count);
+        AssertEx.Equal(NodeKeyLookupStatus.Active, resolutions[0].Status);
+        AssertEx.Equal("node-key-2", resolutions[0].KeyIdUsed);
+    }
+
     private sealed class MutableTimeProvider : TimeProvider
     {
         private DateTimeOffset _utcNow;

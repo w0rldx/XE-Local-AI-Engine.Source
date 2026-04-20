@@ -7,6 +7,8 @@ public interface IEnvelopeCryptoService
 {
     EnvelopeDecryptionResult DecryptRuntimePackage(EncryptedRuntimePackageDto package, Key nodePrivateKey);
 
+    EnvelopeDecryptionResult DecryptConversationMessage(Guid conversationId, EncryptedConversationMessageDto message, Key nodePrivateKey);
+
     EncryptedChunkEnvelopeV1 EncryptChunk(Guid conversationId,
         Guid messageId,
         int epochVersion,

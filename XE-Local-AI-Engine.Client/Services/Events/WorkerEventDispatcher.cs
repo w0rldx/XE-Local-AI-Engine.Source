@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -9,32 +7,28 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
 
 public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 {
     private const string AadMismatchReason = "aad-mismatch";
     private const string RetiredKeyReason = "retired-key";
-    private static readonly JsonSerializerOptions RuntimePackageSerializerOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
 
-    private readonly IEnvelopeCryptoService _envelopeCryptoService;
     private readonly Lazy<IHubMessageSender> _hubMessageSender;
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
+    private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
     private readonly object _syncRoot = new();
 
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
-        IEnvelopeCryptoService envelopeCryptoService,
+        IRuntimePackageEnvelopeAssembler runtimePackageEnvelopeAssembler,
         Lazy<IHubMessageSender> hubMessageSender,
         INodeKeyRegistry nodeKeyRegistry,
         ILogger<WorkerEventDispatcher> logger)
     {
         _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
-        _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
+        _runtimePackageEnvelopeAssembler = runtimePackageEnvelopeAssembler ?? throw new ArgumentNullException(nameof(runtimePackageEnvelopeAssembler));
         _hubMessageSender = hubMessageSender ?? throw new ArgumentNullException(nameof(hubMessageSender));
         _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -48,11 +42,21 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(package);
 
+        _logger.LogInformation(
+            "WorkerEventDispatcher handling InvocationAssigned. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
+            package.InvocationId,
+            package.ConversationId,
+            package.MessageId,
+            package.EpochVersion);
+
         NodeKeyResolution resolution;
 
         try
         {
-            resolution = _nodeKeyRegistry.Resolve(_nodeKeyRegistry.ActiveKeyId);
+            var activeKeyId = _nodeKeyRegistry.ActiveKeyId;
+            _logger.LogInformation("Resolving node key. ActiveKeyId={ActiveKeyId}", activeKeyId);
+            resolution = _nodeKeyRegistry.Resolve(activeKeyId);
+            _logger.LogInformation("Node key resolved. Status={Status} IsResolved={IsResolved}", resolution.Status, resolution.IsResolved);
         }
         catch (InvalidOperationException exception)
         {
@@ -64,6 +68,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         {
             if (resolution.Status == NodeKeyLookupStatus.RetiredExpired)
             {
+                _logger.LogWarning("Active node key retired/expired for message {MessageId}. KeyId={KeyId}", package.MessageId, resolution.KeyIdUsed ?? resolution.RequestedKeyId);
                 await EmitInvocationKeyMismatchAsync(package.MessageId,
                     RetiredKeyReason,
                     resolution.KeyIdUsed ?? resolution.RequestedKeyId).ConfigureAwait(false);
@@ -73,23 +78,41 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             throw new InvalidOperationException("No active node key is available to decrypt the invocation envelope.");
         }
 
-        EnvelopeDecryptionResult decryptionResult;
+        InvocationExecutionContext context;
 
         try
         {
-            decryptionResult = _envelopeCryptoService.DecryptRuntimePackage(package, resolution.PrivateKey);
+            _logger.LogInformation("Assembling runtime package from encrypted envelope. InvocationId={InvocationId}", package.InvocationId);
+            context = _runtimePackageEnvelopeAssembler.Assemble(package);
         }
         catch (InvalidOperationException exception) when (IsAadMismatch(exception))
         {
+            _logger.LogWarning(exception, "AAD mismatch during decrypt for message {MessageId}.", package.MessageId);
             await EmitInvocationKeyMismatchAsync(package.MessageId,
                 AadMismatchReason,
                 resolution.KeyIdUsed ?? resolution.RequestedKeyId).ConfigureAwait(false);
             return;
         }
+        catch (InvalidOperationException exception) when (IsConfigHashMismatch(exception))
+        {
+            _logger.LogWarning(exception, "Config hash mismatch for message {MessageId}.", package.MessageId);
+            await EmitEncryptedFailureAsync(package, "runtime-package-config-hash-mismatch").ConfigureAwait(false);
+            return;
+        }
+        catch (InvalidOperationException exception) when (IsHistoryHashMismatch(exception))
+        {
+            _logger.LogWarning(exception, "History hash mismatch for message {MessageId}.", package.MessageId);
+            await EmitEncryptedFailureAsync(package, "runtime-package-history-hash-mismatch").ConfigureAwait(false);
+            return;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Assemble runtime package failed. InvocationId={InvocationId}", package.InvocationId);
+            throw;
+        }
 
-        using var _ = decryptionResult;
-        var runtimePackage = JsonSerializer.Deserialize<RuntimePackage>(decryptionResult.Plaintext.Span, RuntimePackageSerializerOptions)
-                             ?? throw new InvalidOperationException("Encrypted runtime package payload could not be deserialized.");
+        using var _ = context;
+        var runtimePackage = context.Package;
 
         InvocationState snapshot;
 
@@ -118,11 +141,6 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
         _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);
         PublishStateChanged(snapshot);
-
-        using var context = InvocationExecutionContext.Create(runtimePackage,
-            package.MessageId,
-            package.EpochVersion,
-            decryptionResult.EpochKey);
 
         await RunInvocationAsync(context).ConfigureAwait(false);
     }
@@ -230,9 +248,31 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed).ConfigureAwait(false);
     }
 
+    private async Task EmitEncryptedFailureAsync(EncryptedRuntimePackageDto package, string error)
+    {
+        await _hubMessageSender.Value.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
+        {
+            ConversationId = package.ConversationId,
+            MessageId = package.MessageId,
+            EpochVersion = package.EpochVersion,
+            FailureCategory = nameof(FailureCategory.AgentRuntime),
+            Error = error
+        }).ConfigureAwait(false);
+    }
+
     private static bool IsAadMismatch(InvalidOperationException exception)
     {
         return exception.Message.Contains("AAD", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsConfigHashMismatch(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("runtime-package-config-hash-mismatch", StringComparison.Ordinal);
+    }
+
+    private static bool IsHistoryHashMismatch(InvalidOperationException exception)
+    {
+        return exception.Message.Contains("runtime-package-history-hash-mismatch", StringComparison.Ordinal);
     }
 
     private async Task RunInvocationAsync(InvocationExecutionContext context)
