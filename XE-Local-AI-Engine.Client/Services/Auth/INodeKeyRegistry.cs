@@ -8,6 +8,8 @@ public interface INodeKeyRegistry : IDisposable
 
     PublicKey ActivePublicKey { get; }
 
+    IReadOnlyList<NodeKeyResolution> ResolveGraceEligible();
+
     NodeKeyResolution Resolve(string nodeKeyId);
 
     void Rotate(string nodeKeyId, Key privateKey);

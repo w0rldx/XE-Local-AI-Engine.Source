@@ -42,6 +42,44 @@ public sealed class NodeKeyRegistry : INodeKeyRegistry
         }
     }
 
+    public IReadOnlyList<NodeKeyResolution> ResolveGraceEligible()
+    {
+        lock (_syncRoot)
+        {
+            ThrowIfDisposed();
+
+            var now = _timeProvider.GetUtcNow();
+            EvictExpiredRetiredKeys(now);
+
+            var resolutions = new List<NodeKeyResolution>();
+
+            if (_activeKey is { } activeKey)
+            {
+                resolutions.Add(new NodeKeyResolution
+                {
+                    RequestedKeyId = activeKey.KeyId,
+                    Status = NodeKeyLookupStatus.Active,
+                    KeyIdUsed = activeKey.KeyId,
+                    PrivateKey = activeKey.PrivateKey,
+                    PublicKey = activeKey.PrivateKey.PublicKey
+                });
+            }
+
+            resolutions.AddRange(_retiredKeys.Values
+                .OrderByDescending(static key => key.ExpiresAtUtc)
+                .Select(static retiredKey => new NodeKeyResolution
+                {
+                    RequestedKeyId = retiredKey.KeyId,
+                    Status = NodeKeyLookupStatus.Retired,
+                    KeyIdUsed = retiredKey.KeyId,
+                    PrivateKey = retiredKey.PrivateKey,
+                    PublicKey = retiredKey.PrivateKey.PublicKey
+                }));
+
+            return resolutions;
+        }
+    }
+
     public NodeKeyResolution Resolve(string nodeKeyId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nodeKeyId);

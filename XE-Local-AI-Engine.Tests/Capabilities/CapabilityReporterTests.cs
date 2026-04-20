@@ -227,6 +227,11 @@ public sealed class CapabilityReporterTests
             return Task.CompletedTask;
         }
 
+        public Task SendWorkerKeyRegisteredAsync(Guid keyId, string publicKey, string popSignature, string popChallenge, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default)
         {
             SendCapabilitiesCallCount++;

@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -183,39 +184,6 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
-    public async Task DispatchInvocationAssignedAsync_WhenPayloadCannotDeserialize_ThrowsJsonException()
-    {
-        var runner = Substitute.For<IInvocationRunner>();
-#pragma warning disable CA2000
-        var nodeKeyRegistry = new FakeNodeKeyRegistry();
-#pragma warning restore CA2000
-        var envelopeCryptoService = new FakeEnvelopeCryptoService(_ => new byte[] { 1, 2, 3 });
-        var sender = new MockHubMessageSender();
-
-        var dispatcher = new WorkerEventDispatcher(runner,
-            envelopeCryptoService,
-            new Lazy<IHubMessageSender>(() => sender),
-            nodeKeyRegistry,
-            NullLogger<WorkerEventDispatcher>.Instance);
-
-        var exception = await AssertEx.ThrowsAsync<JsonException>(() => dispatcher.DispatchInvocationAssignedAsync(new EncryptedRuntimePackageDto
-        {
-            ConversationId = Guid.NewGuid(),
-            MessageId = Guid.NewGuid(),
-            EpochVersion = 1,
-            NodeWrappedEpochKey = new byte[] { 1 },
-            ClientEphemeralPublicKey = new byte[] { 2 },
-            Ciphertext = new byte[] { 3 },
-            ContentIv = new byte[] { 4 },
-            Aad = new byte[36],
-            InvocationId = Guid.NewGuid()
-        }));
-
-        AssertEx.Contains(exception.Message, "invalid start of a value", StringComparison.OrdinalIgnoreCase);
-        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
-    }
-
-    [Test]
     public async Task DispatchInvocationAssignedAsync_WhenAadMismatch_EmitsInvocationKeyMismatch()
     {
         var runner = Substitute.For<IInvocationRunner>();
@@ -224,10 +192,10 @@ public sealed class WorkerEventDispatcherTests
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
         var encryptedPackage = CreateEncryptedPackage(RuntimePackageBuilder.Valid().Build());
-        var envelopeCryptoService = new FakeEnvelopeCryptoService(_ => throw new InvalidOperationException("Encrypted runtime package AAD did not match the expected envelope metadata."));
+        var assembler = new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("Encrypted runtime package AAD did not match the expected envelope metadata."));
 
         var dispatcher = new WorkerEventDispatcher(runner,
-            envelopeCryptoService,
+            assembler,
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             NullLogger<WorkerEventDispatcher>.Instance);
@@ -257,7 +225,7 @@ public sealed class WorkerEventDispatcherTests
         var encryptedPackage = CreateEncryptedPackage(RuntimePackageBuilder.Valid().Build());
 
         var dispatcher = new WorkerEventDispatcher(runner,
-            new FakeEnvelopeCryptoService(_ => throw new InvalidOperationException("decrypt should not run for expired retired keys")),
+            new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("assemble should not run for expired retired keys")),
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             NullLogger<WorkerEventDispatcher>.Instance);
@@ -277,49 +245,248 @@ public sealed class WorkerEventDispatcherTests
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
-        var envelopeCryptoService = new FakeEnvelopeCryptoService(encryptedPackage =>
+        var assembler = new FakeRuntimePackageEnvelopeAssembler(encryptedPackage =>
         {
             var runtimePackage = DeserializeRuntimePackage(encryptedPackage);
-            return JsonSerializer.SerializeToUtf8Bytes(runtimePackage, SerializerOptions);
+            return InvocationExecutionContext.Create(runtimePackage,
+                encryptedPackage.MessageId,
+                encryptedPackage.EpochVersion,
+                new byte[32]);
         });
 
-        return CreateDispatcher(runner, envelopeCryptoService, sender, nodeKeyRegistry);
+        return CreateDispatcher(runner, assembler, sender, nodeKeyRegistry);
     }
 
     private static WorkerEventDispatcher CreateDispatcher(IInvocationRunner runner,
-        IEnvelopeCryptoService envelopeCryptoService,
+        IRuntimePackageEnvelopeAssembler assembler,
         IHubMessageSender hubMessageSender,
         INodeKeyRegistry nodeKeyRegistry)
     {
         return new WorkerEventDispatcher(runner,
-            envelopeCryptoService,
+            assembler,
             new Lazy<IHubMessageSender>(() => hubMessageSender),
             nodeKeyRegistry,
             NullLogger<WorkerEventDispatcher>.Instance);
+    }
+
+    [Test]
+    public async Task DispatchInvocationAssignedAsync_WhenConfigHashMismatch_SendsEncryptedFailure()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+#pragma warning disable CA2000
+        var nodeKeyRegistry = new FakeNodeKeyRegistry();
+#pragma warning restore CA2000
+        var sender = new MockHubMessageSender();
+        var encryptedPackage = CreateEncryptedPackage(RuntimePackageBuilder.Valid().Build());
+        var dispatcher = new WorkerEventDispatcher(runner,
+            new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("runtime-package-config-hash-mismatch")),
+            new Lazy<IHubMessageSender>(() => sender),
+            nodeKeyRegistry,
+            NullLogger<WorkerEventDispatcher>.Instance);
+
+        await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.ConversationId == encryptedPackage.ConversationId
+                       && failure.MessageId == encryptedPackage.MessageId
+                       && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+                       && failure.Error == "runtime-package-config-hash-mismatch");
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DispatchInvocationAssignedAsync_WhenHistoryHashMismatch_SendsEncryptedFailure()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+#pragma warning disable CA2000
+        var nodeKeyRegistry = new FakeNodeKeyRegistry();
+#pragma warning restore CA2000
+        var sender = new MockHubMessageSender();
+        var encryptedPackage = CreateEncryptedPackage(RuntimePackageBuilder.Valid().Build());
+        var dispatcher = new WorkerEventDispatcher(runner,
+            new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("runtime-package-history-hash-mismatch")),
+            new Lazy<IHubMessageSender>(() => sender),
+            nodeKeyRegistry,
+            NullLogger<WorkerEventDispatcher>.Instance);
+
+        await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.ConversationId == encryptedPackage.ConversationId
+                       && failure.MessageId == encryptedPackage.MessageId
+                       && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+                       && failure.Error == "runtime-package-history-hash-mismatch");
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DispatchInvocationAssignedAsync_WhenEnvelopeIsValid_BuildsRealRuntimePackageFromMixedEnvelope()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        InvocationExecutionContext? capturedContext = null;
+        byte[]? capturedEpochKey = null;
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                capturedContext = callInfo.Arg<InvocationExecutionContext>();
+                capturedEpochKey = capturedContext.EpochKey.ToArray();
+                return Task.CompletedTask;
+            });
+
+#pragma warning disable CA2000
+        var nodeKeyRegistry = new FakeNodeKeyRegistry();
+#pragma warning restore CA2000
+        var sender = new MockHubMessageSender();
+        var historyEntryOne = CreateHistoryEntry(MessageRole.System, sortOrder: 10);
+        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, sortOrder: 20);
+        var encryptedPackage = CreateMixedEnvelopePackage([historyEntryOne, historyEntryTwo]);
+        var expectedEpochKey = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
+        envelopeCryptoService.DecryptConversationMessage(encryptedPackage.ConversationId, historyEntryOne, Arg.Any<Key>())
+            .Returns(_ => new EnvelopeDecryptionResult("system guidance"u8.ToArray(), new byte[32]));
+        envelopeCryptoService.DecryptConversationMessage(encryptedPackage.ConversationId, historyEntryTwo, Arg.Any<Key>())
+            .Returns(_ => new EnvelopeDecryptionResult("assistant reply"u8.ToArray(), new byte[32]));
+        envelopeCryptoService.DecryptRuntimePackage(encryptedPackage, Arg.Any<Key>())
+            .Returns(_ => new EnvelopeDecryptionResult("latest user message"u8.ToArray(), expectedEpochKey.ToArray()));
+
+        var validator = Substitute.For<IRuntimePackageValidator>();
+        validator.Validate(Arg.Any<RuntimePackage>()).Returns(RuntimePackageValidationResult.Success);
+
+        var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
+        var dispatcher = CreateDispatcher(runner, assembler, sender, nodeKeyRegistry);
+
+        await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
+
+        await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+
+        var context = AssertEx.NotNull(capturedContext);
+        AssertEx.Equal(encryptedPackage.InvocationId, context.Package.InvocationId);
+        AssertEx.Equal(encryptedPackage.ConversationId, context.Package.ConversationId);
+        AssertEx.Equal(encryptedPackage.ClientNodeId, context.Package.ClientNodeId);
+        AssertEx.Equal(encryptedPackage.AgentDefinitionVersion, context.Package.AgentDefinitionVersion);
+        AssertEx.Equal(encryptedPackage.ResolvedSystemPrompt, context.Package.ResolvedSystemPrompt);
+        AssertEx.True(string.Equals(encryptedPackage.ModelProfile, context.Package.ModelProfile, StringComparison.Ordinal));
+        AssertEx.Equal(encryptedPackage.ConfigHash, context.Package.ConfigHash);
+        AssertEx.Equal(encryptedPackage.Timeouts.InvocationTimeoutSeconds, context.Package.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(encryptedPackage.Timeouts.ToolCallTimeoutSeconds, context.Package.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(encryptedPackage.Timeouts.StreamIdleTimeoutSeconds, context.Package.Timeouts.StreamIdleTimeoutSeconds);
+        AssertEx.Equal(1, context.Package.AllowedTools.Count);
+        AssertEx.Equal("open_url", context.Package.AllowedTools[0].Name);
+        AssertEx.Equal(ToolLocation.ApiSide, context.Package.AllowedTools[0].Location);
+        AssertEx.Equal("{\"type\":\"object\"}", context.Package.AllowedTools[0].ParameterSchema);
+        AssertEx.Equal(3, context.Package.ConversationContext.Count);
+        AssertEx.Equal(historyEntryOne.Id, context.Package.ConversationContext[0].Id);
+        AssertEx.Equal(MessageRole.System, context.Package.ConversationContext[0].Role);
+        AssertEx.Equal("system guidance", context.Package.ConversationContext[0].Content);
+        AssertEx.Equal(10, context.Package.ConversationContext[0].SortOrder);
+        AssertEx.Equal(historyEntryTwo.Id, context.Package.ConversationContext[1].Id);
+        AssertEx.Equal(MessageRole.Assistant, context.Package.ConversationContext[1].Role);
+        AssertEx.Equal("assistant reply", context.Package.ConversationContext[1].Content);
+        AssertEx.Equal(20, context.Package.ConversationContext[1].SortOrder);
+        AssertEx.Equal(encryptedPackage.MessageId, context.Package.ConversationContext[2].Id);
+        AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[2].Role);
+        AssertEx.Equal("latest user message", context.Package.ConversationContext[2].Content);
+        AssertEx.Equal(21, context.Package.ConversationContext[2].SortOrder);
+        AssertEx.Equal(encryptedPackage.MessageId, context.MessageId);
+        AssertEx.Equal(encryptedPackage.EpochVersion, context.EpochVersion);
+        AssertEx.True((capturedEpochKey ?? []).SequenceEqual(expectedEpochKey));
+
+        validator.Received(1).Validate(Arg.Is<RuntimePackage>(package =>
+            package.ConversationContext.Count == 3
+            && package.ConversationContext[2].Content == "latest user message"
+            && package.ModelProfile == encryptedPackage.ModelProfile));
     }
 
     private static EncryptedRuntimePackageDto CreateEncryptedPackage(RuntimePackage runtimePackage)
     {
         return new EncryptedRuntimePackageDto
         {
+            InvocationId = runtimePackage.InvocationId,
             ConversationId = runtimePackage.ConversationId,
+            ClientNodeId = runtimePackage.ClientNodeId,
             MessageId = Guid.NewGuid(),
             EpochVersion = 1,
+            AgentDefinitionVersion = runtimePackage.AgentDefinitionVersion,
+            ResolvedSystemPrompt = runtimePackage.ResolvedSystemPrompt,
+            AllowedTools = [],
+            Timeouts = runtimePackage.Timeouts,
+            ConfigHash = runtimePackage.ConfigHash,
+            ConversationContext = [],
+            ConversationContextHash = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
             NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
             ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
             Ciphertext = JsonSerializer.SerializeToUtf8Bytes(runtimePackage, SerializerOptions),
             ContentIv = new byte[] { 7, 8, 9 },
-            Aad = new byte[36],
-            InvocationId = runtimePackage.InvocationId,
-            ClientNodeId = runtimePackage.ClientNodeId
+            Aad = "message|aad-placeholder"
+        };
+    }
+
+    private static EncryptedRuntimePackageDto CreateMixedEnvelopePackage(IReadOnlyList<EncryptedConversationMessageDto>? historyEntries = null)
+    {
+        var conversationContext = historyEntries?.ToList() ?? [];
+        var package = new EncryptedRuntimePackageDto
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ClientNodeId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            EpochVersion = 7,
+            AgentDefinitionVersion = 7,
+            ResolvedSystemPrompt = "You are a helpful local AI assistant.",
+            AllowedTools =
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = "open_url",
+                    Description = "Open a URL in the worker browser",
+                    Schema = "{\"type\":\"object\"}"
+                }
+            ],
+            ModelProfile = "balanced-local-v1",
+            Timeouts = new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30,
+            },
+            ConfigHash = string.Empty,
+            ConversationContext = conversationContext,
+            ConversationContextHash = string.Empty,
+            NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
+            ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
+            Ciphertext = new byte[] { 7, 8, 9 },
+            ContentIv = new byte[] { 10, 11, 12 },
+            Aad = "message|aad-placeholder"
+        };
+
+        return package with
+        {
+            ConfigHash = RuntimePackageConfigHash.Compute(package),
+            ConversationContextHash = RuntimePackageHistoryHash.Compute(package.ConversationContext)
+        };
+    }
+
+    private static EncryptedConversationMessageDto CreateHistoryEntry(MessageRole role, int sortOrder)
+    {
+        return new EncryptedConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = role,
+            SortOrder = sortOrder,
+            EpochVersion = 7,
+            Aad = $"message|history-{sortOrder}",
+            NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
+            ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
+            Ciphertext = new byte[] { 7, 8, 9 },
+            ContentIv = new byte[] { 10, 11, 12 }
         };
     }
 
     private static RuntimePackage DeserializeRuntimePackage(EncryptedRuntimePackageDto encryptedPackage)
     {
-        var invocationId = encryptedPackage.InvocationId ?? Guid.NewGuid();
+        var invocationId = encryptedPackage.InvocationId;
         var conversationId = encryptedPackage.ConversationId;
-        var clientNodeId = encryptedPackage.ClientNodeId ?? Guid.NewGuid();
+        var clientNodeId = encryptedPackage.ClientNodeId;
 
         return JsonSerializer.Deserialize<RuntimePackage>(encryptedPackage.Ciphertext.Span, SerializerOptions)
                ?? RuntimePackageBuilder.Valid()
@@ -346,6 +513,18 @@ public sealed class WorkerEventDispatcherTests
         public string ActiveKeyId => "active-key";
 
         public PublicKey ActivePublicKey => _privateKey.PublicKey;
+
+        public IReadOnlyList<NodeKeyResolution> ResolveGraceEligible()
+        {
+            return [_resolution ?? new NodeKeyResolution
+            {
+                RequestedKeyId = ActiveKeyId,
+                Status = NodeKeyLookupStatus.Active,
+                KeyIdUsed = ActiveKeyId,
+                PrivateKey = _privateKey,
+                PublicKey = _privateKey.PublicKey
+            }];
+        }
 
         public NodeKeyResolution Resolve(string nodeKeyId)
         {
@@ -375,39 +554,18 @@ public sealed class WorkerEventDispatcherTests
         }
     }
 
-    private sealed class FakeEnvelopeCryptoService : IEnvelopeCryptoService
+    private sealed class FakeRuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAssembler
     {
-        private readonly Func<EncryptedRuntimePackageDto, byte[]> _decrypt;
+        private readonly Func<EncryptedRuntimePackageDto, InvocationExecutionContext> _assemble;
 
-        public FakeEnvelopeCryptoService(Func<EncryptedRuntimePackageDto, byte[]> decrypt)
+        public FakeRuntimePackageEnvelopeAssembler(Func<EncryptedRuntimePackageDto, InvocationExecutionContext> assemble)
         {
-            _decrypt = decrypt;
+            _assemble = assemble;
         }
 
-        public EnvelopeDecryptionResult DecryptRuntimePackage(EncryptedRuntimePackageDto package, Key nodePrivateKey)
+        public InvocationExecutionContext Assemble(EncryptedRuntimePackageDto package)
         {
-            return new EnvelopeDecryptionResult(_decrypt(package), new byte[32]);
-        }
-
-        public EncryptedChunkEnvelopeV1 EncryptChunk(Guid conversationId,
-            Guid messageId,
-            int epochVersion,
-            ReadOnlySpan<byte> epochKey,
-            ReadOnlySpan<byte> plaintext,
-            long sequence)
-        {
-            throw new NotSupportedException();
-        }
-
-        public EncryptedCompletedEnvelopeV1 EncryptCompleted(Guid conversationId,
-            Guid messageId,
-            int epochVersion,
-            ReadOnlySpan<byte> epochKey,
-            ReadOnlySpan<byte> plaintext,
-            long totalSequence,
-            IReadOnlyDictionary<string, long> tokenCounts)
-        {
-            throw new NotSupportedException();
+            return _assemble(package);
         }
     }
 }

@@ -256,6 +256,11 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task SendWorkerKeyRegisteredAsync(Guid keyId, string publicKey, string popSignature, string popChallenge, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SendInvocationKeyMismatchAsync(Guid messageId,
             string reason,
             string nodeKeyIdUsed,

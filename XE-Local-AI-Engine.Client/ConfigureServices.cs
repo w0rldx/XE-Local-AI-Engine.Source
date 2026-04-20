@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
@@ -87,6 +88,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<ModelNameValidator>();
         builder.Services.AddSingleton<IRuntimePackageValidator, RuntimePackageValidator>();
         builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
+        builder.Services.AddSingleton<IRuntimePackageEnvelopeAssembler, RuntimePackageEnvelopeAssembler>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
         builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();

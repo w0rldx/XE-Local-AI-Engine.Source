@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using NSec.Cryptography;
@@ -11,7 +10,6 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 
 public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
 {
-    private const int AadLength = 36;
     private const int EpochKeyLength = 32;
     private const int NonceLength = 12;
     private const int TagLength = 16;
@@ -22,21 +20,62 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(nodePrivateKey);
 
-        var expectedAad = BuildEnvelopeAad(package.ConversationId, package.MessageId, package.EpochVersion);
-        var actualAad = package.Aad.Span;
+        return DecryptEnvelope(package.ConversationId,
+            package.MessageId,
+            package.EpochVersion,
+            package.Aad,
+            package.ContentIv.Span,
+            package.Ciphertext.Span,
+            package.NodeWrappedEpochKey.Span,
+            package.ClientEphemeralPublicKey.Span,
+            nodePrivateKey,
+            "Encrypted runtime package");
+    }
 
-        if (actualAad.Length != AadLength || !CryptographicOperations.FixedTimeEquals(actualAad, expectedAad))
+    public EnvelopeDecryptionResult DecryptConversationMessage(Guid conversationId, EncryptedConversationMessageDto message, Key nodePrivateKey)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(nodePrivateKey);
+
+        return DecryptEnvelope(conversationId,
+            message.Id,
+            message.EpochVersion,
+            message.Aad,
+            message.ContentIv.Span,
+            message.Ciphertext.Span,
+            message.NodeWrappedEpochKey.Span,
+            message.ClientEphemeralPublicKey.Span,
+            nodePrivateKey,
+            "Encrypted conversation message");
+    }
+
+    private static EnvelopeDecryptionResult DecryptEnvelope(Guid conversationId,
+        Guid messageId,
+        int epochVersion,
+        string providedAad,
+        ReadOnlySpan<byte> nonce,
+        ReadOnlySpan<byte> ciphertext,
+        ReadOnlySpan<byte> wrappedEpochKey,
+        ReadOnlySpan<byte> clientEphemeralPublicKey,
+        Key nodePrivateKey,
+        string envelopeName)
+    {
+        var expectedAadString = BuildEnvelopeAadString(conversationId, messageId, epochVersion);
+
+        if (!string.Equals(providedAad, expectedAadString, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Encrypted runtime package AAD did not match the expected envelope metadata.");
+            throw new InvalidOperationException($"{envelopeName} AAD did not match the expected envelope metadata.");
         }
 
-        ValidateWrappedPayload(package.ContentIv.Span, package.Ciphertext.Span, package.NodeWrappedEpochKey.Span, package.ClientEphemeralPublicKey.Span);
+        var expectedAad = Encoding.UTF8.GetBytes(expectedAadString);
 
-        var epochKey = UnwrapEpochKey(package.NodeWrappedEpochKey.Span, package.ClientEphemeralPublicKey.Span, nodePrivateKey);
+        ValidateWrappedPayload(nonce, ciphertext, wrappedEpochKey, clientEphemeralPublicKey);
+
+        var epochKey = UnwrapEpochKey(wrappedEpochKey, clientEphemeralPublicKey, nodePrivateKey);
 
         try
         {
-            var plaintext = DecryptPayload(package.ContentIv.Span, package.Ciphertext.Span, epochKey, expectedAad);
+            var plaintext = DecryptPayload(nonce, ciphertext, epochKey, expectedAad);
             return new EnvelopeDecryptionResult(plaintext, epochKey);
         }
         catch
@@ -201,17 +240,11 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
 
     private static byte[] BuildEnvelopeAad(Guid conversationId, Guid messageId, int epochVersion)
     {
-        var conversationBytes = conversationId.ToByteArray(bigEndian: true);
-        var messageBytes = messageId.ToByteArray(bigEndian: true);
-        var epochBytes = new byte[sizeof(int)];
-        var aad = new byte[AadLength];
+        return Encoding.UTF8.GetBytes(BuildEnvelopeAadString(conversationId, messageId, epochVersion));
+    }
 
-        BinaryPrimitives.WriteInt32BigEndian(epochBytes, epochVersion);
-
-        conversationBytes.CopyTo(aad, 0);
-        messageBytes.CopyTo(aad, conversationBytes.Length);
-        epochBytes.CopyTo(aad, conversationBytes.Length + messageBytes.Length);
-
-        return aad;
+    private static string BuildEnvelopeAadString(Guid conversationId, Guid messageId, int epochVersion)
+    {
+        return $"message|{conversationId:D}|{messageId:D}|{epochVersion}";
     }
 }

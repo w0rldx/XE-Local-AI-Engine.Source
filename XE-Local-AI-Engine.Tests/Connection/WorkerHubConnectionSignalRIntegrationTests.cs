@@ -38,6 +38,8 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
+        using var nodeKeyRegistry = new XE_Local_AI_Engine.Client.Services.Auth.NodeKeyRegistry(TimeProvider.System);
+
         await using var connection = new WorkerHubConnection(
             tokenStore,
             Options.Create(new CentralPlatformOptions
@@ -48,6 +50,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
             new ConnectionState(),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
             deadLetterFlushService,
+            nodeKeyRegistry,
             NullLogger<WorkerHubConnection>.Instance,
             CreateFixtureHttpOptionsConfigurator(fixture));
 
@@ -56,18 +59,57 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await connection.ConnectAsync();
 
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        const int epochVersion = 7;
+
         var runtimePackage = new EncryptedRuntimePackageDto
         {
-            ConversationId = Guid.NewGuid(),
-            MessageId = Guid.NewGuid(),
-            EpochVersion = 7,
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            ClientNodeId = Guid.NewGuid(),
+            MessageId = messageId,
+            EpochVersion = epochVersion,
+            AgentDefinitionVersion = 7,
+            ResolvedSystemPrompt = "You are a helpful local AI assistant.",
+            AllowedTools =
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = "open_url",
+                    Description = "Open a URL in the worker browser",
+                    Schema = "{\"type\":\"object\"}"
+                }
+            ],
+            ModelProfile = "balanced-local-v1",
+            Timeouts = new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30,
+            },
+            ConfigHash = "04c79b399e8dd0a4eba7e2b50c43931aa92b7c50ed73db6d1989c209f3c1cf33",
+            ConversationContext =
+            [
+                new EncryptedConversationMessageDto
+                {
+                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    Role = XE_Local_AI_Engine.Client.Models.Enums.MessageRole.User,
+                    SortOrder = 10,
+                    EpochVersion = epochVersion,
+                    Aad = $"message|{conversationId:D}|11111111-1111-1111-1111-111111111111|{epochVersion}",
+                    NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
+                    ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
+                    Ciphertext = new byte[] { 7, 8, 9 },
+                    ContentIv = new byte[] { 10, 11, 12 },
+                }
+            ],
+            ConversationContextHash = "48b074b9ff9a22175eea9299d1df91c8392ff1e4fbfd74750ce08c22e6d54043",
             NodeWrappedEpochKey = new byte[] { 1, 2, 3, 4 },
             ClientEphemeralPublicKey = new byte[] { 5, 6, 7, 8 },
             Ciphertext = new byte[] { 9, 10, 11, 12 },
             ContentIv = new byte[] { 13, 14, 15, 16 },
-            Aad = new byte[] { 17, 18, 19, 20 },
-            InvocationId = Guid.NewGuid(),
-            ClientNodeId = Guid.NewGuid(),
+            Aad = $"message|{conversationId:D}|{messageId:D}|{epochVersion}"
         };
 
         await fixture.SendInvocationAssignedAsync(runtimePackage);
@@ -145,11 +187,49 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         AssertEx.Equal(expected.ConversationId, actual.ConversationId);
         AssertEx.Equal(expected.MessageId, actual.MessageId);
         AssertEx.Equal(expected.EpochVersion, actual.EpochVersion);
+        AssertEx.Equal(expected.AgentDefinitionVersion, actual.AgentDefinitionVersion);
+        AssertEx.Equal(expected.ResolvedSystemPrompt, actual.ResolvedSystemPrompt);
+        AssertEx.Equal(expected.AllowedTools.Count, actual.AllowedTools.Count);
+        AssertEx.True(string.Equals(expected.ModelProfile, actual.ModelProfile, StringComparison.Ordinal));
+
+        for (var index = 0; index < expected.AllowedTools.Count; index++)
+        {
+            var expectedTool = expected.AllowedTools[index];
+            var actualTool = actual.AllowedTools[index];
+
+            AssertEx.Equal(expectedTool.Name, actualTool.Name);
+            AssertEx.True(string.Equals(expectedTool.Description, actualTool.Description, StringComparison.Ordinal));
+            AssertEx.True(string.Equals(expectedTool.Schema, actualTool.Schema, StringComparison.Ordinal));
+        }
+
+        AssertEx.Equal(expected.Timeouts.InvocationTimeoutSeconds, actual.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected.Timeouts.ToolCallTimeoutSeconds, actual.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected.Timeouts.StreamIdleTimeoutSeconds, actual.Timeouts.StreamIdleTimeoutSeconds);
+        AssertEx.Equal(expected.ConfigHash, actual.ConfigHash);
+        AssertEx.Equal(expected.ConversationContextHash, actual.ConversationContextHash);
+        AssertEx.Equal(expected.ConversationContext.Count, actual.ConversationContext.Count);
+
+        for (var index = 0; index < expected.ConversationContext.Count; index++)
+        {
+            var expectedMessage = expected.ConversationContext[index];
+            var actualMessage = actual.ConversationContext[index];
+
+            AssertEx.Equal(expectedMessage.Id, actualMessage.Id);
+            AssertEx.Equal(expectedMessage.Role, actualMessage.Role);
+            AssertEx.Equal(expectedMessage.SortOrder, actualMessage.SortOrder);
+            AssertEx.Equal(expectedMessage.EpochVersion, actualMessage.EpochVersion);
+            AssertEx.Equal(expectedMessage.Aad, actualMessage.Aad);
+            AssertReadOnlyMemoryEqual(expectedMessage.NodeWrappedEpochKey, actualMessage.NodeWrappedEpochKey);
+            AssertReadOnlyMemoryEqual(expectedMessage.ClientEphemeralPublicKey, actualMessage.ClientEphemeralPublicKey);
+            AssertReadOnlyMemoryEqual(expectedMessage.Ciphertext, actualMessage.Ciphertext);
+            AssertReadOnlyMemoryEqual(expectedMessage.ContentIv, actualMessage.ContentIv);
+        }
+
         AssertReadOnlyMemoryEqual(expected.NodeWrappedEpochKey, actual.NodeWrappedEpochKey);
         AssertReadOnlyMemoryEqual(expected.ClientEphemeralPublicKey, actual.ClientEphemeralPublicKey);
         AssertReadOnlyMemoryEqual(expected.Ciphertext, actual.Ciphertext);
         AssertReadOnlyMemoryEqual(expected.ContentIv, actual.ContentIv);
-        AssertReadOnlyMemoryEqual(expected.Aad, actual.Aad);
+        AssertEx.Equal(expected.Aad, actual.Aad);
         AssertEx.Equal(expected.InvocationId, actual.InvocationId);
         AssertEx.Equal(expected.ClientNodeId, actual.ClientNodeId);
     }

@@ -60,6 +60,7 @@ public sealed class WorkerHubConnectionTests
             new ConnectionState(),
             new Lazy<ICapabilityReporter>(() => Substitute.For<ICapabilityReporter>()),
             flushService,
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Auth.INodeKeyRegistry>(),
             NullLogger<WorkerHubConnection>.Instance);
     }
 }
