@@ -27,54 +27,22 @@
 
 <MudGrid Spacing="4" Class="mt-4">
     <MudItem xs="12" md="6">
-        <MudCard>
-            <MudCardContent>
-                <MudText Typo="Typo.h6">Current invocation</MudText>
-                <MudText Typo="Typo.body2" Class="mb-4">Shows the active invocation received from the Central Platform.</MudText>
-
-                @if (_currentInvocation is null)
-                {
+        @if (_currentInvocation is null)
+        {
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Current invocation</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4">Shows the active invocation received from the Central Platform.</MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">No invocation has been assigned yet.</MudText>
-                }
-                else
-                {
-                    <MudSimpleTable Dense="true" Hover="true">
-                        <tbody>
-                        <tr>
-                            <td><strong>Invocation ID</strong></td>
-                            <td>@_currentInvocation.InvocationId</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Conversation ID</strong></td>
-                            <td>@_currentInvocation.ConversationId</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Status</strong></td>
-                            <td>@GetInvocationLabel()</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Started</strong></td>
-                            <td>@_currentInvocation.StartedAt.ToLocalTime().ToString("g")</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Model</strong></td>
-                            <td>@(_currentInvocation.ModelUsed ?? "Unknown")</td>
-                        </tr>
-                        </tbody>
-                    </MudSimpleTable>
-
-                    @if (!string.IsNullOrWhiteSpace(_currentInvocation.Error))
-                    {
-                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @_currentInvocation.Error</MudAlert>
-                    }
-
-                    <div class="mt-4">
-                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelInvocationAsync"
-                                   Disabled="@(!CanCancel || _isCancelling)">@(_isCancelling ? "Cancelling..." : "Cancel invocation")</MudButton>
-                    </div>
-                }
-            </MudCardContent>
-        </MudCard>
+                </MudCardContent>
+            </MudCard>
+        }
+        else
+        {
+            <InvocationCard State="_currentInvocation" Title="Current invocation"/>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="CancelInvocationAsync"
+                       Disabled="@(!CanCancel || _isCancelling)">@(_isCancelling ? "Cancelling..." : "Cancel invocation")</MudButton>
+        }
     </MudItem>
 
     <MudItem xs="12" md="6">
@@ -87,14 +55,60 @@
                 {
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">Live output will appear here when an invocation starts.</MudText>
                 }
-                else if (string.IsNullOrWhiteSpace(_currentInvocation.StreamedContent))
-                {
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Waiting for streamed content...</MudText>
-                }
                 else
                 {
-                    <MudPaper Class="pa-4 mt-2" Style="font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto;" Elevation="0"
-                              Outlined="true">@_currentInvocation.StreamedContent</MudPaper>
+                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mb-3">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Chunks: @_currentInvocation.StreamedChunkCount</MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Last update: @FormatTimestamp(_currentInvocation.LastUpdatedAt)</MudChip>
+
+                        @if (_currentInvocation.PendingApproval is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">Approval pending</MudChip>
+                        }
+
+                        @if (_currentInvocation.PendingToolCalls.Count > 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">@_currentInvocation.PendingToolCalls.Count tool call(s) pending</MudChip>
+                        }
+                    </MudStack>
+
+                    @if (_currentInvocation.PendingApproval is not null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                            Waiting for approval: @_currentInvocation.PendingApproval.Description
+                        </MudAlert>
+                    }
+
+                    @if (_currentInvocation.PendingToolCalls.Count > 0)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                            Active tool calls: @string.Join(", ", _currentInvocation.PendingToolCalls.Select(toolCall => toolCall.ToolName))
+                        </MudAlert>
+                    }
+
+                    @if (_currentInvocation.LastToolCallResult is not null)
+                    {
+                        <MudAlert Severity="@(_currentInvocation.LastToolCallResult.Succeeded ? Severity.Success : Severity.Error)" Dense="true" Class="mb-2">
+                            Last tool call @(_currentInvocation.LastToolCallResult.Succeeded ? "completed" : "failed"): @_currentInvocation.LastToolCallResult.RequestId
+                        </MudAlert>
+                    }
+
+                    @if (_currentInvocation.LastApprovalResolution is not null)
+                    {
+                        <MudAlert Severity="@(_currentInvocation.LastApprovalResolution.Approved ? Severity.Success : Severity.Warning)" Dense="true" Class="mb-2">
+                            Last approval was @(_currentInvocation.LastApprovalResolution.Approved ? "approved" : "rejected").
+                        </MudAlert>
+                    }
+
+                    @if (string.IsNullOrWhiteSpace(_currentInvocation.StreamedContent))
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Waiting for streamed content...</MudText>
+                    }
+                    else
+                    {
+                        <MudPaper Class="pa-4 mt-2" Style="font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto;" Elevation="0"
+                                  Outlined="true">@_currentInvocation.StreamedContent</MudPaper>
+                    }
                 }
             </MudCardContent>
         </MudCard>
@@ -188,6 +202,11 @@
         };
     }
 
+    private static string FormatTimestamp(DateTimeOffset? value)
+    {
+        return value?.ToLocalTime().ToString("g") ?? "—";
+    }
+
     private static InvocationState? Clone(InvocationState? state)
     {
         if (state is null)
@@ -201,9 +220,17 @@
             ConversationId = state.ConversationId,
             Status = state.Status,
             StreamedContent = state.StreamedContent,
+            StreamedChunkCount = state.StreamedChunkCount,
             StartedAt = state.StartedAt,
+            LastUpdatedAt = state.LastUpdatedAt,
+            CompletedAt = state.CompletedAt,
             Error = state.Error,
-            ModelUsed = state.ModelUsed
+            FailureCategory = state.FailureCategory,
+            ModelUsed = state.ModelUsed,
+            PendingApproval = state.PendingApproval,
+            LastApprovalResolution = state.LastApprovalResolution,
+            PendingToolCalls = [.. state.PendingToolCalls],
+            LastToolCallResult = state.LastToolCallResult
         };
     }
 

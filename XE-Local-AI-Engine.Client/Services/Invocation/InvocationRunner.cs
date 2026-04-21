@@ -13,8 +13,10 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
 public sealed class InvocationRunner : IInvocationRunner
@@ -28,6 +30,7 @@ public sealed class InvocationRunner : IInvocationRunner
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
+    private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
     private readonly IEnvelopeCryptoService _envelopeCryptoService;
@@ -46,6 +49,7 @@ public sealed class InvocationRunner : IInvocationRunner
     private bool _userCancelRequested;
 
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
+        Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
         IEnvelopeCryptoService envelopeCryptoService,
         IRuntimePackageValidator runtimePackageValidator,
@@ -56,6 +60,7 @@ public sealed class InvocationRunner : IInvocationRunner
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
+        _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
@@ -91,6 +96,8 @@ public sealed class InvocationRunner : IInvocationRunner
         }
 
         var sender = _hubSender.Value;
+        var dispatcher = _eventDispatcher.Value;
+        var shouldSendHubMessages = !IsLocalLoopbackInvocation(package);
 
         RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
 
@@ -103,7 +110,10 @@ public sealed class InvocationRunner : IInvocationRunner
             long sequence = 0;
             var totalResponseBytes = 0;
 
-            await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
+            if (shouldSendHubMessages)
+            {
+                await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
+            }
 
             var definition = BuildInvocationDefinition(package, resolvedModel);
             await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
@@ -127,37 +137,56 @@ public sealed class InvocationRunner : IInvocationRunner
 
                 responseBuilder.Append(chunk);
 
-                await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
+                await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk).ConfigureAwait(false);
+
+                if (shouldSendHubMessages)
+                {
+                    await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
+                            context.MessageId,
+                            context.EpochVersion,
+                            context.EpochKey.Span,
+                            Encoding.UTF8.GetBytes(chunk),
+                            sequence),
+                        invocationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (shouldSendHubMessages)
+            {
+                await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
                         context.MessageId,
                         context.EpochVersion,
                         context.EpochKey.Span,
-                        Encoding.UTF8.GetBytes(chunk),
-                        sequence),
+                        Encoding.UTF8.GetBytes(responseBuilder.ToString()),
+                        sequence,
+                        new Dictionary<string, long>
+                        {
+                            ["tokensUsed"] = streamedChunkCount
+                        }),
                     invocationToken).ConfigureAwait(false);
             }
 
-            await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
-                    context.MessageId,
-                    context.EpochVersion,
-                    context.EpochKey.Span,
-                    Encoding.UTF8.GetBytes(responseBuilder.ToString()),
-                    sequence,
-                    new Dictionary<string, long>
-                    {
-                        ["tokensUsed"] = streamedChunkCount
-                    }),
-                invocationToken).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(package.InvocationId).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
             CancelPendingToolCalls(package.InvocationId);
-            await TrySendFailureAsync(sender, context, "Invocation timed out or was cancelled", ClassifyCancellation()).ConfigureAwait(false);
+            var failureCategory = ClassifyCancellation();
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
+            if (shouldSendHubMessages)
+            {
+                await TrySendFailureAsync(sender, context, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
+            }
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
             var (failureCategory, message) = MapFailure(exception);
-            await TrySendFailureAsync(sender, context, message, failureCategory).ConfigureAwait(false);
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory).ConfigureAwait(false);
+            if (shouldSendHubMessages)
+            {
+                await TrySendFailureAsync(sender, context, message, failureCategory).ConfigureAwait(false);
+            }
         }
         finally
         {
@@ -202,14 +231,17 @@ public sealed class InvocationRunner : IInvocationRunner
 
         try
         {
-            await sender.SendToolCallRequestAsync(new ToolCallRequestPayload
-                {
-                    InvocationId = invocationId,
-                    RequestId = requestId,
-                    ToolName = toolName,
-                    Parameters = parameters
-                },
+            var payload = new ToolCallRequestPayload
+            {
+                InvocationId = invocationId,
+                RequestId = requestId,
+                ToolName = toolName,
+                Parameters = parameters
+            };
+
+            await sender.SendToolCallRequestAsync(payload,
                 cancellationToken).ConfigureAwait(false);
+            await _eventDispatcher.Value.ReportToolCallRequestedAsync(payload).ConfigureAwait(false);
 
             using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
@@ -428,6 +460,13 @@ public sealed class InvocationRunner : IInvocationRunner
     private static string TruncateUnexpectedMessage(string message)
     {
         return message.Length > 512 ? message[..512] : message;
+    }
+
+    private static bool IsLocalLoopbackInvocation(RuntimePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        return package.RequestedCapabilities?.Any(static capability => string.Equals(capability, LocalChatLoopbackDefaults.RequestedCapability, StringComparison.Ordinal)) == true;
     }
 
     private void CancelPendingToolCalls(Guid invocationId)

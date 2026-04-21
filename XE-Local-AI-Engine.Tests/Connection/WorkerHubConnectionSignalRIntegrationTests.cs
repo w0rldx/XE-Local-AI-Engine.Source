@@ -10,9 +10,11 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
 using XE_Local_AI_Engine.Tests.Fixtures;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -150,6 +152,121 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         AssertEncryptedChunkEqual(chunkPayload, receivedChunk);
         AssertEncryptedCompletedEqual(completedPayload, receivedCompleted);
+        await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task EncryptedRuntimePackageRoundTrip_WhenWorkerReceivesMultiMessageHistory_PreservesConversationContext()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var tokenStore = MockTokenStore.Paired("test-access-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(30));
+        var sender = new MockHubMessageSender();
+        var deadLetterStore = Substitute.For<IDeadLetterStore>();
+        deadLetterStore.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>([]));
+
+        var deadLetterFlushService = new DeadLetterFlushService(
+            deadLetterStore,
+            new Lazy<IHubMessageSender>(() => sender),
+            NullLogger<DeadLetterFlushService>.Instance);
+
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new XE_Local_AI_Engine.Client.Services.Auth.NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = new WorkerHubConnection(
+            tokenStore,
+            Options.Create(new CentralPlatformOptions
+            {
+                BaseUrl = fixture.HubBaseUri.ToString(),
+                HubPath = fixture.HubPath,
+            }),
+            new ConnectionState(),
+            new Lazy<ICapabilityReporter>(() => capabilityReporter),
+            deadLetterFlushService,
+            nodeKeyRegistry,
+            NullLogger<WorkerHubConnection>.Instance,
+            CreateFixtureHttpOptionsConfigurator(fixture));
+
+        var invocationAssigned = new TaskCompletionSource<EncryptedRuntimePackageDto>(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.InvocationAssignedReceived += (_, args) => invocationAssigned.TrySetResult(args.EncryptedRuntimePackage);
+
+        await connection.ConnectAsync();
+
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var historyMessageOneId = Guid.NewGuid();
+        var historyMessageTwoId = Guid.NewGuid();
+        const int epochVersion = 7;
+        var conversationContext = new List<EncryptedConversationMessageDto>
+        {
+            new()
+            {
+                Id = historyMessageOneId,
+                Role = MessageRole.User,
+                SortOrder = 10,
+                EpochVersion = epochVersion,
+                Aad = $"message|{conversationId:D}|{historyMessageOneId:D}|{epochVersion}",
+                NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
+                ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
+                Ciphertext = new byte[] { 7, 8, 9 },
+                ContentIv = new byte[] { 10, 11, 12 },
+            },
+            new()
+            {
+                Id = historyMessageTwoId,
+                Role = MessageRole.Assistant,
+                SortOrder = 20,
+                EpochVersion = epochVersion,
+                Aad = $"message|{conversationId:D}|{historyMessageTwoId:D}|{epochVersion}",
+                NodeWrappedEpochKey = new byte[] { 11, 12, 13 },
+                ClientEphemeralPublicKey = new byte[] { 14, 15, 16 },
+                Ciphertext = new byte[] { 17, 18, 19 },
+                ContentIv = new byte[] { 20, 21, 22 },
+            }
+        };
+
+        var runtimePackage = new EncryptedRuntimePackageDto
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            ClientNodeId = Guid.NewGuid(),
+            MessageId = messageId,
+            EpochVersion = epochVersion,
+            AgentDefinitionVersion = 7,
+            ResolvedSystemPrompt = "You are a helpful local AI assistant.",
+            AllowedTools =
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = "open_url",
+                    Description = "Open a URL in the worker browser",
+                    Schema = "{\"type\":\"object\"}"
+                }
+            ],
+            ModelProfile = "balanced-local-v1",
+            Timeouts = new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30,
+            },
+            ConfigHash = "04c79b399e8dd0a4eba7e2b50c43931aa92b7c50ed73db6d1989c209f3c1cf33",
+            ConversationContext = conversationContext,
+            ConversationContextHash = RuntimePackageHistoryHash.Compute(conversationContext),
+            NodeWrappedEpochKey = new byte[] { 1, 2, 3, 4 },
+            ClientEphemeralPublicKey = new byte[] { 5, 6, 7, 8 },
+            Ciphertext = new byte[] { 9, 10, 11, 12 },
+            ContentIv = new byte[] { 13, 14, 15, 16 },
+            Aad = $"message|{conversationId:D}|{messageId:D}|{epochVersion}"
+        };
+
+        await fixture.SendInvocationAssignedAsync(runtimePackage);
+
+        var receivedPackage = await invocationAssigned.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        AssertEncryptedRuntimePackageEqual(runtimePackage, receivedPackage);
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 

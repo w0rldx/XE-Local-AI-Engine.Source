@@ -42,8 +42,6 @@ public static class AgentServiceCollectionExtensions
         _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
         _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
-        _ = services.AddScoped<ILocalAgentChatService, LocalAgentChatService>();
-
         return services;
     }
 }
