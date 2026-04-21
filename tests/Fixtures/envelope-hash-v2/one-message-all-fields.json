@@ -1,0 +1,16 @@
+{
+  "description": "Single user message with all fields populated",
+  "input": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "sortOrder": 1,
+      "role": "user",
+      "epochVersion": 3,
+      "ciphertext": "Y2lwaGVydGV4dA==",
+      "contentIv": "aXY=",
+      "aad": "YWFk"
+    }
+  ],
+  "expectedHash": "590c171df8f08be690bef534a1f224a66df4c4c53ecd7e357dea5755271ee9fc",
+  "canonicalJson": "[{\"id\":\"11111111-1111-1111-1111-111111111111\",\"sortOrder\":1,\"role\":\"user\",\"epochVersion\":3,\"ciphertext\":\"Y2lwaGVydGV4dA==\",\"contentIv\":\"aXY=\",\"aad\":\"YWFk\"}]"
+}

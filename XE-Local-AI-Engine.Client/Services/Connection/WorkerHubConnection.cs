@@ -323,28 +323,103 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                     package.EpochVersion);
 
                 var handler = InvocationAssignedReceived;
+                 if (handler is null)
+                 {
+                     _logger.LogWarning("InvocationAssigned received but no handler subscribed. InvocationId={InvocationId}", package.InvocationId);
+                     return;
+                 }
+
+                 _logger.LogDebug("Dispatching InvocationAssigned to subscribers. InvocationId={InvocationId}", package.InvocationId);
+                 handler.Invoke(this, new InvocationAssignedReceivedEventArgs(package));
+             });
+        connection.On<ToolCallResultEvent>("ToolCallResult",
+            evt =>
+            {
+                _logger.LogInformation(
+                    "ToolCallResult received. RequestId={RequestId} HasError={HasError}",
+                    evt.RequestId,
+                    !string.IsNullOrWhiteSpace(evt.Error));
+
+                var handler = ToolCallResultReceived;
                 if (handler is null)
                 {
-                    _logger.LogWarning("InvocationAssigned received but no handler subscribed. InvocationId={InvocationId}", package.InvocationId);
+                    _logger.LogWarning("ToolCallResult received but no handler subscribed. RequestId={RequestId}", evt.RequestId);
                     return;
                 }
 
-                handler.Invoke(this, new InvocationAssignedReceivedEventArgs(package));
+                _logger.LogDebug("Dispatching ToolCallResult to subscribers. RequestId={RequestId}", evt.RequestId);
+                handler.Invoke(this, new ToolCallResultReceivedEventArgs(evt));
             });
-        connection.On<ToolCallResultEvent>("ToolCallResult",
-            evt => ToolCallResultReceived?.Invoke(this, new ToolCallResultReceivedEventArgs(evt)));
         connection.On<DisconnectRequestedEvent>("DisconnectRequested",
-            evt => DisconnectRequestedReceived?.Invoke(this, new DisconnectRequestedReceivedEventArgs(evt)));
-        connection.On<ApprovalResolvedEvent>("ApprovalResolved",
-            evt => ApprovalResolvedReceived?.Invoke(this, new ApprovalResolvedReceivedEventArgs(evt)));
-        connection.On<InvocationCancelledEvent>("InvocationCancelled",
-            evt => InvocationCancelledReceived?.Invoke(this, new InvocationCancelledReceivedEventArgs(evt)));
-        connection.On<Guid>("ConversationPurged",
-            conversationId => ConversationPurgedReceived?.Invoke(this,
-                new ConversationPurgedReceivedEventArgs(new ConversationPurgedEvent
+            evt =>
+            {
+                _logger.LogInformation("DisconnectRequested received. Reason={Reason}", evt.Reason);
+
+                var handler = DisconnectRequestedReceived;
+                if (handler is null)
                 {
-                    ConversationId = conversationId
-                })));
+                    _logger.LogWarning("DisconnectRequested received but no handler subscribed. Reason={Reason}", evt.Reason);
+                    return;
+                }
+
+                _logger.LogDebug("Dispatching DisconnectRequested to subscribers. Reason={Reason}", evt.Reason);
+                handler.Invoke(this, new DisconnectRequestedReceivedEventArgs(evt));
+            });
+        connection.On<ApprovalResolvedEvent>("ApprovalResolved",
+            evt =>
+            {
+                _logger.LogInformation(
+                    "ApprovalResolved received. RequestId={RequestId} Approved={Approved}",
+                    evt.RequestId,
+                    evt.Approved);
+
+                var handler = ApprovalResolvedReceived;
+                if (handler is null)
+                {
+                    _logger.LogWarning("ApprovalResolved received but no handler subscribed. RequestId={RequestId}", evt.RequestId);
+                    return;
+                }
+
+                _logger.LogDebug("Dispatching ApprovalResolved to subscribers. RequestId={RequestId}", evt.RequestId);
+                handler.Invoke(this, new ApprovalResolvedReceivedEventArgs(evt));
+            });
+        connection.On<InvocationCancelledEvent>("InvocationCancelled",
+            evt =>
+            {
+                _logger.LogInformation(
+                    "InvocationCancelled received. InvocationId={InvocationId} Reason={Reason}",
+                    evt.InvocationId,
+                    evt.Reason);
+
+                var handler = InvocationCancelledReceived;
+                if (handler is null)
+                {
+                    _logger.LogWarning("InvocationCancelled received but no handler subscribed. InvocationId={InvocationId}", evt.InvocationId);
+                    return;
+                }
+
+                _logger.LogDebug("Dispatching InvocationCancelled to subscribers. InvocationId={InvocationId}", evt.InvocationId);
+                handler.Invoke(this, new InvocationCancelledReceivedEventArgs(evt));
+            });
+        connection.On<Guid>("ConversationPurged",
+            conversationId =>
+            {
+                _logger.LogInformation("ConversationPurged received. ConversationId={ConversationId}", conversationId);
+
+                var handler = ConversationPurgedReceived;
+                if (handler is null)
+                {
+                    _logger.LogWarning("ConversationPurged received but no handler subscribed. ConversationId={ConversationId}", conversationId);
+                    return;
+                }
+
+                _logger.LogDebug("Dispatching ConversationPurged to subscribers. ConversationId={ConversationId}", conversationId);
+                handler.Invoke(this,
+                    new ConversationPurgedReceivedEventArgs(new ConversationPurgedEvent
+                    {
+                        ConversationId = conversationId
+                    }));
+            });
     }
 
     private async Task RegisterNodeKeyAsync(CancellationToken cancellationToken = default)

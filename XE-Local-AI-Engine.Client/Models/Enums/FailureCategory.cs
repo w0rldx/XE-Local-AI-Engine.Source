@@ -7,5 +7,6 @@ public enum FailureCategory
     AgentRuntime = 2,
     ProviderUnreachable = 3,
     Unexpected = 4,
-    AgentToolCall = 5
+    AgentToolCall = 5,
+    HashMismatch = 6
 }

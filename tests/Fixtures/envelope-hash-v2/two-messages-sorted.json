@@ -1,0 +1,24 @@
+{
+  "description": "Two messages — hash is identical regardless of input order (sort by sortOrder asc, id asc)",
+  "input": [
+    {
+      "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "sortOrder": 1,
+      "role": "user",
+      "epochVersion": 1,
+      "ciphertext": "Yw==",
+      "contentIv": "aQ==",
+      "aad": "YQ=="
+    },
+    {
+      "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "sortOrder": 2,
+      "role": "assistant",
+      "epochVersion": 1,
+      "ciphertext": "Zg==",
+      "contentIv": "aQ==",
+      "aad": "YQ=="
+    }
+  ],
+  "expectedHash": "672905ce8086793ad24582ba5d35dfd17f06d0e8b986d01998763979e0cbbcc1"
+}
