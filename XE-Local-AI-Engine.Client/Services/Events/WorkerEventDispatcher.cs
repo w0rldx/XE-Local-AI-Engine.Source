@@ -96,13 +96,13 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         catch (InvalidOperationException exception) when (IsConfigHashMismatch(exception))
         {
             _logger.LogWarning(exception, "Config hash mismatch for message {MessageId}.", package.MessageId);
-            await EmitEncryptedFailureAsync(package, "runtime-package-config-hash-mismatch").ConfigureAwait(false);
+            await EmitEncryptedFailureAsync(package, "runtime-package-config-hash-mismatch", FailureCategory.HashMismatch).ConfigureAwait(false);
             return;
         }
         catch (InvalidOperationException exception) when (IsHistoryHashMismatch(exception))
         {
             _logger.LogWarning(exception, "History hash mismatch for message {MessageId}.", package.MessageId);
-            await EmitEncryptedFailureAsync(package, "runtime-package-history-hash-mismatch").ConfigureAwait(false);
+            await EmitEncryptedFailureAsync(package, "runtime-package-history-hash-mismatch", FailureCategory.HashMismatch).ConfigureAwait(false);
             return;
         }
         catch (InvalidOperationException exception)
@@ -182,7 +182,30 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(evt);
 
-        _logger.LogInformation("Received tool call result for request {RequestId}.", evt.RequestId);
+        var currentInvocation = GetCurrentInvocationSnapshot();
+        var matchingPendingToolCall = currentInvocation?.PendingToolCalls.Any(pendingToolCall =>
+            string.Equals(pendingToolCall.RequestId, evt.RequestId, StringComparison.Ordinal)) == true;
+
+        _logger.LogInformation(
+            "Received tool call result. RequestId={RequestId} HasError={HasError} ResultLength={ResultLength} CurrentInvocationId={CurrentInvocationId}",
+            evt.RequestId,
+            !string.IsNullOrWhiteSpace(evt.Error),
+            evt.Result.Length,
+            currentInvocation?.InvocationId);
+
+        if (currentInvocation is null)
+        {
+            _logger.LogWarning("Tool call result arrived with no current invocation tracked. RequestId={RequestId}", evt.RequestId);
+        }
+        else if (!matchingPendingToolCall)
+        {
+            _logger.LogWarning(
+                "Tool call result did not match any pending tool call. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId} PendingToolCallCount={PendingToolCallCount}",
+                evt.RequestId,
+                currentInvocation.InvocationId,
+                currentInvocation.PendingToolCalls.Count);
+        }
+
         _invocationRunner.ResolveToolCallResult(evt);
 
         UpdateCurrentInvocation(state =>
@@ -195,6 +218,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
                 DateTimeOffset.UtcNow);
         });
 
+        _logger.LogDebug("Tool call result processing finished. RequestId={RequestId}", evt.RequestId);
+
         return Task.CompletedTask;
     }
 
@@ -202,7 +227,18 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(evt);
 
-        _logger.LogInformation("Received disconnect request: {Reason}", evt.Reason);
+        var currentInvocation = GetCurrentInvocationSnapshot();
+
+        _logger.LogWarning(
+            "Received disconnect request. Reason={Reason} CurrentInvocationId={CurrentInvocationId}",
+            evt.Reason,
+            currentInvocation?.InvocationId);
+
+        if (currentInvocation is null)
+        {
+            _logger.LogInformation("Disconnect request received while no invocation was active. Reason={Reason}", evt.Reason);
+        }
+
         _invocationRunner.CancelAll();
 
         InvocationState? snapshot = null;
@@ -221,7 +257,12 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
         if (snapshot is not null)
         {
+            _logger.LogInformation("Disconnect request marked invocation as cancelled. InvocationId={InvocationId}", snapshot.InvocationId);
             PublishStateChanged(snapshot);
+        }
+        else
+        {
+            _logger.LogDebug("Disconnect request completed without invocation state changes. Reason={Reason}", evt.Reason);
         }
 
         return Task.CompletedTask;
@@ -231,9 +272,31 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(evt);
 
+        var currentInvocation = GetCurrentInvocationSnapshot();
+
         _logger.LogInformation("Received approval resolution for request {RequestId}. Approved: {Approved}",
             evt.RequestId,
             evt.Approved);
+
+        if (currentInvocation is null)
+        {
+            _logger.LogWarning("Approval resolution arrived with no current invocation tracked. RequestId={RequestId}", evt.RequestId);
+        }
+        else if (currentInvocation.PendingApproval is null)
+        {
+            _logger.LogWarning(
+                "Approval resolution arrived with no pending approval tracked. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId}",
+                evt.RequestId,
+                currentInvocation.InvocationId);
+        }
+        else if (!string.Equals(currentInvocation.PendingApproval.RequestId, evt.RequestId, StringComparison.Ordinal))
+        {
+            _logger.LogWarning(
+                "Approval resolution request id did not match pending approval. RequestId={RequestId} PendingRequestId={PendingRequestId} CurrentInvocationId={CurrentInvocationId}",
+                evt.RequestId,
+                currentInvocation.PendingApproval.RequestId,
+                currentInvocation.InvocationId);
+        }
 
         UpdateCurrentInvocation(state =>
         {
@@ -246,12 +309,22 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             state.LastApprovalResolution = new InvocationApprovalResolutionState(evt.RequestId, evt.Approved, DateTimeOffset.UtcNow);
         });
 
+        _logger.LogDebug("Approval resolution processing finished. RequestId={RequestId}", evt.RequestId);
+
         return Task.CompletedTask;
     }
 
     public Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt)
     {
         ArgumentNullException.ThrowIfNull(evt);
+
+        var currentInvocation = GetCurrentInvocationSnapshot();
+
+        _logger.LogInformation(
+            "Received invocation cancellation. InvocationId={InvocationId} Reason={Reason} CurrentInvocationId={CurrentInvocationId}",
+            evt.InvocationId,
+            evt.Reason,
+            currentInvocation?.InvocationId);
 
         _invocationRunner.Cancel(evt.InvocationId);
 
@@ -261,8 +334,9 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         {
             if (CurrentInvocation?.InvocationId != evt.InvocationId)
             {
-                _logger.LogDebug("Ignoring cancellation for {InvocationId} because it does not match the current invocation.",
-                    evt.InvocationId);
+                _logger.LogDebug("Ignoring cancellation for {InvocationId} because it does not match the current invocation {CurrentInvocationId}.",
+                    evt.InvocationId,
+                    CurrentInvocation?.InvocationId);
 
                 return Task.CompletedTask;
             }
@@ -409,14 +483,14 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         await _hubMessageSender.Value.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed).ConfigureAwait(false);
     }
 
-    private async Task EmitEncryptedFailureAsync(EncryptedRuntimePackageDto package, string error)
+    private async Task EmitEncryptedFailureAsync(EncryptedRuntimePackageDto package, string error, FailureCategory failureCategory = FailureCategory.AgentRuntime)
     {
         await _hubMessageSender.Value.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
         {
             ConversationId = package.ConversationId,
             MessageId = package.MessageId,
             EpochVersion = package.EpochVersion,
-            FailureCategory = nameof(FailureCategory.AgentRuntime),
+            FailureCategory = failureCategory.ToString(),
             Error = error
         }).ConfigureAwait(false);
     }
@@ -440,6 +514,12 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         var package = context.Package;
 
+        _logger.LogInformation(
+            "Starting invocation execution. InvocationId={InvocationId} ConversationId={ConversationId} Model={Model}",
+            package.InvocationId,
+            package.ConversationId,
+            package.ModelProfile);
+
         UpdateInvocation(package.InvocationId,
                 static state =>
                 {
@@ -462,6 +542,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
                     return state;
                 });
+
+            _logger.LogInformation("Invocation execution completed successfully. InvocationId={InvocationId}", package.InvocationId);
         }
         catch (Exception exception)
         {
@@ -476,6 +558,14 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
                     state.CompletedAt = DateTimeOffset.UtcNow;
                     return state;
                 });
+        }
+    }
+
+    private InvocationState? GetCurrentInvocationSnapshot()
+    {
+        lock (_syncRoot)
+        {
+            return CurrentInvocation is null ? null : Clone(CurrentInvocation);
         }
     }
 

@@ -57,7 +57,7 @@ public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAss
 
     private static void VerifyConversationContextHash(EncryptedRuntimePackageDto package)
     {
-        var computedHash = RuntimePackageHistoryHash.Compute(package.ConversationContext);
+        var computedHash = RuntimePackageHistoryHash.Compute(package.ConversationContext, package.HashAlgorithmVersion);
         if (string.Equals(computedHash, package.ConversationContextHash, StringComparison.Ordinal))
         {
             return;

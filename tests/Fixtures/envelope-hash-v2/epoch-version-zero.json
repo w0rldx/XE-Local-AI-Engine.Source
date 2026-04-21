@@ -1,0 +1,16 @@
+{
+  "description": "Single assistant message with epochVersion=0 (emitted as number 0, not null)",
+  "input": [
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "sortOrder": 0,
+      "role": "assistant",
+      "epochVersion": 0,
+      "ciphertext": "Y2lwaGVydGV4dA==",
+      "contentIv": "aXY=",
+      "aad": "YWFk"
+    }
+  ],
+  "expectedHash": "bea716b80f646f05de320d61207bda21df1710a0403c6ac46687ecb9a7064c21",
+  "canonicalJson": "[{\"id\":\"22222222-2222-2222-2222-222222222222\",\"sortOrder\":0,\"role\":\"assistant\",\"epochVersion\":0,\"ciphertext\":\"Y2lwaGVydGV4dA==\",\"contentIv\":\"aXY=\",\"aad\":\"YWFk\"}]"
+}
