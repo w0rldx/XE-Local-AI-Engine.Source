@@ -1,6 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using NSubstitute;
 using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Models;
@@ -14,6 +18,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class RuntimePackageEnvelopeAssemblerTests
 {
+    private static readonly JsonSerializerOptions PascalCaseRoleSerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        Encoder = JavaScriptEncoder.Default,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     [Test]
     public void Assemble_WhenConfigHashMatches_BuildsInvocationExecutionContext()
     {
@@ -113,6 +126,54 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
     }
 
     [Test]
+    public void Assemble_WhenMultiMessageHistoryHashMatches_DecryptsAllHistoryEntriesInCanonicalOrder()
+    {
+        using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
+        var laterEntry = CreateHistoryEntry(sortOrder: 20, role: MessageRole.Assistant);
+        var earlierEntry = CreateHistoryEntry(sortOrder: 10, role: MessageRole.User);
+        var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
+        nodeKeyRegistry.ResolveGraceEligible().Returns([
+            new NodeKeyResolution
+            {
+                RequestedKeyId = "active-key",
+                Status = NodeKeyLookupStatus.Active,
+                KeyIdUsed = "active-key",
+                PrivateKey = nodePrivateKey,
+                PublicKey = nodePrivateKey.PublicKey
+            }
+        ]);
+
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [laterEntry, earlierEntry]);
+        var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
+        envelopeCryptoService.DecryptConversationMessage(package.ConversationId, earlierEntry, nodePrivateKey)
+            .Returns(_ => new EnvelopeDecryptionResult("first user turn"u8.ToArray(), new byte[32]));
+        envelopeCryptoService.DecryptConversationMessage(package.ConversationId, laterEntry, nodePrivateKey)
+            .Returns(_ => new EnvelopeDecryptionResult("assistant reply"u8.ToArray(), new byte[32]));
+        envelopeCryptoService.DecryptRuntimePackage(package, nodePrivateKey)
+            .Returns(_ => new EnvelopeDecryptionResult("latest user turn"u8.ToArray(), new byte[32]));
+
+        var validator = Substitute.For<IRuntimePackageValidator>();
+        validator.Validate(Arg.Any<RuntimePackage>()).Returns(RuntimePackageValidationResult.Success);
+
+        var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
+        using var context = assembler.Assemble(package);
+
+        AssertEx.Equal(3, context.Package.ConversationContext.Count);
+        AssertEx.Equal(earlierEntry.Id, context.Package.ConversationContext[0].Id);
+        AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[0].Role);
+        AssertEx.Equal("first user turn", context.Package.ConversationContext[0].Content);
+        AssertEx.Equal(10, context.Package.ConversationContext[0].SortOrder);
+        AssertEx.Equal(laterEntry.Id, context.Package.ConversationContext[1].Id);
+        AssertEx.Equal(MessageRole.Assistant, context.Package.ConversationContext[1].Role);
+        AssertEx.Equal("assistant reply", context.Package.ConversationContext[1].Content);
+        AssertEx.Equal(20, context.Package.ConversationContext[1].SortOrder);
+        AssertEx.Equal(package.MessageId, context.Package.ConversationContext[2].Id);
+        AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[2].Role);
+        AssertEx.Equal("latest user turn", context.Package.ConversationContext[2].Content);
+        AssertEx.Equal(21, context.Package.ConversationContext[2].SortOrder);
+    }
+
+    [Test]
     public void Assemble_WhenHistoryEntryUsesDifferentEpoch_DecryptsCrossEpochHistory()
     {
         using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
@@ -175,6 +236,41 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => assembler.Assemble(CreatePackage(includeValidConfigHash: true, includeValidHistoryHash: false))));
 
         AssertEx.Equal("runtime-package-history-hash-mismatch", exception.Message);
+        envelopeCryptoService.DidNotReceive().DecryptRuntimePackage(Arg.Any<EncryptedRuntimePackageDto>(), Arg.Any<Key>());
+        validator.DidNotReceive().Validate(Arg.Any<RuntimePackage>());
+    }
+
+    [Test]
+    public async Task Assemble_WhenHistoryHashWasComputedWithPascalCaseRoleNames_ThrowsAndDoesNotDecrypt()
+    {
+        using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
+        var firstHistoryEntry = CreateHistoryEntry(sortOrder: 10, role: MessageRole.User);
+        var secondHistoryEntry = CreateHistoryEntry(sortOrder: 20, role: MessageRole.Assistant);
+        var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
+        nodeKeyRegistry.ResolveGraceEligible().Returns([
+            new NodeKeyResolution
+            {
+                RequestedKeyId = "active-key",
+                Status = NodeKeyLookupStatus.Active,
+                KeyIdUsed = "active-key",
+                PrivateKey = nodePrivateKey,
+                PublicKey = nodePrivateKey.PublicKey
+            }
+        ]);
+
+        var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
+        var validator = Substitute.For<IRuntimePackageValidator>();
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [firstHistoryEntry, secondHistoryEntry]);
+        package = package with
+        {
+            ConversationContextHash = ComputeHistoryHashWithPascalCaseRoleNames(package.ConversationContext)
+        };
+        var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
+
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => assembler.Assemble(package)));
+
+        AssertEx.Equal("runtime-package-history-hash-mismatch", exception.Message);
+        envelopeCryptoService.DidNotReceive().DecryptConversationMessage(Arg.Any<Guid>(), Arg.Any<EncryptedConversationMessageDto>(), Arg.Any<Key>());
         envelopeCryptoService.DidNotReceive().DecryptRuntimePackage(Arg.Any<EncryptedRuntimePackageDto>(), Arg.Any<Key>());
         validator.DidNotReceive().Validate(Arg.Any<RuntimePackage>());
     }
@@ -261,12 +357,12 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         };
     }
 
-    private static EncryptedConversationMessageDto CreateHistoryEntry(int sortOrder, int epochVersion = 7)
+    private static EncryptedConversationMessageDto CreateHistoryEntry(int sortOrder, MessageRole role = MessageRole.Assistant, int epochVersion = 7)
     {
         return new EncryptedConversationMessageDto
         {
             Id = Guid.NewGuid(),
-            Role = MessageRole.Assistant,
+            Role = role,
             SortOrder = sortOrder,
             EpochVersion = epochVersion,
             Aad = "message|history-placeholder",
@@ -275,5 +371,17 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
             Ciphertext = new byte[] { 7, 8, 9 },
             ContentIv = new byte[] { 10, 11, 12 }
         };
+    }
+
+    private static string ComputeHistoryHashWithPascalCaseRoleNames(IReadOnlyList<EncryptedConversationMessageDto> conversationContext)
+    {
+        var orderedEntries = conversationContext
+            .OrderBy(static entry => entry.SortOrder)
+            .ThenBy(static entry => entry.Id.ToString("D"), StringComparer.Ordinal)
+            .ToList();
+
+        var canonicalJson = JsonSerializer.Serialize(orderedEntries, PascalCaseRoleSerializerOptions);
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
     }
 }

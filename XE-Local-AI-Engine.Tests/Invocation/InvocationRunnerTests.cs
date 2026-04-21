@@ -14,8 +14,10 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -46,6 +48,40 @@ public sealed class InvocationRunnerTests
 
         AssertEx.True(sender.SentEncryptedChunks.Count >= 1);
         AssertEx.True(sender.SentEncryptedChunks.All(chunk => chunk.MessageId != Guid.Empty));
+    }
+
+    [Test]
+    public async Task RunAsync_ValidPackage_ReportsChunksAndCompletionToDispatcher()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var package = RuntimePackageBuilder.Valid().Build();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenLoopbackInvocation_SkipsHubMessagesAndStillReportsDispatcherProgress()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var package = RuntimePackageBuilder.Valid()
+                                         .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
+                                         .Build();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
+
+        await RunAsync(runner, package);
+
+        AssertEx.Empty(sender.AcceptedInvocations);
+        AssertEx.Empty(sender.SentEncryptedChunks);
+        AssertEx.Empty(sender.SentEncryptedCompletions);
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
     }
 
     [Test]
@@ -82,11 +118,12 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_AgentRuntimeThrows_SendsInvocationFailed()
     {
         var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new NotSupportedException("factory failed")));
 
-        var runner = CreateRunner(sender, factory);
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -94,6 +131,9 @@ public sealed class InvocationRunnerTests
         AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId
                                                                  && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
                                                                  && failure.Error.Contains("Agent runtime error", StringComparison.Ordinal));
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Is<string>(message => message.Contains("Agent runtime error", StringComparison.Ordinal)),
+            FailureCategory.AgentRuntime);
     }
 
     [Test]
@@ -305,7 +345,8 @@ public sealed class InvocationRunnerTests
     public async Task ExecuteApiToolCallAsync_WhenResultResolved_ReturnsResult()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
         var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
@@ -318,6 +359,10 @@ public sealed class InvocationRunnerTests
             Result = "done"
         });
 
+        await dispatcher.Received(1).ReportToolCallRequestedAsync(Arg.Is<ToolCallRequestPayload>(payload => payload.InvocationId == invocationId
+            && payload.RequestId == requestId
+            && payload.ToolName == "test-tool"
+            && payload.Parameters == "{}"));
         AssertEx.Equal("done", await task);
     }
 
@@ -429,6 +474,7 @@ public sealed class InvocationRunnerTests
         IRuntimePackageValidator? validator = null,
         ICapabilityReporter? capabilityReporter = null,
         WorkerNodeOptions? workerOptions = null,
+        IWorkerEventDispatcher? eventDispatcher = null,
         IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null)
     {
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -441,6 +487,7 @@ public sealed class InvocationRunnerTests
 
         var resolvedCapabilityReporter = capabilityReporter ?? Substitute.For<ICapabilityReporter>();
         resolvedCapabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+        var resolvedEventDispatcher = eventDispatcher ?? Substitute.For<IWorkerEventDispatcher>();
 
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -450,6 +497,7 @@ public sealed class InvocationRunnerTests
                             .Build();
 
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
+            new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
             new EnvelopeCryptoService(),
             resolvedValidator,

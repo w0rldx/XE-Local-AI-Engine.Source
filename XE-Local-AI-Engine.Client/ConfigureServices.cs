@@ -85,6 +85,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IPairingService, PairingService>();
         builder.Services.AddSingleton<ConnectionState>();
         builder.Services.AddSingleton(sp => new Lazy<IHubMessageSender>(() => sp.GetRequiredService<IHubMessageSender>()));
+        builder.Services.AddSingleton(sp => new Lazy<IWorkerEventDispatcher>(() => sp.GetRequiredService<IWorkerEventDispatcher>()));
         builder.Services.AddSingleton<ModelNameValidator>();
         builder.Services.AddSingleton<IRuntimePackageValidator, RuntimePackageValidator>();
         builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
@@ -100,6 +101,8 @@ public static class ConfigureServices
         builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
+        builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
+        builder.Services.AddScoped<ILocalChatInvocationService, LocalChatInvocationService>();
         builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
         builder.Services.AddSingleton<WorkerHubConnection>(sp =>
         {

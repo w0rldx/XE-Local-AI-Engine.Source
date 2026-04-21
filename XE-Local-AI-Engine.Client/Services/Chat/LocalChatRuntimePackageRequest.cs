@@ -1,0 +1,16 @@
+namespace XE_Local_AI_Engine.Client.Services.Chat;
+
+using XE_Local_AI_Engine.Client.Models;
+
+public sealed record LocalChatRuntimePackageRequest(
+    Guid InvocationId,
+    Guid ConversationId,
+    string ResolvedSystemPrompt,
+    IReadOnlyList<ConversationMessageDto> ConversationContext,
+    string? ModelProfile,
+    int AgentDefinitionVersion,
+    Guid? ClientNodeId = null,
+    IReadOnlyList<AllowedToolDto>? AllowedTools = null,
+    IReadOnlyDictionary<string, object>? ToolPolicies = null,
+    IReadOnlyList<string>? RequestedCapabilities = null,
+    TimeoutSettings? Timeouts = null);

@@ -105,9 +105,20 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             await EmitEncryptedFailureAsync(package, "runtime-package-history-hash-mismatch").ConfigureAwait(false);
             return;
         }
+        catch (InvalidOperationException exception)
+        {
+            _logger.LogError(exception, "Assemble runtime package failed with unhandled exception. InvocationId={InvocationId}", package.InvocationId);
+            await _hubMessageSender.Value.SendInvocationFailedAsync(new InvocationFailedPayload
+            {
+                InvocationId = package.InvocationId,
+                Error = "runtime-package-assemble-failed",
+                FailureCategory = nameof(FailureCategory.AgentRuntime)
+            }).ConfigureAwait(false);
+            return;
+        }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Assemble runtime package failed. InvocationId={InvocationId}", package.InvocationId);
+            _logger.LogError(exception, "Assemble runtime package failed with unexpected exception. InvocationId={InvocationId}", package.InvocationId);
             throw;
         }
 
@@ -133,6 +144,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
                 ConversationId = runtimePackage.ConversationId,
                 Status = InvocationStatus.Assigned,
                 StartedAt = DateTimeOffset.UtcNow,
+                LastUpdatedAt = DateTimeOffset.UtcNow,
                 ModelUsed = runtimePackage.ModelProfile
             };
 
@@ -145,12 +157,44 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         await RunInvocationAsync(context).ConfigureAwait(false);
     }
 
+    public Task ReportInvocationAssignedAsync(RuntimePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        InvocationState snapshot;
+
+        lock (_syncRoot)
+        {
+            if (IsInvocationActive(CurrentInvocation))
+            {
+                throw new InvalidOperationException($"Cannot assign local invocation {package.InvocationId} while invocation {CurrentInvocation!.InvocationId} is still active.");
+            }
+
+            CurrentInvocation = CreateInvocationState(package);
+            snapshot = Clone(CurrentInvocation);
+        }
+
+        PublishStateChanged(snapshot);
+        return Task.CompletedTask;
+    }
+
     public Task DispatchToolCallResultAsync(ToolCallResultEvent evt)
     {
         ArgumentNullException.ThrowIfNull(evt);
 
         _logger.LogInformation("Received tool call result for request {RequestId}.", evt.RequestId);
         _invocationRunner.ResolveToolCallResult(evt);
+
+        UpdateCurrentInvocation(state =>
+        {
+            state.PendingToolCalls = [.. state.PendingToolCalls.Where(pendingToolCall => !string.Equals(pendingToolCall.RequestId, evt.RequestId, StringComparison.Ordinal))];
+            state.LastToolCallResult = new InvocationToolCallResultState(evt.RequestId,
+                string.IsNullOrWhiteSpace(evt.Error),
+                evt.Result,
+                evt.Error,
+                DateTimeOffset.UtcNow);
+        });
+
         return Task.CompletedTask;
     }
 
@@ -169,6 +213,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             {
                 CurrentInvocation!.Status = InvocationStatus.Cancelled;
                 CurrentInvocation.Error = evt.Reason;
+                CurrentInvocation.FailureCategory = FailureCategory.Cancelled;
+                CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
                 snapshot = Clone(CurrentInvocation);
             }
         }
@@ -188,6 +234,17 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         _logger.LogInformation("Received approval resolution for request {RequestId}. Approved: {Approved}",
             evt.RequestId,
             evt.Approved);
+
+        UpdateCurrentInvocation(state =>
+        {
+            if (state.PendingApproval is not null
+                && string.Equals(state.PendingApproval.RequestId, evt.RequestId, StringComparison.Ordinal))
+            {
+                state.PendingApproval = null;
+            }
+
+            state.LastApprovalResolution = new InvocationApprovalResolutionState(evt.RequestId, evt.Approved, DateTimeOffset.UtcNow);
+        });
 
         return Task.CompletedTask;
     }
@@ -212,11 +269,92 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
             CurrentInvocation.Status = InvocationStatus.Cancelled;
             CurrentInvocation.Error = evt.Reason;
+            CurrentInvocation.FailureCategory = FailureCategory.Cancelled;
+            CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
             snapshot = Clone(CurrentInvocation);
         }
 
         _logger.LogInformation("Invocation {InvocationId} marked as cancelled.", evt.InvocationId);
         PublishStateChanged(snapshot);
+        return Task.CompletedTask;
+    }
+
+    public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(chunk);
+
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.Status = InvocationStatus.Running;
+                state.StreamedContent = string.Concat(state.StreamedContent, chunk);
+                state.StreamedChunkCount++;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportInvocationCompletedAsync(Guid invocationId)
+    {
+        UpdateInvocation(invocationId,
+            static state =>
+            {
+                state.Status = InvocationStatus.Completed;
+                state.CompletedAt = DateTimeOffset.UtcNow;
+                state.PendingApproval = null;
+                state.PendingToolCalls = [];
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);
+
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.Status = failureCategory == FailureCategory.Cancelled ? InvocationStatus.Cancelled : InvocationStatus.Failed;
+                state.Error = failureMessage;
+                state.FailureCategory = failureCategory;
+                state.CompletedAt = DateTimeOffset.UtcNow;
+                state.PendingApproval = null;
+                state.PendingToolCalls = [];
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        UpdateInvocation(payload.InvocationId,
+            state =>
+            {
+                state.PendingToolCalls = [.. state.PendingToolCalls,
+                    new InvocationToolCallState(payload.RequestId, payload.ToolName, payload.Parameters, DateTimeOffset.UtcNow)];
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        UpdateInvocation(payload.InvocationId,
+            state =>
+            {
+                state.PendingApproval = new InvocationApprovalState(payload.RequestId, payload.Description, DateTimeOffset.UtcNow);
+                return state;
+            });
+
         return Task.CompletedTask;
     }
 
@@ -228,9 +366,32 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             ConversationId = state.ConversationId,
             Status = state.Status,
             StreamedContent = state.StreamedContent,
+            StreamedChunkCount = state.StreamedChunkCount,
             StartedAt = state.StartedAt,
+            LastUpdatedAt = state.LastUpdatedAt,
+            CompletedAt = state.CompletedAt,
             Error = state.Error,
-            ModelUsed = state.ModelUsed
+            FailureCategory = state.FailureCategory,
+            ModelUsed = state.ModelUsed,
+            PendingApproval = state.PendingApproval,
+            LastApprovalResolution = state.LastApprovalResolution,
+            PendingToolCalls = [.. state.PendingToolCalls],
+            LastToolCallResult = state.LastToolCallResult
+        };
+    }
+
+    private static InvocationState CreateInvocationState(RuntimePackage runtimePackage)
+    {
+        ArgumentNullException.ThrowIfNull(runtimePackage);
+
+        return new InvocationState
+        {
+            InvocationId = runtimePackage.InvocationId,
+            ConversationId = runtimePackage.ConversationId,
+            Status = InvocationStatus.Assigned,
+            StartedAt = DateTimeOffset.UtcNow,
+            LastUpdatedAt = DateTimeOffset.UtcNow,
+            ModelUsed = runtimePackage.ModelProfile
         };
     }
 
@@ -280,10 +441,10 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         var package = context.Package;
 
         UpdateInvocation(package.InvocationId,
-            static state =>
-            {
-                state.Status = InvocationStatus.Running;
-                return state;
+                static state =>
+                {
+                    state.Status = InvocationStatus.Running;
+                    return state;
             });
 
         try
@@ -296,6 +457,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
                     if (state.Status is InvocationStatus.Assigned or InvocationStatus.Running)
                     {
                         state.Status = InvocationStatus.Completed;
+                        state.CompletedAt = DateTimeOffset.UtcNow;
                     }
 
                     return state;
@@ -310,8 +472,34 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
                 {
                     state.Status = InvocationStatus.Failed;
                     state.Error = exception.Message;
+                    state.FailureCategory = FailureCategory.Unexpected;
+                    state.CompletedAt = DateTimeOffset.UtcNow;
                     return state;
                 });
+        }
+    }
+
+    private void UpdateCurrentInvocation(Action<InvocationState> update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        InvocationState? snapshot = null;
+
+        lock (_syncRoot)
+        {
+            if (CurrentInvocation is null)
+            {
+                return;
+            }
+
+            update(CurrentInvocation);
+            CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
+            snapshot = Clone(CurrentInvocation);
+        }
+
+        if (snapshot is not null)
+        {
+            PublishStateChanged(snapshot);
         }
     }
 
@@ -329,6 +517,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             }
 
             CurrentInvocation = update(CurrentInvocation);
+            CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
             snapshot = Clone(CurrentInvocation);
         }
 

@@ -1,12 +1,14 @@
 @page "/chat"
 @rendermode @(new InteractiveServerRenderMode(false))
-@using XE_Local_AI_Engine.AI.Agent.Chat
+@using XE_Local_AI_Engine.Client.Models.Enums
 @using XE_Local_AI_Engine.Client.Services.Chat
+@using XE_Local_AI_Engine.Client.Services.Events
 @implements IAsyncDisposable
 
-@inject ILocalAgentChatService ChatService
+@inject ILocalChatInvocationService ChatService
 @inject IOllamaModelService ModelService
 @inject IDialogService DialogService
+@inject IWorkerEventDispatcher WorkerEventDispatcher
 
 <PageTitle>Local Chat</PageTitle>
 
@@ -121,14 +123,18 @@
 </MudContainer>
 
 @code {
+    private const string EmptyAssistantResponseFallback = "The model completed without returning visible text. Please try again or choose a different model.";
+
     private readonly List<ChatBubble> _messages = new();
     private string _userInput = "";
+    private Guid _conversationId;
     private bool _isStreaming;
     private bool _isOllamaAvailable;
     private string _selectedModel = "";
     private List<string> _availableModels = new();
     private CancellationTokenSource? _cts;
     private ElementReference _chatBottom;
+    private ChatBubble? _streamingAssistantBubble;
 
     private sealed class ChatBubble
     {
@@ -139,12 +145,16 @@
 
     protected override async Task OnInitializedAsync()
     {
+        WorkerEventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+
+        var snapshot = await ChatService.GetSnapshotAsync();
+        _conversationId = snapshot.ConversationId;
         _isOllamaAvailable = await ModelService.IsAvailableAsync();
         if (_isOllamaAvailable)
         {
             var models = await ModelService.ListLocalModelsAsync();
             _availableModels = models.Select(m => m.Name).ToList();
-            _selectedModel = ChatService.SelectedModel;
+            _selectedModel = snapshot.SelectedModel;
             if (!_availableModels.Contains(_selectedModel) && _availableModels.Count > 0)
             {
                 _selectedModel = _availableModels[0];
@@ -178,6 +188,7 @@
 
         var assistantBubble = new ChatBubble { Role = "assistant", Content = "", IsStreaming = true };
         _messages.Add(assistantBubble);
+        _streamingAssistantBubble = assistantBubble;
 
         _isStreaming = true;
         _cts = new CancellationTokenSource();
@@ -185,15 +196,13 @@
 
         try
         {
-            await foreach (var token in ChatService.SendMessageAsync(userMsg, _cts.Token))
-            {
-                assistantBubble.Content = string.Concat(assistantBubble.Content, token);
-                StateHasChanged();
-            }
+            await ChatService.SendMessageAsync(userMsg, _cts.Token);
         }
         catch (OperationCanceledException)
         {
-            assistantBubble.Content += " [cancelled]";
+            assistantBubble.Content = string.IsNullOrWhiteSpace(assistantBubble.Content)
+                ? "[cancelled]"
+                : string.Concat(assistantBubble.Content, " [cancelled]");
         }
         catch (Exception ex)
         {
@@ -202,6 +211,12 @@
         finally
         {
             assistantBubble.IsStreaming = false;
+            if (string.IsNullOrWhiteSpace(assistantBubble.Content))
+            {
+                assistantBubble.Content = EmptyAssistantResponseFallback;
+            }
+
+            _streamingAssistantBubble = null;
             _isStreaming = false;
             _cts?.Dispose();
             _cts = null;
@@ -235,7 +250,8 @@
     private async Task ClearChat()
     {
         _messages.Clear();
-        await ChatService.ResetSessionAsync();
+        await ChatService.ResetConversationAsync();
+        _conversationId = ChatService.ConversationId;
     }
 
     private void CancelStreaming()
@@ -243,8 +259,50 @@
         _cts?.Cancel();
     }
 
+    private void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs eventArgs)
+    {
+        _ = sender;
+
+        if (_streamingAssistantBubble is null || eventArgs.State.ConversationId != _conversationId)
+        {
+            return;
+        }
+
+        switch (eventArgs.State.Status)
+        {
+            case InvocationStatus.Assigned:
+            case InvocationStatus.Running:
+                _streamingAssistantBubble.Content = eventArgs.State.StreamedContent;
+                _streamingAssistantBubble.IsStreaming = true;
+                break;
+            case InvocationStatus.Completed:
+                _streamingAssistantBubble.Content = string.IsNullOrWhiteSpace(eventArgs.State.StreamedContent)
+                    ? EmptyAssistantResponseFallback
+                    : eventArgs.State.StreamedContent;
+                _streamingAssistantBubble.IsStreaming = false;
+                break;
+            case InvocationStatus.Failed:
+                _streamingAssistantBubble.Content = $"Error: {eventArgs.State.Error ?? "Invocation failed."}";
+                _streamingAssistantBubble.IsStreaming = false;
+                break;
+            case InvocationStatus.Cancelled:
+                _streamingAssistantBubble.Content = string.IsNullOrWhiteSpace(eventArgs.State.StreamedContent)
+                    ? "[cancelled]"
+                    : string.Concat(eventArgs.State.StreamedContent, " [cancelled]");
+                _streamingAssistantBubble.IsStreaming = false;
+                break;
+        }
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (WorkerEventDispatcher is not null)
+        {
+            WorkerEventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+        }
+
         if (_cts is not null)
         {
             await _cts.CancelAsync();

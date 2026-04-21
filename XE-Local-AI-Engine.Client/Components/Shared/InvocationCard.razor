@@ -1,5 +1,6 @@
 @using XE_Local_AI_Engine.Client.Models.Enums
 @using XE_Local_AI_Engine.Client.Services.Events
+
 <MudCard Class="mb-4">
     <MudCardHeader>
         <CardHeaderContent>
@@ -26,12 +27,70 @@
                 <td><strong>Model</strong></td>
                 <td>@(State.ModelUsed ?? "Unknown")</td>
             </tr>
+            <tr>
+                <td><strong>Last update</strong></td>
+                <td>@FormatTimestamp(State.LastUpdatedAt)</td>
+            </tr>
+            <tr>
+                <td><strong>Completed</strong></td>
+                <td>@FormatTimestamp(State.CompletedAt)</td>
+            </tr>
+            <tr>
+                <td><strong>Chunks streamed</strong></td>
+                <td>@State.StreamedChunkCount</td>
+            </tr>
+            @if (State.FailureCategory is not null)
+            {
+                <tr>
+                    <td><strong>Failure category</strong></td>
+                    <td>@State.FailureCategory</td>
+                </tr>
+            }
             </tbody>
         </MudSimpleTable>
 
         @if (!string.IsNullOrWhiteSpace(State.Error))
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@State.Error</MudAlert>
+        }
+
+        @if (State.PendingApproval is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                Approval pending since @FormatTimestamp(State.PendingApproval.RequestedAt): @State.PendingApproval.Description
+            </MudAlert>
+        }
+
+        @if (State.LastApprovalResolution is not null)
+        {
+            <MudAlert Severity="@(State.LastApprovalResolution.Approved ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2">
+                Approval request @State.LastApprovalResolution.RequestId was @(State.LastApprovalResolution.Approved ? "approved" : "rejected") at @FormatTimestamp(State.LastApprovalResolution.ResolvedAt).
+            </MudAlert>
+        }
+
+        @if (State.PendingToolCalls.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-2">Pending tool calls</MudText>
+            <MudStack Spacing="1">
+                @foreach (var pendingToolCall in State.PendingToolCalls)
+                {
+                    <MudPaper Class="pa-2" Outlined="true" Elevation="0">
+                        <MudText Typo="Typo.body2"><strong>@pendingToolCall.ToolName</strong> · @pendingToolCall.RequestId</MudText>
+                        <MudText Typo="Typo.caption">Requested @FormatTimestamp(pendingToolCall.RequestedAt)</MudText>
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+
+        @if (State.LastToolCallResult is not null)
+        {
+            <MudAlert Severity="@(State.LastToolCallResult.Succeeded ? Severity.Success : Severity.Error)" Dense="true" Class="mt-2">
+                Tool call @State.LastToolCallResult.RequestId @(State.LastToolCallResult.Succeeded ? "completed" : "failed") at @FormatTimestamp(State.LastToolCallResult.ResolvedAt).
+                @if (!string.IsNullOrWhiteSpace(State.LastToolCallResult.Error))
+                {
+                    <span> @State.LastToolCallResult.Error</span>
+                }
+            </MudAlert>
         }
 
         @if (!string.IsNullOrWhiteSpace(State.StreamedContent))
@@ -68,6 +127,11 @@
             InvocationStatus.Failed or InvocationStatus.Cancelled => Color.Error,
             _ => Color.Default
         };
+    }
+
+    private static string FormatTimestamp(DateTimeOffset? value)
+    {
+        return value?.ToLocalTime().ToString("g") ?? "—";
     }
 
 }
