@@ -2,25 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
 
 using System.Buffers;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
 public static class RuntimePackageHistoryHash
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false,
-        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
-        Encoder = JavaScriptEncoder.Default,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
-
-    public static string Compute(IReadOnlyList<EncryptedConversationMessageDto> conversationContext, int hashAlgorithmVersion = 1)
+    public static string Compute(IReadOnlyList<EncryptedConversationMessageDto> conversationContext)
     {
         ArgumentNullException.ThrowIfNull(conversationContext);
 
@@ -29,24 +18,7 @@ public static class RuntimePackageHistoryHash
             .ThenBy(static entry => entry.Id.ToString("D"), StringComparer.Ordinal)
             .ToList();
 
-        return hashAlgorithmVersion switch
-        {
-            1 => ComputeV1(orderedEntries),
-            2 => ComputeV2(orderedEntries),
-            _ => throw new ArgumentOutOfRangeException(nameof(hashAlgorithmVersion), hashAlgorithmVersion, "Unsupported hash algorithm version.")
-        };
-    }
-
-    public static string SerializeCanonicalJson(IReadOnlyList<EncryptedConversationMessageDto> conversationContext)
-    {
-        ArgumentNullException.ThrowIfNull(conversationContext);
-
-        var orderedEntries = conversationContext
-            .OrderBy(static entry => entry.SortOrder)
-            .ThenBy(static entry => entry.Id.ToString("D"), StringComparer.Ordinal)
-            .ToList();
-
-        return JsonSerializer.Serialize(orderedEntries, SerializerOptions);
+        return ComputeCanonical(orderedEntries);
     }
 
     public static string BuildExpectedAad(Guid conversationId, Guid messageId, int epochVersion)
@@ -54,13 +26,7 @@ public static class RuntimePackageHistoryHash
         return $"message|{conversationId:D}|{messageId:D}|{epochVersion}";
     }
 
-    private static string ComputeV1(List<EncryptedConversationMessageDto> orderedEntries)
-    {
-        var canonicalJson = JsonSerializer.Serialize(orderedEntries, SerializerOptions);
-        return FormatLowercaseHex(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
-    }
-
-    private static string ComputeV2(List<EncryptedConversationMessageDto> orderedEntries)
+    private static string ComputeCanonical(List<EncryptedConversationMessageDto> orderedEntries)
     {
         var bufferWriter = new ArrayBufferWriter<byte>(4096);
         using var writer = new Utf8JsonWriter(bufferWriter, new JsonWriterOptions
@@ -73,7 +39,7 @@ public static class RuntimePackageHistoryHash
         writer.WriteStartArray();
         foreach (var entry in orderedEntries)
         {
-            WriteEntryV2(writer, entry);
+            WriteEntry(writer, entry);
         }
         writer.WriteEndArray();
         writer.Flush();
@@ -81,7 +47,7 @@ public static class RuntimePackageHistoryHash
         return FormatLowercaseHex(SHA256.HashData(bufferWriter.WrittenSpan));
     }
 
-    private static void WriteEntryV2(Utf8JsonWriter writer, EncryptedConversationMessageDto entry)
+    private static void WriteEntry(Utf8JsonWriter writer, EncryptedConversationMessageDto entry)
     {
         var ciphertextB64 = Convert.ToBase64String(entry.Ciphertext.Span);
         var contentIvB64 = Convert.ToBase64String(entry.ContentIv.Span);

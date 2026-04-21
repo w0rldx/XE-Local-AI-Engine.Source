@@ -65,6 +65,22 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         var messageId = Guid.NewGuid();
         const int epochVersion = 7;
 
+        var conversationContext = new List<EncryptedConversationMessageDto>
+        {
+            new()
+            {
+                Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                Role = MessageRole.User,
+                SortOrder = 10,
+                EpochVersion = epochVersion,
+                Aad = $"message|{conversationId:D}|11111111-1111-1111-1111-111111111111|{epochVersion}",
+                NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
+                ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
+                Ciphertext = new byte[] { 7, 8, 9 },
+                ContentIv = new byte[] { 10, 11, 12 },
+            }
+        };
+
         var runtimePackage = new EncryptedRuntimePackageDto
         {
             InvocationId = Guid.NewGuid(),
@@ -91,22 +107,8 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 StreamIdleTimeoutSeconds = 30,
             },
             ConfigHash = "04c79b399e8dd0a4eba7e2b50c43931aa92b7c50ed73db6d1989c209f3c1cf33",
-            ConversationContext =
-            [
-                new EncryptedConversationMessageDto
-                {
-                    Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                    Role = XE_Local_AI_Engine.Client.Models.Enums.MessageRole.User,
-                    SortOrder = 10,
-                    EpochVersion = epochVersion,
-                    Aad = $"message|{conversationId:D}|11111111-1111-1111-1111-111111111111|{epochVersion}",
-                    NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
-                    ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
-                    Ciphertext = new byte[] { 7, 8, 9 },
-                    ContentIv = new byte[] { 10, 11, 12 },
-                }
-            ],
-            ConversationContextHash = "48b074b9ff9a22175eea9299d1df91c8392ff1e4fbfd74750ce08c22e6d54043",
+            ConversationContext = conversationContext,
+            ConversationContextHash = RuntimePackageHistoryHash.Compute(conversationContext),
             NodeWrappedEpochKey = new byte[] { 1, 2, 3, 4 },
             ClientEphemeralPublicKey = new byte[] { 5, 6, 7, 8 },
             Ciphertext = new byte[] { 9, 10, 11, 12 },
