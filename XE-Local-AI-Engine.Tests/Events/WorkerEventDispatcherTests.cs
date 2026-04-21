@@ -289,7 +289,7 @@ public sealed class WorkerEventDispatcherTests
         AssertEx.ContainsSingle(sender.SentEncryptedFailures,
             failure => failure.ConversationId == encryptedPackage.ConversationId
                        && failure.MessageId == encryptedPackage.MessageId
-                       && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+                       && failure.FailureCategory == nameof(FailureCategory.HashMismatch)
                        && failure.Error == "runtime-package-config-hash-mismatch");
         await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
     }
@@ -314,7 +314,7 @@ public sealed class WorkerEventDispatcherTests
         AssertEx.ContainsSingle(sender.SentEncryptedFailures,
             failure => failure.ConversationId == encryptedPackage.ConversationId
                        && failure.MessageId == encryptedPackage.MessageId
-                       && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+                       && failure.FailureCategory == nameof(FailureCategory.HashMismatch)
                        && failure.Error == "runtime-package-history-hash-mismatch");
         await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
     }

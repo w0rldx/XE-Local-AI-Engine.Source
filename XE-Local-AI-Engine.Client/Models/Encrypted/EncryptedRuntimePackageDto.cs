@@ -30,8 +30,6 @@ public sealed record EncryptedRuntimePackageDto
 
     public required string ConversationContextHash { get; init; }
 
-    public int HashAlgorithmVersion { get; init; } = 1;
-
     public required ReadOnlyMemory<byte> NodeWrappedEpochKey { get; init; }
 
     public required ReadOnlyMemory<byte> ClientEphemeralPublicKey { get; init; }
