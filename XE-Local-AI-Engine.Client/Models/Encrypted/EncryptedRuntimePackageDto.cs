@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 
-using XE_Local_AI_Engine.Client.Models;
-
 public sealed record EncryptedRuntimePackageDto
 {
     public required Guid InvocationId { get; init; }

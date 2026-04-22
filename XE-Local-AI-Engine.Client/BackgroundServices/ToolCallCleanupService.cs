@@ -8,8 +8,8 @@ public sealed class ToolCallCleanupService : BackgroundService
 {
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<ToolCallCleanupService> _logger;
-    private readonly IOptions<WorkerNodeOptions> _workerNodeOptions;
     private readonly CancellationTokenSource _shutdownSignal = new();
+    private readonly IOptions<WorkerNodeOptions> _workerNodeOptions;
 
     public ToolCallCleanupService(IInvocationRunner invocationRunner,
         IOptions<WorkerNodeOptions> workerNodeOptions,

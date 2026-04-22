@@ -1,4 +1,3 @@
-using Aspire.Hosting;
 using Microsoft.Extensions.Hosting;
 using Projects;
 
@@ -11,7 +10,7 @@ var ollama = builder.AddOllama("ollama")
 var chatModel = ollama.AddModel("chat", "qwen3.5:0.8b");
 var embeddingsModel = ollama.AddModel("embeddings", "qwen3-embedding:0.6b");
 
-var nodeSqliteKey = builder.AddParameter("node-sqlite-key", secret: true);
+var nodeSqliteKey = builder.AddParameter("node-sqlite-key", true);
 var nodeSqlitePath = Path.Combine(builder.AppHostDirectory, ".data", "node-sqlite");
 
 var nodeSqlite = builder.AddSqlite("node-sqlite", nodeSqlitePath, "node-chat.db");

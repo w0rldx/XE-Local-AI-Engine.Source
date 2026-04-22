@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -42,8 +42,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(package);
 
-        _logger.LogInformation(
-            "WorkerEventDispatcher handling InvocationAssigned. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
+        _logger.LogInformation("WorkerEventDispatcher handling InvocationAssigned. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
             package.InvocationId,
             package.ConversationId,
             package.MessageId,
@@ -186,8 +185,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         var matchingPendingToolCall = currentInvocation?.PendingToolCalls.Any(pendingToolCall =>
             string.Equals(pendingToolCall.RequestId, evt.RequestId, StringComparison.Ordinal)) == true;
 
-        _logger.LogInformation(
-            "Received tool call result. RequestId={RequestId} HasError={HasError} ResultLength={ResultLength} CurrentInvocationId={CurrentInvocationId}",
+        _logger.LogInformation("Received tool call result. RequestId={RequestId} HasError={HasError} ResultLength={ResultLength} CurrentInvocationId={CurrentInvocationId}",
             evt.RequestId,
             !string.IsNullOrWhiteSpace(evt.Error),
             evt.Result.Length,
@@ -199,8 +197,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         }
         else if (!matchingPendingToolCall)
         {
-            _logger.LogWarning(
-                "Tool call result did not match any pending tool call. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId} PendingToolCallCount={PendingToolCallCount}",
+            _logger.LogWarning("Tool call result did not match any pending tool call. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId} PendingToolCallCount={PendingToolCallCount}",
                 evt.RequestId,
                 currentInvocation.InvocationId,
                 currentInvocation.PendingToolCalls.Count);
@@ -229,8 +226,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
         var currentInvocation = GetCurrentInvocationSnapshot();
 
-        _logger.LogWarning(
-            "Received disconnect request. Reason={Reason} CurrentInvocationId={CurrentInvocationId}",
+        _logger.LogWarning("Received disconnect request. Reason={Reason} CurrentInvocationId={CurrentInvocationId}",
             evt.Reason,
             currentInvocation?.InvocationId);
 
@@ -284,15 +280,13 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         }
         else if (currentInvocation.PendingApproval is null)
         {
-            _logger.LogWarning(
-                "Approval resolution arrived with no pending approval tracked. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId}",
+            _logger.LogWarning("Approval resolution arrived with no pending approval tracked. RequestId={RequestId} CurrentInvocationId={CurrentInvocationId}",
                 evt.RequestId,
                 currentInvocation.InvocationId);
         }
         else if (!string.Equals(currentInvocation.PendingApproval.RequestId, evt.RequestId, StringComparison.Ordinal))
         {
-            _logger.LogWarning(
-                "Approval resolution request id did not match pending approval. RequestId={RequestId} PendingRequestId={PendingRequestId} CurrentInvocationId={CurrentInvocationId}",
+            _logger.LogWarning("Approval resolution request id did not match pending approval. RequestId={RequestId} PendingRequestId={PendingRequestId} CurrentInvocationId={CurrentInvocationId}",
                 evt.RequestId,
                 currentInvocation.PendingApproval.RequestId,
                 currentInvocation.InvocationId);
@@ -320,8 +314,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
         var currentInvocation = GetCurrentInvocationSnapshot();
 
-        _logger.LogInformation(
-            "Received invocation cancellation. InvocationId={InvocationId} Reason={Reason} CurrentInvocationId={CurrentInvocationId}",
+        _logger.LogInformation("Received invocation cancellation. InvocationId={InvocationId} Reason={Reason} CurrentInvocationId={CurrentInvocationId}",
             evt.InvocationId,
             evt.Reason,
             currentInvocation?.InvocationId);
@@ -426,8 +419,11 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         UpdateInvocation(payload.InvocationId,
             state =>
             {
-                state.PendingToolCalls = [.. state.PendingToolCalls,
-                    new InvocationToolCallState(payload.RequestId, payload.ToolName, payload.Parameters, DateTimeOffset.UtcNow)];
+                state.PendingToolCalls =
+                [
+                    .. state.PendingToolCalls,
+                    new InvocationToolCallState(payload.RequestId, payload.ToolName, payload.Parameters, DateTimeOffset.UtcNow)
+                ];
                 return state;
             });
 
@@ -534,17 +530,16 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         var package = context.Package;
 
-        _logger.LogInformation(
-            "Starting invocation execution. InvocationId={InvocationId} ConversationId={ConversationId} Model={Model}",
+        _logger.LogInformation("Starting invocation execution. InvocationId={InvocationId} ConversationId={ConversationId} Model={Model}",
             package.InvocationId,
             package.ConversationId,
             package.ModelProfile);
 
         UpdateInvocation(package.InvocationId,
-                static state =>
-                {
-                    state.Status = InvocationStatus.Running;
-                    return state;
+            static state =>
+            {
+                state.Status = InvocationStatus.Running;
+                return state;
             });
 
         try

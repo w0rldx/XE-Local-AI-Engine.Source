@@ -15,6 +15,15 @@ public sealed class InvocationExecutionContext : IDisposable
 
     public required ReadOnlyMemory<byte> EpochKey { get; init; }
 
+    public void Dispose()
+    {
+        if (_ownedEpochKey is not null)
+        {
+            CryptographicOperations.ZeroMemory(_ownedEpochKey);
+            _ownedEpochKey = null;
+        }
+    }
+
     public static InvocationExecutionContext Create(RuntimePackage package, Guid messageId, int epochVersion, ReadOnlyMemory<byte> epochKey)
     {
         ArgumentNullException.ThrowIfNull(package);
@@ -29,14 +38,5 @@ public sealed class InvocationExecutionContext : IDisposable
             EpochKey = ownedEpochKey,
             _ownedEpochKey = ownedEpochKey
         };
-    }
-
-    public void Dispose()
-    {
-        if (_ownedEpochKey is not null)
-        {
-            CryptographicOperations.ZeroMemory(_ownedEpochKey);
-            _ownedEpochKey = null;
-        }
     }
 }

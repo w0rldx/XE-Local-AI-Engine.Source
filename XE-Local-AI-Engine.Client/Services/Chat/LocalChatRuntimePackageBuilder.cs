@@ -38,11 +38,14 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
 
     private static IReadOnlyList<MixedEnvelopeAllowedToolDto> MapAllowedTools(IReadOnlyList<AllowedToolDto> allowedTools)
     {
-        return [.. allowedTools.Select(static tool => new MixedEnvelopeAllowedToolDto
-        {
-            Name = tool.Name,
-            Description = null,
-            Schema = tool.ParameterSchema
-        })];
+        return
+        [
+            .. allowedTools.Select(static tool => new MixedEnvelopeAllowedToolDto
+            {
+                Name = tool.Name,
+                Description = null,
+                Schema = tool.ParameterSchema
+            })
+        ];
     }
 }

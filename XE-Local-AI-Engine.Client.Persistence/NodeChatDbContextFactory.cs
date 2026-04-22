@@ -1,23 +1,22 @@
-namespace XE_Local_AI_Engine.Client.Persistence
+namespace XE_Local_AI_Engine.Client.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
+
+public sealed class NodeChatDbContextFactory : IDesignTimeDbContextFactory<NodeChatDbContext>
 {
-    using Microsoft.EntityFrameworkCore;
-    using Microsoft.EntityFrameworkCore.Design;
+    private const string DefaultConnectionString = "Data Source=node-chat.design.db";
 
-    public sealed class NodeChatDbContextFactory : IDesignTimeDbContextFactory<NodeChatDbContext>
+    public NodeChatDbContext CreateDbContext(string[] args)
     {
-        private const string DefaultConnectionString = "Data Source=node-chat.design.db";
+        _ = args;
 
-        public NodeChatDbContext CreateDbContext(string[] args)
-        {
-            _ = args;
+        var optionsBuilder = new DbContextOptionsBuilder<NodeChatDbContext>();
+        var connectionString = Environment.GetEnvironmentVariable("XE_NODE_SQLITE_CONNECTION_STRING")
+                               ?? DefaultConnectionString;
 
-            var optionsBuilder = new DbContextOptionsBuilder<NodeChatDbContext>();
-            var connectionString = Environment.GetEnvironmentVariable("XE_NODE_SQLITE_CONNECTION_STRING")
-                ?? DefaultConnectionString;
+        optionsBuilder.UseSqlite(connectionString);
 
-            optionsBuilder.UseSqlite(connectionString);
-
-            return new NodeChatDbContext(optionsBuilder.Options, new NullNodeSqliteKeyHolder());
-        }
+        return new NodeChatDbContext(optionsBuilder.Options, new NullNodeSqliteKeyHolder());
     }
 }

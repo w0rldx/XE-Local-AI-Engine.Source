@@ -42,7 +42,7 @@ public sealed class WorkerReconnectPolicy : IRetryPolicy
         }
 
         var exponent = Math.Min(previousRetryCount, 30);
-        var exponentialDelay = (long)_baseDelayMs * (1L << exponent);
+        var exponentialDelay = _baseDelayMs * (1L << exponent);
         var boundedDelay = (int)Math.Min(exponentialDelay, _maxDelayMs);
         var jitter = _jitterMs == 0 ? 0 : _random.Next(0, _jitterMs + 1);
 

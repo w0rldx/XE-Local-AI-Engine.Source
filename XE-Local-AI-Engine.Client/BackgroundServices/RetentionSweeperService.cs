@@ -60,7 +60,7 @@ public sealed class RetentionSweeperService : BackgroundService
         var cutoffUtc = _timeProvider.GetUtcNow().Subtract(RetentionWindow).ToUnixTimeSeconds();
 
         var deletedConversationCount = await retentionStore.SweepExpiredConversationsAsync(cutoffUtc, cancellationToken)
-            .ConfigureAwait(false);
+                                                           .ConfigureAwait(false);
 
         if (deletedConversationCount == 0)
         {

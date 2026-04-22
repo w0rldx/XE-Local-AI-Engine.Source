@@ -58,12 +58,15 @@ public static class RuntimePackageConfigHash
         {
             AgentDefinitionVersion = agentDefinitionVersion,
             ResolvedSystemPrompt = resolvedSystemPrompt,
-            AllowedTools = [.. allowedTools.Select(static tool => new MixedEnvelopeAllowedToolDto
-            {
-                Name = tool.Name,
-                Description = tool.Description,
-                Schema = tool.Schema
-            })],
+            AllowedTools =
+            [
+                .. allowedTools.Select(static tool => new MixedEnvelopeAllowedToolDto
+                {
+                    Name = tool.Name,
+                    Description = tool.Description,
+                    Schema = tool.Schema
+                })
+            ],
             ModelProfile = modelProfile,
             Timeouts = new TimeoutSettingsHashPayload
             {

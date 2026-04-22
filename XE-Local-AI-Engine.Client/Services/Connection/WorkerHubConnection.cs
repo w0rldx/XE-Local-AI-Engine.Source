@@ -6,11 +6,11 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Http.Connections.Client;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
+using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
-using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -18,13 +18,13 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 public sealed class WorkerHubConnection : IWorkerHubConnection
 {
     private readonly Lazy<ICapabilityReporter> _capabilityReporter;
+    private readonly Action<HttpConnectionOptions>? _configureHttpConnectionOptions;
     private readonly ConnectionState _connectionState;
     private readonly DeadLetterFlushService _deadLetterFlushService;
     private readonly ILogger<WorkerHubConnection> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
     private readonly ITokenStore _tokenStore;
-    private readonly Action<HttpConnectionOptions>? _configureHttpConnectionOptions;
 
     private HubConnection? _hubConnection;
 
@@ -262,11 +262,11 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         var connection = new HubConnectionBuilder()
                          .WithUrl(hubUrl, httpOptions =>
-                          {
-                              httpOptions.AccessTokenProvider = GetRequiredAccessTokenAsync;
-                              httpOptions.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
-                              _configureHttpConnectionOptions?.Invoke(httpOptions);
-                          })
+                         {
+                             httpOptions.AccessTokenProvider = GetRequiredAccessTokenAsync;
+                             httpOptions.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                             _configureHttpConnectionOptions?.Invoke(httpOptions);
+                         })
                          .WithAutomaticReconnect(new WorkerReconnectPolicy(options))
                          .AddJsonProtocol(jsonOptions =>
                          {
@@ -293,8 +293,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         connection.On<JsonElement>("InvocationAssigned",
             raw =>
             {
-                _logger.LogInformation(
-                    "InvocationAssigned raw frame received. RawJson={RawJson}",
+                _logger.LogInformation("InvocationAssigned raw frame received. RawJson={RawJson}",
                     raw.GetRawText());
 
                 EncryptedRuntimePackageDto package;
@@ -302,7 +301,10 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                 {
                     var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
                     {
-                        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+                        Converters =
+                        {
+                            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+                        }
                     };
                     package = raw.Deserialize<EncryptedRuntimePackageDto>(options)
                               ?? throw new InvalidOperationException("Deserialized EncryptedRuntimePackageDto was null.");
@@ -315,28 +317,26 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                     return;
                 }
 
-                _logger.LogInformation(
-                    "InvocationAssigned typed binding succeeded. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
+                _logger.LogInformation("InvocationAssigned typed binding succeeded. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
                     package.InvocationId,
                     package.ConversationId,
                     package.MessageId,
                     package.EpochVersion);
 
                 var handler = InvocationAssignedReceived;
-                 if (handler is null)
-                 {
-                     _logger.LogWarning("InvocationAssigned received but no handler subscribed. InvocationId={InvocationId}", package.InvocationId);
-                     return;
-                 }
+                if (handler is null)
+                {
+                    _logger.LogWarning("InvocationAssigned received but no handler subscribed. InvocationId={InvocationId}", package.InvocationId);
+                    return;
+                }
 
-                 _logger.LogDebug("Dispatching InvocationAssigned to subscribers. InvocationId={InvocationId}", package.InvocationId);
-                 handler.Invoke(this, new InvocationAssignedReceivedEventArgs(package));
-             });
+                _logger.LogDebug("Dispatching InvocationAssigned to subscribers. InvocationId={InvocationId}", package.InvocationId);
+                handler.Invoke(this, new InvocationAssignedReceivedEventArgs(package));
+            });
         connection.On<ToolCallResultEvent>("ToolCallResult",
             evt =>
             {
-                _logger.LogInformation(
-                    "ToolCallResult received. RequestId={RequestId} HasError={HasError}",
+                _logger.LogInformation("ToolCallResult received. RequestId={RequestId} HasError={HasError}",
                     evt.RequestId,
                     !string.IsNullOrWhiteSpace(evt.Error));
 
@@ -368,8 +368,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         connection.On<ApprovalResolvedEvent>("ApprovalResolved",
             evt =>
             {
-                _logger.LogInformation(
-                    "ApprovalResolved received. RequestId={RequestId} Approved={Approved}",
+                _logger.LogInformation("ApprovalResolved received. RequestId={RequestId} Approved={Approved}",
                     evt.RequestId,
                     evt.Approved);
 
@@ -386,8 +385,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         connection.On<InvocationCancelledEvent>("InvocationCancelled",
             evt =>
             {
-                _logger.LogInformation(
-                    "InvocationCancelled received. InvocationId={InvocationId} Reason={Reason}",
+                _logger.LogInformation("InvocationCancelled received. InvocationId={InvocationId} Reason={Reason}",
                     evt.InvocationId,
                     evt.Reason);
 
@@ -426,7 +424,10 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     {
         var keyId = Guid.NewGuid();
 #pragma warning disable CA2000 // NodeKeyRegistry takes ownership and disposes the key
-        var privateKey = Key.Create(KeyAgreementAlgorithm.X25519, new KeyCreationParameters { ExportPolicy = KeyExportPolicies.AllowPlaintextExport });
+        var privateKey = Key.Create(KeyAgreementAlgorithm.X25519, new KeyCreationParameters
+        {
+            ExportPolicy = KeyExportPolicies.AllowPlaintextExport
+        });
 #pragma warning restore CA2000
         _nodeKeyRegistry.Rotate(keyId.ToString("N"), privateKey);
 

@@ -13,13 +13,13 @@ public sealed class EnvelopeDecryptionResult : IDisposable
         _epochKey = epochKey ?? throw new ArgumentNullException(nameof(epochKey));
     }
 
-    public ReadOnlyMemory<byte> Plaintext
-        => _plaintext is not null
+    public ReadOnlyMemory<byte> Plaintext =>
+        _plaintext is not null
             ? _plaintext
             : throw new ObjectDisposedException(nameof(EnvelopeDecryptionResult));
 
-    public ReadOnlyMemory<byte> EpochKey
-        => _epochKey is not null
+    public ReadOnlyMemory<byte> EpochKey =>
+        _epochKey is not null
             ? _epochKey
             : throw new ObjectDisposedException(nameof(EnvelopeDecryptionResult));
 

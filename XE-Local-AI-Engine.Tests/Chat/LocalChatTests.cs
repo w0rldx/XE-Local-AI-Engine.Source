@@ -13,7 +13,7 @@ public sealed class LocalChatTests
         AssertEx.NotNull(componentType);
         var resolvedComponentType = componentType!;
 
-        var component = Activator.CreateInstance(resolvedComponentType, nonPublic: true);
+        var component = Activator.CreateInstance(resolvedComponentType, true);
         AssertEx.NotNull(component);
         var resolvedComponent = component!;
 
@@ -36,6 +36,12 @@ public sealed class LocalChatTests
     {
         public int DisposeAsyncCallCount { get; private set; }
 
+        public ValueTask DisposeAsync()
+        {
+            DisposeAsyncCallCount++;
+            return ValueTask.CompletedTask;
+        }
+
         public int AgentDefinitionVersion => 1;
 
         public Guid ConversationId => Guid.NewGuid();
@@ -43,12 +49,6 @@ public sealed class LocalChatTests
         public string SelectedModel => "test-model";
 
         public bool ToolsEnabled => true;
-
-        public ValueTask DisposeAsync()
-        {
-            DisposeAsyncCallCount++;
-            return ValueTask.CompletedTask;
-        }
 
         public ValueTask<LocalChatInvocationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
         {

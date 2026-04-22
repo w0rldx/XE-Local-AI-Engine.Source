@@ -18,8 +18,7 @@ public sealed class RuntimePackageHistoryHashTests
     [Test]
     public void BuildExpectedAad_WhenCurrentMessageInputsProvided_ReturnsSharedVector()
     {
-        var actual = RuntimePackageHistoryHash.BuildExpectedAad(
-            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+        var actual = RuntimePackageHistoryHash.BuildExpectedAad(Guid.Parse("22222222-2222-2222-2222-222222222222"),
             Guid.Parse("11111111-1111-1111-1111-111111111111"),
             7);
 
@@ -29,8 +28,7 @@ public sealed class RuntimePackageHistoryHashTests
     [Test]
     public void BuildExpectedAad_WhenHistoryMessageInputsProvided_ReturnsSharedVector()
     {
-        var actual = RuntimePackageHistoryHash.BuildExpectedAad(
-            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+        var actual = RuntimePackageHistoryHash.BuildExpectedAad(Guid.Parse("22222222-2222-2222-2222-222222222222"),
             Guid.Parse("33333333-3333-3333-3333-333333333333"),
             9);
 
@@ -47,10 +45,22 @@ public sealed class RuntimePackageHistoryHashTests
             SortOrder = 10,
             EpochVersion = 7,
             Aad = "message|conversation|11111111-1111-1111-1111-111111111111|7",
-            NodeWrappedEpochKey = new byte[] { 1 },
-            ClientEphemeralPublicKey = new byte[] { 2 },
-            Ciphertext = new byte[] { 3 },
-            ContentIv = new byte[] { 4 }
+            NodeWrappedEpochKey = new byte[]
+            {
+                1
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                2
+            },
+            Ciphertext = new byte[]
+            {
+                3
+            },
+            ContentIv = new byte[]
+            {
+                4
+            }
         };
 
         var second = first with

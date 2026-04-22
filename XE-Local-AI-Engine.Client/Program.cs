@@ -101,7 +101,7 @@ static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
 
 namespace XE_Local_AI_Engine.Client
 {
-    public partial class Program
+    public class Program
     {
         protected Program()
         {

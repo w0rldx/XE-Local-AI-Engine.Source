@@ -16,10 +16,11 @@ public sealed class CentralPlatformOptionsValidator : IValidateOptions<CentralPl
                                .AppendIf(string.IsNullOrWhiteSpace(options.PairingEndpoint), "CentralPlatform:PairingEndpoint is required.")
                                .AppendIf(!IsRelativePath(options.PairingEndpoint), "CentralPlatform:PairingEndpoint must be an absolute application path starting with '/'.")
                                .AppendIf(options.HeartbeatIntervalSeconds is < 5 or > 300, "CentralPlatform:HeartbeatIntervalSeconds must be between 5 and 300.")
-                                .AppendIf(options.ReconnectDelaysMs.Any(delay => delay < 0), "CentralPlatform:ReconnectDelaysMs cannot contain negative values.")
+                               .AppendIf(options.ReconnectDelaysMs.Any(delay => delay < 0), "CentralPlatform:ReconnectDelaysMs cannot contain negative values.")
                                .AppendIf(options.ReconnectBackoffBaseMs is < 1 or > 30000, "CentralPlatform:ReconnectBackoffBaseMs must be between 1 and 30000.")
                                .AppendIf(options.ReconnectBackoffMaxMs is < 1 or > 120000, "CentralPlatform:ReconnectBackoffMaxMs must be between 1 and 120000.")
-                               .AppendIf(options.ReconnectBackoffMaxMs < options.ReconnectBackoffBaseMs, "CentralPlatform:ReconnectBackoffMaxMs must be greater than or equal to ReconnectBackoffBaseMs.")
+                               .AppendIf(options.ReconnectBackoffMaxMs < options.ReconnectBackoffBaseMs,
+                                   "CentralPlatform:ReconnectBackoffMaxMs must be greater than or equal to ReconnectBackoffBaseMs.")
                                .AppendIf(options.ReconnectBackoffJitterMs is < 0 or > 10000, "CentralPlatform:ReconnectBackoffJitterMs must be between 0 and 10000.")
                                .AppendIf(options.ReconnectMaxAttempts is < 0 or > 100, "CentralPlatform:ReconnectMaxAttempts must be between 0 and 100.")
                                .AppendIf(options.MaxSignalRMessageSizeKb is < 16 or > 1024, "CentralPlatform:MaxSignalRMessageSizeKb must be between 16 and 1024.")

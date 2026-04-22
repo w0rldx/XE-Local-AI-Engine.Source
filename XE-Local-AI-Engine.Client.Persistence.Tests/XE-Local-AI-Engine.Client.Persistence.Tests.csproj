@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="NegativeFence/**/*.cs" />
+    <Compile Remove="NegativeFence/**/*.cs"/>
   </ItemGroup>
 
 </Project>

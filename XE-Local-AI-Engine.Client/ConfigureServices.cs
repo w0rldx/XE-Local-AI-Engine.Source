@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -24,7 +25,6 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using ILogger = ILogger;
@@ -141,8 +141,8 @@ public static class ConfigureServices
                                    ?? throw new InvalidOperationException("Connection string 'node-sqlite' is required.");
 
             options.UseSqlite(connectionString)
-                .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
-                    serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+                   .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                       serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
 
         builder.AddOllamaApiClient("chat");

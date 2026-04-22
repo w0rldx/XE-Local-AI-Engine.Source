@@ -2,14 +2,18 @@ namespace XE_Local_AI_Engine.Tests.Fixtures;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +32,19 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
 
     public X509Certificate2? ServerCert { get; private set; }
 
+    public async ValueTask DisposeAsync()
+    {
+        if (_app is not null)
+        {
+            await _app.StopAsync();
+            _app.Dispose();
+            _app = null;
+        }
+
+        ServerCert?.Dispose();
+        ServerCert = null;
+    }
+
     public async Task StartAsync(CancellationToken ct = default)
     {
         if (_app is not null)
@@ -38,55 +55,55 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         ServerCert = CreateServerCertificate();
 
         var builder = Host.CreateDefaultBuilder()
-            .UseEnvironment(Environments.Development)
-            .ConfigureWebHostDefaults(webBuilder =>
-            {
-                webBuilder.UseKestrel(options =>
-                {
-                    options.Listen(System.Net.IPAddress.Loopback, 0, listenOptions =>
-                    {
-                        listenOptions.UseHttps(ServerCert);
-                        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2;
-                    });
-                });
+                          .UseEnvironment(Environments.Development)
+                          .ConfigureWebHostDefaults(webBuilder =>
+                          {
+                              webBuilder.UseKestrel(options =>
+                              {
+                                  options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                                  {
+                                      listenOptions.UseHttps(ServerCert);
+                                      listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
+                                  });
+                              });
 
-                webBuilder.ConfigureServices(services =>
-                {
-                    services.AddSingleton(_hubState);
-                    services.AddSignalR()
-                        .AddJsonProtocol(options =>
-                        {
-                            options.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-                            options.PayloadSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-                            options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
-                        });
-                });
+                              webBuilder.ConfigureServices(services =>
+                              {
+                                  services.AddSingleton(_hubState);
+                                  services.AddSignalR()
+                                          .AddJsonProtocol(options =>
+                                          {
+                                              options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                                              options.PayloadSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+                                              options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+                                          });
+                              });
 
-                webBuilder.Configure(app =>
-                {
-                    app.UseRouting();
-                    app.UseEndpoints(endpoints =>
-                    {
-                        endpoints.MapHub<FakeWorkerHub>(HubPath, options =>
-                        {
-                            options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
-                        });
-                    });
-                });
-            });
+                              webBuilder.Configure(app =>
+                              {
+                                  app.UseRouting();
+                                  app.UseEndpoints(endpoints =>
+                                  {
+                                      endpoints.MapHub<FakeWorkerHub>(HubPath, options =>
+                                      {
+                                          options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                                      });
+                                  });
+                              });
+                          });
 
         var app = await builder.StartAsync(ct);
 
         _hubState.HubContext = app.Services.GetRequiredService<IHubContext<FakeWorkerHub>>();
 
         var addresses = app.Services
-            .GetRequiredService<IServer>()
-            .Features
-            .Get<IServerAddressesFeature>();
+                           .GetRequiredService<IServer>()
+                           .Features
+                           .Get<IServerAddressesFeature>();
 
         var address = addresses?.Addresses
-            .Select(static value => new Uri(value))
-            .FirstOrDefault(uri => string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+                               .Select(static value => new Uri(value))
+                               .FirstOrDefault(uri => string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
 
         if (address is null)
         {
@@ -127,19 +144,6 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_app is not null)
-        {
-            await _app.StopAsync();
-            _app.Dispose();
-            _app = null;
-        }
-
-        ServerCert?.Dispose();
-        ServerCert = null;
-    }
-
     private static X509Certificate2 CreateServerCertificate()
     {
         using var rsa = RSA.Create(2048);
@@ -149,7 +153,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
 
         var sanBuilder = new SubjectAlternativeNameBuilder();
-        sanBuilder.AddIpAddress(System.Net.IPAddress.Loopback);
+        sanBuilder.AddIpAddress(IPAddress.Loopback);
         sanBuilder.AddDnsName("localhost");
         request.CertificateExtensions.Add(sanBuilder.Build());
 
@@ -223,8 +227,8 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     {
         private readonly Channel<EncryptedChunkEnvelopeV1> _chunks = Channel.CreateUnbounded<EncryptedChunkEnvelopeV1>();
         private readonly Channel<EncryptedCompletedEnvelopeV1> _completed = Channel.CreateUnbounded<EncryptedCompletedEnvelopeV1>();
-        private readonly Channel<(string reason, string nodeKeyIdUsed)> _keyMismatches = Channel.CreateUnbounded<(string reason, string nodeKeyIdUsed)>();
         private readonly ConcurrentDictionary<string, HubCallerContext> _connections = new(StringComparer.Ordinal);
+        private readonly Channel<(string reason, string nodeKeyIdUsed)> _keyMismatches = Channel.CreateUnbounded<(string reason, string nodeKeyIdUsed)>();
 
         public IHubContext<FakeWorkerHub> HubContext { get; set; } = null!;
 

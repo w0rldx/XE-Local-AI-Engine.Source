@@ -61,7 +61,10 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             {
                 ChatOptions = new ChatOptions
                 {
-                    AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = true }
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        ["think"] = true
+                    }
                 }
             }
         };

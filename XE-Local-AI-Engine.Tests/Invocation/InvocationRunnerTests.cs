@@ -90,8 +90,8 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var package = RuntimePackageBuilder.Valid()
-                                         .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
-                                         .Build();
+                                           .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
+                                           .Build();
         var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
 
         await RunAsync(runner, package);
@@ -148,8 +148,8 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, package);
 
         AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId
-                                                                 && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
-                                                                 && failure.Error.Contains("Agent runtime error", StringComparison.Ordinal));
+                                                                         && failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
+                                                                         && failure.Error.Contains("Agent runtime error", StringComparison.Ordinal));
         await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
             Arg.Is<string>(message => message.Contains("Agent runtime error", StringComparison.Ordinal)),
             FailureCategory.AgentRuntime);
@@ -242,7 +242,8 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, package);
 
-        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Response size exceeded", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Response size exceeded", StringComparison.Ordinal));
     }
 
     [Test]
@@ -339,8 +340,8 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.AgentRuntime)
-                                                                && !failure.Error.Contains("ChatClientAgentException", StringComparison.Ordinal)
-                                                                && !failure.Error.Contains("Microsoft.Agents.AI", StringComparison.Ordinal));
+                                                                         && !failure.Error.Contains("ChatClientAgentException", StringComparison.Ordinal)
+                                                                         && !failure.Error.Contains("Microsoft.Agents.AI", StringComparison.Ordinal));
     }
 
     [Test]
@@ -379,9 +380,9 @@ public sealed class InvocationRunnerTests
         });
 
         await dispatcher.Received(1).ReportToolCallRequestedAsync(Arg.Is<ToolCallRequestPayload>(payload => payload.InvocationId == invocationId
-            && payload.RequestId == requestId
-            && payload.ToolName == "test-tool"
-            && payload.Parameters == "{}"));
+                                                                                                            && payload.RequestId == requestId
+                                                                                                            && payload.ToolName == "test-tool"
+                                                                                                            && payload.Parameters == "{}"));
         AssertEx.Equal("done", await task);
     }
 
@@ -543,21 +544,22 @@ public sealed class InvocationRunnerTests
         return CreateFactory(_ => updates, onCreate, onSessionObserved);
     }
 
-    private static IInvocationAgentFactory CreateFactory(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)
+    private static IInvocationAgentFactory CreateFactory(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory, Action<InvocationAgentDefinition>? onCreate = null,
+        Action<bool>? onSessionObserved = null)
     {
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(callInfo =>
                {
                    var definition = callInfo.Arg<InvocationAgentDefinition>();
-                    onCreate?.Invoke(definition);
-                    return Task.FromResult(new InvocationAgentContext
-                    {
-                        Agent = new FakeAIAgent(updatesFactory, onSessionObserved),
-                        Session = null,
-                        SeedMessages = definition.ConversationContext
-                                                 .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
-                                                 .ToList()
+                   onCreate?.Invoke(definition);
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(updatesFactory, onSessionObserved),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
                    });
                });
 
@@ -610,8 +612,8 @@ public sealed class InvocationRunnerTests
 
     private sealed class FakeAIAgent : AIAgent
     {
-        private readonly Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> _updatesFactory;
         private readonly Action<bool>? _onSessionObserved;
+        private readonly Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> _updatesFactory;
 
         public FakeAIAgent(IAsyncEnumerable<AgentResponseUpdate> updates)
             : this(_ => updates)

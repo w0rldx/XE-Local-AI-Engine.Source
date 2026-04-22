@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -60,7 +61,7 @@ public sealed class WorkerHubConnectionTests
             new ConnectionState(),
             new Lazy<ICapabilityReporter>(() => Substitute.For<ICapabilityReporter>()),
             flushService,
-            Substitute.For<XE_Local_AI_Engine.Client.Services.Auth.INodeKeyRegistry>(),
+            Substitute.For<INodeKeyRegistry>(),
             NullLogger<WorkerHubConnection>.Instance);
     }
 }
