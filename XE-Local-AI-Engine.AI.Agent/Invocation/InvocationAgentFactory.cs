@@ -56,7 +56,14 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         {
             Agent = agent,
             Session = null,
-            SeedMessages = seedMessages
+            SeedMessages = seedMessages,
+            RunOptions = new ChatClientAgentRunOptions
+            {
+                ChatOptions = new ChatOptions
+                {
+                    AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = true }
+                }
+            }
         };
 
         context.Items["modelId"] = definition.ModelId;

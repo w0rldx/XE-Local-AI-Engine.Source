@@ -11,6 +11,8 @@ public sealed class InvocationAgentContext : IAsyncDisposable
 
     public required IReadOnlyList<ChatMessage> SeedMessages { get; init; }
 
+    public AgentRunOptions? RunOptions { get; set; }
+
     public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>();
 
     public async ValueTask DisposeAsync()

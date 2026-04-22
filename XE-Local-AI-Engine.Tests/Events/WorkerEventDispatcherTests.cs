@@ -75,6 +75,26 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task ReportInvocationThinkingChunkAsync_AccumulatesThinkingContentSeparately()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var dispatcher = CreateDispatcher(runner);
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, "Let me think...");
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
+        await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, " more thought");
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, " world");
+
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal("Let me think... more thought", current.StreamedThinkingContent);
+        AssertEx.Equal(2, current.StreamedThinkingChunkCount);
+        AssertEx.Equal("Hello world", current.StreamedContent);
+        AssertEx.Equal(2, current.StreamedChunkCount);
+    }
+
+    [Test]
     public async Task DispatchInvocationAssignedAsync_SetsCurrentInvocation()
     {
         var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());

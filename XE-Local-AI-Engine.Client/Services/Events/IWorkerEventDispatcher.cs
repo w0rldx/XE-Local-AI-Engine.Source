@@ -24,6 +24,8 @@ public interface IWorkerEventDispatcher
 
     Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk);
 
+    Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk);
+
     Task ReportInvocationCompletedAsync(Guid invocationId);
 
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);

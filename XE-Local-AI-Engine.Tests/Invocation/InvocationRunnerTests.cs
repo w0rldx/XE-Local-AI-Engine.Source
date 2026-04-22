@@ -66,6 +66,25 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WithThinkingAndTextChunks_ReportsBothToDispatcher()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var package = RuntimePackageBuilder.Valid().Build();
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationThinkingChunkAsync(package.InvocationId, "Let me think...");
+        await dispatcher.Received(1).ReportInvocationThinkingChunkAsync(package.InvocationId, " more thought");
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
+    }
+
+    [Test]
     public async Task RunAsync_WhenLoopbackInvocation_SkipsHubMessagesAndStillReportsDispatcherProgress()
     {
         var sender = new MockHubMessageSender();
@@ -550,6 +569,26 @@ public sealed class InvocationRunnerTests
         foreach (var chunk in chunks)
         {
             yield return new AgentResponseUpdate(ChatRole.Assistant, chunk);
+            await Task.Yield();
+        }
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> CreateMixedUpdates(params (string? Text, string? Thinking)[] chunks)
+    {
+        foreach (var (text, thinking) in chunks)
+        {
+            var contents = new List<AIContent>();
+            if (!string.IsNullOrEmpty(thinking))
+            {
+                contents.Add(new TextReasoningContent(thinking));
+            }
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                contents.Add(new TextContent(text));
+            }
+
+            yield return new AgentResponseUpdate(ChatRole.Assistant, contents);
             await Task.Yield();
         }
     }
