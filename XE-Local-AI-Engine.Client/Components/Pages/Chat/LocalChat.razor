@@ -76,6 +76,20 @@
             {
                 <div class="chat-bubble-assistant">
                     <MudPaper Elevation="1" Class="pa-3" Style="border-radius: 16px 16px 16px 4px; max-width: 70%; word-wrap: break-word;">
+                        @if (!string.IsNullOrEmpty(msg.ThinkingContent))
+                        {
+                            <div style="margin-bottom: 8px;">
+                                <MudButton Size="Size.Small" OnClick="() => msg.ShowThinking = !msg.ShowThinking">
+                                    @(!msg.ShowThinking ? "Show thinking" : "Hide thinking")
+                                </MudButton>
+                                @if (msg.ShowThinking)
+                                {
+                                    <MudPaper Elevation="0" Class="pa-2 mt-1" Style="background-color: #f5f5f5; font-family: monospace; font-size: 0.85em; color: #666;">
+                                        <MudText Typo="Typo.caption">@msg.ThinkingContent</MudText>
+                                    </MudPaper>
+                                }
+                            </div>
+                        }
                         @if (msg.IsStreaming && string.IsNullOrEmpty(msg.Content))
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true"/>
@@ -140,7 +154,9 @@
     {
         public string Role { get; set; } = "";
         public string Content { get; set; } = "";
+        public string ThinkingContent { get; set; } = "";
         public bool IsStreaming { get; set; }
+        public bool ShowThinking { get; set; } = true;
     }
 
     protected override async Task OnInitializedAsync()
@@ -273,6 +289,7 @@
             case InvocationStatus.Assigned:
             case InvocationStatus.Running:
                 _streamingAssistantBubble.Content = eventArgs.State.StreamedContent;
+                _streamingAssistantBubble.ThinkingContent = eventArgs.State.StreamedThinkingContent;
                 _streamingAssistantBubble.IsStreaming = true;
                 break;
             case InvocationStatus.Completed:

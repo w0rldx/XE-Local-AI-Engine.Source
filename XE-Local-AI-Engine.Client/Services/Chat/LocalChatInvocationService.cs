@@ -190,6 +190,9 @@ public sealed class LocalChatInvocationService : ILocalChatInvocationService, ID
                 Id = Guid.NewGuid(),
                 Role = MessageRole.Assistant,
                 Content = invocationState.StreamedContent,
+                Thinking = string.IsNullOrWhiteSpace(invocationState.StreamedThinkingContent)
+                    ? null
+                    : invocationState.StreamedThinkingContent,
                 ModelUsed = invocationState.ModelUsed,
                 SortOrder = _conversationContext.Count
             });

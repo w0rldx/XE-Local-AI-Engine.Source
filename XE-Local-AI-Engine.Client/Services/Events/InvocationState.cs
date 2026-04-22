@@ -14,6 +14,10 @@ public sealed class InvocationState
 
     public int StreamedChunkCount { get; set; }
 
+    public string StreamedThinkingContent { get; set; } = string.Empty;
+
+    public int StreamedThinkingChunkCount { get; set; }
+
     public DateTimeOffset StartedAt { get; init; }
 
     public DateTimeOffset LastUpdatedAt { get; set; }

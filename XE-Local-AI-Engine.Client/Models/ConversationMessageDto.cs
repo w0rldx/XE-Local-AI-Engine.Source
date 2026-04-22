@@ -14,6 +14,8 @@ public sealed record ConversationMessageDto
 
     public string? ToolResults { get; init; }
 
+    public string? Thinking { get; init; }
+
     public string? ModelUsed { get; init; }
 
     public required int SortOrder { get; init; }

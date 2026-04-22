@@ -118,26 +118,35 @@ public sealed class InvocationRunner : IInvocationRunner
             var definition = BuildInvocationDefinition(package, resolvedModel);
             await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
 
-            await foreach (var update in agentContext.Agent.RunStreamingAsync(agentContext.SeedMessages, null, null, invocationToken).ConfigureAwait(false))
+            await foreach (var update in agentContext.Agent.RunStreamingAsync(agentContext.SeedMessages, null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
             {
-                var chunk = update.Text;
-                if (string.IsNullOrEmpty(chunk))
+                var textChunk = update.Text;
+                var thinkingChunk = string.Concat(
+                    update.Contents?.OfType<TextReasoningContent>()
+                          .Select(t => t.Text) ?? Enumerable.Empty<string>());
+
+                if (!string.IsNullOrEmpty(thinkingChunk))
+                {
+                    await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, thinkingChunk).ConfigureAwait(false);
+                }
+
+                if (string.IsNullOrEmpty(textChunk))
                 {
                     continue;
                 }
 
                 streamedChunkCount++;
                 sequence++;
-                totalResponseBytes += Encoding.UTF8.GetByteCount(chunk);
+                totalResponseBytes += Encoding.UTF8.GetByteCount(textChunk);
 
                 if (totalResponseBytes > _maxResponseSizeBytes)
                 {
                     throw new InvalidOperationException($"Response size exceeded maximum of {_maxResponseSizeBytes / (1024 * 1024)}MB");
                 }
 
-                responseBuilder.Append(chunk);
+                responseBuilder.Append(textChunk);
 
-                await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk).ConfigureAwait(false);
+                await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, textChunk).ConfigureAwait(false);
 
                 if (shouldSendHubMessages)
                 {
@@ -145,7 +154,7 @@ public sealed class InvocationRunner : IInvocationRunner
                             context.MessageId,
                             context.EpochVersion,
                             context.EpochKey.Span,
-                            Encoding.UTF8.GetBytes(chunk),
+                            Encoding.UTF8.GetBytes(textChunk),
                             sequence),
                         invocationToken).ConfigureAwait(false);
                 }
@@ -349,7 +358,17 @@ public sealed class InvocationRunner : IInvocationRunner
     {
         return package.ConversationContext
                       .OrderBy(message => message.SortOrder)
-                      .Select(static message => new ChatMessage(MapRole(message.Role), message.Content))
+                      .Select(static message =>
+                      {
+                          var contents = new List<AIContent>();
+                          if (!string.IsNullOrEmpty(message.Thinking))
+                          {
+                              contents.Add(new TextReasoningContent(message.Thinking));
+                          }
+
+                          contents.Add(new TextContent(message.Content));
+                          return new ChatMessage(MapRole(message.Role), contents);
+                      })
                       .ToList();
     }
 

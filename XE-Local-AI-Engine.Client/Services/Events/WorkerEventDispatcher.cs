@@ -369,6 +369,22 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(chunk);
+
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.Status = InvocationStatus.Running;
+                state.StreamedThinkingContent = string.Concat(state.StreamedThinkingContent, chunk);
+                state.StreamedThinkingChunkCount++;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationCompletedAsync(Guid invocationId)
     {
         UpdateInvocation(invocationId,
@@ -441,6 +457,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             Status = state.Status,
             StreamedContent = state.StreamedContent,
             StreamedChunkCount = state.StreamedChunkCount,
+            StreamedThinkingContent = state.StreamedThinkingContent,
+            StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
             StartedAt = state.StartedAt,
             LastUpdatedAt = state.LastUpdatedAt,
             CompletedAt = state.CompletedAt,
@@ -465,7 +483,9 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             Status = InvocationStatus.Assigned,
             StartedAt = DateTimeOffset.UtcNow,
             LastUpdatedAt = DateTimeOffset.UtcNow,
-            ModelUsed = runtimePackage.ModelProfile
+            ModelUsed = runtimePackage.ModelProfile,
+            StreamedThinkingContent = string.Empty,
+            StreamedThinkingChunkCount = 0
         };
     }
 
