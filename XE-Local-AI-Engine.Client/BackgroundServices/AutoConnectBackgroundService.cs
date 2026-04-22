@@ -133,5 +133,4 @@ public sealed class AutoConnectBackgroundService : BackgroundService
         _logger.LogInformation("Application stopping. Auto-connect background service is cancelling pending startup/retry work.");
         _ = _shutdownSignal.CancelAsync();
     }
-
 }

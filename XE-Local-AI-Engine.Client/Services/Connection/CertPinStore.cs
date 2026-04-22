@@ -73,8 +73,7 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
             return false;
         }
 
-        return CryptographicOperations.FixedTimeEquals(
-            Convert.FromHexString(existing.Sha256Thumbprint),
+        return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(existing.Sha256Thumbprint),
             SHA256.HashData(certificate.RawData));
     }
 

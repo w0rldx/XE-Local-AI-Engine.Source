@@ -14,9 +14,9 @@ public static class RuntimePackageHistoryHash
         ArgumentNullException.ThrowIfNull(conversationContext);
 
         var orderedEntries = conversationContext
-            .OrderBy(static entry => entry.SortOrder)
-            .ThenBy(static entry => entry.Id.ToString("D"), StringComparer.Ordinal)
-            .ToList();
+                             .OrderBy(static entry => entry.SortOrder)
+                             .ThenBy(static entry => entry.Id.ToString("D"), StringComparer.Ordinal)
+                             .ToList();
 
         return ComputeCanonical(orderedEntries);
     }
@@ -41,6 +41,7 @@ public static class RuntimePackageHistoryHash
         {
             WriteEntry(writer, entry);
         }
+
         writer.WriteEndArray();
         writer.Flush();
 
@@ -68,14 +69,17 @@ public static class RuntimePackageHistoryHash
         writer.WriteEndObject();
     }
 
-    private static string RoleToString(MessageRole role) => role switch
+    private static string RoleToString(MessageRole role)
     {
-        MessageRole.User => "user",
-        MessageRole.Assistant => "assistant",
-        MessageRole.System => "system",
-        MessageRole.Tool => "tool",
-        _ => throw new ArgumentOutOfRangeException(nameof(role), role, "Unknown MessageRole value.")
-    };
+        return role switch
+        {
+            MessageRole.User => "user",
+            MessageRole.Assistant => "assistant",
+            MessageRole.System => "system",
+            MessageRole.Tool => "tool",
+            _ => throw new ArgumentOutOfRangeException(nameof(role), role, "Unknown MessageRole value.")
+        };
+    }
 
     private static void RejectUnpairedSurrogates(string value, string fieldName)
     {
@@ -89,6 +93,7 @@ public static class RuntimePackageHistoryHash
                 {
                     throw new ArgumentException($"Field '{fieldName}' contains an unpaired high surrogate at index {i}.");
                 }
+
                 i += 2;
             }
             else if (char.IsLowSurrogate(c))

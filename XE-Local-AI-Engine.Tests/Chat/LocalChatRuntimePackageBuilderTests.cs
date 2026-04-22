@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
@@ -76,7 +77,10 @@ public sealed class LocalChatRuntimePackageBuilderTests
             3,
             Guid.NewGuid(),
             [allowedTool],
-            new Dictionary<string, object> { ["approvalRequired"] = true },
+            new Dictionary<string, object>
+            {
+                ["approvalRequired"] = true
+            },
             ["local-chat", "loopback"],
             new TimeoutSettings
             {
@@ -94,12 +98,14 @@ public sealed class LocalChatRuntimePackageBuilderTests
 
         var expectedHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
             request.ResolvedSystemPrompt,
-            [new()
-            {
-                Name = allowedTool.Name,
-                Description = null,
-                Schema = allowedTool.ParameterSchema
-            }],
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = allowedTool.Name,
+                    Description = null,
+                    Schema = allowedTool.ParameterSchema
+                }
+            ],
             request.ModelProfile,
             AssertEx.NotNull(request.Timeouts));
 

@@ -49,42 +49,6 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
             "Encrypted conversation message");
     }
 
-    private static EnvelopeDecryptionResult DecryptEnvelope(Guid conversationId,
-        Guid messageId,
-        int epochVersion,
-        string providedAad,
-        ReadOnlySpan<byte> nonce,
-        ReadOnlySpan<byte> ciphertext,
-        ReadOnlySpan<byte> wrappedEpochKey,
-        ReadOnlySpan<byte> clientEphemeralPublicKey,
-        Key nodePrivateKey,
-        string envelopeName)
-    {
-        var expectedAadString = BuildEnvelopeAadString(conversationId, messageId, epochVersion);
-
-        if (!string.Equals(providedAad, expectedAadString, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"{envelopeName} AAD did not match the expected envelope metadata.");
-        }
-
-        var expectedAad = Encoding.UTF8.GetBytes(expectedAadString);
-
-        ValidateWrappedPayload(nonce, ciphertext, wrappedEpochKey, clientEphemeralPublicKey);
-
-        var epochKey = UnwrapEpochKey(wrappedEpochKey, clientEphemeralPublicKey, nodePrivateKey);
-
-        try
-        {
-            var plaintext = DecryptPayload(nonce, ciphertext, epochKey, expectedAad);
-            return new EnvelopeDecryptionResult(plaintext, epochKey);
-        }
-        catch
-        {
-            CryptographicOperations.ZeroMemory(epochKey);
-            throw;
-        }
-    }
-
     public EncryptedChunkEnvelopeV1 EncryptChunk(Guid conversationId,
         Guid messageId,
         int epochVersion,
@@ -127,6 +91,42 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
             TotalSequence = totalSequence,
             TokenCounts = tokenCounts
         };
+    }
+
+    private static EnvelopeDecryptionResult DecryptEnvelope(Guid conversationId,
+        Guid messageId,
+        int epochVersion,
+        string providedAad,
+        ReadOnlySpan<byte> nonce,
+        ReadOnlySpan<byte> ciphertext,
+        ReadOnlySpan<byte> wrappedEpochKey,
+        ReadOnlySpan<byte> clientEphemeralPublicKey,
+        Key nodePrivateKey,
+        string envelopeName)
+    {
+        var expectedAadString = BuildEnvelopeAadString(conversationId, messageId, epochVersion);
+
+        if (!string.Equals(providedAad, expectedAadString, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"{envelopeName} AAD did not match the expected envelope metadata.");
+        }
+
+        var expectedAad = Encoding.UTF8.GetBytes(expectedAadString);
+
+        ValidateWrappedPayload(nonce, ciphertext, wrappedEpochKey, clientEphemeralPublicKey);
+
+        var epochKey = UnwrapEpochKey(wrappedEpochKey, clientEphemeralPublicKey, nodePrivateKey);
+
+        try
+        {
+            var plaintext = DecryptPayload(nonce, ciphertext, epochKey, expectedAad);
+            return new EnvelopeDecryptionResult(plaintext, epochKey);
+        }
+        catch
+        {
+            CryptographicOperations.ZeroMemory(epochKey);
+            throw;
+        }
     }
 
     private static void ValidateWrappedPayload(ReadOnlySpan<byte> nonce,

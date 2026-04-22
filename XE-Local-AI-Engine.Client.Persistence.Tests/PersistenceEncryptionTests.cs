@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Persistence;
@@ -16,6 +15,14 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 public sealed class PersistenceEncryptionTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_rootPath))
+        {
+            Directory.Delete(_rootPath, true);
+        }
+    }
 
     [Test]
     public async Task SaveChanges_WhenEncryptedPayloadsPersisted_RoundTripsThroughSqlite()
@@ -43,7 +50,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 UserId = "worker-node",
                 CreatedAtUtc = 1,
                 LastSeenUtc = 2,
-                Purged = false,
+                Purged = false
             });
 
             writeContext.Messages.Add(new NodeMessage
@@ -54,7 +61,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 Role = "assistant",
                 Content = messageContent.ToArray(),
                 MetadataJson = metadataJson.ToArray(),
-                CreatedAtUtc = 3,
+                CreatedAtUtc = 3
             });
 
             writeContext.ToolEvents.Add(new NodeToolEvent
@@ -65,7 +72,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 PlaintextArgs = toolArgs.ToArray(),
                 PlaintextResult = toolResult.ToArray(),
                 Status = "completed",
-                CreatedAtUtc = 4,
+                CreatedAtUtc = 4
             });
 
             await writeContext.SaveChangesAsync();
@@ -103,7 +110,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             {
                 ConversationId = conversationId,
                 CreatedAtUtc = 1,
-                LastSeenUtc = 1,
+                LastSeenUtc = 1
             });
 
             context.Messages.Add(new NodeMessage
@@ -114,7 +121,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 Role = "assistant",
                 Content = Encoding.UTF8.GetBytes(messageContentText),
                 MetadataJson = Encoding.UTF8.GetBytes(metadataText),
-                CreatedAtUtc = 2,
+                CreatedAtUtc = 2
             });
 
             await context.SaveChangesAsync();
@@ -132,19 +139,20 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
         const string nodeName = "worker-node-alpha";
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(operatorSecret),
-            })
-            .Build();
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(operatorSecret)
+                            })
+                            .Build();
 
-        using var keyHolder = new NodeSqliteKeyHolder(
-            Options.Create(new WorkerNodeOptions { NodeName = nodeName }),
+        using var keyHolder = new NodeSqliteKeyHolder(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = nodeName
+            }),
             configuration);
 
         var actual = keyHolder.Key.ToArray();
-        var expected = HkdfSha256(
-            operatorSecret,
+        var expected = HkdfSha256(operatorSecret,
             [],
             Encoding.UTF8.GetBytes($"c0re-node-sqlite|v1|{nodeName}"),
             32);
@@ -157,14 +165,16 @@ public sealed class PersistenceEncryptionTests : IDisposable
     {
         var operatorSecret = Enumerable.Range(100, 32).Select(static value => (byte)value).ToArray();
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(operatorSecret),
-            })
-            .Build();
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(operatorSecret)
+                            })
+                            .Build();
 
-        var keyHolder = new NodeSqliteKeyHolder(
-            Options.Create(new WorkerNodeOptions { NodeName = "worker-node-beta" }),
+        var keyHolder = new NodeSqliteKeyHolder(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = "worker-node-beta"
+            }),
             configuration);
 
         _ = keyHolder.Key.Span[0];
@@ -180,8 +190,10 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
         var exception = AssertEx.Throws<InvalidOperationException>(() =>
         {
-            _ = new NodeSqliteKeyHolder(
-                Options.Create(new WorkerNodeOptions { NodeName = "worker-node-gamma" }),
+            _ = new NodeSqliteKeyHolder(Options.Create(new WorkerNodeOptions
+                {
+                    NodeName = "worker-node-gamma"
+                }),
                 configuration);
         });
 
@@ -196,20 +208,20 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var prohibitedNames = new[]
         {
             "MasterKeyVersion",
-            "RotatedFromEpochVersion",
+            "RotatedFromEpochVersion"
         };
 
         var assembly = typeof(NodeChatDbContext).Assembly;
         var discoveredNames = assembly
-            .GetTypes()
-            .SelectMany(type => type
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                .Select(member => member.Name)
-                .Prepend(type.Name))
-            .Where(name => prohibitedNames.Contains(name, StringComparer.Ordinal)
-                || name.Contains("ratchet", StringComparison.OrdinalIgnoreCase))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+                              .GetTypes()
+                              .SelectMany(type => type
+                                                  .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                                                  .Select(member => member.Name)
+                                                  .Prepend(type.Name))
+                              .Where(name => prohibitedNames.Contains(name, StringComparer.Ordinal)
+                                             || name.Contains("ratchet", StringComparison.OrdinalIgnoreCase))
+                              .Distinct(StringComparer.Ordinal)
+                              .ToArray();
 
         AssertEx.Empty(discoveredNames, "Persistence assembly should not contain ratchet identifiers or forbidden epoch fields.");
     }
@@ -222,7 +234,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         {
             RedirectStandardError = true,
             RedirectStandardOutput = true,
-            UseShellExecute = false,
+            UseShellExecute = false
         };
 
         using var process = AssertEx.NotNull(Process.Start(startInfo), "Expected negative fence build process to start.");
@@ -234,18 +246,9 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var combinedOutput = standardOutput + Environment.NewLine + standardError;
 
         AssertEx.False(process.ExitCode == 0, "Negative fence probe must fail to compile.");
-        AssertEx.True(
-            combinedOutput.Contains("CS0122", StringComparison.Ordinal)
-            || combinedOutput.Contains("inaccessible due to its protection level", StringComparison.OrdinalIgnoreCase),
+        AssertEx.True(combinedOutput.Contains("CS0122", StringComparison.Ordinal)
+                      || combinedOutput.Contains("inaccessible due to its protection level", StringComparison.OrdinalIgnoreCase),
             "Negative fence build output should show an accessibility failure.");
-    }
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_rootPath))
-        {
-            Directory.Delete(_rootPath, true);
-        }
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)
@@ -253,9 +256,9 @@ public sealed class PersistenceEncryptionTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
 
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
-            .UseSqlite($"Data Source={databasePath}")
-            .AddInterceptors(new NodeEncryptionSaveChangesInterceptor(), new NodeEncryptionMaterializationInterceptor())
-            .Options;
+                      .UseSqlite($"Data Source={databasePath}")
+                      .AddInterceptors(new NodeEncryptionSaveChangesInterceptor(), new NodeEncryptionMaterializationInterceptor())
+                      .Options;
 
         return new NodeChatDbContext(options, keyHolder);
     }

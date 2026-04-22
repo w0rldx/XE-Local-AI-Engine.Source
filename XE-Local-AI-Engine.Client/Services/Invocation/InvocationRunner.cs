@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -30,10 +30,10 @@ public sealed class InvocationRunner : IInvocationRunner
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
+    private readonly IEnvelopeCryptoService _envelopeCryptoService;
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
-    private readonly IEnvelopeCryptoService _envelopeCryptoService;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
@@ -121,9 +121,8 @@ public sealed class InvocationRunner : IInvocationRunner
             await foreach (var update in agentContext.Agent.RunStreamingAsync(agentContext.SeedMessages, null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
             {
                 var textChunk = update.Text;
-                var thinkingChunk = string.Concat(
-                    update.Contents?.OfType<TextReasoningContent>()
-                          .Select(t => t.Text) ?? Enumerable.Empty<string>());
+                var thinkingChunk = string.Concat(update.Contents?.OfType<TextReasoningContent>()
+                                                        .Select(t => t.Text) ?? Enumerable.Empty<string>());
 
                 if (!string.IsNullOrEmpty(thinkingChunk))
                 {

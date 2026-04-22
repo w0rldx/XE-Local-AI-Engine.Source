@@ -14,8 +14,8 @@ public sealed class LocalChatInvocationService : ILocalChatInvocationService, ID
     private readonly List<ConversationMessageDto> _conversationContext = [];
     private readonly IWorkerEventDispatcher _eventDispatcher;
     private readonly IInvocationRunner _invocationRunner;
-    private readonly ILocalChatRuntimePackageBuilder _runtimePackageBuilder;
     private readonly string _resolvedSystemPrompt;
+    private readonly ILocalChatRuntimePackageBuilder _runtimePackageBuilder;
     private readonly SemaphoreSlim _stateLock = new(1, 1);
     private int _activeSend;
     private bool _disposed;
@@ -37,14 +37,6 @@ public sealed class LocalChatInvocationService : ILocalChatInvocationService, ID
         _resolvedSystemPrompt = LoadResolvedSystemPrompt(resolvedOptions);
     }
 
-    public int AgentDefinitionVersion => CurrentAgentDefinitionVersion;
-
-    public Guid ConversationId { get; private set; }
-
-    public string SelectedModel { get; private set; }
-
-    public bool ToolsEnabled { get; }
-
     public void Dispose()
     {
         if (_disposed)
@@ -55,6 +47,14 @@ public sealed class LocalChatInvocationService : ILocalChatInvocationService, ID
         _disposed = true;
         _stateLock.Dispose();
     }
+
+    public int AgentDefinitionVersion => CurrentAgentDefinitionVersion;
+
+    public Guid ConversationId { get; private set; }
+
+    public string SelectedModel { get; private set; }
+
+    public bool ToolsEnabled { get; }
 
     public async ValueTask<LocalChatInvocationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
     {
@@ -106,7 +106,7 @@ public sealed class LocalChatInvocationService : ILocalChatInvocationService, ID
                     [.. _conversationContext],
                     SelectedModel,
                     AgentDefinitionVersion,
-                    ClientNodeId: LocalChatLoopbackDefaults.ClientNodeId,
+                    LocalChatLoopbackDefaults.ClientNodeId,
                     RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability]));
             }
             finally

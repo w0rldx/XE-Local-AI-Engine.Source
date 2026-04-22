@@ -6,8 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSec.Cryptography;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -23,7 +23,10 @@ public sealed class WorkerEventDispatcherTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
     };
 
     [Test]
@@ -44,11 +47,11 @@ public sealed class WorkerEventDispatcherTests
         await dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(package));
 
         await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == package.InvocationId
-                                                                              && context.Package.ConversationId == package.ConversationId
-                                                                              && context.Package.ClientNodeId == package.ClientNodeId
-                                                                              && context.MessageId != Guid.Empty
-                                                                              && context.EpochVersion == 1
-                                                                              && context.EpochKey.Length == 32),
+                                                                                        && context.Package.ConversationId == package.ConversationId
+                                                                                        && context.Package.ClientNodeId == package.ClientNodeId
+                                                                                        && context.MessageId != Guid.Empty
+                                                                                        && context.EpochVersion == 1
+                                                                                        && context.EpochKey.Length == 32),
             Arg.Any<CancellationToken>());
     }
 
@@ -346,28 +349,28 @@ public sealed class WorkerEventDispatcherTests
         InvocationExecutionContext? capturedContext = null;
         byte[]? capturedEpochKey = null;
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                capturedContext = callInfo.Arg<InvocationExecutionContext>();
-                capturedEpochKey = capturedContext.EpochKey.ToArray();
-                return Task.CompletedTask;
-            });
+              .Returns(callInfo =>
+              {
+                  capturedContext = callInfo.Arg<InvocationExecutionContext>();
+                  capturedEpochKey = capturedContext.EpochKey.ToArray();
+                  return Task.CompletedTask;
+              });
 
 #pragma warning disable CA2000
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
-        var historyEntryOne = CreateHistoryEntry(MessageRole.System, sortOrder: 10);
-        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, sortOrder: 20);
+        var historyEntryOne = CreateHistoryEntry(MessageRole.System, 10);
+        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, 20);
         var encryptedPackage = CreateMixedEnvelopePackage([historyEntryOne, historyEntryTwo]);
         var expectedEpochKey = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(encryptedPackage.ConversationId, historyEntryOne, Arg.Any<Key>())
-            .Returns(_ => new EnvelopeDecryptionResult("system guidance"u8.ToArray(), new byte[32]));
+                             .Returns(_ => new EnvelopeDecryptionResult("system guidance"u8.ToArray(), new byte[32]));
         envelopeCryptoService.DecryptConversationMessage(encryptedPackage.ConversationId, historyEntryTwo, Arg.Any<Key>())
-            .Returns(_ => new EnvelopeDecryptionResult("assistant reply"u8.ToArray(), new byte[32]));
+                             .Returns(_ => new EnvelopeDecryptionResult("assistant reply"u8.ToArray(), new byte[32]));
         envelopeCryptoService.DecryptRuntimePackage(encryptedPackage, Arg.Any<Key>())
-            .Returns(_ => new EnvelopeDecryptionResult("latest user message"u8.ToArray(), expectedEpochKey.ToArray()));
+                             .Returns(_ => new EnvelopeDecryptionResult("latest user message"u8.ToArray(), expectedEpochKey.ToArray()));
 
         var validator = Substitute.For<IRuntimePackageValidator>();
         validator.Validate(Arg.Any<RuntimePackage>()).Returns(RuntimePackageValidationResult.Success);
@@ -433,10 +436,25 @@ public sealed class WorkerEventDispatcherTests
             ConfigHash = runtimePackage.ConfigHash,
             ConversationContext = [],
             ConversationContextHash = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-            NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
-            ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
+            NodeWrappedEpochKey = new byte[]
+            {
+                1,
+                2,
+                3
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                4,
+                5,
+                6
+            },
             Ciphertext = JsonSerializer.SerializeToUtf8Bytes(runtimePackage, SerializerOptions),
-            ContentIv = new byte[] { 7, 8, 9 },
+            ContentIv = new byte[]
+            {
+                7,
+                8,
+                9
+            },
             Aad = "message|aad-placeholder"
         };
     }
@@ -467,15 +485,35 @@ public sealed class WorkerEventDispatcherTests
             {
                 InvocationTimeoutSeconds = 300,
                 ToolCallTimeoutSeconds = 60,
-                StreamIdleTimeoutSeconds = 30,
+                StreamIdleTimeoutSeconds = 30
             },
             ConfigHash = string.Empty,
             ConversationContext = conversationContext,
             ConversationContextHash = string.Empty,
-            NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
-            ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
-            Ciphertext = new byte[] { 7, 8, 9 },
-            ContentIv = new byte[] { 10, 11, 12 },
+            NodeWrappedEpochKey = new byte[]
+            {
+                1,
+                2,
+                3
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                4,
+                5,
+                6
+            },
+            Ciphertext = new byte[]
+            {
+                7,
+                8,
+                9
+            },
+            ContentIv = new byte[]
+            {
+                10,
+                11,
+                12
+            },
             Aad = "message|aad-placeholder"
         };
 
@@ -495,10 +533,30 @@ public sealed class WorkerEventDispatcherTests
             SortOrder = sortOrder,
             EpochVersion = 7,
             Aad = $"message|history-{sortOrder}",
-            NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
-            ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
-            Ciphertext = new byte[] { 7, 8, 9 },
-            ContentIv = new byte[] { 10, 11, 12 }
+            NodeWrappedEpochKey = new byte[]
+            {
+                1,
+                2,
+                3
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                4,
+                5,
+                6
+            },
+            Ciphertext = new byte[]
+            {
+                7,
+                8,
+                9
+            },
+            ContentIv = new byte[]
+            {
+                10,
+                11,
+                12
+            }
         };
     }
 
@@ -510,10 +568,10 @@ public sealed class WorkerEventDispatcherTests
 
         return JsonSerializer.Deserialize<RuntimePackage>(encryptedPackage.Ciphertext.Span, SerializerOptions)
                ?? RuntimePackageBuilder.Valid()
-                   .WithInvocationId(invocationId)
-                   .WithConversationId(conversationId)
-                   .WithClientNodeId(clientNodeId)
-                   .Build();
+                                       .WithInvocationId(invocationId)
+                                       .WithConversationId(conversationId)
+                                       .WithClientNodeId(clientNodeId)
+                                       .Build();
     }
 
     private sealed class FakeNodeKeyRegistry : INodeKeyRegistry
@@ -536,14 +594,17 @@ public sealed class WorkerEventDispatcherTests
 
         public IReadOnlyList<NodeKeyResolution> ResolveGraceEligible()
         {
-            return [_resolution ?? new NodeKeyResolution
-            {
-                RequestedKeyId = ActiveKeyId,
-                Status = NodeKeyLookupStatus.Active,
-                KeyIdUsed = ActiveKeyId,
-                PrivateKey = _privateKey,
-                PublicKey = _privateKey.PublicKey
-            }];
+            return
+            [
+                _resolution ?? new NodeKeyResolution
+                {
+                    RequestedKeyId = ActiveKeyId,
+                    Status = NodeKeyLookupStatus.Active,
+                    KeyIdUsed = ActiveKeyId,
+                    PrivateKey = _privateKey,
+                    PublicKey = _privateKey.PublicKey
+                }
+            ];
         }
 
         public NodeKeyResolution Resolve(string nodeKeyId)

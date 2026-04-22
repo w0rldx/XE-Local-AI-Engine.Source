@@ -62,8 +62,8 @@ internal static class NodePayloadProtector
 
     private static byte[] BuildAssociatedData(Guid conversationId, Guid recordId, string columnName)
     {
-        var conversationBytes = conversationId.ToByteArray(bigEndian: true);
-        var recordBytes = recordId.ToByteArray(bigEndian: true);
+        var conversationBytes = conversationId.ToByteArray(true);
+        var recordBytes = recordId.ToByteArray(true);
         var columnBytes = Encoding.UTF8.GetBytes(columnName);
         var schemaVersionBytes = Encoding.UTF8.GetBytes(SchemaVersion);
         var aad = new byte[conversationBytes.Length + recordBytes.Length + columnBytes.Length + schemaVersionBytes.Length];

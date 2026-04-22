@@ -1,6 +1,5 @@
 @using XE_Local_AI_Engine.Client.Models.Enums
 @using XE_Local_AI_Engine.Client.Services.Events
-
 <MudCard Class="mb-4">
     <MudCardHeader>
         <CardHeaderContent>
@@ -64,7 +63,8 @@
         @if (State.LastApprovalResolution is not null)
         {
             <MudAlert Severity="@(State.LastApprovalResolution.Approved ? Severity.Success : Severity.Warning)" Dense="true" Class="mt-2">
-                Approval request @State.LastApprovalResolution.RequestId was @(State.LastApprovalResolution.Approved ? "approved" : "rejected") at @FormatTimestamp(State.LastApprovalResolution.ResolvedAt).
+                Approval
+                request @State.LastApprovalResolution.RequestId was @(State.LastApprovalResolution.Approved ? "approved" : "rejected") at @FormatTimestamp(State.LastApprovalResolution.ResolvedAt).
             </MudAlert>
         }
 

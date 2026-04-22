@@ -66,15 +66,15 @@ public sealed class NodeKeyRegistry : INodeKeyRegistry
             }
 
             resolutions.AddRange(_retiredKeys.Values
-                .OrderByDescending(static key => key.ExpiresAtUtc)
-                .Select(static retiredKey => new NodeKeyResolution
-                {
-                    RequestedKeyId = retiredKey.KeyId,
-                    Status = NodeKeyLookupStatus.Retired,
-                    KeyIdUsed = retiredKey.KeyId,
-                    PrivateKey = retiredKey.PrivateKey,
-                    PublicKey = retiredKey.PrivateKey.PublicKey
-                }));
+                                             .OrderByDescending(static key => key.ExpiresAtUtc)
+                                             .Select(static retiredKey => new NodeKeyResolution
+                                             {
+                                                 RequestedKeyId = retiredKey.KeyId,
+                                                 Status = NodeKeyLookupStatus.Retired,
+                                                 KeyIdUsed = retiredKey.KeyId,
+                                                 PrivateKey = retiredKey.PrivateKey,
+                                                 PublicKey = retiredKey.PrivateKey.PublicKey
+                                             }));
 
             return resolutions;
         }
@@ -192,10 +192,10 @@ public sealed class NodeKeyRegistry : INodeKeyRegistry
     private void EvictExpiredRetiredKeys(DateTimeOffset now, string? preservedKeyId = null)
     {
         var expiredKeyIds = _retiredKeys
-            .Where(entry => entry.Value.ExpiresAtUtc <= now
-                            && !string.Equals(entry.Key, preservedKeyId, StringComparison.Ordinal))
-            .Select(entry => entry.Key)
-            .ToList();
+                            .Where(entry => entry.Value.ExpiresAtUtc <= now
+                                            && !string.Equals(entry.Key, preservedKeyId, StringComparison.Ordinal))
+                            .Select(entry => entry.Key)
+                            .ToList();
 
         foreach (var expiredKeyId in expiredKeyIds)
         {

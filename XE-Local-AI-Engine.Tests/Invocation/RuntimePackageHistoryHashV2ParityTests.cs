@@ -6,11 +6,12 @@ using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Golden-vector parity tests for canonical hash. Hashes must match C0re server exactly.
-/// Fixture source: tests/Fixtures/envelope-hash-v2/
+///     Golden-vector parity tests for canonical hash. Hashes must match C0re server exactly.
+///     Fixture source: tests/Fixtures/envelope-hash-v2/
 /// </summary>
 public sealed class RuntimePackageHistoryHashV2ParityTests
 {
+    private const string Aad = "YWFk";
     private static readonly Guid Id1 = new("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Id2 = new("22222222-2222-2222-2222-222222222222");
     private static readonly Guid IdA = new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -18,7 +19,6 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
 
     private static readonly byte[] Ct = Convert.FromBase64String("Y2lwaGVydGV4dA==");
     private static readonly byte[] Iv = Convert.FromBase64String("aXY=");
-    private const string Aad = "YWFk";
 
     [Test]
     public void Hash_EmptyList_MatchesC0reGoldenVector()
@@ -30,7 +30,10 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
     [Test]
     public void Hash_OneMessageAllFields_MatchesC0reGoldenVector()
     {
-        var messages = new[] { MakeMsg(Id1, 1, MessageRole.User, 3, Ct, Iv, Aad) };
+        var messages = new[]
+        {
+            MakeMsg(Id1, 1, MessageRole.User, 3, Ct, Iv, Aad)
+        };
         var hash = RuntimePackageHistoryHash.Compute(messages);
         AssertEx.Equal("590c171df8f08be690bef534a1f224a66df4c4c53ecd7e357dea5755271ee9fc", hash);
     }
@@ -38,7 +41,10 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
     [Test]
     public void Hash_EpochVersionZero_MatchesC0reGoldenVector()
     {
-        var messages = new[] { MakeMsg(Id2, 0, MessageRole.Assistant, 0, Ct, Iv, Aad) };
+        var messages = new[]
+        {
+            MakeMsg(Id2, 0, MessageRole.Assistant, 0, Ct, Iv, Aad)
+        };
         var hash = RuntimePackageHistoryHash.Compute(messages);
         AssertEx.Equal("bea716b80f646f05de320d61207bda21df1710a0403c6ac46687ecb9a7064c21", hash);
     }
@@ -90,8 +96,7 @@ public sealed class RuntimePackageHistoryHashV2ParityTests
         AssertEx.Equal("d7646bed0dea9c0259d0b2750194b22af4f5e41ed77335f001056e4684f55310", hash);
     }
 
-    private static EncryptedConversationMessageDto MakeMsg(
-        Guid id, int sortOrder, MessageRole role, int epochVersion,
+    private static EncryptedConversationMessageDto MakeMsg(Guid id, int sortOrder, MessageRole role, int epochVersion,
         byte[] ciphertext, byte[] contentIv, string aad)
     {
         return new EncryptedConversationMessageDto

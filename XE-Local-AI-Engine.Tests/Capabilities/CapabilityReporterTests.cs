@@ -157,10 +157,10 @@ public sealed class CapabilityReporterTests
     private sealed class MockWorkerHubConnection : IWorkerHubConnection
     {
         private EventHandler<ApprovalResolvedReceivedEventArgs>? _approvalResolvedReceived;
+        private EventHandler<ConversationPurgedReceivedEventArgs>? _conversationPurgedReceived;
         private EventHandler<DisconnectRequestedReceivedEventArgs>? _disconnectRequestedReceived;
         private EventHandler<InvocationAssignedReceivedEventArgs>? _invocationAssignedReceived;
         private EventHandler<InvocationCancelledReceivedEventArgs>? _invocationCancelledReceived;
-        private EventHandler<ConversationPurgedReceivedEventArgs>? _conversationPurgedReceived;
         private EventHandler<WorkerConnectionStateChangedEventArgs>? _stateChanged;
         private EventHandler<ToolCallResultReceivedEventArgs>? _toolCallResultReceived;
 

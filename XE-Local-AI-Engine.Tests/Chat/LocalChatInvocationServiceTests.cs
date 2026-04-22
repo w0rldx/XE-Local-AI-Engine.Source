@@ -3,9 +3,10 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -73,7 +74,7 @@ public sealed class LocalChatInvocationServiceTests
         AssertEx.Contains(AssertEx.NotNull(context.Package.RequestedCapabilities), LocalChatLoopbackDefaults.RequestedCapability);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[0].Role);
         AssertEx.Equal("hello", context.Package.ConversationContext[0].Content);
-        await eventDispatcher.Received(1).ReportInvocationAssignedAsync(Arg.Is<XE_Local_AI_Engine.Client.Models.RuntimePackage>(package => package.InvocationId == invocationId));
+        await eventDispatcher.Received(1).ReportInvocationAssignedAsync(Arg.Is<RuntimePackage>(package => package.InvocationId == invocationId));
     }
 
     [Test]
@@ -130,12 +131,12 @@ public sealed class LocalChatInvocationServiceTests
         eventDispatcher = Substitute.For<IWorkerEventDispatcher>();
 
         return new LocalChatInvocationService(Options.Create(new LocalChatAgentOptions
-        {
-            AgentName = "XeLocalAgent",
-            DefaultModel = "qwen3.5:0.8b",
-            InstructionsResource = "XE_Local_AI_Engine.AI.Agent.Instructions.LocalChatDefault.txt",
-            EnableTools = true
-        }),
+            {
+                AgentName = "XeLocalAgent",
+                DefaultModel = "qwen3.5:0.8b",
+                InstructionsResource = "XE_Local_AI_Engine.AI.Agent.Instructions.LocalChatDefault.txt",
+                EnableTools = true
+            }),
             new LocalChatRuntimePackageBuilder(),
             invocationRunner,
             eventDispatcher);

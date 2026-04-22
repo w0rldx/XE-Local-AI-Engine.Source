@@ -1,49 +1,48 @@
-namespace XE_Local_AI_Engine.Client.Persistence
+namespace XE_Local_AI_Engine.Client.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+
+public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeRetentionStore
 {
-    using Microsoft.EntityFrameworkCore;
+    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
-    public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeRetentionStore
+    public async Task<int> SweepExpiredConversationsAsync(long cutoffUtc, CancellationToken cancellationToken = default)
     {
-        private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        var candidateConversationIds = await _dbContext.Conversations
+                                                       .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
+                                                       .Select(conversation => conversation.ConversationId)
+                                                       .ToListAsync(cancellationToken)
+                                                       .ConfigureAwait(false);
 
-        public async Task<int> SweepExpiredConversationsAsync(long cutoffUtc, CancellationToken cancellationToken = default)
+        if (candidateConversationIds.Count == 0)
         {
-            var candidateConversationIds = await _dbContext.Conversations
-                .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
-                .Select(conversation => conversation.ConversationId)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (candidateConversationIds.Count == 0)
-            {
-                return 0;
-            }
-
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-
-            _ = await _dbContext.Messages
-                .Where(message => candidateConversationIds.Contains(message.ConversationId))
-                .ExecuteDeleteAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            _ = await _dbContext.ToolEvents
-                .Where(toolEvent => candidateConversationIds.Contains(toolEvent.ConversationId))
-                .ExecuteDeleteAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            _ = await _dbContext.PurgedTombstones
-                .Where(tombstone => candidateConversationIds.Contains(tombstone.ConversationId))
-                .ExecuteDeleteAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            var deletedConversationCount = await _dbContext.Conversations
-                .Where(conversation => candidateConversationIds.Contains(conversation.ConversationId))
-                .ExecuteDeleteAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-
-            return deletedConversationCount;
+            return 0;
         }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        _ = await _dbContext.Messages
+                            .Where(message => candidateConversationIds.Contains(message.ConversationId))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+
+        _ = await _dbContext.ToolEvents
+                            .Where(toolEvent => candidateConversationIds.Contains(toolEvent.ConversationId))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+
+        _ = await _dbContext.PurgedTombstones
+                            .Where(tombstone => candidateConversationIds.Contains(tombstone.ConversationId))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+
+        var deletedConversationCount = await _dbContext.Conversations
+                                                       .Where(conversation => candidateConversationIds.Contains(conversation.ConversationId))
+                                                       .ExecuteDeleteAsync(cancellationToken)
+                                                       .ConfigureAwait(false);
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        return deletedConversationCount;
     }
 }

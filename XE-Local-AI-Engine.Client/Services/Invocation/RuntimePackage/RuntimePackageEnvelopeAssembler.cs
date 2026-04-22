@@ -71,10 +71,10 @@ public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAss
         ArgumentNullException.ThrowIfNull(package);
 
         var decryptedMessages = package.ConversationContext
-            .Select(historyEntry => DecryptHistoryMessage(package.ConversationId, historyEntry))
-            .OrderBy(static message => message.SortOrder)
-            .ThenBy(static message => message.Id.ToString("D"), StringComparer.Ordinal)
-            .ToList();
+                                       .Select(historyEntry => DecryptHistoryMessage(package.ConversationId, historyEntry))
+                                       .OrderBy(static message => message.SortOrder)
+                                       .ThenBy(static message => message.Id.ToString("D"), StringComparer.Ordinal)
+                                       .ToList();
 
         return decryptedMessages;
     }
@@ -190,13 +190,13 @@ public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAss
                     Id = package.MessageId,
                     Role = MessageRole.User,
                     Content = Encoding.UTF8.GetString(currentMessagePlaintext),
-                    SortOrder = currentMessageSortOrder,
+                    SortOrder = currentMessageSortOrder
                 }
             ],
             AllowedTools = [.. package.AllowedTools.Select(MapAllowedTool)],
             ModelProfile = package.ModelProfile,
             Timeouts = package.Timeouts,
-            ConfigHash = package.ConfigHash,
+            ConfigHash = package.ConfigHash
         };
     }
 

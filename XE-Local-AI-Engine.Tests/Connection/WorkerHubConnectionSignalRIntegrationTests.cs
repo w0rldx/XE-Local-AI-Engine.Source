@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Connection;
 
-using System.Net.Http;
 using System.Net.Security;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Http.Connections.Client;
@@ -11,6 +10,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -32,22 +32,20 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         var deadLetterStore = Substitute.For<IDeadLetterStore>();
         deadLetterStore.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>([]));
 
-        var deadLetterFlushService = new DeadLetterFlushService(
-            deadLetterStore,
+        var deadLetterFlushService = new DeadLetterFlushService(deadLetterStore,
             new Lazy<IHubMessageSender>(() => sender),
             NullLogger<DeadLetterFlushService>.Instance);
 
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        using var nodeKeyRegistry = new XE_Local_AI_Engine.Client.Services.Auth.NodeKeyRegistry(TimeProvider.System);
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
 
-        await using var connection = new WorkerHubConnection(
-            tokenStore,
+        await using var connection = new WorkerHubConnection(tokenStore,
             Options.Create(new CentralPlatformOptions
             {
                 BaseUrl = fixture.HubBaseUri.ToString(),
-                HubPath = fixture.HubPath,
+                HubPath = fixture.HubPath
             }),
             new ConnectionState(),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
@@ -74,10 +72,30 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 SortOrder = 10,
                 EpochVersion = epochVersion,
                 Aad = $"message|{conversationId:D}|11111111-1111-1111-1111-111111111111|{epochVersion}",
-                NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
-                ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
-                Ciphertext = new byte[] { 7, 8, 9 },
-                ContentIv = new byte[] { 10, 11, 12 },
+                NodeWrappedEpochKey = new byte[]
+                {
+                    1,
+                    2,
+                    3
+                },
+                ClientEphemeralPublicKey = new byte[]
+                {
+                    4,
+                    5,
+                    6
+                },
+                Ciphertext = new byte[]
+                {
+                    7,
+                    8,
+                    9
+                },
+                ContentIv = new byte[]
+                {
+                    10,
+                    11,
+                    12
+                }
             }
         };
 
@@ -104,15 +122,39 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
             {
                 InvocationTimeoutSeconds = 300,
                 ToolCallTimeoutSeconds = 60,
-                StreamIdleTimeoutSeconds = 30,
+                StreamIdleTimeoutSeconds = 30
             },
             ConfigHash = "04c79b399e8dd0a4eba7e2b50c43931aa92b7c50ed73db6d1989c209f3c1cf33",
             ConversationContext = conversationContext,
             ConversationContextHash = RuntimePackageHistoryHash.Compute(conversationContext),
-            NodeWrappedEpochKey = new byte[] { 1, 2, 3, 4 },
-            ClientEphemeralPublicKey = new byte[] { 5, 6, 7, 8 },
-            Ciphertext = new byte[] { 9, 10, 11, 12 },
-            ContentIv = new byte[] { 13, 14, 15, 16 },
+            NodeWrappedEpochKey = new byte[]
+            {
+                1,
+                2,
+                3,
+                4
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                5,
+                6,
+                7,
+                8
+            },
+            Ciphertext = new byte[]
+            {
+                9,
+                10,
+                11,
+                12
+            },
+            ContentIv = new byte[]
+            {
+                13,
+                14,
+                15,
+                16
+            },
             Aad = $"message|{conversationId:D}|{messageId:D}|{epochVersion}"
         };
 
@@ -126,9 +168,21 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
             ConversationId = runtimePackage.ConversationId,
             MessageId = runtimePackage.MessageId,
             EpochVersion = runtimePackage.EpochVersion,
-            ChunkIv = new byte[] { 21, 22, 23, 24 },
-            ChunkCiphertext = new byte[] { 25, 26, 27, 28 },
-            Sequence = 1,
+            ChunkIv = new byte[]
+            {
+                21,
+                22,
+                23,
+                24
+            },
+            ChunkCiphertext = new byte[]
+            {
+                25,
+                26,
+                27,
+                28
+            },
+            Sequence = 1
         };
 
         var completedPayload = new EncryptedCompletedEnvelopeV1
@@ -136,14 +190,26 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
             ConversationId = runtimePackage.ConversationId,
             MessageId = runtimePackage.MessageId,
             EpochVersion = runtimePackage.EpochVersion,
-            FinalIv = new byte[] { 31, 32, 33, 34 },
-            FinalCiphertext = new byte[] { 35, 36, 37, 38 },
+            FinalIv = new byte[]
+            {
+                31,
+                32,
+                33,
+                34
+            },
+            FinalCiphertext = new byte[]
+            {
+                35,
+                36,
+                37,
+                38
+            },
             TotalSequence = 2,
             TokenCounts = new Dictionary<string, long>
             {
                 ["input"] = 11,
-                ["output"] = 7,
-            },
+                ["output"] = 7
+            }
         };
 
         await connection.SendEncryptedChunkAsync(chunkPayload);
@@ -168,22 +234,20 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         var deadLetterStore = Substitute.For<IDeadLetterStore>();
         deadLetterStore.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>([]));
 
-        var deadLetterFlushService = new DeadLetterFlushService(
-            deadLetterStore,
+        var deadLetterFlushService = new DeadLetterFlushService(deadLetterStore,
             new Lazy<IHubMessageSender>(() => sender),
             NullLogger<DeadLetterFlushService>.Instance);
 
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        using var nodeKeyRegistry = new XE_Local_AI_Engine.Client.Services.Auth.NodeKeyRegistry(TimeProvider.System);
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
 
-        await using var connection = new WorkerHubConnection(
-            tokenStore,
+        await using var connection = new WorkerHubConnection(tokenStore,
             Options.Create(new CentralPlatformOptions
             {
                 BaseUrl = fixture.HubBaseUri.ToString(),
-                HubPath = fixture.HubPath,
+                HubPath = fixture.HubPath
             }),
             new ConnectionState(),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
@@ -211,10 +275,30 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 SortOrder = 10,
                 EpochVersion = epochVersion,
                 Aad = $"message|{conversationId:D}|{historyMessageOneId:D}|{epochVersion}",
-                NodeWrappedEpochKey = new byte[] { 1, 2, 3 },
-                ClientEphemeralPublicKey = new byte[] { 4, 5, 6 },
-                Ciphertext = new byte[] { 7, 8, 9 },
-                ContentIv = new byte[] { 10, 11, 12 },
+                NodeWrappedEpochKey = new byte[]
+                {
+                    1,
+                    2,
+                    3
+                },
+                ClientEphemeralPublicKey = new byte[]
+                {
+                    4,
+                    5,
+                    6
+                },
+                Ciphertext = new byte[]
+                {
+                    7,
+                    8,
+                    9
+                },
+                ContentIv = new byte[]
+                {
+                    10,
+                    11,
+                    12
+                }
             },
             new()
             {
@@ -223,10 +307,30 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 SortOrder = 20,
                 EpochVersion = epochVersion,
                 Aad = $"message|{conversationId:D}|{historyMessageTwoId:D}|{epochVersion}",
-                NodeWrappedEpochKey = new byte[] { 11, 12, 13 },
-                ClientEphemeralPublicKey = new byte[] { 14, 15, 16 },
-                Ciphertext = new byte[] { 17, 18, 19 },
-                ContentIv = new byte[] { 20, 21, 22 },
+                NodeWrappedEpochKey = new byte[]
+                {
+                    11,
+                    12,
+                    13
+                },
+                ClientEphemeralPublicKey = new byte[]
+                {
+                    14,
+                    15,
+                    16
+                },
+                Ciphertext = new byte[]
+                {
+                    17,
+                    18,
+                    19
+                },
+                ContentIv = new byte[]
+                {
+                    20,
+                    21,
+                    22
+                }
             }
         };
 
@@ -253,15 +357,39 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
             {
                 InvocationTimeoutSeconds = 300,
                 ToolCallTimeoutSeconds = 60,
-                StreamIdleTimeoutSeconds = 30,
+                StreamIdleTimeoutSeconds = 30
             },
             ConfigHash = "04c79b399e8dd0a4eba7e2b50c43931aa92b7c50ed73db6d1989c209f3c1cf33",
             ConversationContext = conversationContext,
             ConversationContextHash = RuntimePackageHistoryHash.Compute(conversationContext),
-            NodeWrappedEpochKey = new byte[] { 1, 2, 3, 4 },
-            ClientEphemeralPublicKey = new byte[] { 5, 6, 7, 8 },
-            Ciphertext = new byte[] { 9, 10, 11, 12 },
-            ContentIv = new byte[] { 13, 14, 15, 16 },
+            NodeWrappedEpochKey = new byte[]
+            {
+                1,
+                2,
+                3,
+                4
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                5,
+                6,
+                7,
+                8
+            },
+            Ciphertext = new byte[]
+            {
+                9,
+                10,
+                11,
+                12
+            },
+            ContentIv = new byte[]
+            {
+                13,
+                14,
+                15,
+                16
+            },
             Aad = $"message|{conversationId:D}|{messageId:D}|{epochVersion}"
         };
 
