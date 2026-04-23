@@ -9,6 +9,8 @@ public sealed class MockOllamaHttpHandler : HttpMessageHandler
     private string[] _models = [];
     private Exception? _nextException;
 
+    public int TagsRequestCount { get; private set; }
+
     public void SetModelsResponse(params string[] models)
     {
         ArgumentNullException.ThrowIfNull(models);
@@ -39,6 +41,11 @@ public sealed class MockOllamaHttpHandler : HttpMessageHandler
         var path = request.RequestUri?.AbsolutePath ?? string.Empty;
         if (string.Equals(path, "/api/tags", StringComparison.OrdinalIgnoreCase))
         {
+            lock (_sync)
+            {
+                TagsRequestCount++;
+            }
+
             var models = GetModelsSnapshot()
                          .Select(name => new MockOllamaModel(name))
                          .ToArray();

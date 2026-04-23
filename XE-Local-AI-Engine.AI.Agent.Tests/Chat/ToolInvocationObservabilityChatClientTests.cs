@@ -12,7 +12,8 @@ public sealed class ToolInvocationObservabilityChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_WithFunctionCallContent_LogsToolInvocation()
     {
-        using var innerClient = new FakeChatClient();
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new FakeChatClient(callId, "approve-job");
         var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
 
@@ -28,16 +29,20 @@ public sealed class ToolInvocationObservabilityChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_WithFunctionCallContent_CreatesToolInvocationActivity()
     {
-        using var innerClient = new FakeChatClient();
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new FakeChatClient(callId, "approve-job");
         var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
-        var startedActivities = new List<string>();
+        var stoppedActivities = new List<(string OperationName, string? CallId, string? ToolName)>();
 
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
             Sample = static (ref _) => ActivitySamplingResult.AllData,
-            ActivityStarted = activity => startedActivities.Add(activity.OperationName)
+            ActivityStopped = activity => stoppedActivities.Add((
+                activity.OperationName,
+                activity.GetTagItem("tool.call_id")?.ToString(),
+                activity.GetTagItem("tool.name")?.ToString()))
         };
 
         ActivitySource.AddActivityListener(listener);
@@ -47,11 +52,23 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        AssertEx.ContainsSingle(startedActivities, name => string.Equals(name, "AgentRun.ToolInvocation", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(stoppedActivities,
+            activity => string.Equals(activity.OperationName, "AgentRun.ToolInvocation", StringComparison.Ordinal)
+                        && string.Equals(activity.CallId, callId, StringComparison.Ordinal)
+                        && string.Equals(activity.ToolName, "approve-job", StringComparison.Ordinal));
     }
 
     private sealed class FakeChatClient : IChatClient
     {
+        private readonly string _callId;
+        private readonly string _toolName;
+
+        public FakeChatClient(string callId, string toolName)
+        {
+            _callId = callId ?? throw new ArgumentNullException(nameof(callId));
+            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+        }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
@@ -68,7 +85,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             {
                 Contents =
                 [
-                    new FunctionCallContent("call-1", "approve-job", new Dictionary<string, object?>
+                    new FunctionCallContent(_callId, _toolName, new Dictionary<string, object?>
                     {
                         ["decision"] = true
                     })

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
 using System.Runtime.CompilerServices;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -30,6 +31,30 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal("Be helpful.", context.SeedMessages[0].Text);
         AssertEx.Equal("hello", context.SeedMessages[1].Text);
         AssertEx.Equal(false, context.Items["toolsEnabled"]);
+    }
+
+    [Test]
+    public async Task CreateAsync_AppliesResolvedModelToChatOptions()
+    {
+        var definition = new InvocationAgentDefinition("llama3.2:3b",
+            "Be helpful.",
+            [],
+            []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+
+        AssertEx.Equal("llama3.2:3b", chatOptions.ModelId);
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue("think", out var thinkValue));
+        AssertEx.Equal(true, thinkValue);
     }
 
     [Test]

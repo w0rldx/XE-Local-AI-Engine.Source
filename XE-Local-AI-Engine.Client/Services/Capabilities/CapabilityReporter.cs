@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 
 public sealed class CapabilityReporter : ICapabilityReporter
 {
+    private static readonly TimeSpan InstalledModelsCacheLifetime = TimeSpan.FromSeconds(10);
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
     private readonly string _defaultModel;
@@ -16,15 +17,20 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private readonly ILogger<CapabilityReporter> _logger;
 
     private readonly IOllamaApiClient _ollamaClient;
+    private readonly TimeProvider _timeProvider;
+    private readonly object _installedModelsCacheSync = new();
+    private CachedInstalledModels? _installedModelsCache;
 
     public CapabilityReporter(IOllamaApiClient ollamaClient,
         IConfiguration configuration,
         IWorkerHubConnection hubConnection,
+        TimeProvider timeProvider,
         ILogger<CapabilityReporter> logger)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         ArgumentNullException.ThrowIfNull(configuration);
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _defaultModel = configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
@@ -69,7 +75,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
 
         try
         {
-            if (!await _ollamaClient.IsRunningAsync(CancellationToken.None).ConfigureAwait(false))
+            if (!await _ollamaClient.IsRunningAsync(cancellationToken).ConfigureAwait(false))
             {
                 _logger.LogWarning("Ollama is not reachable during capability preflight.");
                 return false;
@@ -119,16 +125,25 @@ public sealed class CapabilityReporter : ICapabilityReporter
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var cachedModels = TryGetCachedInstalledModels();
+        if (cachedModels is not null)
+        {
+            return cachedModels;
+        }
+
         try
         {
-            var models = await _ollamaClient.ListLocalModelsAsync(CancellationToken.None).ConfigureAwait(false);
-            return models
-                   .Select(model => model.Name?.Trim())
-                   .Where(name => !string.IsNullOrWhiteSpace(name))
-                   .Distinct(StringComparer.OrdinalIgnoreCase)
-                   .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                   .Cast<string>()
-                   .ToArray();
+            var models = await _ollamaClient.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
+            var normalizedModels = models
+                                   .Select(model => model.Name?.Trim())
+                                   .Where(name => !string.IsNullOrWhiteSpace(name))
+                                   .Distinct(StringComparer.OrdinalIgnoreCase)
+                                   .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                                   .Cast<string>()
+                                   .ToArray();
+
+            CacheInstalledModels(normalizedModels);
+            return normalizedModels;
         }
         catch (HttpRequestException exception)
         {
@@ -136,6 +151,35 @@ public sealed class CapabilityReporter : ICapabilityReporter
             return [];
         }
     }
+
+    private IReadOnlyList<string>? TryGetCachedInstalledModels()
+    {
+        lock (_installedModelsCacheSync)
+        {
+            if (_installedModelsCache is null)
+            {
+                return null;
+            }
+
+            if (_timeProvider.GetUtcNow() >= _installedModelsCache.ExpiresAt)
+            {
+                _installedModelsCache = null;
+                return null;
+            }
+
+            return _installedModelsCache.Models;
+        }
+    }
+
+    private void CacheInstalledModels(IReadOnlyList<string> models)
+    {
+        lock (_installedModelsCacheSync)
+        {
+            _installedModelsCache = new CachedInstalledModels(models, _timeProvider.GetUtcNow().Add(InstalledModelsCacheLifetime));
+        }
+    }
+
+    private sealed record CachedInstalledModels(IReadOnlyList<string> Models, DateTimeOffset ExpiresAt);
 
     private static IReadOnlyList<string> DetermineSupportedCapabilities(IReadOnlyList<string> installedModels)
     {

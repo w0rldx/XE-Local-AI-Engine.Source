@@ -82,6 +82,35 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
+    public async Task VerifyOllamaAndModelAsync_WhenCalledRepeatedly_UsesCachedInstalledModels()
+    {
+        using var context = CreateContext();
+        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+
+        var firstResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
+        var secondResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
+
+        AssertEx.True(firstResult);
+        AssertEx.True(secondResult);
+        AssertEx.Equal(1, context.Handler.TagsRequestCount);
+    }
+
+    [Test]
+    public async Task VerifyOllamaAndModelAsync_WhenCacheExpires_RefreshesInstalledModels()
+    {
+        using var context = CreateContext();
+        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+
+        var firstResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
+        context.TimeProvider.Advance(TimeSpan.FromSeconds(11));
+        var secondResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
+
+        AssertEx.True(firstResult);
+        AssertEx.True(secondResult);
+        AssertEx.Equal(2, context.Handler.TagsRequestCount);
+    }
+
+    [Test]
     public async Task ReportToApiAsync_CallsSendCapabilitiesAsync()
     {
         using var context = CreateContext();
@@ -112,8 +141,9 @@ public sealed class CapabilityReporterTests
         var chatClient = new OllamaApiClient(httpClient);
 
         var hubConnection = new MockWorkerHubConnection();
-        var reporter = new CapabilityReporter(chatClient, configuration, hubConnection, NullLogger<CapabilityReporter>.Instance);
-        return new CapabilityReporterTestContext(handler, httpClient, chatClient, hubConnection, reporter);
+        var timeProvider = new FakeTimeProvider();
+        var reporter = new CapabilityReporter(chatClient, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        return new CapabilityReporterTestContext(handler, httpClient, chatClient, hubConnection, reporter, timeProvider);
     }
 
     private sealed class CapabilityReporterTestContext : IDisposable
@@ -122,13 +152,15 @@ public sealed class CapabilityReporterTests
             HttpClient httpClient,
             OllamaApiClient chatClient,
             MockWorkerHubConnection hubConnection,
-            CapabilityReporter reporter)
+            CapabilityReporter reporter,
+            FakeTimeProvider timeProvider)
         {
             Handler = handler;
             HttpClient = httpClient;
             ChatClient = chatClient;
             HubConnection = hubConnection;
             Reporter = reporter;
+            TimeProvider = timeProvider;
         }
 
         public MockOllamaHttpHandler Handler { get; }
@@ -141,6 +173,8 @@ public sealed class CapabilityReporterTests
 
         public CapabilityReporter Reporter { get; }
 
+        public FakeTimeProvider TimeProvider { get; }
+
         public void Dispose()
         {
             if (ChatClient is IDisposable disposableChatClient)
@@ -151,6 +185,21 @@ public sealed class CapabilityReporterTests
             HttpClient.Dispose();
             Handler.Dispose();
             HubConnection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+
+    private sealed class FakeTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _utcNow = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
+
+        public void Advance(TimeSpan timeSpan)
+        {
+            _utcNow = _utcNow.Add(timeSpan);
         }
     }
 
