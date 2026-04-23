@@ -61,6 +61,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             {
                 ChatOptions = new ChatOptions
                 {
+                    ModelId = definition.ModelId,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
                         ["think"] = true
