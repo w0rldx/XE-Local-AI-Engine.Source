@@ -14,7 +14,8 @@ public interface IEnvelopeCryptoService
         int epochVersion,
         ReadOnlySpan<byte> epochKey,
         ReadOnlySpan<byte> plaintext,
-        long sequence);
+        long sequence,
+        string kind = EncryptedChunkEnvelopeV1.ContentKind);
 
     EncryptedCompletedEnvelopeV1 EncryptCompleted(Guid conversationId,
         Guid messageId,
@@ -22,5 +23,6 @@ public interface IEnvelopeCryptoService
         ReadOnlySpan<byte> epochKey,
         ReadOnlySpan<byte> plaintext,
         long totalSequence,
-        IReadOnlyDictionary<string, long> tokenCounts);
+        IReadOnlyDictionary<string, long> tokenCounts,
+        ReadOnlyMemory<byte>? reasoningPlaintext = null);
 }

@@ -11,6 +11,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -48,6 +49,7 @@ public sealed class InvocationRunnerTests
 
         AssertEx.True(sender.SentEncryptedChunks.Count >= 1);
         AssertEx.True(sender.SentEncryptedChunks.All(chunk => chunk.MessageId != Guid.Empty));
+        AssertEx.True(sender.SentEncryptedChunks.All(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind));
     }
 
     [Test]
@@ -82,6 +84,30 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
         await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
+    }
+
+    [Test]
+    public async Task RunAsync_WithThinkingAndTextChunks_SendsEncryptedReasoningChunksAndFinalReasoning()
+    {
+        var sender = new MockHubMessageSender();
+        var package = RuntimePackageBuilder.Valid().Build();
+        var runner = CreateRunner(sender,
+            agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
+
+        await RunAsync(runner, package);
+
+        var contentChunks = sender.SentEncryptedChunks.Where(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind).ToList();
+        var reasoningChunks = sender.SentEncryptedChunks.Where(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ReasoningKind).ToList();
+
+        AssertEx.Equal(2, contentChunks.Count);
+        AssertEx.Equal(2, reasoningChunks.Count);
+        AssertEx.Equal(1, reasoningChunks[0].Sequence);
+        AssertEx.Equal(2, reasoningChunks[1].Sequence);
+        AssertEx.Equal(1, sender.SentEncryptedCompletions.Count);
+        AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalIv.HasValue);
+        AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalCiphertext.HasValue);
+        AssertEx.Equal(2, sender.SentEncryptedCompletions[0].TokenCounts["outputTokens"]);
+        AssertEx.Equal(2, sender.SentEncryptedCompletions[0].TokenCounts["reasoningTokens"]);
     }
 
     [Test]
@@ -244,6 +270,24 @@ public sealed class InvocationRunnerTests
 
         AssertEx.ContainsSingle(sender.SentEncryptedFailures,
             failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Response size exceeded", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task RunAsync_ExceedsMaxReasoningSize_SendsInvocationFailed()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 1,
+            MaxPendingToolCallAgeMinutes = 5
+        }, agentUpdates: CreateMixedUpdates((Text: null, Thinking: new string('x', (1024 * 1024) + 1))));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures,
+            failure => failure.ConversationId == package.ConversationId && failure.Error.Contains("Reasoning size exceeded", StringComparison.Ordinal));
     }
 
     [Test]
