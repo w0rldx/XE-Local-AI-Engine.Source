@@ -106,9 +106,13 @@ public sealed class InvocationRunner : IInvocationRunner
             var invocationToken = GetInvocationCancellationToken();
             var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
             var responseBuilder = new StringBuilder();
+            var reasoningBuilder = new StringBuilder();
             var streamedChunkCount = 0;
+            var streamedReasoningChunkCount = 0;
             long sequence = 0;
+            long reasoningSequence = 0;
             var totalResponseBytes = 0;
+            var totalReasoningBytes = 0;
 
             if (shouldSendHubMessages)
             {
@@ -126,7 +130,29 @@ public sealed class InvocationRunner : IInvocationRunner
 
                 if (!string.IsNullOrEmpty(thinkingChunk))
                 {
+                    totalReasoningBytes += Encoding.UTF8.GetByteCount(thinkingChunk);
+                    if (totalReasoningBytes > _maxResponseSizeBytes)
+                    {
+                        throw new InvalidOperationException($"Reasoning size exceeded maximum of {_maxResponseSizeBytes / (1024 * 1024)}MB");
+                    }
+
+                    streamedReasoningChunkCount++;
+                    reasoningSequence++;
+                    reasoningBuilder.Append(thinkingChunk);
+
                     await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, thinkingChunk).ConfigureAwait(false);
+
+                    if (shouldSendHubMessages)
+                    {
+                        await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
+                                context.MessageId,
+                                context.EpochVersion,
+                                context.EpochKey.Span,
+                                Encoding.UTF8.GetBytes(thinkingChunk),
+                                reasoningSequence,
+                                EncryptedChunkEnvelopeV1.ReasoningKind),
+                            invocationToken).ConfigureAwait(false);
+                    }
                 }
 
                 if (string.IsNullOrEmpty(textChunk))
@@ -169,8 +195,11 @@ public sealed class InvocationRunner : IInvocationRunner
                         sequence,
                         new Dictionary<string, long>
                         {
-                            ["tokensUsed"] = streamedChunkCount
-                        }),
+                            ["tokensUsed"] = streamedChunkCount + streamedReasoningChunkCount,
+                            ["outputTokens"] = streamedChunkCount,
+                            ["reasoningTokens"] = streamedReasoningChunkCount
+                        },
+                        reasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(reasoningBuilder.ToString()) : null),
                     invocationToken).ConfigureAwait(false);
             }
 

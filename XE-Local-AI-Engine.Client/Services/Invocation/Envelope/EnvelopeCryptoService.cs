@@ -54,15 +54,19 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         int epochVersion,
         ReadOnlySpan<byte> epochKey,
         ReadOnlySpan<byte> plaintext,
-        long sequence)
+        long sequence,
+        string kind = EncryptedChunkEnvelopeV1.ContentKind)
     {
-        var (nonce, ciphertext) = EncryptPayload(plaintext, epochKey, BuildEnvelopeAad(conversationId, messageId, epochVersion));
+        ValidateEncryptedFieldKind(kind);
+
+        var (nonce, ciphertext) = EncryptPayload(plaintext, epochKey, BuildChunkAad(conversationId, messageId, epochVersion, sequence, kind));
 
         return new EncryptedChunkEnvelopeV1
         {
             ConversationId = conversationId,
             MessageId = messageId,
             EpochVersion = epochVersion,
+            Kind = kind,
             ChunkIv = nonce,
             ChunkCiphertext = ciphertext,
             Sequence = sequence
@@ -75,11 +79,15 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         ReadOnlySpan<byte> epochKey,
         ReadOnlySpan<byte> plaintext,
         long totalSequence,
-        IReadOnlyDictionary<string, long> tokenCounts)
+        IReadOnlyDictionary<string, long> tokenCounts,
+        ReadOnlyMemory<byte>? reasoningPlaintext = null)
     {
         ArgumentNullException.ThrowIfNull(tokenCounts);
 
         var (nonce, ciphertext) = EncryptPayload(plaintext, epochKey, BuildEnvelopeAad(conversationId, messageId, epochVersion));
+        (byte[] Nonce, byte[] Ciphertext)? reasoning = reasoningPlaintext is { } value
+            ? EncryptPayload(value.Span, epochKey, BuildReasoningEnvelopeAad(conversationId, messageId, epochVersion))
+            : null;
 
         return new EncryptedCompletedEnvelopeV1
         {
@@ -88,6 +96,8 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
             EpochVersion = epochVersion,
             FinalIv = nonce,
             FinalCiphertext = ciphertext,
+            ReasoningFinalIv = reasoning?.Nonce,
+            ReasoningFinalCiphertext = reasoning?.Ciphertext,
             TotalSequence = totalSequence,
             TokenCounts = tokenCounts
         };
@@ -241,6 +251,31 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
     private static byte[] BuildEnvelopeAad(Guid conversationId, Guid messageId, int epochVersion)
     {
         return Encoding.UTF8.GetBytes(BuildEnvelopeAadString(conversationId, messageId, epochVersion));
+    }
+
+    private static byte[] BuildReasoningEnvelopeAad(Guid conversationId, Guid messageId, int epochVersion)
+    {
+        return Encoding.UTF8.GetBytes($"{BuildEnvelopeAadString(conversationId, messageId, epochVersion)}|reasoning");
+    }
+
+    private static byte[] BuildChunkAad(Guid conversationId, Guid messageId, int epochVersion, long sequence, string kind)
+    {
+        var aad = string.Equals(kind, EncryptedChunkEnvelopeV1.ReasoningKind, StringComparison.Ordinal)
+            ? $"chunk|{conversationId:D}|{messageId:D}|{epochVersion}|reasoning|{sequence}"
+            : $"chunk|{conversationId:D}|{messageId:D}|{epochVersion}|{sequence}";
+
+        return Encoding.UTF8.GetBytes(aad);
+    }
+
+    private static void ValidateEncryptedFieldKind(string kind)
+    {
+        if (string.Equals(kind, EncryptedChunkEnvelopeV1.ContentKind, StringComparison.Ordinal)
+            || string.Equals(kind, EncryptedChunkEnvelopeV1.ReasoningKind, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(kind), kind, "Encrypted chunk kind must be content or reasoning.");
     }
 
     private static string BuildEnvelopeAadString(Guid conversationId, Guid messageId, int epochVersion)

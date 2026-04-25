@@ -14,6 +14,10 @@ public sealed record EncryptedCompletedEnvelopeV1
 
     public required ReadOnlyMemory<byte> FinalCiphertext { get; init; }
 
+    public ReadOnlyMemory<byte>? ReasoningFinalIv { get; init; }
+
+    public ReadOnlyMemory<byte>? ReasoningFinalCiphertext { get; init; }
+
     public required long TotalSequence { get; init; }
 
     public required IReadOnlyDictionary<string, long> TokenCounts { get; init; }
