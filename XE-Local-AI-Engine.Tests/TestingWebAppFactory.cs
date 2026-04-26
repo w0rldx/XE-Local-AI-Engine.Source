@@ -15,14 +15,33 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
+    private readonly FakeOllamaServer? _fakeOllamaServer;
+
+    public TestingWebAppFactory()
+    {
+        if (!RunLocalIntegration)
+        {
+            _fakeOllamaServer = FakeOllamaServer.StartAsync(new FakeOllamaOptions
+            {
+                Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
+            }).GetAwaiter().GetResult();
+        }
+    }
+
     public bool SkipDefaultBaseUrlOverride { get; init; }
 
     public new async ValueTask DisposeAsync()
     {
+        if (_fakeOllamaServer is not null)
+        {
+            await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
+        }
+
         await base.DisposeAsync();
         GC.SuppressFinalize(this);
     }
@@ -45,10 +64,6 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
         _ = builder.ConfigureTestServices(services =>
         {
-            var runLocalIntegration = string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
-                "true",
-                StringComparison.OrdinalIgnoreCase);
-
             services.RemoveAll<IHostedService>();
 
             if (!SkipDefaultBaseUrlOverride)
@@ -65,20 +80,11 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
 
-            if (!runLocalIntegration)
+            if (!RunLocalIntegration)
             {
                 services.RemoveAll<IOllamaApiClient>();
                 services.RemoveAll<IChatClient>();
-                services.AddSingleton<OllamaApiClient>(_ =>
-                {
-                    var handler = new MockOllamaHttpHandler();
-                    handler.SetModelsResponse();
-
-                    return new OllamaApiClient(new HttpClient(handler)
-                    {
-                        BaseAddress = new Uri("http://fake-ollama/")
-                    });
-                });
+                services.AddSingleton<OllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer!.BaseAddress));
                 services.AddSingleton<IOllamaApiClient>(sp => sp.GetRequiredService<OllamaApiClient>());
                 services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<OllamaApiClient>());
 
@@ -89,4 +95,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
         base.ConfigureWebHost(builder);
     }
+
+    private static bool RunLocalIntegration => string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
 }
