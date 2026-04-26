@@ -7,16 +7,16 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class CapabilityReporterTests
 {
     [Test]
     public async Task DetectCapabilitiesAsync_ReturnsNonNullResult()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
@@ -26,8 +26,8 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task DetectCapabilitiesAsync_PopulatesInstalledModels()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:0.8b", "llava:latest");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b", "llava:latest");
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
@@ -39,8 +39,8 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task DetectCapabilitiesAsync_WhenOllamaThrows_ReturnsEmptyModels()
     {
-        using var context = CreateContext();
-        context.Handler.ThrowOnNextRequest(new HttpRequestException("offline"));
+        await using var context = await CreateContextAsync();
+        context.EnqueueFailure(FakeOllamaFailure.Http500);
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
@@ -51,8 +51,8 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task VerifyOllamaAndModelAsync_WhenModelInList_ReturnsTrue()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
 
         var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
 
@@ -62,8 +62,8 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task VerifyOllamaAndModelAsync_WhenModelMissing_ReturnsFalse()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("llama3:latest");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("llama3:latest");
 
         var result = await context.Reporter.VerifyOllamaAndModelAsync("unknown-model");
 
@@ -73,8 +73,8 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task VerifyOllamaAndModelAsync_WhenOllamaUnreachable_ReturnsFalse()
     {
-        using var context = CreateContext();
-        context.Handler.ThrowOnNextRequest(new HttpRequestException("offline"));
+        await using var context = await CreateContextAsync();
+        context.EnqueueFailure(FakeOllamaFailure.Http500);
 
         var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
 
@@ -84,22 +84,22 @@ public sealed class CapabilityReporterTests
     [Test]
     public async Task VerifyOllamaAndModelAsync_WhenCalledRepeatedly_UsesCachedInstalledModels()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
 
         var firstResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
         var secondResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
 
         AssertEx.True(firstResult);
         AssertEx.True(secondResult);
-        AssertEx.Equal(1, context.Handler.TagsRequestCount);
+        AssertEx.Equal(1, context.TagsRequestCount);
     }
 
     [Test]
     public async Task VerifyOllamaAndModelAsync_WhenCacheExpires_RefreshesInstalledModels()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
 
         var firstResult = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
         context.TimeProvider.Advance(TimeSpan.FromSeconds(11));
@@ -107,14 +107,14 @@ public sealed class CapabilityReporterTests
 
         AssertEx.True(firstResult);
         AssertEx.True(secondResult);
-        AssertEx.Equal(2, context.Handler.TagsRequestCount);
+        AssertEx.Equal(2, context.TagsRequestCount);
     }
 
     [Test]
     public async Task ReportToApiAsync_CallsSendCapabilitiesAsync()
     {
-        using var context = CreateContext();
-        context.Handler.SetModelsResponse("qwen3.5:0.8b");
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
 
         await context.Reporter.ReportToApiAsync();
 
@@ -123,7 +123,7 @@ public sealed class CapabilityReporterTests
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
     }
 
-    private static CapabilityReporterTestContext CreateContext()
+    private static async Task<CapabilityReporterTestContext> CreateContextAsync()
     {
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -132,40 +132,33 @@ public sealed class CapabilityReporterTests
                             })
                             .Build();
 
-        var handler = new MockOllamaHttpHandler();
-        var httpClient = new HttpClient(handler)
-        {
-            BaseAddress = new Uri("http://fake-ollama/")
-        };
-
-        var chatClient = new OllamaApiClient(httpClient);
+        var server = await FakeOllamaServer.StartAsync();
+        var chatClient = new OllamaApiClient(server.BaseAddress);
 
         var hubConnection = new MockWorkerHubConnection();
         var timeProvider = new FakeTimeProvider();
         var reporter = new CapabilityReporter(chatClient, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
-        return new CapabilityReporterTestContext(handler, httpClient, chatClient, hubConnection, reporter, timeProvider);
+        return new CapabilityReporterTestContext(server, chatClient, hubConnection, reporter, timeProvider);
     }
 
-    private sealed class CapabilityReporterTestContext : IDisposable
+    private sealed class CapabilityReporterTestContext : IAsyncDisposable
     {
-        public CapabilityReporterTestContext(MockOllamaHttpHandler handler,
-            HttpClient httpClient,
+        public CapabilityReporterTestContext(FakeOllamaServer server,
             OllamaApiClient chatClient,
             MockWorkerHubConnection hubConnection,
             CapabilityReporter reporter,
             FakeTimeProvider timeProvider)
         {
-            Handler = handler;
-            HttpClient = httpClient;
+            Server = server;
             ChatClient = chatClient;
             HubConnection = hubConnection;
             Reporter = reporter;
             TimeProvider = timeProvider;
         }
 
-        public MockOllamaHttpHandler Handler { get; }
+        public FakeOllamaServer Server { get; }
 
-        public HttpClient HttpClient { get; }
+        public int TagsRequestCount => Server.RecordedRequests.Count(request => string.Equals(request.Path, "/api/tags", StringComparison.OrdinalIgnoreCase));
 
         public OllamaApiClient ChatClient { get; }
 
@@ -175,16 +168,23 @@ public sealed class CapabilityReporterTests
 
         public FakeTimeProvider TimeProvider { get; }
 
-        public void Dispose()
+        public void SetModelsResponse(params string[] models)
+        {
+            ArgumentNullException.ThrowIfNull(models);
+            Server.State.Models = models.ToArray();
+        }
+
+        public void EnqueueFailure(FakeOllamaFailure failure) => Server.State.EnqueueFailure(failure);
+
+        public async ValueTask DisposeAsync()
         {
             if (ChatClient is IDisposable disposableChatClient)
             {
                 disposableChatClient.Dispose();
             }
 
-            HttpClient.Dispose();
-            Handler.Dispose();
-            HubConnection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await Server.DisposeAsync().ConfigureAwait(false);
+            await HubConnection.DisposeAsync().ConfigureAwait(false);
         }
     }
 

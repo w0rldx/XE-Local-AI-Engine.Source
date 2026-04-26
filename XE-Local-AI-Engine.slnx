@@ -9,9 +9,11 @@
     <Folder Name="/Src/">
         <Project Path="XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj"/>
         <Project Path="XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj"/>
         <Project Path="XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
     </Folder>
     <Folder Name="/Tests/">
         <Project Path="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"/>

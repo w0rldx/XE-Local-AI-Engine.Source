@@ -26,7 +26,11 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
         {
             using var service = CreateService(hubConnection, MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)));
             using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(120);
+            var heartbeatSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            hubConnection.SendHeartbeatAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                         .Returns(Task.CompletedTask)
+                         .AndDoes(_ => heartbeatSent.TrySetResult());
+            cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(2));
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
@@ -90,12 +94,17 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
 
         try
         {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            var heartbeatAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             hubConnection.SendHeartbeatAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                         .Returns(_ => throw new InvalidOperationException("boom"));
+                         .Returns(_ =>
+                         {
+                             heartbeatAttempted.TrySetResult();
+                             return Task.FromException(new InvalidOperationException("boom"));
+                         });
 
             using var service = CreateService(hubConnection, MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)));
-            using var cancellationTokenSource = new CancellationTokenSource();
-            cancellationTokenSource.CancelAfter(120);
+            cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(2));
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
