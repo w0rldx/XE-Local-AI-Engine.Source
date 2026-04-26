@@ -18,19 +18,30 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
 
     public async Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        await RecordAsync(nameof(SendPurgeConversationAsync), new { conversationId }, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendPurgeConversationAsync), new
+        {
+            conversationId
+        }, cancellationToken).ConfigureAwait(false);
         await _inner.SendPurgeConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SendInvocationKeyMismatchAsync(Guid messageId, string reason, string nodeKeyIdUsed, CancellationToken cancellationToken = default)
     {
-        await RecordAsync(nameof(SendInvocationKeyMismatchAsync), new { messageId, reason, nodeKeyIdUsed }, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendInvocationKeyMismatchAsync), new
+        {
+            messageId,
+            reason,
+            nodeKeyIdUsed
+        }, cancellationToken).ConfigureAwait(false);
         await _inner.SendInvocationKeyMismatchAsync(messageId, reason, nodeKeyIdUsed, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SendInvocationAcceptedAsync(Guid invocationId, CancellationToken cancellationToken = default)
     {
-        await RecordAsync(nameof(SendInvocationAcceptedAsync), new { invocationId }, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendInvocationAcceptedAsync), new
+        {
+            invocationId
+        }, cancellationToken).ConfigureAwait(false);
         await _inner.SendInvocationAcceptedAsync(invocationId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -57,7 +68,12 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
 
     public async Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
     {
-        await RecordAsync(nameof(SendTokenStreamChunkAsync), new { invocationId, token, isComplete }, cancellationToken).ConfigureAwait(false);
+        await RecordAsync(nameof(SendTokenStreamChunkAsync), new
+        {
+            invocationId,
+            token,
+            isComplete
+        }, cancellationToken).ConfigureAwait(false);
         await _inner.SendTokenStreamChunkAsync(invocationId, token, isComplete, cancellationToken).ConfigureAwait(false);
     }
 

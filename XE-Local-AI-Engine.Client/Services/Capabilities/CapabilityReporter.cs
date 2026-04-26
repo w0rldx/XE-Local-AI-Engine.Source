@@ -14,11 +14,11 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private static readonly string[] BaseCapabilities = ["text"];
     private readonly string _defaultModel;
     private readonly IWorkerHubConnection _hubConnection;
+    private readonly object _installedModelsCacheSync = new();
     private readonly ILogger<CapabilityReporter> _logger;
 
     private readonly IOllamaApiClient _ollamaClient;
     private readonly TimeProvider _timeProvider;
-    private readonly object _installedModelsCacheSync = new();
     private CachedInstalledModels? _installedModelsCache;
 
     public CapabilityReporter(IOllamaApiClient ollamaClient,
@@ -178,8 +178,6 @@ public sealed class CapabilityReporter : ICapabilityReporter
             _installedModelsCache = new CachedInstalledModels(models, _timeProvider.GetUtcNow().Add(InstalledModelsCacheLifetime));
         }
     }
-
-    private sealed record CachedInstalledModels(IReadOnlyList<string> Models, DateTimeOffset ExpiresAt);
 
     private static IReadOnlyList<string> DetermineSupportedCapabilities(IReadOnlyList<string> installedModels)
     {
@@ -382,6 +380,8 @@ public sealed class CapabilityReporter : ICapabilityReporter
 
         return null;
     }
+
+    private sealed record CachedInstalledModels(IReadOnlyList<string> Models, DateTimeOffset ExpiresAt);
 
     private sealed record GpuInfo(string GpuName, long? VramMb, bool CudaAvailable);
 }

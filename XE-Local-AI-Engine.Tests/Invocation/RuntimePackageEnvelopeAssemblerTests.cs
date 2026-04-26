@@ -132,7 +132,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
     public void Assemble_WhenMultiMessageHistoryHashMatches_DecryptsAllHistoryEntriesInCanonicalOrder()
     {
         using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
-        var laterEntry = CreateHistoryEntry(20, MessageRole.Assistant);
+        var laterEntry = CreateHistoryEntry(20);
         var earlierEntry = CreateHistoryEntry(10, MessageRole.User);
         var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
         nodeKeyRegistry.ResolveGraceEligible().Returns([
@@ -249,7 +249,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
     {
         using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
         var firstHistoryEntry = CreateHistoryEntry(10, MessageRole.User);
-        var secondHistoryEntry = CreateHistoryEntry(20, MessageRole.Assistant);
+        var secondHistoryEntry = CreateHistoryEntry(20);
         var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
         nodeKeyRegistry.ResolveGraceEligible().Returns([
             new NodeKeyResolution

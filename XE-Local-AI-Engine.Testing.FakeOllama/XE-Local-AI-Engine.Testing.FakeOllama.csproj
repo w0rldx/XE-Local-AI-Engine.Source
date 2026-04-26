@@ -6,11 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="OllamaSharp" />
+    <PackageReference Include="OllamaSharp"/>
   </ItemGroup>
 
 </Project>

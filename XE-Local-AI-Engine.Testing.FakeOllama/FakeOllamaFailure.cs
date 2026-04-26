@@ -7,5 +7,5 @@ public enum FakeOllamaFailure
     MalformedJson,
     EmptyResponse,
     PartialStream,
-    Http500,
+    Http500
 }
