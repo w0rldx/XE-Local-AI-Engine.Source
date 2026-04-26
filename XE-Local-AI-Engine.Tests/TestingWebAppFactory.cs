@@ -35,6 +35,11 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     public bool SkipDefaultBaseUrlOverride { get; init; }
 
+    private static bool RunLocalIntegration =>
+        string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
     public new async ValueTask DisposeAsync()
     {
         if (_fakeOllamaServer is not null)
@@ -95,8 +100,4 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
         base.ConfigureWebHost(builder);
     }
-
-    private static bool RunLocalIntegration => string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
-        "true",
-        StringComparison.OrdinalIgnoreCase);
 }

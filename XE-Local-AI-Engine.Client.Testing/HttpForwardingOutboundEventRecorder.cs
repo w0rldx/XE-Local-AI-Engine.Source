@@ -16,7 +16,7 @@ public sealed class HttpForwardingOutboundEventRecorder : IOutboundEventRecorder
 
         var baseUrl = configuration.GetValue<string>("Pipeline:SinkBaseUrl");
         _sinkToken = configuration.GetValue<string>("Pipeline:SinkToken")
-            ?? throw new InvalidOperationException("Pipeline:SinkToken is required when outbound event recording is enabled.");
+                     ?? throw new InvalidOperationException("Pipeline:SinkToken is required when outbound event recording is enabled.");
 
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
@@ -28,6 +28,11 @@ public sealed class HttpForwardingOutboundEventRecorder : IOutboundEventRecorder
             BaseAddress = new Uri(baseUrl, UriKind.Absolute),
             Timeout = TimeSpan.FromSeconds(30)
         };
+    }
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
     }
 
     public async Task RecordAsync(string method, object? payload, long sequenceNumber, CancellationToken ct)
@@ -50,6 +55,4 @@ public sealed class HttpForwardingOutboundEventRecorder : IOutboundEventRecorder
         using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
-
-    public void Dispose() => _httpClient.Dispose();
 }

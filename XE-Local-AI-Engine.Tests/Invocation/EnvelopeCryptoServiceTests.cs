@@ -66,7 +66,10 @@ public sealed class EnvelopeCryptoServiceTests
             epochKey,
             Encoding.UTF8.GetBytes("answer"),
             1,
-            new Dictionary<string, long> { ["tokensUsed"] = 2 },
+            new Dictionary<string, long>
+            {
+                ["tokensUsed"] = 2
+            },
             Encoding.UTF8.GetBytes("final thinking"));
 
         var contentPlaintext = Decrypt(encrypted.FinalIv.Span,

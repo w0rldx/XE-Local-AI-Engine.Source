@@ -168,14 +168,6 @@ public sealed class CapabilityReporterTests
 
         public FakeTimeProvider TimeProvider { get; }
 
-        public void SetModelsResponse(params string[] models)
-        {
-            ArgumentNullException.ThrowIfNull(models);
-            Server.State.Models = models.ToArray();
-        }
-
-        public void EnqueueFailure(FakeOllamaFailure failure) => Server.State.EnqueueFailure(failure);
-
         public async ValueTask DisposeAsync()
         {
             if (ChatClient is IDisposable disposableChatClient)
@@ -185,6 +177,17 @@ public sealed class CapabilityReporterTests
 
             await Server.DisposeAsync().ConfigureAwait(false);
             await HubConnection.DisposeAsync().ConfigureAwait(false);
+        }
+
+        public void SetModelsResponse(params string[] models)
+        {
+            ArgumentNullException.ThrowIfNull(models);
+            Server.State.Models = models.ToArray();
+        }
+
+        public void EnqueueFailure(FakeOllamaFailure failure)
+        {
+            Server.State.EnqueueFailure(failure);
         }
     }
 
