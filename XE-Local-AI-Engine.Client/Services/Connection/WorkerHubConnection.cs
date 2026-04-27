@@ -153,7 +153,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     public Task SendCapabilitiesAsync(ClientCapabilities capabilities, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
-        return SendAsync("WorkerCapabilitiesReported", capabilities, cancellationToken);
+        return SendAsync("WorkerCapabilitiesReported", ClientCapabilitiesPayload.From(capabilities), cancellationToken);
     }
 
     public Task SendHeartbeatAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
@@ -290,6 +290,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private void RegisterEventHandlers(HubConnection connection)
     {
+        connection.On("CapabilitiesReportRequested", ReportCapabilitiesRequestedAsync);
         connection.On<JsonElement>("InvocationAssigned",
             raw =>
             {
@@ -420,6 +421,19 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             });
     }
 
+    private async Task ReportCapabilitiesRequestedAsync()
+    {
+        try
+        {
+            _logger.LogInformation("Capabilities report requested by central platform.");
+            await _capabilityReporter.Value.ReportToApiAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to report capabilities after central platform request.");
+        }
+    }
+
     private async Task RegisterNodeKeyAsync(CancellationToken cancellationToken = default)
     {
         var keyId = Guid.NewGuid();
@@ -517,5 +531,66 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         var baseUri = new Uri(options.BaseUrl, UriKind.Absolute);
         return new Uri(baseUri, options.HubPath).ToString();
+    }
+
+    private sealed record ClientCapabilitiesPayload
+    {
+        public required HardwareCapabilitiesPayload HardwareInfo { get; init; }
+
+        public required SystemCapabilitiesPayload Capabilities { get; init; }
+
+        public static ClientCapabilitiesPayload From(ClientCapabilities capabilities)
+        {
+            return new ClientCapabilitiesPayload
+            {
+                HardwareInfo = new HardwareCapabilitiesPayload
+                {
+                    RamMb = ToInt32(capabilities.RamMb),
+                    VramMb = ToInt32(capabilities.VramMb),
+                    CudaAvailable = capabilities.CudaAvailable,
+                    GpuName = capabilities.GpuName,
+                    CpuClass = capabilities.CpuClass
+                },
+                Capabilities = new SystemCapabilitiesPayload
+                {
+                    SystemScoreClass = capabilities.SystemScoreClass ?? "Medium",
+                    InstalledModels = capabilities.InstalledModels,
+                    SupportedCapabilities = capabilities.SupportedCapabilities,
+                    ActiveModel = capabilities.ActiveModel,
+                    ActiveModelExpiresAt = capabilities.ActiveModelExpiresAt
+                }
+            };
+        }
+
+        private static int ToInt32(long? value)
+        {
+            return value is null ? 0 : checked((int)value.Value);
+        }
+    }
+
+    private sealed record HardwareCapabilitiesPayload
+    {
+        public int RamMb { get; init; }
+
+        public int VramMb { get; init; }
+
+        public bool CudaAvailable { get; init; }
+
+        public string? GpuName { get; init; }
+
+        public string? CpuClass { get; init; }
+    }
+
+    private sealed record SystemCapabilitiesPayload
+    {
+        public string SystemScoreClass { get; init; } = "Medium";
+
+        public IReadOnlyList<string> InstalledModels { get; init; } = [];
+
+        public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
+
+        public string? ActiveModel { get; init; }
+
+        public DateTimeOffset? ActiveModelExpiresAt { get; init; }
     }
 }

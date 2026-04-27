@@ -47,6 +47,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
         var installedModels = await GetInstalledModelNamesAsync(cancellationToken).ConfigureAwait(false);
         var supportedCapabilities = DetermineSupportedCapabilities(installedModels);
         var cpuClass = await DetectCpuClassAsync(cancellationToken).ConfigureAwait(false);
+        var activeModel = await DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
 
         return new ClientCapabilities
         {
@@ -57,7 +58,9 @@ public sealed class CapabilityReporter : ICapabilityReporter
             CpuClass = cpuClass,
             SystemScoreClass = CalculateSystemScoreClass(ramMb, gpuInfo?.VramMb, gpuInfo?.CudaAvailable ?? false),
             InstalledModels = installedModels,
-            SupportedCapabilities = supportedCapabilities
+            SupportedCapabilities = supportedCapabilities,
+            ActiveModel = activeModel.Name,
+            ActiveModelExpiresAt = activeModel.ExpiresAt
         };
     }
 
@@ -150,6 +153,51 @@ public sealed class CapabilityReporter : ICapabilityReporter
             _logger.LogWarning(exception, "Failed to query installed Ollama models.");
             return [];
         }
+    }
+
+    private async Task<ActiveModelInfo> DetectActiveModelAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var runningModels = await _ollamaClient.ListRunningModelsAsync(cancellationToken).ConfigureAwait(false);
+            var active = runningModels.FirstOrDefault();
+            if (active is null)
+            {
+                return ActiveModelInfo.None;
+            }
+
+            var modelName = NormalizeModelName(active.Name) ?? NormalizeModelName(active.ModelName);
+            if (modelName is null)
+            {
+                return ActiveModelInfo.None;
+            }
+
+            return new ActiveModelInfo(modelName, NormalizeExpiresAt(active.ExpiresAt));
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogWarning(exception, "Failed to query running Ollama models.");
+            return ActiveModelInfo.None;
+        }
+    }
+
+    private static string? NormalizeModelName(string? modelName)
+    {
+        var normalized = modelName?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+    }
+
+    private static DateTimeOffset? NormalizeExpiresAt(object? expiresAt)
+    {
+        return expiresAt switch
+        {
+            DateTimeOffset value => value,
+            DateTime value => new DateTimeOffset(value),
+            string value when DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) => parsed,
+            _ => null
+        };
     }
 
     private IReadOnlyList<string>? TryGetCachedInstalledModels()
@@ -382,6 +430,11 @@ public sealed class CapabilityReporter : ICapabilityReporter
     }
 
     private sealed record CachedInstalledModels(IReadOnlyList<string> Models, DateTimeOffset ExpiresAt);
+
+    private sealed record ActiveModelInfo(string? Name, DateTimeOffset? ExpiresAt)
+    {
+        public static ActiveModelInfo None { get; } = new(null, null);
+    }
 
     private sealed record GpuInfo(string GpuName, long? VramMb, bool CudaAvailable);
 }

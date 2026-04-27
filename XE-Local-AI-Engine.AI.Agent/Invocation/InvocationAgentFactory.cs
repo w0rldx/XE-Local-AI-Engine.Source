@@ -64,7 +64,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                     ModelId = definition.ModelId,
                     AdditionalProperties = new AdditionalPropertiesDictionary
                     {
-                        ["think"] = true
+                        ["think"] = ResolveThinkOption(definition.ReasoningEffort)
                     }
                 }
             }
@@ -74,6 +74,37 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         context.Items["toolsEnabled"] = tools.Count > 0;
 
         return Task.FromResult(context);
+    }
+
+    private static object ResolveThinkOption(string? reasoningEffort)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return true;
+        }
+
+        var normalized = reasoningEffort.Trim();
+        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
+        {
+            return "low";
+        }
+
+        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
+        {
+            return "medium";
+        }
+
+        if (string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase))
+        {
+            return "high";
+        }
+
+        return true;
     }
 
     private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)

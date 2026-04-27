@@ -26,14 +26,42 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             AllowedTools = allowedTools,
             ToolPolicies = request.ToolPolicies is null ? null : new Dictionary<string, object>(request.ToolPolicies),
             ModelProfile = request.ModelProfile,
+            ReasoningEffort = NormalizeReasoningEffort(request.ReasoningEffort),
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             ConfigHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
                 request.ResolvedSystemPrompt,
                 MapAllowedTools(allowedTools),
                 request.ModelProfile,
-                timeouts)
+                timeouts,
+                request.ReasoningEffort)
         };
+    }
+
+    private static string? NormalizeReasoningEffort(string? reasoningEffort)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return null;
+        }
+
+        var normalized = reasoningEffort.Trim();
+        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
+        {
+            return "low";
+        }
+
+        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return "none";
+        }
+
+        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
+        {
+            return "medium";
+        }
+
+        return string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase) ? "high" : null;
     }
 
     private static IReadOnlyList<MixedEnvelopeAllowedToolDto> MapAllowedTools(IReadOnlyList<AllowedToolDto> allowedTools)

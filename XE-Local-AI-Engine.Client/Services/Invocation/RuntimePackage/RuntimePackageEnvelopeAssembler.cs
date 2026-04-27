@@ -195,6 +195,7 @@ public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAss
             ],
             AllowedTools = [.. package.AllowedTools.Select(MapAllowedTool)],
             ModelProfile = package.ModelProfile,
+            ReasoningEffort = package.ReasoningEffort,
             Timeouts = package.Timeouts,
             ConfigHash = package.ConfigHash
         };

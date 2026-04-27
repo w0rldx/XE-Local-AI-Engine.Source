@@ -17,4 +17,8 @@ public sealed record ClientCapabilities
     public IReadOnlyList<string> InstalledModels { get; init; } = [];
 
     public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
+
+    public string? ActiveModel { get; init; }
+
+    public DateTimeOffset? ActiveModelExpiresAt { get; init; }
 }

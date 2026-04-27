@@ -13,4 +13,5 @@ public sealed record LocalChatRuntimePackageRequest(
     IReadOnlyList<AllowedToolDto>? AllowedTools = null,
     IReadOnlyDictionary<string, object>? ToolPolicies = null,
     IReadOnlyList<string>? RequestedCapabilities = null,
-    TimeoutSettings? Timeouts = null);
+    TimeoutSettings? Timeouts = null,
+    string? ReasoningEffort = null);

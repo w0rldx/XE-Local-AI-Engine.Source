@@ -22,6 +22,69 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 public sealed class WorkerHubConnectionSignalRIntegrationTests
 {
     [Test]
+    public async Task SendCapabilitiesAsync_WhenWorkerReportsCapabilities_SendsServerHubContractShape()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var tokenStore = MockTokenStore.Paired("test-access-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(30));
+        var sender = new MockHubMessageSender();
+        var deadLetterStore = Substitute.For<IDeadLetterStore>();
+        deadLetterStore.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>([]));
+
+        var deadLetterFlushService = new DeadLetterFlushService(deadLetterStore,
+            new Lazy<IHubMessageSender>(() => sender),
+            NullLogger<DeadLetterFlushService>.Instance);
+
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = new WorkerHubConnection(tokenStore,
+            Options.Create(new CentralPlatformOptions
+            {
+                BaseUrl = fixture.HubBaseUri.ToString(),
+                HubPath = fixture.HubPath
+            }),
+            new ConnectionState(),
+            new Lazy<ICapabilityReporter>(() => capabilityReporter),
+            deadLetterFlushService,
+            nodeKeyRegistry,
+            NullLogger<WorkerHubConnection>.Instance,
+            CreateFixtureHttpOptionsConfigurator(fixture));
+
+        await connection.ConnectAsync();
+
+        var expiresAt = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds());
+        await connection.SendCapabilitiesAsync(new ClientCapabilities
+        {
+            RamMb = 32000,
+            VramMb = 16000,
+            CudaAvailable = true,
+            GpuName = "RTX",
+            CpuClass = "desktop",
+            SystemScoreClass = "High",
+            InstalledModels = ["qwen3.5:0.8b"],
+            SupportedCapabilities = ["text"],
+            ActiveModel = "qwen3.5:0.8b",
+            ActiveModelExpiresAt = expiresAt
+        });
+
+        var payload = await fixture.WaitForCapabilitiesAsync(TimeSpan.FromSeconds(5));
+        AssertEx.Equal(32000, payload.HardwareInfo.RamMb);
+        AssertEx.Equal(16000, payload.HardwareInfo.VramMb);
+        AssertEx.True(payload.HardwareInfo.CudaAvailable);
+        AssertEx.Equal("RTX", payload.HardwareInfo.GpuName);
+        AssertEx.Equal("desktop", payload.HardwareInfo.CpuClass);
+        AssertEx.Equal("High", payload.Capabilities.SystemScoreClass);
+        AssertEx.Contains(payload.Capabilities.InstalledModels, "qwen3.5:0.8b");
+        AssertEx.Contains(payload.Capabilities.SupportedCapabilities, "text");
+        AssertEx.Equal("qwen3.5:0.8b", payload.Capabilities.ActiveModel);
+        AssertEx.Equal(expiresAt, payload.Capabilities.ActiveModelExpiresAt);
+    }
+
+    [Test]
     public async Task EncryptedRuntimePackageRoundTrip_WhenWorkerReceivesInvocationAndSendsChunkAndCompleted_PreservesPayloads()
     {
         await using var fixture = new FakeWorkerNodeFixture();

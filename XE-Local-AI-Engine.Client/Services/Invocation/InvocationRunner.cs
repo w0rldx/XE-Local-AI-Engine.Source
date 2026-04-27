@@ -228,6 +228,23 @@ public sealed class InvocationRunner : IInvocationRunner
         finally
         {
             ClearActiveInvocation(package.InvocationId);
+            await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
+        }
+    }
+
+    private async Task TryReportCapabilitiesAfterInvocationAsync(Guid invocationId)
+    {
+        try
+        {
+            var reportTask = _capabilityReporter.ReportToApiAsync();
+            if (reportTask is not null)
+            {
+                await reportTask.ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to report capabilities after invocation {InvocationId} completed.", invocationId);
         }
     }
 
@@ -379,7 +396,8 @@ public sealed class InvocationRunner : IInvocationRunner
         return new InvocationAgentDefinition(resolvedModel,
             package.ResolvedSystemPrompt,
             BuildInvocationTools(package),
-            messages);
+            messages,
+            package.ReasoningEffort);
     }
 
     private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)

@@ -20,6 +20,8 @@ public sealed record RuntimePackage
 
     public string? ModelProfile { get; init; }
 
+    public string? ReasoningEffort { get; init; }
+
     public List<string>? RequestedCapabilities { get; init; }
 
     public required TimeoutSettings Timeouts { get; init; }

@@ -26,20 +26,23 @@ public static class RuntimePackageConfigHash
             package.ResolvedSystemPrompt,
             package.AllowedTools,
             package.ModelProfile,
-            package.Timeouts);
+            package.Timeouts,
+            package.ReasoningEffort);
     }
 
     public static string Compute(int agentDefinitionVersion,
         string resolvedSystemPrompt,
         IReadOnlyList<MixedEnvelopeAllowedToolDto> allowedTools,
         string? modelProfile,
-        TimeoutSettings timeouts)
+        TimeoutSettings timeouts,
+        string? reasoningEffort = null)
     {
         var canonicalJson = SerializeCanonicalJson(agentDefinitionVersion,
             resolvedSystemPrompt,
             allowedTools,
             modelProfile,
-            timeouts);
+            timeouts,
+            reasoningEffort);
 
         return FormatLowercaseHex(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
     }
@@ -48,7 +51,8 @@ public static class RuntimePackageConfigHash
         string resolvedSystemPrompt,
         IReadOnlyList<MixedEnvelopeAllowedToolDto> allowedTools,
         string? modelProfile,
-        TimeoutSettings timeouts)
+        TimeoutSettings timeouts,
+        string? reasoningEffort = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resolvedSystemPrompt);
         ArgumentNullException.ThrowIfNull(allowedTools);
@@ -68,6 +72,7 @@ public static class RuntimePackageConfigHash
                 })
             ],
             ModelProfile = modelProfile,
+            ReasoningEffort = NormalizeReasoningEffort(reasoningEffort),
             Timeouts = new TimeoutSettingsHashPayload
             {
                 InvocationTimeoutSeconds = timeouts.InvocationTimeoutSeconds,
@@ -94,6 +99,32 @@ public static class RuntimePackageConfigHash
         });
     }
 
+    private static string? NormalizeReasoningEffort(string? reasoningEffort)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return null;
+        }
+
+        var normalized = reasoningEffort.Trim();
+        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
+        {
+            return "low";
+        }
+
+        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return "none";
+        }
+
+        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
+        {
+            return "medium";
+        }
+
+        return string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase) ? "high" : null;
+    }
+
     private sealed record ConfigHashPayload
     {
         [JsonPropertyOrder(1)]
@@ -109,6 +140,9 @@ public static class RuntimePackageConfigHash
         public string? ModelProfile { get; init; }
 
         [JsonPropertyOrder(5)]
+        public string? ReasoningEffort { get; init; }
+
+        [JsonPropertyOrder(6)]
         public required TimeoutSettingsHashPayload Timeouts { get; init; }
     }
 
