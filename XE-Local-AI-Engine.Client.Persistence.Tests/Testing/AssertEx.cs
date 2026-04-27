@@ -80,5 +80,3 @@ internal static class AssertEx
         };
     }
 }
-
-public sealed class AssertionException(string message) : Exception(message);

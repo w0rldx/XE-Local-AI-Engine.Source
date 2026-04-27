@@ -185,10 +185,3 @@ internal static class AssertEx
         };
     }
 }
-
-public sealed class AssertionException : Exception
-{
-    public AssertionException(string message) : base(message)
-    {
-    }
-}

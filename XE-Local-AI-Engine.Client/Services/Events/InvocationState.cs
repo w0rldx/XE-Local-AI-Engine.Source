@@ -38,26 +38,3 @@ public sealed class InvocationState
 
     public InvocationToolCallResultState? LastToolCallResult { get; set; }
 }
-
-public sealed record InvocationApprovalState(
-    string RequestId,
-    string Description,
-    DateTimeOffset RequestedAt);
-
-public sealed record InvocationApprovalResolutionState(
-    string RequestId,
-    bool Approved,
-    DateTimeOffset ResolvedAt);
-
-public sealed record InvocationToolCallState(
-    string RequestId,
-    string ToolName,
-    string Parameters,
-    DateTimeOffset RequestedAt);
-
-public sealed record InvocationToolCallResultState(
-    string RequestId,
-    bool Succeeded,
-    string Result,
-    string? Error,
-    DateTimeOffset ResolvedAt);

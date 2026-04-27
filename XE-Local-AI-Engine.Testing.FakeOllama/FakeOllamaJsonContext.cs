@@ -10,7 +10,3 @@ using System.Text.Json.Serialization;
 internal sealed partial class FakeOllamaJsonContext : JsonSerializerContext
 {
 }
-
-internal sealed record FakeOllamaFailureRequest(string Failure);
-
-internal sealed record FakeOllamaScriptRequest(IReadOnlyList<string> Tokens);
