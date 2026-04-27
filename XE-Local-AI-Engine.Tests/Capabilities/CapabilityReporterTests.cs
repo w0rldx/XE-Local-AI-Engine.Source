@@ -37,6 +37,48 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
+    public async Task DetectCapabilitiesAsync_WhenRunningModelExists_PopulatesActiveModel()
+    {
+        await using var context = await CreateContextAsync();
+        var expiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
+        context.SetModelsResponse("qwen3.5:0.8b", "llava:latest");
+        context.SetRunningModels((" qwen3.5:0.8b ", expiresAt));
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Equal("qwen3.5:0.8b", result.ActiveModel);
+        AssertEx.Equal(expiresAt, result.ActiveModelExpiresAt);
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenNoRunningModels_ReturnsNullActiveModel()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
+        context.SetRunningModels();
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Null(result.ActiveModel);
+        AssertEx.Null(result.ActiveModelExpiresAt);
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenRunningModelQueryFails_ReturnsNullActiveModel()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
+        await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
+        context.EnqueueFailure(FakeOllamaFailure.Http500);
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
+        AssertEx.Null(result.ActiveModel);
+        AssertEx.Null(result.ActiveModelExpiresAt);
+    }
+
+    [Test]
     public async Task DetectCapabilitiesAsync_WhenOllamaThrows_ReturnsEmptyModels()
     {
         await using var context = await CreateContextAsync();
@@ -46,6 +88,8 @@ public sealed class CapabilityReporterTests
 
         AssertEx.Equal(0, result.InstalledModels.Count);
         AssertEx.Contains(result.SupportedCapabilities, "text");
+        AssertEx.Null(result.ActiveModel);
+        AssertEx.Null(result.ActiveModelExpiresAt);
     }
 
     [Test]
@@ -183,6 +227,14 @@ public sealed class CapabilityReporterTests
         {
             ArgumentNullException.ThrowIfNull(models);
             Server.State.Models = models.ToArray();
+        }
+
+        public void SetRunningModels(params (string Name, DateTimeOffset? ExpiresAt)[] models)
+        {
+            ArgumentNullException.ThrowIfNull(models);
+            Server.State.RunningModels = models
+                                         .Select(model => new FakeOllamaState.FakeOllamaRunningModel(model.Name, model.ExpiresAt))
+                                         .ToArray();
         }
 
         public void EnqueueFailure(FakeOllamaFailure failure)

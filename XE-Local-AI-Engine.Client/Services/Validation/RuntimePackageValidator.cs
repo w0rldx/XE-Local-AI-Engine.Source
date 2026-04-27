@@ -28,6 +28,7 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
 
         ValidateSystemPrompt(package.ResolvedSystemPrompt, errors);
         ValidateModelProfile(package.ModelProfile, errors);
+        ValidateReasoningEffort(package.ReasoningEffort, errors);
         ValidateConversationContext(package.ConversationContext, errors);
         ValidateTimeouts(package.Timeouts, errors);
         ValidateConfigHash(package.ConfigHash, errors);
@@ -61,6 +62,23 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
         if (validationError is not null)
         {
             errors.Add(validationError);
+        }
+    }
+
+    private static void ValidateReasoningEffort(string? reasoningEffort, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return;
+        }
+
+        var normalized = reasoningEffort.Trim();
+        if (!string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("Invalid reasoning effort");
         }
     }
 

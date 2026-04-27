@@ -6,4 +6,5 @@ public sealed record InvocationAgentDefinition(
     string ModelId,
     string Instructions,
     IReadOnlyList<AITool> Tools,
-    IReadOnlyList<ChatMessage> ConversationContext);
+    IReadOnlyList<ChatMessage> ConversationContext,
+    string? ReasoningEffort = null);

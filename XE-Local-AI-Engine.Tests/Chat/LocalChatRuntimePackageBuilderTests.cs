@@ -87,13 +87,15 @@ public sealed class LocalChatRuntimePackageBuilderTests
                 InvocationTimeoutSeconds = 45,
                 ToolCallTimeoutSeconds = 15,
                 StreamIdleTimeoutSeconds = 20
-            });
+            },
+            "high");
 
         var package = builder.Build(request);
 
         AssertEx.Equal(1, package.AllowedTools.Count);
         AssertEx.Equal("open_url", package.AllowedTools[0].Name);
         AssertEx.Equal(true, package.ToolPolicies!["approvalRequired"]);
+        AssertEx.Equal("high", package.ReasoningEffort);
         AssertEx.Equal(2, AssertEx.NotNull(package.RequestedCapabilities).Count);
 
         var expectedHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
@@ -107,7 +109,8 @@ public sealed class LocalChatRuntimePackageBuilderTests
                 }
             ],
             request.ModelProfile,
-            AssertEx.NotNull(request.Timeouts));
+            AssertEx.NotNull(request.Timeouts),
+            request.ReasoningEffort);
 
         AssertEx.Equal(expectedHash, package.ConfigHash);
     }

@@ -20,6 +20,8 @@ public sealed record EncryptedRuntimePackageDto
 
     public string? ModelProfile { get; init; }
 
+    public string? ReasoningEffort { get; init; }
+
     public required TimeoutSettings Timeouts { get; init; }
 
     public required string ConfigHash { get; init; }

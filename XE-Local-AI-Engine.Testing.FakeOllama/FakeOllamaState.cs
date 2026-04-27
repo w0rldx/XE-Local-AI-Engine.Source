@@ -13,12 +13,15 @@ public sealed class FakeOllamaState
         ArgumentNullException.ThrowIfNull(options);
 
         Models = options.Models.Count > 0 ? options.Models.ToArray() : ["chat", "embeddings"];
+        RunningModels = [];
         ChatScript = options.ChatTokenScript;
         EmbeddingDimensions = options.EmbeddingDimensions > 0 ? options.EmbeddingDimensions : 384;
         ControlEndpointToken = options.ControlEndpointToken;
     }
 
     public IReadOnlyList<string> Models { get; set; }
+
+    public IReadOnlyList<FakeOllamaRunningModel> RunningModels { get; set; }
 
     public Func<ChatRequest, IAsyncEnumerable<string>>? ChatScript { get; set; }
 
@@ -60,4 +63,6 @@ public sealed class FakeOllamaState
             Thread.Yield();
         }
     }
+
+    public sealed record FakeOllamaRunningModel(string Name, DateTimeOffset? ExpiresAt);
 }

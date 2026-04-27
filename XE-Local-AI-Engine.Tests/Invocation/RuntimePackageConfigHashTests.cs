@@ -47,9 +47,29 @@ public sealed class RuntimePackageConfigHashTests
             });
 
         AssertEx.Equal(
-            "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"You are a helpful local AI assistant.\",\"allowedTools\":[{\"name\":\"open_url\",\"description\":\"Open a URL in the worker browser\",\"schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"url\\\":{\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"url\\\"]}\"}],\"modelProfile\":null,\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
+            "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"You are a helpful local AI assistant.\",\"allowedTools\":[{\"name\":\"open_url\",\"description\":\"Open a URL in the worker browser\",\"schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"url\\\":{\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"url\\\"]}\"}],\"modelProfile\":null,\"reasoningEffort\":null,\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
             canonicalJson);
-        AssertEx.Equal("04c79b399e8dd0a4eba7e2b50c43931aa92b7c50ed73db6d1989c209f3c1cf33", digest);
+        AssertEx.Equal("2725e653bfe20850855168e5a38e4a4256a0db640dc0b6453da185f4f08859d6", digest);
+    }
+
+    [Test]
+    public void Compute_WhenReasoningEffortChanges_ChangesDigest()
+    {
+        var firstDigest = RuntimePackageConfigHash.Compute(7,
+            "prompt",
+            [],
+            null,
+            new TimeoutSettings(),
+            "low");
+
+        var secondDigest = RuntimePackageConfigHash.Compute(7,
+            "prompt",
+            [],
+            null,
+            new TimeoutSettings(),
+            "high");
+
+        AssertEx.NotEqual(firstDigest, secondDigest);
     }
 
     [Test]

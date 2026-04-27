@@ -137,6 +137,11 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         return FixtureHubState.ReadAsync(_hubState.KeyMismatchReader, timeout);
     }
 
+    public Task<ClientCapabilitiesPayload> WaitForCapabilitiesAsync(TimeSpan timeout)
+    {
+        return FixtureHubState.ReadAsync(_hubState.CapabilitiesReader, timeout);
+    }
+
     [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "The plan requires this exact test fixture contract.")]
     public Task FireConnectionDropAsync()
     {
@@ -216,6 +221,12 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
             return _state.KeyMismatchWriter.WriteAsync((payload.Reason, payload.NodeKeyIdUsed)).AsTask();
         }
 
+        public Task WorkerCapabilitiesReported(ClientCapabilitiesPayload payload)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            return _state.CapabilitiesWriter.WriteAsync(payload).AsTask();
+        }
+
         public Task SendPurgeConversationAsync(Guid conversationId)
         {
             _ = conversationId;
@@ -227,6 +238,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     {
         private readonly Channel<EncryptedChunkEnvelopeV1> _chunks = Channel.CreateUnbounded<EncryptedChunkEnvelopeV1>();
         private readonly Channel<EncryptedCompletedEnvelopeV1> _completed = Channel.CreateUnbounded<EncryptedCompletedEnvelopeV1>();
+        private readonly Channel<ClientCapabilitiesPayload> _capabilities = Channel.CreateUnbounded<ClientCapabilitiesPayload>();
         private readonly ConcurrentDictionary<string, HubCallerContext> _connections = new(StringComparer.Ordinal);
         private readonly Channel<(string reason, string nodeKeyIdUsed)> _keyMismatches = Channel.CreateUnbounded<(string reason, string nodeKeyIdUsed)>();
 
@@ -239,6 +251,10 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         public ChannelWriter<EncryptedCompletedEnvelopeV1> CompletedWriter => _completed.Writer;
 
         public ChannelReader<EncryptedCompletedEnvelopeV1> CompletedReader => _completed.Reader;
+
+        public ChannelWriter<ClientCapabilitiesPayload> CapabilitiesWriter => _capabilities.Writer;
+
+        public ChannelReader<ClientCapabilitiesPayload> CapabilitiesReader => _capabilities.Reader;
 
         public ChannelWriter<(string reason, string nodeKeyIdUsed)> KeyMismatchWriter => _keyMismatches.Writer;
 
@@ -277,5 +293,38 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
                 throw new TimeoutException($"Timed out waiting for fixture payload of type '{typeof(T).Name}'.", exception);
             }
         }
+    }
+
+    public sealed record ClientCapabilitiesPayload
+    {
+        public required HardwareCapabilitiesPayload HardwareInfo { get; init; }
+
+        public required SystemCapabilitiesPayload Capabilities { get; init; }
+    }
+
+    public sealed record HardwareCapabilitiesPayload
+    {
+        public int RamMb { get; init; }
+
+        public int VramMb { get; init; }
+
+        public bool CudaAvailable { get; init; }
+
+        public string? GpuName { get; init; }
+
+        public string? CpuClass { get; init; }
+    }
+
+    public sealed record SystemCapabilitiesPayload
+    {
+        public string SystemScoreClass { get; init; } = "Medium";
+
+        public IReadOnlyList<string> InstalledModels { get; init; } = [];
+
+        public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
+
+        public string? ActiveModel { get; init; }
+
+        public DateTimeOffset? ActiveModelExpiresAt { get; init; }
     }
 }
