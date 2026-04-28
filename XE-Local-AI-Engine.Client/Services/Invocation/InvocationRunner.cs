@@ -77,7 +77,7 @@ public sealed class InvocationRunner : IInvocationRunner
         _maxPendingToolCallAge = TimeSpan.FromMinutes(workerOptions.Value.MaxPendingToolCallAgeMinutes);
     }
 
-    public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+    public async Task RunAsync(Models.RuntimePackage package, CancellationToken cancellationToken = default)
     {
         using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
         await RunAsync(context, cancellationToken).ConfigureAwait(false);
@@ -232,22 +232,6 @@ public sealed class InvocationRunner : IInvocationRunner
         }
     }
 
-    private async Task TryReportCapabilitiesAfterInvocationAsync(Guid invocationId)
-    {
-        try
-        {
-            var reportTask = _capabilityReporter.ReportToApiAsync();
-            if (reportTask is not null)
-            {
-                await reportTask.ConfigureAwait(false);
-            }
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to report capabilities after invocation {InvocationId} completed.", invocationId);
-        }
-    }
-
     public void Cancel(Guid invocationId)
     {
         CancellationTokenSource? invocationCancellationTokenSource = null;
@@ -370,6 +354,22 @@ public sealed class InvocationRunner : IInvocationRunner
         }
     }
 
+    private async Task TryReportCapabilitiesAfterInvocationAsync(Guid invocationId)
+    {
+        try
+        {
+            var reportTask = _capabilityReporter.ReportToApiAsync();
+            if (reportTask is not null)
+            {
+                await reportTask.ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to report capabilities after invocation {InvocationId} completed.", invocationId);
+        }
+    }
+
     private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
     {
         if (await _capabilityReporter.VerifyOllamaAndModelAsync(requestedModel, cancellationToken).ConfigureAwait(false))
@@ -389,7 +389,7 @@ public sealed class InvocationRunner : IInvocationRunner
         return _defaultModel;
     }
 
-    private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package, string resolvedModel)
+    private InvocationAgentDefinition BuildInvocationDefinition(Models.RuntimePackage package, string resolvedModel)
     {
         var messages = BuildChatMessages(package);
 
@@ -400,7 +400,7 @@ public sealed class InvocationRunner : IInvocationRunner
             package.ReasoningEffort);
     }
 
-    private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
+    private static IReadOnlyList<ChatMessage> BuildChatMessages(Models.RuntimePackage package)
     {
         return package.ConversationContext
                       .OrderBy(message => message.SortOrder)
@@ -418,7 +418,7 @@ public sealed class InvocationRunner : IInvocationRunner
                       .ToList();
     }
 
-    private IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)
+    private IReadOnlyList<AITool> BuildInvocationTools(Models.RuntimePackage package)
     {
         return package.AllowedTools
                       .Where(static tool => tool.Location == ToolLocation.ApiSide)
@@ -527,7 +527,7 @@ public sealed class InvocationRunner : IInvocationRunner
         return message.Length > 512 ? message[..512] : message;
     }
 
-    private static bool IsLocalLoopbackInvocation(RuntimePackage package)
+    private static bool IsLocalLoopbackInvocation(Models.RuntimePackage package)
     {
         ArgumentNullException.ThrowIfNull(package);
 

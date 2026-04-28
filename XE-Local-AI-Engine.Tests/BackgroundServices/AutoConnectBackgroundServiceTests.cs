@@ -64,7 +64,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
     }
 
     [Test]
-    public async Task ExecuteAsync_WhenTokenExpired_SkipsConnect()
+    public async Task ExecuteAsync_WhenTokenExpired_CallsConnectSoConnectionCanRefresh()
     {
         AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
         var hubConnection = new MockWorkerHubConnection();
@@ -72,6 +72,28 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         try
         {
             using var service = CreateService(hubConnection, MockTokenStore.WithExpiredToken(), CreateApplicationLifetime());
+            using var cancellationTokenSource = new CancellationTokenSource();
+            cancellationTokenSource.CancelAfter(1000);
+
+            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
+
+            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+        }
+        finally
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenAutoConnectDisabled_SkipsConnect()
+    {
+        AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
+        var hubConnection = new MockWorkerHubConnection();
+
+        try
+        {
+            using var service = CreateService(hubConnection, MockTokenStore.PairedWithAutoConnectDisabled(), CreateApplicationLifetime());
             using var cancellationTokenSource = new CancellationTokenSource();
             cancellationTokenSource.CancelAfter(1000);
 

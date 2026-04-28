@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Testing.FakeOllama.Endpoints;
 
 public sealed class FakeOllamaServer : IAsyncDisposable
 {

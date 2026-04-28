@@ -54,6 +54,12 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public DateTimeOffset? TokenExpiresAt => _credentials?.ExpiresAt;
 
+    public bool AutoConnectOnStart => _credentials?.AutoConnectOnStart ?? true;
+
+    public string? BindingMethod => _credentials?.BindingMethod;
+
+    public string? LastKnownNodeName => _credentials?.LastKnownNodeName;
+
     public async Task<string?> GetAccessTokenAsync()
     {
         await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
@@ -66,15 +72,27 @@ public sealed class TokenStore : ITokenStore, IDisposable
         return _credentials?.ClientNodeId;
     }
 
-    public async Task StoreTokensAsync(PairClientResponse pairingResponse)
+    public async Task<string?> GetRefreshTokenAsync()
+    {
+        await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
+        return _credentials?.RefreshToken;
+    }
+
+    public async Task StoreTokensAsync(PairClientResponse pairingResponse, TokenStoreMetadata? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(pairingResponse);
 
         var expiresAt = ParseJwtExpiry(pairingResponse.AccessToken) ?? pairingResponse.ExpiresAt;
-        var credentials = new StoredWorkerCredentials(pairingResponse.ClientNodeId,
-            pairingResponse.AccessToken,
-            pairingResponse.RefreshToken,
-            expiresAt);
+        var credentials = new StoredWorkerCredentials
+        {
+            ClientNodeId = pairingResponse.ClientNodeId,
+            AccessToken = pairingResponse.AccessToken,
+            RefreshToken = pairingResponse.RefreshToken,
+            ExpiresAt = expiresAt,
+            BindingMethod = metadata?.BindingMethod ?? _credentials?.BindingMethod ?? "pairing-token",
+            AutoConnectOnStart = metadata?.AutoConnectOnStart ?? _credentials?.AutoConnectOnStart ?? true,
+            LastKnownNodeName = metadata?.LastKnownNodeName ?? _credentials?.LastKnownNodeName
+        };
 
         var payload = JsonSerializer.SerializeToUtf8Bytes(credentials, SerializerOptions);
         var protectedPayload = _protector.Protect(payload);
@@ -85,6 +103,36 @@ public sealed class TokenStore : ITokenStore, IDisposable
             await File.WriteAllBytesAsync(_credentialsPath, protectedPayload).ConfigureAwait(false);
             ApplyPlatformFileSecurity();
             _credentials = credentials;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+
+        RaiseTokensChanged();
+    }
+
+    public async Task SetAutoConnectOnStartAsync(bool enabled)
+    {
+        await EnsureCredentialsLoadedAsync().ConfigureAwait(false);
+
+        await _lock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_credentials is null)
+            {
+                return;
+            }
+
+            _credentials = _credentials with
+            {
+                AutoConnectOnStart = enabled
+            };
+
+            var payload = JsonSerializer.SerializeToUtf8Bytes(_credentials, SerializerOptions);
+            var protectedPayload = _protector.Protect(payload);
+            await File.WriteAllBytesAsync(_credentialsPath, protectedPayload).ConfigureAwait(false);
+            ApplyPlatformFileSecurity();
         }
         finally
         {
@@ -306,9 +354,20 @@ public sealed class TokenStore : ITokenStore, IDisposable
         return Convert.FromBase64String(normalized);
     }
 
-    private sealed record StoredWorkerCredentials(
-        Guid ClientNodeId,
-        string AccessToken,
-        string RefreshToken,
-        DateTimeOffset ExpiresAt);
+    private sealed record StoredWorkerCredentials
+    {
+        public required Guid ClientNodeId { get; init; }
+
+        public required string AccessToken { get; init; }
+
+        public required string RefreshToken { get; init; }
+
+        public required DateTimeOffset ExpiresAt { get; init; }
+
+        public string BindingMethod { get; init; } = "pairing-token";
+
+        public bool AutoConnectOnStart { get; init; } = true;
+
+        public string? LastKnownNodeName { get; init; }
+    }
 }

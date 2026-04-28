@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
-using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -56,25 +56,30 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
-    public async Task DispatchInvocationAssignedAsync_WhenAlreadyBusy_LogsAndDrops()
+    public async Task DispatchInvocationAssignedAsync_WhenAlreadyBusy_QueuesSecondAssignment()
     {
         var runner = Substitute.For<IInvocationRunner>();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(_ => gate.Task);
-
-        var dispatcher = CreateDispatcher(runner);
         var first = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
         var second = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call => ((InvocationExecutionContext)call[0]).Package.InvocationId == first.InvocationId ? gate.Task : Task.CompletedTask);
+
+        var dispatcher = CreateDispatcher(runner);
 
         var firstDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(first));
         await Task.Delay(20);
-        await dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(second));
+        var secondDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(second));
 
         await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(first.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
 
         gate.SetResult();
-        await firstDispatch;
+        await Task.WhenAll(firstDispatch, secondDispatch);
+
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>());
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == second.InvocationId), Arg.Any<CancellationToken>());
+        AssertEx.Equal(second.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
     }
 
     [Test]

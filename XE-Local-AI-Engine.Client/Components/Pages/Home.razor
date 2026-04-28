@@ -11,7 +11,7 @@
 
 <MudText Typo="Typo.subtitle2">Worker Node</MudText>
 <MudText Typo="Typo.h4" Class="mb-1">Welcome to the worker console</MudText>
-<MudText Typo="Typo.body1" Class="mb-4">Use the worker dashboard to pair this node, inspect capabilities, and monitor live invocations from the Central Platform.</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Use the worker dashboard to bind this node, inspect capabilities, and monitor live invocations from the Central Platform.</MudText>
 
 <ConnectionStatusBadge/>
 
@@ -20,13 +20,13 @@
         <MudCard>
             <MudCardContent>
                 <MudText Typo="Typo.h6">Current status</MudText>
-                <MudText Typo="Typo.body2" Class="mb-3">Quick summary of pairing and connection health.</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3">Quick summary of binding and connection health.</MudText>
 
                 <MudSimpleTable Dense="true" Hover="true">
                     <tbody>
                     <tr>
-                        <td>Pairing</td>
-                        <td>@(TokenStore.IsPaired ? "Paired" : "Not paired")</td>
+                        <td>Binding</td>
+                        <td>@(TokenStore.IsPaired ? "Bound" : "Not bound")</td>
                     </tr>
                     <tr>
                         <td>Connection</td>
@@ -58,7 +58,7 @@
                 <MudText Typo="Typo.body2" Class="mb-3">Open the area that matches the task you want to perform.</MudText>
 
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard" Class="mr-2">Open dashboard</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/pairing" Class="mr-2">Open pairing wizard</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/node-binding" Class="mr-2">Bind this node</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/invocations">Open invocation monitor</MudButton>
             </MudCardContent>
         </MudCard>
@@ -100,7 +100,7 @@
             WorkerConnectionState.Connected => "Connected",
             WorkerConnectionState.Connecting => "Connecting",
             WorkerConnectionState.Reconnecting => "Reconnecting",
-            WorkerConnectionState.Pairing => "Pairing",
+            WorkerConnectionState.Pairing => "Binding",
             WorkerConnectionState.Error => "Error",
             _ => "Offline"
         };

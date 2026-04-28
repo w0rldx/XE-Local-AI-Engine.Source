@@ -236,9 +236,9 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
 
     private sealed class FixtureHubState
     {
+        private readonly Channel<ClientCapabilitiesPayload> _capabilities = Channel.CreateUnbounded<ClientCapabilitiesPayload>();
         private readonly Channel<EncryptedChunkEnvelopeV1> _chunks = Channel.CreateUnbounded<EncryptedChunkEnvelopeV1>();
         private readonly Channel<EncryptedCompletedEnvelopeV1> _completed = Channel.CreateUnbounded<EncryptedCompletedEnvelopeV1>();
-        private readonly Channel<ClientCapabilitiesPayload> _capabilities = Channel.CreateUnbounded<ClientCapabilitiesPayload>();
         private readonly ConcurrentDictionary<string, HubCallerContext> _connections = new(StringComparer.Ordinal);
         private readonly Channel<(string reason, string nodeKeyIdUsed)> _keyMismatches = Channel.CreateUnbounded<(string reason, string nodeKeyIdUsed)>();
 

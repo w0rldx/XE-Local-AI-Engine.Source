@@ -13,6 +13,12 @@ public sealed class CentralPlatformOptions
 
     public string PairingEndpoint { get; set; } = "/api/v1/client-nodes/pair";
 
+    public string DeviceBindingStartEndpoint { get; set; } = "/api/v1/client-nodes/device-bind/start";
+
+    public string DeviceBindingTokenEndpoint { get; set; } = "/api/v1/client-nodes/device-bind/token";
+
+    public string WorkerTokenRefreshEndpoint { get; set; } = "/api/v1/client-nodes/worker-token/refresh";
+
     [Range(5, 300)]
     public int HeartbeatIntervalSeconds { get; set; } = 30;
 

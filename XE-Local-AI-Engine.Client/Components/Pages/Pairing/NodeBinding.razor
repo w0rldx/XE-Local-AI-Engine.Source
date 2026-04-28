@@ -1,0 +1,195 @@
+@page "/node-binding"
+@page "/pairing"
+@using XE_Local_AI_Engine.Client.Models.NodeBinding
+@using XE_Local_AI_Engine.Client.Services.Auth
+@implements IAsyncDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject INodeBindingService NodeBindingService
+@inject ILogger<NodeBinding> Logger
+
+<PageTitle>Node Binding</PageTitle>
+
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4" Class="mb-1">Bind this node to your Central Platform account</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Start binding here, then approve the request in the Central Platform using the displayed user code.</MudText>
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="7">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-4">Device binding</MudText>
+
+                @if (!string.IsNullOrWhiteSpace(_statusMessage))
+                {
+                    <MudAlert Severity="@_statusSeverity" Dense="true" Class="mb-4">@_statusMessage</MudAlert>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+                }
+
+                @if (_session is null)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-4">No binding request is active on this worker.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartBindingAsync" Disabled="_isWorking" FullWidth="true">
+                        @(_isWorking ? "Starting binding..." : "Start binding")
+                    </MudButton>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <tbody>
+                        <tr>
+                            <td>Status</td>
+                            <td>@_currentStatus</td>
+                        </tr>
+                        <tr>
+                            <td>User code</td>
+                            <td><strong>@_session.UserCode</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Verification URL</td>
+                            <td>
+                                <MudLink Href="@_session.VerificationUriComplete" Target="_blank">@_session.VerificationUriComplete</MudLink>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Expires</td>
+                            <td>@_session.ExpiresAt.ToLocalTime().ToString("g")</td>
+                        </tr>
+                        </tbody>
+                    </MudSimpleTable>
+
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CancelBindingAsync" Disabled="_isCancelling" Class="mt-4">
+                        @(_isCancelling ? "Cancelling..." : "Cancel polling")
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@_session.VerificationUriComplete" Target="_blank" Class="mt-4 ml-2">Open approval link</MudButton>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" md="5">
+        <MudCard Outlined="true">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-2">How binding works</MudText>
+                <MudList T="string" Dense="true">
+                    <MudListItem Icon="@Icons.Material.Filled.Check">Click <strong>Start binding</strong> to request a one-time user code.</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check">Open the approval link and sign in to the Central Platform.</MudListItem>
+                    <MudListItem Icon="@Icons.Material.Filled.Check">The worker polls at the server-provided interval and stores credentials only after approval.</MudListItem>
+                </MudList>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private CancellationTokenSource? _bindingCancellation;
+    private NodeBindingSession? _session;
+    private string _currentStatus = "Not started";
+    private Severity _statusSeverity = Severity.Info;
+    private bool _isCancelling;
+    private bool _isWorking;
+    private string? _errorMessage;
+    private string? _statusMessage;
+
+    public async ValueTask DisposeAsync()
+    {
+        await CancelBindingAsync().ConfigureAwait(false);
+        if (_bindingCancellation is not null)
+        {
+            await _bindingCancellation.CancelAsync().ConfigureAwait(false);
+            _bindingCancellation.Dispose();
+        }
+    }
+
+    private async Task StartBindingAsync()
+    {
+        if (_isWorking)
+        {
+            return;
+        }
+
+        _isWorking = true;
+        _errorMessage = null;
+        _statusMessage = null;
+        _statusSeverity = Severity.Info;
+
+        try
+        {
+            _bindingCancellation?.Dispose();
+            _bindingCancellation = new CancellationTokenSource();
+            _session = await NodeBindingService.StartBindingAsync(_bindingCancellation.Token);
+            _currentStatus = "Pending approval";
+            _statusMessage = "Binding started. Approve this worker in the Central Platform.";
+            _ = PollUntilTerminalAsync(_session, _bindingCancellation.Token);
+        }
+        catch (NodeBindingException exception)
+        {
+            Logger.LogWarning(exception, "Device binding start failed.");
+            _errorMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unexpected device binding start failure.");
+            _errorMessage = "An unexpected error occurred while starting device binding.";
+        }
+        finally
+        {
+            _isWorking = false;
+        }
+    }
+
+    private async Task PollUntilTerminalAsync(NodeBindingSession session, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await NodeBindingService.PollUntilTerminalAsync(session, cancellationToken);
+            _currentStatus = result.Status;
+            _statusSeverity = string.Equals(result.Status, "approved", StringComparison.OrdinalIgnoreCase) ? Severity.Success : Severity.Warning;
+            _statusMessage = string.Equals(result.Status, "approved", StringComparison.OrdinalIgnoreCase)
+                ? "Binding approved. Worker credentials were stored securely."
+                : $"Binding ended with status '{result.Status}'.";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _currentStatus = "Cancelled";
+            _statusSeverity = Severity.Info;
+            _statusMessage = "Binding polling was cancelled locally.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Device binding poll failed.");
+            _currentStatus = "Failed";
+            _errorMessage = exception is NodeBindingException ? exception.Message : "Device binding polling failed.";
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CancelBindingAsync()
+    {
+        if (_isCancelling)
+        {
+            return;
+        }
+
+        _isCancelling = true;
+        try
+        {
+            if (_bindingCancellation is not null)
+            {
+                await _bindingCancellation.CancelAsync().ConfigureAwait(false);
+            }
+
+            await NodeBindingService.CancelAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _isCancelling = false;
+        }
+    }
+
+}

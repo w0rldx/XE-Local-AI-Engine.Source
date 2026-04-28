@@ -25,6 +25,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
     private readonly ITokenStore _tokenStore;
+    private readonly IWorkerTokenRefreshService _workerTokenRefreshService;
 
     private HubConnection? _hubConnection;
 
@@ -35,10 +36,12 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         DeadLetterFlushService deadLetterFlushService,
         INodeKeyRegistry nodeKeyRegistry,
         ILogger<WorkerHubConnection> logger,
-        Action<HttpConnectionOptions>? configureHttpConnectionOptions = null)
+        Action<HttpConnectionOptions>? configureHttpConnectionOptions = null,
+        IWorkerTokenRefreshService? workerTokenRefreshService = null)
     {
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _platformOptions = platformOptions ?? throw new ArgumentNullException(nameof(platformOptions));
+        _workerTokenRefreshService = workerTokenRefreshService ?? NoOpWorkerTokenRefreshService.Instance;
         _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _deadLetterFlushService = deadLetterFlushService ?? throw new ArgumentNullException(nameof(deadLetterFlushService));
@@ -79,7 +82,12 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         if (_tokenStore.IsTokenExpired)
         {
-            throw new WorkerTokenExpiredException();
+            _logger.LogInformation("Worker token is expired. Attempting refresh before connecting.");
+            var refreshed = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
+            if (!refreshed || _tokenStore.IsTokenExpired)
+            {
+                throw new WorkerTokenExpiredException();
+            }
         }
 
         _connectionState.TransitionTo(WorkerConnectionState.Connecting);
@@ -531,6 +539,21 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         var baseUri = new Uri(options.BaseUrl, UriKind.Absolute);
         return new Uri(baseUri, options.HubPath).ToString();
+    }
+
+    private sealed class NoOpWorkerTokenRefreshService : IWorkerTokenRefreshService
+    {
+        public static readonly NoOpWorkerTokenRefreshService Instance = new();
+
+        private NoOpWorkerTokenRefreshService()
+        {
+        }
+
+        public Task<bool> TryRefreshAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(false);
+        }
     }
 
     private sealed record ClientCapabilitiesPayload
