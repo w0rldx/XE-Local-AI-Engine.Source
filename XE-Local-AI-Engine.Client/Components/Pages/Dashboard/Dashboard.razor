@@ -15,7 +15,7 @@
 
 <MudText Typo="Typo.subtitle2">Worker Node</MudText>
 <MudText Typo="Typo.h4">Connection dashboard</MudText>
-<MudText Typo="Typo.body1" Class="mb-4">Monitor pairing state, connection health, and locally detected capabilities.</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Monitor binding state, connection health, and locally detected capabilities.</MudText>
 <MudChip T="string" Color="@GetConnectionChipColor()" Size="Size.Small">@GetConnectionLabel()</MudChip>
 
 @if (!string.IsNullOrWhiteSpace(_actionMessage))
@@ -38,8 +38,16 @@
                 <MudSimpleTable Dense="true" Hover="true">
                     <tbody>
                     <tr>
-                        <td>Pairing status</td>
-                        <td>@(TokenStore.IsPaired ? "Paired" : "Not paired")</td>
+                        <td>Binding status</td>
+                        <td>@(TokenStore.IsPaired ? "Bound" : "Not bound")</td>
+                    </tr>
+                    <tr>
+                        <td>Binding method</td>
+                        <td>@(TokenStore.BindingMethod ?? "Unknown")</td>
+                    </tr>
+                    <tr>
+                        <td>Node name</td>
+                        <td>@(TokenStore.LastKnownNodeName ?? "Unknown")</td>
                     </tr>
                     <tr>
                         <td>Connection state</td>
@@ -60,9 +68,13 @@
                 {
                     <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">Last error: @ConnectionState.LastError</MudAlert>
                 }
+
+                <MudSwitch T="bool" Label="Auto-connect on start" Value="TokenStore.AutoConnectOnStart" ValueChanged="SetAutoConnectOnStartAsync" Color="Color.Primary"
+                           Disabled="@(!TokenStore.IsPaired || _isUpdatingAutoConnect)" Class="mt-4"/>
             </MudCardContent>
             <MudCardActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConnectAsync" Disabled="@(!CanConnect || _isConnecting)">@(_isConnecting ? "Connecting..." : "Connect")</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConnectAsync"
+                           Disabled="@(!CanConnect || _isConnecting)">@(_isConnecting ? "Connecting..." : "Connect now")</MudButton>
                 <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DisconnectAsync"
                            Disabled="@(!CanDisconnect || _isDisconnecting)">@(_isDisconnecting ? "Disconnecting..." : "Disconnect")</MudButton>
             </MudCardActions>
@@ -143,6 +155,7 @@
     private bool _isConnecting;
     private bool _isDisconnecting;
     private bool _isRefreshingCapabilities;
+    private bool _isUpdatingAutoConnect;
     private string? _actionMessage;
     private string? _errorMessage;
 
@@ -217,6 +230,32 @@
         finally
         {
             _isDisconnecting = false;
+        }
+    }
+
+    private async Task SetAutoConnectOnStartAsync(bool enabled)
+    {
+        if (_isUpdatingAutoConnect)
+        {
+            return;
+        }
+
+        _isUpdatingAutoConnect = true;
+        ClearMessages();
+
+        try
+        {
+            await TokenStore.SetAutoConnectOnStartAsync(enabled);
+            _actionMessage = enabled ? "Auto-connect on start enabled." : "Auto-connect on start disabled.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Dashboard auto-connect preference update failed.");
+            _errorMessage = "Unable to update auto-connect preference right now.";
+        }
+        finally
+        {
+            _isUpdatingAutoConnect = false;
         }
     }
 

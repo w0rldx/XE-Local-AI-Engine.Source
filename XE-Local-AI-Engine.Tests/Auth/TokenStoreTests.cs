@@ -158,6 +158,45 @@ public sealed class TokenStoreTests : IDisposable
         AssertEx.Equal(expiresAt, tokenStore.TokenExpiresAt);
     }
 
+    [Test]
+    public async Task StoreTokensAsync_WhenMetadataProvided_PersistsBindingMetadata()
+    {
+        using var tokenStore = CreateTokenStore();
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build(), new TokenStoreMetadata
+        {
+            BindingMethod = "device-code",
+            AutoConnectOnStart = false,
+            LastKnownNodeName = "worker-a"
+        });
+
+        AssertEx.Equal("device-code", tokenStore.BindingMethod);
+        AssertEx.False(tokenStore.AutoConnectOnStart);
+        AssertEx.Equal("worker-a", tokenStore.LastKnownNodeName);
+    }
+
+    [Test]
+    public async Task StoreTokensAsync_WhenMetadataOmitted_DefaultsAutoConnectOnStartTrue()
+    {
+        using var tokenStore = CreateTokenStore();
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+        AssertEx.True(tokenStore.AutoConnectOnStart);
+        AssertEx.Equal("pairing-token", tokenStore.BindingMethod);
+    }
+
+    [Test]
+    public async Task SetAutoConnectOnStartAsync_WhenPaired_PersistsPreference()
+    {
+        using var tokenStore = CreateTokenStore();
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+        await tokenStore.SetAutoConnectOnStartAsync(false);
+
+        AssertEx.False(tokenStore.AutoConnectOnStart);
+    }
+
     private TokenStore CreateTokenStore(IDataProtectionProvider? dataProtectionProvider = null)
     {
         Directory.CreateDirectory(_contentRootPath);

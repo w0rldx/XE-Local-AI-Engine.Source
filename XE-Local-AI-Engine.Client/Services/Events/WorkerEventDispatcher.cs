@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -7,8 +8,11 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 
+[SuppressMessage("Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "Registered for the application lifetime; disposing the service provider owns singleton cleanup.")]
 public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 {
     private const string AadMismatchReason = "aad-mismatch";
@@ -18,6 +22,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
+    private readonly SemaphoreSlim _remoteInvocationQueue = new(1, 1);
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
     private readonly object _syncRoot = new();
 
@@ -121,39 +126,19 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             throw;
         }
 
-        using var _ = context;
+        using var invocationContext = context;
         var runtimePackage = context.Package;
 
-        InvocationState snapshot;
+        await _remoteInvocationQueue.WaitAsync().ConfigureAwait(false);
 
-        lock (_syncRoot)
+        try
         {
-            if (IsInvocationActive(CurrentInvocation))
-            {
-                _logger.LogWarning("Ignoring invocation assignment for {InvocationId} because invocation {CurrentInvocationId} is still active.",
-                    runtimePackage.InvocationId,
-                    CurrentInvocation!.InvocationId);
-
-                return;
-            }
-
-            CurrentInvocation = new InvocationState
-            {
-                InvocationId = runtimePackage.InvocationId,
-                ConversationId = runtimePackage.ConversationId,
-                Status = InvocationStatus.Assigned,
-                StartedAt = DateTimeOffset.UtcNow,
-                LastUpdatedAt = DateTimeOffset.UtcNow,
-                ModelUsed = runtimePackage.ModelProfile
-            };
-
-            snapshot = Clone(CurrentInvocation);
+            await RunQueuedInvocationAsync(context, runtimePackage).ConfigureAwait(false);
         }
-
-        _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);
-        PublishStateChanged(snapshot);
-
-        await RunInvocationAsync(context).ConfigureAwait(false);
+        finally
+        {
+            _ = _remoteInvocationQueue.Release();
+        }
     }
 
     public Task ReportInvocationAssignedAsync(RuntimePackage package)
@@ -442,6 +427,41 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             });
 
         return Task.CompletedTask;
+    }
+
+    private async Task RunQueuedInvocationAsync(InvocationExecutionContext context, RuntimePackage runtimePackage)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(runtimePackage);
+
+        InvocationState snapshot;
+
+        lock (_syncRoot)
+        {
+            if (IsInvocationActive(CurrentInvocation))
+            {
+                _logger.LogWarning("Delaying invocation assignment for {InvocationId} because invocation {CurrentInvocationId} is still active.",
+                    runtimePackage.InvocationId,
+                    CurrentInvocation!.InvocationId);
+            }
+
+            CurrentInvocation = new InvocationState
+            {
+                InvocationId = runtimePackage.InvocationId,
+                ConversationId = runtimePackage.ConversationId,
+                Status = InvocationStatus.Assigned,
+                StartedAt = DateTimeOffset.UtcNow,
+                LastUpdatedAt = DateTimeOffset.UtcNow,
+                ModelUsed = runtimePackage.ModelProfile
+            };
+
+            snapshot = Clone(CurrentInvocation);
+        }
+
+        _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);
+        PublishStateChanged(snapshot);
+
+        await RunInvocationAsync(context).ConfigureAwait(false);
     }
 
     private static InvocationState Clone(InvocationState state)

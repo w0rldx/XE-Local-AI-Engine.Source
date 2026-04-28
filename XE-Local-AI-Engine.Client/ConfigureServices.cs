@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
-using XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using ILogger = ILogger;
@@ -83,6 +83,8 @@ public static class ConfigureServices
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
+        builder.Services.AddSingleton<IWorkerTokenRefreshService, WorkerTokenRefreshService>();
+        builder.Services.AddScoped<INodeBindingService, NodeBindingService>();
         builder.Services.AddSingleton<ConnectionState>();
         builder.Services.AddSingleton(sp => new Lazy<IHubMessageSender>(() => sp.GetRequiredService<IHubMessageSender>()));
         builder.Services.AddSingleton(sp => new Lazy<IWorkerEventDispatcher>(() => sp.GetRequiredService<IWorkerEventDispatcher>()));
@@ -149,7 +151,7 @@ public static class ConfigureServices
         builder.AddOllamaApiClient("embeddings")
                .AddEmbeddingGenerator();
 
-        builder.Services.AddSingleton<IChatClient>(_ =>
+        builder.Services.AddSingleton<OllamaApiClient>(_ =>
         {
             var (chatEndpoint, chatModel) = ResolveChatConnectionSettings(configuration);
 
@@ -166,6 +168,8 @@ public static class ConfigureServices
             };
 #pragma warning restore CA2000
         });
+        builder.Services.AddSingleton<IOllamaApiClient>(sp => sp.GetRequiredService<OllamaApiClient>());
+        builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<OllamaApiClient>());
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
     }

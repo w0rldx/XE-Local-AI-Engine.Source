@@ -7,6 +7,7 @@ public sealed class MockTokenStore : ITokenStore
 {
     private string? _accessToken;
     private Guid? _clientNodeId;
+    private string? _refreshToken;
 
     public int ClearTokensAsyncCallCount { get; private set; }
 
@@ -27,6 +28,12 @@ public sealed class MockTokenStore : ITokenStore
 
     public DateTimeOffset? TokenExpiresAt { get; private set; }
 
+    public bool AutoConnectOnStart { get; private set; } = true;
+
+    public string? BindingMethod { get; private set; }
+
+    public string? LastKnownNodeName { get; private set; }
+
     public Task<string?> GetAccessTokenAsync()
     {
         return Task.FromResult(IsTokenExpired ? null : _accessToken);
@@ -37,14 +44,30 @@ public sealed class MockTokenStore : ITokenStore
         return Task.FromResult(_clientNodeId);
     }
 
-    public Task StoreTokensAsync(PairClientResponse pairingResponse)
+    public Task<string?> GetRefreshTokenAsync()
+    {
+        return Task.FromResult(_refreshToken);
+    }
+
+    public Task StoreTokensAsync(PairClientResponse pairingResponse, TokenStoreMetadata? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(pairingResponse);
 
         StoreTokensAsyncCallCount++;
         _accessToken = pairingResponse.AccessToken;
+        _refreshToken = pairingResponse.RefreshToken;
         _clientNodeId = pairingResponse.ClientNodeId;
         TokenExpiresAt = pairingResponse.ExpiresAt;
+        BindingMethod = metadata?.BindingMethod ?? BindingMethod ?? "pairing-token";
+        AutoConnectOnStart = metadata?.AutoConnectOnStart ?? AutoConnectOnStart;
+        LastKnownNodeName = metadata?.LastKnownNodeName ?? LastKnownNodeName;
+        TokensChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
+    }
+
+    public Task SetAutoConnectOnStartAsync(bool enabled)
+    {
+        AutoConnectOnStart = enabled;
         TokensChanged?.Invoke(this, EventArgs.Empty);
         return Task.CompletedTask;
     }
@@ -53,6 +76,7 @@ public sealed class MockTokenStore : ITokenStore
     {
         ClearTokensAsyncCallCount++;
         _accessToken = null;
+        _refreshToken = null;
         _clientNodeId = null;
         TokenExpiresAt = null;
         TokensChanged?.Invoke(this, EventArgs.Empty);
@@ -75,8 +99,22 @@ public sealed class MockTokenStore : ITokenStore
         return new MockTokenStore
         {
             _accessToken = jwt,
+            _refreshToken = "refresh-token",
             _clientNodeId = clientNodeId,
-            TokenExpiresAt = expiresAt
+            TokenExpiresAt = expiresAt,
+            BindingMethod = "pairing-token"
+        };
+    }
+
+    public static MockTokenStore PairedWithAutoConnectDisabled()
+    {
+        return new MockTokenStore
+        {
+            _accessToken = "token",
+            _clientNodeId = Guid.NewGuid(),
+            TokenExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            AutoConnectOnStart = false,
+            BindingMethod = "device-code"
         };
     }
 

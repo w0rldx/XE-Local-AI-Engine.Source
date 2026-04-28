@@ -45,6 +45,6 @@
     <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.24.0.138807" />
-    <PackageVersion Include="TUnit" Version="1.39.0" />
+    <PackageVersion Include="TUnit" Version="1.40.10" />
   </ItemGroup>
 </Project>

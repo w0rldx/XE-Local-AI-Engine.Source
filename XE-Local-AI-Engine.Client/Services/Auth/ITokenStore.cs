@@ -11,15 +11,35 @@ public interface ITokenStore
     bool IsTokenExpiringSoon { get; }
 
     DateTimeOffset? TokenExpiresAt { get; }
+
+    bool AutoConnectOnStart { get; }
+
+    string? BindingMethod { get; }
+
+    string? LastKnownNodeName { get; }
+
     Task<string?> GetAccessTokenAsync();
 
     Task<Guid?> GetClientNodeIdAsync();
 
-    Task StoreTokensAsync(PairClientResponse pairingResponse);
+    Task<string?> GetRefreshTokenAsync();
+
+    Task StoreTokensAsync(PairClientResponse pairingResponse, TokenStoreMetadata? metadata = null);
+
+    Task SetAutoConnectOnStartAsync(bool enabled);
 
     Task ClearTokensAsync();
 
     Task HandleKeyRotationAsync();
 
     event EventHandler? TokensChanged;
+}
+
+public sealed record TokenStoreMetadata
+{
+    public string? BindingMethod { get; init; }
+
+    public bool? AutoConnectOnStart { get; init; }
+
+    public string? LastKnownNodeName { get; init; }
 }

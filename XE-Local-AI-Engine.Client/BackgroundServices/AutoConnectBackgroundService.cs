@@ -55,9 +55,9 @@ public sealed class AutoConnectBackgroundService : BackgroundService
             return;
         }
 
-        if (_tokenStore.IsTokenExpired)
+        if (!_tokenStore.AutoConnectOnStart)
         {
-            _logger.LogWarning("Worker token is expired. Auto-connect skipped until re-pairing completes.");
+            _logger.LogInformation("Auto-connect disabled by local setting.");
             return;
         }
 

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.Invocation.RuntimeEnvelope;
+namespace XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 
 using System.Buffers;
 using System.Security.Cryptography;

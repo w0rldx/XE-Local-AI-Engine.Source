@@ -1,13 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
 using System.Security.Cryptography;
-using XE_Local_AI_Engine.Client.Models;
 
 public sealed class InvocationExecutionContext : IDisposable
 {
     private byte[]? _ownedEpochKey;
 
-    public required RuntimePackage Package { get; init; }
+    public required Models.RuntimePackage Package { get; init; }
 
     public required Guid MessageId { get; init; }
 
@@ -24,7 +23,7 @@ public sealed class InvocationExecutionContext : IDisposable
         }
     }
 
-    public static InvocationExecutionContext Create(RuntimePackage package, Guid messageId, int epochVersion, ReadOnlyMemory<byte> epochKey)
+    public static InvocationExecutionContext Create(Models.RuntimePackage package, Guid messageId, int epochVersion, ReadOnlyMemory<byte> epochKey)
     {
         ArgumentNullException.ThrowIfNull(package);
 

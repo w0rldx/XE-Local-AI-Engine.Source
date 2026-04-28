@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Testing.FakeOllama;
+namespace XE_Local_AI_Engine.Testing.FakeOllama.Endpoints;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
