@@ -1,0 +1,294 @@
+@page "/cloud-settings"
+@using XE_Local_AI_Engine.Client.Configuration
+@using XE_Local_AI_Engine.Client.Services.Capabilities
+@using XE_Local_AI_Engine.Client.Services.CloudProviders
+@rendermode @(new InteractiveServerRenderMode(false))
+
+@inject ICloudCredentialStore CloudCredentialStore
+@inject ICapabilityReporter CapabilityReporter
+@inject ILogger<CloudSettings> Logger
+
+<PageTitle>Cloud Settings</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.subtitle2">Worker Node</MudText>
+        <MudText Typo="Typo.h4">Cloud settings</MudText>
+        <MudText Typo="Typo.body1">Configure cloud provider credentials on this worker only.</MudText>
+    </div>
+    <MudSpacer/>
+    <MudChip T="string" Color="@(_providerName == CloudProviderOptions.ProviderAzureFoundry ? Color.Info : Color.Default)" Icon="@Icons.Material.Filled.Cloud">
+        @GetProviderLabel()
+    </MudChip>
+</MudStack>
+
+@if (!string.IsNullOrWhiteSpace(_successMessage))
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@_successMessage</MudAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+}
+
+<MudAlert Severity="Severity.Info" Class="mb-4">
+    Azure API keys are encrypted in the worker-local credential store and are never sent to the central C0re server.
+    Changing the active provider requires restarting the worker before inference uses the new provider.
+</MudAlert>
+
+<MudGrid>
+    <MudItem xs="12" md="7">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Class="mb-4">Provider configuration</MudText>
+
+                <MudSelect T="string"
+                           Label="AI provider"
+                           Value="_providerName"
+                           ValueChanged="OnProviderChangedAsync"
+                           Disabled="_isSaving"
+                           Variant="Variant.Outlined"
+                           Class="mb-4">
+                    <MudSelectItem T="string" Value="@CloudProviderOptions.ProviderNone">Local (Ollama)</MudSelectItem>
+                    <MudSelectItem T="string" Value="@CloudProviderOptions.ProviderAzureFoundry">Azure Foundry</MudSelectItem>
+                </MudSelect>
+
+                @if (_providerName == CloudProviderOptions.ProviderAzureFoundry)
+                {
+                    <MudTextField @bind-Value="_azureEndpoint"
+                                  Label="Azure endpoint"
+                                  Placeholder="https://&lt;resource&gt;.openai.azure.com/"
+                                  Variant="Variant.Outlined"
+                                  Disabled="_isSaving"
+                                  Immediate="true"
+                                  Class="mb-4"/>
+
+                    <MudTextField @bind-Value="_azureApiKey"
+                                  Label="Azure API key"
+                                  InputType="InputType.Password"
+                                  Placeholder="Enter API key to save or rotate credentials"
+                                  Variant="Variant.Outlined"
+                                  Disabled="_isSaving"
+                                  Immediate="true"
+                                  Class="mb-2"/>
+
+                    @if (_hasStoredApiKey)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-4">
+                            A local API key is already stored. Re-enter a key only when saving or rotating Azure credentials.
+                        </MudText>
+                    }
+
+                    <MudTextField @bind-Value="_azureDeploymentName"
+                                  Label="Deployment name"
+                                  Placeholder="gpt-4o"
+                                  Variant="Variant.Outlined"
+                                  Disabled="_isSaving"
+                                  Immediate="true"
+                                  Class="mb-4"/>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           Disabled="@(_isSaving || !CanSave)"
+                           OnClick="SaveAsync">
+                    @(_isSaving ? "Saving..." : "Save settings")
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Disabled="_isSaving"
+                           OnClick="LoadSettingsAsync">
+                    Reload
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="5">
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Class="mb-4">Current local state</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <tbody>
+                    <tr>
+                        <td>Provider</td>
+                        <td>@GetProviderLabel()</td>
+                    </tr>
+                    <tr>
+                        <td>Endpoint</td>
+                        <td>@(string.IsNullOrWhiteSpace(_azureEndpoint) ? "—" : _azureEndpoint)</td>
+                    </tr>
+                    <tr>
+                        <td>Deployment</td>
+                        <td>@(string.IsNullOrWhiteSpace(_azureDeploymentName) ? "—" : _azureDeploymentName)</td>
+                    </tr>
+                    <tr>
+                        <td>API key</td>
+                        <td>@(_hasStoredApiKey ? "Stored locally" : "Not stored")</td>
+                    </tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string _providerName = CloudProviderOptions.ProviderNone;
+    private string? _azureEndpoint;
+    private string? _azureApiKey;
+    private string? _azureDeploymentName;
+    private bool _hasStoredApiKey;
+    private bool _isSaving;
+    private string? _successMessage;
+    private string? _errorMessage;
+
+    private bool CanSave =>
+        _providerName == CloudProviderOptions.ProviderNone
+        || (_providerName == CloudProviderOptions.ProviderAzureFoundry
+            && IsHttpsAbsoluteUri(_azureEndpoint)
+            && !string.IsNullOrWhiteSpace(_azureApiKey)
+            && !string.IsNullOrWhiteSpace(_azureDeploymentName));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        ClearMessages();
+
+        try
+        {
+            var credentials = await CloudCredentialStore.LoadAsync();
+            if (credentials is null)
+            {
+                _providerName = CloudProviderOptions.ProviderNone;
+                _azureEndpoint = null;
+                _azureApiKey = null;
+                _azureDeploymentName = null;
+                _hasStoredApiKey = false;
+                return;
+            }
+
+            _providerName = NormalizeProviderName(credentials.ProviderName);
+            _azureEndpoint = credentials.Endpoint;
+            _azureApiKey = null;
+            _azureDeploymentName = credentials.DeploymentName;
+            _hasStoredApiKey = !string.IsNullOrWhiteSpace(credentials.ApiKey);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Cloud settings could not be loaded.");
+            _errorMessage = "Cloud settings could not be loaded.";
+        }
+    }
+
+    private Task OnProviderChangedAsync(string providerName)
+    {
+        _providerName = NormalizeProviderName(providerName);
+        ClearMessages();
+
+        if (_providerName == CloudProviderOptions.ProviderNone)
+        {
+            _azureEndpoint = null;
+            _azureApiKey = null;
+            _azureDeploymentName = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_isSaving || !CanSave)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (_providerName == CloudProviderOptions.ProviderNone)
+            {
+                await CloudCredentialStore.ClearAsync();
+                _hasStoredApiKey = false;
+                _successMessage = "Cloud settings cleared. Restart the worker to switch inference back to local Ollama.";
+            }
+            else
+            {
+                await CloudCredentialStore.SaveAsync(new StoredCloudCredentials
+                {
+                    ProviderName = CloudProviderOptions.ProviderAzureFoundry,
+                    Endpoint = _azureEndpoint!.Trim(),
+                    ApiKey = _azureApiKey!.Trim(),
+                    DeploymentName = _azureDeploymentName!.Trim()
+                });
+
+                _azureApiKey = null;
+                _hasStoredApiKey = true;
+                _successMessage = "Cloud settings saved locally. Restart the worker before cloud inference is used.";
+            }
+
+            await ReportCapabilitiesBestEffortAsync();
+        }
+        catch (ArgumentException exception)
+        {
+            Logger.LogWarning(exception, "Cloud settings validation failed.");
+            _errorMessage = "Cloud settings are invalid. Check the provider, HTTPS endpoint, API key, and deployment name.";
+        }
+        catch (IOException exception)
+        {
+            Logger.LogWarning(exception, "Cloud settings could not be written.");
+            _errorMessage = "Cloud settings could not be saved to the local credential store.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ReportCapabilitiesBestEffortAsync()
+    {
+        try
+        {
+            await CapabilityReporter.ReportToApiAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Capability refresh after cloud settings change failed.");
+        }
+    }
+
+    private string GetProviderLabel()
+    {
+        return _providerName == CloudProviderOptions.ProviderAzureFoundry ? "Azure Foundry" : "Local (Ollama)";
+    }
+
+    private void ClearMessages()
+    {
+        _successMessage = null;
+        _errorMessage = null;
+    }
+
+    private static string NormalizeProviderName(string? providerName)
+    {
+        if (string.Equals(providerName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
+        {
+            return CloudProviderOptions.ProviderAzureFoundry;
+        }
+
+        return CloudProviderOptions.ProviderNone;
+    }
+
+    private static bool IsHttpsAbsoluteUri(string? endpoint)
+    {
+        return Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
+               && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+    }
+}

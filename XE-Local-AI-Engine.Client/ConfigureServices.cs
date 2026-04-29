@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Embeddings;
@@ -55,10 +56,14 @@ public static class ConfigureServices
         builder.Services.AddOptions<SecurityOptions>()
                .Bind(configuration.GetSection(SecurityOptions.SectionName))
                .ValidateOnStart();
+        builder.Services.AddOptions<CloudProviderOptions>()
+               .Bind(configuration.GetSection(CloudProviderOptions.SectionName))
+               .ValidateOnStart();
 
         builder.Services.AddSingleton<IValidateOptions<CentralPlatformOptions>, CentralPlatformOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<SecurityOptions>, SecurityOptionsValidator>();
+        builder.Services.AddSingleton<IValidateOptions<CloudProviderOptions>, CloudProviderOptionsValidator>();
 
         var centralPlatformBaseUrl = configuration.GetValue<string>("CentralPlatform:BaseUrl")
                                      ?? throw new InvalidOperationException("CentralPlatform:BaseUrl is required.");
@@ -81,6 +86,8 @@ public static class ConfigureServices
         }).AddStandardResilienceHandler();
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
+        builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
+        builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
         builder.Services.AddSingleton<IWorkerTokenRefreshService, WorkerTokenRefreshService>();
@@ -169,7 +176,19 @@ public static class ConfigureServices
 #pragma warning restore CA2000
         });
         builder.Services.AddSingleton<IOllamaApiClient>(sp => sp.GetRequiredService<OllamaApiClient>());
-        builder.Services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<OllamaApiClient>());
+        builder.Services.AddSingleton<IChatClient>(sp =>
+        {
+            var credentialStore = sp.GetRequiredService<ICloudCredentialStore>();
+            var credentials = credentialStore.LoadAsync().GetAwaiter().GetResult();
+
+            if (credentials is not null
+                && string.Equals(credentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
+            {
+                return sp.GetRequiredService<IAzureFoundryChatClientFactory>().Create(credentials);
+            }
+
+            return sp.GetRequiredService<OllamaApiClient>();
+        });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
     }
