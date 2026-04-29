@@ -6,6 +6,7 @@ using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -167,7 +168,29 @@ public sealed class CapabilityReporterTests
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
     }
 
-    private static async Task<CapabilityReporterTestContext> CreateContextAsync()
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenAzureFoundryCredentialsExist_ReportsCloudCapabilities()
+    {
+        await using var context = await CreateContextAsync(new StoredCloudCredentials
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            ApiKey = "test-api-key",
+            DeploymentName = "gpt-4o"
+        });
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Equal("Cloud", result.NodeType);
+        AssertEx.Equal("AzureFoundry", result.CloudProviderName);
+        AssertEx.Equal("Cloud", result.SystemScoreClass);
+        AssertEx.Equal("gpt-4o", result.ActiveModel);
+        AssertEx.Contains(result.InstalledModels, "gpt-4o");
+        AssertEx.Contains(result.SupportedCapabilities, "cloud");
+        AssertEx.Equal(0, context.TagsRequestCount);
+    }
+
+    private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null)
     {
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -180,8 +203,9 @@ public sealed class CapabilityReporterTests
         var chatClient = new OllamaApiClient(server.BaseAddress);
 
         var hubConnection = new MockWorkerHubConnection();
+        var cloudCredentialStore = new StubCloudCredentialStore(cloudCredentials);
         var timeProvider = new FakeTimeProvider();
-        var reporter = new CapabilityReporter(chatClient, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        var reporter = new CapabilityReporter(chatClient, cloudCredentialStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
         return new CapabilityReporterTestContext(server, chatClient, hubConnection, reporter, timeProvider);
     }
 
@@ -240,6 +264,31 @@ public sealed class CapabilityReporterTests
         public void EnqueueFailure(FakeOllamaFailure failure)
         {
             Server.State.EnqueueFailure(failure);
+        }
+    }
+
+    private sealed class StubCloudCredentialStore : ICloudCredentialStore
+    {
+        private readonly StoredCloudCredentials? _credentials;
+
+        public StubCloudCredentialStore(StoredCloudCredentials? credentials)
+        {
+            _credentials = credentials;
+        }
+
+        public Task<StoredCloudCredentials?> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_credentials);
+        }
+
+        public Task SaveAsync(StoredCloudCredentials credentials, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
         }
     }
 

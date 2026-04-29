@@ -4,7 +4,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using OllamaSharp;
+using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 
 public sealed class CapabilityReporter : ICapabilityReporter
@@ -13,6 +15,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
     private readonly string _defaultModel;
+    private readonly ICloudCredentialStore _cloudCredentialStore;
     private readonly IWorkerHubConnection _hubConnection;
     private readonly object _installedModelsCacheSync = new();
     private readonly ILogger<CapabilityReporter> _logger;
@@ -22,12 +25,14 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private CachedInstalledModels? _installedModelsCache;
 
     public CapabilityReporter(IOllamaApiClient ollamaClient,
+        ICloudCredentialStore cloudCredentialStore,
         IConfiguration configuration,
         IWorkerHubConnection hubConnection,
         TimeProvider timeProvider,
         ILogger<CapabilityReporter> logger)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
+        _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
         ArgumentNullException.ThrowIfNull(configuration);
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -44,9 +49,17 @@ public sealed class CapabilityReporter : ICapabilityReporter
 
         var ramMb = await DetectRamMbAsync(cancellationToken).ConfigureAwait(false);
         var gpuInfo = await TryDetectGpuInfoAsync(cancellationToken).ConfigureAwait(false);
+        var cpuClass = await DetectCpuClassAsync(cancellationToken).ConfigureAwait(false);
+        var cloudCredentials = await _cloudCredentialStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+
+        if (cloudCredentials is not null
+            && string.Equals(cloudCredentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateCloudCapabilities(cloudCredentials, ramMb, gpuInfo, cpuClass);
+        }
+
         var installedModels = await GetInstalledModelNamesAsync(cancellationToken).ConfigureAwait(false);
         var supportedCapabilities = DetermineSupportedCapabilities(installedModels);
-        var cpuClass = await DetectCpuClassAsync(cancellationToken).ConfigureAwait(false);
         var activeModel = await DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
 
         return new ClientCapabilities
@@ -61,6 +74,27 @@ public sealed class CapabilityReporter : ICapabilityReporter
             SupportedCapabilities = supportedCapabilities,
             ActiveModel = activeModel.Name,
             ActiveModelExpiresAt = activeModel.ExpiresAt
+        };
+    }
+
+    private static ClientCapabilities CreateCloudCapabilities(StoredCloudCredentials credentials, long? ramMb, GpuInfo? gpuInfo, string? cpuClass)
+    {
+        var deploymentName = credentials.DeploymentName.Trim();
+
+        return new ClientCapabilities
+        {
+            RamMb = ramMb,
+            VramMb = gpuInfo?.VramMb,
+            CudaAvailable = gpuInfo?.CudaAvailable ?? false,
+            GpuName = gpuInfo?.GpuName,
+            CpuClass = cpuClass,
+            SystemScoreClass = "Cloud",
+            NodeType = "Cloud",
+            CloudProviderName = CloudProviderOptions.ProviderAzureFoundry,
+            InstalledModels = [deploymentName],
+            SupportedCapabilities = ["cloud", "text"],
+            ActiveModel = deploymentName,
+            ActiveModelExpiresAt = null
         };
     }
 

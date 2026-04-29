@@ -6,12 +6,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
     <PackageReference Include="MudBlazor"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>

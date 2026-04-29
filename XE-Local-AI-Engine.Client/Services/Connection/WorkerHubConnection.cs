@@ -562,6 +562,10 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         public required SystemCapabilitiesPayload Capabilities { get; init; }
 
+        public string NodeType { get; init; } = "Local";
+
+        public string? CloudProviderName { get; init; }
+
         public static ClientCapabilitiesPayload From(ClientCapabilities capabilities)
         {
             return new ClientCapabilitiesPayload
@@ -581,7 +585,9 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                     SupportedCapabilities = capabilities.SupportedCapabilities,
                     ActiveModel = capabilities.ActiveModel,
                     ActiveModelExpiresAt = capabilities.ActiveModelExpiresAt
-                }
+                },
+                NodeType = capabilities.NodeType,
+                CloudProviderName = capabilities.CloudProviderName
             };
         }
 

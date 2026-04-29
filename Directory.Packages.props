@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.2.4" />
+    <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.1.1" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.1.1" />
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.1.1" />
@@ -20,6 +21,7 @@
     <PackageVersion Include="MudBlazor" Version="9.4.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.25" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.5.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.7" />

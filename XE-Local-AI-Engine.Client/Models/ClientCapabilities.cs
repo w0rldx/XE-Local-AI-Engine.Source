@@ -14,6 +14,10 @@ public sealed record ClientCapabilities
 
     public string? SystemScoreClass { get; init; }
 
+    public string NodeType { get; init; } = "Local";
+
+    public string? CloudProviderName { get; init; }
+
     public IReadOnlyList<string> InstalledModels { get; init; } = [];
 
     public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
