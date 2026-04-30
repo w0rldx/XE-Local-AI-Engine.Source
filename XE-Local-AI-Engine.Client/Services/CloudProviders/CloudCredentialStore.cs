@@ -31,11 +31,6 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         _logger = logger;
     }
 
-    public void Dispose()
-    {
-        _lock.Dispose();
-    }
-
     public async Task<StoredCloudCredentials?> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -110,6 +105,11 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         {
             _lock.Release();
         }
+    }
+
+    public void Dispose()
+    {
+        _lock.Dispose();
     }
 
     private static StoredCloudCredentials DeserializeCredentials(byte[] payload)

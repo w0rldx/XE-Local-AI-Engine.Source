@@ -28,7 +28,7 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         var factory = new AzureFoundryChatClientFactory();
 
-        Throws<ArgumentException>(() => factory.Create(CreateCredentials(endpoint: " ")));
+        Throws<ArgumentException>(() => factory.Create(CreateCredentials(" ")));
     }
 
     [Test]
