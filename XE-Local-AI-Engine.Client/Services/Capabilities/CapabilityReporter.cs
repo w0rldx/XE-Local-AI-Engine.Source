@@ -14,8 +14,8 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private static readonly TimeSpan InstalledModelsCacheLifetime = TimeSpan.FromSeconds(10);
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
-    private readonly string _defaultModel;
     private readonly ICloudCredentialStore _cloudCredentialStore;
+    private readonly string _defaultModel;
     private readonly IWorkerHubConnection _hubConnection;
     private readonly object _installedModelsCacheSync = new();
     private readonly ILogger<CapabilityReporter> _logger;
@@ -77,27 +77,6 @@ public sealed class CapabilityReporter : ICapabilityReporter
         };
     }
 
-    private static ClientCapabilities CreateCloudCapabilities(StoredCloudCredentials credentials, long? ramMb, GpuInfo? gpuInfo, string? cpuClass)
-    {
-        var deploymentName = credentials.DeploymentName.Trim();
-
-        return new ClientCapabilities
-        {
-            RamMb = ramMb,
-            VramMb = gpuInfo?.VramMb,
-            CudaAvailable = gpuInfo?.CudaAvailable ?? false,
-            GpuName = gpuInfo?.GpuName,
-            CpuClass = cpuClass,
-            SystemScoreClass = "Cloud",
-            NodeType = "Cloud",
-            CloudProviderName = CloudProviderOptions.ProviderAzureFoundry,
-            InstalledModels = [deploymentName],
-            SupportedCapabilities = ["cloud", "text"],
-            ActiveModel = deploymentName,
-            ActiveModelExpiresAt = null
-        };
-    }
-
     public async Task ReportToApiAsync(CancellationToken cancellationToken = default)
     {
         var capabilities = await DetectCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
@@ -156,6 +135,27 @@ public sealed class CapabilityReporter : ICapabilityReporter
         }
 
         return canFallback;
+    }
+
+    private static ClientCapabilities CreateCloudCapabilities(StoredCloudCredentials credentials, long? ramMb, GpuInfo? gpuInfo, string? cpuClass)
+    {
+        var deploymentName = credentials.DeploymentName.Trim();
+
+        return new ClientCapabilities
+        {
+            RamMb = ramMb,
+            VramMb = gpuInfo?.VramMb,
+            CudaAvailable = gpuInfo?.CudaAvailable ?? false,
+            GpuName = gpuInfo?.GpuName,
+            CpuClass = cpuClass,
+            SystemScoreClass = "Cloud",
+            NodeType = "Cloud",
+            CloudProviderName = CloudProviderOptions.ProviderAzureFoundry,
+            InstalledModels = [deploymentName],
+            SupportedCapabilities = ["cloud", "text"],
+            ActiveModel = deploymentName,
+            ActiveModelExpiresAt = null
+        };
     }
 
     private async Task<IReadOnlyList<string>> GetInstalledModelNamesAsync(CancellationToken cancellationToken)

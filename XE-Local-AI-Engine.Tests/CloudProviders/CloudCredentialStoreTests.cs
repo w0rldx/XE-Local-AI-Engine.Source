@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Hosting;
@@ -88,7 +89,7 @@ public sealed class CloudCredentialStoreTests : IDisposable
     public async Task SaveAsync_WhenProviderIsUnknown_ThrowsArgumentException()
     {
         using var store = CreateStore();
-        var credentials = CreateCredentials(providerName: "OtherCloud");
+        var credentials = CreateCredentials("OtherCloud");
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveAsync(credentials));
     }
@@ -100,7 +101,7 @@ public sealed class CloudCredentialStoreTests : IDisposable
         await File.WriteAllBytesAsync(GetCredentialsPath(), [1, 2, 3]);
         var protector = Substitute.For<IDataProtector>();
         protector.CreateProtector(Arg.Any<string>()).Returns(protector);
-        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new System.Security.Cryptography.CryptographicException("boom"));
+        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("boom"));
         using var store = CreateStore(protector);
 
         var loaded = await store.LoadAsync();

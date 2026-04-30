@@ -16,12 +16,12 @@ public sealed class CloudProviderOptionsValidator : IValidateOptions<CloudProvid
         var errors = Enumerable.Empty<string>()
                                .AppendIf(!IsKnownProvider(providerName),
                                    $"CloudProvider:ProviderName must be '{CloudProviderOptions.ProviderNone}' or '{CloudProviderOptions.ProviderAzureFoundry}'.")
-                                .AppendIf(isAzureFoundry && !IsHttpsAbsoluteUri(options.AzureEndpoint),
-                                    "CloudProvider:AzureEndpoint must be an absolute HTTPS URL when ProviderName is AzureFoundry.")
-                                .AppendIf(isAzureFoundry && string.IsNullOrWhiteSpace(options.AzureApiKey),
-                                    "CloudProvider:AzureApiKey is required when ProviderName is AzureFoundry.")
-                                .AppendIf(isAzureFoundry && string.IsNullOrWhiteSpace(options.AzureDeploymentName),
-                                    "CloudProvider:AzureDeploymentName is required when ProviderName is AzureFoundry.")
+                               .AppendIf(isAzureFoundry && !IsHttpsAbsoluteUri(options.AzureEndpoint),
+                                   "CloudProvider:AzureEndpoint must be an absolute HTTPS URL when ProviderName is AzureFoundry.")
+                               .AppendIf(isAzureFoundry && string.IsNullOrWhiteSpace(options.AzureApiKey),
+                                   "CloudProvider:AzureApiKey is required when ProviderName is AzureFoundry.")
+                               .AppendIf(isAzureFoundry && string.IsNullOrWhiteSpace(options.AzureDeploymentName),
+                                   "CloudProvider:AzureDeploymentName is required when ProviderName is AzureFoundry.")
                                .ToArray();
 
         return errors.Length == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
