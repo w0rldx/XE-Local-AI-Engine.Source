@@ -260,6 +260,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             evt.RequestId,
             evt.Approved);
 
+        _invocationRunner.ResolveApprovalResult(evt);
+
         if (currentInvocation is null)
         {
             _logger.LogWarning("Approval resolution arrived with no current invocation tracked. RequestId={RequestId}", evt.RequestId);

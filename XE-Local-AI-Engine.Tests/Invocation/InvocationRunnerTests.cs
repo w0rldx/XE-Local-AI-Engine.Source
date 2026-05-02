@@ -433,6 +433,14 @@ public sealed class InvocationRunnerTests
         var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
         await Task.Delay(20);
 
+        var approvalRequestId = sender.SentApprovals.Single().RequestId;
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvalRequestId,
+            Approved = true
+        });
+        await Task.Delay(20);
+
         var requestId = sender.SentToolCalls.Single().RequestId;
         runner.ResolveToolCallResult(new ToolCallResultEvent
         {
@@ -440,8 +448,12 @@ public sealed class InvocationRunnerTests
             Result = "done"
         });
 
-        await dispatcher.Received(1).ReportToolCallRequestedAsync(Arg.Is<ToolCallRequestPayload>(payload => payload.InvocationId == invocationId
+        AssertEx.Equal(approvalRequestId, requestId);
+        await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId
                                                                                                             && payload.RequestId == requestId
+                                                                                                            && payload.Description.Contains("test-tool", StringComparison.Ordinal)));
+        await dispatcher.Received(1).ReportToolCallRequestedAsync(Arg.Is<ToolCallRequestPayload>(payload => payload.InvocationId == invocationId
+                                                                                                             && payload.RequestId == requestId
                                                                                                             && payload.ToolName == "test-tool"
                                                                                                             && payload.Parameters == "{}"));
         AssertEx.Equal("done", await task);
@@ -455,6 +467,14 @@ public sealed class InvocationRunnerTests
         var invocationId = Guid.NewGuid();
 
         var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
+        await Task.Delay(20);
+
+        var approvalRequestId = sender.SentApprovals.Single().RequestId;
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent
+        {
+            RequestId = approvalRequestId,
+            Approved = true
+        });
         await Task.Delay(20);
 
         var requestId = sender.SentToolCalls.Single().RequestId;

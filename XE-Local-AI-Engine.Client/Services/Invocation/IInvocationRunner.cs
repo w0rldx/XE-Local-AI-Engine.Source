@@ -14,5 +14,7 @@ public interface IInvocationRunner
 
     void CleanupStaleToolCalls(TimeSpan maxAge);
 
+    void ResolveApprovalResult(ApprovalResolvedEvent evt);
+
     void ResolveToolCallResult(ToolCallResultEvent evt);
 }
