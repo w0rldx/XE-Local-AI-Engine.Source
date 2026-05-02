@@ -115,6 +115,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             await _hubMessageSender.Value.SendInvocationFailedAsync(new InvocationFailedPayload
             {
                 InvocationId = package.InvocationId,
+                MessageId = package.MessageId,
                 Error = "runtime-package-assemble-failed",
                 FailureCategory = nameof(FailureCategory.AgentRuntime)
             }).ConfigureAwait(false);

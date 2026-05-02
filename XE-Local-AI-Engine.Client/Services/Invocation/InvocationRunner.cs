@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
 using System.Collections.Concurrent;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
@@ -22,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 public sealed class InvocationRunner : IInvocationRunner
 {
     private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
+    private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
     private const string ProviderUnavailableMessage = "Provider unreachable.";
 
     private static readonly Regex FrameworkExceptionNamePattern =
@@ -462,6 +464,7 @@ public sealed class InvocationRunner : IInvocationRunner
             await _deadLetterStore.EnqueueAsync(new InvocationFailedPayload
             {
                 InvocationId = context.Package.InvocationId,
+                MessageId = context.MessageId == Guid.Empty ? null : context.MessageId,
                 Error = error,
                 FailureCategory = failureCategory.ToString()
             }, CancellationToken.None).ConfigureAwait(false);
@@ -490,6 +493,8 @@ public sealed class InvocationRunner : IInvocationRunner
             NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
             InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>
                 (FailureCategory.Unexpected, invalidOperationException.Message),
+            HttpRequestException httpRequestException when httpRequestException.StatusCode == HttpStatusCode.NotFound =>
+                (FailureCategory.ModelUnavailable, ModelUnavailableMessage),
             HttpRequestException => (FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
             _ when IsAgentRuntimeException(exception) => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
             _ => (FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))

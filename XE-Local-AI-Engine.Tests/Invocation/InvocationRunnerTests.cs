@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Runtime.CompilerServices;
+using System.Net;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -357,6 +358,22 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenProviderReturnsNotFound_MapsModelUnavailableFailureCategory()
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("not found", null, HttpStatusCode.NotFound)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelUnavailable)
+                                                                         && failure.Error == "Selected model is not installed on this node.");
+    }
+
+    [Test]
     public async Task RunAsync_WhenUnexpected_MapsFailureCategory()
     {
         var sender = new MockHubMessageSender();
@@ -488,15 +505,19 @@ public sealed class InvocationRunnerTests
         var payload = new InvocationFailedPayload
         {
             InvocationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            MessageId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
             Error = "Invocation timed out after 30 seconds.",
             FailureCategory = nameof(FailureCategory.Timeout)
         };
 
         var json = JsonSerializer.Serialize(payload);
         var roundTrip = JsonSerializer.Deserialize<InvocationFailedPayload>(json);
+        var deserialized = AssertEx.NotNull(roundTrip);
 
         AssertEx.Contains(json, "\"FailureCategory\":\"Timeout\"");
-        AssertEx.Equal(nameof(FailureCategory.Timeout), AssertEx.NotNull(roundTrip).FailureCategory);
+        AssertEx.Contains(json, "\"MessageId\":\"22222222-2222-2222-2222-222222222222\"");
+        AssertEx.Equal(nameof(FailureCategory.Timeout), deserialized.FailureCategory);
+        AssertEx.Equal(payload.MessageId, deserialized.MessageId);
     }
 
     [Test]
