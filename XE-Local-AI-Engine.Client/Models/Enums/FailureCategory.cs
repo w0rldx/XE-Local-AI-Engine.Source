@@ -8,5 +8,6 @@ public enum FailureCategory
     ProviderUnreachable = 3,
     Unexpected = 4,
     AgentToolCall = 5,
-    HashMismatch = 6
+    HashMismatch = 6,
+    ModelUnavailable = 7
 }
