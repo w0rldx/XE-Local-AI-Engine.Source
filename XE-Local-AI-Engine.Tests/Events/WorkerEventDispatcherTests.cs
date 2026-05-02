@@ -145,17 +145,19 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
-    public async Task DispatchApprovalResolvedAsync_OnlyLogs_DoesNotCallRunner()
+    public async Task DispatchApprovalResolvedAsync_CallsResolveApprovalResult()
     {
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
-
-        await dispatcher.DispatchApprovalResolvedAsync(new ApprovalResolvedEvent
+        var evt = new ApprovalResolvedEvent
         {
             RequestId = "req-1",
             Approved = true
-        });
+        };
 
+        await dispatcher.DispatchApprovalResolvedAsync(evt);
+
+        runner.Received(1).ResolveApprovalResult(evt);
         runner.DidNotReceive().Cancel(Arg.Any<Guid>());
         runner.DidNotReceive().CancelAll();
         runner.DidNotReceive().ResolveToolCallResult(Arg.Any<ToolCallResultEvent>());

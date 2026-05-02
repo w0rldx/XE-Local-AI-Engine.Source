@@ -260,8 +260,9 @@ public sealed class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(parameters);
 
         var requestId = Guid.NewGuid().ToString("N");
-        var completion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall(invocationId, DateTimeOffset.UtcNow, completion);
+        var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingToolCall = new PendingToolCall(invocationId, DateTimeOffset.UtcNow, approvalCompletion, resultCompletion);
         var sender = _hubSender.Value;
 
         if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
@@ -271,6 +272,12 @@ public sealed class InvocationRunner : IInvocationRunner
 
         try
         {
+            var approvalPayload = new ApprovalRequestPayload
+            {
+                InvocationId = invocationId,
+                RequestId = requestId,
+                Description = $"Tool '{toolName}' requested with parameters: {parameters}"
+            };
             var payload = new ToolCallRequestPayload
             {
                 InvocationId = invocationId,
@@ -279,6 +286,18 @@ public sealed class InvocationRunner : IInvocationRunner
                 Parameters = parameters
             };
 
+            await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
+            await _eventDispatcher.Value.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
+
+            using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+
+            var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            if (!approved)
+            {
+                throw new WorkerToolCallException(toolName, "Tool call was rejected by the user.");
+            }
+
             await sender.SendToolCallRequestAsync(payload,
                 cancellationToken).ConfigureAwait(false);
             await _eventDispatcher.Value.ReportToolCallRequestedAsync(payload).ConfigureAwait(false);
@@ -286,7 +305,7 @@ public sealed class InvocationRunner : IInvocationRunner
             using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
-            var result = await completion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            var result = await resultCompletion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(result.Error))
             {
                 throw new WorkerToolCallException(toolName, result.Error);
@@ -323,7 +342,8 @@ public sealed class InvocationRunner : IInvocationRunner
         {
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
-                removedPendingToolCall.Completion.TrySetCanceled();
+                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
+                removedPendingToolCall.ResultCompletion.TrySetCanceled();
             }
         }
     }
@@ -341,8 +361,20 @@ public sealed class InvocationRunner : IInvocationRunner
 
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
-                removedPendingToolCall.Completion.TrySetException(new TimeoutException("Tool call timed out during cleanup."));
+                var timeoutException = new TimeoutException("Tool call timed out during cleanup.");
+                removedPendingToolCall.ApprovalCompletion.TrySetException(timeoutException);
+                removedPendingToolCall.ResultCompletion.TrySetException(timeoutException);
             }
+        }
+    }
+
+    public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
+        {
+            pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
         }
     }
 
@@ -352,7 +384,7 @@ public sealed class InvocationRunner : IInvocationRunner
 
         if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
         {
-            pendingToolCall.Completion.TrySetResult(evt);
+            pendingToolCall.ResultCompletion.TrySetResult(evt);
         }
     }
 
@@ -550,7 +582,8 @@ public sealed class InvocationRunner : IInvocationRunner
 
             if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
             {
-                removedPendingToolCall.Completion.TrySetCanceled();
+                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
+                removedPendingToolCall.ResultCompletion.TrySetCanceled();
             }
         }
     }
@@ -627,7 +660,8 @@ public sealed class InvocationRunner : IInvocationRunner
     private sealed record PendingToolCall(
         Guid InvocationId,
         DateTimeOffset CreatedAt,
-        TaskCompletionSource<ToolCallResultEvent> Completion);
+        TaskCompletionSource<bool> ApprovalCompletion,
+        TaskCompletionSource<ToolCallResultEvent> ResultCompletion);
 
     public sealed class WorkerToolCallException : Exception
     {

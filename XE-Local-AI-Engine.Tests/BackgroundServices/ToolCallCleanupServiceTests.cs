@@ -122,6 +122,10 @@ public sealed class ToolCallCleanupServiceTests
         {
         }
 
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
         public Task WaitForCleanupAsync(int timeoutMs = 5000)
         {
             return _cleanupSignal.WaitAsync(timeoutMs);
