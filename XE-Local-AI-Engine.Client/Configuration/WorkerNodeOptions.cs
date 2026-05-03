@@ -15,7 +15,7 @@ public sealed class WorkerNodeOptions
     public string DeadLetterQueuePath { get; set; } = "dead-letter-queue";
 
     [Range(1, 60)]
-    public int MaxPendingToolCallAgeMinutes { get; set; } = 5;
+    public int MaxPendingToolCallAgeMinutes { get; set; } = 10;
 
     [Range(1, 3600)]
     public int CleanupIntervalSeconds { get; set; } = 60;

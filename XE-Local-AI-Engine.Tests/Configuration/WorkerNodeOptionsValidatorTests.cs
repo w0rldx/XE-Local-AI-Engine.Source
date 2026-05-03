@@ -19,6 +19,14 @@ public sealed class WorkerNodeOptionsValidatorTests
     }
 
     [Test]
+    public void Defaults_UseTenMinutePendingToolCallAge()
+    {
+        var options = CreateValidOptions();
+
+        AssertEx.Equal(10, options.MaxPendingToolCallAgeMinutes);
+    }
+
+    [Test]
     public void Validate_WhenNodeNameIsMissing_ReturnsFailure()
     {
         var options = CreateValidOptions();

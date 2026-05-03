@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Net;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Agents.AI;
@@ -389,6 +390,37 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenUnexpected_ClearsInvocationCancellationTokenSource()
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("boom")));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Null(GetActiveInvocationCancellationTokenSource(runner));
+    }
+
+    [Test]
+    public async Task RunAsync_AfterUnexpected_StartsSecondInvocationCleanly()
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("boom")));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build());
+
+        AssertEx.Null(GetActiveInvocationCancellationTokenSource(runner));
+    }
+
+    [Test]
     public async Task RunAsync_WhenAgentRuntimeMessageContainsFrameworkType_RedactsFrameworkNames()
     {
         var sender = new MockHubMessageSender();
@@ -548,8 +580,9 @@ public sealed class InvocationRunnerTests
         {
             NodeName = "worker",
             MaxResponseSizeMb = 10,
-            MaxPendingToolCallAgeMinutes = 0
+            MaxPendingToolCallAgeMinutes = 1
         });
+        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
 
         var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}"));
         AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
@@ -571,6 +604,48 @@ public sealed class InvocationRunnerTests
         runner.CleanupStaleToolCalls(TimeSpan.Zero);
 
         var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => task);
+        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCompletes_CleansUpStaleToolCalls()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 10,
+            MaxPendingToolCallAgeMinutes = 1
+        });
+        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
+        var pendingToolCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
+
+        await Task.Delay(20);
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingToolCall);
+        AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenFaults_CleansUpStaleToolCalls()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender,
+            workerOptions: new WorkerNodeOptions
+            {
+                NodeName = "worker",
+                MaxResponseSizeMb = 10,
+                MaxPendingToolCallAgeMinutes = 1
+            },
+            agentUpdates: ThrowingUpdates());
+        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
+        var pendingToolCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
+
+        await Task.Delay(20);
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingToolCall);
         AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -622,6 +697,18 @@ public sealed class InvocationRunnerTests
     {
         using var context = InvocationExecutionContext.Create(package, Guid.NewGuid(), 1, new byte[32]);
         await runner.RunAsync(context, cancellationToken);
+    }
+
+    private static CancellationTokenSource? GetActiveInvocationCancellationTokenSource(InvocationRunner runner)
+    {
+        var field = AssertEx.NotNull(typeof(InvocationRunner).GetField("_invocationCancellationTokenSource", BindingFlags.Instance | BindingFlags.NonPublic));
+        return (CancellationTokenSource?)field.GetValue(runner);
+    }
+
+    private static void SetMaxPendingToolCallAge(InvocationRunner runner, TimeSpan maxPendingToolCallAge)
+    {
+        var field = AssertEx.NotNull(typeof(InvocationRunner).GetField("_maxPendingToolCallAge", BindingFlags.Instance | BindingFlags.NonPublic));
+        field.SetValue(runner, maxPendingToolCallAge);
     }
 
     private static IInvocationAgentFactory CreateFactory(IAsyncEnumerable<AgentResponseUpdate> updates, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)
@@ -693,6 +780,15 @@ public sealed class InvocationRunnerTests
         started.TrySetResult();
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         yield break;
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ThrowingUpdates()
+    {
+        await Task.Yield();
+        throw new InvalidOperationException("stream failed");
+#pragma warning disable CS0162
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "unreachable");
+#pragma warning restore CS0162
     }
 
     private sealed class FakeAIAgent : AIAgent
