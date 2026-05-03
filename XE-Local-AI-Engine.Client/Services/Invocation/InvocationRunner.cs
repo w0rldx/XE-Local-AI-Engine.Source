@@ -229,6 +229,7 @@ public sealed class InvocationRunner : IInvocationRunner
         }
         finally
         {
+            CleanupStaleToolCalls(_maxPendingToolCallAge);
             ClearActiveInvocation(package.InvocationId);
             await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
         }
@@ -590,18 +591,12 @@ public sealed class InvocationRunner : IInvocationRunner
 
     private void RegisterActiveInvocation(Guid invocationId, int timeoutSeconds, CancellationToken cancellationToken)
     {
-        lock (_syncRoot)
-        {
-            if (_currentInvocationId is not null)
-            {
-                throw new InvalidOperationException("Worker is busy with another invocation");
-            }
+        CancellationTokenSource? invocationCancellationTokenSource = null;
 
-            _currentInvocationId = invocationId;
-            _userCancelRequested = false;
-            _timeoutTriggered = false;
-            _invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _invocationCancellationTokenSource.Token.Register(() =>
+        try
+        {
+            invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            invocationCancellationTokenSource.Token.Register(() =>
             {
                 lock (_syncRoot)
                 {
@@ -611,7 +606,25 @@ public sealed class InvocationRunner : IInvocationRunner
                     }
                 }
             });
-            _invocationCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            invocationCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
+            lock (_syncRoot)
+            {
+                if (_currentInvocationId is not null)
+                {
+                    throw new InvalidOperationException("Worker is busy with another invocation");
+                }
+
+                _currentInvocationId = invocationId;
+                _userCancelRequested = false;
+                _timeoutTriggered = false;
+                _invocationCancellationTokenSource = invocationCancellationTokenSource;
+                invocationCancellationTokenSource = null;
+            }
+        }
+        finally
+        {
+            invocationCancellationTokenSource?.Dispose();
         }
     }
 
