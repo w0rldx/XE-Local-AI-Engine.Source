@@ -453,7 +453,7 @@ public sealed class InvocationRunnerTests
                                                                                                             && payload.RequestId == requestId
                                                                                                             && payload.Description.Contains("test-tool", StringComparison.Ordinal)));
         await dispatcher.Received(1).ReportToolCallRequestedAsync(Arg.Is<ToolCallRequestPayload>(payload => payload.InvocationId == invocationId
-                                                                                                             && payload.RequestId == requestId
+                                                                                                            && payload.RequestId == requestId
                                                                                                             && payload.ToolName == "test-tool"
                                                                                                             && payload.Parameters == "{}"));
         AssertEx.Equal("done", await task);
