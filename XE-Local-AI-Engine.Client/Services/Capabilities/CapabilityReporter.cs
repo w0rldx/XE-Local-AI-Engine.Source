@@ -15,6 +15,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private static readonly TimeSpan InstalledModelsCacheLifetime = TimeSpan.FromSeconds(10);
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
+
     private static readonly string[] ConfiguredModelKeys =
     [
         "Agent:LocalChat:DefaultModel",
@@ -184,10 +185,10 @@ public sealed class CapabilityReporter : ICapabilityReporter
         {
             var models = await _ollamaClient.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
             var discoveredModelNames = models
-                                      .Select(model => NormalizeModelName(model.Name))
-                                      .Where(name => !string.IsNullOrWhiteSpace(name))
-                                      .Cast<string>()
-                                      .ToArray();
+                                       .Select(model => NormalizeModelName(model.Name))
+                                       .Where(name => !string.IsNullOrWhiteSpace(name))
+                                       .Cast<string>()
+                                       .ToArray();
             var normalizedModels = models
                                    .Select(model => NormalizeModelName(model.Name))
                                    .Concat(_configuredModelNames)
@@ -197,7 +198,8 @@ public sealed class CapabilityReporter : ICapabilityReporter
                                    .Cast<string>()
                                    .ToArray();
 
-            _logger.LogInformation("Detected {DiscoveredModelCount} Ollama model(s), {ConfiguredModelCount} configured model fallback(s), reporting {ReportedModelCount} installed model(s): {ReportedModels}.",
+            _logger.LogInformation(
+                "Detected {DiscoveredModelCount} Ollama model(s), {ConfiguredModelCount} configured model fallback(s), reporting {ReportedModelCount} installed model(s): {ReportedModels}.",
                 discoveredModelNames.Length,
                 _configuredModelNames.Count,
                 normalizedModels.Length,
