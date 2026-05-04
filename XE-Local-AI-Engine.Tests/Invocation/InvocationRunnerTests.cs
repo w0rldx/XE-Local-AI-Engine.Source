@@ -617,10 +617,9 @@ public sealed class InvocationRunnerTests
             MaxResponseSizeMb = 10,
             MaxPendingToolCallAgeMinutes = 1
         });
-        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
         var pendingToolCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
+        AgePendingToolCalls(runner, TimeSpan.FromMinutes(2));
 
-        await Task.Delay(20);
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingToolCall);
@@ -639,10 +638,9 @@ public sealed class InvocationRunnerTests
                 MaxPendingToolCallAgeMinutes = 1
             },
             agentUpdates: ThrowingUpdates());
-        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
         var pendingToolCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
+        AgePendingToolCalls(runner, TimeSpan.FromMinutes(2));
 
-        await Task.Delay(20);
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => pendingToolCall);
@@ -709,6 +707,19 @@ public sealed class InvocationRunnerTests
     {
         var field = AssertEx.NotNull(typeof(InvocationRunner).GetField("_maxPendingToolCallAge", BindingFlags.Instance | BindingFlags.NonPublic));
         field.SetValue(runner, maxPendingToolCallAge);
+    }
+
+    private static void AgePendingToolCalls(InvocationRunner runner, TimeSpan age)
+    {
+        var pendingToolCallsField = AssertEx.NotNull(typeof(InvocationRunner).GetField("_pendingToolCalls", BindingFlags.Instance | BindingFlags.NonPublic));
+        var pendingToolCalls = (System.Collections.IEnumerable)AssertEx.NotNull(pendingToolCallsField.GetValue(runner));
+
+        foreach (var pendingToolCallEntry in pendingToolCalls)
+        {
+            var pendingToolCall = AssertEx.NotNull(pendingToolCallEntry.GetType().GetProperty("Value")?.GetValue(pendingToolCallEntry));
+            var createdAtField = AssertEx.NotNull(pendingToolCall.GetType().GetField("<CreatedAt>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic));
+            createdAtField.SetValue(pendingToolCall, DateTimeOffset.UtcNow - age);
+        }
     }
 
     private static IInvocationAgentFactory CreateFactory(IAsyncEnumerable<AgentResponseUpdate> updates, Action<InvocationAgentDefinition>? onCreate = null, Action<bool>? onSessionObserved = null)
