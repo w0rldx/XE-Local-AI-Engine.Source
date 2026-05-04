@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
+using System.Collections;
 using System.Net;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -712,7 +713,7 @@ public sealed class InvocationRunnerTests
     private static void AgePendingToolCalls(InvocationRunner runner, TimeSpan age)
     {
         var pendingToolCallsField = AssertEx.NotNull(typeof(InvocationRunner).GetField("_pendingToolCalls", BindingFlags.Instance | BindingFlags.NonPublic));
-        var pendingToolCalls = (System.Collections.IEnumerable)AssertEx.NotNull(pendingToolCallsField.GetValue(runner));
+        var pendingToolCalls = (IEnumerable)AssertEx.NotNull(pendingToolCallsField.GetValue(runner));
 
         foreach (var pendingToolCallEntry in pendingToolCalls)
         {
