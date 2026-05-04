@@ -38,6 +38,41 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
+    public async Task DetectCapabilitiesAsync_WhenAspireConnectionStringsConfigured_IncludesConfiguredModels()
+    {
+        await using var context = await CreateContextAsync(configurationOverrides: new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:chat"] = "Endpoint=http://127.0.0.1:11434;Model=qwen3:0.6b",
+            ["ConnectionStrings:embeddings"] = "Endpoint=http://127.0.0.1:11434;Model=qwen3-embedding:0.6b"
+        });
+        context.SetModelsResponse();
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.InstalledModels, "qwen3:0.6b");
+        AssertEx.Contains(result.InstalledModels, "qwen3-embedding:0.6b");
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenRuntimeModelSettingsConfigured_IncludesConfiguredModels()
+    {
+        await using var context = await CreateContextAsync(configurationOverrides: new Dictionary<string, string?>
+        {
+            ["Ollama:ChatModel"] = "qwen3.5:0.8b",
+            ["Agent:LocalChat:DefaultModel"] = "qwen3.5:0.8b",
+            ["Aspire:OllamaSharp:chat:SelectedModel"] = "qwen3:0.6b",
+            ["Aspire:OllamaSharp:embeddings:SelectedModel"] = "qwen3-embedding:0.6b"
+        });
+        context.SetModelsResponse();
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
+        AssertEx.Contains(result.InstalledModels, "qwen3:0.6b");
+        AssertEx.Contains(result.InstalledModels, "qwen3-embedding:0.6b");
+    }
+
+    [Test]
     public async Task DetectCapabilitiesAsync_WhenRunningModelExists_PopulatesActiveModel()
     {
         await using var context = await CreateContextAsync();
@@ -80,14 +115,14 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
-    public async Task DetectCapabilitiesAsync_WhenOllamaThrows_ReturnsEmptyModels()
+    public async Task DetectCapabilitiesAsync_WhenOllamaThrows_ReturnsConfiguredModels()
     {
         await using var context = await CreateContextAsync();
         context.EnqueueFailure(FakeOllamaFailure.Http500);
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
-        AssertEx.Equal(0, result.InstalledModels.Count);
+        AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Contains(result.SupportedCapabilities, "text");
         AssertEx.Null(result.ActiveModel);
         AssertEx.Null(result.ActiveModelExpiresAt);
@@ -105,25 +140,25 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
-    public async Task VerifyOllamaAndModelAsync_WhenModelMissing_ReturnsFalse()
+    public async Task VerifyOllamaAndModelAsync_WhenModelMissingAndDefaultConfigured_ReturnsTrue()
     {
         await using var context = await CreateContextAsync();
         context.SetModelsResponse("llama3:latest");
 
         var result = await context.Reporter.VerifyOllamaAndModelAsync("unknown-model");
 
-        AssertEx.False(result);
+        AssertEx.True(result);
     }
 
     [Test]
-    public async Task VerifyOllamaAndModelAsync_WhenOllamaUnreachable_ReturnsFalse()
+    public async Task VerifyOllamaAndModelAsync_WhenOllamaListFailsAndModelConfigured_ReturnsTrue()
     {
         await using var context = await CreateContextAsync();
         context.EnqueueFailure(FakeOllamaFailure.Http500);
 
         var result = await context.Reporter.VerifyOllamaAndModelAsync("qwen3.5:0.8b");
 
-        AssertEx.False(result);
+        AssertEx.True(result);
     }
 
     [Test]
@@ -190,13 +225,24 @@ public sealed class CapabilityReporterTests
         AssertEx.Equal(0, context.TagsRequestCount);
     }
 
-    private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null)
+    private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null,
+        Dictionary<string, string?>? configurationOverrides = null)
     {
+        var configurationValues = new Dictionary<string, string?>
+        {
+            ["Ollama:ChatModel"] = "qwen3.5:0.8b"
+        };
+
+        if (configurationOverrides is not null)
+        {
+            foreach (var (key, value) in configurationOverrides)
+            {
+                configurationValues[key] = value;
+            }
+        }
+
         var configuration = new ConfigurationBuilder()
-                            .AddInMemoryCollection(new Dictionary<string, string?>
-                            {
-                                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
-                            })
+                            .AddInMemoryCollection(configurationValues)
                             .Build();
 
         var server = await FakeOllamaServer.StartAsync();

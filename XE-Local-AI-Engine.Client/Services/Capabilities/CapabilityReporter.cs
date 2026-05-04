@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capabilities;
 
 using System.ComponentModel;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using OllamaSharp;
@@ -14,7 +15,17 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private static readonly TimeSpan InstalledModelsCacheLifetime = TimeSpan.FromSeconds(10);
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
+    private static readonly string[] ConfiguredModelKeys =
+    [
+        "Agent:LocalChat:DefaultModel",
+        "Ollama:ChatModel",
+        "Aspire:OllamaSharp:chat:SelectedModel",
+        "Aspire:OllamaSharp:embeddings:SelectedModel"
+    ];
+
+    private static readonly string[] ModelConnectionStringNames = ["chat", "embeddings"];
     private readonly ICloudCredentialStore _cloudCredentialStore;
+    private readonly IReadOnlyList<string> _configuredModelNames;
     private readonly string _defaultModel;
     private readonly IWorkerHubConnection _hubConnection;
     private readonly object _installedModelsCacheSync = new();
@@ -41,6 +52,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
         _defaultModel = configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
                         ?? configuration.GetValue<string>("Ollama:ChatModel")
                         ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required for capability reporting.");
+        _configuredModelNames = ResolveConfiguredModelNames(configuration);
     }
 
     public async Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
@@ -171,22 +183,72 @@ public sealed class CapabilityReporter : ICapabilityReporter
         try
         {
             var models = await _ollamaClient.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
+            var discoveredModelNames = models
+                                      .Select(model => NormalizeModelName(model.Name))
+                                      .Where(name => !string.IsNullOrWhiteSpace(name))
+                                      .Cast<string>()
+                                      .ToArray();
             var normalizedModels = models
-                                   .Select(model => model.Name?.Trim())
+                                   .Select(model => NormalizeModelName(model.Name))
+                                   .Concat(_configuredModelNames)
                                    .Where(name => !string.IsNullOrWhiteSpace(name))
                                    .Distinct(StringComparer.OrdinalIgnoreCase)
                                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                                    .Cast<string>()
                                    .ToArray();
 
+            _logger.LogInformation("Detected {DiscoveredModelCount} Ollama model(s), {ConfiguredModelCount} configured model fallback(s), reporting {ReportedModelCount} installed model(s): {ReportedModels}.",
+                discoveredModelNames.Length,
+                _configuredModelNames.Count,
+                normalizedModels.Length,
+                string.Join(", ", normalizedModels));
+
             CacheInstalledModels(normalizedModels);
             return normalizedModels;
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogWarning(exception, "Failed to query installed Ollama models.");
-            return [];
+            _logger.LogWarning(exception, "Failed to query installed Ollama models. Reporting {ConfiguredModelCount} configured model fallback(s): {ConfiguredModels}.",
+                _configuredModelNames.Count,
+                string.Join(", ", _configuredModelNames));
+            return _configuredModelNames;
         }
+    }
+
+    private static IReadOnlyList<string> ResolveConfiguredModelNames(IConfiguration configuration)
+    {
+        var configuredModelNames = ConfiguredModelKeys
+                                   .Select(configuration.GetValue<string>)
+                                   .Select(NormalizeModelName);
+        var connectionStringModelNames = ModelConnectionStringNames
+                                         .Select(configuration.GetConnectionString)
+                                         .Select(TryExtractModelName);
+
+        return configuredModelNames
+               .Concat(connectionStringModelNames)
+               .Where(modelName => !string.IsNullOrWhiteSpace(modelName))
+               .Distinct(StringComparer.OrdinalIgnoreCase)
+               .OrderBy(modelName => modelName, StringComparer.OrdinalIgnoreCase)
+               .Cast<string>()
+               .ToArray();
+    }
+
+    private static string? TryExtractModelName(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return null;
+        }
+
+        var connectionStringBuilder = new DbConnectionStringBuilder
+        {
+            ConnectionString = connectionString
+        };
+
+        return connectionStringBuilder.TryGetValue("Model", out var modelValue)
+               && modelValue is string modelName
+            ? NormalizeModelName(modelName)
+            : null;
     }
 
     private async Task<ActiveModelInfo> DetectActiveModelAsync(CancellationToken cancellationToken)
