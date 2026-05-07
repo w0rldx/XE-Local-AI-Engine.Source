@@ -142,6 +142,18 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         }
     }
 
+    public Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+
+        return envelope.StorageMode switch
+        {
+            "PlainSync" when envelope.Plain is not null => ReportInvocationAssignedAsync(envelope.Plain),
+            "EncryptedSync" when envelope.Encrypted is not null => DispatchInvocationAssignedAsync(envelope.Encrypted),
+            _ => throw new InvalidOperationException($"InvocationAssignedV2 envelope was invalid for storage mode '{envelope.StorageMode}'.")
+        };
+    }
+
     public Task ReportInvocationAssignedAsync(RuntimePackage package)
     {
         ArgumentNullException.ThrowIfNull(package);

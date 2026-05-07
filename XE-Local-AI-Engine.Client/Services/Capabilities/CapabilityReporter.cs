@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class CapabilityReporter : ICapabilityReporter
 {
@@ -31,6 +32,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private readonly IWorkerHubConnection _hubConnection;
     private readonly object _installedModelsCacheSync = new();
     private readonly ILogger<CapabilityReporter> _logger;
+    private readonly INodeSettingsStore _nodeSettingsStore;
 
     private readonly IOllamaApiClient _ollamaClient;
     private readonly TimeProvider _timeProvider;
@@ -38,6 +40,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
 
     public CapabilityReporter(IOllamaApiClient ollamaClient,
         ICloudCredentialStore cloudCredentialStore,
+        INodeSettingsStore nodeSettingsStore,
         IConfiguration configuration,
         IWorkerHubConnection hubConnection,
         TimeProvider timeProvider,
@@ -45,6 +48,7 @@ public sealed class CapabilityReporter : ICapabilityReporter
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
+        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         ArgumentNullException.ThrowIfNull(configuration);
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -64,11 +68,12 @@ public sealed class CapabilityReporter : ICapabilityReporter
         var gpuInfo = await TryDetectGpuInfoAsync(cancellationToken).ConfigureAwait(false);
         var cpuClass = await DetectCpuClassAsync(cancellationToken).ConfigureAwait(false);
         var cloudCredentials = await _cloudCredentialStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
 
         if (cloudCredentials is not null
             && string.Equals(cloudCredentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
         {
-            return CreateCloudCapabilities(cloudCredentials, ramMb, gpuInfo, cpuClass);
+            return CreateCloudCapabilities(cloudCredentials, nodeSettings, ramMb, gpuInfo, cpuClass);
         }
 
         var installedModels = await GetInstalledModelNamesAsync(cancellationToken).ConfigureAwait(false);
@@ -86,7 +91,8 @@ public sealed class CapabilityReporter : ICapabilityReporter
             InstalledModels = installedModels,
             SupportedCapabilities = supportedCapabilities,
             ActiveModel = activeModel.Name,
-            ActiveModelExpiresAt = activeModel.ExpiresAt
+            ActiveModelExpiresAt = activeModel.ExpiresAt,
+            MaxMessageRequestTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
         };
     }
 
@@ -150,7 +156,11 @@ public sealed class CapabilityReporter : ICapabilityReporter
         return canFallback;
     }
 
-    private static ClientCapabilities CreateCloudCapabilities(StoredCloudCredentials credentials, long? ramMb, GpuInfo? gpuInfo, string? cpuClass)
+    private static ClientCapabilities CreateCloudCapabilities(StoredCloudCredentials credentials,
+        StoredNodeSettings nodeSettings,
+        long? ramMb,
+        GpuInfo? gpuInfo,
+        string? cpuClass)
     {
         var deploymentName = credentials.DeploymentName.Trim();
 
@@ -167,7 +177,8 @@ public sealed class CapabilityReporter : ICapabilityReporter
             InstalledModels = [deploymentName],
             SupportedCapabilities = ["cloud", "text"],
             ActiveModel = deploymentName,
-            ActiveModelExpiresAt = null
+            ActiveModelExpiresAt = null,
+            MaxMessageRequestTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
         };
     }
 

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -201,6 +202,21 @@ public sealed class CapabilityReporterTests
         AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
         AssertEx.NotNull(context.HubConnection.LastCapabilities);
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
+        AssertEx.Equal(300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenNodeSettingsExist_IncludesTimeoutSetting()
+    {
+        await using var context = await CreateContextAsync(nodeSettings: new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 120
+        });
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Equal(120, result.MaxMessageRequestTimeoutSeconds);
     }
 
     [Test]
@@ -226,6 +242,7 @@ public sealed class CapabilityReporterTests
     }
 
     private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null,
+        StoredNodeSettings? nodeSettings = null,
         Dictionary<string, string?>? configurationOverrides = null)
     {
         var configurationValues = new Dictionary<string, string?>
@@ -250,8 +267,9 @@ public sealed class CapabilityReporterTests
 
         var hubConnection = new MockWorkerHubConnection();
         var cloudCredentialStore = new StubCloudCredentialStore(cloudCredentials);
+        var nodeSettingsStore = new StubNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
         var timeProvider = new FakeTimeProvider();
-        var reporter = new CapabilityReporter(chatClient, cloudCredentialStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        var reporter = new CapabilityReporter(chatClient, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
         return new CapabilityReporterTestContext(server, chatClient, hubConnection, reporter, timeProvider);
     }
 
@@ -333,6 +351,26 @@ public sealed class CapabilityReporterTests
         }
 
         public Task ClearAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubNodeSettingsStore : INodeSettingsStore
+    {
+        private readonly StoredNodeSettings _settings;
+
+        public StubNodeSettingsStore(StoredNodeSettings settings)
+        {
+            _settings = settings;
+        }
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_settings);
+        }
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
