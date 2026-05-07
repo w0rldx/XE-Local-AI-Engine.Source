@@ -12,6 +12,8 @@ public interface IWorkerEventDispatcher
 
     Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
 
+    Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope);
+
     Task DispatchToolCallResultAsync(ToolCallResultEvent evt);
 
     Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt);

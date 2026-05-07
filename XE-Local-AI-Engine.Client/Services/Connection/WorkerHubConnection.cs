@@ -342,6 +342,42 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                 _logger.LogDebug("Dispatching InvocationAssigned to subscribers. InvocationId={InvocationId}", package.InvocationId);
                 handler.Invoke(this, new InvocationAssignedReceivedEventArgs(package));
             });
+        connection.On<JsonElement>("InvocationAssignedV2",
+            raw =>
+            {
+                _logger.LogInformation("InvocationAssignedV2 raw frame received. RawJson={RawJson}",
+                    raw.GetRawText());
+
+                InvocationAssignedEnvelope envelope;
+                try
+                {
+                    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                    {
+                        Converters =
+                        {
+                            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+                        }
+                    };
+                    envelope = raw.Deserialize<InvocationAssignedEnvelope>(options)
+                               ?? throw new InvalidOperationException("Deserialized InvocationAssignedEnvelope was null.");
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception,
+                        "InvocationAssignedV2 manual deserialization failed. RawJson={RawJson}",
+                        raw.GetRawText());
+                    return;
+                }
+
+                var handler = InvocationAssignedReceived;
+                if (handler is null)
+                {
+                    _logger.LogWarning("InvocationAssignedV2 received but no handler subscribed. StorageMode={StorageMode}", envelope.StorageMode);
+                    return;
+                }
+
+                handler.Invoke(this, new InvocationAssignedReceivedEventArgs(envelope));
+            });
         connection.On<ToolCallResultEvent>("ToolCallResult",
             evt =>
             {
@@ -566,6 +602,8 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         public string? CloudProviderName { get; init; }
 
+        public required NodeSettingsPayload Settings { get; init; }
+
         public static ClientCapabilitiesPayload From(ClientCapabilities capabilities)
         {
             return new ClientCapabilitiesPayload
@@ -587,7 +625,11 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                     ActiveModelExpiresAt = capabilities.ActiveModelExpiresAt
                 },
                 NodeType = capabilities.NodeType,
-                CloudProviderName = capabilities.CloudProviderName
+                CloudProviderName = capabilities.CloudProviderName,
+                Settings = new NodeSettingsPayload
+                {
+                    MaxMessageRequestTimeoutSeconds = capabilities.MaxMessageRequestTimeoutSeconds
+                }
             };
         }
 
@@ -621,5 +663,10 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         public string? ActiveModel { get; init; }
 
         public DateTimeOffset? ActiveModelExpiresAt { get; init; }
+    }
+
+    private sealed record NodeSettingsPayload
+    {
+        public int MaxMessageRequestTimeoutSeconds { get; init; }
     }
 }

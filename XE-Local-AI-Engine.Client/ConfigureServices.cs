@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using ILogger = ILogger;
@@ -87,6 +88,7 @@ public static class ConfigureServices
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
+        builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
@@ -120,7 +122,7 @@ public static class ConfigureServices
             var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("WorkerHubConnectionEventBindings");
 
             connection.InvocationAssignedReceived += (_, args) =>
-                DispatchSafely(dispatcher.Value.DispatchInvocationAssignedAsync(args.EncryptedRuntimePackage), logger, nameof(IWorkerEventDispatcher.DispatchInvocationAssignedAsync));
+                DispatchSafely(dispatcher.Value.DispatchInvocationAssignedV2Async(args.Envelope), logger, nameof(IWorkerEventDispatcher.DispatchInvocationAssignedV2Async));
             connection.ToolCallResultReceived += (_, args) =>
                 DispatchSafely(dispatcher.Value.DispatchToolCallResultAsync(args.ToolCallResult), logger, nameof(IWorkerEventDispatcher.DispatchToolCallResultAsync));
             connection.DisconnectRequestedReceived += (_, args) =>

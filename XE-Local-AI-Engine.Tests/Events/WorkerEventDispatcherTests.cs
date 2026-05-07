@@ -56,6 +56,30 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task DispatchInvocationAssignedV2Async_WhenPlainSync_AssignsPlainPackageWithoutEncryptedAssembly()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var assembler = Substitute.For<IRuntimePackageEnvelopeAssembler>();
+#pragma warning disable CA2000
+        var nodeKeyRegistry = new FakeNodeKeyRegistry();
+#pragma warning restore CA2000
+        var dispatcher = CreateDispatcher(runner, assembler, new MockHubMessageSender(), nodeKeyRegistry);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = package,
+            Encrypted = null
+        });
+
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(package.InvocationId, current.InvocationId);
+        assembler.DidNotReceiveWithAnyArgs().Assemble(default!);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+    }
+
+    [Test]
     public async Task DispatchInvocationAssignedAsync_WhenAlreadyBusy_QueuesSecondAssignment()
     {
         var runner = Substitute.For<IInvocationRunner>();
