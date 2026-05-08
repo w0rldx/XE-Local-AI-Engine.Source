@@ -233,6 +233,18 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             cancellationToken);
     }
 
+    public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    {
+        return SendAsync("ReasoningStreamChunk",
+            new TokenStreamChunkPayload
+            {
+                InvocationId = invocationId,
+                Token = token,
+                IsComplete = isComplete
+            },
+            cancellationToken);
+    }
+
     public Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);

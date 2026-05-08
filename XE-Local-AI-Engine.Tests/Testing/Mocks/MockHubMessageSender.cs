@@ -13,6 +13,8 @@ public sealed class MockHubMessageSender : IHubMessageSender
 
     public List<TokenStreamChunkPayload> SentChunks { get; } = [];
 
+    public List<TokenStreamChunkPayload> SentReasoningChunks { get; } = [];
+
     public List<EncryptedChunkEnvelopeV1> SentEncryptedChunks { get; } = [];
 
     public List<ToolCallRequestPayload> SentToolCalls { get; } = [];
@@ -71,6 +73,20 @@ public sealed class MockHubMessageSender : IHubMessageSender
         cancellationToken.ThrowIfCancellationRequested();
         ThrowIfScheduled();
         SentChunks.Add(new TokenStreamChunkPayload
+        {
+            InvocationId = invocationId,
+            Token = token,
+            IsComplete = isComplete
+        });
+
+        return Task.CompletedTask;
+    }
+
+    public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ThrowIfScheduled();
+        SentReasoningChunks.Add(new TokenStreamChunkPayload
         {
             InvocationId = invocationId,
             Token = token,

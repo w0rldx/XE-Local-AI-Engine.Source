@@ -519,6 +519,11 @@ public sealed class CapabilityReporterTests
             return Task.CompletedTask;
         }
 
+        public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;

@@ -148,10 +148,32 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
         return envelope.StorageMode switch
         {
-            "PlainSync" when envelope.Plain is not null => ReportInvocationAssignedAsync(envelope.Plain),
+            "PlainSync" when envelope.Plain is not null => DispatchPlainInvocationAsync(envelope.Plain),
             "EncryptedSync" when envelope.Encrypted is not null => DispatchInvocationAssignedAsync(envelope.Encrypted),
             _ => throw new InvalidOperationException($"InvocationAssignedV2 envelope was invalid for storage mode '{envelope.StorageMode}'.")
         };
+    }
+
+    private async Task DispatchPlainInvocationAsync(RuntimePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        _logger.LogInformation("WorkerEventDispatcher handling plain InvocationAssignedV2. InvocationId={InvocationId} ConversationId={ConversationId}",
+            package.InvocationId,
+            package.ConversationId);
+
+        using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+
+        await _remoteInvocationQueue.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            await RunQueuedInvocationAsync(context, package).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _remoteInvocationQueue.Release();
+        }
     }
 
     public Task ReportInvocationAssignedAsync(RuntimePackage package)
@@ -348,7 +370,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(chunk);
+        ArgumentException.ThrowIfNullOrEmpty(chunk);
 
         UpdateInvocation(invocationId,
             state =>
@@ -364,7 +386,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(chunk);
+        ArgumentException.ThrowIfNullOrEmpty(chunk);
 
         UpdateInvocation(invocationId,
             state =>

@@ -133,6 +133,68 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenPlainContext_StreamsTokenChunksAndSendsInvocationCompleted()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdates("Hello", " world"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Contains(sender.AcceptedInvocations, package.InvocationId);
+        AssertEx.Empty(sender.SentEncryptedChunks);
+        AssertEx.Empty(sender.SentEncryptedCompletions);
+
+        var contentChunks = sender.SentChunks.Where(chunk => !chunk.IsComplete).ToList();
+        AssertEx.True(contentChunks.Count >= 2);
+        AssertEx.True(contentChunks.All(chunk => chunk.InvocationId == package.InvocationId));
+        AssertEx.True(sender.SentChunks.Any(chunk => chunk.IsComplete));
+
+        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal(package.InvocationId, sender.SentCompletions[0].InvocationId);
+        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenPlainContext_StreamsReasoningChunksAndFinalReasoning()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            agentUpdates: CreateMixedUpdates((Text: "Hello", Thinking: "Let me think..."), (Text: " world", Thinking: " more thought")));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Empty(sender.SentEncryptedChunks);
+        var reasoningChunks = sender.SentReasoningChunks.Where(chunk => !chunk.IsComplete).ToList();
+        AssertEx.Equal(2, reasoningChunks.Count);
+        AssertEx.Equal("Let me think...", reasoningChunks[0].Token);
+        AssertEx.Equal(" more thought", reasoningChunks[1].Token);
+        AssertEx.True(sender.SentReasoningChunks.Any(chunk => chunk.IsComplete));
+        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal("Let me think... more thought", sender.SentCompletions[0].FinalReasoning);
+        AssertEx.Equal(2, sender.SentCompletions[0].ReasoningTokens);
+        await dispatcher.Received().ReportInvocationThinkingChunkAsync(package.InvocationId, Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenPlainContextAndAgentRuntimeThrows_SendsPlainInvocationFailed()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: ThrowingUpdates());
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Empty(sender.SentEncryptedFailures);
+        AssertEx.Equal(1, sender.SentFailures.Count);
+        AssertEx.Equal(package.InvocationId, sender.SentFailures[0].InvocationId);
+        AssertEx.Null(sender.SentFailures[0].MessageId);
+    }
+
+    [Test]
     public async Task RunAsync_ValidPackage_SendsCompletion()
     {
         var sender = new MockHubMessageSender();
@@ -687,6 +749,12 @@ public sealed class InvocationRunnerTests
     private static async Task RunAsync(InvocationRunner runner, RuntimePackage package, CancellationToken cancellationToken = default)
     {
         using var context = InvocationExecutionContext.Create(package, Guid.NewGuid(), 1, new byte[32]);
+        await runner.RunAsync(context, cancellationToken);
+    }
+
+    private static async Task RunPlainAsync(InvocationRunner runner, RuntimePackage package, CancellationToken cancellationToken = default)
+    {
+        using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
         await runner.RunAsync(context, cancellationToken);
     }
 

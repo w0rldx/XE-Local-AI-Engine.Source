@@ -77,6 +77,17 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
         await _inner.SendTokenStreamChunkAsync(invocationId, token, isComplete, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    {
+        await RecordAsync(nameof(SendReasoningStreamChunkAsync), new
+        {
+            invocationId,
+            token,
+            isComplete
+        }, cancellationToken).ConfigureAwait(false);
+        await _inner.SendReasoningStreamChunkAsync(invocationId, token, isComplete, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(payload);

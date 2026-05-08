@@ -100,6 +100,8 @@ public sealed class InvocationRunner : IInvocationRunner
         var sender = _hubSender.Value;
         var dispatcher = _eventDispatcher.Value;
         var shouldSendHubMessages = !IsLocalLoopbackInvocation(package);
+        var sendEncrypted = shouldSendHubMessages && context.IsEncrypted;
+        var sendPlain = shouldSendHubMessages && !context.IsEncrypted;
 
         RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
 
@@ -144,7 +146,7 @@ public sealed class InvocationRunner : IInvocationRunner
 
                     await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, thinkingChunk).ConfigureAwait(false);
 
-                    if (shouldSendHubMessages)
+                    if (sendEncrypted)
                     {
                         await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
                                 context.MessageId,
@@ -154,6 +156,10 @@ public sealed class InvocationRunner : IInvocationRunner
                                 reasoningSequence,
                                 EncryptedChunkEnvelopeV1.ReasoningKind),
                             invocationToken).ConfigureAwait(false);
+                    }
+                    else if (sendPlain)
+                    {
+                        await sender.SendReasoningStreamChunkAsync(package.InvocationId, thinkingChunk, isComplete: false, invocationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -175,7 +181,7 @@ public sealed class InvocationRunner : IInvocationRunner
 
                 await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, textChunk).ConfigureAwait(false);
 
-                if (shouldSendHubMessages)
+                if (sendEncrypted)
                 {
                     await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
                             context.MessageId,
@@ -185,9 +191,13 @@ public sealed class InvocationRunner : IInvocationRunner
                             sequence),
                         invocationToken).ConfigureAwait(false);
                 }
+                else if (sendPlain)
+                {
+                    await sender.SendTokenStreamChunkAsync(package.InvocationId, textChunk, isComplete: false, invocationToken).ConfigureAwait(false);
+                }
             }
 
-            if (shouldSendHubMessages)
+            if (sendEncrypted)
             {
                 await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
                         context.MessageId,
@@ -203,6 +213,20 @@ public sealed class InvocationRunner : IInvocationRunner
                         },
                         reasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(reasoningBuilder.ToString()) : null),
                     invocationToken).ConfigureAwait(false);
+            }
+            else if (sendPlain)
+            {
+                await sender.SendReasoningStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
+                await sender.SendTokenStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
+                await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
+                {
+                    InvocationId = package.InvocationId,
+                    FinalContent = responseBuilder.ToString(),
+                    ModelUsed = resolvedModel,
+                    TokensUsed = streamedChunkCount + streamedReasoningChunkCount,
+                    FinalReasoning = reasoningBuilder.ToString(),
+                    ReasoningTokens = streamedReasoningChunkCount
+                }, invocationToken).ConfigureAwait(false);
             }
 
             await dispatcher.ReportInvocationCompletedAsync(package.InvocationId).ConfigureAwait(false);
@@ -481,15 +505,28 @@ public sealed class InvocationRunner : IInvocationRunner
     {
         try
         {
-            await sender.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
+            if (!context.IsEncrypted)
+            {
+                await sender.SendInvocationFailedAsync(new InvocationFailedPayload
                 {
-                    ConversationId = context.Package.ConversationId,
-                    MessageId = context.MessageId,
-                    EpochVersion = context.EpochVersion,
+                    InvocationId = context.Package.InvocationId,
+                    MessageId = context.MessageId == Guid.Empty ? null : context.MessageId,
                     Error = error,
                     FailureCategory = failureCategory.ToString()
-                },
-                CancellationToken.None).ConfigureAwait(false);
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            else
+            {
+                await sender.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
+                    {
+                        ConversationId = context.Package.ConversationId,
+                        MessageId = context.MessageId,
+                        EpochVersion = context.EpochVersion,
+                        Error = error,
+                        FailureCategory = failureCategory.ToString()
+                    },
+                    CancellationToken.None).ConfigureAwait(false);
+            }
         }
         catch (Exception exception)
         {

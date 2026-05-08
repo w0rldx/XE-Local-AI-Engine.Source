@@ -56,7 +56,7 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
-    public async Task DispatchInvocationAssignedV2Async_WhenPlainSync_AssignsPlainPackageWithoutEncryptedAssembly()
+    public async Task DispatchInvocationAssignedV2Async_WhenPlainSync_RunsRunnerWithPlainContextAndSkipsEncryptedAssembly()
     {
         var runner = Substitute.For<IInvocationRunner>();
         var assembler = Substitute.For<IRuntimePackageEnvelopeAssembler>();
@@ -76,7 +76,12 @@ public sealed class WorkerEventDispatcherTests
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal(package.InvocationId, current.InvocationId);
         assembler.DidNotReceiveWithAnyArgs().Assemble(default!);
-        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!);
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == package.InvocationId
+                                                                                        && context.Package.ConversationId == package.ConversationId
+                                                                                        && !context.IsEncrypted
+                                                                                        && context.EpochKey.IsEmpty
+                                                                                        && context.MessageId == Guid.Empty),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -124,6 +129,28 @@ public sealed class WorkerEventDispatcherTests
         AssertEx.Equal(2, current.StreamedThinkingChunkCount);
         AssertEx.Equal("Hello world", current.StreamedContent);
         AssertEx.Equal(2, current.StreamedChunkCount);
+    }
+
+    [Test]
+    public async Task ReportInvocationChunkAsync_WhenChunkIsWhitespaceOnly_PreservesWhitespace()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var dispatcher = CreateDispatcher(runner);
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, " ");
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, "world");
+        await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, "Think");
+        await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, "\n");
+        await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, "again");
+
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal("Hello world", current.StreamedContent);
+        AssertEx.Equal(3, current.StreamedChunkCount);
+        AssertEx.Equal("Think\nagain", current.StreamedThinkingContent);
+        AssertEx.Equal(3, current.StreamedThinkingChunkCount);
     }
 
     [Test]
