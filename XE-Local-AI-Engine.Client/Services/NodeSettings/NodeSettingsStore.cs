@@ -5,6 +5,7 @@ using System.Text.Json;
 public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
 {
     private const string SettingsFileName = "node-settings.json";
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -19,6 +20,11 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         ArgumentNullException.ThrowIfNull(hostEnvironment);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _settingsPath = Path.Combine(hostEnvironment.ContentRootPath, SettingsFileName);
+    }
+
+    public void Dispose()
+    {
+        _lock.Dispose();
     }
 
     public async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
@@ -69,11 +75,6 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         {
             _lock.Release();
         }
-    }
-
-    public void Dispose()
-    {
-        _lock.Dispose();
     }
 
     private static StoredNodeSettings Normalize(StoredNodeSettings settings)

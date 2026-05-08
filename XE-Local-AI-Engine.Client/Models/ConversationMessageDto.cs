@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
-using XE_Local_AI_Engine.Client.Models.Enums;
-
 public sealed record ConversationMessageDto
 {
     public required Guid Id { get; init; }
