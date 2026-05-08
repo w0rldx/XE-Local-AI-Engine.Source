@@ -31,6 +31,12 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
+    <ProjectReference Include="..\..\..\C0re.AI.Shared.Contracts\C0re.AI.Shared.Contracts.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
+    <Using Include="C0re.AI.Shared.Contracts.Events"/>
   </ItemGroup>
 
 </Project>

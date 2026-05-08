@@ -467,11 +467,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(20);
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent
-        {
-            RequestId = approvalRequestId,
-            Approved = true
-        });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
         await Task.Delay(20);
 
         var requestId = sender.SentToolCalls.Single().RequestId;
@@ -503,11 +499,7 @@ public sealed class InvocationRunnerTests
         await Task.Delay(20);
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent
-        {
-            RequestId = approvalRequestId,
-            Approved = true
-        });
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
         await Task.Delay(20);
 
         var requestId = sender.SentToolCalls.Single().RequestId;

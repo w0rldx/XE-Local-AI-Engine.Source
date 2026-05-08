@@ -173,11 +173,7 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
-        var evt = new ApprovalResolvedEvent
-        {
-            RequestId = "req-1",
-            Approved = true
-        };
+        var evt = new ApprovalResolvedEvent("req-1", true);
 
         await dispatcher.DispatchApprovalResolvedAsync(evt);
 
@@ -196,11 +192,7 @@ public sealed class WorkerEventDispatcherTests
         var package = RuntimePackageBuilder.Valid().Build();
         await dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(package));
 
-        await dispatcher.DispatchInvocationCancelledAsync(new InvocationCancelledEvent
-        {
-            InvocationId = package.InvocationId,
-            Reason = "cancelled"
-        });
+        await dispatcher.DispatchInvocationCancelledAsync(new InvocationCancelledEvent(package.InvocationId, "cancelled"));
 
         runner.Received(1).Cancel(package.InvocationId);
     }

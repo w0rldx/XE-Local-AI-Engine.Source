@@ -21,4 +21,9 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
+    <Using Include="C0re.AI.Shared.Contracts.Events"/>
+  </ItemGroup>
+
 </Project>
