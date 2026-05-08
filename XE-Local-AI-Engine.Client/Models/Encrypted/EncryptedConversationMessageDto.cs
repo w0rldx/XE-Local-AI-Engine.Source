@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 
 using System.Text.Json.Serialization;
-using XE_Local_AI_Engine.Client.Models.Enums;
 
 public sealed record EncryptedConversationMessageDto
 {

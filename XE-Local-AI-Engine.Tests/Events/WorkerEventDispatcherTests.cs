@@ -76,7 +76,7 @@ public sealed class WorkerEventDispatcherTests
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal(package.InvocationId, current.InvocationId);
         assembler.DidNotReceiveWithAnyArgs().Assemble(default!);
-        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!);
     }
 
     [Test]

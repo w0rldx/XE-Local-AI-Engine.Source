@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Enums;
 
 public static class RuntimePackageHistoryHash
 {
