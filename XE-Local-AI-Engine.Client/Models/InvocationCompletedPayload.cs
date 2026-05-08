@@ -9,4 +9,8 @@ public sealed record InvocationCompletedPayload
     public string? ModelUsed { get; init; }
 
     public int? TokensUsed { get; init; }
+
+    public string? FinalReasoning { get; init; }
+
+    public int? ReasoningTokens { get; init; }
 }

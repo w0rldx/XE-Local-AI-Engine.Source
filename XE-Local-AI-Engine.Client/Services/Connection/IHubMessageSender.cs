@@ -19,6 +19,8 @@ public interface IHubMessageSender
 
     Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default);
 
+    Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default);
+
     Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default);
 
     Task SendApprovalRequestAsync(ApprovalRequestPayload payload, CancellationToken cancellationToken = default);

@@ -14,6 +14,8 @@ public sealed class InvocationExecutionContext : IDisposable
 
     public required ReadOnlyMemory<byte> EpochKey { get; init; }
 
+    public required bool IsEncrypted { get; init; }
+
     public void Dispose()
     {
         if (_ownedEpochKey is not null)
@@ -28,6 +30,7 @@ public sealed class InvocationExecutionContext : IDisposable
         ArgumentNullException.ThrowIfNull(package);
 
         var ownedEpochKey = epochKey.ToArray();
+        var isEncrypted = ownedEpochKey.Length > 0;
 
         return new InvocationExecutionContext
         {
@@ -35,7 +38,22 @@ public sealed class InvocationExecutionContext : IDisposable
             MessageId = messageId,
             EpochVersion = epochVersion,
             EpochKey = ownedEpochKey,
+            IsEncrypted = isEncrypted,
             _ownedEpochKey = ownedEpochKey
+        };
+    }
+
+    public static InvocationExecutionContext CreatePlain(Models.RuntimePackage package, Guid messageId)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        return new InvocationExecutionContext
+        {
+            Package = package,
+            MessageId = messageId,
+            EpochVersion = 0,
+            EpochKey = ReadOnlyMemory<byte>.Empty,
+            IsEncrypted = false
         };
     }
 }
