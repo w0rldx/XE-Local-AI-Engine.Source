@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 
 public sealed class WorkerHubConnection : IWorkerHubConnection
 {
+    private static readonly TimeSpan AccessTokenRefreshSkew = TimeSpan.FromMinutes(5);
     private readonly Lazy<ICapabilityReporter> _capabilityReporter;
     private readonly Action<HttpConnectionOptions>? _configureHttpConnectionOptions;
     private readonly ConnectionState _connectionState;
@@ -25,6 +26,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
     private readonly ITokenStore _tokenStore;
+    private readonly SemaphoreSlim _tokenRefreshLock = new(1, 1);
     private readonly IWorkerTokenRefreshService _workerTokenRefreshService;
 
     private HubConnection? _hubConnection;
@@ -80,14 +82,9 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             throw new WorkerNotPairedException();
         }
 
-        if (_tokenStore.IsTokenExpired)
+        if (!await EnsureFreshAccessTokenAsync(cancellationToken).ConfigureAwait(false))
         {
-            _logger.LogInformation("Worker token is expired. Attempting refresh before connecting.");
-            var refreshed = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
-            if (!refreshed || _tokenStore.IsTokenExpired)
-            {
-                throw new WorkerTokenExpiredException();
-            }
+            throw new WorkerTokenExpiredException();
         }
 
         _connectionState.TransitionTo(WorkerConnectionState.Connecting);
@@ -109,6 +106,13 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             await _capabilityReporter.Value.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
             await RegisterNodeKeyAsync(cancellationToken).ConfigureAwait(false);
             _connectionState.TransitionTo(WorkerConnectionState.Connected);
+        }
+        catch (Exception exception) when (IsInactiveHubSendException(exception))
+        {
+            const string message = "Worker hub disconnected during startup handshake. Stored node credentials may be stale or rejected; refresh or re-pairing is required.";
+            _logger.LogWarning(exception, message);
+            _connectionState.TransitionTo(WorkerConnectionState.Error, message);
+            throw new InvalidOperationException(message, exception);
         }
         catch (Exception exception)
         {
@@ -273,6 +277,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     {
         _connectionState.StateChanged -= OnConnectionStateChanged;
         await DisposeHubConnectionAsync().ConfigureAwait(false);
+        _tokenRefreshLock.Dispose();
     }
 
     private HubConnection CreateHubConnection()
@@ -511,10 +516,63 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private async Task<string?> GetRequiredAccessTokenAsync()
     {
+        if (!await EnsureFreshAccessTokenAsync().ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("No valid access token available. Re-pairing is required.");
+        }
+
         var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
         return !string.IsNullOrWhiteSpace(token)
             ? token
             : throw new InvalidOperationException("No access token available. Re-pairing is required.");
+    }
+
+    private async Task<bool> EnsureFreshAccessTokenAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await ShouldRefreshAccessTokenAsync().ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        await _tokenRefreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!await ShouldRefreshAccessTokenAsync().ConfigureAwait(false))
+            {
+                return true;
+            }
+
+            _logger.LogInformation("Worker access token is expired or close to expiry. Attempting refresh before hub authentication.");
+            var refreshed = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
+            if (!refreshed)
+            {
+                return false;
+            }
+
+            var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
+            return !string.IsNullOrWhiteSpace(token);
+        }
+        finally
+        {
+            _tokenRefreshLock.Release();
+        }
+    }
+
+    private async Task<bool> ShouldRefreshAccessTokenAsync()
+    {
+        var token = await _tokenStore.GetAccessTokenAsync().ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return true;
+        }
+
+        return _tokenStore.TokenExpiresAt is not { } expiresAt || expiresAt <= DateTimeOffset.UtcNow.Add(AccessTokenRefreshSkew);
+    }
+
+    private static bool IsInactiveHubSendException(Exception exception)
+    {
+        return exception is InvalidOperationException invalidOperationException &&
+               invalidOperationException.Message.StartsWith("Worker hub connection is not active.", StringComparison.Ordinal);
     }
 
     private async Task SendAsync(string methodName, object payload, CancellationToken cancellationToken)
@@ -563,6 +621,12 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private async Task OnReconnectedAsync(string? connectionId)
     {
         _logger.LogInformation("Worker hub connection reconnected with connection id {ConnectionId}.", connectionId);
+
+        if (!await EnsureFreshAccessTokenAsync().ConfigureAwait(false))
+        {
+            _connectionState.TransitionTo(WorkerConnectionState.Error, "Worker credentials could not be refreshed. Re-pairing is required.");
+            return;
+        }
 
         var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
         if (clientNodeId is not null)

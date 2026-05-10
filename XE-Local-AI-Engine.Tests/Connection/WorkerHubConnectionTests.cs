@@ -30,6 +30,19 @@ public sealed class WorkerHubConnectionTests
     }
 
     [Test]
+    public async Task ConnectAsync_WhenTokenCloseToExpiry_AttemptsRefreshBeforeConnecting()
+    {
+        var tokenStore = MockTokenStore.Paired("expiring-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(1));
+        var refreshService = Substitute.For<IWorkerTokenRefreshService>();
+        refreshService.TryRefreshAsync(Arg.Any<CancellationToken>()).Returns(false);
+        await using var connection = CreateConnection(tokenStore, refreshService);
+
+        await AssertEx.ThrowsAsync<WorkerTokenExpiredException>(() => connection.ConnectAsync());
+
+        await refreshService.Received(1).TryRefreshAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task State_InitiallyDisconnected()
     {
         await using var connection = CreateConnection(MockTokenStore.Unpaired());
@@ -45,7 +58,7 @@ public sealed class WorkerHubConnectionTests
         await connection.DisposeAsync();
     }
 
-    private static WorkerHubConnection CreateConnection(MockTokenStore tokenStore)
+    private static WorkerHubConnection CreateConnection(MockTokenStore tokenStore, IWorkerTokenRefreshService? refreshService = null)
     {
         var deadLetterStore = Substitute.For<IDeadLetterStore>();
         var sender = new MockHubMessageSender();
@@ -62,6 +75,7 @@ public sealed class WorkerHubConnectionTests
             new Lazy<ICapabilityReporter>(() => Substitute.For<ICapabilityReporter>()),
             flushService,
             Substitute.For<INodeKeyRegistry>(),
-            NullLogger<WorkerHubConnection>.Instance);
+            NullLogger<WorkerHubConnection>.Instance,
+            workerTokenRefreshService: refreshService);
     }
 }
