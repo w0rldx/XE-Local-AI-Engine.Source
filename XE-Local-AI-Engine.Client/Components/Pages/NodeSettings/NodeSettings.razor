@@ -81,8 +81,29 @@
                         <td>Allowed range</td>
                         <td>@StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds–@StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds seconds</td>
                     </tr>
+                    <tr>
+                        <td>Last capability report</td>
+                        <td>@FormatTimestamp(_lastCapabilityReportAt)</td>
+                    </tr>
+                    <tr>
+                        <td>Ollama reachable</td>
+                        <td>@FormatOptionalBoolean(_ollamaReachable)</td>
+                    </tr>
+                    <tr>
+                        <td>Management mode</td>
+                        <td>@_managementMode</td>
+                    </tr>
                     </tbody>
                 </MudSimpleTable>
+
+                @if (_diagnostics.Count > 0)
+                {
+                    <MudText Typo="Typo.h6" Class="mt-4 mb-2">Latest diagnostics</MudText>
+                    @foreach (var diagnostic in _diagnostics)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">@diagnostic</MudChip>
+                    }
+                }
             </MudCardContent>
         </MudCard>
     </MudItem>
@@ -90,6 +111,10 @@
 
 @code {
     private int _maxMessageRequestTimeoutSeconds = StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds;
+    private DateTimeOffset? _lastCapabilityReportAt;
+    private bool? _ollamaReachable;
+    private string _managementMode = "unknown";
+    private IReadOnlyList<string> _diagnostics = [];
     private bool _isSaving;
     private string? _successMessage;
     private string? _errorMessage;
@@ -111,6 +136,7 @@
         {
             var settings = await NodeSettingsStore.LoadAsync();
             _maxMessageRequestTimeoutSeconds = settings.MaxMessageRequestTimeoutSeconds;
+            await RefreshLocalStateAsync();
         }
         catch (Exception exception)
         {
@@ -155,11 +181,43 @@
         try
         {
             await CapabilityReporter.ReportToApiAsync();
+            await RefreshLocalStateAsync();
         }
         catch (Exception exception)
         {
             Logger.LogWarning(exception, "Capability refresh after node settings change failed.");
         }
+    }
+
+    private async Task RefreshLocalStateAsync()
+    {
+        try
+        {
+            var capabilities = await CapabilityReporter.DetectCapabilitiesAsync();
+            _lastCapabilityReportAt = capabilities.LastCapabilityReportAt;
+            _ollamaReachable = capabilities.OllamaReachable;
+            _managementMode = capabilities.ManagementMode;
+            _diagnostics = capabilities.Diagnostics;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Local capability state could not be refreshed for node settings.");
+        }
+    }
+
+    private static string FormatOptionalBoolean(bool? value)
+    {
+        return value switch
+        {
+            true => "Yes",
+            false => "No",
+            _ => "Unknown"
+        };
+    }
+
+    private static string FormatTimestamp(DateTimeOffset? timestamp)
+    {
+        return timestamp?.ToLocalTime().ToString("g") ?? "Not reported";
     }
 
     private void ClearMessages()

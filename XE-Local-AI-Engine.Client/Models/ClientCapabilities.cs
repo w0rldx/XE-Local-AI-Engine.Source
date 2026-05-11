@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Client.Models;
 
 public sealed record ClientCapabilities
 {
+    public int SchemaVersion { get; init; } = 1;
+
     public long? RamMb { get; init; }
 
     public long? VramMb { get; init; }
@@ -17,6 +19,16 @@ public sealed record ClientCapabilities
     public string NodeType { get; init; } = "Local";
 
     public string? CloudProviderName { get; init; }
+
+    public bool? OllamaReachable { get; init; }
+
+    public string? OllamaVersion { get; init; }
+
+    public string ManagementMode { get; init; } = "unknown";
+
+    public DateTimeOffset? LastCapabilityReportAt { get; init; }
+
+    public IReadOnlyList<string> Diagnostics { get; init; } = [];
 
     public IReadOnlyList<string> InstalledModels { get; init; } = [];
 

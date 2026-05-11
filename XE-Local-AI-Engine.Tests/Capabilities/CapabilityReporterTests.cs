@@ -23,6 +23,11 @@ public sealed class CapabilityReporterTests
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
         AssertEx.NotNull(result);
+        AssertEx.Equal(1, result.SchemaVersion);
+        AssertEx.True(result.OllamaReachable == true);
+        AssertEx.Equal("0.0.0-fake", result.OllamaVersion);
+        AssertEx.Equal("unmanaged", result.ManagementMode);
+        AssertEx.True(result.LastCapabilityReportAt.HasValue);
     }
 
     [Test]
@@ -125,6 +130,9 @@ public sealed class CapabilityReporterTests
 
         AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Contains(result.SupportedCapabilities, "text");
+        AssertEx.Contains(result.Diagnostics, "ollama-unreachable");
+        AssertEx.True(result.OllamaReachable == false);
+        AssertEx.Equal("unknown", result.ManagementMode);
         AssertEx.Null(result.ActiveModel);
         AssertEx.Null(result.ActiveModelExpiresAt);
     }
@@ -203,6 +211,19 @@ public sealed class CapabilityReporterTests
         AssertEx.NotNull(context.HubConnection.LastCapabilities);
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Equal(300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
+        AssertEx.True(context.HubConnection.LastCapabilities.LastCapabilityReportAt.HasValue);
+    }
+
+    [Test]
+    public async Task ReportToApiAsync_WhenCalledRepeatedly_ThrottlesDuplicateReports()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        await context.Reporter.ReportToApiAsync();
+        await context.Reporter.ReportToApiAsync();
+
+        AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
     }
 
     [Test]
@@ -235,7 +256,9 @@ public sealed class CapabilityReporterTests
         AssertEx.Equal("Cloud", result.NodeType);
         AssertEx.Equal("AzureFoundry", result.CloudProviderName);
         AssertEx.Equal("Cloud", result.SystemScoreClass);
+        AssertEx.Equal("unknown", result.ManagementMode);
         AssertEx.Equal("gpt-4o", result.ActiveModel);
+        AssertEx.True(result.LastCapabilityReportAt.HasValue);
         AssertEx.Contains(result.InstalledModels, "gpt-4o");
         AssertEx.Contains(result.SupportedCapabilities, "cloud");
         AssertEx.Equal(0, context.TagsRequestCount);

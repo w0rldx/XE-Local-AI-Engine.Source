@@ -58,12 +58,18 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         var expiresAt = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds());
         await connection.SendCapabilitiesAsync(new ClientCapabilities
         {
+            SchemaVersion = 1,
             RamMb = 32000,
             VramMb = 16000,
             CudaAvailable = true,
             GpuName = "RTX",
             CpuClass = "desktop",
             SystemScoreClass = "High",
+            OllamaReachable = true,
+            OllamaVersion = "0.0.0-test",
+            ManagementMode = "unmanaged",
+            LastCapabilityReportAt = expiresAt.AddMinutes(-1),
+            Diagnostics = ["test-diagnostic"],
             InstalledModels = ["qwen3.5:0.8b"],
             SupportedCapabilities = ["text"],
             ActiveModel = "qwen3.5:0.8b",
@@ -76,7 +82,13 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         AssertEx.True(payload.HardwareInfo.CudaAvailable);
         AssertEx.Equal("RTX", payload.HardwareInfo.GpuName);
         AssertEx.Equal("desktop", payload.HardwareInfo.CpuClass);
+        AssertEx.Equal(1, payload.Capabilities.SchemaVersion);
         AssertEx.Equal("High", payload.Capabilities.SystemScoreClass);
+        AssertEx.True(payload.Capabilities.OllamaReachable == true);
+        AssertEx.Equal("0.0.0-test", payload.Capabilities.OllamaVersion);
+        AssertEx.Equal("unmanaged", payload.Capabilities.ManagementMode);
+        AssertEx.Equal(expiresAt.AddMinutes(-1), payload.Capabilities.LastCapabilityReportAt);
+        AssertEx.Contains(payload.Capabilities.Diagnostics, "test-diagnostic");
         AssertEx.Contains(payload.Capabilities.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Contains(payload.Capabilities.SupportedCapabilities, "text");
         AssertEx.Equal("qwen3.5:0.8b", payload.Capabilities.ActiveModel);

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -14,6 +15,7 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
     public void Dispose()
     {
         HeartbeatBackgroundService.TestDelayOverride = TimeSpan.Zero;
+        HeartbeatBackgroundService.TestCapabilityRefreshIntervalOverride = TimeSpan.Zero;
     }
 
     [Test]
@@ -117,6 +119,33 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenCapabilityRefreshDue_ReportsCapabilities()
+    {
+        HeartbeatBackgroundService.TestDelayOverride = TimeSpan.FromMilliseconds(10);
+        HeartbeatBackgroundService.TestCapabilityRefreshIntervalOverride = TimeSpan.FromMilliseconds(10);
+        var hubConnection = CreateHubConnection(WorkerConnectionState.Connected);
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        try
+        {
+            using var service = CreateService(hubConnection,
+                MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
+                capabilityReporter);
+            using var cancellationTokenSource = new CancellationTokenSource();
+            cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(2));
+
+            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
+
+            await capabilityReporter.Received().ReportToApiAsync(Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    [Test]
     public async Task ExecuteAsync_CancellationToken_StopsLoop()
     {
         HeartbeatBackgroundService.TestDelayOverride = TimeSpan.FromMilliseconds(10);
@@ -143,10 +172,13 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
         return hubConnection;
     }
 
-    private static HeartbeatBackgroundService CreateService(IWorkerHubConnection hubConnection, MockTokenStore tokenStore)
+    private static HeartbeatBackgroundService CreateService(IWorkerHubConnection hubConnection,
+        MockTokenStore tokenStore,
+        ICapabilityReporter? capabilityReporter = null)
     {
         return new HeartbeatBackgroundService(hubConnection,
             tokenStore,
+            new Lazy<ICapabilityReporter>(() => capabilityReporter ?? Substitute.For<ICapabilityReporter>()),
             Options.Create(new CentralPlatformOptions
             {
                 BaseUrl = "https://test.example.com",

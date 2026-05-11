@@ -119,8 +119,37 @@
                             <td>System score</td>
                             <td>@(_capabilities.SystemScoreClass ?? "Unknown")</td>
                         </tr>
+                        <tr>
+                            <td>Ollama reachable</td>
+                            <td>@FormatOptionalBoolean(_capabilities.OllamaReachable)</td>
+                        </tr>
+                        <tr>
+                            <td>Ollama version</td>
+                            <td>@(_capabilities.OllamaVersion ?? "Unknown")</td>
+                        </tr>
+                        <tr>
+                            <td>Management mode</td>
+                            <td>@_capabilities.ManagementMode</td>
+                        </tr>
+                        <tr>
+                            <td>Snapshot time</td>
+                            <td>@FormatTimestamp(_capabilities.LastCapabilityReportAt)</td>
+                        </tr>
+                        <tr>
+                            <td>Schema version</td>
+                            <td>@_capabilities.SchemaVersion</td>
+                        </tr>
                         </tbody>
                     </MudSimpleTable>
+
+                    @if (_capabilities.Diagnostics.Count > 0)
+                    {
+                        <MudText Typo="Typo.h6" Class="mt-4 mb-2">Diagnostics</MudText>
+                        @foreach (var diagnostic in _capabilities.Diagnostics)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">@diagnostic</MudChip>
+                        }
+                    }
 
                     <MudText Typo="Typo.h6" Class="mt-4 mb-2">Installed models</MudText>
                     @if (_capabilities.InstalledModels.Count == 0)
@@ -355,6 +384,21 @@
         return memoryMb is > 0
             ? $"{memoryMb.Value / 1024d:0.0} GB"
             : "Unknown";
+    }
+
+    private static string FormatOptionalBoolean(bool? value)
+    {
+        return value switch
+        {
+            true => "Yes",
+            false => "No",
+            _ => "Unknown"
+        };
+    }
+
+    private static string FormatTimestamp(DateTimeOffset? timestamp)
+    {
+        return timestamp?.ToLocalTime().ToString("g") ?? "Not reported";
     }
 
     private void ClearMessages()

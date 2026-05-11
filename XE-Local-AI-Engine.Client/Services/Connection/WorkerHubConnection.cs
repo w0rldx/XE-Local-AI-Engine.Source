@@ -694,7 +694,13 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                 },
                 Capabilities = new SystemCapabilitiesPayload
                 {
+                    SchemaVersion = capabilities.SchemaVersion,
                     SystemScoreClass = capabilities.SystemScoreClass ?? "Medium",
+                    OllamaReachable = capabilities.OllamaReachable,
+                    OllamaVersion = capabilities.OllamaVersion,
+                    ManagementMode = capabilities.ManagementMode,
+                    LastCapabilityReportAt = capabilities.LastCapabilityReportAt,
+                    Diagnostics = capabilities.Diagnostics,
                     InstalledModels = capabilities.InstalledModels,
                     SupportedCapabilities = capabilities.SupportedCapabilities,
                     ActiveModel = capabilities.ActiveModel,
@@ -730,7 +736,19 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private sealed record SystemCapabilitiesPayload
     {
+        public int SchemaVersion { get; init; } = 1;
+
         public string SystemScoreClass { get; init; } = "Medium";
+
+        public bool? OllamaReachable { get; init; }
+
+        public string? OllamaVersion { get; init; }
+
+        public string ManagementMode { get; init; } = "unknown";
+
+        public DateTimeOffset? LastCapabilityReportAt { get; init; }
+
+        public IReadOnlyList<string> Diagnostics { get; init; } = [];
 
         public IReadOnlyList<string> InstalledModels { get; init; } = [];
 
