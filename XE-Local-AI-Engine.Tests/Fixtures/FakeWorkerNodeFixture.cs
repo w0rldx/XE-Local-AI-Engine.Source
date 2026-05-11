@@ -317,7 +317,19 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
 
     public sealed record SystemCapabilitiesPayload
     {
+        public int SchemaVersion { get; init; } = 1;
+
         public string SystemScoreClass { get; init; } = "Medium";
+
+        public bool? OllamaReachable { get; init; }
+
+        public string? OllamaVersion { get; init; }
+
+        public string ManagementMode { get; init; } = "unknown";
+
+        public DateTimeOffset? LastCapabilityReportAt { get; init; }
+
+        public IReadOnlyList<string> Diagnostics { get; init; } = [];
 
         public IReadOnlyList<string> InstalledModels { get; init; } = [];
 

@@ -11,9 +11,15 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-public sealed class CapabilityReporter : ICapabilityReporter
+public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 {
+    private const int CapabilitySchemaVersion = 1;
+    private const string DiagnosticMissingCuda = "missing-cuda";
+    private const string DiagnosticMissingGpu = "missing-gpu";
+    private const string DiagnosticOllamaUnreachable = "ollama-unreachable";
+    private const string DiagnosticUnknownInventory = "unknown-inventory";
     private static readonly TimeSpan InstalledModelsCacheLifetime = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan ReportThrottleInterval = TimeSpan.FromSeconds(5);
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
 
@@ -35,8 +41,10 @@ public sealed class CapabilityReporter : ICapabilityReporter
     private readonly INodeSettingsStore _nodeSettingsStore;
 
     private readonly IOllamaApiClient _ollamaClient;
+    private readonly SemaphoreSlim _reportSync = new(1, 1);
     private readonly TimeProvider _timeProvider;
     private CachedInstalledModels? _installedModelsCache;
+    private DateTimeOffset? _lastReportStartedAt;
 
     public CapabilityReporter(IOllamaApiClient ollamaClient,
         ICloudCredentialStore cloudCredentialStore,
@@ -69,25 +77,39 @@ public sealed class CapabilityReporter : ICapabilityReporter
         var cpuClass = await DetectCpuClassAsync(cancellationToken).ConfigureAwait(false);
         var cloudCredentials = await _cloudCredentialStore.LoadAsync(cancellationToken).ConfigureAwait(false);
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var detectedAt = _timeProvider.GetUtcNow();
 
         if (cloudCredentials is not null
             && string.Equals(cloudCredentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
         {
-            return CreateCloudCapabilities(cloudCredentials, nodeSettings, ramMb, gpuInfo, cpuClass);
+            return CreateCloudCapabilities(cloudCredentials, nodeSettings, ramMb, gpuInfo, cpuClass, detectedAt);
         }
 
+        var diagnostics = BuildHardwareDiagnostics(gpuInfo);
+        var ollamaStatus = await DetectOllamaRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        diagnostics.AddRange(ollamaStatus.Diagnostics);
         var installedModels = await GetInstalledModelNamesAsync(cancellationToken).ConfigureAwait(false);
         var supportedCapabilities = DetermineSupportedCapabilities(installedModels);
         var activeModel = await DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
+        if (installedModels.Count == 0)
+        {
+            diagnostics.Add(DiagnosticUnknownInventory);
+        }
 
         return new ClientCapabilities
         {
+            SchemaVersion = CapabilitySchemaVersion,
             RamMb = ramMb,
             VramMb = gpuInfo?.VramMb,
             CudaAvailable = gpuInfo?.CudaAvailable ?? false,
             GpuName = gpuInfo?.GpuName,
             CpuClass = cpuClass,
             SystemScoreClass = CalculateSystemScoreClass(ramMb, gpuInfo?.VramMb, gpuInfo?.CudaAvailable ?? false),
+            OllamaReachable = ollamaStatus.Reachable,
+            OllamaVersion = ollamaStatus.Version,
+            ManagementMode = ollamaStatus.Reachable ? "unmanaged" : "unknown",
+            LastCapabilityReportAt = detectedAt,
+            Diagnostics = NormalizeDiagnostics(diagnostics),
             InstalledModels = installedModels,
             SupportedCapabilities = supportedCapabilities,
             ActiveModel = activeModel.Name,
@@ -98,10 +120,31 @@ public sealed class CapabilityReporter : ICapabilityReporter
 
     public async Task ReportToApiAsync(CancellationToken cancellationToken = default)
     {
-        var capabilities = await DetectCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-        await _hubConnection.SendCapabilitiesAsync(capabilities, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("Reported worker capabilities to API with {ModelCount} installed model(s).",
-            capabilities.InstalledModels.Count);
+        if (!await _reportSync.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        {
+            _logger.LogDebug("Skipping capability report because another report is already in progress.");
+            return;
+        }
+
+        try
+        {
+            var now = _timeProvider.GetUtcNow();
+            if (_lastReportStartedAt is not null && now - _lastReportStartedAt.Value < ReportThrottleInterval)
+            {
+                _logger.LogDebug("Skipping capability report because the last report started at {LastReportStartedAt}.", _lastReportStartedAt);
+                return;
+            }
+
+            _lastReportStartedAt = now;
+            var capabilities = await DetectCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+            await _hubConnection.SendCapabilitiesAsync(capabilities, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Reported worker capabilities to API with {ModelCount} installed model(s).",
+                capabilities.InstalledModels.Count);
+        }
+        finally
+        {
+            _reportSync.Release();
+        }
     }
 
     public async Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default)
@@ -156,16 +199,23 @@ public sealed class CapabilityReporter : ICapabilityReporter
         return canFallback;
     }
 
+    public void Dispose()
+    {
+        _reportSync.Dispose();
+    }
+
     private static ClientCapabilities CreateCloudCapabilities(StoredCloudCredentials credentials,
         StoredNodeSettings nodeSettings,
         long? ramMb,
         GpuInfo? gpuInfo,
-        string? cpuClass)
+        string? cpuClass,
+        DateTimeOffset detectedAt)
     {
         var deploymentName = credentials.DeploymentName.Trim();
 
         return new ClientCapabilities
         {
+            SchemaVersion = CapabilitySchemaVersion,
             RamMb = ramMb,
             VramMb = gpuInfo?.VramMb,
             CudaAvailable = gpuInfo?.CudaAvailable ?? false,
@@ -174,6 +224,9 @@ public sealed class CapabilityReporter : ICapabilityReporter
             SystemScoreClass = "Cloud",
             NodeType = "Cloud",
             CloudProviderName = CloudProviderOptions.ProviderAzureFoundry,
+            ManagementMode = "unknown",
+            LastCapabilityReportAt = detectedAt,
+            Diagnostics = NormalizeDiagnostics(BuildHardwareDiagnostics(gpuInfo)),
             InstalledModels = [deploymentName],
             SupportedCapabilities = ["cloud", "text"],
             ActiveModel = deploymentName,
@@ -225,6 +278,29 @@ public sealed class CapabilityReporter : ICapabilityReporter
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
             return _configuredModelNames;
+        }
+    }
+
+    private async Task<OllamaRuntimeStatus> DetectOllamaRuntimeAsync(CancellationToken cancellationToken)
+    {
+        var diagnostics = new List<string>();
+
+        try
+        {
+            if (!await _ollamaClient.IsRunningAsync(cancellationToken).ConfigureAwait(false))
+            {
+                diagnostics.Add(DiagnosticOllamaUnreachable);
+                return new OllamaRuntimeStatus(false, null, diagnostics);
+            }
+
+            var version = await _ollamaClient.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+            return new OllamaRuntimeStatus(true, NormalizeModelName(version?.ToString()), diagnostics);
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogWarning(exception, "Ollama runtime detection failed because the endpoint is unreachable.");
+            diagnostics.Add(DiagnosticOllamaUnreachable);
+            return new OllamaRuntimeStatus(false, null, diagnostics);
         }
     }
 
@@ -352,6 +428,34 @@ public sealed class CapabilityReporter : ICapabilityReporter
     {
         return VisionModelMarkers.Any(marker =>
             modelName.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<string> BuildHardwareDiagnostics(GpuInfo? gpuInfo)
+    {
+        var diagnostics = new List<string>();
+        if (gpuInfo is null)
+        {
+            diagnostics.Add(DiagnosticMissingGpu);
+            diagnostics.Add(DiagnosticMissingCuda);
+            return diagnostics;
+        }
+
+        if (!gpuInfo.CudaAvailable)
+        {
+            diagnostics.Add(DiagnosticMissingCuda);
+        }
+
+        return diagnostics;
+    }
+
+    private static IReadOnlyList<string> NormalizeDiagnostics(IEnumerable<string> diagnostics)
+    {
+        return diagnostics
+               .Where(static diagnostic => !string.IsNullOrWhiteSpace(diagnostic))
+               .Select(static diagnostic => diagnostic.Trim())
+               .Distinct(StringComparer.OrdinalIgnoreCase)
+               .OrderBy(static diagnostic => diagnostic, StringComparer.OrdinalIgnoreCase)
+               .ToArray();
     }
 
     private static async Task<long?> DetectRamMbAsync(CancellationToken cancellationToken)
@@ -539,6 +643,8 @@ public sealed class CapabilityReporter : ICapabilityReporter
     }
 
     private sealed record CachedInstalledModels(IReadOnlyList<string> Models, DateTimeOffset ExpiresAt);
+
+    private sealed record OllamaRuntimeStatus(bool Reachable, string? Version, IReadOnlyList<string> Diagnostics);
 
     private sealed record ActiveModelInfo(string? Name, DateTimeOffset? ExpiresAt)
     {
