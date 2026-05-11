@@ -13,6 +13,8 @@ public sealed class FakeOllamaState
         ArgumentNullException.ThrowIfNull(options);
 
         Models = options.Models.Count > 0 ? options.Models.ToArray() : ["chat", "embeddings"];
+        ModelDigests = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        ModelInfo = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
         RunningModels = [];
         ChatScript = options.ChatTokenScript;
         EmbeddingDimensions = options.EmbeddingDimensions > 0 ? options.EmbeddingDimensions : 384;
@@ -20,6 +22,10 @@ public sealed class FakeOllamaState
     }
 
     public IReadOnlyList<string> Models { get; set; }
+
+    public IDictionary<string, string> ModelDigests { get; }
+
+    public IDictionary<string, IReadOnlyDictionary<string, object?>> ModelInfo { get; }
 
     public IReadOnlyList<FakeOllamaRunningModel> RunningModels { get; set; }
 

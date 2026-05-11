@@ -154,28 +154,6 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         };
     }
 
-    private async Task DispatchPlainInvocationAsync(RuntimePackage package)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-
-        _logger.LogInformation("WorkerEventDispatcher handling plain InvocationAssignedV2. InvocationId={InvocationId} ConversationId={ConversationId}",
-            package.InvocationId,
-            package.ConversationId);
-
-        using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
-
-        await _remoteInvocationQueue.WaitAsync().ConfigureAwait(false);
-
-        try
-        {
-            await RunQueuedInvocationAsync(context, package).ConfigureAwait(false);
-        }
-        finally
-        {
-            _ = _remoteInvocationQueue.Release();
-        }
-    }
-
     public Task ReportInvocationAssignedAsync(RuntimePackage package)
     {
         ArgumentNullException.ThrowIfNull(package);
@@ -464,6 +442,28 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             });
 
         return Task.CompletedTask;
+    }
+
+    private async Task DispatchPlainInvocationAsync(RuntimePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        _logger.LogInformation("WorkerEventDispatcher handling plain InvocationAssignedV2. InvocationId={InvocationId} ConversationId={ConversationId}",
+            package.InvocationId,
+            package.ConversationId);
+
+        using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
+
+        await _remoteInvocationQueue.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            await RunQueuedInvocationAsync(context, package).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = _remoteInvocationQueue.Release();
+        }
     }
 
     private async Task RunQueuedInvocationAsync(InvocationExecutionContext context, RuntimePackage runtimePackage)

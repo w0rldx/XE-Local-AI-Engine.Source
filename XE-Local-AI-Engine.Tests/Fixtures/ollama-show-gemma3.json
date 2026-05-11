@@ -1,0 +1,13 @@
+{
+  "license": "fake",
+  "modelfile": "FROM gemma3:4b",
+  "parameters": "",
+  "template": "{{ .Prompt }}",
+  "details": {
+    "family": "gemma3"
+  },
+  "model_info": {
+    "gemma3.context_length": 131072,
+    "gemma3.embedding_length": 2560
+  }
+}

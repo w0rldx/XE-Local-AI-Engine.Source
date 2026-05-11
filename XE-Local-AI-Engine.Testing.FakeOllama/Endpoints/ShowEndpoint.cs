@@ -17,6 +17,10 @@ internal static class ShowEndpoint
             return Results.Empty;
         }
 
+        var modelInfo = model is not null && state.ModelInfo.TryGetValue(model, out var configuredModelInfo)
+            ? configuredModelInfo
+            : new Dictionary<string, object?>();
+
         return Results.Json(new
         {
             license = "fake",
@@ -35,7 +39,7 @@ internal static class ShowEndpoint
                 parameter_size = "0B",
                 quantization_level = "Q0_0"
             },
-            model_info = new Dictionary<string, object?>(),
+            model_info = modelInfo,
             capabilities = new[]
             {
                 "completion",

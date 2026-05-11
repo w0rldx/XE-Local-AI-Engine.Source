@@ -26,4 +26,8 @@
     <Using Include="C0re.AI.Shared.Contracts.Events"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+
 </Project>

@@ -8,6 +8,13 @@ public sealed record InvocationCompletedPayload
 
     public string? ModelUsed { get; init; }
 
+    /// <summary>Prompt/input tokens reported by the model backend on the terminal response chunk.</summary>
+    public int? InputTokens { get; init; }
+
+    /// <summary>Completion/output tokens reported by the model backend on the terminal response chunk.</summary>
+    public int? OutputTokens { get; init; }
+
+    /// <summary>Total tokens reported by the model backend on the terminal response chunk.</summary>
     public int? TokensUsed { get; init; }
 
     public string? FinalReasoning { get; init; }

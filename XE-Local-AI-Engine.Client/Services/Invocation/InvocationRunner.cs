@@ -113,6 +113,7 @@ public sealed class InvocationRunner : IInvocationRunner
             var reasoningBuilder = new StringBuilder();
             var streamedChunkCount = 0;
             var streamedReasoningChunkCount = 0;
+            UsageSnapshot? usageSnapshot = null;
             long sequence = 0;
             long reasoningSequence = 0;
             var totalResponseBytes = 0;
@@ -131,6 +132,17 @@ public sealed class InvocationRunner : IInvocationRunner
                 var textChunk = update.Text;
                 var thinkingChunk = string.Concat(update.Contents?.OfType<TextReasoningContent>()
                                                         .Select(t => t.Text) ?? Enumerable.Empty<string>());
+                var usage = update.Contents?.OfType<UsageContent>().LastOrDefault()?.Details;
+                if (usage is not null)
+                {
+                    usageSnapshot = UsageSnapshot.From(usage);
+                    _logger.LogDebug("Received terminal usage for invocation {InvocationId}: input={InputTokens}, output={OutputTokens}, reasoning={ReasoningTokens}, total={TotalTokens}.",
+                        package.InvocationId,
+                        usageSnapshot.InputTokens,
+                        usageSnapshot.OutputTokens,
+                        usageSnapshot.ReasoningTokens,
+                        usageSnapshot.TotalTokens);
+                }
 
                 if (!string.IsNullOrEmpty(thinkingChunk))
                 {
@@ -205,17 +217,19 @@ public sealed class InvocationRunner : IInvocationRunner
                         context.EpochKey.Span,
                         Encoding.UTF8.GetBytes(responseBuilder.ToString()),
                         sequence,
-                        new Dictionary<string, long>
-                        {
-                            ["tokensUsed"] = streamedChunkCount + streamedReasoningChunkCount,
-                            ["outputTokens"] = streamedChunkCount,
-                            ["reasoningTokens"] = streamedReasoningChunkCount
-                        },
+                        usageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(),
                         reasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(reasoningBuilder.ToString()) : null),
                     invocationToken).ConfigureAwait(false);
             }
             else if (sendPlain)
             {
+                if (usageSnapshot is null)
+                {
+                    _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
+                        package.InvocationId,
+                        resolvedModel);
+                }
+
                 await sender.SendReasoningStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
                 await sender.SendTokenStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
                 await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
@@ -223,9 +237,11 @@ public sealed class InvocationRunner : IInvocationRunner
                     InvocationId = package.InvocationId,
                     FinalContent = responseBuilder.ToString(),
                     ModelUsed = resolvedModel,
-                    TokensUsed = streamedChunkCount + streamedReasoningChunkCount,
+                    InputTokens = usageSnapshot?.InputTokens,
+                    OutputTokens = usageSnapshot?.OutputTokens,
+                    TokensUsed = usageSnapshot?.TotalTokens,
                     FinalReasoning = reasoningBuilder.ToString(),
-                    ReasoningTokens = streamedReasoningChunkCount
+                    ReasoningTokens = usageSnapshot?.ReasoningTokens
                 }, invocationToken).ConfigureAwait(false);
             }
 
@@ -705,6 +721,50 @@ public sealed class InvocationRunner : IInvocationRunner
         }
 
         invocationCancellationTokenSource?.Dispose();
+    }
+
+    private sealed record UsageSnapshot(int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? TotalTokens)
+    {
+        public static UsageSnapshot From(UsageDetails usage)
+        {
+            var inputTokens = ToNullableInt(usage.InputTokenCount);
+            var outputTokens = ToNullableInt(usage.OutputTokenCount);
+            var reasoningTokens = ToNullableInt(usage.ReasoningTokenCount);
+            var totalTokens = ToNullableInt(usage.TotalTokenCount)
+                              ?? SumIfAny(inputTokens, outputTokens, reasoningTokens);
+
+            return new UsageSnapshot(inputTokens, outputTokens, reasoningTokens, totalTokens);
+        }
+
+        public Dictionary<string, long> ToTokenCounts()
+        {
+            var counts = new Dictionary<string, long>();
+            AddIfPresent(counts, "inputTokens", InputTokens);
+            AddIfPresent(counts, "outputTokens", OutputTokens);
+            AddIfPresent(counts, "reasoningTokens", ReasoningTokens);
+            AddIfPresent(counts, "totalTokens", TotalTokens);
+            return counts;
+        }
+
+        private static void AddIfPresent(Dictionary<string, long> counts, string key, int? value)
+        {
+            if (value is not null)
+            {
+                counts[key] = value.Value;
+            }
+        }
+
+        private static int? SumIfAny(params int?[] values)
+        {
+            return values.Any(static value => value is not null)
+                ? values.Sum(static value => value ?? 0)
+                : null;
+        }
+
+        private static int? ToNullableInt(long? value)
+        {
+            return value is null ? null : checked((int)value.Value);
+        }
     }
 
     private sealed record PendingToolCall(

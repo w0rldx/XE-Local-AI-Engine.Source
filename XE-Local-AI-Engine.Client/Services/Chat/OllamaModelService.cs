@@ -30,6 +30,16 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
         return _ollamaClient.ShowModelAsync(modelName, ct);
     }
 
+    public async Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)
+    {
+        var response = await ShowModelAsync(modelName, ct).ConfigureAwait(false);
+        var maxContextTokens = OllamaModelInfoParser.TryGetContextLength(response.Info?.ExtraInfo, out var contextLength)
+            ? contextLength
+            : (int?)null;
+
+        return new OllamaModelDetails(response, maxContextTokens);
+    }
+
     public async IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName,
         [EnumeratorCancellation]
         CancellationToken ct = default)
