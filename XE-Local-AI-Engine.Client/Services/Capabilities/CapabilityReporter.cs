@@ -7,13 +7,14 @@ using System.Globalization;
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 {
-    private const int CapabilitySchemaVersion = 1;
+    private const int CapabilitySchemaVersion = 2;
     private const string DiagnosticMissingCuda = "missing-cuda";
     private const string DiagnosticMissingGpu = "missing-gpu";
     private const string DiagnosticOllamaUnreachable = "ollama-unreachable";
@@ -38,15 +39,19 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     private readonly IWorkerHubConnection _hubConnection;
     private readonly object _installedModelsCacheSync = new();
     private readonly ILogger<CapabilityReporter> _logger;
+    private readonly Dictionary<ModelContextCacheKey, int?> _modelContextCache = new();
+    private readonly object _modelContextCacheSync = new();
     private readonly INodeSettingsStore _nodeSettingsStore;
 
     private readonly IOllamaApiClient _ollamaClient;
+    private readonly IOllamaModelService _ollamaModelService;
     private readonly SemaphoreSlim _reportSync = new(1, 1);
     private readonly TimeProvider _timeProvider;
     private CachedInstalledModels? _installedModelsCache;
     private DateTimeOffset? _lastReportStartedAt;
 
     public CapabilityReporter(IOllamaApiClient ollamaClient,
+        IOllamaModelService ollamaModelService,
         ICloudCredentialStore cloudCredentialStore,
         INodeSettingsStore nodeSettingsStore,
         IConfiguration configuration,
@@ -55,6 +60,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         ILogger<CapabilityReporter> logger)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
+        _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
         _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         ArgumentNullException.ThrowIfNull(configuration);
@@ -88,10 +94,12 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         var diagnostics = BuildHardwareDiagnostics(gpuInfo);
         var ollamaStatus = await DetectOllamaRuntimeAsync(cancellationToken).ConfigureAwait(false);
         diagnostics.AddRange(ollamaStatus.Diagnostics);
-        var installedModels = await GetInstalledModelNamesAsync(cancellationToken).ConfigureAwait(false);
+        var installedModelInventory = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
+        var installedModels = installedModelInventory.Select(model => model.Name).ToArray();
+        var installedModelMetadata = await GetInstalledModelMetadataAsync(installedModelInventory, cancellationToken).ConfigureAwait(false);
         var supportedCapabilities = DetermineSupportedCapabilities(installedModels);
         var activeModel = await DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
-        if (installedModels.Count == 0)
+        if (installedModels.Length == 0)
         {
             diagnostics.Add(DiagnosticUnknownInventory);
         }
@@ -111,6 +119,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             LastCapabilityReportAt = detectedAt,
             Diagnostics = NormalizeDiagnostics(diagnostics),
             InstalledModels = installedModels,
+            InstalledModelMetadata = installedModelMetadata,
             SupportedCapabilities = supportedCapabilities,
             ActiveModel = activeModel.Name,
             ActiveModelExpiresAt = activeModel.ExpiresAt,
@@ -228,6 +237,15 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             LastCapabilityReportAt = detectedAt,
             Diagnostics = NormalizeDiagnostics(BuildHardwareDiagnostics(gpuInfo)),
             InstalledModels = [deploymentName],
+            InstalledModelMetadata =
+            [
+                new ClientModelMetadata
+                {
+                    Name = deploymentName,
+                    Digest = null,
+                    MaxContextTokens = null
+                }
+            ],
             SupportedCapabilities = ["cloud", "text"],
             ActiveModel = deploymentName,
             ActiveModelExpiresAt = null,
@@ -236,6 +254,12 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     }
 
     private async Task<IReadOnlyList<string>> GetInstalledModelNamesAsync(CancellationToken cancellationToken)
+    {
+        var models = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
+        return models.Select(model => model.Name).ToArray();
+    }
+
+    private async Task<IReadOnlyList<InstalledModelInfo>> GetInstalledModelInventoryAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -248,26 +272,28 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         try
         {
             var models = await _ollamaClient.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
-            var discoveredModelNames = models
-                                       .Select(model => NormalizeModelName(model.Name))
-                                       .Where(name => !string.IsNullOrWhiteSpace(name))
-                                       .Cast<string>()
-                                       .ToArray();
-            var normalizedModels = models
-                                   .Select(model => NormalizeModelName(model.Name))
-                                   .Concat(_configuredModelNames)
-                                   .Where(name => !string.IsNullOrWhiteSpace(name))
-                                   .Distinct(StringComparer.OrdinalIgnoreCase)
-                                   .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                                   .Cast<string>()
+            var discoveredModels = models
+                                   .Select(model => new
+                                   {
+                                       Name = NormalizeModelName(model.Name),
+                                       Digest = NormalizeModelName(model.Digest)
+                                   })
+                                   .Where(model => !string.IsNullOrWhiteSpace(model.Name))
+                                   .Select(model => new InstalledModelInfo(model.Name!, model.Digest, true))
+                                   .ToArray();
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false));
+            var normalizedModels = discoveredModels
+                                   .Concat(configuredModels)
+                                   .DistinctBy(model => model.Name, StringComparer.OrdinalIgnoreCase)
+                                   .OrderBy(model => model.Name, StringComparer.OrdinalIgnoreCase)
                                    .ToArray();
 
             _logger.LogInformation(
                 "Detected {DiscoveredModelCount} Ollama model(s), {ConfiguredModelCount} configured model fallback(s), reporting {ReportedModelCount} installed model(s): {ReportedModels}.",
-                discoveredModelNames.Length,
+                discoveredModels.Length,
                 _configuredModelNames.Count,
                 normalizedModels.Length,
-                string.Join(", ", normalizedModels));
+                string.Join(", ", normalizedModels.Select(model => model.Name)));
 
             CacheInstalledModels(normalizedModels);
             return normalizedModels;
@@ -277,7 +303,62 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             _logger.LogWarning(exception, "Failed to query installed Ollama models. Reporting {ConfiguredModelCount} configured model fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
-            return _configuredModelNames;
+            return _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false)).ToArray();
+        }
+    }
+
+    private async Task<IReadOnlyList<ClientModelMetadata>> GetInstalledModelMetadataAsync(IReadOnlyList<InstalledModelInfo> installedModels,
+        CancellationToken cancellationToken)
+    {
+        var metadata = new List<ClientModelMetadata>(installedModels.Count);
+        foreach (var installedModel in installedModels)
+        {
+            var maxContextTokens = installedModel.IsDiscovered && !string.IsNullOrWhiteSpace(installedModel.Digest)
+                ? await GetMaxContextTokensAsync(installedModel, cancellationToken).ConfigureAwait(false)
+                : null;
+
+            metadata.Add(new ClientModelMetadata
+            {
+                Name = installedModel.Name,
+                Digest = installedModel.Digest,
+                MaxContextTokens = maxContextTokens
+            });
+        }
+
+        return metadata;
+    }
+
+    private async Task<int?> GetMaxContextTokensAsync(InstalledModelInfo installedModel, CancellationToken cancellationToken)
+    {
+        var cacheKey = new ModelContextCacheKey(installedModel.Name, installedModel.Digest!);
+        lock (_modelContextCacheSync)
+        {
+            if (_modelContextCache.TryGetValue(cacheKey, out var cachedContextLength))
+            {
+                return cachedContextLength;
+            }
+        }
+
+        try
+        {
+            var details = await _ollamaModelService.ShowModelDetailsAsync(installedModel.Name, cancellationToken).ConfigureAwait(false);
+            if (details.MaxContextTokens is null)
+            {
+                _logger.LogWarning("Ollama /api/show for model '{ModelName}' succeeded but did not include a supported *.context_length model_info key.",
+                    installedModel.Name);
+            }
+
+            lock (_modelContextCacheSync)
+            {
+                _modelContextCache[cacheKey] = details.MaxContextTokens;
+            }
+
+            return details.MaxContextTokens;
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogWarning(exception, "Failed to query Ollama /api/show for model '{ModelName}'. Reporting unknown max context tokens.", installedModel.Name);
+            return null;
         }
     }
 
@@ -294,7 +375,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             }
 
             var version = await _ollamaClient.GetVersionAsync(cancellationToken).ConfigureAwait(false);
-            return new OllamaRuntimeStatus(true, NormalizeModelName(version?.ToString()), diagnostics);
+            return new OllamaRuntimeStatus(true, NormalizeModelName(version), diagnostics);
         }
         catch (HttpRequestException exception)
         {
@@ -385,7 +466,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         };
     }
 
-    private IReadOnlyList<string>? TryGetCachedInstalledModels()
+    private IReadOnlyList<InstalledModelInfo>? TryGetCachedInstalledModels()
     {
         lock (_installedModelsCacheSync)
         {
@@ -404,7 +485,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         }
     }
 
-    private void CacheInstalledModels(IReadOnlyList<string> models)
+    private void CacheInstalledModels(IReadOnlyList<InstalledModelInfo> models)
     {
         lock (_installedModelsCacheSync)
         {
@@ -642,7 +723,11 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         return null;
     }
 
-    private sealed record CachedInstalledModels(IReadOnlyList<string> Models, DateTimeOffset ExpiresAt);
+    private sealed record CachedInstalledModels(IReadOnlyList<InstalledModelInfo> Models, DateTimeOffset ExpiresAt);
+
+    private sealed record InstalledModelInfo(string Name, string? Digest, bool IsDiscovered);
+
+    private sealed record ModelContextCacheKey(string ModelName, string Digest);
 
     private sealed record OllamaRuntimeStatus(bool Reachable, string? Version, IReadOnlyList<string> Diagnostics);
 

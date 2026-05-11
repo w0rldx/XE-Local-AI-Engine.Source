@@ -18,7 +18,7 @@ internal static class TagsEndpoint
             name = model,
             modified_at = FakeOllamaEndpointMapper.NowString(),
             size = 1,
-            digest = "sha256:fake",
+            digest = state.ModelDigests.TryGetValue(model, out var digest) ? digest : "sha256:fake",
             details = new
             {
                 format = "gguf",

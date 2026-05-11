@@ -317,7 +317,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
 
     public sealed record SystemCapabilitiesPayload
     {
-        public int SchemaVersion { get; init; } = 1;
+        public int SchemaVersion { get; init; } = 2;
 
         public string SystemScoreClass { get; init; } = "Medium";
 
@@ -333,10 +333,21 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
 
         public IReadOnlyList<string> InstalledModels { get; init; } = [];
 
+        public IReadOnlyList<ModelMetadataPayload> InstalledModelMetadata { get; init; } = [];
+
         public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
 
         public string? ActiveModel { get; init; }
 
         public DateTimeOffset? ActiveModelExpiresAt { get; init; }
+    }
+
+    public sealed record ModelMetadataPayload
+    {
+        public required string Name { get; init; }
+
+        public string? Digest { get; init; }
+
+        public int? MaxContextTokens { get; init; }
     }
 }

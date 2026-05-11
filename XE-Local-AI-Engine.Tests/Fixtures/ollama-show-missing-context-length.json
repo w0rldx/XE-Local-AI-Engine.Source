@@ -1,0 +1,12 @@
+{
+  "license": "fake",
+  "modelfile": "FROM fake:latest",
+  "parameters": "",
+  "template": "{{ .Prompt }}",
+  "details": {
+    "family": "fake"
+  },
+  "model_info": {
+    "fake.embedding_length": 1024
+  }
+}

@@ -58,7 +58,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         var expiresAt = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds());
         await connection.SendCapabilitiesAsync(new ClientCapabilities
         {
-            SchemaVersion = 1,
+            SchemaVersion = 2,
             RamMb = 32000,
             VramMb = 16000,
             CudaAvailable = true,
@@ -71,6 +71,15 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
             LastCapabilityReportAt = expiresAt.AddMinutes(-1),
             Diagnostics = ["test-diagnostic"],
             InstalledModels = ["qwen3.5:0.8b"],
+            InstalledModelMetadata =
+            [
+                new ClientModelMetadata
+                {
+                    Name = "qwen3.5:0.8b",
+                    Digest = "sha256:qwen-test",
+                    MaxContextTokens = 32768
+                }
+            ],
             SupportedCapabilities = ["text"],
             ActiveModel = "qwen3.5:0.8b",
             ActiveModelExpiresAt = expiresAt
@@ -82,7 +91,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         AssertEx.True(payload.HardwareInfo.CudaAvailable);
         AssertEx.Equal("RTX", payload.HardwareInfo.GpuName);
         AssertEx.Equal("desktop", payload.HardwareInfo.CpuClass);
-        AssertEx.Equal(1, payload.Capabilities.SchemaVersion);
+        AssertEx.Equal(2, payload.Capabilities.SchemaVersion);
         AssertEx.Equal("High", payload.Capabilities.SystemScoreClass);
         AssertEx.True(payload.Capabilities.OllamaReachable == true);
         AssertEx.Equal("0.0.0-test", payload.Capabilities.OllamaVersion);
@@ -90,6 +99,10 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         AssertEx.Equal(expiresAt.AddMinutes(-1), payload.Capabilities.LastCapabilityReportAt);
         AssertEx.Contains(payload.Capabilities.Diagnostics, "test-diagnostic");
         AssertEx.Contains(payload.Capabilities.InstalledModels, "qwen3.5:0.8b");
+        AssertEx.ContainsSingle(payload.Capabilities.InstalledModelMetadata,
+            model => model.Name == "qwen3.5:0.8b"
+                     && model.Digest == "sha256:qwen-test"
+                     && model.MaxContextTokens == 32768);
         AssertEx.Contains(payload.Capabilities.SupportedCapabilities, "text");
         AssertEx.Equal("qwen3.5:0.8b", payload.Capabilities.ActiveModel);
         AssertEx.Equal(expiresAt, payload.Capabilities.ActiveModelExpiresAt);

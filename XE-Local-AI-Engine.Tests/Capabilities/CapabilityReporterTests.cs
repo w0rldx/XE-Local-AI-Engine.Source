@@ -6,6 +6,7 @@ using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -23,7 +24,7 @@ public sealed class CapabilityReporterTests
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
         AssertEx.NotNull(result);
-        AssertEx.Equal(1, result.SchemaVersion);
+        AssertEx.Equal(2, result.SchemaVersion);
         AssertEx.True(result.OllamaReachable == true);
         AssertEx.Equal("0.0.0-fake", result.OllamaVersion);
         AssertEx.Equal("unmanaged", result.ManagementMode);
@@ -41,6 +42,64 @@ public sealed class CapabilityReporterTests
         AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
         AssertEx.Contains(result.InstalledModels, "llava:latest");
         AssertEx.Contains(result.SupportedCapabilities, "vision");
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenShowReportsContextLength_PopulatesModelMetadata()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen2:7b");
+        context.SetModelDigest("qwen2:7b", "sha256:qwen2-a");
+        context.SetModelInfo("qwen2:7b", new Dictionary<string, object?>
+        {
+            ["qwen2.context_length"] = 32768
+        });
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.ContainsSingle(result.InstalledModelMetadata,
+            model => string.Equals(model.Name, "qwen2:7b", StringComparison.Ordinal)
+                     && string.Equals(model.Digest, "sha256:qwen2-a", StringComparison.Ordinal)
+                     && model.MaxContextTokens == 32768);
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenShowOmitsContextLength_ReportsNullModelMetadata()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("fake:latest");
+        context.SetModelDigest("fake:latest", "sha256:fake-a");
+        context.SetModelInfo("fake:latest", new Dictionary<string, object?>
+        {
+            ["fake.embedding_length"] = 1024
+        });
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.ContainsSingle(result.InstalledModelMetadata,
+            model => string.Equals(model.Name, "fake:latest", StringComparison.Ordinal)
+                     && string.Equals(model.Digest, "sha256:fake-a", StringComparison.Ordinal)
+                     && model.MaxContextTokens is null);
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenModelDigestUnchanged_UsesCachedContextLength()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("gemma3:4b");
+        context.SetModelDigest("gemma3:4b", "sha256:gemma3-a");
+        context.SetModelInfo("gemma3:4b", new Dictionary<string, object?>
+        {
+            ["gemma3.context_length"] = 131072
+        });
+
+        var firstResult = await context.Reporter.DetectCapabilitiesAsync();
+        context.ClearRecordedRequests();
+        var secondResult = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Equal(131072, firstResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
+        AssertEx.Equal(131072, secondResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
+        AssertEx.Equal(0, context.ShowRequestCount);
     }
 
     [Test]
@@ -287,25 +346,28 @@ public sealed class CapabilityReporterTests
 
         var server = await FakeOllamaServer.StartAsync();
         var chatClient = new OllamaApiClient(server.BaseAddress);
+        var modelService = new OllamaModelService(chatClient);
 
         var hubConnection = new MockWorkerHubConnection();
         var cloudCredentialStore = new StubCloudCredentialStore(cloudCredentials);
         var nodeSettingsStore = new StubNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
         var timeProvider = new FakeTimeProvider();
-        var reporter = new CapabilityReporter(chatClient, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
-        return new CapabilityReporterTestContext(server, chatClient, hubConnection, reporter, timeProvider);
+        var reporter = new CapabilityReporter(chatClient, modelService, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        return new CapabilityReporterTestContext(server, chatClient, modelService, hubConnection, reporter, timeProvider);
     }
 
     private sealed class CapabilityReporterTestContext : IAsyncDisposable
     {
         public CapabilityReporterTestContext(FakeOllamaServer server,
             OllamaApiClient chatClient,
+            OllamaModelService modelService,
             MockWorkerHubConnection hubConnection,
             CapabilityReporter reporter,
             FakeTimeProvider timeProvider)
         {
             Server = server;
             ChatClient = chatClient;
+            ModelService = modelService;
             HubConnection = hubConnection;
             Reporter = reporter;
             TimeProvider = timeProvider;
@@ -315,7 +377,11 @@ public sealed class CapabilityReporterTests
 
         public int TagsRequestCount => Server.RecordedRequests.Count(request => string.Equals(request.Path, "/api/tags", StringComparison.OrdinalIgnoreCase));
 
+        public int ShowRequestCount => Server.RecordedRequests.Count(request => string.Equals(request.Path, "/api/show", StringComparison.OrdinalIgnoreCase));
+
         public OllamaApiClient ChatClient { get; }
+
+        public OllamaModelService ModelService { get; }
 
         public MockWorkerHubConnection HubConnection { get; }
 
@@ -325,6 +391,8 @@ public sealed class CapabilityReporterTests
 
         public async ValueTask DisposeAsync()
         {
+            ModelService.Dispose();
+
             if (ChatClient is IDisposable disposableChatClient)
             {
                 disposableChatClient.Dispose();
@@ -338,6 +406,21 @@ public sealed class CapabilityReporterTests
         {
             ArgumentNullException.ThrowIfNull(models);
             Server.State.Models = models.ToArray();
+        }
+
+        public void SetModelDigest(string model, string digest)
+        {
+            Server.State.ModelDigests[model] = digest;
+        }
+
+        public void SetModelInfo(string model, IReadOnlyDictionary<string, object?> modelInfo)
+        {
+            Server.State.ModelInfo[model] = modelInfo;
+        }
+
+        public void ClearRecordedRequests()
+        {
+            Server.State.ClearRequests();
         }
 
         public void SetRunningModels(params (string Name, DateTimeOffset? ExpiresAt)[] models)

@@ -109,8 +109,8 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(1, sender.SentEncryptedCompletions.Count);
         AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalIv.HasValue);
         AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalCiphertext.HasValue);
-        AssertEx.Equal(2, sender.SentEncryptedCompletions[0].TokenCounts["outputTokens"]);
-        AssertEx.Equal(2, sender.SentEncryptedCompletions[0].TokenCounts["reasoningTokens"]);
+        AssertEx.False(sender.SentEncryptedCompletions[0].TokenCounts.ContainsKey("outputTokens"));
+        AssertEx.False(sender.SentEncryptedCompletions[0].TokenCounts.ContainsKey("reasoningTokens"));
     }
 
     [Test]
@@ -175,8 +175,29 @@ public sealed class InvocationRunnerTests
         AssertEx.True(sender.SentReasoningChunks.Any(chunk => chunk.IsComplete));
         AssertEx.Equal(1, sender.SentCompletions.Count);
         AssertEx.Equal("Let me think... more thought", sender.SentCompletions[0].FinalReasoning);
-        AssertEx.Equal(2, sender.SentCompletions[0].ReasoningTokens);
+        AssertEx.Null(sender.SentCompletions[0].ReasoningTokens);
         await dispatcher.Received().ReportInvocationThinkingChunkAsync(package.InvocationId, Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenPlainContextReceivesUsageContent_SendsAuthoritativeTokenCounts()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: null),
+            (Text: " world", Usage: new UsageDetails
+            {
+                InputTokenCount = 10,
+                OutputTokenCount = 2,
+                TotalTokenCount = 12
+            })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal(10, sender.SentCompletions[0].InputTokens);
+        AssertEx.Equal(2, sender.SentCompletions[0].OutputTokens);
+        AssertEx.Equal(12, sender.SentCompletions[0].TokensUsed);
     }
 
     [Test]
@@ -832,6 +853,26 @@ public sealed class InvocationRunnerTests
             if (!string.IsNullOrEmpty(text))
             {
                 contents.Add(new TextContent(text));
+            }
+
+            yield return new AgentResponseUpdate(ChatRole.Assistant, contents);
+            await Task.Yield();
+        }
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> CreateUpdatesWithUsage(params (string Text, UsageDetails? Usage)[] chunks)
+    {
+        foreach (var (text, usage) in chunks)
+        {
+            var contents = new List<AIContent>();
+            if (!string.IsNullOrEmpty(text))
+            {
+                contents.Add(new TextContent(text));
+            }
+
+            if (usage is not null)
+            {
+                contents.Add(new UsageContent(usage));
             }
 
             yield return new AgentResponseUpdate(ChatRole.Assistant, contents);

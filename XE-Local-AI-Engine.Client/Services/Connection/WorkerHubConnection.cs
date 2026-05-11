@@ -25,8 +25,8 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private readonly ILogger<WorkerHubConnection> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
-    private readonly ITokenStore _tokenStore;
     private readonly SemaphoreSlim _tokenRefreshLock = new(1, 1);
+    private readonly ITokenStore _tokenStore;
     private readonly IWorkerTokenRefreshService _workerTokenRefreshService;
 
     private HubConnection? _hubConnection;
@@ -702,6 +702,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                     LastCapabilityReportAt = capabilities.LastCapabilityReportAt,
                     Diagnostics = capabilities.Diagnostics,
                     InstalledModels = capabilities.InstalledModels,
+                    InstalledModelMetadata = capabilities.InstalledModelMetadata.Select(ModelMetadataPayload.From).ToArray(),
                     SupportedCapabilities = capabilities.SupportedCapabilities,
                     ActiveModel = capabilities.ActiveModel,
                     ActiveModelExpiresAt = capabilities.ActiveModelExpiresAt
@@ -736,7 +737,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private sealed record SystemCapabilitiesPayload
     {
-        public int SchemaVersion { get; init; } = 1;
+        public int SchemaVersion { get; init; } = 2;
 
         public string SystemScoreClass { get; init; } = "Medium";
 
@@ -752,11 +753,32 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
         public IReadOnlyList<string> InstalledModels { get; init; } = [];
 
+        public IReadOnlyList<ModelMetadataPayload> InstalledModelMetadata { get; init; } = [];
+
         public IReadOnlyList<string> SupportedCapabilities { get; init; } = [];
 
         public string? ActiveModel { get; init; }
 
         public DateTimeOffset? ActiveModelExpiresAt { get; init; }
+    }
+
+    private sealed record ModelMetadataPayload
+    {
+        public required string Name { get; init; }
+
+        public string? Digest { get; init; }
+
+        public int? MaxContextTokens { get; init; }
+
+        public static ModelMetadataPayload From(ClientModelMetadata metadata)
+        {
+            return new ModelMetadataPayload
+            {
+                Name = metadata.Name,
+                Digest = metadata.Digest,
+                MaxContextTokens = metadata.MaxContextTokens
+            };
+        }
     }
 
     private sealed record NodeSettingsPayload
