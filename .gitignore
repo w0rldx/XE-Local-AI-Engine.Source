@@ -361,5 +361,11 @@ repomix-output.*
 node-compile-cache/
 v8-compile-cache-1000/
 
+# temporary files
+tmp/
+
+# C# Dev Kit for Visual Studio Code
+*.lscache
+
 # Worker Credentials
 *worker-credentials.enc
