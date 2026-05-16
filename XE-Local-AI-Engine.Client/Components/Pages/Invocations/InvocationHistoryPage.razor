@@ -1,0 +1,115 @@
+@page "/invocations/history"
+@using XE_Local_AI_Engine.Client.Services.Events
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+@inject IInvocationHistory InvocationHistory
+
+<PageTitle>Invocation History</PageTitle>
+
+<MudText Typo="Typo.subtitle2">Worker Node</MudText>
+<MudText Typo="Typo.h4">Invocation history</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">Last @InvocationHistory.Capacity invocations processed by this node.</MudText>
+
+@if (_entries.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">No invocations recorded yet.</MudAlert>
+}
+else
+{
+    <MudTable Items="_entries" Dense="true" Hover="true" Striped="true" Bordered="false" Class="mb-4">
+        <HeaderContent>
+            <MudTh>Status</MudTh>
+            <MudTh>Invocation Id</MudTh>
+            <MudTh>Conversation</MudTh>
+            <MudTh>Model</MudTh>
+            <MudTh>Started</MudTh>
+            <MudTh>Duration</MudTh>
+            <MudTh>Chunks</MudTh>
+            <MudTh>Error</MudTh>
+        </HeaderContent>
+        <RowTemplate Context="entry">
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(entry.Status)">@entry.Status</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Invocation Id"><code>@entry.InvocationId.ToString("D")</code></MudTd>
+            <MudTd DataLabel="Conversation"><code>@entry.ConversationId.ToString("D")</code></MudTd>
+            <MudTd DataLabel="Model">@(entry.ModelUsed ?? "—")</MudTd>
+            <MudTd DataLabel="Started">@FormatTimestamp(entry.StartedAt)</MudTd>
+            <MudTd DataLabel="Duration">@FormatDuration(entry.Duration)</MudTd>
+            <MudTd DataLabel="Chunks">@entry.StreamedChunkCount</MudTd>
+            <MudTd DataLabel="Error">
+                @if (!string.IsNullOrWhiteSpace(entry.Error))
+                {
+                    <MudTooltip Text="@entry.Error">
+                        <MudText Typo="Typo.caption" Color="Color.Error">
+                            @(entry.FailureCategory?.ToString() ?? "Error"): @Truncate(entry.Error, 60)
+                        </MudText>
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<InvocationHistoryEntry> _entries = [];
+
+    protected override void OnInitialized()
+    {
+        _entries = [.. InvocationHistory.Snapshot()];
+        InvocationHistory.EntryAdded += OnEntryAdded;
+    }
+
+    public void Dispose()
+    {
+        InvocationHistory.EntryAdded -= OnEntryAdded;
+    }
+
+    private void OnEntryAdded(object? sender, InvocationHistoryEntryAddedEventArgs e)
+    {
+        _ = sender;
+        _entries = [.. InvocationHistory.Snapshot()];
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static Color GetStatusColor(InvocationStatus status)
+    {
+        return status switch
+        {
+            InvocationStatus.Completed => Color.Success,
+            InvocationStatus.Failed => Color.Error,
+            InvocationStatus.Cancelled => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private static string FormatTimestamp(DateTimeOffset value)
+    {
+        return value.ToLocalTime().ToString("g");
+    }
+
+    private static string FormatDuration(TimeSpan value)
+    {
+        if (value.TotalSeconds < 1)
+        {
+            return $"{value.TotalMilliseconds:F0} ms";
+        }
+
+        if (value.TotalMinutes < 1)
+        {
+            return $"{value.TotalSeconds:F1} s";
+        }
+
+        return $"{(int)value.TotalMinutes}m {value.Seconds}s";
+    }
+
+    private static string Truncate(string value, int max)
+    {
+        return value.Length <= max ? value : value[..max] + "…";
+    }
+
+}

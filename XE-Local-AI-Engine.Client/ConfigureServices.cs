@@ -102,6 +102,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
         builder.Services.AddSingleton<IRuntimePackageEnvelopeAssembler, RuntimePackageEnvelopeAssembler>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
+        builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
         builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
