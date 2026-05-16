@@ -68,7 +68,7 @@ public sealed class MockHubMessageSender : IHubMessageSender
         return Task.CompletedTask;
     }
 
-    public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ThrowIfScheduled();
@@ -76,13 +76,14 @@ public sealed class MockHubMessageSender : IHubMessageSender
         {
             InvocationId = invocationId,
             Token = token,
-            IsComplete = isComplete
+            IsComplete = isComplete,
+            SourceSequence = sourceSequence
         });
 
         return Task.CompletedTask;
     }
 
-    public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ThrowIfScheduled();
@@ -90,7 +91,8 @@ public sealed class MockHubMessageSender : IHubMessageSender
         {
             InvocationId = invocationId,
             Token = token,
-            IsComplete = isComplete
+            IsComplete = isComplete,
+            SourceSequence = sourceSequence
         });
 
         return Task.CompletedTask;

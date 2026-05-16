@@ -7,4 +7,6 @@ public sealed record TokenStreamChunkPayload
     public required string Token { get; init; }
 
     public required bool IsComplete { get; init; }
+
+    public long? SourceSequence { get; init; }
 }

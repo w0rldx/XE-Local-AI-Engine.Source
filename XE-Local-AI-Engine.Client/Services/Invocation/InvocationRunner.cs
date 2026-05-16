@@ -171,7 +171,11 @@ public sealed class InvocationRunner : IInvocationRunner
                     }
                     else if (sendPlain)
                     {
-                        await sender.SendReasoningStreamChunkAsync(package.InvocationId, thinkingChunk, isComplete: false, invocationToken).ConfigureAwait(false);
+                        await sender.SendReasoningStreamChunkAsync(package.InvocationId,
+                            thinkingChunk,
+                            false,
+                            reasoningSequence,
+                            invocationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -205,7 +209,11 @@ public sealed class InvocationRunner : IInvocationRunner
                 }
                 else if (sendPlain)
                 {
-                    await sender.SendTokenStreamChunkAsync(package.InvocationId, textChunk, isComplete: false, invocationToken).ConfigureAwait(false);
+                    await sender.SendTokenStreamChunkAsync(package.InvocationId,
+                        textChunk,
+                        false,
+                        sequence,
+                        invocationToken).ConfigureAwait(false);
                 }
             }
 
@@ -230,8 +238,16 @@ public sealed class InvocationRunner : IInvocationRunner
                         resolvedModel);
                 }
 
-                await sender.SendReasoningStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
-                await sender.SendTokenStreamChunkAsync(package.InvocationId, string.Empty, isComplete: true, invocationToken).ConfigureAwait(false);
+                await sender.SendReasoningStreamChunkAsync(package.InvocationId,
+                    string.Empty,
+                    true,
+                    reasoningSequence + 1,
+                    invocationToken).ConfigureAwait(false);
+                await sender.SendTokenStreamChunkAsync(package.InvocationId,
+                    string.Empty,
+                    true,
+                    sequence + 1,
+                    invocationToken).ConfigureAwait(false);
                 await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
                 {
                     InvocationId = package.InvocationId,

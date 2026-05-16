@@ -225,26 +225,28 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         return SendAsync("SendEncryptedFailedAsync", payload, cancellationToken);
     }
 
-    public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
     {
         return SendAsync("TokenStreamChunk",
             new TokenStreamChunkPayload
             {
                 InvocationId = invocationId,
                 Token = token,
-                IsComplete = isComplete
+                IsComplete = isComplete,
+                SourceSequence = sourceSequence
             },
             cancellationToken);
     }
 
-    public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
     {
         return SendAsync("ReasoningStreamChunk",
             new TokenStreamChunkPayload
             {
                 InvocationId = invocationId,
                 Token = token,
-                IsComplete = isComplete
+                IsComplete = isComplete,
+                SourceSequence = sourceSequence
             },
             cancellationToken);
     }
