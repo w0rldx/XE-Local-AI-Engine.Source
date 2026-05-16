@@ -66,26 +66,28 @@ public sealed class RecordingHubMessageSender : IHubMessageSender
         await _inner.SendEncryptedFailedAsync(payload, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    public async Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
     {
         await RecordAsync(nameof(SendTokenStreamChunkAsync), new
         {
             invocationId,
             token,
-            isComplete
+            isComplete,
+            sourceSequence
         }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendTokenStreamChunkAsync(invocationId, token, isComplete, cancellationToken).ConfigureAwait(false);
+        await _inner.SendTokenStreamChunkAsync(invocationId, token, isComplete, sourceSequence, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+    public async Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
     {
         await RecordAsync(nameof(SendReasoningStreamChunkAsync), new
         {
             invocationId,
             token,
-            isComplete
+            isComplete,
+            sourceSequence
         }, cancellationToken).ConfigureAwait(false);
-        await _inner.SendReasoningStreamChunkAsync(invocationId, token, isComplete, cancellationToken).ConfigureAwait(false);
+        await _inner.SendReasoningStreamChunkAsync(invocationId, token, isComplete, sourceSequence, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SendToolCallRequestAsync(ToolCallRequestPayload payload, CancellationToken cancellationToken = default)

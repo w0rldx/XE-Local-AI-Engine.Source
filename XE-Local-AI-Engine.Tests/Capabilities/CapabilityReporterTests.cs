@@ -620,12 +620,12 @@ public sealed class CapabilityReporterTests
             return Task.CompletedTask;
         }
 
-        public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+        public Task SendTokenStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
 
-        public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, CancellationToken cancellationToken = default)
+        public Task SendReasoningStreamChunkAsync(Guid invocationId, string token, bool isComplete, long? sourceSequence = null, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }
