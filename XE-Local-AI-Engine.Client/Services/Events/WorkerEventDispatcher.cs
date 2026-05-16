@@ -19,6 +19,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     private const string RetiredKeyReason = "retired-key";
 
     private readonly Lazy<IHubMessageSender> _hubMessageSender;
+    private readonly IInvocationHistory _invocationHistory;
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
@@ -30,12 +31,14 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         IRuntimePackageEnvelopeAssembler runtimePackageEnvelopeAssembler,
         Lazy<IHubMessageSender> hubMessageSender,
         INodeKeyRegistry nodeKeyRegistry,
+        IInvocationHistory invocationHistory,
         ILogger<WorkerEventDispatcher> logger)
     {
         _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
         _runtimePackageEnvelopeAssembler = runtimePackageEnvelopeAssembler ?? throw new ArgumentNullException(nameof(runtimePackageEnvelopeAssembler));
         _hubMessageSender = hubMessageSender ?? throw new ArgumentNullException(nameof(hubMessageSender));
         _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
+        _invocationHistory = invocationHistory ?? throw new ArgumentNullException(nameof(invocationHistory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -691,6 +694,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     private void PublishStateChanged(InvocationState state)
     {
+        _invocationHistory.Record(state);
         Volatile.Read(ref InvocationStateChanged)?.Invoke(this, new InvocationStateChangedEventArgs(Clone(state)));
     }
 }

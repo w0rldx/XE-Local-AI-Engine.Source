@@ -271,6 +271,7 @@ public sealed class WorkerEventDispatcherTests
             assembler,
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
+            Substitute.For<IInvocationHistory>(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -301,6 +302,7 @@ public sealed class WorkerEventDispatcherTests
             new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("assemble should not run for expired retired keys")),
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
+            Substitute.For<IInvocationHistory>(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -339,6 +341,7 @@ public sealed class WorkerEventDispatcherTests
             assembler,
             new Lazy<IHubMessageSender>(() => hubMessageSender),
             nodeKeyRegistry,
+            Substitute.For<IInvocationHistory>(),
             NullLogger<WorkerEventDispatcher>.Instance);
     }
 
@@ -355,6 +358,7 @@ public sealed class WorkerEventDispatcherTests
             new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("runtime-package-config-hash-mismatch")),
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
+            Substitute.For<IInvocationHistory>(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -380,6 +384,7 @@ public sealed class WorkerEventDispatcherTests
             new FakeRuntimePackageEnvelopeAssembler(_ => throw new InvalidOperationException("runtime-package-history-hash-mismatch")),
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
+            Substitute.For<IInvocationHistory>(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
