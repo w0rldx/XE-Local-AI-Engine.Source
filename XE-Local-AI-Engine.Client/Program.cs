@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Components;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Shutdown;
 
 try
 {
@@ -30,6 +31,7 @@ try
     var app = builder.Build();
 
     await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
+    RegisterWorkerShutdownDrain(app);
 
     app.UseSerilogRequestLogging();
 
@@ -97,6 +99,32 @@ static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
     var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
     await dbContext.Database.MigrateAsync().ConfigureAwait(false);
+}
+
+static void RegisterWorkerShutdownDrain(WebApplication app)
+{
+    ArgumentNullException.ThrowIfNull(app);
+
+    app.Lifetime.ApplicationStopping.Register(static state =>
+    {
+        var services = (IServiceProvider)state!;
+
+        try
+        {
+            var drainService = services.GetRequiredService<IWorkerShutdownDrainService>();
+            var result = drainService.DrainAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+            if (!result.Succeeded)
+            {
+                Log.Warning("Worker shutdown drain completed with incomplete steps. Diagnostics: {Diagnostics}.", result.Diagnostics);
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Error("Worker shutdown drain failed before completion. Exception type: {ExceptionType}.",
+                exception.GetType().Name);
+        }
+    }, app.Services);
 }
 
 namespace XE_Local_AI_Engine.Client

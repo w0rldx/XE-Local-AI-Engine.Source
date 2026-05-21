@@ -8,7 +8,11 @@ using XE_Local_AI_Engine.Client.Models.Events;
 public interface IWorkerEventDispatcher
 {
     InvocationState? CurrentInvocation { get; }
+    bool IsAcceptingRemoteInvocations { get; }
+
     event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
+
+    void StopAcceptingRemoteInvocations();
 
     Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
 

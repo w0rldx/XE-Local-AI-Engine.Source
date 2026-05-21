@@ -1,6 +1,18 @@
+@using Microsoft.AspNetCore.Components.Authorization
 <Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)"/>
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <Authorizing>
+                <LayoutView Layout="typeof(MainLayout)">
+                    <MudAlert Severity="Severity.Info">Authorizing local operator access...</MudAlert>
+                </LayoutView>
+            </Authorizing>
+            <NotAuthorized>
+                <LayoutView Layout="typeof(MainLayout)">
+                    <MudAlert Severity="Severity.Warning">You are not authorized to view this page.</MudAlert>
+                </LayoutView>
+            </NotAuthorized>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1"/>
     </Found>
     <NotFound>

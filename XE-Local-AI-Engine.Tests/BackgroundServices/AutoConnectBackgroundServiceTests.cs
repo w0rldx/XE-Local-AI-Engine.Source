@@ -3,11 +3,14 @@ namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -108,6 +111,75 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenBootstrapModelIsNotReady_DoesNotConnect()
+    {
+        AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
+        var hubConnection = new MockWorkerHubConnection();
+        var connectionState = new ConnectionState();
+
+        try
+        {
+            using var service = CreateService(hubConnection,
+                MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
+                CreateApplicationLifetime(),
+                new CentralPlatformOptions
+                {
+                    BaseUrl = "https://test.example.com",
+                    ReconnectBackoffBaseMs = 1,
+                    ReconnectBackoffMaxMs = 1,
+                    ReconnectBackoffJitterMs = 0,
+                    ReconnectMaxAttempts = 1
+                },
+                new SequenceHostAgentReadinessClient(false, false),
+                connectionState);
+            using var cancellationTokenSource = new CancellationTokenSource();
+            cancellationTokenSource.CancelAfter(1000);
+
+            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
+
+            AssertEx.Equal(0, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(WorkerConnectionState.PreparingModel, connectionState.Current);
+        }
+        finally
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenBootstrapModelBecomesReady_ConnectsAfterGateOpens()
+    {
+        AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
+        var hubConnection = new MockWorkerHubConnection();
+
+        try
+        {
+            using var service = CreateService(hubConnection,
+                MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
+                CreateApplicationLifetime(),
+                new CentralPlatformOptions
+                {
+                    BaseUrl = "https://test.example.com",
+                    ReconnectBackoffBaseMs = 1,
+                    ReconnectBackoffMaxMs = 1,
+                    ReconnectBackoffJitterMs = 0,
+                    ReconnectMaxAttempts = 3
+                },
+                new SequenceHostAgentReadinessClient(false, true));
+            using var cancellationTokenSource = new CancellationTokenSource();
+            cancellationTokenSource.CancelAfter(1000);
+
+            await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
+
+            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+        }
+        finally
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenConnectThrows_RetriesWithBackoff()
     {
         AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(1);
@@ -164,6 +236,33 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ApplicationStopping_StopsAcceptingRemoteInvocations()
+    {
+        AutoConnectBackgroundService.TestStartupDelayOverride = TimeSpan.FromMilliseconds(50);
+        var hubConnection = new MockWorkerHubConnection();
+        using var applicationLifetime = new MockHostApplicationLifetime();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+
+        try
+        {
+            using var service = CreateService(hubConnection,
+                MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(1)),
+                applicationLifetime,
+                workerEventDispatcher: dispatcher);
+
+            await service.StartAsync(CancellationToken.None);
+            applicationLifetime.StopApplication();
+            await service.StopAsync(CancellationToken.None);
+
+            dispatcher.Received(1).StopAcceptingRemoteInvocations();
+        }
+        finally
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    [Test]
     public void Dispose_DoesNotThrow()
     {
         var hubConnection = new MockWorkerHubConnection();
@@ -179,10 +278,16 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
     private static AutoConnectBackgroundService CreateService(IWorkerHubConnection hubConnection,
         MockTokenStore tokenStore,
         IHostApplicationLifetime applicationLifetime,
-        CentralPlatformOptions? options = null)
+        CentralPlatformOptions? options = null,
+        IHostAgentReadinessClient? hostAgentReadinessClient = null,
+        ConnectionState? connectionState = null,
+        IWorkerEventDispatcher? workerEventDispatcher = null)
     {
         return new AutoConnectBackgroundService(hubConnection,
             tokenStore,
+            hostAgentReadinessClient ?? new SequenceHostAgentReadinessClient(true),
+            connectionState ?? new ConnectionState(),
+            workerEventDispatcher ?? Substitute.For<IWorkerEventDispatcher>(),
             applicationLifetime,
             Options.Create(options ?? new CentralPlatformOptions
             {
@@ -193,6 +298,28 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
                 ReconnectMaxAttempts = 3
             }),
             NullLogger<AutoConnectBackgroundService>.Instance);
+    }
+
+    private sealed class SequenceHostAgentReadinessClient : IHostAgentReadinessClient
+    {
+        private readonly Queue<bool> _results;
+        private bool _lastResult;
+
+        public SequenceHostAgentReadinessClient(params bool[] results)
+        {
+            _results = new Queue<bool>(results);
+            _lastResult = results.Length > 0 && results[^1];
+        }
+
+        public Task<bool> IsBootstrapModelReadyAsync(CancellationToken cancellationToken)
+        {
+            if (_results.TryDequeue(out var result))
+            {
+                _lastResult = result;
+            }
+
+            return Task.FromResult(_lastResult);
+        }
     }
 
     private sealed class MockWorkerHubConnection : IWorkerHubConnection
@@ -362,16 +489,24 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
         }
     }
 
-    private sealed class MockHostApplicationLifetime : IHostApplicationLifetime
+    private sealed class MockHostApplicationLifetime : IHostApplicationLifetime, IDisposable
     {
+        private readonly CancellationTokenSource _applicationStopping = new();
+
+        public void Dispose()
+        {
+            _applicationStopping.Dispose();
+        }
+
         public CancellationToken ApplicationStarted => CancellationToken.None;
 
-        public CancellationToken ApplicationStopping => CancellationToken.None;
+        public CancellationToken ApplicationStopping => _applicationStopping.Token;
 
         public CancellationToken ApplicationStopped => CancellationToken.None;
 
         public void StopApplication()
         {
+            _applicationStopping.Cancel();
         }
     }
 }

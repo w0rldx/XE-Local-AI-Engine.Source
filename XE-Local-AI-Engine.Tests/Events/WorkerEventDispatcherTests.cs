@@ -112,6 +112,52 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task DispatchInvocationAssignedV2Async_WhenStopAcceptingRemoteInvocations_IgnoresNewAssignment()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var dispatcher = CreateDispatcher(runner);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        dispatcher.StopAcceptingRemoteInvocations();
+
+        await dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = package,
+            Encrypted = null
+        });
+
+        AssertEx.False(dispatcher.IsAcceptingRemoteInvocations);
+        AssertEx.Null(dispatcher.CurrentInvocation);
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StopAcceptingRemoteInvocations_DoesNotCancelAlreadyActiveAssignment()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(gate.Task);
+        var dispatcher = CreateDispatcher(runner);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        var dispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = package,
+            Encrypted = null
+        });
+
+        await Task.Delay(20);
+        dispatcher.StopAcceptingRemoteInvocations();
+        gate.SetResult();
+        await dispatch;
+
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == package.InvocationId), Arg.Any<CancellationToken>());
+        AssertEx.Equal(InvocationStatus.Completed, dispatcher.CurrentInvocation?.Status ?? InvocationStatus.Failed);
+    }
+
+    [Test]
     public async Task ReportInvocationThinkingChunkAsync_AccumulatesThinkingContentSeparately()
     {
         var runner = Substitute.For<IInvocationRunner>();

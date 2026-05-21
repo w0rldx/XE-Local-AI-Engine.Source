@@ -1,0 +1,607 @@
+@page "/manager"
+@attribute [Authorize(Roles = LocalOperatorAuthorization.OperatorRole)]
+@using Microsoft.AspNetCore.Authorization
+@using XE_Local_AI_Engine.Client.Services.Auth
+@using XE_Local_AI_Engine.Client.Services.Manager
+@using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts
+@implements IAsyncDisposable
+@rendermode @(new InteractiveServerRenderMode(false))
+
+@inject IHostAgentManagerService ManagerService
+@inject ISnackbar Snackbar
+@inject ILogger<ManagerOverview> Logger
+
+<PageTitle>Runtime Manager</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.subtitle2">Host runtime</MudText>
+        <MudText Typo="Typo.h4">Runtime manager</MudText>
+        <MudText Typo="Typo.body1">Manage the local substrate, inspect HostAgent capabilities, and view sanitized runtime manifest data.</MudText>
+    </div>
+    <MudSpacer/>
+    <MudChip T="string" Color="@GetStatusColor()" Icon="@GetStatusIcon()">@GetStatusLabel()</MudChip>
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" Disabled="_isLoading">Refresh</MudButton>
+</MudStack>
+
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_errorMessage</MudAlert>
+}
+
+@if (_isLoading && _snapshot is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4"/>
+}
+else if (_snapshot is not null)
+{
+    <MudTabs Rounded="true" Elevation="1">
+        <MudTabPanel Text="Status" Icon="@Icons.Material.Filled.MonitorHeart">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-3">Substrate status</MudText>
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <tbody>
+                                <tr>
+                                    <td>State</td>
+                                    <td>@_snapshot.Status.State</td>
+                                </tr>
+                                <tr>
+                                    <td>Desired state</td>
+                                    <td>@_snapshot.Status.DesiredState</td>
+                                </tr>
+                                <tr>
+                                    <td>Runtime lifecycle</td>
+                                    <td>@_snapshot.Status.RuntimeLifecycle</td>
+                                </tr>
+                                <tr>
+                                    <td>Bootstrap model ready</td>
+                                    <td>@FormatBoolean(_snapshot.Status.BootstrapModelReady)</td>
+                                </tr>
+                                <tr>
+                                    <td>Web UI</td>
+                                    <td>@FormatText(_snapshot.Status.WebUiUrl)</td>
+                                </tr>
+                                <tr>
+                                    <td>Observed</td>
+                                    <td>@FormatTimestamp(_snapshot.Status.ObservedAt)</td>
+                                </tr>
+                                </tbody>
+                            </MudSimpleTable>
+                            @RenderDiagnostics(_snapshot.Status.Diagnostics)
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-3">Capabilities</MudText>
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <tbody>
+                                <tr>
+                                    <td>CPU available</td>
+                                    <td>@FormatBoolean(_snapshot.Capabilities.CpuAvailable)</td>
+                                </tr>
+                                <tr>
+                                    <td>NVIDIA GPU inference</td>
+                                    <td>@FormatBoolean(_snapshot.Capabilities.NvidiaGpuInference)</td>
+                                </tr>
+                                <tr>
+                                    <td>GPU runtime configured</td>
+                                    <td>@FormatBoolean(_snapshot.Capabilities.GpuRuntimeConfigured)</td>
+                                </tr>
+                                <tr>
+                                    <td>AMD GPU status</td>
+                                    <td>@FormatText(_snapshot.Capabilities.AmdGpuStatus)</td>
+                                </tr>
+                                <tr>
+                                    <td>Runtime disk</td>
+                                    <td>@FormatBytes(_snapshot.Capabilities.RuntimeDiskBytes)</td>
+                                </tr>
+                                <tr>
+                                    <td>Observed</td>
+                                    <td>@FormatTimestamp(_snapshot.Capabilities.ObservedAt)</td>
+                                </tr>
+                                </tbody>
+                            </MudSimpleTable>
+                            @RenderDiagnostics(_snapshot.Capabilities.Diagnostics)
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Models" Icon="@Icons.Material.Filled.Memory">
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                This picker uses the configured local model provider. Provider changes remain restart-required in this MVP pass; no secrets are displayed.
+            </MudAlert>
+            <MudGrid>
+                <MudItem xs="12" md="5">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-3">Provider</MudText>
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <tbody>
+                                <tr>
+                                    <td>Name</td>
+                                    <td>@_snapshot.ModelProviderHealth.ProviderName</td>
+                                </tr>
+                                <tr>
+                                    <td>Healthy</td>
+                                    <td>@FormatBoolean(_snapshot.ModelProviderHealth.IsHealthy)</td>
+                                </tr>
+                                <tr>
+                                    <td>Observed</td>
+                                    <td>@FormatTimestamp(_snapshot.ModelProviderHealth.ObservedAt)</td>
+                                </tr>
+                                </tbody>
+                            </MudSimpleTable>
+                            @RenderDiagnostics(_snapshot.ModelProviderHealth.Diagnostics)
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-3">Model picker</MudText>
+                            <MudSelect T="string" Label="Available local model" @bind-Value="_selectedModelName" Variant="Variant.Outlined" Clearable="true">
+                                @foreach (var model in _snapshot.Models)
+                                {
+                                    <MudSelectItem T="string" Value="@model.ModelName">@model.ModelName (@model.ProviderName)</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @if (SelectedModel is not null)
+                            {
+                                <MudSimpleTable Dense="true" Hover="true" Class="mt-4">
+                                    <tbody>
+                                    <tr>
+                                        <td>Available</td>
+                                        <td>@FormatBoolean(SelectedModel.IsAvailable)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Size</td>
+                                        <td>@FormatOptionalBytes(SelectedModel.SizeBytes)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Modified</td>
+                                        <td>@FormatTimestamp(SelectedModel.ModifiedAt)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Max context</td>
+                                        <td>@(SelectedModel.MaxContextTokens?.ToString("N0") ?? "Unknown")</td>
+                                    </tr>
+                                    </tbody>
+                                </MudSimpleTable>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Containers" Icon="@Icons.Material.Filled.Inventory2">
+            <MudTable Items="_snapshot.Components" T="RuntimeComponentStatusDto" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>Name</MudTh>
+                    <MudTh>Desired</MudTh>
+                    <MudTh>Health</MudTh>
+                    <MudTh>Image</MudTh>
+                    <MudTh>Digest</MudTh>
+                    <MudTh>Observed</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Name">@context.Name</MudTd>
+                    <MudTd DataLabel="Desired">@context.DesiredState</MudTd>
+                    <MudTd DataLabel="Health">
+                        <MudChip T="string" Size="Size.Small" Color="@GetHealthColor(context.Health)">@context.Health.ToString()</MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Image">
+                        <MudText Typo="Typo.body2" Style="word-break: break-all;">@context.ImageReference</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Digest">@FormatBoolean(context.DigestVerified)</MudTd>
+                    <MudTd DataLabel="Observed">@FormatTimestamp(context.ObservedAt)</MudTd>
+                    <MudTd DataLabel="Actions">
+                        <MudStack Row="true" Spacing="1">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => ExecuteContainerActionAsync(context.Name, HostAgentContainerAction.Start))"
+                                       Disabled="@IsActionDisabled(context.Name)">Start
+                            </MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => ExecuteContainerActionAsync(context.Name, HostAgentContainerAction.Stop))"
+                                       Disabled="@IsActionDisabled(context.Name)">Stop
+                            </MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => ExecuteContainerActionAsync(context.Name, HostAgentContainerAction.Restart))"
+                                       Disabled="@IsActionDisabled(context.Name)">Restart
+                            </MudButton>
+                        </MudStack>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText>No runtime containers reported.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+
+            @if (_lastActionReport is not null)
+            {
+                <MudAlert Severity="@(_lastActionReport.Succeeded ? Severity.Success : Severity.Warning)" Class="mt-4">
+                    @_lastActionReport.Action completed at @FormatTimestamp(_lastActionReport.CompletedAt). Diagnostics: @string.Join(", ", _lastActionReport.Diagnostics)
+                </MudAlert>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="Logs" Icon="@Icons.Material.Filled.Article">
+            <MudGrid Class="mb-4">
+                <MudItem xs="12" md="5">
+                    <MudSelect T="string" Label="Container" @bind-Value="_selectedLogContainer" Variant="Variant.Outlined">
+                        @foreach (var containerName in _snapshot.Components.Select(static component => component.Name))
+                        {
+                            <MudSelectItem T="string" Value="@containerName">@containerName</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudNumericField T="int" Label="Tail lines" @bind-Value="_tailLines" Min="1" Max="500" Variant="Variant.Outlined"/>
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex align-center gap-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadRecentLogsAsync" Disabled="@(!CanLoadLogs || _isLoadingLogs)">Load recent</MudButton>
+                    @if (_isFollowingLogs)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="StopFollowingLogsAsync">Stop following</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined" OnClick="StartFollowingLogs" Disabled="@(!CanLoadLogs || _isLoadingLogs)">Follow</MudButton>
+                    }
+                </MudItem>
+            </MudGrid>
+            <MudPaper Elevation="1" Class="pa-3" Style="max-height: 420px; overflow: auto; font-family: monospace; font-size: 0.85rem;">
+                @if (_logLines.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No logs loaded.</MudText>
+                }
+                else
+                {
+                    @foreach (var line in _logLines)
+                    {
+                        <div>[@FormatTimestamp(line.ObservedAt)] @line.ContainerName/@line.Stream: @line.Line</div>
+                    }
+                }
+            </MudPaper>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Manifest" Icon="@Icons.Material.Filled.Description">
+            @if (!_snapshot.Manifest.Available)
+            {
+                <MudAlert Severity="Severity.Warning">Runtime manifest is not available in this web server configuration. @string.Join(", ", _snapshot.Manifest.Diagnostics)</MudAlert>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Class="mb-4">
+                    <tbody>
+                    <tr>
+                        <td>Schema version</td>
+                        <td>@_snapshot.Manifest.SchemaVersion</td>
+                    </tr>
+                    <tr>
+                        <td>Runtime mode</td>
+                        <td>@_snapshot.Manifest.RuntimeMode</td>
+                    </tr>
+                    <tr>
+                        <td>Bootstrap model</td>
+                        <td>@_snapshot.Manifest.BootstrapModel</td>
+                    </tr>
+                    <tr>
+                        <td>Default chat model</td>
+                        <td>@_snapshot.Manifest.DefaultChatModel</td>
+                    </tr>
+                    <tr>
+                        <td>Runtime disk limit</td>
+                        <td>@(_snapshot.Manifest.MaxRuntimeDiskGb?.ToString() ?? "Unknown") GB</td>
+                    </tr>
+                    <tr>
+                        <td>Stop drain timeout</td>
+                        <td>@(_snapshot.Manifest.StopDrainTimeoutSeconds?.ToString() ?? "Unknown") seconds</td>
+                    </tr>
+                    </tbody>
+                </MudSimpleTable>
+                <MudExpansionPanels MultiExpansion="true">
+                    @foreach (var container in _snapshot.Manifest.Containers)
+                    {
+                        <MudExpansionPanel Text="@container.Name">
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <tbody>
+                                <tr>
+                                    <td>Image</td>
+                                    <td style="word-break: break-all;">@container.Image</td>
+                                </tr>
+                                <tr>
+                                    <td>Network</td>
+                                    <td>@container.Network</td>
+                                </tr>
+                                </tbody>
+                            </MudSimpleTable>
+                            <MudText Typo="Typo.h6" Class="mt-4 mb-2">Environment</MudText>
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <tbody>
+                                @foreach (var entry in container.Environment)
+                                {
+                                    <tr>
+                                        <td>@entry.Name</td>
+                                        <td>@entry.Value</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </MudSimpleTable>
+                            <MudText Typo="Typo.h6" Class="mt-4 mb-2">Volumes</MudText>
+                            <MudSimpleTable Dense="true" Hover="true">
+                                <tbody>
+                                @foreach (var volume in container.Volumes)
+                                {
+                                    <tr>
+                                        <td>@volume.Source</td>
+                                        <td>@volume.Target</td>
+                                        <td>@(volume.ReadOnly ? "read-only" : "read-write")</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </MudSimpleTable>
+                        </MudExpansionPanel>
+                    }
+                </MudExpansionPanels>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private static readonly TimeSpan DefaultDrainTimeout = TimeSpan.FromSeconds(30);
+    private readonly List<HostAgentLogLineDto> _logLines = [];
+    private HostAgentManagerSnapshot? _snapshot;
+    private ContainerActionReportDto? _lastActionReport;
+    private CancellationTokenSource? _logStreamCts;
+    private bool _isLoading = true;
+    private bool _isLoadingLogs;
+    private bool _isFollowingLogs;
+    private string? _errorMessage;
+    private string? _selectedModelName;
+    private string? _selectedLogContainer;
+    private string? _activeActionContainerName;
+    private int _tailLines = 100;
+
+    private LocalModelDescriptor? SelectedModel =>
+        _snapshot?.Models.FirstOrDefault(model => string.Equals(model.ModelName, _selectedModelName, StringComparison.Ordinal));
+
+    private bool CanLoadLogs => !string.IsNullOrWhiteSpace(_selectedLogContainer);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_logStreamCts is not null)
+        {
+            await _logStreamCts.CancelAsync();
+            _logStreamCts.Dispose();
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            _snapshot = await ManagerService.LoadSnapshotAsync(CancellationToken.None);
+            _selectedModelName ??= _snapshot.Models.FirstOrDefault()?.ModelName;
+            _selectedLogContainer ??= _snapshot.Components.FirstOrDefault()?.Name;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Runtime manager snapshot failed to load.");
+            _errorMessage = "Runtime manager data could not be loaded.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ExecuteContainerActionAsync(string containerName, HostAgentContainerAction action)
+    {
+        if (IsActionDisabled(containerName))
+        {
+            return;
+        }
+
+        _activeActionContainerName = containerName;
+        _errorMessage = null;
+
+        try
+        {
+            _lastActionReport = await ManagerService.ExecuteContainerActionAsync(containerName, action, DefaultDrainTimeout, CancellationToken.None);
+            Snackbar.Add($"{action} requested for {containerName}.", Severity.Success);
+            await RefreshAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Container action {Action} failed for {ContainerName}.", action, containerName);
+            _errorMessage = $"{action} failed for {containerName}.";
+        }
+        finally
+        {
+            _activeActionContainerName = null;
+        }
+    }
+
+    private bool IsActionDisabled(string containerName)
+    {
+        return _activeActionContainerName is not null && !string.Equals(_activeActionContainerName, containerName, StringComparison.Ordinal);
+    }
+
+    private Task LoadRecentLogsAsync()
+    {
+        return StreamLogsAsync(false);
+    }
+
+    private void StartFollowingLogs()
+    {
+        _ = StreamLogsAsync(true);
+    }
+
+    private async Task StopFollowingLogsAsync()
+    {
+        if (_logStreamCts is not null)
+        {
+            await _logStreamCts.CancelAsync();
+        }
+
+        _isFollowingLogs = false;
+    }
+
+    private async Task StreamLogsAsync(bool follow)
+    {
+        if (!CanLoadLogs || _isLoadingLogs)
+        {
+            return;
+        }
+
+        if (_logStreamCts is not null)
+        {
+            await _logStreamCts.CancelAsync();
+            _logStreamCts.Dispose();
+        }
+
+        _logStreamCts = new CancellationTokenSource();
+        _logLines.Clear();
+        _isLoadingLogs = true;
+        _isFollowingLogs = follow;
+        _errorMessage = null;
+
+        try
+        {
+            await foreach (var line in ManagerService.StreamLogsAsync(_selectedLogContainer!, _tailLines, follow, _logStreamCts.Token))
+            {
+                _logLines.Add(line);
+                if (_logLines.Count > 500)
+                {
+                    _logLines.RemoveRange(0, _logLines.Count - 500);
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException exception)
+        {
+            Logger.LogDebug(exception, "Runtime manager log stream cancelled for {ContainerName}.", _selectedLogContainer);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Runtime manager log stream failed for {ContainerName}.", _selectedLogContainer);
+            _errorMessage = "Container logs could not be loaded.";
+        }
+        finally
+        {
+            _isLoadingLogs = false;
+            _isFollowingLogs = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Color GetStatusColor()
+    {
+        return _snapshot?.Status.State switch
+        {
+            HostAgentState.Running => Color.Success,
+            HostAgentState.Starting or HostAgentState.Stopping or HostAgentState.Degraded => Color.Warning,
+            HostAgentState.Failed => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStatusIcon()
+    {
+        return _snapshot?.Status.State switch
+        {
+            HostAgentState.Running => Icons.Material.Filled.CheckCircle,
+            HostAgentState.Failed => Icons.Material.Filled.Error,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    private string GetStatusLabel()
+    {
+        return _snapshot?.Status.State.ToString() ?? "Loading";
+    }
+
+    private static Color GetHealthColor(ContainerHealth health)
+    {
+        return health switch
+        {
+            ContainerHealth.Healthy => Color.Success,
+            ContainerHealth.Starting => Color.Warning,
+            ContainerHealth.Unhealthy => Color.Error,
+            ContainerHealth.Stopped => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private static string FormatBoolean(bool value)
+    {
+        return value ? "Yes" : "No";
+    }
+
+    private static string FormatText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "Unknown" : value;
+    }
+
+    private static string FormatTimestamp(DateTimeOffset? timestamp)
+    {
+        return timestamp is null || timestamp == DateTimeOffset.UnixEpoch
+            ? "Not reported"
+            : timestamp.Value.ToLocalTime().ToString("g");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F1} GB";
+        if (bytes >= 1_048_576) return $"{bytes / 1_048_576.0:F1} MB";
+        if (bytes >= 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes} B";
+    }
+
+    private static string FormatOptionalBytes(long? bytes)
+    {
+        return bytes is > 0 ? FormatBytes(bytes.Value) : "Unknown";
+    }
+
+    private static RenderFragment RenderDiagnostics(IReadOnlyList<string> diagnostics)
+    {
+        return builder =>
+        {
+            if (diagnostics.Count == 0)
+            {
+                return;
+            }
+
+            var sequence = 0;
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "mt-3");
+            foreach (var diagnostic in diagnostics)
+            {
+                builder.OpenComponent<MudChip<string>>(sequence++);
+                builder.AddAttribute(sequence++, "Size", Size.Small);
+                builder.AddAttribute(sequence++, "Color", Color.Warning);
+                builder.AddAttribute(sequence++, "ChildContent", (RenderFragment)(chipBuilder => chipBuilder.AddContent(0, diagnostic)));
+                builder.CloseComponent();
+            }
+
+            builder.CloseElement();
+        };
+    }
+
+}

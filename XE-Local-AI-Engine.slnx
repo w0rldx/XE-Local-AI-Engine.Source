@@ -12,8 +12,15 @@
         <Project Path="XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj"/>
+        <Project Path="XE-Local-AI-Engine.HostAgent.Abstractions/XE-Local-AI-Engine.HostAgent.Abstractions.csproj"/>
+        <Project Path="XE-Local-AI-Engine.HostAgent.Grpc.Contracts/XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
+        <Project Path="XE-Local-AI-Engine.HostAgent.Linux/XE-Local-AI-Engine.HostAgent.Linux.csproj"/>
+        <Project Path="XE-Local-AI-Engine.HostAgent.Windows/XE-Local-AI-Engine.HostAgent.Windows.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Providers.Abstractions/XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Providers.Ollama/XE-Local-AI-Engine.Providers.Ollama.csproj"/>
         <Project Path="XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj"/>
         <Project Path="XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Tray/XE-Local-AI-Engine.Tray.csproj"/>
     </Folder>
     <Folder Name="/Tests/">
         <Project Path="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"/>

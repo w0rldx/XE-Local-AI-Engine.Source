@@ -38,7 +38,8 @@ public sealed class ToolInvocationObservabilityChatClientTests
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
-            Sample = static (ref _) => ActivitySamplingResult.AllData,
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity => stoppedActivities.Add((
                 activity.OperationName,
                 activity.GetTagItem("tool.call_id")?.ToString(),
@@ -46,6 +47,13 @@ public sealed class ToolInvocationObservabilityChatClientTests
         };
 
         ActivitySource.AddActivityListener(listener);
+
+        // Prime the listener in-process before the wrapped client emits from the static production source.
+        using (var probeSource = new ActivitySource("XE.LocalAiEngine.AI.Agent"))
+        {
+            using var probeActivity = probeSource.StartActivity("Probe");
+            AssertEx.NotNull(probeActivity, "Expected ActivityListener probe activity to be created.");
+        }
 
         await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
         {

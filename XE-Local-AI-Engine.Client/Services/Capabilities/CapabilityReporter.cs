@@ -94,11 +94,14 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         var diagnostics = BuildHardwareDiagnostics(gpuInfo);
         var ollamaStatus = await DetectOllamaRuntimeAsync(cancellationToken).ConfigureAwait(false);
         diagnostics.AddRange(ollamaStatus.Diagnostics);
-        var installedModelInventory = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
+        var installedModelInventoryResult = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
+        diagnostics.AddRange(installedModelInventoryResult.Diagnostics);
+        var installedModelInventory = installedModelInventoryResult.Models;
         var installedModels = installedModelInventory.Select(model => model.Name).ToArray();
         var installedModelMetadata = await GetInstalledModelMetadataAsync(installedModelInventory, cancellationToken).ConfigureAwait(false);
         var supportedCapabilities = DetermineSupportedCapabilities(installedModels);
         var activeModel = await DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
+        var ollamaReachable = ollamaStatus.Reachable && installedModelInventoryResult.OllamaQuerySucceeded;
         if (installedModels.Length == 0)
         {
             diagnostics.Add(DiagnosticUnknownInventory);
@@ -113,9 +116,9 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             GpuName = gpuInfo?.GpuName,
             CpuClass = cpuClass,
             SystemScoreClass = CalculateSystemScoreClass(ramMb, gpuInfo?.VramMb, gpuInfo?.CudaAvailable ?? false),
-            OllamaReachable = ollamaStatus.Reachable,
-            OllamaVersion = ollamaStatus.Version,
-            ManagementMode = ollamaStatus.Reachable ? "unmanaged" : "unknown",
+            OllamaReachable = ollamaReachable,
+            OllamaVersion = ollamaReachable ? ollamaStatus.Version : null,
+            ManagementMode = ollamaReachable ? "unmanaged" : "unknown",
             LastCapabilityReportAt = detectedAt,
             Diagnostics = NormalizeDiagnostics(diagnostics),
             InstalledModels = installedModels,
@@ -255,18 +258,18 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
     private async Task<IReadOnlyList<string>> GetInstalledModelNamesAsync(CancellationToken cancellationToken)
     {
-        var models = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
-        return models.Select(model => model.Name).ToArray();
+        var result = await GetInstalledModelInventoryAsync(cancellationToken).ConfigureAwait(false);
+        return result.Models.Select(model => model.Name).ToArray();
     }
 
-    private async Task<IReadOnlyList<InstalledModelInfo>> GetInstalledModelInventoryAsync(CancellationToken cancellationToken)
+    private async Task<InstalledModelInventoryResult> GetInstalledModelInventoryAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var cachedModels = TryGetCachedInstalledModels();
         if (cachedModels is not null)
         {
-            return cachedModels;
+            return new InstalledModelInventoryResult(cachedModels, true, []);
         }
 
         try
@@ -296,14 +299,15 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
                 string.Join(", ", normalizedModels.Select(model => model.Name)));
 
             CacheInstalledModels(normalizedModels);
-            return normalizedModels;
+            return new InstalledModelInventoryResult(normalizedModels, true, []);
         }
         catch (HttpRequestException exception)
         {
             _logger.LogWarning(exception, "Failed to query installed Ollama models. Reporting {ConfiguredModelCount} configured model fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
-            return _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false)).ToArray();
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false)).ToArray();
+            return new InstalledModelInventoryResult(configuredModels, false, [DiagnosticOllamaUnreachable]);
         }
     }
 
@@ -724,6 +728,8 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     }
 
     private sealed record CachedInstalledModels(IReadOnlyList<InstalledModelInfo> Models, DateTimeOffset ExpiresAt);
+
+    private sealed record InstalledModelInventoryResult(IReadOnlyList<InstalledModelInfo> Models, bool OllamaQuerySucceeded, IReadOnlyList<string> Diagnostics);
 
     private sealed record InstalledModelInfo(string Name, string? Digest, bool IsDiscovered);
 

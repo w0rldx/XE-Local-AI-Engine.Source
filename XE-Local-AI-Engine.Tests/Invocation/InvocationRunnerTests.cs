@@ -413,6 +413,54 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task DrainActiveInvocationsAsync_WhenActiveInvocationCompletes_ReturnsTrue()
+    {
+        var sender = new MockHubMessageSender();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var package = RuntimePackageBuilder.Valid().Build();
+        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+        AssertEx.Equal(1, runner.ActiveInvocationCount);
+
+        var drainTask = runner.DrainActiveInvocationsAsync(TimeSpan.FromSeconds(2));
+        AssertEx.False(drainTask.IsCompleted);
+
+        gate.SetResult();
+
+        AssertEx.True(await drainTask);
+        await runTask;
+        AssertEx.Equal(0, runner.ActiveInvocationCount);
+    }
+
+    [Test]
+    public async Task DrainActiveInvocationsAsync_WhenTimeoutElapses_ReturnsFalseWithoutCancellingInvocation()
+    {
+        var sender = new MockHubMessageSender();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var package = RuntimePackageBuilder.Valid().Build();
+        var runner = CreateRunner(sender, agentUpdates: BlockingUpdates(gate.Task, started));
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        var drained = await runner.DrainActiveInvocationsAsync(TimeSpan.FromMilliseconds(10));
+
+        AssertEx.False(drained);
+        AssertEx.False(runTask.IsCompleted);
+        AssertEx.Equal(1, runner.ActiveInvocationCount);
+
+        gate.SetResult();
+        await runTask.WaitAsync(TimeSpan.FromSeconds(2));
+
+        AssertEx.Equal(0, runner.ActiveInvocationCount);
+        AssertEx.Empty(sender.SentEncryptedFailures);
+    }
+
+    [Test]
     public async Task RunAsync_WhenInvocationTimeoutElapses_MapsTimeoutFailureCategory()
     {
         var sender = new MockHubMessageSender();
