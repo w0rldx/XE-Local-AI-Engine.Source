@@ -27,8 +27,8 @@ public sealed class CentralPlatformOptions
     [Range(1, 30000)]
     public int ReconnectBackoffBaseMs { get; set; } = 1000;
 
-    [Range(1, 120000)]
-    public int ReconnectBackoffMaxMs { get; set; } = 30000;
+    [Range(1, 1800000)]
+    public int ReconnectBackoffMaxMs { get; set; } = 1800000;
 
     [Range(0, 10000)]
     public int ReconnectBackoffJitterMs { get; set; } = 500;

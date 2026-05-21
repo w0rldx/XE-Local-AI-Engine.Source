@@ -64,6 +64,17 @@ public sealed class CentralPlatformOptionsValidatorTests
     }
 
     [Test]
+    public void Validate_WhenReconnectBackoffMaxExceedsLimit_ReturnsFailure()
+    {
+        var options = CreateValidOptions();
+        options.ReconnectBackoffMaxMs = 1800001;
+
+        var result = _validator.Validate(null, options);
+
+        AssertFailureContains(result, "ReconnectBackoffMaxMs");
+    }
+
+    [Test]
     public void Validate_WhenReconnectMaxAttemptsExceedsLimit_ReturnsFailure()
     {
         var options = CreateValidOptions();

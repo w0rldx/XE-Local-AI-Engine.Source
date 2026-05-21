@@ -37,4 +37,16 @@ public sealed class WorkerReconnectPolicyTests
 
         AssertEx.Null(policy.GetDelay(2));
     }
+
+    [Test]
+    public void GetDelay_WithDefaultOptions_CapsAtThirtyMinutes()
+    {
+        var policy = new WorkerReconnectPolicy(new CentralPlatformOptions
+        {
+            BaseUrl = "https://test.example.com"
+        });
+
+        AssertEx.Equal(TimeSpan.FromMinutes(30), policy.GetDelay(11));
+        AssertEx.Equal(TimeSpan.FromMinutes(30), policy.GetDelay(12));
+    }
 }
