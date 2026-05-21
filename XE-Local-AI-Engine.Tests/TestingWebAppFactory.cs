@@ -15,6 +15,9 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -63,7 +66,9 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-{Guid.NewGuid():N}.sqlite")}",
-                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray())
+                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray()),
+                ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
+                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
             });
         });
 
@@ -89,9 +94,14 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             {
                 services.RemoveAll<IOllamaApiClient>();
                 services.RemoveAll<IChatClient>();
-                services.AddSingleton<OllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer!.BaseAddress));
-                services.AddSingleton<IOllamaApiClient>(sp => sp.GetRequiredService<OllamaApiClient>());
-                services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<OllamaApiClient>());
+                services.RemoveAll<ILocalModelProvider>();
+                services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer!.BaseAddress));
+                services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
+                services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILocalModelProvider>().CreateChatClient(new LocalModelSelection
+                {
+                    ModelName = "qwen3.5:0.8b",
+                    ProviderName = OllamaLocalModelProvider.OllamaProviderName
+                }));
 
                 services.RemoveAll<IHttpClientFactory>();
                 services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());

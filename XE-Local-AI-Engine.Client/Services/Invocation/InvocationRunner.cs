@@ -29,6 +29,8 @@ public sealed class InvocationRunner : IInvocationRunner
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant);
 
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
+
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
@@ -39,7 +41,6 @@ public sealed class InvocationRunner : IInvocationRunner
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
-
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly IRuntimePackageValidator _runtimePackageValidator;
     private readonly object _syncRoot = new();
@@ -79,6 +80,8 @@ public sealed class InvocationRunner : IInvocationRunner
         _maxPendingToolCallAge = TimeSpan.FromMinutes(workerOptions.Value.MaxPendingToolCallAgeMinutes);
     }
 
+    public int ActiveInvocationCount => _activeInvocationCompletions.Count;
+
     public async Task RunAsync(Models.RuntimePackage package, CancellationToken cancellationToken = default)
     {
         using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
@@ -104,6 +107,7 @@ public sealed class InvocationRunner : IInvocationRunner
         var sendPlain = shouldSendHubMessages && !context.IsEncrypted;
 
         RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
+        var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId);
 
         try
         {
@@ -287,7 +291,27 @@ public sealed class InvocationRunner : IInvocationRunner
         {
             CleanupStaleToolCalls(_maxPendingToolCallAge);
             ClearActiveInvocation(package.InvocationId);
+            CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
             await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
+        }
+    }
+
+    public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var activeInvocationTasks = _activeInvocationCompletions.Values.Select(static completion => completion.Task).ToArray();
+        if (activeInvocationTasks.Length == 0)
+        {
+            return true;
+        }
+
+        try
+        {
+            await Task.WhenAll(activeInvocationTasks).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
         }
     }
 
@@ -459,6 +483,23 @@ public sealed class InvocationRunner : IInvocationRunner
         {
             _logger.LogWarning(exception, "Failed to report capabilities after invocation {InvocationId} completed.", invocationId);
         }
+    }
+
+    private TaskCompletionSource RegisterActiveInvocationCompletion(Guid invocationId)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_activeInvocationCompletions.TryAdd(invocationId, completion))
+        {
+            throw new InvalidOperationException($"Invocation {invocationId} is already tracked as active.");
+        }
+
+        return completion;
+    }
+
+    private void CompleteActiveInvocation(Guid invocationId, TaskCompletionSource completion)
+    {
+        _activeInvocationCompletions.TryRemove(invocationId, out _);
+        completion.TrySetResult();
     }
 
     private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)

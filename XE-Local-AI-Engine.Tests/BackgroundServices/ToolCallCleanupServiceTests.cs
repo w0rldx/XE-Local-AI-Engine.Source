@@ -89,9 +89,16 @@ public sealed class ToolCallCleanupServiceTests
             _cleanupSignal.Dispose();
         }
 
+        public int ActiveInvocationCount => 0;
+
         public Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
         }
 
         public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)

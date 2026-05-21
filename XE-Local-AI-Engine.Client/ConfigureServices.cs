@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -23,17 +24,24 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
+using XE_Local_AI_Engine.Client.Services.Manager;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Ollama;
 using ILogger = ILogger;
 
 public static class ConfigureServices
 {
     private const string ConsoleOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+    private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
 
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
@@ -46,6 +54,8 @@ public static class ConfigureServices
 
         builder.Services.AddRazorComponents()
                .AddInteractiveServerComponents();
+        builder.Services.AddAuthorization();
+        builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddMudServices();
 
         builder.Services.AddOptions<CentralPlatformOptions>()
@@ -60,6 +70,7 @@ public static class ConfigureServices
         builder.Services.AddOptions<CloudProviderOptions>()
                .Bind(configuration.GetSection(CloudProviderOptions.SectionName))
                .ValidateOnStart();
+        builder.Services.AddOptions<WorkerShutdownDrainOptions>();
 
         builder.Services.AddSingleton<IValidateOptions<CentralPlatformOptions>, CentralPlatformOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();
@@ -87,6 +98,7 @@ public static class ConfigureServices
         }).AddStandardResilienceHandler();
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
+        builder.Services.AddScoped<AuthenticationStateProvider, LocalOperatorAuthenticationStateProvider>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
         builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
@@ -95,10 +107,21 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IWorkerTokenRefreshService, WorkerTokenRefreshService>();
         builder.Services.AddScoped<INodeBindingService, NodeBindingService>();
         builder.Services.AddSingleton<ConnectionState>();
+        builder.Services.AddSingleton(HostAgentClientOptions.FromConfiguration(configuration));
+        builder.Services.AddSingleton<IHostAgentClient, GrpcHostAgentClient>();
+        builder.Services.AddSingleton(HostAgentStartupGateOptions.FromConfiguration(configuration));
+        builder.Services.AddSingleton<IHostAgentReadinessClient>(sp =>
+        {
+            var options = sp.GetRequiredService<HostAgentStartupGateOptions>();
+            return options.Enabled
+                ? ActivatorUtilities.CreateInstance<GrpcHostAgentReadinessClient>(sp)
+                : new DisabledHostAgentReadinessClient();
+        });
         builder.Services.AddSingleton(sp => new Lazy<IHubMessageSender>(() => sp.GetRequiredService<IHubMessageSender>()));
         builder.Services.AddSingleton(sp => new Lazy<IWorkerEventDispatcher>(() => sp.GetRequiredService<IWorkerEventDispatcher>()));
         builder.Services.AddSingleton<ModelNameValidator>();
         builder.Services.AddSingleton<IRuntimePackageValidator, RuntimePackageValidator>();
+        builder.Services.AddSingleton<IHostAgentManagerService, HostAgentManagerService>();
         builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
         builder.Services.AddSingleton<IRuntimePackageEnvelopeAssembler, RuntimePackageEnvelopeAssembler>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
@@ -112,6 +135,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
+        builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddScoped<ILocalChatInvocationService, LocalChatInvocationService>();
@@ -157,28 +181,14 @@ public static class ConfigureServices
                        serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
 
-        builder.AddOllamaApiClient("chat");
         builder.AddOllamaApiClient("embeddings")
                .AddEmbeddingGenerator();
 
-        builder.Services.AddSingleton<OllamaApiClient>(_ =>
+        builder.Services.AddOllamaLocalModelProvider(_ =>
         {
-            var (chatEndpoint, chatModel) = ResolveChatConnectionSettings(configuration);
-
-#pragma warning disable CA2000 // Lifetime is managed by the DI container.
-            var httpClient = new HttpClient
-            {
-                BaseAddress = chatEndpoint,
-                Timeout = TimeSpan.FromMinutes(5)
-            };
-
-            return new OllamaApiClient(httpClient)
-            {
-                SelectedModel = chatModel
-            };
-#pragma warning restore CA2000
+            var chatConnectionSettings = ResolveChatConnectionSettings(configuration);
+            return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
         });
-        builder.Services.AddSingleton<IOllamaApiClient>(sp => sp.GetRequiredService<OllamaApiClient>());
         builder.Services.AddSingleton<IChatClient>(sp =>
         {
             var credentialStore = sp.GetRequiredService<ICloudCredentialStore>();
@@ -190,7 +200,18 @@ public static class ConfigureServices
                 return sp.GetRequiredService<IAzureFoundryChatClientFactory>().Create(credentials);
             }
 
-            return sp.GetRequiredService<OllamaApiClient>();
+            var chatConnectionSettings = ResolveChatConnectionSettings(configuration);
+            if (UseLocalModelProvider(configuration))
+            {
+                return sp.GetRequiredService<ILocalModelProvider>().CreateChatClient(new LocalModelSelection
+                {
+                    ModelName = chatConnectionSettings.Model,
+                    ProviderName = OllamaLocalModelProvider.OllamaProviderName
+                });
+            }
+
+            return sp.GetRequiredService<IOllamaApiClient>() as IChatClient
+                   ?? throw new InvalidOperationException("The configured local Ollama client must implement IChatClient.");
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
@@ -217,7 +238,7 @@ public static class ConfigureServices
             TaskScheduler.Default);
     }
 
-    private static (Uri Endpoint, string Model) ResolveChatConnectionSettings(IConfiguration configuration)
+    private static ChatConnectionSettings ResolveChatConnectionSettings(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
@@ -236,7 +257,7 @@ public static class ConfigureServices
                 && modelValue is string model
                 && !string.IsNullOrWhiteSpace(model))
             {
-                return (endpointUri, model);
+                return new ChatConnectionSettings(endpointUri, model);
             }
         }
 
@@ -245,6 +266,15 @@ public static class ConfigureServices
                             ?? configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
                             ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required.");
 
-        return (new Uri(fallbackEndpoint, UriKind.Absolute), fallbackModel);
+        return new ChatConnectionSettings(new Uri(fallbackEndpoint, UriKind.Absolute), fallbackModel);
     }
+
+    private static bool UseLocalModelProvider(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        return configuration.GetValue<bool>(UseLocalModelProviderConfigurationKey);
+    }
+
+    private sealed record ChatConnectionSettings(Uri Endpoint, string Model);
 }

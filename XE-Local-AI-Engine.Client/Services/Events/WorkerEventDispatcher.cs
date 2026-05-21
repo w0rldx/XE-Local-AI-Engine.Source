@@ -26,6 +26,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly SemaphoreSlim _remoteInvocationQueue = new(1, 1);
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
     private readonly object _syncRoot = new();
+    private bool _isAcceptingRemoteInvocations = true;
 
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
         IRuntimePackageEnvelopeAssembler runtimePackageEnvelopeAssembler,
@@ -46,9 +47,41 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public InvocationState? CurrentInvocation { get; private set; }
 
+    public bool IsAcceptingRemoteInvocations
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _isAcceptingRemoteInvocations;
+            }
+        }
+    }
+
+    public void StopAcceptingRemoteInvocations()
+    {
+        lock (_syncRoot)
+        {
+            if (!_isAcceptingRemoteInvocations)
+            {
+                return;
+            }
+
+            _isAcceptingRemoteInvocations = false;
+        }
+
+        _logger.LogInformation("WorkerEventDispatcher stopped accepting new remote invocation assignments for shutdown drain.");
+    }
+
     public async Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package)
     {
         ArgumentNullException.ThrowIfNull(package);
+
+        if (!IsAcceptingRemoteInvocations)
+        {
+            _logger.LogInformation("Ignoring remote InvocationAssigned because shutdown drain is active. InvocationId={InvocationId}", package.InvocationId);
+            return;
+        }
 
         _logger.LogInformation("WorkerEventDispatcher handling InvocationAssigned. InvocationId={InvocationId} ConversationId={ConversationId} MessageId={MessageId} EpochVersion={EpochVersion}",
             package.InvocationId,
@@ -148,6 +181,12 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     public Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope)
     {
         ArgumentNullException.ThrowIfNull(envelope);
+
+        if (!IsAcceptingRemoteInvocations)
+        {
+            _logger.LogInformation("Ignoring remote InvocationAssignedV2 because shutdown drain is active. StorageMode={StorageMode}", envelope.StorageMode);
+            return Task.CompletedTask;
+        }
 
         return envelope.StorageMode switch
         {

@@ -11,14 +11,20 @@
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
     <PackageReference Include="Microsoft.Testing.Platform"/>
+    <PackageReference Include="NJsonSchema"/>
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TUnit"/>
+    <PackageReference Include="YamlDotNet"/>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Abstractions\XE-Local-AI-Engine.HostAgent.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Linux\XE-Local-AI-Engine.HostAgent.Linux.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +34,8 @@
 
   <ItemGroup>
     <Content Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest"/>
+    <Content Include="..\Plans\artifacts\sample-manifests\*.yaml" Link="Fixtures\HostAgent\SampleManifests\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/>
+    <Content Include="..\XE-Local-AI-Engine.HostAgent.Abstractions\Schemas\host-agent-manifest.schema.json" Link="Fixtures\HostAgent\host-agent-manifest.schema.json" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
 </Project>

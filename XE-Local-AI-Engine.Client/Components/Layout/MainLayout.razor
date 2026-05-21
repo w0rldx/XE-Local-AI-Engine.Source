@@ -1,3 +1,5 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using XE_Local_AI_Engine.Client.Services.Auth
 @inherits LayoutComponentBase
 
 <MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode"/>
@@ -28,6 +30,9 @@
             <MudNavLink Href="/cloud-settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Cloud">Cloud Settings</MudNavLink>
             <MudNavLink Href="/chat" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Chat">Chat</MudNavLink>
             <MudNavLink Href="/models" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CloudDownload">Models</MudNavLink>
+            <AuthorizeView Roles="@LocalOperatorAuthorization.OperatorRole">
+                <MudNavLink Href="/manager" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MonitorHeart">Manager</MudNavLink>
+            </AuthorizeView>
             <MudNavLink Href="/invocations" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Terminal">Invocations</MudNavLink>
             <MudNavLink Href="/invocations/history" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">Invocation History</MudNavLink>
         </MudNavMenu>

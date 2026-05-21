@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -63,6 +64,16 @@ public sealed class ApplicationStartupTests
     {
         await using var factory = new TestingWebAppFactory();
         AssertEx.NotNull(factory.Services.GetRequiredService<ICapabilityReporter>());
+    }
+
+    [Test]
+    public async Task IWorkerShutdownDrainService_IsRegistered()
+    {
+        await using var factory = new TestingWebAppFactory();
+
+        AssertEx.NotNull(factory.Services.GetRequiredService<IWorkerShutdownDrainService>());
+        AssertEx.Equal(WorkerShutdownDrainOptions.DefaultDrainTimeout,
+            factory.Services.GetRequiredService<IOptions<WorkerShutdownDrainOptions>>().Value.DrainTimeout);
     }
 
     [Test]

@@ -53,7 +53,7 @@ public sealed class InvocationAgentFactoryTests
 
         AssertEx.Equal("llama3.2:3b", chatOptions.ModelId);
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
-        AssertEx.True(additionalProperties.TryGetValue("think", out var thinkValue));
+        AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
         AssertEx.Equal(true, thinkValue);
     }
 

@@ -63,6 +63,11 @@ BenchmarkDotNet.Artifacts/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+!Plans/artifacts/
+!Plans/artifacts/sample-manifests/
+!Plans/artifacts/sample-manifests/*.yaml
+!Plans/artifacts/schemas/
+!Plans/artifacts/schemas/*.schema.json
 
 # StyleCop
 StyleCopReport.xml

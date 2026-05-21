@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.HostAgent.Grpc.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf"/>
+    <PackageReference Include="Grpc.Core.Api"/>
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\host_agent.proto" GrpcServices="Both"/>
+  </ItemGroup>
+
+</Project>
