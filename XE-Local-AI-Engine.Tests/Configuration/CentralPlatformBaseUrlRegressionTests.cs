@@ -81,8 +81,8 @@ public sealed class CentralPlatformBaseUrlRegressionTests
         AssertEx.True(File.Exists(path), $"Expected Client app settings at '{path}'.");
 
         var configuration = new ConfigurationBuilder()
-            .AddJsonFile(path, optional: false)
-            .Build();
+                            .AddJsonFile(path, false)
+                            .Build();
 
         var options = new CentralPlatformOptions
         {
@@ -96,8 +96,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
 
     private static string GetClientAppSettingsPath(string appSettingsFileName)
     {
-        return Path.Combine(
-            GetRepositoryRoot(),
+        return Path.Combine(GetRepositoryRoot(),
             "Apps",
             "XE-Local-AI-Engine",
             "XE-Local-AI-Engine.Client",

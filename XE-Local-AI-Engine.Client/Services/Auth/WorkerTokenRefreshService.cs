@@ -26,48 +26,60 @@ public sealed class WorkerTokenRefreshService : IWorkerTokenRefreshService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<bool> TryRefreshAsync(CancellationToken cancellationToken = default)
+    public async Task<WorkerTokenRefreshOutcome> TryRefreshAsync(CancellationToken cancellationToken = default)
     {
         var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
         var refreshToken = await _tokenStore.GetRefreshTokenAsync().ConfigureAwait(false);
         if (clientNodeId is null || string.IsNullOrWhiteSpace(refreshToken))
         {
-            _logger.LogInformation("Worker credentials cannot be refreshed because refresh metadata is missing.");
-            return false;
+            _logger.LogWarning("Worker credentials cannot be refreshed because refresh metadata is missing. Re-pairing is required.");
+            return WorkerTokenRefreshOutcome.CredentialsRevoked;
         }
 
-        using var client = _httpClientFactory.CreateClient("CentralPlatformApi");
-        using var response = await client.PostAsJsonAsync(_platformOptions.Value.WorkerTokenRefreshEndpoint,
-            new RefreshWorkerTokenRequest
+        HttpResponseMessage response;
+        try
+        {
+            using var client = _httpClientFactory.CreateClient("CentralPlatformApi");
+            response = await client.PostAsJsonAsync(_platformOptions.Value.WorkerTokenRefreshEndpoint,
+                new RefreshWorkerTokenRequest
+                {
+                    ClientNodeId = clientNodeId.Value,
+                    RefreshToken = refreshToken
+                },
+                SerializerOptions,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogWarning(exception, "Worker refresh token request failed with a network error. Treating as transient.");
+            return WorkerTokenRefreshOutcome.TransientFailure;
+        }
+
+        using (response)
+        {
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
             {
-                ClientNodeId = clientNodeId.Value,
-                RefreshToken = refreshToken
-            },
-            SerializerOptions,
-            cancellationToken).ConfigureAwait(false);
+                _logger.LogWarning("Worker refresh token was rejected by the Central Platform. Clearing local worker credentials.");
+                await _tokenStore.ClearTokensAsync().ConfigureAwait(false);
+                return WorkerTokenRefreshOutcome.CredentialsRevoked;
+            }
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
-        {
-            _logger.LogWarning("Worker refresh token was rejected by the Central Platform. Clearing local worker credentials.");
-            await _tokenStore.ClearTokensAsync().ConfigureAwait(false);
-            return false;
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Worker refresh token request failed with status code {StatusCode}. Treating as transient.", response.StatusCode);
+                return WorkerTokenRefreshOutcome.TransientFailure;
+            }
+
+            var credentials = await response.Content.ReadFromJsonAsync<PairClientResponse>(SerializerOptions, cancellationToken).ConfigureAwait(false);
+            if (credentials is null)
+            {
+                _logger.LogWarning("Worker refresh token request returned an empty response. Treating as transient.");
+                return WorkerTokenRefreshOutcome.TransientFailure;
+            }
+
+            await _tokenStore.StoreTokensAsync(credentials).ConfigureAwait(false);
+            _logger.LogInformation("Worker credentials refreshed for client node {ClientNodeId}.", credentials.ClientNodeId);
+            return WorkerTokenRefreshOutcome.Success;
         }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Worker refresh token request failed with status code {StatusCode}.", response.StatusCode);
-            return false;
-        }
-
-        var credentials = await response.Content.ReadFromJsonAsync<PairClientResponse>(SerializerOptions, cancellationToken).ConfigureAwait(false);
-        if (credentials is null)
-        {
-            _logger.LogWarning("Worker refresh token request returned an empty response.");
-            return false;
-        }
-
-        await _tokenStore.StoreTokensAsync(credentials).ConfigureAwait(false);
-        _logger.LogInformation("Worker credentials refreshed for client node {ClientNodeId}.", credentials.ClientNodeId);
-        return true;
     }
 }

@@ -175,6 +175,29 @@ internal static class AssertEx
         throw new AssertionException(message ?? $"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
     }
 
+    public static async Task EventuallyAsync(Func<bool> condition, TimeSpan timeout, string? message = null)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        var pollInterval = TimeSpan.FromMilliseconds(25);
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(pollInterval).ConfigureAwait(false);
+        }
+
+        if (!condition())
+        {
+            throw new AssertionException(message ?? $"Condition was not satisfied within {timeout}.");
+        }
+    }
+
     private static string FormatValue(object? value)
     {
         return value switch

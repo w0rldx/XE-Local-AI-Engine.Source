@@ -166,8 +166,8 @@ public sealed class HostAgentHmacOptionsTests
     private static IConfiguration BuildConfiguration(params (string Key, string? Value)[] values)
     {
         return new ConfigurationBuilder()
-            .AddInMemoryCollection(values.ToDictionary(pair => pair.Key, pair => pair.Value))
-            .Build();
+               .AddInMemoryCollection(values.ToDictionary(pair => pair.Key, pair => pair.Value))
+               .Build();
     }
 
     private static string CreateTempDirectory()
@@ -181,7 +181,7 @@ public sealed class HostAgentHmacOptionsTests
     {
         if (Directory.Exists(directory))
         {
-            Directory.Delete(directory, recursive: true);
+            Directory.Delete(directory, true);
         }
     }
 
