@@ -28,6 +28,39 @@ public sealed class HostAgentHmacMetadataTests
         AssertEx.True(result.Succeeded);
     }
 
+    [Test]
+    public async Task Create_WhenSecretIsBlank_ThrowsArgumentException()
+    {
+        await AssertEx.ThrowsAsync<ArgumentException>(() => Task.Run(() =>
+            HostAgentHmacMetadata.Create(new Empty(),
+                MethodName,
+                "   ",
+                new FrozenTimeProvider(FrozenNow),
+                HostAgentHmacOptions.DefaultBucketSeconds)));
+    }
+
+    [Test]
+    public async Task Create_WhenBucketSecondsIsNonPositive_ThrowsArgumentOutOfRange()
+    {
+        await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() => Task.Run(() =>
+            HostAgentHmacMetadata.Create(new Empty(),
+                MethodName,
+                Secret,
+                new FrozenTimeProvider(FrozenNow),
+                0)));
+    }
+
+    [Test]
+    public async Task Create_WhenRequestIsNull_ThrowsArgumentNull()
+    {
+        await AssertEx.ThrowsAsync<ArgumentNullException>(() => Task.Run(() =>
+            HostAgentHmacMetadata.Create(null!,
+                MethodName,
+                Secret,
+                new FrozenTimeProvider(FrozenNow),
+                HostAgentHmacOptions.DefaultBucketSeconds)));
+    }
+
     private static HmacRequestValidator CreateValidator()
     {
         var options = new TestOptionsMonitor<HostAgentHmacOptions>(new HostAgentHmacOptions

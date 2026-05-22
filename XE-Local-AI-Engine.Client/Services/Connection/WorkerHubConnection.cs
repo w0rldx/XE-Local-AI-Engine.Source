@@ -25,10 +25,12 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     private readonly ILogger<WorkerHubConnection> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
+    private readonly TimeProvider _timeProvider;
     private readonly SemaphoreSlim _tokenRefreshLock = new(1, 1);
     private readonly ITokenStore _tokenStore;
     private readonly IWorkerTokenRefreshService _workerTokenRefreshService;
 
+    private bool _credentialsRevoked;
     private HubConnection? _hubConnection;
 
     public WorkerHubConnection(ITokenStore tokenStore,
@@ -39,7 +41,8 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         INodeKeyRegistry nodeKeyRegistry,
         ILogger<WorkerHubConnection> logger,
         Action<HttpConnectionOptions>? configureHttpConnectionOptions = null,
-        IWorkerTokenRefreshService? workerTokenRefreshService = null)
+        IWorkerTokenRefreshService? workerTokenRefreshService = null,
+        TimeProvider? timeProvider = null)
     {
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _platformOptions = platformOptions ?? throw new ArgumentNullException(nameof(platformOptions));
@@ -49,6 +52,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         _deadLetterFlushService = deadLetterFlushService ?? throw new ArgumentNullException(nameof(deadLetterFlushService));
         _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _configureHttpConnectionOptions = configureHttpConnectionOptions;
 
         _connectionState.StateChanged += OnConnectionStateChanged;
@@ -82,7 +86,23 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             throw new WorkerNotPairedException();
         }
 
-        if (!await EnsureFreshAccessTokenAsync(cancellationToken).ConfigureAwait(false))
+        // A fresh connect attempt (e.g. after re-pairing) clears any prior revocation latch so the new
+        // reconnect policy instance is not pre-poisoned.
+        Volatile.Write(ref _credentialsRevoked, false);
+
+        bool tokenIsFresh;
+        try
+        {
+            tokenIsFresh = await EnsureFreshAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (WorkerCredentialsRevokedException exception)
+        {
+            _logger.LogWarning(exception, "Worker credentials were revoked during initial connect. Re-pairing is required.");
+            _connectionState.TransitionTo(WorkerConnectionState.Error, exception.Message);
+            throw;
+        }
+
+        if (!tokenIsFresh)
         {
             throw new WorkerTokenExpiredException();
         }
@@ -174,7 +194,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             new HeartbeatPayload
             {
                 ClientNodeId = clientNodeId,
-                Timestamp = DateTimeOffset.UtcNow
+                Timestamp = _timeProvider.GetUtcNow()
             },
             cancellationToken);
     }
@@ -294,7 +314,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
                              httpOptions.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
                              _configureHttpConnectionOptions?.Invoke(httpOptions);
                          })
-                         .WithAutomaticReconnect(new WorkerReconnectPolicy(options))
+                         .WithAutomaticReconnect(new WorkerReconnectPolicy(options, OnReconnectPolicyDetectedRevokedCredentials))
                          .AddJsonProtocol(jsonOptions =>
                          {
                              jsonOptions.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -545,8 +565,13 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             }
 
             _logger.LogInformation("Worker access token is expired or close to expiry. Attempting refresh before hub authentication.");
-            var refreshed = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
-            if (!refreshed)
+            var outcome = await _workerTokenRefreshService.TryRefreshAsync(cancellationToken).ConfigureAwait(false);
+            if (outcome == WorkerTokenRefreshOutcome.CredentialsRevoked)
+            {
+                throw new WorkerCredentialsRevokedException();
+            }
+
+            if (outcome == WorkerTokenRefreshOutcome.TransientFailure)
             {
                 return false;
             }
@@ -568,7 +593,7 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
             return true;
         }
 
-        return _tokenStore.TokenExpiresAt is not { } expiresAt || expiresAt <= DateTimeOffset.UtcNow.Add(AccessTokenRefreshSkew);
+        return _tokenStore.TokenExpiresAt is not { } expiresAt || expiresAt <= _timeProvider.GetUtcNow().Add(AccessTokenRefreshSkew);
     }
 
     private static bool IsInactiveHubSendException(Exception exception)
@@ -610,8 +635,37 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
 
     private Task OnConnectionClosedAsync(Exception? exception)
     {
+        // SignalR discards the real RetryReason when reconnect retries are exhausted: the Closed event
+        // surfaces a synthetic "retries exhausted" OperationCanceledException, NOT the
+        // WorkerCredentialsRevokedException that actually stopped the loop. We therefore detect revocation
+        // two ways: (1) the latch set by the reconnect policy when it returned null for a revoked reason,
+        // and (2) the exception chain, which still carries the typed exception on the initial-connect path.
+        if (Volatile.Read(ref _credentialsRevoked) || ContainsCredentialsRevoked(exception))
+        {
+            _connectionState.TransitionTo(WorkerConnectionState.Error, "Worker credentials could not be refreshed. Re-pairing is required.");
+            return Task.CompletedTask;
+        }
+
         _connectionState.TransitionTo(WorkerConnectionState.Disconnected, exception?.Message);
         return Task.CompletedTask;
+    }
+
+    private void OnReconnectPolicyDetectedRevokedCredentials()
+    {
+        Volatile.Write(ref _credentialsRevoked, true);
+    }
+
+    private static bool ContainsCredentialsRevoked(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is WorkerCredentialsRevokedException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Task OnReconnectingAsync(Exception? exception)
@@ -624,7 +678,19 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
     {
         _logger.LogInformation("Worker hub connection reconnected with connection id {ConnectionId}.", connectionId);
 
-        if (!await EnsureFreshAccessTokenAsync().ConfigureAwait(false))
+        bool tokenIsFresh;
+        try
+        {
+            tokenIsFresh = await EnsureFreshAccessTokenAsync().ConfigureAwait(false);
+        }
+        catch (WorkerCredentialsRevokedException exception)
+        {
+            _logger.LogWarning(exception, "Worker credentials were revoked during reconnect. Re-pairing is required.");
+            _connectionState.TransitionTo(WorkerConnectionState.Error, "Worker credentials could not be refreshed. Re-pairing is required.");
+            return;
+        }
+
+        if (!tokenIsFresh)
         {
             _connectionState.TransitionTo(WorkerConnectionState.Error, "Worker credentials could not be refreshed. Re-pairing is required.");
             return;
@@ -663,10 +729,10 @@ public sealed class WorkerHubConnection : IWorkerHubConnection
         {
         }
 
-        public Task<bool> TryRefreshAsync(CancellationToken cancellationToken = default)
+        public Task<WorkerTokenRefreshOutcome> TryRefreshAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(false);
+            return Task.FromResult(WorkerTokenRefreshOutcome.TransientFailure);
         }
     }
 

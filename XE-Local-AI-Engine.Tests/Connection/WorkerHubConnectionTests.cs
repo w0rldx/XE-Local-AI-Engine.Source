@@ -34,7 +34,7 @@ public sealed class WorkerHubConnectionTests
     {
         var tokenStore = MockTokenStore.Paired("expiring-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(1));
         var refreshService = Substitute.For<IWorkerTokenRefreshService>();
-        refreshService.TryRefreshAsync(Arg.Any<CancellationToken>()).Returns(false);
+        refreshService.TryRefreshAsync(Arg.Any<CancellationToken>()).Returns(WorkerTokenRefreshOutcome.TransientFailure);
         await using var connection = CreateConnection(tokenStore, refreshService);
 
         await AssertEx.ThrowsAsync<WorkerTokenExpiredException>(() => connection.ConnectAsync());

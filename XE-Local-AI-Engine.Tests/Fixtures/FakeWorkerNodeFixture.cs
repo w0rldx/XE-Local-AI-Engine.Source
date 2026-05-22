@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Connections.Features;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -31,6 +32,8 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     public string HubPath { get; } = "/hub/worker";
 
     public X509Certificate2? ServerCert { get; private set; }
+
+    public int CapabilitiesReportCount => _hubState.CapabilitiesReportCount;
 
     public async ValueTask DisposeAsync()
     {
@@ -142,10 +145,32 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         return FixtureHubState.ReadAsync(_hubState.CapabilitiesReader, timeout);
     }
 
+    public Task<HeartbeatPayload> WaitForHeartbeatAsync(TimeSpan timeout)
+    {
+        return FixtureHubState.ReadAsync(_hubState.HeartbeatReader, timeout);
+    }
+
+    public Task<Guid> WaitForWorkerHelloAsync(TimeSpan timeout)
+    {
+        return FixtureHubState.ReadAsync(_hubState.WorkerHelloReader, timeout);
+    }
+
     [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "The plan requires this exact test fixture contract.")]
     public Task FireConnectionDropAsync()
     {
         _hubState.AbortAllConnections();
+        return Task.CompletedTask;
+    }
+
+    // HubCallerContext.Abort() sends a graceful SignalR close message with allowReconnect:false, so the
+    // client tears the connection down and intentionally does NOT auto-reconnect. To exercise the
+    // reconnect path we must drop the underlying transport abruptly (no close frame) so the client's
+    // receive loop observes a transport error and WithAutomaticReconnect engages. This aborts the
+    // connection at the transport layer via IConnectionLifetimeFeature, mimicking a real network loss.
+    [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Matches the existing FireConnectionDropAsync fixture contract.")]
+    public Task FireTransportLevelConnectionDropAsync()
+    {
+        _hubState.AbortAllTransports();
         return Task.CompletedTask;
     }
 
@@ -185,9 +210,26 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
             await base.OnDisconnectedAsync(exception);
         }
 
-        public Task WorkerHello(object payload)
+        public Task WorkerHello(JsonElement payload)
         {
-            ArgumentNullException.ThrowIfNull(payload);
+            var clientNodeId = payload.GetProperty("clientNodeId").GetGuid();
+            return _state.WorkerHelloWriter.WriteAsync(clientNodeId).AsTask();
+        }
+
+        public Task Heartbeat(JsonElement payload)
+        {
+            var clientNodeId = payload.GetProperty("clientNodeId").GetGuid();
+            var timestamp = payload.GetProperty("timestamp").GetDateTimeOffset();
+            return _state.HeartbeatWriter.WriteAsync(new HeartbeatPayload
+            {
+                ClientNodeId = clientNodeId,
+                Timestamp = timestamp
+            }).AsTask();
+        }
+
+        public Task WorkerKeyRegistered(JsonElement payload)
+        {
+            _ = payload;
             return Task.CompletedTask;
         }
 
@@ -224,6 +266,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         public Task WorkerCapabilitiesReported(ClientCapabilitiesPayload payload)
         {
             ArgumentNullException.ThrowIfNull(payload);
+            _state.IncrementCapabilitiesReportCount();
             return _state.CapabilitiesWriter.WriteAsync(payload).AsTask();
         }
 
@@ -240,9 +283,22 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         private readonly Channel<EncryptedChunkEnvelopeV1> _chunks = Channel.CreateUnbounded<EncryptedChunkEnvelopeV1>();
         private readonly Channel<EncryptedCompletedEnvelopeV1> _completed = Channel.CreateUnbounded<EncryptedCompletedEnvelopeV1>();
         private readonly ConcurrentDictionary<string, HubCallerContext> _connections = new(StringComparer.Ordinal);
+        private readonly Channel<HeartbeatPayload> _heartbeats = Channel.CreateUnbounded<HeartbeatPayload>();
         private readonly Channel<(string reason, string nodeKeyIdUsed)> _keyMismatches = Channel.CreateUnbounded<(string reason, string nodeKeyIdUsed)>();
+        private readonly Channel<Guid> _workerHellos = Channel.CreateUnbounded<Guid>();
+        private int _capabilitiesReportCount;
 
         public IHubContext<FakeWorkerHub> HubContext { get; set; } = null!;
+
+        public int CapabilitiesReportCount => Volatile.Read(ref _capabilitiesReportCount);
+
+        public ChannelWriter<HeartbeatPayload> HeartbeatWriter => _heartbeats.Writer;
+
+        public ChannelReader<HeartbeatPayload> HeartbeatReader => _heartbeats.Reader;
+
+        public ChannelWriter<Guid> WorkerHelloWriter => _workerHellos.Writer;
+
+        public ChannelReader<Guid> WorkerHelloReader => _workerHellos.Reader;
 
         public ChannelWriter<EncryptedChunkEnvelopeV1> ChunkWriter => _chunks.Writer;
 
@@ -259,6 +315,11 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         public ChannelWriter<(string reason, string nodeKeyIdUsed)> KeyMismatchWriter => _keyMismatches.Writer;
 
         public ChannelReader<(string reason, string nodeKeyIdUsed)> KeyMismatchReader => _keyMismatches.Reader;
+
+        public void IncrementCapabilitiesReportCount()
+        {
+            Interlocked.Increment(ref _capabilitiesReportCount);
+        }
 
         public void RegisterConnection(HubCallerContext context)
         {
@@ -277,6 +338,17 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
             foreach (var context in _connections.Values)
             {
                 context.Abort();
+            }
+        }
+
+        public void AbortAllTransports()
+        {
+            foreach (var context in _connections.Values)
+            {
+                var lifetime = context.Features.Get<IConnectionLifetimeFeature>()
+                               ?? throw new InvalidOperationException("IConnectionLifetimeFeature is unavailable; a transport-level drop cannot be simulated. "
+                                                                      + "Reconnect tests require WebSockets so this feature is present.");
+                lifetime.Abort();
             }
         }
 
