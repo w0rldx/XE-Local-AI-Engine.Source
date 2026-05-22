@@ -14,6 +14,34 @@
         "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22102"
       }
     },
+    "https-fast-dev": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17226;http://localhost:15205",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21039",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23273",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22102",
+        "XE_ENABLE_HOST_AGENT_DEV": "true"
+      }
+    },
+    "https-runtime-fidelity": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17226;http://localhost:15205",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21039",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23273",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22102",
+        "XE_ENABLE_HOST_AGENT_RUNTIME_FIDELITY": "true"
+      }
+    },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
