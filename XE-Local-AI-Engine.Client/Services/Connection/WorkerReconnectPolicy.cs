@@ -9,6 +9,7 @@ public sealed class WorkerReconnectPolicy : IRetryPolicy
     private readonly int _jitterMs;
     private readonly int _maxAttempts;
     private readonly int _maxDelayMs;
+    private readonly Action? _onCredentialsRevoked;
     private readonly Random _random;
 
     public WorkerReconnectPolicy(CentralPlatformOptions options)
@@ -16,7 +17,12 @@ public sealed class WorkerReconnectPolicy : IRetryPolicy
     {
     }
 
-    internal WorkerReconnectPolicy(CentralPlatformOptions options, Random random)
+    public WorkerReconnectPolicy(CentralPlatformOptions options, Action? onCredentialsRevoked)
+        : this(options, Random.Shared, onCredentialsRevoked)
+    {
+    }
+
+    internal WorkerReconnectPolicy(CentralPlatformOptions options, Random random, Action? onCredentialsRevoked = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         _random = random ?? throw new ArgumentNullException(nameof(random));
@@ -24,11 +30,23 @@ public sealed class WorkerReconnectPolicy : IRetryPolicy
         _maxDelayMs = options.ReconnectBackoffMaxMs;
         _jitterMs = options.ReconnectBackoffJitterMs;
         _maxAttempts = options.ReconnectMaxAttempts;
+        _onCredentialsRevoked = onCredentialsRevoked;
     }
 
     public TimeSpan? NextRetryDelay(RetryContext retryContext)
     {
         ArgumentNullException.ThrowIfNull(retryContext);
+
+        if (IsCredentialsRevoked(retryContext.RetryReason))
+        {
+            // Permanent credential revocation: stop reconnecting. SignalR discards the real RetryReason
+            // when it raises Closed (it substitutes a synthetic "retries exhausted" exception), so we
+            // notify the owner here. WorkerHubConnection latches this and maps the subsequent Closed event
+            // to the Error (re-pairing required) state.
+            _onCredentialsRevoked?.Invoke();
+            return null;
+        }
+
         return GetDelay((int)retryContext.PreviousRetryCount);
     }
 
@@ -47,5 +65,18 @@ public sealed class WorkerReconnectPolicy : IRetryPolicy
         var jitter = _jitterMs == 0 ? 0 : _random.Next(0, _jitterMs + 1);
 
         return TimeSpan.FromMilliseconds(Math.Min(boundedDelay + jitter, _maxDelayMs));
+    }
+
+    private static bool IsCredentialsRevoked(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is WorkerCredentialsRevokedException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
