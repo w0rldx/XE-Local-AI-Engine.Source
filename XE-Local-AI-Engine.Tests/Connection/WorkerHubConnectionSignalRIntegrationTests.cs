@@ -487,12 +487,350 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task SendHeartbeatAsync_WhenConnected_DeliversHeartbeatPayload()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var heartbeatTimestamp = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+        var timeProvider = new FixedTimeProvider(heartbeatTimestamp);
+
+        var clientNodeId = Guid.NewGuid();
+        // The token must stay fresh relative to BOTH the injected clock (token-refresh check) and the
+        // real wall clock (MockTokenStore.IsTokenExpired), so anchor expiry beyond both far into the future.
+        var tokenStore = MockTokenStore.Paired("test-access-token", clientNodeId, heartbeatTimestamp.AddMinutes(30));
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = CreateConnection(fixture, tokenStore, capabilityReporter, nodeKeyRegistry, timeProvider: timeProvider);
+
+        await connection.ConnectAsync();
+        await connection.SendHeartbeatAsync(clientNodeId);
+
+        var heartbeat = await fixture.WaitForHeartbeatAsync(TimeSpan.FromSeconds(5));
+        AssertEx.Equal(clientNodeId, heartbeat.ClientNodeId);
+        AssertEx.Equal(heartbeatTimestamp, heartbeat.Timestamp);
+    }
+
+    [Test]
+    public async Task SendAsync_WhenDisconnected_ThrowsInvalidOperation()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var clientNodeId = Guid.NewGuid();
+        var tokenStore = MockTokenStore.Paired("test-access-token", clientNodeId, DateTimeOffset.UtcNow.AddMinutes(30));
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = CreateConnection(fixture, tokenStore, capabilityReporter, nodeKeyRegistry);
+
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => connection.SendHeartbeatAsync(clientNodeId));
+        AssertEx.Contains(exception.Message, "Worker hub connection is not active.");
+    }
+
+    [Test]
+    public async Task OnReconnected_WhenConnectionDrops_ReSendsWorkerHelloAndReportsCapabilities()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var clientNodeId = Guid.NewGuid();
+        var tokenStore = MockTokenStore.Paired("test-access-token", clientNodeId, DateTimeOffset.UtcNow.AddHours(1));
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = CreateConnection(fixture,
+            tokenStore,
+            capabilityReporter,
+            nodeKeyRegistry,
+            configureHttpOptions: CreateFixtureWebSocketsOptionsConfigurator(fixture));
+
+        await connection.ConnectAsync();
+        AssertEx.Equal(WorkerConnectionState.Connected, connection.State);
+
+        // Drain the handshake side-effects produced by the initial connect so the post-reconnect
+        // assertions observe only the second handshake.
+        var firstHello = await fixture.WaitForWorkerHelloAsync(TimeSpan.FromSeconds(5));
+        AssertEx.Equal(clientNodeId, firstHello);
+        await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
+
+        // Wire a deterministic signal for the post-reconnect Connected transition. The connection
+        // re-enters Connected only after OnReconnectedAsync completes its full re-handshake. A
+        // transport-level drop (no graceful close frame) is required so WithAutomaticReconnect engages.
+        var reconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.StateChanged += (_, args) =>
+        {
+            if (args.PreviousState == WorkerConnectionState.Reconnecting
+                && args.CurrentState == WorkerConnectionState.Connected)
+            {
+                reconnected.TrySetResult();
+            }
+        };
+
+        await fixture.FireTransportLevelConnectionDropAsync();
+
+        await reconnected.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // OnReconnectedAsync re-sends WorkerHello over the hub and re-reports capabilities via the
+        // capability reporter. The hub observes the second WorkerHello; the reporter observes the
+        // second ReportToApiAsync call (once from the initial connect, once from the reconnect).
+        var secondHello = await fixture.WaitForWorkerHelloAsync(TimeSpan.FromSeconds(5));
+        AssertEx.Equal(clientNodeId, secondHello);
+
+        await capabilityReporter.Received(2).ReportToApiAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task OnReconnected_WhenCredentialsRevoked_StopsAndTransitionsToError()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var clientNodeId = Guid.NewGuid();
+
+        // The token sits inside the 5-minute refresh skew (expires in 1 minute, not yet expired) so the
+        // AccessTokenProvider attempts a refresh on EVERY hub authentication, including each reconnect.
+        var tokenStore = MockTokenStore.Paired("test-access-token", clientNodeId, DateTimeOffset.UtcNow.AddMinutes(1));
+
+        // Initial connect must succeed, so the refresh reports Success up front; once the worker is
+        // Connected the test flips the gate to CredentialsRevoked BEFORE dropping the transport. The flip
+        // happens-before the drop on the test thread, so the post-drop reconnect deterministically sees
+        // the revoked outcome (no timers, no SignalR call-count coupling).
+        var refreshService = new GatedWorkerTokenRefreshService(WorkerTokenRefreshOutcome.Success);
+
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = CreateConnection(fixture,
+            tokenStore,
+            capabilityReporter,
+            nodeKeyRegistry,
+            refreshService,
+            configureHttpOptions: CreateFixtureWebSocketsOptionsConfigurator(fixture));
+
+        var errorReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reconnectingObserved = false;
+        var reconnectAttemptsAfterError = 0;
+        var errorAlreadySignaled = false;
+        connection.StateChanged += (_, args) =>
+        {
+            if (args.CurrentState == WorkerConnectionState.Reconnecting)
+            {
+                reconnectingObserved = true;
+                if (errorAlreadySignaled)
+                {
+                    Interlocked.Increment(ref reconnectAttemptsAfterError);
+                }
+            }
+
+            if (args.CurrentState == WorkerConnectionState.Error)
+            {
+                errorAlreadySignaled = true;
+                errorReached.TrySetResult();
+            }
+        };
+
+        await connection.ConnectAsync();
+        AssertEx.Equal(WorkerConnectionState.Connected, connection.State);
+
+        // Now revoke: every subsequent refresh (including the reconnect's AccessTokenProvider call)
+        // yields CredentialsRevoked, which surfaces as WorkerCredentialsRevokedException.
+        refreshService.SetOutcome(WorkerTokenRefreshOutcome.CredentialsRevoked);
+
+        await fixture.FireTransportLevelConnectionDropAsync();
+
+        await errorReached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        AssertEx.Equal(WorkerConnectionState.Error, connection.State);
+        AssertEx.True(reconnectingObserved, "Expected the connection to attempt at least one reconnect before erroring.");
+
+        // After Error there must be no further reconnect cycle: the policy returned null, so SignalR
+        // stopped retrying. Give any stray reconnect a brief deterministic window to (not) appear.
+        await AssertEx.EventuallyAsync(() => connection.State == WorkerConnectionState.Error,
+            TimeSpan.FromMilliseconds(500),
+            "Connection did not settle in Error.");
+        AssertEx.Equal(0, Volatile.Read(ref reconnectAttemptsAfterError));
+    }
+
+    [Test]
+    public async Task Reconnect_WhenTransientRefreshFailure_KeepsReconnecting()
+    {
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var clientNodeId = Guid.NewGuid();
+        var tokenStore = MockTokenStore.Paired("test-access-token", clientNodeId, DateTimeOffset.UtcNow.AddMinutes(1));
+
+        // Success at connect, transient failure afterwards. A transient failure must NOT stop the
+        // reconnect loop: the provider returns "no valid token" (InvalidOperationException, not the
+        // revoked type), the policy keeps issuing delays, and the worker stays in Reconnecting.
+        var refreshService = new GatedWorkerTokenRefreshService(WorkerTokenRefreshOutcome.Success);
+
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = CreateConnection(fixture,
+            tokenStore,
+            capabilityReporter,
+            nodeKeyRegistry,
+            refreshService,
+            configureHttpOptions: CreateFixtureWebSocketsOptionsConfigurator(fixture));
+
+        var reconnecting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var errorObserved = false;
+        connection.StateChanged += (_, args) =>
+        {
+            if (args.CurrentState == WorkerConnectionState.Reconnecting)
+            {
+                reconnecting.TrySetResult();
+            }
+
+            if (args.CurrentState == WorkerConnectionState.Error)
+            {
+                errorObserved = true;
+            }
+        };
+
+        await connection.ConnectAsync();
+        AssertEx.Equal(WorkerConnectionState.Connected, connection.State);
+
+        refreshService.SetOutcome(WorkerTokenRefreshOutcome.TransientFailure);
+
+        await fixture.FireTransportLevelConnectionDropAsync();
+
+        await reconnecting.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The transient failure keeps the worker reconnecting; it must not transition to Error. Hold the
+        // observation window open briefly to assert the negative (no Error) deterministically.
+        await AssertEx.EventuallyAsync(() => connection.State == WorkerConnectionState.Reconnecting,
+            TimeSpan.FromSeconds(2),
+            "Expected the connection to remain in Reconnecting on a transient refresh failure.");
+        AssertEx.False(errorObserved, "A transient refresh failure must not transition the worker to Error.");
+        AssertEx.Equal(WorkerConnectionState.Reconnecting, connection.State);
+    }
+
+    [Test]
+    public async Task OnReconnected_WhenTokenRefreshFails_TransitionsToError()
+    {
+        // Now reachable: a revoked refresh during reconnect surfaces WorkerCredentialsRevokedException,
+        // the reconnect policy returns null, SignalR raises Closed with that exception, and
+        // OnConnectionClosedAsync maps it to the Error (re-pairing required) state.
+        await using var fixture = new FakeWorkerNodeFixture();
+        await fixture.StartAsync();
+
+        var clientNodeId = Guid.NewGuid();
+        var tokenStore = MockTokenStore.Paired("test-access-token", clientNodeId, DateTimeOffset.UtcNow.AddMinutes(1));
+        var refreshService = new GatedWorkerTokenRefreshService(WorkerTokenRefreshOutcome.Success);
+
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+
+        using var nodeKeyRegistry = new NodeKeyRegistry(TimeProvider.System);
+
+        await using var connection = CreateConnection(fixture,
+            tokenStore,
+            capabilityReporter,
+            nodeKeyRegistry,
+            refreshService,
+            configureHttpOptions: CreateFixtureWebSocketsOptionsConfigurator(fixture));
+
+        var errorReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connection.StateChanged += (_, args) =>
+        {
+            if (args.CurrentState == WorkerConnectionState.Error)
+            {
+                errorReached.TrySetResult();
+            }
+        };
+
+        await connection.ConnectAsync();
+        AssertEx.Equal(WorkerConnectionState.Connected, connection.State);
+
+        refreshService.SetOutcome(WorkerTokenRefreshOutcome.CredentialsRevoked);
+
+        await fixture.FireTransportLevelConnectionDropAsync();
+
+        await errorReached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        AssertEx.Equal(WorkerConnectionState.Error, connection.State);
+    }
+
+    private static WorkerHubConnection CreateConnection(FakeWorkerNodeFixture fixture,
+        ITokenStore tokenStore,
+        ICapabilityReporter capabilityReporter,
+        INodeKeyRegistry nodeKeyRegistry,
+        IWorkerTokenRefreshService? refreshService = null,
+        TimeProvider? timeProvider = null,
+        Action<HttpConnectionOptions>? configureHttpOptions = null)
+    {
+        var sender = new MockHubMessageSender();
+        var deadLetterStore = Substitute.For<IDeadLetterStore>();
+        deadLetterStore.GetPendingAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<InvocationFailedPayload>>([]));
+
+        var deadLetterFlushService = new DeadLetterFlushService(deadLetterStore,
+            new Lazy<IHubMessageSender>(() => sender),
+            NullLogger<DeadLetterFlushService>.Instance);
+
+        return new WorkerHubConnection(tokenStore,
+            Options.Create(new CentralPlatformOptions
+            {
+                BaseUrl = fixture.HubBaseUri.ToString(),
+                HubPath = fixture.HubPath
+            }),
+            new ConnectionState(),
+            new Lazy<ICapabilityReporter>(() => capabilityReporter),
+            deadLetterFlushService,
+            nodeKeyRegistry,
+            NullLogger<WorkerHubConnection>.Instance,
+            configureHttpOptions ?? CreateFixtureHttpOptionsConfigurator(fixture),
+            refreshService,
+            timeProvider);
+    }
+
     private static Action<HttpConnectionOptions> CreateFixtureHttpOptionsConfigurator(FakeWorkerNodeFixture fixture)
     {
         return httpOptions =>
         {
             httpOptions.Transports = HttpTransportType.LongPolling;
             httpOptions.HttpMessageHandlerFactory = innerHandler => ConfigureFixtureCertificateValidation(innerHandler, fixture);
+        };
+    }
+
+    // Reconnect tests MUST run over WebSockets: a server-side HubCallerContext.Abort() only surfaces
+    // to the client as a transport loss on WebSockets, not on LongPolling. Over LongPolling the client
+    // stays Connected and WithAutomaticReconnect never engages, so Reconnected/OnReconnectedAsync never run.
+    private static Action<HttpConnectionOptions> CreateFixtureWebSocketsOptionsConfigurator(FakeWorkerNodeFixture fixture)
+    {
+        return httpOptions =>
+        {
+            if (fixture.ServerCert is null)
+            {
+                throw new InvalidOperationException("The fake worker node fixture certificate is not available.");
+            }
+
+            var expectedThumbprint = fixture.ServerCert.Thumbprint;
+
+            httpOptions.Transports = HttpTransportType.WebSockets;
+
+            // The negotiate request still travels over HTTP, so the self-signed cert must be trusted there too.
+            httpOptions.HttpMessageHandlerFactory = innerHandler => ConfigureFixtureCertificateValidation(innerHandler, fixture);
+
+            httpOptions.WebSocketConfiguration = ws =>
+                ws.RemoteCertificateValidationCallback = (_, certificate, _, sslPolicyErrors) =>
+                    sslPolicyErrors is SslPolicyErrors.None
+                    || string.Equals(certificate?.GetCertHashString(), expectedThumbprint, StringComparison.OrdinalIgnoreCase);
         };
     }
 
@@ -600,5 +938,48 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
     private static void AssertReadOnlyMemoryEqual(ReadOnlyMemory<byte> expected, ReadOnlyMemory<byte> actual)
     {
         AssertEx.True(expected.Span.SequenceEqual(actual.Span));
+    }
+
+    private sealed class GatedWorkerTokenRefreshService : IWorkerTokenRefreshService
+    {
+        private readonly Lock _gate = new();
+        private WorkerTokenRefreshOutcome _outcome;
+
+        public GatedWorkerTokenRefreshService(WorkerTokenRefreshOutcome initialOutcome)
+        {
+            _outcome = initialOutcome;
+        }
+
+        public Task<WorkerTokenRefreshOutcome> TryRefreshAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_gate)
+            {
+                return Task.FromResult(_outcome);
+            }
+        }
+
+        public void SetOutcome(WorkerTokenRefreshOutcome outcome)
+        {
+            lock (_gate)
+            {
+                _outcome = outcome;
+            }
+        }
+    }
+
+    private sealed class FixedTimeProvider : TimeProvider
+    {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
     }
 }

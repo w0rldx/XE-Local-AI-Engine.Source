@@ -24,8 +24,7 @@ public sealed class HostAgentSocketPathTests
             var path = HostAgentSocketPaths.GetDefaultSocketPath();
 
             var byteCount = Encoding.UTF8.GetByteCount(path);
-            AssertEx.True(
-                byteCount < HostAgentSocketOptions.SunPathMaxBytes,
+            AssertEx.True(byteCount < HostAgentSocketOptions.SunPathMaxBytes,
                 $"Default socket path '{path}' is {byteCount} bytes; expected < {HostAgentSocketOptions.SunPathMaxBytes}.");
         }
         finally
@@ -44,14 +43,12 @@ public sealed class HostAgentSocketPathTests
 
             // 114-byte path mirrors the regression that crashed startup.
             var oversizedPath = "/run/user/1000/xe-host-agent/" + new string('a', 86);
-            AssertEx.True(
-                Encoding.UTF8.GetByteCount(oversizedPath) >= HostAgentSocketOptions.SunPathMaxBytes,
+            AssertEx.True(Encoding.UTF8.GetByteCount(oversizedPath) >= HostAgentSocketOptions.SunPathMaxBytes,
                 "Test fixture path must exceed the sun_path limit.");
 
             var configuration = BuildConfiguration(("HostAgent:SocketPath", oversizedPath));
 
-            var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(
-                () => Task.FromResult(HostAgentSocketOptions.FromConfiguration(configuration)));
+            var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.FromResult(HostAgentSocketOptions.FromConfiguration(configuration)));
 
             AssertEx.Contains(exception.Message, oversizedPath);
             AssertEx.Contains(exception.Message, HostAgentSocketOptions.SunPathMaxBytes.ToString());
@@ -107,8 +104,8 @@ public sealed class HostAgentSocketPathTests
     private static IConfiguration BuildConfiguration(params (string Key, string? Value)[] values)
     {
         return new ConfigurationBuilder()
-            .AddInMemoryCollection(values.ToDictionary(pair => pair.Key, pair => pair.Value))
-            .Build();
+               .AddInMemoryCollection(values.ToDictionary(pair => pair.Key, pair => pair.Value))
+               .Build();
     }
 
     private static (string? Xdg, string? Uid, string? Socket) CaptureEnvironment()

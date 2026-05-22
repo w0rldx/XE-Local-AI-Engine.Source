@@ -47,11 +47,14 @@ IResourceBuilder<ProjectResource>? hostAgentLinux = null;
 IResourceBuilder<ParameterResource>? hostAgentHmacSecret = null;
 if (enableHostAgentDev || enableHostAgentRuntimeFidelity)
 {
-    hostAgentHmacSecret = builder.AddParameter(
-        "host-agent-hmac-secret",
-        new GenerateParameterDefault { MinLength = 64, Special = false },
-        secret: true,
-        persist: true);
+    hostAgentHmacSecret = builder.AddParameter("host-agent-hmac-secret",
+        new GenerateParameterDefault
+        {
+            MinLength = 64,
+            Special = false
+        },
+        true,
+        true);
     hostAgentLinux = builder.AddProject<XE_Local_AI_Engine_HostAgent_Linux>("xe-host-agent-linux")
                             .WithEnvironment("ASPIRE_ENABLED", "true")
                             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
