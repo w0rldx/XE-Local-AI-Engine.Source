@@ -63,8 +63,9 @@ public sealed class HostAgentSystemdUnitTests
         AssertEx.Contains(options, "Path.Combine(xdgRuntimeDirectory, \"xe-host-agent\", \"hmac-secret\")");
         AssertEx.Contains(options, "IsManagedWslRuntime");
         AssertEx.Contains(bootstrap, "EnsureNativeSecret");
-        AssertEx.Contains(bootstrap, "RandomNumberGenerator.GetBytes(32)");
-        AssertEx.Contains(bootstrap, "UnixFileMode.UserRead | UnixFileMode.UserWrite");
+
+        // Behavioural coverage for the random secret generation and owner-only file mode now lives in
+        // HostAgentHmacSecretBootstrapTests; the brittle source-text assertions were removed.
     }
 
     [Test]
