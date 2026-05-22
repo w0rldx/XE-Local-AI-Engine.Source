@@ -247,21 +247,21 @@ public sealed class App : Application, IDisposable
     {
         await ConfirmAndSendLifecycleActionAsync("Stop Services",
             "Stop XE Local AI Engine services? Active work will be given the configured graceful shutdown window.",
-            "shutdown").ConfigureAwait(true);
+            endpointName: "shutdown").ConfigureAwait(true);
     }
 
     private async void StartServicesMenuItemOnClick(object? sender, EventArgs e)
     {
         await ConfirmAndSendLifecycleActionAsync("Start Services",
             "Start XE Local AI Engine services?",
-            "startup").ConfigureAwait(true);
+            endpointName: "startup").ConfigureAwait(true);
     }
 
     private async void RestartRuntimeMenuItemOnClick(object? sender, EventArgs e)
     {
         await ConfirmAndSendLifecycleActionAsync("Restart Runtime",
             "Restart the XE Local AI Engine runtime? Active work will be given the configured graceful shutdown window.",
-            "restart").ConfigureAwait(true);
+            endpointName: "restart").ConfigureAwait(true);
     }
 
     private async void ShowDiagnosticsMenuItemOnClick(object? sender, EventArgs e)

@@ -4,6 +4,17 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 var enableHostAgentDev = builder.Configuration.GetValue<bool>("XE_ENABLE_HOST_AGENT_DEV");
+var enableHostAgentRuntimeFidelity = builder.Configuration.GetValue<bool>("XE_ENABLE_HOST_AGENT_RUNTIME_FIDELITY");
+var hostAgentMode = "disabled";
+if (enableHostAgentDev)
+{
+    hostAgentMode = "fast-dev";
+}
+
+if (enableHostAgentRuntimeFidelity)
+{
+    hostAgentMode = "runtime-fidelity";
+}
 
 var ollama = builder.AddOllama("ollama")
                     .WithImageTag("latest")
@@ -16,7 +27,16 @@ var nodeSqliteKey = builder.AddParameter("node-sqlite-key", true);
 var nodeSqlitePath = Path.Combine(builder.AppHostDirectory, ".data", "node-sqlite");
 
 var nodeSqlite = builder.AddSqlite("node-sqlite", nodeSqlitePath, "node-chat.db");
-var hostAgentSocketPath = Path.Combine(builder.AppHostDirectory, ".data", "host-agent-dev", "host-agent.sock");
+var hostAgentDataDirectoryName = enableHostAgentRuntimeFidelity
+    ? "host-agent-runtime-fidelity"
+    : "host-agent-dev";
+// Unix domain socket paths are capped at 108 chars (sun_path). The AppHost project dir
+// is too deep (>108), so on Unix root the dev socket under the temp dir to stay under the limit.
+var hostAgentSocketPath = OperatingSystem.IsWindows()
+    ? Path.Combine(builder.AppHostDirectory, ".data", hostAgentDataDirectoryName, "host-agent.sock")
+    : Path.Combine(Path.GetTempPath(), "xe-ha", hostAgentDataDirectoryName, "host-agent.sock");
+var hostAgentDockerEndpoint = builder.Configuration["XE_HOST_AGENT_DOCKER_ENDPOINT"]
+                              ?? builder.Configuration["HostAgent:Docker:Endpoint"];
 
 if (builder.Environment.IsDevelopment())
 {
@@ -25,18 +45,28 @@ if (builder.Environment.IsDevelopment())
 
 IResourceBuilder<ProjectResource>? hostAgentLinux = null;
 IResourceBuilder<ParameterResource>? hostAgentHmacSecret = null;
-if (enableHostAgentDev)
+if (enableHostAgentDev || enableHostAgentRuntimeFidelity)
 {
-    hostAgentHmacSecret = builder.AddParameter("host-agent-hmac-secret", true);
+    hostAgentHmacSecret = builder.AddParameter(
+        "host-agent-hmac-secret",
+        new GenerateParameterDefault { MinLength = 64, Special = false },
+        secret: true,
+        persist: true);
     hostAgentLinux = builder.AddProject<XE_Local_AI_Engine_HostAgent_Linux>("xe-host-agent-linux")
                             .WithEnvironment("ASPIRE_ENABLED", "true")
                             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+                            .WithEnvironment("XE_HOST_AGENT_ASPIRE_MODE", hostAgentMode)
                             .WithEnvironment("XE_HOST_AGENT_SOCKET", hostAgentSocketPath)
                             .WithEnvironment("XE_HOST_AGENT_TCP_DISABLED", "true")
                             .WithEnvironment("HostAgent__Hmac__Secret", hostAgentHmacSecret)
-                            .WithEnvironment("HostAgent__Docker__UseFakeDriver", "true")
+                            .WithEnvironment("HostAgent__Docker__UseFakeDriver", enableHostAgentRuntimeFidelity ? "false" : "true")
                             .WithReference(chatModel)
                             .WaitFor(chatModel);
+
+    if (enableHostAgentRuntimeFidelity && !string.IsNullOrWhiteSpace(hostAgentDockerEndpoint))
+    {
+        hostAgentLinux.WithEnvironment("HostAgent__Docker__Endpoint", hostAgentDockerEndpoint);
+    }
 }
 
 var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
@@ -45,6 +75,7 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithUrlForEndpoint("http", url => url.DisplayText = "XE Local AI Engine (http)")
                  .WithEnvironment("ASPIRE_ENABLED", "true")
                  .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+                 .WithEnvironment("XE_HOST_AGENT_ASPIRE_MODE", hostAgentMode)
                  .WithEnvironment("XE_NODE_SQLITE_KEY", nodeSqliteKey)
                  .WithReference(chatModel)
                  .WithReference(embeddingsModel)
@@ -57,8 +88,12 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
 
 if (hostAgentLinux is not null && hostAgentHmacSecret is not null)
 {
-    app.WithEnvironment("HostAgent__Client__SocketPath", hostAgentSocketPath)
+    app.WithEnvironment("XE_HOST_AGENT_SOCKET", hostAgentSocketPath)
+       .WithEnvironment("HostAgent__Client__SocketPath", hostAgentSocketPath)
        .WithEnvironment("HostAgent__Client__Secret", hostAgentHmacSecret)
+       .WithEnvironment("HostAgent__StartupGate__Enabled", "true")
+       .WithEnvironment("HostAgent__StartupGate__SocketPath", hostAgentSocketPath)
+       .WithEnvironment("HostAgent__StartupGate__Secret", hostAgentHmacSecret)
        .WaitFor(hostAgentLinux);
 }
 

@@ -28,16 +28,16 @@ internal static class WindowsDetachedProcessLauncher
                             | NativeMethods.ProcessCreationOptions.CreateBreakawayFromJob
                             | NativeMethods.ProcessCreationOptions.ExtendedStartupInfoPresent;
 
-        if (!NativeMethods.CreateProcessW(executablePath,
-                null,
-                IntPtr.Zero,
-                IntPtr.Zero,
-                false,
-                creationFlags,
-                IntPtr.Zero,
-                workingDirectory,
-                startupInfo,
-                out var processInformation))
+        if (!NativeMethods.CreateProcessW(applicationName: executablePath,
+                commandLine: null,
+                processAttributes: IntPtr.Zero,
+                threadAttributes: IntPtr.Zero,
+                inheritHandles: false,
+                creationFlags: creationFlags,
+                environment: IntPtr.Zero,
+                currentDirectory: workingDirectory,
+                startupInfo: startupInfo,
+                processInformation: out var processInformation))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error());
         }

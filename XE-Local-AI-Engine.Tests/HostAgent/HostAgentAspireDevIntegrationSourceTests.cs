@@ -24,6 +24,35 @@ public sealed class HostAgentAspireDevIntegrationSourceTests
     }
 
     [Test]
+    public async Task AppHost_WhenRuntimeFidelityEnabled_WiresProductionLikeHostAgentContract()
+    {
+        var appHost = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.AppHost", "AppHost.cs"));
+
+        AssertEx.Contains(appHost, "XE_ENABLE_HOST_AGENT_RUNTIME_FIDELITY");
+        AssertEx.Contains(appHost, "runtime-fidelity");
+        AssertEx.Contains(appHost, "host-agent-runtime-fidelity");
+        AssertEx.Contains(appHost, "HostAgent__Docker__UseFakeDriver");
+        AssertEx.Contains(appHost, "enableHostAgentRuntimeFidelity ? \"false\" : \"true\"");
+        AssertEx.Contains(appHost, "XE_HOST_AGENT_DOCKER_ENDPOINT");
+        AssertEx.Contains(appHost, "HostAgent__Docker__Endpoint");
+        AssertEx.Contains(appHost, "XE_HOST_AGENT_SOCKET");
+        AssertEx.Contains(appHost, "HostAgent__StartupGate__Enabled");
+        AssertEx.Contains(appHost, "HostAgent__StartupGate__SocketPath");
+        AssertEx.Contains(appHost, "HostAgent__StartupGate__Secret");
+    }
+
+    [Test]
+    public async Task AppHostLaunchSettings_WhenHostAgentModesAreAvailable_ExposeDedicatedProfiles()
+    {
+        var launchSettings = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.AppHost", "Properties", "launchSettings.json"));
+
+        AssertEx.Contains(launchSettings, "https-fast-dev");
+        AssertEx.Contains(launchSettings, "XE_ENABLE_HOST_AGENT_DEV");
+        AssertEx.Contains(launchSettings, "https-runtime-fidelity");
+        AssertEx.Contains(launchSettings, "XE_ENABLE_HOST_AGENT_RUNTIME_FIDELITY");
+    }
+
+    [Test]
     public async Task HostAgentLinux_WhenG1Implemented_CanUseFakeDockerDriverAndAspireConnectionStringEndpoint()
     {
         var program = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.HostAgent.Linux", "Program.cs"));

@@ -27,7 +27,7 @@ public sealed class WindowsHostAgentAcl
 
         var identity = _identityProvider.GetCurrent();
         var directorySecurity = new DirectorySecurity();
-        directorySecurity.SetAccessRuleProtection(true, false);
+        directorySecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
 
         AddDirectoryRule(directorySecurity, identity.UserSid, FileSystemRights.FullControl);
         AddDirectoryRule(directorySecurity, identity.AdministratorsSid, FileSystemRights.FullControl);
@@ -48,7 +48,7 @@ public sealed class WindowsHostAgentAcl
 
         var identity = _identityProvider.GetCurrent();
         var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(true, false);
+        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
 
         AddFileRule(fileSecurity, identity.UserSid, FileSystemRights.FullControl);
         AddFileRule(fileSecurity, identity.AdministratorsSid, FileSystemRights.FullControl);
