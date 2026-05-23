@@ -1,0 +1,248 @@
+.navbar {
+	/* dark-7 is slightly darker than the main content dark-6, giving the sidebar its own surface */
+	background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+	height: 100dvh;
+	padding: 0 var(--mantine-spacing-xs) 0 var(--mantine-spacing-xs);
+	display: flex;
+	flex-direction: column;
+
+	/* dark-3 gives a more visible edge in dark mode than dark-4 */
+	border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-3));
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 100;
+	box-sizing: border-box;
+	overflow-x: hidden;
+}
+
+.header {
+	height: 56px;
+	display: flex;
+	align-items: center;
+	gap: var(--mantine-spacing-xs);
+	flex-shrink: 0;
+	border-bottom: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-4));
+}
+
+.logo-mark-wrapper {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+
+	/* Match icon-slot width so the logo center aligns with all nav icons and avatar */
+	width: calc(56px - 2 * var(--mantine-spacing-xs));
+	height: 32px;
+}
+
+.logo-text-motion {
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.links {
+	min-height: 0;
+}
+
+.links-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-top: var(--mantine-spacing-sm);
+	padding-bottom: var(--mantine-spacing-sm);
+
+	/* Prevents animated gap/label from triggering a horizontal scrollbar inside ScrollArea */
+	overflow-x: hidden;
+}
+
+.control {
+	font-weight: 500;
+	display: block;
+	width: 100%;
+
+	/* No horizontal padding — centering is handled by justify-content on control-content */
+	padding: var(--mantine-spacing-xs) 0;
+
+	/* Use dark-1 in dark mode for stronger icon/text presence */
+	color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+	font-size: var(--mantine-font-size-sm);
+	border-radius: var(--mantine-radius-sm);
+	transition:
+		background-color 200ms ease-out,
+		color 200ms ease-out;
+
+	@mixin hover {
+		background-color: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 8%));
+		color: light-dark(var(--mantine-color-black), var(--mantine-color-white));
+	}
+}
+
+.control-content {
+	display: flex;
+	align-items: center;
+
+	/* Left-aligned; the icon-slot container keeps the icon at a fixed horizontal
+	   position in both states so there is no jump when collapsing/expanding */
+
+	/* gap is animated by framer-motion; no static value here */
+	min-width: 0;
+}
+
+/* Fixed-width icon slot — same width as the collapsed sidebar's inner content area.
+   Centers the icon within the slot in all states and aligns it with the logo mark. */
+
+.icon-slot {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: calc(56px - 2 * var(--mantine-spacing-xs));
+}
+
+.control-label-motion {
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.link {
+	font-weight: 500;
+	display: block;
+	text-decoration: none;
+	padding: var(--mantine-spacing-xs) var(--mantine-spacing-xs);
+	margin-left: var(--mantine-spacing-xl);
+	font-size: var(--mantine-font-size-sm);
+	color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
+	border-left: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+	width: calc(100% - var(--mantine-spacing-xl));
+	text-align: left;
+	transition:
+		background-color 200ms ease-out,
+		color 200ms ease-out;
+
+	@mixin hover {
+		background-color: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 6%));
+		color: light-dark(var(--mantine-color-black), var(--mantine-color-dark-0));
+	}
+}
+
+.collapsed-menu-target {
+	display: block;
+	width: 100%;
+}
+
+.footer {
+	display: flex;
+	flex-direction: column;
+	gap: var(--mantine-spacing-xs);
+	margin-top: auto;
+	padding-top: var(--mantine-spacing-xs);
+	padding-bottom: var(--mantine-spacing-sm);
+	flex-shrink: 0;
+	border-top: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-4));
+}
+
+.footer-user-group {
+	width: 100%;
+	border-radius: var(--mantine-radius-md);
+	transition: background-color 200ms ease-out;
+}
+
+.user {
+	display: block;
+	width: 100%;
+
+	/* No horizontal padding — matches .control; avatar centred via .user-row justify-content */
+	padding: var(--mantine-spacing-xs) 0;
+	color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+	border-radius: var(--mantine-radius-sm);
+	transition:
+		background-color 200ms ease-out,
+		color 200ms ease-out;
+
+	@mixin hover {
+		background-color: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 8%));
+		color: light-dark(var(--mantine-color-black), var(--mantine-color-white));
+	}
+}
+
+.user-row {
+	display: flex;
+	align-items: center;
+
+	/* Left-aligned; avatar is inside icon-slot which keeps it on the same axis as nav icons */
+
+	/* gap is animated by framer-motion; no static value here */
+	min-width: 0;
+}
+
+.user-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.user-info-motion {
+	overflow: hidden;
+}
+
+.user-name,
+.user-email {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	display: block;
+}
+
+.toggle-row {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.toggle-button {
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--mantine-radius-sm);
+	color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+	flex-shrink: 0;
+	transition:
+		background-color 200ms ease-out,
+		color 200ms ease-out;
+
+	@mixin hover {
+		background-color: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 8%));
+		color: light-dark(var(--mantine-color-black), var(--mantine-color-white));
+	}
+}
+
+/* ── Collapsed-state overrides ──────────────────────────────────────────── */
+
+.navbar[data-collapsed="true"] .toggle-row {
+	justify-content: center;
+}
+
+.navbar[data-collapsed="true"] .footer-user-group {
+	background-color: transparent;
+}
+
+/* ── Expanded-state overrides ──────────────────────────────────────────── */
+
+.navbar[data-collapsed="false"] .footer-user-group {
+	background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+.navbar[data-collapsed="false"] .user {
+	border-radius: var(--mantine-radius-md);
+}
+
+/* ── Nested sub-links container ─────────────────────────────────────────── */
+
+/* height/opacity are animated by framer-motion; overflow:hidden is required  */
+
+.nested-links {
+	overflow: hidden;
+}

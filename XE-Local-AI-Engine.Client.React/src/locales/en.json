@@ -1,0 +1,1001 @@
+{
+	"basicFormatOption": "en-US",
+	"common": {
+		"loading": "Loading...",
+		"refreshing": "Refreshing...",
+		"filterReset": "Reset Filters",
+		"close": "Close",
+		"confirm": "Confirm",
+		"cancel": "Cancel",
+		"ok": "Ok",
+		"edit": "Edit",
+		"view": "View",
+		"delete": "Delete",
+		"density": "Density",
+		"densityCompact": "Compact",
+		"densityComfortable": "Comfortable",
+		"densitySpacious": "Spacious",
+		"create": "Create",
+		"search": "Search",
+		"filters": "Filters",
+		"save": "Save",
+		"noData": "No records found",
+		"entries": "entries",
+		"error": "Error",
+		"fetchError": "There was a problem loading table data.",
+		"providers": {
+			"cloudflareAccess": "Cloudflare Access"
+		}
+	},
+	"theme": {
+		"title": "Theme",
+		"light": "Light",
+		"dark": "Dark",
+		"switchToLight": "Switch to light mode",
+		"switchToDark": "Switch to dark mode"
+	},
+	"navigation": {
+		"home": "Home",
+		"chat": "Chat",
+		"schedule": "Schedule",
+		"user": "User",
+		"adminPanel": "Admin Panel",
+		"adminPanelUsers": "Users",
+		"adminPanelRoles": "Roles",
+		"adminPanelPermissions": "Permissions",
+		"adminPanelPairingTokens": "Pairing Tokens",
+		"adminPanelAgentDefinitions": "Agent Definitions",
+		"adminPanelToolDefinitions": "Tool Definitions",
+		"adminPanelClientNodes": "Client Nodes",
+		"adminPanelAiModels": "AI Models",
+		"adminPanelFeedback": "Feedback",
+		"adminPanelAppKeys": "App Keys"
+	},
+	"chat": {
+		"thoughts": "Thoughts",
+		"words": "words",
+		"thinking": "thinking…",
+		"reasoningMode": "Reasoning Mode",
+		"toolCall": {
+			"sending": "Sending",
+			"inFlight": "In flight",
+			"done": "Done",
+			"failed": "Failed",
+			"thinkingLive": "Thinking…",
+			"thoughtFor": "Thought for {{s}}s"
+		}
+	},
+	"pages": {
+		"chat": {
+			"windowTitle": "Chat window",
+			"lockedState": "This conversation is locked. Unlock it to view messages.",
+			"inputPlaceholder": "Type your message",
+			"send": "Send",
+			"modelLabel": "Model",
+			"modelPlaceholder": "Select model",
+			"modelLoaded": "Currently loaded",
+			"modelAvailable": "Available",
+			"modelUnloadingIn": "Unloading in {{time}}",
+			"modelExpired": "Not loaded",
+			"modelSelector": {
+				"availableModels": "Available models",
+				"hint": "Choose a model installed on the selected node."
+			},
+			"reasoningEffortLabel": "Reasoning effort",
+			"reasoningEffortUnavailable": "Reasoning is unavailable for the selected model",
+			"localToolsLabel": "Local tools",
+			"localToolsEnabled": "Local tools enabled",
+			"localToolsDisabled": "Local tools disabled",
+			"localToolsUnavailable": "Local tools are unavailable for the selected model",
+			"cloudToolsLabel": "Cloud tools",
+			"cloudToolsEnabled": "Cloud tools enabled",
+			"cloudToolsDisabled": "Cloud tools disabled",
+			"cloudToolsUnavailable": "Cloud tools are unavailable for the selected model",
+			"cloudToolsPrivacyHint": "Cloud tools may send data to the provider",
+			"reasoningEffortOptions": {
+				"none": "None",
+				"low": "Low",
+				"medium": "Medium",
+				"high": "High"
+			},
+			"newConversation": "New plain chat",
+			"newEncryptedConversation": "New encrypted chat",
+			"storageMode": {
+				"plain": "Plain",
+				"encrypted": "Encrypted",
+				"plainTooltip": "Stored as readable chat history for your account.",
+				"encryptedTooltip": "Stored encrypted. Unlock with your encrypted-sync password."
+			},
+			"encryptedConversation": {
+				"lockedTitle": "Encrypted chat locked",
+				"lockedDescription": "Enter your encrypted-sync password to unlock encrypted chats."
+			},
+			"activeNode": {
+				"label": "Active node",
+				"sessionHint": "Active for this browser tab/session. Release to switch.",
+				"rememberDefault": "Remember as default",
+				"release": "Release active node"
+			},
+			"noOnlineClientNodes": "No online client nodes are available. Pair and connect a worker node before creating conversations.",
+			"waitingForStreamedResponse": "Waiting for streamed response",
+			"waitingForResponse": "Waiting for response",
+			"streamErrors": {
+				"epochKeyMissing": "Encryption keys are still syncing — please retry.",
+				"eventHandlerError": "A local chat update failed. Please retry or refresh the conversation."
+			},
+			"thoughts": "Thoughts",
+			"words": "words",
+			"thinking": "thinking…",
+			"reasoningMode": "Reasoning Mode",
+			"emptyState": "Create or select a conversation to start chatting.",
+			"noMessages": "No messages yet.",
+			"pendingApprovalLabel": "Pending approval",
+			"activityTimeline": "Activity timeline",
+			"activityDetails": {
+				"arguments": "Arguments",
+				"result": "Result"
+			},
+			"activityTimelineTypes": {
+				"ToolCall": "Tool call",
+				"ToolResult": "Tool result",
+				"ContextRetrieval": "Context retrieval",
+				"WorkflowStepStarted": "Workflow step started",
+				"WorkflowStepCompleted": "Workflow step completed",
+				"WorkflowStepFailed": "Workflow step failed",
+				"AgentHandoff": "Agent handoff",
+				"ContentGeneration": "Content generation",
+				"Error": "Error",
+				"Unknown": "Type {{type}}"
+			},
+			"roles": {
+				"system": "System",
+				"user": "User",
+				"assistant": "Assistant",
+				"tool": "Tool",
+				"unknown": "Role {{role}}"
+			},
+			"clientSelector": {
+				"label": "Client node",
+				"placeholder": "Select an online client",
+				"activeSessionHint": "Selecting a node makes it active for this browser session. Release to switch.",
+				"activeOnceChosen": "Active for this tab"
+			},
+			"conversationList": {
+				"title": "Conversations",
+				"show": "Expand sidebar",
+				"hide": "Minimize sidebar",
+				"expandAria": "Expand sidebar",
+				"collapseAria": "Minimize sidebar",
+				"untitled": "Untitled conversation",
+				"archived": "Archived",
+				"noClientAssigned": "No client assigned",
+				"empty": "No conversations yet.",
+				"delete": "Delete",
+				"deleteConfirm": "Delete this conversation? This cannot be undone.",
+				"deleteSuccess": "Conversation deleted.",
+				"deleteShiftHint": "Shift+Click to skip confirm"
+			},
+			"disconnect": {
+				"button": "Disconnect",
+				"title": "Disconnect client node",
+				"descriptionWithName": "Disconnect \"{{name}}\"? Any in-flight work may stop.",
+				"descriptionWithoutName": "Disconnect the selected client node? Any in-flight work may stop.",
+				"confirm": "Disconnect"
+			},
+			"release": {
+				"button": "Release",
+				"title": "Release node",
+				"descriptionWithName": "Release \"{{name}}\" from your active session? The node will stay online and become available for selection again.",
+				"descriptionWithoutName": "Release this node from your active session? The node will stay online.",
+				"confirm": "Release"
+			},
+			"nodeInfo": {
+				"button": "View node information",
+				"title": "Node information",
+				"empty": "No online nodes available.",
+				"emptyTitle": "No nodes available",
+				"emptyDescription": "Online client nodes will appear here. Make sure a node is connected and online.",
+				"searchPlaceholder": "Search nodes…",
+				"nodeList": "Nodes",
+				"noMatch": "No matching nodes",
+				"selectPrompt": "Select a node to view details",
+				"statusOnline": "Online",
+				"statusBusy": "Busy",
+				"statusError": "Error",
+				"statusOffline": "Offline",
+				"tabOverview": "Overview",
+				"tabHardware": "Hardware",
+				"tabModels": "Models",
+				"selectNode": "Select this node",
+				"currentNode": "Current node",
+				"copyInfo": "Copy info",
+				"copied": "Copied"
+			},
+			"followUpTitle": "Suggested follow-ups",
+			"toolApproval": {
+				"title": "Tool approval required",
+				"description": "A worker is requesting approval before continuing.",
+				"reject": "Reject",
+				"approve": "Approve"
+			},
+			"sync": {
+				"enableStandard": "Enable sync",
+				"enableEncrypted": "Enable encrypted sync",
+				"standardEnabledSuccess": "Standard sync enabled for this conversation.",
+				"encryptedEnabledSuccess": "Encrypted sync enabled for this conversation.",
+				"confirm": {
+					"keepLocalOnly": "Keep local only",
+					"continue": "Continue",
+					"enableSync": "Enable sync",
+					"enableStandardTitle": "Enable standard sync?",
+					"enableEncryptedTitle": "Enable encrypted sync?",
+					"standardDescription": "This will allow this TrustedLocal conversation to sync to the platform. Continue only if you want this conversation uploaded from this device.",
+					"encryptedDescription": "This will convert this TrustedLocal conversation to encrypted sync. You must confirm this change before any encrypted upload can happen."
+				}
+			},
+			"encryptedSync": {
+				"unlock": {
+					"title": "Unlock encrypted sync",
+					"description": "Enter your dedicated sync password to unlock your encrypted conversations on this device.",
+					"passwordDescription": "This is separate from your account password.",
+					"passwordLabel": "Sync password",
+					"passwordPlaceholder": "Enter your encrypted sync password",
+					"recoveryAction": "Forgot password? Use recovery key",
+					"submit": "Unlock",
+					"errors": {
+						"notConfigured": "Encrypted sync is not configured for this account yet.",
+						"incorrectPassword": "Incorrect sync password"
+					},
+					"unlockingTitle": "Unlocking encrypted chat",
+					"unlockingSubtitle": "Verifying your encrypted chat password.",
+					"preparingTitle": "Preparing encrypted chat",
+					"preparingSubtitle": "Loading encrypted history.",
+					"errorTitle": "Encrypted chat unavailable",
+					"errorSubtitle": "Could not finish preparing encrypted chat."
+				},
+				"setup": {
+					"title": "Set up encrypted sync",
+					"description": "This is a separate password from your account password. The platform cannot read your encrypted chats.",
+					"ssoPasswordDescription": "This is a separate password from your account login.",
+					"passwordDescription": "Use a dedicated sync password with at least {{count}} characters.",
+					"passwordLabel": "Sync password",
+					"passwordPlaceholder": "Create your encrypted sync password",
+					"passwordStrength": "Password strength",
+					"strength": {
+						"empty": "Add a dedicated sync password",
+						"weak": "Weak",
+						"reasonable": "Reasonable",
+						"strong": "Strong"
+					},
+					"recoveryKeyTitle": "Recovery key",
+					"recoveryKeyHint": "Save this key now. It cannot be shown again.",
+					"copy": "Copy",
+					"copySuccess": "Recovery key copied to clipboard.",
+					"acknowledgement": "I have written down or saved my recovery key securely. I understand it cannot be shown again.",
+					"submit": "Generate recovery key",
+					"complete": "I have saved the recovery key",
+					"ready": "Encrypted sync is ready.",
+					"errors": {
+						"shortPassword": "Your sync password must be at least {{count}} characters long.",
+						"setupFailed": "Encrypted sync setup failed. Please try again."
+					}
+				},
+				"recovery": {
+					"title": "Recover encrypted sync",
+					"description": "Use your one-time recovery key to set a new sync password without re-encrypting your stored chats.",
+					"recoveryKeyDescription": "Spaces and dashes are ignored automatically.",
+					"recoveryKeyLabel": "Recovery key",
+					"recoveryKeyPlaceholder": "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z1234-56789",
+					"newPasswordDescription": "Use a new dedicated sync password with at least {{count}} characters.",
+					"newPasswordLabel": "New sync password",
+					"newPasswordPlaceholder": "Create a new encrypted sync password",
+					"confirmPasswordLabel": "Confirm new sync password",
+					"confirmPasswordPlaceholder": "Confirm your new encrypted sync password",
+					"submit": "Reset sync password",
+					"resetSuccess": "Your sync password has been reset.",
+					"newRecoveryKeyTitle": "Your new recovery key",
+					"newRecoveryKeyHint": "Save this key now. It cannot be shown again.",
+					"acknowledgement": "I have written down or saved my new recovery key securely.",
+					"complete": "I have saved the recovery key",
+					"validation": {
+						"tooShort": "Recovery key is too short.",
+						"invalidCharacters": "Recovery key contains invalid characters.",
+						"missingCheckCharacter": "Recovery key is missing a check character.",
+						"invalidCheckDigit": "Recovery key check digit is invalid.",
+						"invalidLength": "Recovery key has an invalid length.",
+						"invalid": "Recovery key is invalid."
+					},
+					"errors": {
+						"shortPassword": "Your new sync password must be at least {{count}} characters long.",
+						"passwordMismatch": "Your new passwords do not match.",
+						"notConfigured": "Encrypted sync is not configured for this account yet.",
+						"recoveryKeyIncorrect": "Recovery key is incorrect.",
+						"recoveryFailed": "Recovery failed. Please check your recovery key and try again."
+					}
+				},
+				"reset": {
+					"trigger": "Lost password and recovery code? Delete encrypted data",
+					"title": "Delete encrypted data?",
+					"description": "This permanently deletes your encrypted chat data and ALL conversations on every device. There is no way to recover them. You will need to set up encrypted chat again.",
+					"confirm": "Delete everything",
+					"success": "Encrypted data deleted. Set up encrypted chat again to continue.",
+					"errors": {
+						"apiFailed": "Could not delete encrypted data on the server.",
+						"wrongPassword": "Incorrect account password."
+					},
+					"passwordLabel": "Account password",
+					"passwordDescription": "Enter your account password to authorise this deletion.",
+					"passwordPlaceholder": "Your account password"
+				},
+				"changePassword": {
+					"title": "Change sync password",
+					"description": "Change your encrypted sync password. Your stored chats will remain accessible.",
+					"button": "Change sync password",
+					"newPasswordDescription": "Use a dedicated sync password with at least {{count}} characters.",
+					"newPasswordLabel": "New sync password",
+					"newPasswordPlaceholder": "Enter your new sync password",
+					"passwordStrength": "Password strength",
+					"strength": {
+						"empty": "Add a new sync password",
+						"weak": "Weak",
+						"reasonable": "Reasonable",
+						"strong": "Strong"
+					},
+					"confirmPasswordDescription": "Re-enter your new sync password to confirm.",
+					"confirmPasswordLabel": "Confirm new sync password",
+					"confirmPasswordPlaceholder": "Confirm your new sync password",
+					"submit": "Change password",
+					"success": "Sync password changed successfully.",
+					"errors": {
+						"shortPassword": "Your sync password must be at least {{count}} characters long.",
+						"passwordMismatch": "Your new passwords do not match.",
+						"notConfigured": "Encrypted sync is not configured for this account yet.",
+						"changeFailed": "Password change failed. Please try again."
+					}
+				}
+			},
+			"actions": {
+				"branch": "Branch conversation",
+				"branchSuccess": "Branched conversation created.",
+				"copy": "Copy message",
+				"copySuccess": "Message copied to clipboard.",
+				"feedback": "Give feedback",
+				"regenerate": "Regenerate response",
+				"regenerateUnavailable": "Unable to regenerate this message."
+			},
+			"feedback": {
+				"title": "Message feedback",
+				"description": "Help improve future responses by rating this assistant message.",
+				"positive": "Positive",
+				"negative": "Negative",
+				"additionalFeedback": "Additional feedback",
+				"additionalFeedbackPlaceholder": "What worked well or what should be improved?",
+				"submit": "Submit feedback",
+				"success": "Feedback submitted successfully."
+			},
+			"revisions": {
+				"position": "Revision {{current}} of {{total}}",
+				"previous": "Previous revision",
+				"next": "Next revision"
+			},
+			"streaming": "Receiving response"
+		},
+		"clientNodes": {
+			"fields": {
+				"hardware": "Hardware",
+				"systemScore": "System score",
+				"capabilities": "Capabilities",
+				"models": "Installed models"
+			},
+			"settings": {
+				"title": "Node Settings",
+				"provider": "AI Provider",
+				"providerNone": "Local (Ollama)",
+				"azureEndpoint": "Azure Endpoint",
+				"azureApiKey": "Azure API Key",
+				"azureDeploymentName": "Deployment Name"
+			},
+			"none": "None reported"
+		},
+		"admin": {
+			"agentDefinitions": {
+				"title": "Agent Definitions",
+				"note": "Configure agent display metadata, AI model selection, reasoning effort, tools, and policies.",
+				"create": "Create agent definition",
+				"edit": "Edit",
+				"save": "Save",
+				"setDefault": "Set default",
+				"created": "Agent definition created successfully",
+				"updated": "Agent definition updated successfully",
+				"deleted": "Agent definition deleted successfully",
+				"defaultSet": "Default agent definition updated successfully",
+				"invalidPolicies": "Policies must be valid JSON.",
+				"loadDetailsError": "Failed to load agent definition details.",
+				"loadAiModelsError": "Failed to load AI models.",
+				"loadToolsError": "Failed to load tool definitions.",
+				"nameLabel": "Name",
+				"displayNameLabel": "Display Name",
+				"descriptionLabel": "Description",
+				"systemPromptLabel": "System Prompt",
+				"aiModelLabel": "AI Model",
+				"aiModelPlaceholder": "Select an AI model",
+				"reasoningEffortLabel": "Reasoning effort",
+				"reasoningEffortPlaceholder": "Select reasoning effort",
+				"workflowTypeLabel": "Workflow Type",
+				"workflowTypePlaceholder": "e.g. default, research, coding",
+				"defaultModelProfileLabel": "Model Profile",
+				"defaultModelProfilePlaceholder": "e.g. llama3:8b",
+				"allowedToolsLabel": "Allowed Tools",
+				"policiesLabel": "Policies (JSON)",
+				"policiesPlaceholder": "{\n  \"approvalMode\": \"manual\"\n}",
+				"reasoningEffortOptions": {
+					"low": "Low",
+					"medium": "Medium",
+					"high": "High"
+				},
+				"defaultBadge": "Default",
+				"createDialogTitle": "Create agent definition",
+				"editDialogTitle": "Edit agent definition",
+				"deleteDialogTitle": "Delete agent definition",
+				"deleteDialogText": "Do you really want to delete '{{name}}'?",
+				"columns": {
+					"name": "Name",
+					"description": "Description",
+					"version": "Version",
+					"default": "Default",
+					"actions": "Actions"
+				}
+			},
+			"toolDefinitions": {
+				"title": "Tool Definitions",
+				"note": "Edit is deferred until the backend exposes full tool-definition details including endpoint/handler.",
+				"create": "Create tool definition",
+				"created": "Tool definition created successfully",
+				"deleted": "Tool definition deleted successfully",
+				"nameLabel": "Name",
+				"descriptionLabel": "Description",
+				"locationLabel": "Location",
+				"endpointOrHandlerLabel": "Endpoint or Handler",
+				"parameterSchemaLabel": "Parameter Schema",
+				"requiresApprovalLabel": "Requires approval",
+				"createDialogTitle": "Create tool definition",
+				"deleteDialogTitle": "Delete tool definition",
+				"deleteDialogText": "Do you really want to delete '{{name}}'?",
+				"apiSide": "API Side",
+				"clientLocal": "Client Local",
+				"columns": {
+					"name": "Name",
+					"description": "Description",
+					"location": "Location",
+					"approval": "Approval",
+					"actions": "Actions"
+				}
+			},
+			"clientNodes": {
+				"title": "Client Nodes",
+				"deleted": "Client node deleted successfully",
+				"deleteDialogTitle": "Delete client node",
+				"deleteDialogText": "Do you really want to delete '{{name}}'?",
+				"columns": {
+					"name": "Name",
+					"userId": "User ID",
+					"status": "Status",
+					"systemScore": "System Score",
+					"lastSeen": "Last Seen",
+					"actions": "Actions"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Disconnecting",
+					"error": "Error"
+				}
+			},
+			"aiModels": {
+				"title": "AI Models",
+				"create": "Create AI model",
+				"save": "Save",
+				"edit": "Edit",
+				"created": "AI model created successfully",
+				"updated": "AI model updated successfully",
+				"deleted": "AI model deleted successfully",
+				"modelIdLabel": "Model ID",
+				"displayNameLabel": "Display Name",
+				"descriptionLabel": "Description",
+				"typeLabel": "Model type",
+				"typeOptions": {
+					"llm": "LLM",
+					"embedding": "Embedding"
+				},
+				"isReasoningModelLabel": "Reasoning model",
+				"supportsToolCallingLabel": "Supports tool calling",
+				"isPublicLabel": "Public for chat users",
+				"reasoningEffortNamesLabel": "Allowed reasoning efforts",
+				"defaultReasoningEffortNameLabel": "Default reasoning effort",
+				"createDialogTitle": "Create AI model",
+				"editDialogTitle": "Edit AI model",
+				"deleteDialogTitle": "Delete AI model",
+				"deleteDialogText": "Do you really want to delete '{{name}}'?",
+				"activeBadge": "Active",
+				"publicBadge": "Public",
+				"reasoningBadge": "Reasoning",
+				"toolCallingBadge": "Tools",
+				"columns": {
+					"modelId": "Model ID",
+					"displayName": "Display Name",
+					"type": "Type",
+					"reasoning": "Reasoning",
+					"tools": "Tools",
+					"public": "Public",
+					"active": "Active",
+					"actions": "Actions"
+				}
+			},
+			"feedback": {
+				"title": "Feedback",
+				"all": "All",
+				"solved": "Solved",
+				"unsolved": "Unsolved",
+				"markSolved": "Mark solved",
+				"solvedSuccess": "Feedback marked as solved",
+				"solveDialogTitle": "Mark feedback as solved",
+				"solveNoteLabel": "Solved note",
+				"columns": {
+					"conversation": "Conversation",
+					"message": "Message Preview",
+					"sentiment": "Sentiment",
+					"status": "Status",
+					"createdAt": "Created",
+					"actions": "Actions"
+				},
+				"positive": "Positive",
+				"negative": "Negative",
+				"open": "Open",
+				"resolved": "Resolved"
+			},
+			"pairingTokens": {
+				"title": "Pairing Tokens",
+				"legacyNotice": "Pairing tokens are deprecated for normal worker onboarding. Use device-code node binding by default; create tokens only for temporary legacy compatibility.",
+				"labelLabel": "Label",
+				"labelPlaceholder": "e.g. Office workstation",
+				"create": "Create pairing token",
+				"created": "Pairing token created successfully",
+				"rotated": "Pairing token rotated successfully",
+				"revoked": "Pairing token revoked successfully",
+				"revokeDialogTitle": "Revoke pairing token",
+				"revokeDialogText": "Do you really want to revoke '{{name}}'?",
+				"rotate": "Rotate",
+				"rotateConfirmTitle": "Rotate pairing token?",
+				"rotateConfirmDescription": "This issues a new pairing secret for this token. The old secret will stop working immediately. Existing paired clients keep their sessions — the new secret only matters for the next pairing or login. This cannot be undone.",
+				"rotateConfirmLabel": "Rotate",
+				"secretModalTitle": "Store this pairing token now",
+				"secretWarning": "The pairing token is shown only once. Save it in a secure location.",
+				"tokenLabel": "Pairing Token",
+				"copyToken": "Copy token",
+				"tokenCopied": "Pairing token copied to clipboard",
+				"expirationOption_one": "{{count}} day",
+				"expirationOption_other": "{{count}} days",
+				"durationBadge_one": "Valid for {{count}} day",
+				"durationBadge_other": "Valid for {{count}} days",
+				"statusOpen": "Open",
+				"statusUsed": "Used",
+				"statusExpired": "Expired",
+				"columns": {
+					"label": "Label",
+					"duration": "Duration",
+					"status": "Status",
+					"assignedTo": "Assigned to",
+					"usedBy": "Used by client",
+					"createdAt": "Created",
+					"expiresAt": "Expires",
+					"actions": "Actions"
+				}
+			},
+			"appKeys": {
+				"title": "App Keys",
+				"nameLabel": "Name",
+				"namePlaceholder": "e.g. API client production",
+				"appsLabel": "Apps",
+				"create": "Create App Key",
+				"created": "App key created successfully",
+				"deleted": "App key deleted successfully",
+				"enabled": "App key enabled",
+				"disabled": "App key disabled",
+				"validation": "Name and at least one app are required",
+				"deleteDialogTitle": "Delete app key",
+				"deleteDialogText": "Do you really want to delete '{{name}}'? This action cannot be undone.",
+				"secretModalTitle": "Store this secret now",
+				"secretWarning": "The client secret is shown only once. Save it in a secure location.",
+				"copySecret": "Copy secret",
+				"secretCopied": "Secret copied to clipboard",
+				"clientSecretLabel": "Client Secret",
+				"columns": {
+					"name": "Name",
+					"clientId": "Client ID",
+					"apps": "Apps",
+					"createdAt": "Created",
+					"lastUsedAt": "Last used",
+					"enabled": "Enabled",
+					"actions": "Actions"
+				}
+			},
+			"permissions": {
+				"title": "Permissions",
+				"tablePermissions": "Permissions",
+				"permissionUpdated": "Permission updated successfully",
+				"noRolesAvailable": "No roles available"
+			},
+			"roles": {
+				"title": "Roles",
+				"deleteDialogTitle": "Delete Role",
+				"deleteDialogText": "Are you sure you want to delete this role?",
+				"tableTooltipEdit": "Edit role",
+				"tableTooltipDelete": "Delete role",
+				"protectedAdminRoleTooltip": "Administrator role cannot be renamed or deleted.",
+				"protectedDefaultRoleTooltip": "Default account role cannot be renamed or deleted.",
+				"administratorBadge": "Administrator",
+				"defaultAccountRoleBadge": "Default account role",
+				"createRole": "Create Role",
+				"roleDeleted": "Role deleted successfully"
+			},
+			"users": {
+				"title": "Users",
+				"tableHeaders": {
+					"username": "Username",
+					"firstName": "First Name",
+					"lastName": "Last Name"
+				},
+				"deleteDialogTitle": "Delete User",
+				"deleteDialogText": "Are you sure you want to delete this user?",
+				"tableTooltipEdit": "Edit user",
+				"tableTooltipView": "View",
+				"tableTooltipDelete": "Delete user",
+				"deleteSuccess": "User deleted successfully",
+				"createUser": "Create User"
+			}
+		},
+		"home": {
+			"title": {
+				"welcome": "Welcome!"
+			}
+		},
+		"schedule": {
+			"title": "Schedule",
+			"createAppointment": "Create Appointment",
+			"viewAppointment": "Appointment Details",
+			"editAppointment": "Edit Appointment",
+			"deleteAppointment": "Delete Appointment",
+			"deleteConfirmTitle": "Delete Appointment",
+			"deleteConfirmText": "Are you sure you want to delete this appointment?",
+			"viewOnlyNotice": "You can view appointments but cannot manage them.",
+			"fields": {
+				"title": "Title",
+				"titlePlaceholder": "Enter appointment title",
+				"description": "Description",
+				"descriptionPlaceholder": "Enter description (optional)",
+				"start": "Start",
+				"end": "End",
+				"color": "Color",
+				"isShared": "System appointment (visible to all users)",
+				"user": "Assign to user"
+			},
+			"validation": {
+				"titleRequired": "Title is required",
+				"titleMaxLength": "Title must not exceed 200 characters",
+				"titleTrimmed": "Title must not start or end with whitespace.",
+				"endAfterStart": "End time must be after start time"
+			},
+			"scheduler": {
+				"day": "Day",
+				"week": "Week",
+				"month": "Month",
+				"year": "Year",
+				"today": "Today",
+				"previous": "Previous",
+				"next": "Next",
+				"more": "More"
+			},
+			"adminPanel": {
+				"title": "User Appointments",
+				"searchPlaceholder": "Search users...",
+				"loadError": "Failed to load users.",
+				"show": "Show user appointments",
+				"hide": "Hide user appointments"
+			},
+			"systemBadge": "System",
+			"appointmentCreated": "Appointment created successfully",
+			"appointmentUpdated": "Appointment updated successfully",
+			"appointmentDeleted": "Appointment deleted successfully"
+		},
+		"notFound": {
+			"subtitleSecret": "You have found a secret place.",
+			"subtitleNotFound": "Unfortunately, this is only a 404 page. You may have mistyped the address, or the page has been moved to another URL.",
+			"backToHomeText": "Take me back to home page"
+		},
+		"deviceBinding": {
+			"title": "Approve device",
+			"description": "Review the device code from your worker node before approving access to your account.",
+			"userCodeLabel": "Device code",
+			"userCodePlaceholder": "Enter the code shown on your device",
+			"approve": "Approve device",
+			"deny": "Deny",
+			"completeTitle": "Request complete",
+			"approvedMessage": "Device '{{nodeName}}' has been approved.",
+			"deniedMessage": "The device request has been denied.",
+			"approvedToast": "Device approved.",
+			"deniedToast": "Device denied.",
+			"errorToast": "Device request could not be completed. Check the code and try again."
+		},
+		"userSettings": {
+			"title": "User Settings",
+			"changePassword": "Change Password",
+			"accountInformation": "Account Information",
+			"myNodes": {
+				"title": "My nodes",
+				"supportText": "Review bound local workers, connection health, active model use, and revoke a node when it should no longer access your account.",
+				"emptyTitle": "No nodes bound",
+				"emptyText": "Bind a local worker to see it here.",
+				"errorTitle": "Unable to load nodes",
+				"errorText": "Refresh the list or try again later.",
+				"disconnected": "Disconnect request sent.",
+				"deleted": "Node unbound successfully.",
+				"disconnectDialogTitle": "Disconnect node",
+				"disconnectDialogText": "Disconnect '{{name}}' from the active session? The node remains bound and can reconnect.",
+				"deleteDialogTitle": "Unbind node",
+				"deleteDialogText": "Unbind '{{name}}' and revoke its worker credentials? Rebinding will be required.",
+				"actions": {
+					"settings": "Settings",
+					"disconnect": "Disconnect",
+					"unbind": "Unbind"
+				},
+				"settings": {
+					"title": "Node settings",
+					"description": "Configure request handling for '{{name}}'. More node settings will appear here later.",
+					"maxTimeoutLabel": "Maximum message request timeout",
+					"maxTimeoutDescription": "Stops hung message requests after the configured number of seconds.",
+					"maxTimeoutError": "Enter a value between 5 and 3600 seconds.",
+					"saved": "Node settings saved."
+				},
+				"columns": {
+					"name": "Name",
+					"status": "Status",
+					"systemScore": "System score",
+					"lastSeen": "Last seen",
+					"activeModel": "Active model",
+					"keyStatus": "Key status",
+					"actions": "Actions"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Disconnecting",
+					"error": "Error"
+				},
+				"keyStatus": {
+					"active": "Active key",
+					"missing": "Key missing",
+					"unbound": "Unbound"
+				}
+			},
+			"themeConfigurator": {
+				"title": "Theme Configurator",
+				"description": "Temporarily change the active theme, test it in the app, and export the result as JSON.",
+				"developerHint": "Developers can replace src/theme/theme.json with the exported JSON and deploy.",
+				"generatorHint": "Generate complete primary and secondary color scales from a single base color.",
+				"mode": "Mode",
+				"fontFamily": "Font family",
+				"breakpoints": "Breakpoints",
+				"baseColor": "Base color",
+				"generatedScale": "Generated scale",
+				"invalidColor": "Please enter a valid color (#RRGGBB or rgb(r,g,b)).",
+				"primaryPalette": "Primary palette",
+				"primaryPaletteDescription": "Pick a base color and auto-generate the primary shades.",
+				"secondaryPalette": "Secondary palette",
+				"secondaryPaletteDescription": "Pick a base color and auto-generate the secondary shades.",
+				"primaryMain": "Primary color",
+				"primaryHover": "Primary hover color",
+				"secondaryMain": "Secondary color",
+				"secondaryHover": "Secondary hover color",
+				"variantsPreview": "Variants preview",
+				"variantsPrimary": "Primary button variants",
+				"variantsSecondary": "Secondary button variants",
+				"variantFilled": "Filled",
+				"variantLight": "Light",
+				"variantOutline": "Outline",
+				"variantSubtle": "Subtle",
+				"applyPreview": "Apply Preview",
+				"resetToSource": "Reset To Source",
+				"exportJson": "Export JSON",
+				"importJson": "Import JSON",
+				"previewApplied": "Theme preview applied",
+				"previewReset": "Theme preview reset to source",
+				"exported": "Theme JSON exported",
+				"imported": "Theme JSON imported and applied",
+				"importError": "Invalid JSON file"
+			},
+			"passwordAndSecurity": "Password and Security",
+			"deviceSessions": "Device Sessions",
+			"editProfile": "Edit Profile",
+			"saveEdit": "Save",
+			"cancelEdit": "Cancel",
+			"profileInformationUpdated": "Profile information updated successfully",
+			"labels": {
+				"firstName": "First Name",
+				"lastName": "Last Name",
+				"email": "Email"
+			}
+		}
+	},
+	"components": {
+		"loginCard": {
+			"signIn": "Sign In",
+			"noAccount": "Don't have an account? Register",
+			"labels": {
+				"email": "Email",
+				"password": "Password"
+			}
+		},
+		"roleCreateModal": {
+			"createRole": "Create Role",
+			"roleName": "Role Name",
+			"roleNamePlaceholder": "Enter role name",
+			"roleCreated": "Role created successfully",
+			"create": "Create",
+			"cancel": "Cancel"
+		},
+		"roleEditModal": {
+			"editRole": "Edit Role",
+			"roleName": "Role Name",
+			"roleNamePlaceholder": "Enter role name",
+			"protectedRoleHint": "Protected roles cannot be renamed.",
+			"protectedRoleSubmitError": "Protected roles cannot be renamed.",
+			"roleUpdated": "Role updated successfully",
+			"save": "Save",
+			"cancel": "Cancel"
+		},
+		"userCreateModal": {
+			"createUser": "Create User",
+			"username": "Username",
+			"usernamePlaceholder": "Enter username",
+			"firstName": "First Name",
+			"firstNamePlaceholder": "Enter first name",
+			"lastName": "Last Name",
+			"lastNamePlaceholder": "Enter last name",
+			"email": "Email",
+			"emailPlaceholder": "Enter email",
+			"password": "Password",
+			"passwordPlaceholder": "Enter password",
+			"roles": "Roles",
+			"create": "Create",
+			"cancel": "Cancel",
+			"createSuccess": "User created successfully"
+		},
+		"userEditModal": {
+			"editUser": "Edit User",
+			"username": "Username",
+			"usernamePlaceholder": "Enter username",
+			"firstName": "First Name",
+			"firstNamePlaceholder": "Enter first name",
+			"lastName": "Last Name",
+			"lastNamePlaceholder": "Enter last name",
+			"email": "Email",
+			"emailPlaceholder": "Enter email",
+			"password": "Password",
+			"passwordPlaceholder": "Enter password",
+			"passwordHelperText": "Leave blank to keep the same",
+			"loginOverExternalProvider": "Sign in over {{provider}} provider",
+			"disabled": "Disabled",
+			"roles": "Roles",
+			"save": "Save",
+			"cancel": "Cancel",
+			"userUpdated": "User updated successfully"
+		},
+		"userViewModal": {
+			"viewUser": "View User",
+			"username": "Username",
+			"firstName": "First Name",
+			"lastName": "Last Name",
+			"email": "Email",
+			"roles": "Roles",
+			"loginOverExternalProvider": "Sign in over {{provider}} provider",
+			"ok": "Ok"
+		},
+		"userChangePasswordDialog": {
+			"changePassword": "Change Password",
+			"oldPassword": "Old Password",
+			"oldPasswordPlaceholder": "Enter old password",
+			"currentPassword": "Current Password",
+			"currentPasswordPlaceholder": "Enter current password",
+			"newPassword": "New Password",
+			"newPasswordPlaceholder": "Enter new password",
+			"confirmPassword": "Confirm Password",
+			"confirmPasswordPlaceholder": "Confirm new password",
+			"passwordChanged": "Password changed successfully",
+			"change": "Change",
+			"cancel": "Cancel"
+		},
+		"registerCard": {
+			"title": "Register",
+			"email": "Email",
+			"emailPlaceholder": "Enter email",
+			"password": "Password",
+			"passwordPlaceholder": "Enter password",
+			"confirmPassword": "Confirm Password",
+			"confirmPasswordPlaceholder": "Confirm password",
+			"register": "Register",
+			"alreadyHaveAccount": "Already have an account? Sign in",
+			"labels": {
+				"email": "Email",
+				"password": "Password"
+			}
+		},
+		"sideNavigationBar": {
+			"tooltip": {
+				"collapse": "Collapse",
+				"expand": "Expand"
+			}
+		},
+		"tables": {
+			"button": {
+				"resetFilters": "Reset Filters"
+			}
+		},
+		"dialogTextTitleBar": {
+			"tooltip": {
+				"close": "Close"
+			}
+		},
+		"userDeviceSessions": {
+			"deviceSessions": "Device Sessions",
+			"activeSessions": "Active Sessions",
+			"terminateSession": "Terminate Session",
+			"terminateSessionConfirmation": "Are you sure you want to terminate this session? You will be signed out from this device.",
+			"terminateAllSessions": "Terminate All",
+			"terminateOtherSessions": "Terminate Other",
+			"terminateAllSessionsConfirmation": "Are you sure you want to terminate all other sessions? You will be signed out from all other devices.",
+			"currentSession": "Current Session",
+			"lastLogin": "Last Login",
+			"firstLogin": "First Login",
+			"loginProvider": "Sign in Provider",
+			"manageDeviceSessions": "Manage Device Sessions",
+			"cannotLogoutCurrentDevice": "You cannot logout from this device because it is your current session."
+		},
+		"mobileNavigation": {
+			"languageTitle": "Language",
+			"userAvatarMenu": {
+				"title": "User",
+				"signedInAs": "Signed in as",
+				"userSettings": "User Settings",
+				"logout": "Logout"
+			}
+		},
+		"desktopNavigation": {
+			"userAvatarMenu": {
+				"title": "User",
+				"signedInAs": "Signed in as",
+				"userSettings": "User Settings",
+				"logout": "Logout"
+			}
+		},
+		"languageMenu": {
+			"tooltip": "Change language"
+		}
+	},
+	"errorMessages": {
+		"roleNameAlreadyExists": "Role with name already exists",
+		"emailAlreadyInUse": "Email is already taken",
+		"usernameAlreadyInUse": "Username is already taken",
+		"requiredField": "This field is required",
+		"minLength": "This field must be at least {{min}} characters long",
+		"invalidEmail": "Invalid email address",
+		"invalidName": "Only letters, spaces, hyphens and apostrophes allowed",
+		"invalidEmailOrPassword": "Invalid email or password",
+		"loginWithDisabledUser": "User is disabled. If you think this is a mistake, please contact the administrator.",
+		"passwordsDoNotMatch": "Passwords do not match",
+		"passwordIncorrect": "Password is incorrect",
+		"onlyAlphanumeric": "Only alphanumeric characters are allowed",
+		"userNameNotMatchCriteria": "Username can only contain letters, numbers, dots, underscores, and hyphens and cannot be empty",
+		"defaultErrorMessage": "An error occurred",
+		"tooManyRequests": "Too many requests. Please try again later."
+	}
+}

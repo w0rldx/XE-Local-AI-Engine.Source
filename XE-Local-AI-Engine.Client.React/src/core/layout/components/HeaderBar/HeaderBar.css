@@ -1,0 +1,11 @@
+.header-bar-item-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 2rem;
+}
+
+.ending {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}

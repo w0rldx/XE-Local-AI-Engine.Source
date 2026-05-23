@@ -89,6 +89,19 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithHttpHealthCheck("/health/live")
                  .WithHttpHealthCheck("/health/ready");
 
+builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
+       .WithEnvironment("BROWSER", "none")
+       .WithEnvironment("VITE_APP_TITLE", "XE Local AI Engine")
+       .WithEnvironment("VITE_API_VERSION", "v1")
+       .WithEnvironment("VITE_CROSS_COOKIE_ENABLED", "false")
+       .WithHttpsEndpoint(env: "VITE_PORT", port: 5175)
+       .WithReference(app)
+       .WaitFor(app)
+       .WithEnvironment("VITE_API_URL", $"{app.GetEndpoint("https")}")
+       .WithRunScript("dev")
+       .WithBuildScript("build")
+       .WithPnpm();
+
 if (hostAgentLinux is not null && hostAgentHmacSecret is not null)
 {
     app.WithEnvironment("XE_HOST_AGENT_SOCKET", hostAgentSocketPath)

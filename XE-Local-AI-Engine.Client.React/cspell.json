@@ -1,0 +1,35 @@
+{
+	"$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+	"version": "0.2",
+	"language": "en",
+	"ignorePaths": ["node_modules/**"],
+	"import": ["@cspell/dict-en_us/cspell-ext.json", "@cspell/dict-de-de/cspell-ext.json"],
+	"overrides": [
+		{
+			"ignoreWords": ["ts-nocheck"],
+			"filename": "*/**/*.gen.ts"
+		},
+		{
+			"ignoreWords": ["Deutsch"],
+			"filename": "src/data/LanguageData.ts"
+		},
+		{
+			"ignoreWords": ["typecheck"],
+			"filename": "package.json"
+		}
+	],
+	"words": [
+		"fontsource",
+		"languagedetector",
+		"stylelint",
+		"tabler",
+		"tanstack",
+		"templatedatamodels",
+		"unocss",
+		"zustand",
+		"aspnetcore",
+		"aspnet",
+		"entraid",
+		"entra"
+	]
+}
