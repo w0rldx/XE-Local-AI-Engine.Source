@@ -1,10 +1,16 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.EntityFrameworkCore;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using Scalar.AspNetCore;
 using Serilog;
+using Microsoft.Agents.AI.DevUI;
+using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Components;
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 
 try
@@ -27,6 +33,16 @@ try
 
     // Add services to the container.
     builder.AddServices(builder.Configuration);
+
+    // Agent Framework DevUI (development only): a representative named agent plus the
+    // OpenAI-compatible Responses/Conversations services the DevUI dashboard requires.
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.AddLocalAiAgentDevUi();
+        builder.AddOpenAIResponses();
+        builder.AddOpenAIConversations();
+        builder.AddDevUI();
+    }
 
     var app = builder.Build();
 
@@ -71,8 +87,46 @@ try
         }
     });
 
+    app.UseMiddleware<LocalApiSecurityMiddleware>();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.UseFastEndpoints(static config =>
+    {
+        config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
+        config.Errors.UseProblemDetails();
+    });
+
+    if (!app.Environment.IsProduction())
+    {
+        app.UseSwaggerGen(static options =>
+        {
+            options.Path = "/openapi/local/v1/{documentName}.json";
+        });
+
+        app.MapScalarApiReference("/scalar", static settings =>
+        {
+            settings.OpenApiRoutePattern = "/openapi/local/{documentName}/{documentName}.json";
+
+            settings.AddDocument("v1");
+
+            settings.AddPreferredSecuritySchemes("LocalOperator");
+        }).AllowAnonymous();
+    }
+
+    // Agent Framework DevUI dashboard (development only) at /devui. The OpenAI-compatible
+    // Responses + Conversations endpoints must be mapped before MapDevUI.
+    if (app.Environment.IsDevelopment())
+    {
+        app.MapOpenAIResponses();
+        app.MapOpenAIConversations();
+        app.MapDevUI();
+    }
+
     app.MapRazorComponents<App>()
        .AddInteractiveServerRenderMode();
+
+    app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");
 
     await app.RunAsync();
 }
@@ -96,9 +150,9 @@ static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
     ArgumentNullException.ThrowIfNull(services);
 
     await using var scope = services.CreateAsyncScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+    var migrationService = scope.ServiceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
-    await dbContext.Database.MigrateAsync().ConfigureAwait(false);
+    await migrationService.MigrateAsync().ConfigureAwait(false);
 }
 
 static void RegisterWorkerShutdownDrain(WebApplication app)

@@ -87,7 +87,25 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WaitFor(embeddingsModel)
                  .WaitFor(nodeSqlite)
                  .WithHttpHealthCheck("/health/live")
-                 .WithHttpHealthCheck("/health/ready");
+                 .WithHttpHealthCheck("/health/ready")
+                 .WithUrls(static context =>
+                 {
+                     if (context.GetEndpoint("https") is { } https)
+                     {
+                         context.Urls.Add(new ResourceUrlAnnotation
+                         {
+                             Url = "/scalar",
+                             DisplayText = "Scalar API docs",
+                             Endpoint = https
+                         });
+                         context.Urls.Add(new ResourceUrlAnnotation
+                         {
+                             Url = "/openapi/local/v1/v1.json",
+                             DisplayText = "OpenAPI spec (v1)",
+                             Endpoint = https
+                         });
+                     }
+                 });
 
 builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithEnvironment("BROWSER", "none")

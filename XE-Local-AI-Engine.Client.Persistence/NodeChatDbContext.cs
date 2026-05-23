@@ -92,6 +92,21 @@ public sealed class NodeChatDbContext : DbContext
 
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        builder.Property(entity => entity.Status)
+               .HasColumnName("status")
+               .HasDefaultValue(NodeMessageStatus.Completed);
+
+        builder.Property(entity => entity.RequestId)
+               .HasColumnName("request_id");
+
+        builder.Property(entity => entity.Error)
+               .HasColumnName("error");
+
+        builder.HasIndex(entity => entity.RequestId);
     }
 
     private static void ConfigureToolEvent(EntityTypeBuilder<NodeToolEvent> builder)

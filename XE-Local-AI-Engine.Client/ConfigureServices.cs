@@ -1,12 +1,16 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
+using FastEndpoints;
+using FastEndpoints.Swagger;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using MudBlazor.Services;
+using NSwag;
 using OllamaSharp;
 using Serilog;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -36,6 +40,7 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
+using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 using ILogger = ILogger;
 
 public static class ConfigureServices
@@ -54,7 +59,33 @@ public static class ConfigureServices
 
         builder.Services.AddRazorComponents()
                .AddInteractiveServerComponents();
-        builder.Services.AddAuthorization();
+        builder.Services.AddFastEndpoints();
+        builder.Services.SwaggerDocument(options =>
+        {
+            options.DocumentSettings = settings =>
+            {
+                settings.DocumentName = "v1";
+                settings.Title = "XE Local AI Engine";
+                settings.Version = "v1";
+                settings.AddAuth("LocalOperator", new OpenApiSecurityScheme
+                {
+                    Type = OpenApiSecuritySchemeType.ApiKey,
+                    Name = LocalOperatorAuthorization.HeaderName,
+                    In = OpenApiSecurityApiKeyLocation.Header,
+                    Description = "Per-launch local operator token."
+                });
+            };
+
+            options.ExcludeNonFastEndpoints = true;
+        });
+        builder.Services.AddAuthentication(LocalOperatorAuthorization.AuthenticationType)
+               .AddScheme<AuthenticationSchemeOptions, LocalOperatorAuthenticationHandler>(LocalOperatorAuthorization.AuthenticationType, _ => { });
+        builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy(LocalOperatorAuthorization.OperatorPolicy,
+                policy => policy.AddAuthenticationSchemes(LocalOperatorAuthorization.AuthenticationType)
+                                .RequireRole(LocalOperatorAuthorization.OperatorRole));
+        });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddMudServices();
 
@@ -64,17 +95,23 @@ public static class ConfigureServices
         builder.Services.AddOptions<WorkerNodeOptions>()
                .Bind(configuration.GetSection(WorkerNodeOptions.SectionName))
                .ValidateOnStart();
-        builder.Services.AddOptions<SecurityOptions>()
-               .Bind(configuration.GetSection(SecurityOptions.SectionName))
+        builder.Services.AddOptions<ClientSecurityOptions>()
+               .Bind(configuration.GetSection(ClientSecurityOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddOptions<CloudProviderOptions>()
                .Bind(configuration.GetSection(CloudProviderOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddOptions<NodeChatMigrationRecoveryOptions>()
+               .Bind(configuration.GetSection(NodeChatMigrationRecoveryOptions.SectionName))
+               .Validate(static options => options.MigrationAttemptTimeout > TimeSpan.Zero, "Migration attempt timeout must be greater than zero.")
+               .Validate(static options => options.StartupLockTimeout > TimeSpan.Zero, "Startup lock timeout must be greater than zero.")
+               .Validate(static options => options.StartupLockPollInterval > TimeSpan.Zero, "Startup lock poll interval must be greater than zero.")
                .ValidateOnStart();
         builder.Services.AddOptions<WorkerShutdownDrainOptions>();
 
         builder.Services.AddSingleton<IValidateOptions<CentralPlatformOptions>, CentralPlatformOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();
-        builder.Services.AddSingleton<IValidateOptions<SecurityOptions>, SecurityOptionsValidator>();
+        builder.Services.AddSingleton<IValidateOptions<ClientSecurityOptions>, SecurityOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<CloudProviderOptions>, CloudProviderOptionsValidator>();
 
         var centralPlatformBaseUrl = configuration.GetValue<string>("CentralPlatform:BaseUrl")
@@ -98,6 +135,7 @@ public static class ConfigureServices
         }).AddStandardResilienceHandler();
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
+        builder.Services.AddSingleton<ILocalOperatorTokenProvider, LocalOperatorTokenProvider>();
         builder.Services.AddScoped<AuthenticationStateProvider, LocalOperatorAuthenticationStateProvider>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
         builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
@@ -170,6 +208,7 @@ public static class ConfigureServices
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);
+        builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
 
         builder.Services.AddDbContext<NodeChatDbContext>((serviceProvider, options) =>
         {

@@ -96,6 +96,9 @@ importers:
       '@cspell/dict-de-de':
         specifier: ^4.1.2
         version: 4.1.2
+      '@hey-api/client-axios':
+        specifier: 0.9.1
+        version: 0.9.1(@hey-api/openapi-ts@0.97.1(magicast@0.5.3)(typescript@6.0.3))(axios@1.16.1)
       '@hey-api/openapi-ts':
         specifier: 0.97.1
         version: 0.97.1(magicast@0.5.3)(typescript@6.0.3)
@@ -725,6 +728,13 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@hey-api/client-axios@0.9.1':
+    resolution: {integrity: sha512-fvpOdnEz6tu5T2+IMNZW3g9mAZwaXavqpsvtapEZNtYxyYtQ+lQs9wJn/VPhZEvdXAXu8HPTCRpmfa0t1aRATA==}
+    deprecated: Starting with v0.73.0, this package is bundled directly inside @hey-api/openapi-ts.
+    peerDependencies:
+      '@hey-api/openapi-ts': < 2
+      axios: '>= 1.0.0 < 2'
 
   '@hey-api/codegen-core@0.8.1':
     resolution: {integrity: sha512-Iciv2vUCJTW9lWM/ROvyZLblmcbYJHPuXfzb1SzeDVVn4xEXu2ilLU1pq3fn+09FZ/Y0P7VyvRE47UDU6om8xA==}
@@ -4390,6 +4400,11 @@ snapshots:
       tabbable: 6.4.0
 
   '@floating-ui/utils@0.2.11': {}
+
+  '@hey-api/client-axios@0.9.1(@hey-api/openapi-ts@0.97.1(magicast@0.5.3)(typescript@6.0.3))(axios@1.16.1)':
+    dependencies:
+      '@hey-api/openapi-ts': 0.97.1(magicast@0.5.3)(typescript@6.0.3)
+      axios: 1.16.1
 
   '@hey-api/codegen-core@0.8.1(magicast@0.5.3)':
     dependencies:
