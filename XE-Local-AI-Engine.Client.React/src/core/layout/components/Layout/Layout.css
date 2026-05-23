@@ -1,0 +1,13 @@
+.main-content-sidebar-expanded {
+	margin-left: 220px;
+	width: calc(100% - 220px);
+}
+
+.main-content-sidebar-collapsed {
+	margin-left: 56px;
+	width: calc(100% - 56px);
+}
+
+.main-content-sidebar-mobile {
+	width: 100%;
+}

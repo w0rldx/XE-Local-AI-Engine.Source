@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.AppHost"/>
+    <PackageReference Include="Aspire.Hosting.JavaScript" />
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama"/>
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Sqlite"/>
   </ItemGroup>

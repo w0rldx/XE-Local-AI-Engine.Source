@@ -1,0 +1,1001 @@
+{
+	"basicFormatOption": "de-DE",
+	"common": {
+		"loading": "Lädt...",
+		"refreshing": "Aktualisiere...",
+		"filterReset": "Filter zurücksetzen",
+		"close": "Schließen",
+		"confirm": "Bestätigen",
+		"cancel": "Abbrechen",
+		"ok": "Ok",
+		"edit": "Bearbeiten",
+		"view": "Anzeigen",
+		"delete": "Löschen",
+		"density": "Dichte",
+		"densityCompact": "Kompakt",
+		"densityComfortable": "Komfortabel",
+		"densitySpacious": "Geräumig",
+		"create": "Erstellen",
+		"search": "Suchen",
+		"filters": "Filter",
+		"save": "Speichern",
+		"noData": "Keine Einträge gefunden",
+		"entries": "Einträge",
+		"error": "Fehler",
+		"fetchError": "Beim Laden der Tabellendaten ist ein Problem aufgetreten.",
+		"providers": {
+			"cloudflareAccess": "Cloudflare Access"
+		}
+	},
+	"theme": {
+		"title": "Design",
+		"light": "Hell",
+		"dark": "Dunkel",
+		"switchToLight": "Zum hellen Modus wechseln",
+		"switchToDark": "Zum dunklen Modus wechseln"
+	},
+	"navigation": {
+		"home": "Start",
+		"chat": "Chat",
+		"schedule": "Terminplaner",
+		"user": "Benutzer",
+		"adminPanel": "Adminbereich",
+		"adminPanelUsers": "Benutzer",
+		"adminPanelRoles": "Rollen",
+		"adminPanelPermissions": "Berechtigungen",
+		"adminPanelPairingTokens": "Pairing-Tokens",
+		"adminPanelAgentDefinitions": "Agent-Definitionen",
+		"adminPanelToolDefinitions": "Tool-Definitionen",
+		"adminPanelClientNodes": "Client-Nodes",
+		"adminPanelAiModels": "KI-Modelle",
+		"adminPanelFeedback": "Feedback",
+		"adminPanelAppKeys": "App-Schlüssel"
+	},
+	"chat": {
+		"thoughts": "Gedanken",
+		"words": "Wörter",
+		"thinking": "denkt…",
+		"reasoningMode": "Reasoning-Modus",
+		"toolCall": {
+			"sending": "Sende",
+			"inFlight": "Aktiv",
+			"done": "Fertig",
+			"failed": "Fehlgeschlagen",
+			"thinkingLive": "Denke…",
+			"thoughtFor": "Gedacht für {{s}}s"
+		}
+	},
+	"pages": {
+		"chat": {
+			"windowTitle": "Chatfenster",
+			"lockedState": "Diese Unterhaltung ist gesperrt. Entsperre sie, um Nachrichten anzuzeigen.",
+			"inputPlaceholder": "Nachricht eingeben",
+			"send": "Senden",
+			"modelLabel": "Modell",
+			"modelPlaceholder": "Modell auswählen",
+			"modelLoaded": "Aktuell geladen",
+			"modelAvailable": "Verfügbar",
+			"modelUnloadingIn": "Entladen in {{time}}",
+			"modelExpired": "Nicht geladen",
+			"modelSelector": {
+				"availableModels": "Verfügbare Modelle",
+				"hint": "Wähle ein auf dem ausgewählten Node installiertes Modell."
+			},
+			"reasoningEffortLabel": "Reasoning-Effort",
+			"reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
+			"localToolsLabel": "Lokale Tools",
+			"localToolsEnabled": "Lokale Tools aktiviert",
+			"localToolsDisabled": "Lokale Tools deaktiviert",
+			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
+			"cloudToolsLabel": "Cloud-Tools",
+			"cloudToolsEnabled": "Cloud-Tools aktiviert",
+			"cloudToolsDisabled": "Cloud-Tools deaktiviert",
+			"cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
+			"cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Provider senden",
+			"reasoningEffortOptions": {
+				"none": "Keine",
+				"low": "Niedrig",
+				"medium": "Mittel",
+				"high": "Hoch"
+			},
+			"newConversation": "Neuer normaler Chat",
+			"newEncryptedConversation": "Neuer verschlüsselter Chat",
+			"storageMode": {
+				"plain": "Normal",
+				"encrypted": "Verschlüsselt",
+				"plainTooltip": "Wird als lesbarer Chatverlauf für dein Konto gespeichert.",
+				"encryptedTooltip": "Wird verschlüsselt gespeichert. Mit deinem Passwort für verschlüsselte Synchronisierung entsperren."
+			},
+			"encryptedConversation": {
+				"lockedTitle": "Verschlüsselter Chat gesperrt",
+				"lockedDescription": "Gib dein Passwort für verschlüsselte Synchronisierung ein, um verschlüsselte Chats zu entsperren."
+			},
+			"activeNode": {
+				"label": "Aktiver Knoten",
+				"sessionHint": "Aktiv für diesen Browser-Tab/diese Sitzung. Freigeben, um zu wechseln.",
+				"rememberDefault": "Als Standard merken",
+				"release": "Aktiven Knoten freigeben"
+			},
+			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Kopple und verbinde zuerst einen Worker-Node, bevor du Unterhaltungen erstellst.",
+			"waitingForStreamedResponse": "Warte auf gestreamte Antwort",
+			"waitingForResponse": "Warte auf Antwort",
+			"streamErrors": {
+				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuche es erneut.",
+				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuche es erneut oder aktualisiere die Unterhaltung."
+			},
+			"thoughts": "Gedanken",
+			"words": "Wörter",
+			"thinking": "denkt…",
+			"reasoningMode": "Reasoning-Modus",
+			"emptyState": "Erstelle oder wähle eine Unterhaltung, um zu chatten.",
+			"noMessages": "Noch keine Nachrichten.",
+			"pendingApprovalLabel": "Ausstehende Freigabe",
+			"activityTimeline": "Aktivitätsverlauf",
+			"activityDetails": {
+				"arguments": "Argumente",
+				"result": "Ergebnis"
+			},
+			"activityTimelineTypes": {
+				"ToolCall": "Tool-Aufruf",
+				"ToolResult": "Tool-Ergebnis",
+				"ContextRetrieval": "Kontextabruf",
+				"WorkflowStepStarted": "Workflow-Schritt gestartet",
+				"WorkflowStepCompleted": "Workflow-Schritt abgeschlossen",
+				"WorkflowStepFailed": "Workflow-Schritt fehlgeschlagen",
+				"AgentHandoff": "Agent-Übergabe",
+				"ContentGeneration": "Inhaltserstellung",
+				"Error": "Fehler",
+				"Unknown": "Typ {{type}}"
+			},
+			"roles": {
+				"system": "System",
+				"user": "Benutzer",
+				"assistant": "Assistent",
+				"tool": "Tool",
+				"unknown": "Rolle {{role}}"
+			},
+			"clientSelector": {
+				"label": "Client-Node",
+				"placeholder": "Einen Online-Client auswählen",
+				"activeSessionHint": "Durch die Auswahl wird der Node für diese Browser-Sitzung aktiv. Freigeben, um zu wechseln.",
+				"activeOnceChosen": "Aktiv für diesen Tab"
+			},
+			"conversationList": {
+				"title": "Unterhaltungen",
+				"show": "Seitenleiste ausklappen",
+				"hide": "Seitenleiste einklappen",
+				"expandAria": "Seitenleiste ausklappen",
+				"collapseAria": "Seitenleiste einklappen",
+				"untitled": "Unbenannte Unterhaltung",
+				"archived": "Archiviert",
+				"noClientAssigned": "Kein Client zugewiesen",
+				"empty": "Noch keine Unterhaltungen.",
+				"delete": "Löschen",
+				"deleteConfirm": "Diese Unterhaltung löschen? Das kann nicht rückgängig gemacht werden.",
+				"deleteSuccess": "Unterhaltung gelöscht.",
+				"deleteShiftHint": "Umschalt+Klick überspringt Bestätigung"
+			},
+			"disconnect": {
+				"button": "Trennen",
+				"title": "Client-Node trennen",
+				"descriptionWithName": "\"{{name}}\" trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
+				"descriptionWithoutName": "Den ausgewählten Client-Node trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
+				"confirm": "Trennen"
+			},
+			"release": {
+				"button": "Freigeben",
+				"title": "Node freigeben",
+				"descriptionWithName": "\"{{name}}\" aus deiner aktiven Sitzung freigeben? Der Node bleibt online und kann anschließend wieder ausgewählt werden.",
+				"descriptionWithoutName": "Diesen Node aus deiner aktiven Sitzung freigeben? Der Node bleibt online.",
+				"confirm": "Freigeben"
+			},
+			"nodeInfo": {
+				"button": "Node-Informationen anzeigen",
+				"title": "Node-Informationen",
+				"empty": "Keine Online-Nodes verfügbar.",
+				"emptyTitle": "Keine Nodes verfügbar",
+				"emptyDescription": "Online-Client-Nodes werden hier angezeigt. Stellen Sie sicher, dass ein Node verbunden und online ist.",
+				"searchPlaceholder": "Nodes suchen…",
+				"nodeList": "Nodes",
+				"noMatch": "Keine passenden Nodes",
+				"selectPrompt": "Wählen Sie einen Node für Details",
+				"statusOnline": "Online",
+				"statusBusy": "Beschäftigt",
+				"statusError": "Fehler",
+				"statusOffline": "Offline",
+				"tabOverview": "Übersicht",
+				"tabHardware": "Hardware",
+				"tabModels": "Modelle",
+				"selectNode": "Diesen Node auswählen",
+				"currentNode": "Aktueller Node",
+				"copyInfo": "Info kopieren",
+				"copied": "Kopiert"
+			},
+			"followUpTitle": "Vorgeschlagene Anschlussfragen",
+			"toolApproval": {
+				"title": "Tool-Freigabe erforderlich",
+				"description": "Ein Worker benötigt eine Freigabe, bevor er fortfahren kann.",
+				"reject": "Ablehnen",
+				"approve": "Freigeben"
+			},
+			"sync": {
+				"enableStandard": "Sync aktivieren",
+				"enableEncrypted": "Verschlüsselten Sync aktivieren",
+				"standardEnabledSuccess": "Standard-Sync wurde für diese Unterhaltung aktiviert.",
+				"encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diese Unterhaltung aktiviert.",
+				"confirm": {
+					"keepLocalOnly": "Lokal behalten",
+					"continue": "Weiter",
+					"enableSync": "Sync aktivieren",
+					"enableStandardTitle": "Standard-Sync aktivieren?",
+					"enableEncryptedTitle": "Verschlüsselten Sync aktivieren?",
+					"standardDescription": "Dadurch kann diese TrustedLocal-Unterhaltung mit der Plattform synchronisiert werden. Fahre nur fort, wenn diese Unterhaltung von diesem Gerät hochgeladen werden soll.",
+					"encryptedDescription": "Dadurch wird diese TrustedLocal-Unterhaltung in verschlüsselten Sync umgewandelt. Du musst diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind."
+				}
+			},
+			"encryptedSync": {
+				"unlock": {
+					"title": "Verschlüsselten Sync entsperren",
+					"description": "Gib dein eigenes Sync-Passwort ein, um deine verschlüsselten Unterhaltungen auf diesem Gerät zu entsperren.",
+					"passwordDescription": "Dieses Passwort ist getrennt von deinem Kontopasswort.",
+					"passwordLabel": "Sync-Passwort",
+					"passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort eingeben",
+					"recoveryAction": "Passwort vergessen? Recovery-Key verwenden",
+					"submit": "Entsperren",
+					"errors": {
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"incorrectPassword": "Sync-Passwort ist falsch"
+					},
+					"unlockingTitle": "Verschlüsselter Chat wird entsperrt",
+					"unlockingSubtitle": "Dein Chat-Passwort wird überprüft.",
+					"preparingTitle": "Verschlüsselter Chat wird vorbereitet",
+					"preparingSubtitle": "Verschlüsselter Verlauf wird geladen.",
+					"errorTitle": "Verschlüsselter Chat nicht verfügbar",
+					"errorSubtitle": "Der verschlüsselte Chat konnte nicht vollständig vorbereitet werden."
+				},
+				"setup": {
+					"title": "Verschlüsselten Sync einrichten",
+					"description": "Dies ist ein separates Passwort zu deinem Kontopasswort. Die Plattform kann deine verschlüsselten Chats nicht lesen.",
+					"ssoPasswordDescription": "Dies ist ein separates Passwort zu deiner Kontoanmeldung.",
+					"passwordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"passwordLabel": "Sync-Passwort",
+					"passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort erstellen",
+					"passwordStrength": "Passwortstärke",
+					"strength": {
+						"empty": "Ein eigenes Sync-Passwort hinzufügen",
+						"weak": "Schwach",
+						"reasonable": "Akzeptabel",
+						"strong": "Stark"
+					},
+					"recoveryKeyTitle": "Recovery-Key",
+					"recoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
+					"copy": "Kopieren",
+					"copySuccess": "Recovery-Key wurde in die Zwischenablage kopiert.",
+					"acknowledgement": "Ich habe meinen Recovery-Key sicher notiert oder gespeichert. Mir ist klar, dass er nicht erneut angezeigt werden kann.",
+					"submit": "Recovery-Key generieren",
+					"complete": "Ich habe den Recovery-Key gespeichert",
+					"ready": "Verschlüsselter Sync ist bereit.",
+					"errors": {
+						"shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"setupFailed": "Die Einrichtung des verschlüsselten Syncs ist fehlgeschlagen. Bitte versuche es erneut."
+					}
+				},
+				"recovery": {
+					"title": "Verschlüsselten Sync wiederherstellen",
+					"description": "Verwende deinen einmaligen Recovery-Key, um ein neues Sync-Passwort festzulegen, ohne deine gespeicherten Chats neu zu verschlüsseln.",
+					"recoveryKeyDescription": "Leerzeichen und Bindestriche werden automatisch ignoriert.",
+					"recoveryKeyLabel": "Recovery-Key",
+					"recoveryKeyPlaceholder": "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z1234-56789",
+					"newPasswordDescription": "Verwende ein neues eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"newPasswordLabel": "Neues Sync-Passwort",
+					"newPasswordPlaceholder": "Neues verschlüsseltes Sync-Passwort erstellen",
+					"confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
+					"confirmPasswordPlaceholder": "Dein neues verschlüsseltes Sync-Passwort bestätigen",
+					"submit": "Sync-Passwort zurücksetzen",
+					"resetSuccess": "Dein Sync-Passwort wurde zurückgesetzt.",
+					"newRecoveryKeyTitle": "Dein neuer Recovery-Key",
+					"newRecoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
+					"acknowledgement": "Ich habe meinen neuen Recovery-Key sicher notiert oder gespeichert.",
+					"complete": "Ich habe den Recovery-Key gespeichert",
+					"validation": {
+						"tooShort": "Der Recovery-Key ist zu kurz.",
+						"invalidCharacters": "Der Recovery-Key enthält ungültige Zeichen.",
+						"missingCheckCharacter": "Dem Recovery-Key fehlt ein Prüfzeichen.",
+						"invalidCheckDigit": "Die Prüfziffer des Recovery-Keys ist ungültig.",
+						"invalidLength": "Der Recovery-Key hat eine ungültige Länge.",
+						"invalid": "Der Recovery-Key ist ungültig."
+					},
+					"errors": {
+						"shortPassword": "Dein neues Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"recoveryKeyIncorrect": "Der Recovery-Key ist falsch.",
+						"recoveryFailed": "Die Wiederherstellung ist fehlgeschlagen. Bitte prüfe deinen Recovery-Key und versuche es erneut."
+					}
+				},
+				"reset": {
+					"trigger": "Passwort und Recovery-Key verloren? Tresor löschen",
+					"title": "Verschlüsselten Tresor löschen?",
+					"description": "Dadurch werden dein verschlüsselter Tresor und ALLE Unterhaltungen auf allen Geräten dauerhaft gelöscht. Eine Wiederherstellung ist nicht möglich. Du musst den verschlüsselten Chat danach erneut einrichten.",
+					"confirm": "Alles löschen",
+					"success": "Verschlüsselter Tresor gelöscht. Richte den verschlüsselten Chat erneut ein, um fortzufahren.",
+					"errors": {
+						"apiFailed": "Der verschlüsselte Tresor konnte auf dem Server nicht gelöscht werden.",
+						"wrongPassword": "Falsches Konto-Passwort."
+					},
+					"passwordLabel": "Konto-Passwort",
+					"passwordDescription": "Gib dein Konto-Passwort ein, um die Löschung zu bestätigen.",
+					"passwordPlaceholder": "Dein Konto-Passwort"
+				},
+				"changePassword": {
+					"title": "Sync-Passwort ändern",
+					"description": "Ändere dein verschlüsseltes Sync-Passwort. Deine gespeicherten Chats bleiben weiterhin zugänglich.",
+					"button": "Sync-Passwort ändern",
+					"newPasswordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"newPasswordLabel": "Neues Sync-Passwort",
+					"newPasswordPlaceholder": "Dein neues Sync-Passwort eingeben",
+					"passwordStrength": "Passwortstärke",
+					"strength": {
+						"empty": "Neues Sync-Passwort hinzufügen",
+						"weak": "Schwach",
+						"reasonable": "Akzeptabel",
+						"strong": "Stark"
+					},
+					"confirmPasswordDescription": "Gib dein neues Sync-Passwort zur Bestätigung erneut ein.",
+					"confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
+					"confirmPasswordPlaceholder": "Neues Sync-Passwort bestätigen",
+					"submit": "Passwort ändern",
+					"success": "Sync-Passwort erfolgreich geändert.",
+					"errors": {
+						"shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"changeFailed": "Passwortänderung fehlgeschlagen. Bitte versuche es erneut."
+					}
+				}
+			},
+			"actions": {
+				"branch": "Unterhaltung verzweigen",
+				"branchSuccess": "Verzweigte Unterhaltung wurde erstellt.",
+				"copy": "Nachricht kopieren",
+				"copySuccess": "Nachricht wurde in die Zwischenablage kopiert.",
+				"feedback": "Feedback geben",
+				"regenerate": "Antwort neu generieren",
+				"regenerateUnavailable": "Diese Nachricht kann nicht neu generiert werden."
+			},
+			"feedback": {
+				"title": "Nachrichtenfeedback",
+				"description": "Hilf dabei, zukünftige Antworten zu verbessern, indem du diese Assistenten-Nachricht bewertest.",
+				"positive": "Positiv",
+				"negative": "Negativ",
+				"additionalFeedback": "Zusätzliches Feedback",
+				"additionalFeedbackPlaceholder": "Was war gut oder was sollte verbessert werden?",
+				"submit": "Feedback senden",
+				"success": "Feedback wurde erfolgreich gesendet."
+			},
+			"revisions": {
+				"position": "Revision {{current}} von {{total}}",
+				"previous": "Vorherige Revision",
+				"next": "Nächste Revision"
+			},
+			"streaming": "Antwort wird empfangen"
+		},
+		"clientNodes": {
+			"fields": {
+				"hardware": "Hardware",
+				"systemScore": "System-Score",
+				"capabilities": "Fähigkeiten",
+				"models": "Installierte Modelle"
+			},
+			"settings": {
+				"title": "Node-Einstellungen",
+				"provider": "KI-Anbieter",
+				"providerNone": "Lokal (Ollama)",
+				"azureEndpoint": "Azure-Endpunkt",
+				"azureApiKey": "Azure-API-Schlüssel",
+				"azureDeploymentName": "Deployment-Name"
+			},
+			"none": "Keine angegeben"
+		},
+		"admin": {
+			"agentDefinitions": {
+				"title": "Agent-Definitionen",
+				"note": "Konfiguriere Anzeige-Metadaten, AI-Modell-Auswahl, Reasoning-Effort, Tools und Richtlinien für Agenten.",
+				"create": "Agent-Definition erstellen",
+				"edit": "Bearbeiten",
+				"save": "Speichern",
+				"setDefault": "Als Standard setzen",
+				"created": "Agent-Definition erfolgreich erstellt",
+				"updated": "Agent-Definition erfolgreich aktualisiert",
+				"deleted": "Agent-Definition erfolgreich gelöscht",
+				"defaultSet": "Standard-Agent-Definition erfolgreich aktualisiert",
+				"invalidPolicies": "Policies müssen gültiges JSON sein.",
+				"loadDetailsError": "Agent-Definition-Details konnten nicht geladen werden.",
+				"loadAiModelsError": "AI-Modelle konnten nicht geladen werden.",
+				"loadToolsError": "Tool-Definitionen konnten nicht geladen werden.",
+				"nameLabel": "Name",
+				"displayNameLabel": "Anzeigename",
+				"descriptionLabel": "Beschreibung",
+				"systemPromptLabel": "System-Prompt",
+				"aiModelLabel": "AI-Modell",
+				"aiModelPlaceholder": "AI-Modell auswählen",
+				"reasoningEffortLabel": "Reasoning-Effort",
+				"reasoningEffortPlaceholder": "Reasoning-Effort auswählen",
+				"workflowTypeLabel": "Workflow-Typ",
+				"workflowTypePlaceholder": "z. B. default, research, coding",
+				"defaultModelProfileLabel": "Modellprofil",
+				"defaultModelProfilePlaceholder": "z. B. llama3:8b",
+				"allowedToolsLabel": "Erlaubte Tools",
+				"policiesLabel": "Richtlinien (JSON)",
+				"policiesPlaceholder": "{\n  \"approvalMode\": \"manual\"\n}",
+				"reasoningEffortOptions": {
+					"low": "Niedrig",
+					"medium": "Mittel",
+					"high": "Hoch"
+				},
+				"defaultBadge": "Standard",
+				"createDialogTitle": "Agent-Definition erstellen",
+				"editDialogTitle": "Agent-Definition bearbeiten",
+				"deleteDialogTitle": "Agent-Definition löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"columns": {
+					"name": "Name",
+					"description": "Beschreibung",
+					"version": "Version",
+					"default": "Standard",
+					"actions": "Aktionen"
+				}
+			},
+			"toolDefinitions": {
+				"title": "Tool Definitions",
+				"note": "Bearbeiten wird verschoben, bis das Backend vollständige Tool-Definition-Details inklusive Endpoint/Handler bereitstellt.",
+				"create": "Tool Definition erstellen",
+				"created": "Tool Definition erfolgreich erstellt",
+				"deleted": "Tool Definition erfolgreich gelöscht",
+				"nameLabel": "Name",
+				"descriptionLabel": "Beschreibung",
+				"locationLabel": "Ort",
+				"endpointOrHandlerLabel": "Endpoint oder Handler",
+				"parameterSchemaLabel": "Parameter Schema",
+				"requiresApprovalLabel": "Benötigt Freigabe",
+				"createDialogTitle": "Tool Definition erstellen",
+				"deleteDialogTitle": "Tool Definition löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"apiSide": "API Side",
+				"clientLocal": "Client Local",
+				"columns": {
+					"name": "Name",
+					"description": "Beschreibung",
+					"location": "Ort",
+					"approval": "Freigabe",
+					"actions": "Aktionen"
+				}
+			},
+			"clientNodes": {
+				"title": "Client Nodes",
+				"deleted": "Client Node erfolgreich gelöscht",
+				"deleteDialogTitle": "Client Node löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"columns": {
+					"name": "Name",
+					"userId": "User ID",
+					"status": "Status",
+					"systemScore": "System Score",
+					"lastSeen": "Zuletzt gesehen",
+					"actions": "Aktionen"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Disconnecting",
+					"error": "Error"
+				}
+			},
+			"aiModels": {
+				"title": "KI-Modelle",
+				"create": "KI-Modell erstellen",
+				"save": "Speichern",
+				"edit": "Bearbeiten",
+				"created": "KI-Modell erfolgreich erstellt",
+				"updated": "KI-Modell erfolgreich aktualisiert",
+				"deleted": "KI-Modell erfolgreich gelöscht",
+				"modelIdLabel": "Modell-ID",
+				"displayNameLabel": "Anzeigename",
+				"descriptionLabel": "Beschreibung",
+				"typeLabel": "Modelltyp",
+				"typeOptions": {
+					"llm": "LLM",
+					"embedding": "Embedding"
+				},
+				"isReasoningModelLabel": "Reasoning-Modell",
+				"supportsToolCallingLabel": "Unterstützt Tool-Aufrufe",
+				"isPublicLabel": "Öffentlich für Chat-Nutzer",
+				"reasoningEffortNamesLabel": "Erlaubte Reasoning-Efforts",
+				"defaultReasoningEffortNameLabel": "Standard-Reasoning-Effort",
+				"createDialogTitle": "KI-Modell erstellen",
+				"editDialogTitle": "KI-Modell bearbeiten",
+				"deleteDialogTitle": "KI-Modell löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"activeBadge": "Aktiv",
+				"publicBadge": "Öffentlich",
+				"reasoningBadge": "Reasoning",
+				"toolCallingBadge": "Tools",
+				"columns": {
+					"modelId": "Modell-ID",
+					"displayName": "Anzeigename",
+					"type": "Typ",
+					"reasoning": "Reasoning",
+					"tools": "Tools",
+					"public": "Öffentlich",
+					"active": "Aktiv",
+					"actions": "Aktionen"
+				}
+			},
+			"feedback": {
+				"title": "Feedback",
+				"all": "Alle",
+				"solved": "Gelöst",
+				"unsolved": "Ungelöst",
+				"markSolved": "Als gelöst markieren",
+				"solvedSuccess": "Feedback als gelöst markiert",
+				"solveDialogTitle": "Feedback als gelöst markieren",
+				"solveNoteLabel": "Lösungsnotiz",
+				"columns": {
+					"conversation": "Konversation",
+					"message": "Nachrichtenvorschau",
+					"sentiment": "Stimmung",
+					"status": "Status",
+					"createdAt": "Erstellt",
+					"actions": "Aktionen"
+				},
+				"positive": "Positiv",
+				"negative": "Negativ",
+				"open": "Offen",
+				"resolved": "Gelöst"
+			},
+			"pairingTokens": {
+				"title": "Pairing Tokens",
+				"legacyNotice": "Pairing-Tokens sind für das normale Worker-Onboarding veraltet. Verwenden Sie standardmäßig die Gerätecode-Node-Bindung und erstellen Sie Tokens nur vorübergehend für Legacy-Kompatibilität.",
+				"labelLabel": "Bezeichnung",
+				"labelPlaceholder": "z. B. Arbeitsplatz Büro",
+				"create": "Pairing Token erstellen",
+				"created": "Pairing Token erfolgreich erstellt",
+				"rotated": "Pairing Token erfolgreich rotiert",
+				"revoked": "Pairing Token erfolgreich widerrufen",
+				"revokeDialogTitle": "Pairing Token widerrufen",
+				"revokeDialogText": "Möchten Sie '{{name}}' wirklich widerrufen?",
+				"rotate": "Rotieren",
+				"rotateConfirmTitle": "Pairing-Token rotieren?",
+				"rotateConfirmDescription": "Dies erzeugt ein neues Pairing-Geheimnis für diesen Token. Das alte Geheimnis funktioniert ab sofort nicht mehr. Bereits gekoppelte Clients behalten ihre Sitzungen — das neue Geheimnis wird nur beim nächsten Pairing oder Login benötigt. Diese Aktion kann nicht rückgängig gemacht werden.",
+				"rotateConfirmLabel": "Rotieren",
+				"secretModalTitle": "Diesen Pairing Token jetzt speichern",
+				"secretWarning": "Der Pairing Token wird nur einmal angezeigt. Bitte sicher speichern.",
+				"tokenLabel": "Pairing Token",
+				"copyToken": "Token kopieren",
+				"tokenCopied": "Pairing Token in Zwischenablage kopiert",
+				"expirationOption_one": "{{count}} Tag",
+				"expirationOption_other": "{{count}} Tage",
+				"durationBadge_one": "Gültig für {{count}} Tag",
+				"durationBadge_other": "Gültig für {{count}} Tage",
+				"statusOpen": "Offen",
+				"statusUsed": "Verwendet",
+				"statusExpired": "Abgelaufen",
+				"columns": {
+					"label": "Bezeichnung",
+					"duration": "Gültigkeitsdauer",
+					"status": "Status",
+					"assignedTo": "Zugewiesen an",
+					"usedBy": "Verwendet von Client",
+					"createdAt": "Erstellt",
+					"expiresAt": "Läuft ab",
+					"actions": "Aktionen"
+				}
+			},
+			"appKeys": {
+				"title": "App Keys",
+				"nameLabel": "Name",
+				"namePlaceholder": "z. B. API-Client Produktion",
+				"appsLabel": "Apps",
+				"create": "App Key erstellen",
+				"created": "App Key erfolgreich erstellt",
+				"deleted": "App Key erfolgreich gelöscht",
+				"enabled": "App Key aktiviert",
+				"disabled": "App Key deaktiviert",
+				"validation": "Name und mindestens eine App sind erforderlich",
+				"deleteDialogTitle": "App Key löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.",
+				"secretModalTitle": "Secret jetzt speichern",
+				"secretWarning": "Das Client Secret wird nur einmal angezeigt. Bitte sicher speichern.",
+				"copySecret": "Secret kopieren",
+				"secretCopied": "Secret in Zwischenablage kopiert",
+				"clientSecretLabel": "Client Secret",
+				"columns": {
+					"name": "Name",
+					"clientId": "Client ID",
+					"apps": "Apps",
+					"createdAt": "Erstellt",
+					"lastUsedAt": "Zuletzt verwendet",
+					"enabled": "Aktiv",
+					"actions": "Aktionen"
+				}
+			},
+			"permissions": {
+				"title": "Berechtigungen",
+				"tablePermissions": "Berechtigungen",
+				"permissionUpdated": "Berechtigung erfolgreich aktualisiert",
+				"noRolesAvailable": "Keine Rollen verfügbar"
+			},
+			"roles": {
+				"title": "Rollen",
+				"deleteDialogTitle": "Rolle löschen",
+				"deleteDialogText": "Möchten Sie diese Rolle wirklich löschen?",
+				"tableTooltipEdit": "Bearbeiten",
+				"tableTooltipDelete": "Löschen",
+				"protectedAdminRoleTooltip": "Die Administratorrolle kann weder umbenannt noch gelöscht werden.",
+				"protectedDefaultRoleTooltip": "Die Standardkontorolle kann weder umbenannt noch gelöscht werden.",
+				"administratorBadge": "Administrator",
+				"defaultAccountRoleBadge": "Standardkontorolle",
+				"createRole": "Rolle erstellen",
+				"roleDeleted": "Rolle erfolgreich gelöscht"
+			},
+			"users": {
+				"title": "Benutzer",
+				"tableHeaders": {
+					"username": "Benutzername",
+					"firstName": "Vorname",
+					"lastName": "Nachname"
+				},
+				"deleteDialogTitle": "Benutzer löschen",
+				"deleteDialogText": "Möchten Sie diesen Benutzer wirklich löschen?",
+				"tableTooltipEdit": "Bearbeiten",
+				"tableTooltipView": "Anzeigen",
+				"tableTooltipDelete": "Löschen",
+				"deleteSuccess": "Benutzer erfolgreich gelöscht",
+				"createUser": "Benutzer erstellen"
+			}
+		},
+		"home": {
+			"title": {
+				"welcome": "Willkommen!"
+			}
+		},
+		"schedule": {
+			"title": "Terminplaner",
+			"createAppointment": "Termin erstellen",
+			"viewAppointment": "Termindetails",
+			"editAppointment": "Termin bearbeiten",
+			"deleteAppointment": "Termin löschen",
+			"deleteConfirmTitle": "Termin löschen",
+			"deleteConfirmText": "Möchten Sie diesen Termin wirklich löschen?",
+			"viewOnlyNotice": "Sie können Termine ansehen, aber nicht verwalten.",
+			"fields": {
+				"title": "Titel",
+				"titlePlaceholder": "Titel eingeben",
+				"description": "Beschreibung",
+				"descriptionPlaceholder": "Beschreibung eingeben (optional)",
+				"start": "Beginn",
+				"end": "Ende",
+				"color": "Farbe",
+				"isShared": "Systemtermin (für alle Benutzer sichtbar)",
+				"user": "Benutzer zuweisen"
+			},
+			"validation": {
+				"titleRequired": "Titel ist erforderlich",
+				"titleMaxLength": "Titel darf maximal 200 Zeichen lang sein",
+				"titleTrimmed": "Titel darf nicht mit Leerzeichen beginnen oder enden.",
+				"endAfterStart": "Endzeit muss nach der Startzeit liegen"
+			},
+			"scheduler": {
+				"day": "Tag",
+				"week": "Woche",
+				"month": "Monat",
+				"year": "Jahr",
+				"today": "Heute",
+				"previous": "Zurück",
+				"next": "Weiter",
+				"more": "Mehr"
+			},
+			"adminPanel": {
+				"title": "Benutzertermine",
+				"searchPlaceholder": "Benutzer suchen...",
+				"loadError": "Benutzer konnten nicht geladen werden.",
+				"show": "Benutzertermine anzeigen",
+				"hide": "Benutzertermine ausblenden"
+			},
+			"systemBadge": "System",
+			"appointmentCreated": "Termin erfolgreich erstellt",
+			"appointmentUpdated": "Termin erfolgreich aktualisiert",
+			"appointmentDeleted": "Termin erfolgreich gelöscht"
+		},
+		"notFound": {
+			"subtitleSecret": "Du hast einen geheimen Bereich gefunden.",
+			"subtitleNotFound": "Die Seite, die sie suchen, existiert nicht.",
+			"backToHomeText": "Zurück zur Startseite"
+		},
+		"deviceBinding": {
+			"title": "Gerät freigeben",
+			"description": "Prüfe den Gerätecode deines Worker-Nodes, bevor du den Zugriff auf dein Konto freigibst.",
+			"userCodeLabel": "Gerätecode",
+			"userCodePlaceholder": "Gib den auf deinem Gerät angezeigten Code ein",
+			"approve": "Gerät freigeben",
+			"deny": "Ablehnen",
+			"completeTitle": "Anfrage abgeschlossen",
+			"approvedMessage": "Gerät '{{nodeName}}' wurde freigegeben.",
+			"deniedMessage": "Die Geräteanfrage wurde abgelehnt.",
+			"approvedToast": "Gerät freigegeben.",
+			"deniedToast": "Gerät abgelehnt.",
+			"errorToast": "Geräteanfrage konnte nicht abgeschlossen werden. Prüfe den Code und versuche es erneut."
+		},
+		"userSettings": {
+			"title": "Benutzereinstellungen",
+			"changePassword": "Passwort ändern",
+			"accountInformation": "Account Informationen",
+			"myNodes": {
+				"title": "Meine Nodes",
+				"supportText": "Prüfe gebundene lokale Worker, Verbindungsstatus, aktive Modellnutzung und widerrufe eine Node, wenn sie keinen Kontozugriff mehr haben soll.",
+				"emptyTitle": "Keine Nodes gebunden",
+				"emptyText": "Binde einen lokalen Worker, damit er hier angezeigt wird.",
+				"errorTitle": "Nodes konnten nicht geladen werden",
+				"errorText": "Aktualisiere die Liste oder versuche es später erneut.",
+				"disconnected": "Trennungsanfrage gesendet.",
+				"deleted": "Node erfolgreich entbunden.",
+				"disconnectDialogTitle": "Node trennen",
+				"disconnectDialogText": "'{{name}}' von der aktiven Sitzung trennen? Die Node bleibt gebunden und kann sich erneut verbinden.",
+				"deleteDialogTitle": "Node entbinden",
+				"deleteDialogText": "'{{name}}' entbinden und Worker-Anmeldedaten widerrufen? Danach ist erneutes Binden erforderlich.",
+				"actions": {
+					"settings": "Einstellungen",
+					"disconnect": "Trennen",
+					"unbind": "Entbinden"
+				},
+				"settings": {
+					"title": "Node-Einstellungen",
+					"description": "Konfiguriere die Anfrageverarbeitung für '{{name}}'. Weitere Node-Einstellungen erscheinen später hier.",
+					"maxTimeoutLabel": "Maximales Timeout für Nachrichtenanfragen",
+					"maxTimeoutDescription": "Beendet hängende Nachrichtenanfragen nach der konfigurierten Anzahl von Sekunden.",
+					"maxTimeoutError": "Gib einen Wert zwischen 5 und 3600 Sekunden ein.",
+					"saved": "Node-Einstellungen gespeichert."
+				},
+				"columns": {
+					"name": "Name",
+					"status": "Status",
+					"systemScore": "System-Score",
+					"lastSeen": "Zuletzt gesehen",
+					"activeModel": "Aktives Modell",
+					"keyStatus": "Schlüsselstatus",
+					"actions": "Aktionen"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Wird getrennt",
+					"error": "Fehler"
+				},
+				"keyStatus": {
+					"active": "Aktiver Schlüssel",
+					"missing": "Schlüssel fehlt",
+					"unbound": "Nicht gebunden"
+				}
+			},
+			"themeConfigurator": {
+				"title": "Theme Konfigurator",
+				"description": "Aktives Theme temporär anpassen, direkt in der Anwendung testen und als JSON exportieren.",
+				"developerHint": "Entwickler können die exportierte JSON in src/theme/theme.json ersetzen und deployen.",
+				"generatorHint": "Generiere komplette Primär- und Sekundär-Farbskalen aus einer Basisfarbe.",
+				"mode": "Modus",
+				"fontFamily": "Schriftfamilie",
+				"breakpoints": "Umbruchpunkte",
+				"baseColor": "Basisfarbe",
+				"generatedScale": "Generierte Skala",
+				"invalidColor": "Bitte eine gültige Farbe eingeben (#RRGGBB oder rgb(r,g,b)).",
+				"primaryPalette": "Primärpalette",
+				"primaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Primärabstufungen automatisch.",
+				"secondaryPalette": "Sekundärpalette",
+				"secondaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Sekundärabstufungen automatisch.",
+				"primaryMain": "Primärfarbe",
+				"primaryHover": "Primärfarbe Hover",
+				"secondaryMain": "Sekundärfarbe",
+				"secondaryHover": "Sekundärfarbe Hover",
+				"variantsPreview": "Variantenvorschau",
+				"variantsPrimary": "Primäre Button-Varianten",
+				"variantsSecondary": "Sekundäre Button-Varianten",
+				"variantFilled": "Gefüllt",
+				"variantLight": "Leicht",
+				"variantOutline": "Outline",
+				"variantSubtle": "Subtil",
+				"applyPreview": "Vorschau anwenden",
+				"resetToSource": "Auf Quelle zurücksetzen",
+				"exportJson": "JSON exportieren",
+				"importJson": "JSON importieren",
+				"previewApplied": "Theme Vorschau angewendet",
+				"previewReset": "Theme Vorschau auf Quelle zurückgesetzt",
+				"exported": "Theme JSON exportiert",
+				"imported": "Theme JSON importiert und angewendet",
+				"importError": "Ungültige JSON Datei"
+			},
+			"passwordAndSecurity": "Passwort und Sicherheit",
+			"deviceSessions": "Gerätesitzungen",
+			"editProfile": "Profil bearbeiten",
+			"saveEdit": "Speichern",
+			"cancelEdit": "Abbrechen",
+			"profileInformationUpdated": "Profil erfolgreich aktualisiert",
+			"labels": {
+				"firstName": "Vorname",
+				"lastName": "Nachname",
+				"email": "Email"
+			}
+		}
+	},
+	"components": {
+		"loginCard": {
+			"signIn": "Anmelden",
+			"noAccount": "Kein Konto? Registrieren",
+			"labels": {
+				"email": "Email",
+				"password": "Passwort"
+			}
+		},
+		"roleCreateModal": {
+			"createRole": "Rolle erstellen",
+			"roleName": "Rollenname",
+			"roleNamePlaceholder": "Rollenname eingeben",
+			"roleCreated": "Rolle erfolgreich erstellt",
+			"create": "Erstellen",
+			"cancel": "Abbrechen"
+		},
+		"roleEditModal": {
+			"editRole": "Rolle bearbeiten",
+			"roleName": "Rollenname",
+			"roleNamePlaceholder": "Rollenname eingeben",
+			"protectedRoleHint": "Geschützte Rollen können nicht umbenannt werden.",
+			"protectedRoleSubmitError": "Geschützte Rollen können nicht umbenannt werden.",
+			"roleUpdated": "Rolle erfolgreich aktualisiert",
+			"save": "Speichern",
+			"cancel": "Abbrechen"
+		},
+		"userCreateModal": {
+			"createUser": "Benutzer erstellen",
+			"username": "Benutzername",
+			"usernamePlaceholder": "Benutzername eingeben",
+			"firstName": "Vorname",
+			"firstNamePlaceholder": "Vornamen eingeben",
+			"lastName": "Nachname",
+			"lastNamePlaceholder": "Nachnamen eingeben",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"roles": "Rollen",
+			"create": "Erstellen",
+			"cancel": "Abbrechen",
+			"createSuccess": "Benutzer erfolgreich erstellt"
+		},
+		"userEditModal": {
+			"editUser": "Benutzer bearbeiten",
+			"username": "Benutzername",
+			"usernamePlaceholder": "Benutzername eingeben",
+			"firstName": "Vorname",
+			"firstNamePlaceholder": "Vornamen eingeben",
+			"lastName": "Nachname",
+			"lastNamePlaceholder": "Nachnamen eingeben",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"passwordHelperText": "Leer lassen, um das Passwort nicht zu ändern",
+			"loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
+			"disabled": "Deaktiviert",
+			"roles": "Rollen",
+			"save": "Speichern",
+			"cancel": "Abbrechen",
+			"userUpdated": "Benutzer erfolgreich aktualisiert"
+		},
+		"userViewModal": {
+			"viewUser": "Benutzer anzeigen",
+			"username": "Benutzername",
+			"firstName": "Vorname",
+			"lastName": "Nachname",
+			"email": "Email",
+			"roles": "Rollen",
+			"loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
+			"ok": "Ok"
+		},
+		"userChangePasswordDialog": {
+			"changePassword": "Passwort ändern",
+			"oldPassword": "Altes Passwort",
+			"oldPasswordPlaceholder": "Altes Passwort eingeben",
+			"currentPassword": "Aktuelles Passwort",
+			"currentPasswordPlaceholder": "Aktuelles Passwort eingeben",
+			"newPassword": "Neues Passwort",
+			"newPasswordPlaceholder": "Neues Passwort eingeben",
+			"confirmPassword": "Passwort bestätigen",
+			"confirmPasswordPlaceholder": "Passwort bestätigen",
+			"passwordChanged": "Passwort erfolgreich geändert",
+			"change": "Ändern",
+			"cancel": "Abbrechen"
+		},
+		"registerCard": {
+			"title": "Registrieren",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"confirmPassword": "Passwort bestätigen",
+			"confirmPasswordPlaceholder": "Passwort bestätigen",
+			"register": "Registrieren",
+			"alreadyHaveAccount": "Bereits ein Konto? Anmelden",
+			"labels": {
+				"email": "Email",
+				"password": "Passwort"
+			}
+		},
+		"sideNavigationBar": {
+			"tooltip": {
+				"collapse": "Einklappen",
+				"expand": "Ausklappen"
+			}
+		},
+		"tables": {
+			"button": {
+				"resetFilters": "Filter zurücksetzen"
+			}
+		},
+		"dialogTextTitleBar": {
+			"tooltip": {
+				"close": "Schließen"
+			}
+		},
+		"userDeviceSessions": {
+			"deviceSessions": "Gerätesitzungen",
+			"activeSessions": "Aktive Sitzungen",
+			"terminateSession": "Sitzung beenden",
+			"terminateSessionConfirmation": "Möchten Sie diese Sitzung wirklich beenden? Sie werden von diesem Gerät abgemeldet.",
+			"terminateAllSessions": "Alle Sitzungen beenden",
+			"terminateOtherSessions": "Andere Sitzungen beenden",
+			"terminateAllSessionsConfirmation": "Möchten Sie wirklich alle anderen Sitzungen beenden? Sie werden von allen anderen Geräten abgemeldet.",
+			"currentSession": "Aktuelle Sitzung",
+			"lastLogin": "Letzter Login",
+			"firstLogin": "Erster Login",
+			"loginProvider": "Login-Anbieter",
+			"manageDeviceSessions": "Gerätesitzungen verwalten",
+			"cannotLogoutCurrentDevice": "Sie können sich nicht von diesem Gerät abmelden, da es Ihre aktuelle Sitzung ist."
+		},
+		"mobileNavigation": {
+			"languageTitle": "Sprache",
+			"userAvatarMenu": {
+				"title": "Benutzer",
+				"signedInAs": "Angemeldet als",
+				"userSettings": "Benutzereinstellungen",
+				"logout": "Abmelden"
+			}
+		},
+		"desktopNavigation": {
+			"userAvatarMenu": {
+				"title": "Benutzer",
+				"signedInAs": "Angemeldet als",
+				"userSettings": "Benutzereinstellungen",
+				"logout": "Abmelden"
+			}
+		},
+		"languageMenu": {
+			"tooltip": "Sprache ändern"
+		}
+	},
+	"errorMessages": {
+		"roleNameAlreadyExists": "Der Rollenname existiert bereits",
+		"emailAlreadyInUse": "Die Email wird bereits verwendet",
+		"usernameAlreadyInUse": "Der Benutzername wird bereits verwendet",
+		"requiredField": "Dieses Feld ist erforderlich",
+		"minLength": "Mindestens {{min}} Zeichen erforderlich",
+		"invalidEmail": "Ungültige Email",
+		"invalidName": "Nur Buchstaben, Leerzeichen, Bindestriche und Apostrophe erlaubt",
+		"invalidEmailOrPassword": "Ungültige Email oder Passwort",
+		"loginWithDisabledUser": "Benutzer ist deaktiviert. Wenn Sie denken dass das ein Versehen ist, wenden Sie sich bitte an den Administrator.",
+		"passwordsDoNotMatch": "Passwörter stimmen nicht überein",
+		"passwordIncorrect": "Passwort ist falsch",
+		"onlyAlphanumeric": "Nur alphanumerische Zeichen erlaubt",
+		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
+		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
+		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
+	}
+}
