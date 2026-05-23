@@ -12,6 +12,8 @@
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.3.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.3.0" />
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.2.0" />
+    <PackageVersion Include="FastEndpoints" Version="8.1.0" />
+    <PackageVersion Include="FastEndpoints.Swagger" Version="8.1.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.35.0" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
     <PackageVersion Include="Grpc.Core.Api" Version="2.80.0" />
@@ -37,9 +39,11 @@
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.6.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.6.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.0.0-preview.260108.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.6.2" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.6.2" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.6.2-preview.260521.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.6.2-alpha.260521.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.6.2-preview.260521.1" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.6.0" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
     <PackageVersion Include="NJsonSchema" Version="11.6.1" />
@@ -50,6 +54,7 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.14.14" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />

@@ -37,6 +37,13 @@
 	"navigation": {
 		"home": "Home",
 		"chat": "Chat",
+		"dashboard": "Dashboard",
+		"binding": "Node Binding",
+		"nodeSettings": "Node Settings",
+		"cloudSettings": "Cloud Settings",
+		"models": "Models",
+		"manager": "Manager",
+		"invocations": "Invocations",
 		"schedule": "Schedule",
 		"user": "User",
 		"adminPanel": "Admin Panel",
@@ -657,6 +664,48 @@
 		"home": {
 			"title": {
 				"welcome": "Welcome!"
+			}
+		},
+		"dashboard": {
+			"placeholder": {
+				"title": "Dashboard",
+				"description": "Remote connection state and node health controls will be added here."
+			}
+		},
+		"nodeBinding": {
+			"placeholder": {
+				"title": "Node binding",
+				"description": "Pairing and binding workflows will be ported from the current node UI."
+			}
+		},
+		"nodeSettings": {
+			"placeholder": {
+				"title": "Node settings",
+				"description": "Local node settings will be backed by the node FastEndpoints API."
+			}
+		},
+		"cloudSettings": {
+			"placeholder": {
+				"title": "Cloud settings",
+				"description": "Provider configuration will use secret-safe local API responses."
+			}
+		},
+		"models": {
+			"placeholder": {
+				"title": "Models",
+				"description": "Local model listing, selection, pull, and delete controls will be added here."
+			}
+		},
+		"manager": {
+			"placeholder": {
+				"title": "Runtime manager",
+				"description": "HostAgent runtime status and container actions will be added here."
+			}
+		},
+		"invocations": {
+			"placeholder": {
+				"title": "Invocations",
+				"description": "Current and historical invocation monitoring will be ported here."
 			}
 		},
 		"schedule": {

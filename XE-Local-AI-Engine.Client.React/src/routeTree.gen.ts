@@ -11,6 +11,13 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
+import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
+import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
+import { Route as LayoutManagerRouteImport } from './routes/_layout/manager'
+import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
+import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
+import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 
 const LayoutRoute = LayoutRouteImport.update({
@@ -22,6 +29,41 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutNodeSettingsRoute = LayoutNodeSettingsRouteImport.update({
+  id: '/node-settings',
+  path: '/node-settings',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutNodeBindingRoute = LayoutNodeBindingRouteImport.update({
+  id: '/node-binding',
+  path: '/node-binding',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutModelsRoute = LayoutModelsRouteImport.update({
+  id: '/models',
+  path: '/models',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutManagerRoute = LayoutManagerRouteImport.update({
+  id: '/manager',
+  path: '/manager',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutInvocationsRoute = LayoutInvocationsRouteImport.update({
+  id: '/invocations',
+  path: '/invocations',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutCloudSettingsRoute = LayoutCloudSettingsRouteImport.update({
+  id: '/cloud-settings',
+  path: '/cloud-settings',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutChatRoute = LayoutChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -31,23 +73,73 @@ const LayoutChatRoute = LayoutChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/chat': typeof LayoutChatRoute
+  '/cloud-settings': typeof LayoutCloudSettingsRoute
+  '/dashboard': typeof LayoutDashboardRoute
+  '/invocations': typeof LayoutInvocationsRoute
+  '/manager': typeof LayoutManagerRoute
+  '/models': typeof LayoutModelsRoute
+  '/node-binding': typeof LayoutNodeBindingRoute
+  '/node-settings': typeof LayoutNodeSettingsRoute
 }
 export interface FileRoutesByTo {
   '/chat': typeof LayoutChatRoute
+  '/cloud-settings': typeof LayoutCloudSettingsRoute
+  '/dashboard': typeof LayoutDashboardRoute
+  '/invocations': typeof LayoutInvocationsRoute
+  '/manager': typeof LayoutManagerRoute
+  '/models': typeof LayoutModelsRoute
+  '/node-binding': typeof LayoutNodeBindingRoute
+  '/node-settings': typeof LayoutNodeSettingsRoute
   '/': typeof LayoutIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
   '/_layout/chat': typeof LayoutChatRoute
+  '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
+  '/_layout/dashboard': typeof LayoutDashboardRoute
+  '/_layout/invocations': typeof LayoutInvocationsRoute
+  '/_layout/manager': typeof LayoutManagerRoute
+  '/_layout/models': typeof LayoutModelsRoute
+  '/_layout/node-binding': typeof LayoutNodeBindingRoute
+  '/_layout/node-settings': typeof LayoutNodeSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chat'
+  fullPaths:
+    | '/'
+    | '/chat'
+    | '/cloud-settings'
+    | '/dashboard'
+    | '/invocations'
+    | '/manager'
+    | '/models'
+    | '/node-binding'
+    | '/node-settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/chat' | '/'
-  id: '__root__' | '/_layout' | '/_layout/chat' | '/_layout/'
+  to:
+    | '/chat'
+    | '/cloud-settings'
+    | '/dashboard'
+    | '/invocations'
+    | '/manager'
+    | '/models'
+    | '/node-binding'
+    | '/node-settings'
+    | '/'
+  id:
+    | '__root__'
+    | '/_layout'
+    | '/_layout/chat'
+    | '/_layout/cloud-settings'
+    | '/_layout/dashboard'
+    | '/_layout/invocations'
+    | '/_layout/manager'
+    | '/_layout/models'
+    | '/_layout/node-binding'
+    | '/_layout/node-settings'
+    | '/_layout/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -70,6 +162,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/node-settings': {
+      id: '/_layout/node-settings'
+      path: '/node-settings'
+      fullPath: '/node-settings'
+      preLoaderRoute: typeof LayoutNodeSettingsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/node-binding': {
+      id: '/_layout/node-binding'
+      path: '/node-binding'
+      fullPath: '/node-binding'
+      preLoaderRoute: typeof LayoutNodeBindingRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/models': {
+      id: '/_layout/models'
+      path: '/models'
+      fullPath: '/models'
+      preLoaderRoute: typeof LayoutModelsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/manager': {
+      id: '/_layout/manager'
+      path: '/manager'
+      fullPath: '/manager'
+      preLoaderRoute: typeof LayoutManagerRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/invocations': {
+      id: '/_layout/invocations'
+      path: '/invocations'
+      fullPath: '/invocations'
+      preLoaderRoute: typeof LayoutInvocationsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/dashboard': {
+      id: '/_layout/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof LayoutDashboardRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/cloud-settings': {
+      id: '/_layout/cloud-settings'
+      path: '/cloud-settings'
+      fullPath: '/cloud-settings'
+      preLoaderRoute: typeof LayoutCloudSettingsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/chat': {
       id: '/_layout/chat'
       path: '/chat'
@@ -82,11 +223,25 @@ declare module '@tanstack/react-router' {
 
 interface LayoutRouteChildren {
   LayoutChatRoute: typeof LayoutChatRoute
+  LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
+  LayoutDashboardRoute: typeof LayoutDashboardRoute
+  LayoutInvocationsRoute: typeof LayoutInvocationsRoute
+  LayoutManagerRoute: typeof LayoutManagerRoute
+  LayoutModelsRoute: typeof LayoutModelsRoute
+  LayoutNodeBindingRoute: typeof LayoutNodeBindingRoute
+  LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutChatRoute: LayoutChatRoute,
+  LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
+  LayoutDashboardRoute: LayoutDashboardRoute,
+  LayoutInvocationsRoute: LayoutInvocationsRoute,
+  LayoutManagerRoute: LayoutManagerRoute,
+  LayoutModelsRoute: LayoutModelsRoute,
+  LayoutNodeBindingRoute: LayoutNodeBindingRoute,
+  LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }
 

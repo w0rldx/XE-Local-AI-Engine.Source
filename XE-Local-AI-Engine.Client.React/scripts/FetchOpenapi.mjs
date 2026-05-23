@@ -3,7 +3,7 @@ import { get as httpGet } from "node:http";
 import { Agent as HttpsAgent, get as httpsGet } from "node:https";
 import { resolve } from "node:path";
 
-const url = process.env.OPENAPI_SPEC_URL ?? "https://localhost:5001/openapi/v1/v1.json";
+const url = process.env.OPENAPI_SPEC_URL ?? "https://localhost:50722/openapi/local/v1/v1.json";
 const out = resolve(process.cwd(), "openapi/v1.json");
 
 function fetchJson(specUrl) {

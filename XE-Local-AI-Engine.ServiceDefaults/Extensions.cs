@@ -55,6 +55,8 @@ public static class Extensions
                    {
                        tracing.AddSource(builder.Environment.ApplicationName)
                               .AddSource("XE.LocalAiEngine.AI.Agent")
+                              .AddSource("Microsoft.Agents.AI*")
+                              .AddSource("Microsoft.Extensions.AI*")
                               .AddAspNetCoreInstrumentation(tracing =>
                                   tracing.Filter = context =>
                                       !context.Request.Path.StartsWithSegments("/health/live", StringComparison.CurrentCulture))

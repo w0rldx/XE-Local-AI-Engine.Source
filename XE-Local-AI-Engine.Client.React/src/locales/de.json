@@ -37,6 +37,13 @@
 	"navigation": {
 		"home": "Start",
 		"chat": "Chat",
+		"dashboard": "Dashboard",
+		"binding": "Node-Bindung",
+		"nodeSettings": "Node-Einstellungen",
+		"cloudSettings": "Cloud-Einstellungen",
+		"models": "Modelle",
+		"manager": "Manager",
+		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
 		"user": "Benutzer",
 		"adminPanel": "Adminbereich",
@@ -657,6 +664,48 @@
 		"home": {
 			"title": {
 				"welcome": "Willkommen!"
+			}
+		},
+		"dashboard": {
+			"placeholder": {
+				"title": "Dashboard",
+				"description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
+			}
+		},
+		"nodeBinding": {
+			"placeholder": {
+				"title": "Node-Bindung",
+				"description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
+			}
+		},
+		"nodeSettings": {
+			"placeholder": {
+				"title": "Node-Einstellungen",
+				"description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden."
+			}
+		},
+		"cloudSettings": {
+			"placeholder": {
+				"title": "Cloud-Einstellungen",
+				"description": "Provider-Konfiguration nutzt geheimnissichere lokale API-Antworten."
+			}
+		},
+		"models": {
+			"placeholder": {
+				"title": "Modelle",
+				"description": "Lokale Modellauflistung, Auswahl, Pull und Löschen werden hier ergänzt."
+			}
+		},
+		"manager": {
+			"placeholder": {
+				"title": "Runtime-Manager",
+				"description": "HostAgent-Laufzeitstatus und Container-Aktionen werden hier ergänzt."
+			}
+		},
+		"invocations": {
+			"placeholder": {
+				"title": "Aufrufe",
+				"description": "Aktuelle und historische Aufrufüberwachung wird hier portiert."
 			}
 		},
 		"schedule": {

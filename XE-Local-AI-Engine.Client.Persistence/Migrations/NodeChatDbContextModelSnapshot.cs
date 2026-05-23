@@ -69,9 +69,17 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error");
+
                     b.Property<byte[]>("MetadataJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("metadata_json");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -82,9 +90,21 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("sequence");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status")
+                        .HasDefaultValue("completed");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
                     b.HasKey("MessageId");
 
                     b.HasIndex("ConversationId");
+
+                    b.HasIndex("RequestId");
 
                     b.ToTable("messages", (string)null);
                 });

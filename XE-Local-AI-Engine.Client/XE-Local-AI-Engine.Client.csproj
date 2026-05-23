@@ -3,21 +3,30 @@
   <PropertyGroup>
     <UserSecretsId>31bd0c1c-d903-4e54-bae9-df0140eb36bd</UserSecretsId>
     <RootNamespace>XE_Local_AI_Engine.Client</RootNamespace>
+    <NodeReactClientDir>$(MSBuildProjectDirectory)\..\XE-Local-AI-Engine.Client.React\</NodeReactClientDir>
+    <NodeReactBuildDir>$(NodeReactClientDir)dist\</NodeReactBuildDir>
+    <NodeReactRootWebRootDir>$(MSBuildProjectDirectory)\wwwroot\</NodeReactRootWebRootDir>
+    <NodeReactWebRootDir>$(NodeReactRootWebRootDir)app\</NodeReactWebRootDir>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
+    <PackageReference Include="FastEndpoints"/>
+    <PackageReference Include="FastEndpoints.Swagger"/>
     <PackageReference Include="Grpc.Net.Client"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI"/>
+    <PackageReference Include="Microsoft.Agents.AI.DevUI"/>
     <PackageReference Include="MudBlazor"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="Scalar.AspNetCore"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="Serilog.AspNetCore"/>
     <PackageReference Include="Serilog.Enrichers.Environment"/>
@@ -42,5 +51,43 @@
     <Using Include="C0re.AI.Shared.Contracts.Enums"/>
     <Using Include="C0re.AI.Shared.Contracts.Events"/>
   </ItemGroup>
+
+  <Target Name="CopyNodeReactBuildToWwwroot" BeforeTargets="Build;ComputeFilesToPublish" Condition="Exists('$(NodeReactBuildDir)index.html')">
+    <ItemGroup>
+      <NodeReactBuildFiles Include="$(NodeReactBuildDir)**\*.*"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)index.html"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)favicon.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)logo.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)logo192.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)logo512.png"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)manifest.json"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)robots.txt"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)staticwebapp.config.json"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)web.config"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_mark.svg"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_wordmark.svg"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)index.html"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)favicon.png"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)logo.png"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)logo192.png"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)logo512.png"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)manifest.json"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)robots.txt"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)staticwebapp.config.json"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)web.config"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)xen_logo_mark.svg"/>
+      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)xen_logo_wordmark.svg"/>
+    </ItemGroup>
+
+    <MakeDir Directories="$(NodeReactWebRootDir)"/>
+    <RemoveDir Directories="$(NodeReactWebRootDir)assets"/>
+    <RemoveDir Directories="$(NodeReactRootWebRootDir)assets"/>
+    <Delete Files="@(NodeReactStaleRootFiles)"/>
+    <Delete Files="@(NodeReactLegacyRootFiles)"/>
+    <Copy SourceFiles="@(NodeReactBuildFiles)"
+          DestinationFiles="@(NodeReactBuildFiles->'$(NodeReactWebRootDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"/>
+    <Message Importance="high" Text="Copied node React build from $(NodeReactBuildDir) to $(NodeReactWebRootDir)."/>
+  </Target>
 
 </Project>

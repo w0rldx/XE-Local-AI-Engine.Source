@@ -16,5 +16,13 @@ internal sealed record class NodeMessage
 
     public long CreatedAtUtc { get; set; }
 
+    public long UpdatedAtUtc { get; set; }
+
+    public string Status { get; set; } = NodeMessageStatus.Completed;
+
+    public Guid? RequestId { get; set; }
+
+    public string? Error { get; set; }
+
     public NodeConversation? Conversation { get; set; }
 }
