@@ -1,9 +1,25 @@
-import type { AxiosError, AxiosInstance } from "axios";
+import { AxiosHeaders, type AxiosError, type AxiosInstance } from "axios";
 import { t } from "i18next";
 import { toast } from "@/core/ui/notifications/Toast";
 
+import { getLocalOperatorToken, localOperatorHeaderName } from "@/core/api/auth/LocalOperatorToken";
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
+
+export const addLocalOperatorTokenInterceptor = (axiosInstance: AxiosInstance) => {
+	axiosInstance.interceptors.request.use((config) => {
+		const token = getLocalOperatorToken();
+		if (!token) {
+			return config;
+		}
+
+		const headers = AxiosHeaders.from(config.headers);
+		headers.set(localOperatorHeaderName, token);
+		config.headers = headers;
+
+		return config;
+	});
+};
 
 export const addRateLimitingInterceptor = (axiosInstance: AxiosInstance) => {
 	axiosInstance.interceptors.response.use(

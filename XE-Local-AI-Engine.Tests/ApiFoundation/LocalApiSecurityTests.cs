@@ -33,7 +33,7 @@ public sealed class LocalApiSecurityTests
     }
 
     [Test]
-    public async Task LocalApi_WhenHostIsUnsafe_ReturnsForbidden()
+    public async Task LocalApi_WhenHostIsUnsafe_ReturnsBadRequest()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
@@ -43,7 +43,7 @@ public sealed class LocalApiSecurityTests
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Test]

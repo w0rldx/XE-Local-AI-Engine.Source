@@ -23,13 +23,15 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
+    private static readonly SemaphoreSlim HostStartupLock = new(1, 1);
+
     private readonly FakeOllamaServer? _fakeOllamaServer;
 
-    public TestingWebAppFactory()
+    public TestingWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
     {
         if (!RunLocalIntegration)
         {
-            _fakeOllamaServer = FakeOllamaServer.StartAsync(new FakeOllamaOptions
+            _fakeOllamaServer = FakeOllamaServer.StartAsync(fakeOllamaOptions ?? new FakeOllamaOptions
             {
                 Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
             }).GetAwaiter().GetResult();
@@ -37,6 +39,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
     }
 
     public bool SkipDefaultBaseUrlOverride { get; init; }
+
+    public Action<IServiceCollection>? ConfigureAdditionalTestServices { get; init; }
 
     private static bool RunLocalIntegration =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
@@ -56,6 +60,19 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     public async Task InitializeAsync()
     {
+    }
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        HostStartupLock.Wait();
+        try
+        {
+            return base.CreateHost(builder);
+        }
+        finally
+        {
+            HostStartupLock.Release();
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -106,6 +123,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 services.RemoveAll<IHttpClientFactory>();
                 services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());
             }
+
+            ConfigureAdditionalTestServices?.Invoke(services);
         });
 
         base.ConfigureWebHost(builder);

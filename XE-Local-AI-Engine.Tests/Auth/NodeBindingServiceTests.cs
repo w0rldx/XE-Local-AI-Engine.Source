@@ -68,7 +68,7 @@ public sealed class NodeBindingServiceTests
         AssertEx.Equal(1, pollCount);
         AssertEx.Equal(1, tokenStore.StoreTokensAsyncCallCount);
         AssertEx.Equal("device-code", tokenStore.BindingMethod);
-        AssertEx.True(tokenStore.AutoConnectOnStart);
+        AssertEx.False(tokenStore.AutoConnectOnStart);
         AssertEx.Equal("worker-node-test", tokenStore.LastKnownNodeName);
     }
 
@@ -98,6 +98,40 @@ public sealed class NodeBindingServiceTests
 
         AssertEx.Equal("expired", result.Status);
         AssertEx.Equal(0, tokenStore.StoreTokensAsyncCallCount);
+    }
+
+    [Test]
+    public async Task CancelAsync_CancelsActivePolling()
+    {
+        var pollStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var service = CreateService(MockTokenStore.Unpaired(), request =>
+        {
+            if (request.RequestUri?.AbsolutePath.EndsWith("/token", StringComparison.Ordinal) == true)
+            {
+                pollStarted.TrySetResult();
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new PollNodeBindingResponse
+                    {
+                        Status = "pending",
+                        IntervalSeconds = 1,
+                        ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+                    })
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(CreateStartResponse())
+            });
+        });
+        var session = await service.StartBindingAsync();
+
+        var pollTask = service.PollUntilTerminalAsync(session);
+        await pollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await service.CancelAsync().ConfigureAwait(false);
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => pollTask).ConfigureAwait(false);
     }
 
     private static NodeBindingService CreateService(MockTokenStore tokenStore,

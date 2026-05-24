@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -8,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesInterceptor
 {
-    private readonly Dictionary<DbContext, List<TrackedEncryptedProperty>> _pendingRestores = [];
+    private readonly ConcurrentDictionary<DbContext, List<TrackedEncryptedProperty>> _pendingRestores = [];
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
@@ -81,7 +82,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
 
     private void RestoreTrackedPayloads(DbContext? context)
     {
-        if (context is null || !_pendingRestores.Remove(context, out var trackedProperties))
+        if (context is null || !_pendingRestores.TryRemove(context, out var trackedProperties))
         {
             return;
         }

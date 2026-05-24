@@ -176,14 +176,28 @@ public sealed class TokenStoreTests : IDisposable
     }
 
     [Test]
-    public async Task StoreTokensAsync_WhenMetadataOmitted_DefaultsAutoConnectOnStartTrue()
+    public async Task StoreTokensAsync_WhenMetadataOmitted_DefaultsAutoConnectOnStartFalse()
     {
         using var tokenStore = CreateTokenStore();
 
         await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
 
-        AssertEx.True(tokenStore.AutoConnectOnStart);
+        AssertEx.False(tokenStore.AutoConnectOnStart);
         AssertEx.Equal("pairing-token", tokenStore.BindingMethod);
+    }
+
+    [Test]
+    public async Task StoreTokensAsync_WhenMetadataOmitted_PreservesExistingAutoConnectPreference()
+    {
+        using var tokenStore = CreateTokenStore();
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build(), new TokenStoreMetadata
+        {
+            AutoConnectOnStart = true
+        });
+
+        await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+        AssertEx.True(tokenStore.AutoConnectOnStart);
     }
 
     [Test]

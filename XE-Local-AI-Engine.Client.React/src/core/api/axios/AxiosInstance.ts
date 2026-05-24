@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { addApiProblemDetailsInterceptor, addRateLimitingInterceptor } from "@/core/api/axios/Interceptors";
+import { addApiProblemDetailsInterceptor, addLocalOperatorTokenInterceptor, addRateLimitingInterceptor } from "@/core/api/axios/Interceptors";
 import { versionedApiBaseUrl } from "@/core/api/utils/VersionedApiUrl";
 
 const axiosInstance = axios.create({
@@ -10,6 +10,9 @@ const axiosInstance = axios.create({
 		Accept: "application/json",
 	},
 });
+
+// Request interceptors
+addLocalOperatorTokenInterceptor(axiosInstance);
 
 // Response interceptors
 addRateLimitingInterceptor(axiosInstance);

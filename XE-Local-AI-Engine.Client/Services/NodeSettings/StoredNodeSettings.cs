@@ -9,4 +9,6 @@ public sealed record StoredNodeSettings
     public const int MaxMaxMessageRequestTimeoutSeconds = 3600;
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
+
+    public string? DefaultModelName { get; init; }
 }

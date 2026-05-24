@@ -112,11 +112,11 @@ public sealed class RouteCoexistenceTests
             StringComparison.OrdinalIgnoreCase,
             "Blazor SignalR negotiate should remain available on _blazor.");
 
-        AssertEx.Equal(HttpStatusCode.NotFound, localChatNegotiateResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, localChatNegotiateResponse.StatusCode);
         AssertEx.False(string.Equals(localChatNegotiateResponse.Content.Headers.ContentType?.MediaType,
                 "text/html",
                 StringComparison.OrdinalIgnoreCase),
-            "The future local chat hub path must not be swallowed by Blazor or the React SPA fallback before the hub is mapped.");
+            "The local chat hub path must not be swallowed by Blazor or the React SPA fallback after the hub is mapped.");
     }
 
     private static HttpRequestMessage CreateProbeRequest(TestingWebAppFactory factory, string name)

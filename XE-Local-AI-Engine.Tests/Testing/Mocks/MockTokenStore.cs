@@ -28,7 +28,7 @@ public sealed class MockTokenStore : ITokenStore
 
     public DateTimeOffset? TokenExpiresAt { get; private set; }
 
-    public bool AutoConnectOnStart { get; private set; } = true;
+    public bool AutoConnectOnStart { get; private set; }
 
     public string? BindingMethod { get; private set; }
 
@@ -102,6 +102,7 @@ public sealed class MockTokenStore : ITokenStore
             _refreshToken = "refresh-token",
             _clientNodeId = clientNodeId,
             TokenExpiresAt = expiresAt,
+            AutoConnectOnStart = true,
             BindingMethod = "pairing-token"
         };
     }

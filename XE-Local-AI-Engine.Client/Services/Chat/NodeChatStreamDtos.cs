@@ -1,0 +1,36 @@
+namespace XE_Local_AI_Engine.Client.Services.Chat;
+
+public static class ChatStreamEventTypes
+{
+    public const string UserMessagePersisted = "user-message-persisted";
+    public const string AssistantPending = "assistant-pending";
+    public const string AssistantStreaming = "assistant-streaming";
+    public const string AssistantDelta = "assistant-delta";
+    public const string AssistantCompleted = "assistant-completed";
+    public const string AssistantCancelled = "assistant-cancelled";
+    public const string AssistantFailed = "assistant-failed";
+    public const string AssistantInterrupted = "assistant-interrupted";
+}
+
+public sealed record NodeChatStreamRequest(
+    Guid ConversationId,
+    string Content,
+    Guid? UserMessageId = null,
+    Guid? MessageId = null,
+    Guid? RequestId = null,
+    string? Model = null);
+
+public sealed record ChatStreamEvent(
+    string Type,
+    Guid ConversationId,
+    Guid MessageId,
+    Guid RequestId,
+    string Status,
+    long Sequence,
+    long OccurredAtUtc,
+    string? Delta = null,
+    string? ReasoningDelta = null,
+    string? Content = null,
+    string? Reasoning = null,
+    string? Error = null,
+    string? Model = null);

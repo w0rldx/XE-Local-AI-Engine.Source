@@ -80,6 +80,36 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task TerminalizeAssistantMessageAsync_WhenFailed_PersistsPartialContentAndRedactedError()
+    {
+        await using var provider = await BuildProviderAsync("failed-terminal.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Failure", null, CreatedAtUtc: 24)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 25)).ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 26).ConfigureAwait(false);
+        await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "partial answer", Reasoning: "partial reasoning", UpdatedAtUtc: 27)).ConfigureAwait(false);
+
+        var failed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+            correlation,
+            NodeChatMessageStatusValues.Failed,
+            UpdatedAtUtc: 28,
+            Content: "partial answer",
+            Reasoning: "partial reasoning",
+            Error: "local-chat-stream-failed")).ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var loadedAssistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, failed.Status);
+        AssertEx.Equal("partial answer", loadedAssistant.Content);
+        AssertEx.Equal("partial reasoning", loadedAssistant.Reasoning);
+        AssertEx.Equal("local-chat-stream-failed", loadedAssistant.Error);
+        AssertEx.Equal(28L, loadedAssistant.UpdatedAtUtc);
+    }
+
+    [Test]
     public async Task ListAndGet_ExcludePurgedConversationsAndOrderMessagesBySequence()
     {
         await using var provider = await BuildProviderAsync("list.sqlite").ConfigureAwait(false);

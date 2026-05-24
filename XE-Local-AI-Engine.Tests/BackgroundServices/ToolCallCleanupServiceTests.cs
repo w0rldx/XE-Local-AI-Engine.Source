@@ -14,10 +14,10 @@ public sealed class ToolCallCleanupServiceTests
     public async Task ExecuteAsync_CallsCleanupStaleToolCalls_Periodically()
     {
         using var runner = new MockInvocationRunner();
-        using var service = CreateService(runner, 5, 1);
+        using var service = CreateService(runner, 5, 0);
 
         await service.StartAsync(CancellationToken.None);
-        await runner.WaitForCleanupAsync();
+        AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.True(runner.CleanupCallCount > 0);
@@ -27,10 +27,10 @@ public sealed class ToolCallCleanupServiceTests
     public async Task ExecuteAsync_PassesConfiguredMaxAge()
     {
         using var runner = new MockInvocationRunner();
-        using var service = CreateService(runner, 7, 1);
+        using var service = CreateService(runner, 7, 0);
 
         await service.StartAsync(CancellationToken.None);
-        await runner.WaitForCleanupAsync();
+        AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.Equal(TimeSpan.FromMinutes(7), runner.LastCleanupMaxAge);
@@ -43,10 +43,10 @@ public sealed class ToolCallCleanupServiceTests
         {
             CleanupException = new InvalidOperationException("boom")
         };
-        using var service = CreateService(runner, 5, 1);
+        using var service = CreateService(runner, 5, 0);
 
         await service.StartAsync(CancellationToken.None);
-        await runner.WaitForCleanupAsync();
+        AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.True(runner.CleanupCallCount > 0);
@@ -133,7 +133,7 @@ public sealed class ToolCallCleanupServiceTests
         {
         }
 
-        public Task WaitForCleanupAsync(int timeoutMs = 5000)
+        public Task<bool> WaitForCleanupAsync(int timeoutMs = 5000)
         {
             return _cleanupSignal.WaitAsync(timeoutMs);
         }
