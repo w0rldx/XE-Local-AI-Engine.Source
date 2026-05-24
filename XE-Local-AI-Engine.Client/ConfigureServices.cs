@@ -1,11 +1,15 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -59,7 +63,20 @@ public static class ConfigureServices
 
         builder.Services.AddRazorComponents()
                .AddInteractiveServerComponents();
-        builder.Services.AddFastEndpoints();
+        builder.Services.ConfigureHttpJsonOptions(options => ConfigureJsonSerializerOptions(options.SerializerOptions));
+        builder.Services.AddFastEndpoints(options =>
+        {
+            options.DisableAutoDiscovery = true;
+            options.Assemblies = [typeof(ConfigureServices).Assembly];
+        });
+        builder.Services.AddSignalR(options =>
+        {
+            options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
+            options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+            options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+            options.MaximumReceiveMessageSize = 64 * 1024;
+            options.StreamBufferCapacity = 1;
+        });
         builder.Services.SwaggerDocument(options =>
         {
             options.DocumentSettings = settings =>
@@ -143,8 +160,9 @@ public static class ConfigureServices
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
         builder.Services.AddSingleton<IWorkerTokenRefreshService, WorkerTokenRefreshService>();
-        builder.Services.AddScoped<INodeBindingService, NodeBindingService>();
+        builder.Services.AddSingleton<INodeBindingService, NodeBindingService>();
         builder.Services.AddSingleton<ConnectionState>();
+        builder.Services.AddSingleton<IConnectionControlService, ConnectionControlService>();
         builder.Services.AddSingleton(HostAgentClientOptions.FromConfiguration(configuration));
         builder.Services.AddSingleton<IHostAgentClient, GrpcHostAgentClient>();
         builder.Services.AddSingleton(HostAgentStartupGateOptions.FromConfiguration(configuration));
@@ -169,7 +187,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
         builder.Services.AddSingleton<IDeadLetterStore, FileDeadLetterStore>();
         builder.Services.AddSingleton<INodeSqliteKeyHolder, NodeSqliteKeyHolder>();
-        builder.Services.AddScoped<NodeEncryptionSaveChangesInterceptor>();
+        builder.Services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
@@ -177,6 +195,11 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddScoped<ILocalChatInvocationService, LocalChatInvocationService>();
+        builder.Services.AddSingleton<NodeChatPersistenceWriter>();
+        builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
+        builder.Services.AddSingleton<INodeChatStreamCancellationRegistry, NodeChatStreamCancellationRegistry>();
+        builder.Services.AddScoped<INodeChatStreamService, NodeChatStreamService>();
+        builder.Services.AddSingleton<NodeChatRestartRecoveryService>();
         builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
         builder.Services.AddSingleton<WorkerHubConnection>(sp =>
         {
@@ -216,6 +239,7 @@ public static class ConfigureServices
                                    ?? throw new InvalidOperationException("Connection string 'node-sqlite' is required.");
 
             options.UseSqlite(connectionString)
+                   .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                    .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
                        serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
@@ -275,6 +299,20 @@ public static class ConfigureServices
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted,
             TaskScheduler.Default);
+    }
+
+    public static void ConfigureJsonSerializerOptions(JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        options.PropertyNameCaseInsensitive = true;
+        options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
+        options.TypeInfoResolver ??= new DefaultJsonTypeInfoResolver();
+
+        if (!options.Converters.OfType<JsonStringEnumConverter>().Any())
+        {
+            options.Converters.Add(new JsonStringEnumConverter());
+        }
     }
 
     private static ChatConnectionSettings ResolveChatConnectionSettings(IConfiguration configuration)

@@ -79,8 +79,18 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
 
     private static StoredNodeSettings Normalize(StoredNodeSettings settings)
     {
-        return settings.MaxMessageRequestTimeoutSeconds is < StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds or > StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds
-            ? new StoredNodeSettings()
-            : settings;
+        if (settings.MaxMessageRequestTimeoutSeconds is < StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds or > StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds)
+        {
+            return new StoredNodeSettings();
+        }
+
+        var defaultModelName = string.IsNullOrWhiteSpace(settings.DefaultModelName)
+            ? null
+            : settings.DefaultModelName.Trim();
+
+        return settings with
+        {
+            DefaultModelName = defaultModelName
+        };
     }
 }

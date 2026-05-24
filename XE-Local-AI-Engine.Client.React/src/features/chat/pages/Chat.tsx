@@ -1,130 +1,284 @@
-import { Container } from "@mantine/core";
-import { useState } from "react";
+import { Alert, Container, Loader, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
+import { appendOptimisticNodeChatSend, applyNodeChatStreamEvent, markNodeChatStreamTerminated } from "@/features/chat/api/NodeChatStreamState";
 import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatConversationModel, ChatTimelineEntry, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
-
-const createdAt = "2026-05-23T08:30:00.000Z";
-
-const conversations: ChatConversationModel[] = [
-	{
-		id: "local-preview",
-		title: "Local runtime preview",
-		createdAt,
-		updatedAt: "2026-05-23T08:40:00.000Z",
-		lastActivity: "2026-05-23T08:40:00.000Z",
-		lastMessagePreview: "Display-only shell with markdown, reasoning, and tool activity.",
-		isPinned: true,
-		messages: [
-			{
-				id: "msg-user-1",
-				conversationId: "local-preview",
-				role: "user",
-				content: "Show the copied chat display running in the node client. Include **markdown**, a tool event, and reasoning.",
-				status: "completed",
-				createdAt: "2026-05-23T08:31:00.000Z",
-				sortOrder: 1,
-			},
-			{
-				id: "msg-assistant-1",
-				conversationId: "local-preview",
-				role: "assistant",
-				content:
-					"This node-owned display slice now renders in isolation.\n\n- Markdown and GFM lists render locally.\n- Tool activity is presentational only.\n- Sending stays disabled until Phase 4.7 wiring.\n\n```ts\nconst phase = \"4.1-display\";\n```",
-				reasoning: "Keep this slice local to the node React client and avoid platform transport, storage, encryption, and client-node routing dependencies.",
-				status: "completed",
-				createdAt: "2026-05-23T08:32:00.000Z",
-				sortOrder: 2,
-				model: "llama3.2:latest",
-			},
-		],
-	},
-	{
-		id: "adapter-next",
-		title: "Adapter wiring next",
-		createdAt: "2026-05-23T08:35:00.000Z",
-		updatedAt: "2026-05-23T08:38:00.000Z",
-		lastActivity: "2026-05-23T08:38:00.000Z",
-		lastMessagePreview: "REST and local SignalR adapter work remains future scope.",
-		messages: [
-			{
-				id: "msg-user-2",
-				conversationId: "adapter-next",
-				role: "user",
-				content: "Can this send yet?",
-				status: "completed",
-				createdAt: "2026-05-23T08:35:00.000Z",
-				sortOrder: 1,
-			},
-			{
-				id: "msg-assistant-2",
-				conversationId: "adapter-next",
-				role: "assistant",
-				content: "Not yet. This page deliberately uses local mock data until the node adapter, FastEndpoints API, and local SignalR stream are implemented.",
-				status: "completed",
-				createdAt: "2026-05-23T08:36:00.000Z",
-				sortOrder: 2,
-			},
-		],
-	},
-];
+import type { ChatConversationModel, ChatStreamingState, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
+import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 const modelOptions: ModelOption[] = [
 	{
-		value: "llama3.2:latest",
-		label: "llama3.2:latest",
-		displayName: "Llama 3.2 Local",
+		value: localDefaultModelValue,
+		label: "Local default",
+		displayName: "Local runtime default",
 		isReasoningModel: false,
 		isAvailable: true,
-		statusLabel: "Sample local model",
-	},
-	{
-		value: "qwen3:latest",
-		label: "qwen3:latest",
-		displayName: "Qwen 3 Local",
-		isReasoningModel: true,
-		isAvailable: true,
-		statusLabel: "Sample reasoning model",
-	},
-];
-
-const timelineEntries: ChatTimelineEntry[] = [
-	{
-		id: "tool-1",
-		messageId: "msg-assistant-1",
-		type: "ToolCall",
-		toolName: "local_context_snapshot",
-		toolArgs: JSON.stringify({ scope: "node-client-chat-display" }),
-		state: "received",
-		createdAt: "2026-05-23T08:32:30.000Z",
-	},
-	{
-		id: "tool-2",
-		messageId: "msg-assistant-1",
-		type: "ToolResult",
-		toolName: "local_context_snapshot",
-		toolResult: JSON.stringify({ status: "mock", importedPlatformRuntime: false }),
-		state: "received",
-		createdAt: "2026-05-23T08:32:32.000Z",
+		statusLabel: "Runtime-selected model",
 	},
 ];
 
 const chatUiCapabilities = buildChatUiCapabilities(nodeCapabilities.chat);
 const hiddenNodeSurfaces = hiddenChatSurfaceLabels(chatUiCapabilities).join(", ");
-const phase42Notice = `Display preview only. Sending and model changes are disabled until the local chat adapter is wired. Node mode hides ${hiddenNodeSurfaces}.`;
+const emptyConversations: ChatConversationModel[] = [];
+
+interface ActiveChatStream {
+	conversationId: string;
+	messageId: string;
+	requestId: string;
+	abortController: AbortController;
+}
+
+function mergeSelectedConversation(
+	conversations: ChatConversationModel[],
+	selectedConversation?: ChatConversationModel,
+): ChatConversationModel[] {
+	if (!selectedConversation) {
+		return conversations;
+	}
+
+	const hasSelectedConversation = conversations.some((conversation) => conversation.id === selectedConversation.id);
+	if (!hasSelectedConversation) {
+		return [selectedConversation, ...conversations];
+	}
+
+	return conversations.map((conversation) => (conversation.id === selectedConversation.id ? selectedConversation : conversation));
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : "Unknown error";
+}
+
+function createId(): string {
+	return crypto.randomUUID();
+}
+
+function titleFromContent(content: string): string {
+	const normalized = content.replace(/\s+/g, " ").trim();
+	return normalized.length > 48 ? `${normalized.slice(0, 45)}…` : normalized || "New conversation";
+}
 
 export function Chat() {
-	const [selectedConversationId, setSelectedConversationId] = useState(conversations[0]?.id ?? "");
+	const queryClient = useQueryClient();
+	const activeStream = useRef<ActiveChatStream | null>(null);
+	const [requestedConversationId, setRequestedConversationId] = useState("");
 	const [collapsed, setCollapsed] = useState(false);
-	const [selectedModel] = useState(modelOptions[0]?.value ?? "");
+	const [selectedModel, setSelectedModel] = useState(modelOptions[0]?.value ?? "");
 	const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("medium");
+	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
+	const [streamError, setStreamError] = useState<string | undefined>();
+
+	const conversationsQuery = useQuery({
+		queryKey: nodeChatQueryKeys.conversations(),
+		queryFn: ({ signal }) => nodeChatAdapter.listConversations({ signal }),
+	});
+
+	const createConversationMutation = useMutation({
+		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
+		onSuccess: async (conversation) => {
+			queryClient.setQueryData<ChatConversationModel[]>(nodeChatQueryKeys.conversations(), (current = emptyConversations) => [conversation, ...current]);
+			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
+			setRequestedConversationId(conversation.id);
+			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
+		},
+	});
+
+	const conversations = conversationsQuery.data ?? emptyConversations;
+	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
+	const selectedConversationId = requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? "");
+
+	const selectedConversationQuery = useQuery({
+		queryKey: nodeChatQueryKeys.conversation(selectedConversationId),
+		queryFn: ({ signal }) => nodeChatAdapter.getConversation(selectedConversationId, { signal }),
+		enabled: selectedConversationId.length > 0,
+	});
+
+	const displayConversations = useMemo(
+		() => mergeSelectedConversation(conversations, selectedConversationQuery.data),
+		[conversations, selectedConversationQuery.data],
+	);
+	const isLoadingInitialConversations = conversationsQuery.isLoading && displayConversations.length === 0;
+	const isCreatingConversation = createConversationMutation.isPending;
+	const isSending = Boolean(streamingMessage?.isActive);
+
+	const cacheConversation = useCallback(
+		(conversation: ChatConversationModel): void => {
+			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
+			queryClient.setQueryData<ChatConversationModel[]>(nodeChatQueryKeys.conversations(), (current = emptyConversations) =>
+				mergeSelectedConversation(current, conversation),
+			);
+		},
+		[queryClient],
+	);
+
+	const resolveSendConversation = useCallback(
+		async (content: string): Promise<ChatConversationModel> => {
+			if (selectedConversationQuery.data) {
+				return selectedConversationQuery.data;
+			}
+
+			const summaryConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
+			if (summaryConversation) {
+				const loaded = await nodeChatAdapter.getConversation(summaryConversation.id);
+				cacheConversation(loaded);
+				return loaded;
+			}
+
+			const created = await nodeChatAdapter.createConversation({ title: titleFromContent(content) });
+			cacheConversation(created);
+			setRequestedConversationId(created.id);
+			return created;
+		},
+		[cacheConversation, displayConversations, selectedConversationId, selectedConversationQuery.data],
+	);
+
+	const refreshConversation = useCallback(
+		async (conversationId: string): Promise<void> => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId) }),
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() }),
+			]);
+		},
+		[queryClient],
+	);
+
+	const handleSend = useCallback(
+		async (content: string, _effort: ReasoningEffort, model: string): Promise<void> => {
+			if (activeStream.current) {
+				return;
+			}
+
+			setStreamError(undefined);
+			let conversation: ChatConversationModel;
+			try {
+				conversation = await resolveSendConversation(content);
+			} catch (error) {
+				setStreamError(errorMessage(error));
+				return;
+			}
+
+			const ids = {
+				userMessageId: createId(),
+				assistantMessageId: createId(),
+				requestId: createId(),
+			};
+			const requestModel = toNodeChatRequestModel(model);
+			const startedAt = new Date().toISOString();
+			const optimisticConversation = appendOptimisticNodeChatSend(conversation, ids, content, startedAt, requestModel);
+			const abortController = new AbortController();
+
+			cacheConversation(optimisticConversation);
+			setStreamingMessage({
+				conversationId: conversation.id,
+				messageId: ids.assistantMessageId,
+				content: "",
+				isActive: true,
+			});
+			activeStream.current = {
+				conversationId: conversation.id,
+				messageId: ids.assistantMessageId,
+				requestId: ids.requestId,
+				abortController,
+			};
+
+			try {
+				for await (const streamEvent of nodeChatAdapter.sendMessage(
+					{
+						conversationId: conversation.id,
+						content,
+						userMessageId: ids.userMessageId,
+						messageId: ids.assistantMessageId,
+						requestId: ids.requestId,
+						model: requestModel,
+					},
+					abortController.signal,
+				)) {
+					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? optimisticConversation;
+					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
+					cacheConversation(applied.conversation);
+					setStreamingMessage(applied.streamingMessage);
+				}
+			} catch (error) {
+				if (!abortController.signal.aborted) {
+					const message = errorMessage(error);
+					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? optimisticConversation;
+					const failed = markNodeChatStreamTerminated(currentConversation, ids.assistantMessageId, "failed", message);
+					cacheConversation(failed.conversation);
+					setStreamingMessage(failed.streamingMessage);
+					setStreamError(message);
+				}
+			} finally {
+				activeStream.current = null;
+				setStreamingMessage((current) => (current?.messageId === ids.assistantMessageId ? { ...current, isActive: false } : current));
+				await refreshConversation(conversation.id);
+			}
+		},
+		[cacheConversation, queryClient, refreshConversation, resolveSendConversation],
+	);
+
+	const handleCancel = useCallback(async (): Promise<void> => {
+		const active = activeStream.current;
+		if (!active) {
+			return;
+		}
+
+		try {
+			await nodeChatAdapter.cancelMessage({
+				conversationId: active.conversationId,
+				messageId: active.messageId,
+				requestId: active.requestId,
+			});
+		} catch (error) {
+			setStreamError(errorMessage(error));
+		} finally {
+			active.abortController.abort();
+			const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(active.conversationId));
+			if (currentConversation) {
+				const cancelled = markNodeChatStreamTerminated(currentConversation, active.messageId, "cancelled");
+				cacheConversation(cancelled.conversation);
+				setStreamingMessage(cancelled.streamingMessage);
+			}
+			await refreshConversation(active.conversationId);
+		}
+	}, [cacheConversation, queryClient, refreshConversation]);
+
+	const notice = useMemo(
+		() =>
+			streamError ? (
+				<Stack gap={2}>
+					<Text fw={700}>Local chat stream failed.</Text>
+					<Text size="sm">{streamError}</Text>
+				</Stack>
+			) : conversationsQuery.isError ? (
+				<Stack gap={2}>
+					<Text fw={700}>Unable to load local chat history.</Text>
+					<Text size="sm">{errorMessage(conversationsQuery.error)}</Text>
+				</Stack>
+			) : (
+				`Local conversation history is loaded from the node API. Send, stream, and cancel are wired to the local SignalR hub. Node mode hides ${hiddenNodeSurfaces}.`
+			),
+		[conversationsQuery.error, conversationsQuery.isError, streamError],
+	);
 
 	return (
 		<Container size="xl" py="lg" h="calc(100vh - 96px)">
+			{isLoadingInitialConversations ? (
+				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
+					Loading local chat history…
+				</Alert>
+			) : null}
+			{createConversationMutation.isError ? (
+				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} mb="md">
+					{errorMessage(createConversationMutation.error)}
+				</Alert>
+			) : null}
 			<ChatDisplayShell
-				conversations={conversations}
+				conversations={displayConversations}
 				selectedConversationId={selectedConversationId}
 				modelOptions={modelOptions}
 				selectedModel={selectedModel}
@@ -132,28 +286,34 @@ export function Chat() {
 				availableReasoningEfforts={["none", "low", "medium", "high"]}
 				capabilities={chatUiCapabilities}
 				contextUsage={{
-					usedTokens: 1380,
-					maxTokens: 8192,
-					isAuthoritative: false,
-					modelLabel: "Llama 3.2 Local",
+					isAuthoritative: true,
+					modelLabel: "Local runtime default",
 					nodeLabel: "Local node",
 				}}
-				disabledNotice={phase42Notice}
-				timelineEntries={timelineEntries}
+				streamingMessage={streamingMessage}
+				disabledNotice={notice}
 				inputStatus={{
-					isSending: false,
-					chatInputDisabled: true,
+					isSending,
+					chatInputDisabled: isCreatingConversation,
 					modelSelectorDisabled: true,
-					sendDisabled: true,
+					sendDisabled: selectedConversationQuery.isLoading,
 				}}
 				conversationListCollapsed={collapsed}
-				onSelectConversation={setSelectedConversationId}
-				onCreateConversation={() => undefined}
+				onSelectConversation={setRequestedConversationId}
+				onCreateConversation={() => {
+					if (!isCreatingConversation) {
+						createConversationMutation.mutate();
+					}
+				}}
 				onToggleConversationList={() => setCollapsed((value) => !value)}
-				onModelChange={() => undefined}
+				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}
-				onSend={() => undefined}
-				onCancel={() => undefined}
+				onSend={(content, effort, model) => {
+					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
+				}}
+				onCancel={() => {
+					handleCancel().catch((error: unknown) => setStreamError(errorMessage(error)));
+				}}
 			/>
 		</Container>
 	);

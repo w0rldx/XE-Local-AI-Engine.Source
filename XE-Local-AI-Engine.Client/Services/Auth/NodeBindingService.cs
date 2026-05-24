@@ -92,7 +92,7 @@ public sealed class NodeBindingService : INodeBindingService
                     new TokenStoreMetadata
                     {
                         BindingMethod = "device-code",
-                        AutoConnectOnStart = true,
+                        AutoConnectOnStart = false,
                         LastKnownNodeName = _workerOptions.Value.NodeName
                     }).ConfigureAwait(false);
 

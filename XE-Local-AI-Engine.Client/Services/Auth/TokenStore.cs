@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Models;
 public sealed class TokenStore : ITokenStore, IDisposable
 {
     private const string CredentialsFileName = "worker-credentials.enc";
+    private const bool DefaultAutoConnectOnStart = false;
     private static readonly TimeSpan ExpiringSoonThreshold = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly string _credentialsPath;
@@ -54,7 +55,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public DateTimeOffset? TokenExpiresAt => _credentials?.ExpiresAt;
 
-    public bool AutoConnectOnStart => _credentials?.AutoConnectOnStart ?? true;
+    public bool AutoConnectOnStart => _credentials?.AutoConnectOnStart ?? DefaultAutoConnectOnStart;
 
     public string? BindingMethod => _credentials?.BindingMethod;
 
@@ -90,7 +91,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
             RefreshToken = pairingResponse.RefreshToken,
             ExpiresAt = expiresAt,
             BindingMethod = metadata?.BindingMethod ?? _credentials?.BindingMethod ?? "pairing-token",
-            AutoConnectOnStart = metadata?.AutoConnectOnStart ?? _credentials?.AutoConnectOnStart ?? true,
+            AutoConnectOnStart = metadata?.AutoConnectOnStart ?? _credentials?.AutoConnectOnStart ?? DefaultAutoConnectOnStart,
             LastKnownNodeName = metadata?.LastKnownNodeName ?? _credentials?.LastKnownNodeName
         };
 
@@ -366,7 +367,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
         public string BindingMethod { get; init; } = "pairing-token";
 
-        public bool AutoConnectOnStart { get; init; } = true;
+        public bool AutoConnectOnStart { get; init; } = DefaultAutoConnectOnStart;
 
         public string? LastKnownNodeName { get; init; }
     }

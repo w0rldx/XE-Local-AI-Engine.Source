@@ -464,12 +464,21 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenInvocationTimeoutElapses_MapsTimeoutFailureCategory()
     {
         var sender = new MockHubMessageSender();
-        var package = RuntimePackageBuilder.Valid().WithTimeout(0).Build();
+        // Use a normal (non-zero) invocation timeout so the token is NOT already cancelled when the
+        // runner starts: that guarantees the agent is enumerated and signals `started`. WithTimeout(0)
+        // raced the timeout against reaching enumeration — under load the token cancelled before the
+        // agent began streaming, so `started` never fired and `await started.Task` hung the whole run.
+        var package = RuntimePackageBuilder.Valid().WithTimeout().Build();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var runner = CreateRunner(sender, CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)));
 
         var runTask = RunAsync(runner, package);
         await started.Task;
+
+        // Fire the invocation timeout deterministically now that the agent is streaming. Cancelling the
+        // invocation token source without a prior user-cancel sets the runner's timeout flag, so the
+        // failure is mapped to the Timeout category — the same path the real CancelAfter timer triggers.
+        await AssertEx.NotNull(GetActiveInvocationCancellationTokenSource(runner)).CancelAsync();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
         AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
@@ -595,11 +604,11 @@ public sealed class InvocationRunnerTests
         var invocationId = Guid.NewGuid();
 
         var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
-        await Task.Delay(20);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
         runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
-        await Task.Delay(20);
+        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentToolCalls.Single().RequestId;
         runner.ResolveToolCallResult(new ToolCallResultEvent
@@ -627,11 +636,11 @@ public sealed class InvocationRunnerTests
         var invocationId = Guid.NewGuid();
 
         var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}");
-        await Task.Delay(20);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
         runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
-        await Task.Delay(20);
+        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentToolCalls.Single().RequestId;
         runner.ResolveToolCallResult(new ToolCallResultEvent
@@ -652,7 +661,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender);
 
         var pendingCall = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
-        await Task.Delay(20);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         runner.CancelAll();
 
@@ -724,7 +733,7 @@ public sealed class InvocationRunnerTests
         });
 
         var task = runner.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}");
-        await Task.Delay(20);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
         runner.CleanupStaleToolCalls(TimeSpan.Zero);
 
         var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => task);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -9,7 +10,9 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Components;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 
@@ -47,6 +50,7 @@ try
     var app = builder.Build();
 
     await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
+    await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
     RegisterWorkerShutdownDrain(app);
 
     app.UseSerilogRequestLogging();
@@ -60,6 +64,20 @@ try
 
     app.UseHttpsRedirection();
     app.UseAntiforgery();
+
+    app.Use(async (context, next) =>
+    {
+        if (IsNodeReactIndexRequest(context.Request))
+        {
+            await ServeNodeReactIndexAsync(
+                context,
+                app.Environment,
+                app.Services.GetRequiredService<ILocalOperatorTokenProvider>()).ConfigureAwait(false);
+            return;
+        }
+
+        await next().ConfigureAwait(false);
+    });
 
     app.UseStaticFiles();
     app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -95,7 +113,12 @@ try
     {
         config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
         config.Errors.UseProblemDetails();
+        ConfigureServices.ConfigureJsonSerializerOptions(config.Serializer.Options);
     });
+    app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)
+       .RequireAuthorization(LocalOperatorAuthorization.OperatorPolicy);
+    app.MapHub<RuntimeManagerHub>(LocalApiRoutes.RuntimeManager.Hub)
+       .RequireAuthorization(LocalOperatorAuthorization.OperatorPolicy);
 
     if (!app.Environment.IsProduction())
     {
@@ -126,7 +149,7 @@ try
     app.MapRazorComponents<App>()
        .AddInteractiveServerRenderMode();
 
-    app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");
+    app.MapGet("/app/{*path:nonfile}", ServeNodeReactIndexAsync);
 
     await app.RunAsync();
 }
@@ -155,6 +178,17 @@ static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
     await migrationService.MigrateAsync().ConfigureAwait(false);
 }
 
+static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider services)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    await using var scope = services.CreateAsyncScope();
+    var recoveryService = scope.ServiceProvider.GetRequiredService<NodeChatRestartRecoveryService>();
+    var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+
+    await recoveryService.RecoverInterruptedMessagesAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds()).ConfigureAwait(false);
+}
+
 static void RegisterWorkerShutdownDrain(WebApplication app)
 {
     ArgumentNullException.ThrowIfNull(app);
@@ -179,6 +213,60 @@ static void RegisterWorkerShutdownDrain(WebApplication app)
                 exception.GetType().Name);
         }
     }, app.Services);
+}
+
+static bool IsNodeReactIndexRequest(HttpRequest request)
+{
+    ArgumentNullException.ThrowIfNull(request);
+
+    if (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method))
+    {
+        return false;
+    }
+
+    var path = request.Path.Value ?? string.Empty;
+    return path.Equals("/app", StringComparison.OrdinalIgnoreCase)
+           || path.Equals("/app/", StringComparison.OrdinalIgnoreCase)
+           || path.Equals("/app/index.html", StringComparison.OrdinalIgnoreCase);
+}
+
+static async Task ServeNodeReactIndexAsync(
+    HttpContext context,
+    IWebHostEnvironment environment,
+    ILocalOperatorTokenProvider tokenProvider)
+{
+    ArgumentNullException.ThrowIfNull(context);
+    ArgumentNullException.ThrowIfNull(environment);
+    ArgumentNullException.ThrowIfNull(tokenProvider);
+
+    var indexFile = environment.WebRootFileProvider.GetFileInfo("app/index.html");
+    if (!indexFile.Exists)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await using var indexStream = indexFile.CreateReadStream();
+    using var reader = new StreamReader(indexStream);
+    var html = await reader.ReadToEndAsync(context.RequestAborted).ConfigureAwait(false);
+    var responseHtml = InjectLocalOperatorToken(html, tokenProvider.Token);
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    if (HttpMethods.IsHead(context.Request.Method))
+    {
+        return;
+    }
+
+    await context.Response.WriteAsync(responseHtml, context.RequestAborted).ConfigureAwait(false);
+}
+
+static string InjectLocalOperatorToken(string html, string token)
+{
+    var tokenScript = $"<script>globalThis.__XE_LOCAL_OPERATOR_TOKEN__ = {JsonSerializer.Serialize(token)};</script>";
+    const string headCloseTag = "</head>";
+    var headCloseIndex = html.IndexOf(headCloseTag, StringComparison.OrdinalIgnoreCase);
+
+    return headCloseIndex < 0 ? string.Concat(tokenScript, html) : html.Insert(headCloseIndex, tokenScript);
 }
 
 namespace XE_Local_AI_Engine.Client
