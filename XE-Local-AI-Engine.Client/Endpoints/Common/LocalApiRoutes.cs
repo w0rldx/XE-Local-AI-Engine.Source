@@ -58,4 +58,9 @@ public static class LocalApiRoutes
         public const string Status = "runtime/status";
         public const string ContainerAction = "runtime/containers/action";
     }
+
+    public static class Invocations
+    {
+        public const string Monitor = "invocations";
+    }
 }
