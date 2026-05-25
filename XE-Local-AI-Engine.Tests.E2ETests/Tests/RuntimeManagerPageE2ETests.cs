@@ -5,7 +5,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Per-page interaction E2E tests for the Runtime Manager page (<c>/app/manager</c>).
+///     Per-page interaction E2E tests for the Runtime Manager page (<c>/manager</c>).
 ///     <para>
 ///         PROBE strategy (task #4): Before asserting tab content we issue a raw HTTP call to
 ///         <c>GET /api/local/v1/runtime/status</c> (same token-extraction approach as
@@ -28,7 +28,7 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
     private static partial Regex InjectedTokenRegex();
 
     /// <summary>
-    ///     Extracts the injected operator token from the /app HTML response.
+    ///     Extracts the injected operator token from the root HTML response.
     ///     Mirrors the approach used in TokenInjectionSpikeE2ETests.
     /// </summary>
     private static string? ExtractInjectedToken(string html)
@@ -46,8 +46,8 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
         var serverAddress = Factory.ServerAddress.TrimEnd('/');
         using var client = new HttpClient();
 
-        // Step 1: extract the operator token from the /app route (same as spike).
-        var appResponse = await client.GetAsync($"{serverAddress}/app");
+        // Step 1: extract the operator token from the root route (same as spike).
+        var appResponse = await client.GetAsync($"{serverAddress}/");
         var appBody = await appResponse.Content.ReadAsStringAsync();
         var token = ExtractInjectedToken(appBody);
 

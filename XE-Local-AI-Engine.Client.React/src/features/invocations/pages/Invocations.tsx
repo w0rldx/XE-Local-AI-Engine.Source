@@ -88,7 +88,7 @@ export function Invocations() {
   const active = isInvocationActive(monitor?.current?.status);
 
   return (
-    <Container size="xl" py="lg">
+    <Container fluid={true} py="lg">
       <Stack gap="lg">
         <Group justify="space-between" align="flex-start">
           <Stack gap={4}>

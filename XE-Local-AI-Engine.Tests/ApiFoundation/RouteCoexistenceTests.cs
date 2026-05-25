@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class RouteCoexistenceTests
 {
     [Test]
-    public async Task HealthEndpoints_WhenBlazorAndSpaAreMounted_DoNotUseSpaFallback()
+    public async Task HealthEndpoints_WhenSpaOwnsRoot_DoNotUseSpaFallback()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
@@ -23,11 +23,11 @@ public sealed class RouteCoexistenceTests
         AssertEx.Contains(readyResponse.Content.Headers.ContentType?.MediaType,
             "json",
             StringComparison.OrdinalIgnoreCase,
-            "Ready health endpoint should return JSON instead of the React or Blazor shell.");
+            "Ready health endpoint should return JSON instead of the React shell, even though the SPA fallback owns root.");
     }
 
     [Test]
-    public async Task LocalApi_WhenBlazorAndSpaAreMounted_ReturnsJsonInsteadOfHtmlShell()
+    public async Task LocalApi_WhenSpaOwnsRoot_ReturnsJsonInsteadOfHtmlShell()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
@@ -47,7 +47,7 @@ public sealed class RouteCoexistenceTests
     }
 
     [Test]
-    public async Task RootRoute_WhenTransitionPrefixIsActive_RemainsBlazorOwned()
+    public async Task RootRoute_AfterCutover_ServesReactSpaShellWithoutBlazorScript()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
@@ -57,66 +57,60 @@ public sealed class RouteCoexistenceTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.MediaType, "html", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Contains(body, "_framework/blazor.web.js", StringComparison.OrdinalIgnoreCase);
-        AssertEx.False(body.Contains("/app/assets/", StringComparison.OrdinalIgnoreCase), "Root route should not serve the React /app shell during transition.");
+        AssertEx.Contains(body, "<div id=\"root\"></div>", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Contains(body, "/assets/", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(body.Contains("_framework/blazor.web.js", StringComparison.OrdinalIgnoreCase),
+            "After cutover the React client owns root; the Blazor shell must no longer be served.");
+        AssertEx.False(body.Contains("/app/assets/", StringComparison.OrdinalIgnoreCase),
+            "After cutover there is no /app prefix; assets are served from root.");
     }
 
     [Test]
-    public async Task ReactDeepLink_WhenUnderAppPrefix_ServesSpaShellWithoutBlazorScript()
+    public async Task ReactDeepLink_AtRoot_ServesSpaShellWithoutBlazorScript()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/app/dashboard").ConfigureAwait(false);
+        using var response = await client.GetAsync("/dashboard").ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Contains(response.Content.Headers.ContentType?.MediaType, "html", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(body, "<div id=\"root\"></div>", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Contains(body, "/app/assets/", StringComparison.OrdinalIgnoreCase);
-        AssertEx.False(body.Contains("_framework/blazor.web.js", StringComparison.OrdinalIgnoreCase), "React deep links should not serve the Blazor shell.");
+        AssertEx.Contains(body, "/assets/", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(body.Contains("_framework/blazor.web.js", StringComparison.OrdinalIgnoreCase),
+            "React deep links should serve the React SPA shell, not the Blazor shell.");
     }
 
     [Test]
-    public async Task FileLikeAppPath_WhenAssetIsMissing_DoesNotUseSpaFallback()
+    public async Task FileLikeAssetPath_WhenAssetIsMissing_DoesNotUseSpaFallback()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/app/assets/missing-route-coexistence-file.js").ConfigureAwait(false);
+        using var response = await client.GetAsync("/assets/missing-route-coexistence-file.js").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
                 "text/html",
                 StringComparison.OrdinalIgnoreCase),
-            "File-like /app asset requests should not be rewritten to the SPA shell.");
+            "File-like asset requests should not be rewritten to the SPA shell.");
     }
 
     [Test]
-    public async Task SignalRPaths_WhenBlazorIsMounted_DoNotCollideWithFutureLocalChatHubPath()
+    public async Task LocalChatHubPath_AfterCutover_IsNotSwallowedBySpaFallback()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var blazorNegotiateRequest = new HttpRequestMessage(HttpMethod.Post, "/_blazor/negotiate?negotiateVersion=1")
-        {
-            Content = new StringContent(string.Empty)
-        };
-        using var blazorNegotiateResponse = await client.SendAsync(blazorNegotiateRequest).ConfigureAwait(false);
         using var localChatNegotiateRequest = CreateLocalChatNegotiateRequest(factory);
         using var localChatNegotiateResponse = await client.SendAsync(localChatNegotiateRequest).ConfigureAwait(false);
-
-        AssertEx.Equal(HttpStatusCode.OK, blazorNegotiateResponse.StatusCode);
-        AssertEx.Contains(blazorNegotiateResponse.Content.Headers.ContentType?.MediaType,
-            "json",
-            StringComparison.OrdinalIgnoreCase,
-            "Blazor SignalR negotiate should remain available on _blazor.");
 
         AssertEx.Equal(HttpStatusCode.OK, localChatNegotiateResponse.StatusCode);
         AssertEx.False(string.Equals(localChatNegotiateResponse.Content.Headers.ContentType?.MediaType,
                 "text/html",
                 StringComparison.OrdinalIgnoreCase),
-            "The local chat hub path must not be swallowed by Blazor or the React SPA fallback after the hub is mapped.");
+            "The local chat hub negotiate path must not be swallowed by the React SPA fallback after cutover.");
     }
 
     private static HttpRequestMessage CreateProbeRequest(TestingWebAppFactory factory, string name)

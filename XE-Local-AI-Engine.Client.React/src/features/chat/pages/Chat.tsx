@@ -1,4 +1,4 @@
-import { Alert, Container, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Box, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -266,7 +266,7 @@ export function Chat() {
 	);
 
 	return (
-		<Container size="xl" py="lg" h="calc(100vh - 96px)">
+		<Box py="lg" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
 			{isLoadingInitialConversations ? (
 				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
 					Loading local chat history…
@@ -315,6 +315,6 @@ export function Chat() {
 					handleCancel().catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}
 			/>
-		</Container>
+		</Box>
 	);
 }

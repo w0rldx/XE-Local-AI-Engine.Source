@@ -16,6 +16,12 @@ const DevelopmentUi = import.meta.env.DEV
 export function Layout() {
 	const sideBarCollapsed = useDesktopNavigationBarStore((state) => state.sidebarState);
 	const setSideBarCollapsed = useDesktopNavigationBarStore((state) => state.actions.setSidebarState);
+	// The desktop breakpoint is resolved in JS (not a CSS media query) because the
+	// resulting marginLeft/width are fed into framer-motion's `animate` prop to drive
+	// the 0.2s collapse/expand transition. Tradeoff: on first paint before hydration
+	// `width` reflects the real window, so there is no flash in practice, but SSR/prerender
+	// would briefly render the mobile (100%) layout. Keeping it here avoids duplicating the
+	// breakpoint across JS and CSS and keeps margin/width as a single source of truth.
 	const { width } = useWindowDimensions();
 	const isDesktopViewport = width >= 768;
 
@@ -39,7 +45,7 @@ export function Layout() {
 					<DesktopNavigationBar sideBarCollapsed={sideBarCollapsed} setSideBarCollapsed={setSideBarCollapsed} />
 				</div>
 				<m.div
-					className={`w-full flex flex-col h-dvh overflow-hidden ${width >= 768 && sideBarCollapsed && "main-content-sidebar-collapsed"} ${width >= 768 && !sideBarCollapsed && "main-content-sidebar-expanded"}`}
+					className="w-full flex flex-col h-dvh overflow-hidden"
 					initial={false}
 					animate={{
 						marginLeft: contentMarginLeft,

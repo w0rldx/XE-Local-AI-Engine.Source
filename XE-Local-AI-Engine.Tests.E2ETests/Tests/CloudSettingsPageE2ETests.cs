@@ -4,10 +4,10 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Per-page interaction E2E tests for the Cloud Settings page (<c>/app/cloud-settings</c>).
+///     Per-page interaction E2E tests for the Cloud Settings page (<c>/cloud-settings</c>).
 ///     <para>
 ///         Branch A (confirmed by source analysis): <c>getCloudSettings</c> returns 200 in-process
-///         (HTTP same-origin, token injected via <c>/app</c>). The <c>TextInput</c> / <c>PasswordInput</c>
+///         (HTTP same-origin, token injected via the root shell). The <c>TextInput</c> / <c>PasswordInput</c>
 ///         elements are rendered unconditionally — no <c>{settings ? ...}</c> gate in CloudSettings.tsx.
 ///     </para>
 ///     <para>
@@ -19,9 +19,15 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 [Category("Page")]
 public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
 {
-    // CSS selectors for the TextInput elements — placeholders are unique in CloudSettings.tsx.
+    // CSS selectors for the TextInput/PasswordInput elements — placeholders and type are unique in
+    // CloudSettings.tsx. Attribute selectors bypass Playwright's label-resolution path which is
+    // unreliable with Mantine's dynamic element IDs (see class-level doc).
     private const string EndpointInputSelector = "input[placeholder='https://example.openai.azure.com/']";
     private const string DeploymentInputSelector = "input[placeholder='gpt-4o']";
+
+    // PasswordInput renders a single type="password" input; there is exactly one on this page.
+    // GetByLabel("API key") is unreliable because Mantine links label→input via a generated ID.
+    private const string ApiKeyInputSelector = "input[type='password']";
 
     /// <summary>
     ///     Navigates to cloud-settings and waits until the endpoint input is visible and enabled —
@@ -89,7 +95,8 @@ public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
         // Assert all three inputs are visible and enabled — proves the form is interactive.
         var endpointInput = Page.Locator(EndpointInputSelector);
         var deploymentInput = Page.Locator(DeploymentInputSelector);
-        var apiKeyInput = Page.GetByLabel("API key");
+        // Use CSS attribute selector — GetByLabel is unreliable with Mantine's dynamic IDs.
+        var apiKeyInput = Page.Locator(ApiKeyInputSelector);
 
         await Expect(endpointInput).ToBeVisibleAsync();
         await Expect(endpointInput).ToBeEnabledAsync();

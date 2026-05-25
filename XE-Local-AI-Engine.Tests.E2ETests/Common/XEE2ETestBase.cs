@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     <para>
 ///         Single origin: the host serves both the API and the SPA, so
 ///         <see cref="FrontendBaseUrl" /> == <see cref="ApiBaseUrl" /> == the factory's ServerAddress.
-///         Navigate to <see cref="NodeAppUrl" /> (the token-injecting <c>/app</c> route) so the browser
+///         Navigate to <see cref="NodeAppUrl" /> (the token-injecting root route) so the browser
 ///         receives <c>__XE_LOCAL_OPERATOR_TOKEN__</c> and can call <c>/api/local/v1</c>.
 ///     </para>
 /// </summary>
@@ -37,10 +37,12 @@ public abstract class XEE2ETestBase : PageTest
     protected Uri FrontendBaseUrl => ApiBaseUrl;
 
     /// <summary>
-    ///     The token-injecting SPA entry point: <c>{ServerAddress}/app</c>. Navigating here serves
-    ///     <c>index.html</c> through <c>ServeNodeReactIndexAsync</c>, injecting the operator token.
+    ///     The token-injecting SPA entry point: the host root <c>{ServerAddress}</c>. Navigating here
+    ///     (or to a deep link below it, e.g. <c>{NodeAppUrl}/dashboard</c>) serves <c>index.html</c>
+    ///     through <c>ServeNodeReactIndexAsync</c>, injecting the operator token. Post-cutover the
+    ///     React client owns root, so there is no <c>/app</c> prefix.
     /// </summary>
-    protected string NodeAppUrl => $"{Factory.ServerAddress.TrimEnd('/')}/app";
+    protected string NodeAppUrl => Factory.ServerAddress.TrimEnd('/');
 
     public override string BrowserName => "chromium";
 

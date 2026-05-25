@@ -3,10 +3,24 @@
   <PropertyGroup>
     <UserSecretsId>31bd0c1c-d903-4e54-bae9-df0140eb36bd</UserSecretsId>
     <RootNamespace>XE_Local_AI_Engine.Client</RootNamespace>
+    <!--
+      Disable the SDK StaticWebAssets pipeline for this host. After the /app→root cutover the React
+      shell lives at wwwroot\index.html (BasePath "/"), which collides with the
+      Microsoft.Agents.AI.DevUI package's own staticwebassets\index.html (also BasePath "/") — the SDK
+      fails with "Conflicting assets with the same target path 'index.html'" (and, in the dev manifest
+      path, "Sequence contains more than one element") on rebuilds. The host serves the React shell +
+      assets via app.UseStaticFiles() + ServeNodeReactIndexAsync (physical wwwroot files), NOT via the
+      StaticWebAssets/Blazor manifest, and MapRazorComponents is removed at cutover, so nothing depends
+      on the SWA pipeline here. With it off there is no manifest to collide, which also makes the
+      wwwroot copy idempotent across rebuilds. wwwroot content still publishes via the default
+      <Content Include="wwwroot\**"> (CopyToPublishDirectory) for UseStaticFiles.
+    -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
     <NodeReactClientDir>$(MSBuildProjectDirectory)\..\XE-Local-AI-Engine.Client.React\</NodeReactClientDir>
     <NodeReactBuildDir>$(NodeReactClientDir)dist\</NodeReactBuildDir>
-    <NodeReactRootWebRootDir>$(MSBuildProjectDirectory)\wwwroot\</NodeReactRootWebRootDir>
-    <NodeReactWebRootDir>$(NodeReactRootWebRootDir)app\</NodeReactWebRootDir>
+    <!-- Cutover (Plan Phase 7.2): the React build is copied to the wwwroot root (Vite base "/"),
+         not the transition wwwroot\app\ sub-directory. -->
+    <NodeReactWebRootDir>$(MSBuildProjectDirectory)\wwwroot\</NodeReactWebRootDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -52,7 +66,19 @@
     <Using Include="C0re.AI.Shared.Contracts.Events"/>
   </ItemGroup>
 
-  <Target Name="CopyNodeReactBuildToWwwroot" BeforeTargets="Build;ComputeFilesToPublish" Condition="Exists('$(NodeReactBuildDir)index.html')">
+  <!--
+    Copy the node React build (dist) into wwwroot root for the host to serve via UseStaticFiles +
+    ServeNodeReactIndexAsync. The target deletes the previously copied React outputs (root files +
+    assets/) before re-copying so it is hygienic across rebuilds. Idempotency across consecutive
+    rebuilds is provided by removing these outputs from SDK static-web-asset discovery (the
+    Content Remove / None Include block above) so a populated wwwroot does not produce a duplicate
+    or conflicting logical asset for /index.html on the second build.
+    Only the React build outputs are removed; the tracked wwwroot\.gitignore and wwwroot\app.css
+    (Blazor stylesheet, removed later in WP-C2) are preserved.
+  -->
+  <Target Name="CopyNodeReactBuildToWwwroot"
+          BeforeTargets="Build;ComputeFilesToPublish"
+          Condition="Exists('$(NodeReactBuildDir)index.html')">
     <ItemGroup>
       <NodeReactBuildFiles Include="$(NodeReactBuildDir)**\*.*"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)index.html"/>
@@ -66,24 +92,13 @@
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)web.config"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_mark.svg"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_wordmark.svg"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)index.html"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)favicon.png"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)logo.png"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)logo192.png"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)logo512.png"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)manifest.json"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)robots.txt"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)staticwebapp.config.json"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)web.config"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)xen_logo_mark.svg"/>
-      <NodeReactLegacyRootFiles Include="$(NodeReactRootWebRootDir)xen_logo_wordmark.svg"/>
     </ItemGroup>
 
     <MakeDir Directories="$(NodeReactWebRootDir)"/>
     <RemoveDir Directories="$(NodeReactWebRootDir)assets"/>
-    <RemoveDir Directories="$(NodeReactRootWebRootDir)assets"/>
+    <!-- Remove the transition-era wwwroot\app\ tree so stale prefixed assets/shell are not served after cutover. -->
+    <RemoveDir Directories="$(NodeReactWebRootDir)app"/>
     <Delete Files="@(NodeReactStaleRootFiles)"/>
-    <Delete Files="@(NodeReactLegacyRootFiles)"/>
     <Copy SourceFiles="@(NodeReactBuildFiles)"
           DestinationFiles="@(NodeReactBuildFiles->'$(NodeReactWebRootDir)%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true"/>

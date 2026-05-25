@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
@@ -66,7 +67,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     ///     (see <c>TokenInjectionSpikeE2ETests</c>, <c>HostBootSmokeE2ETests</c>).
     /// </summary>
     /// <param name="port">Free loopback port chosen up front (before the React build).</param>
-    /// <param name="webRoot">Temp directory whose <c>app/index.html</c> is the freshly built dist (UseWebRoot).</param>
+    /// <param name="webRoot">Temp directory whose root <c>index.html</c> is the freshly built dist (UseWebRoot).</param>
     /// <param name="fakeOllamaOptions">Optional FakeOllama configuration; defaults to the standard test models.</param>
     public XENodeE2EWebApplicationFactory(int port, string webRoot, FakeOllamaOptions? fakeOllamaOptions = null)
         : this(fakeOllamaOptions)
@@ -176,6 +177,16 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
+
+            // Replace the real WorkerEventDispatcher with an inert stub so that
+            // IWorkerEventDispatcher.CurrentInvocation always returns null.
+            // Without this, a Chat e2e test that successfully sends a message sets
+            // CurrentInvocation on the shared singleton, causing InvocationsPageE2ETests
+            // to see an active invocation and fail the empty-state assertion.
+            // NSubstitute's default for a reference-typed property is null — no extra
+            // setup required.
+            services.RemoveAll<IWorkerEventDispatcher>();
+            services.AddSingleton<IWorkerEventDispatcher>(_ => Substitute.For<IWorkerEventDispatcher>());
 
             services.RemoveAll<IOllamaApiClient>();
             services.RemoveAll<IChatClient>();

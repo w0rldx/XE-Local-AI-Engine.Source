@@ -53,7 +53,7 @@ export function NodeSettings() {
 	const canSave = timeoutToSave !== undefined && !saveMutation.isPending;
 
 	return (
-		<Container size="md" py="lg">
+		<Container fluid={true} py="lg">
 			<Stack gap="lg">
 				<Stack gap={4}>
 					<Text size="sm" tt="uppercase" fw={700} c="dimmed">

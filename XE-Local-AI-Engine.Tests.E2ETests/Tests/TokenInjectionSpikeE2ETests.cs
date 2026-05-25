@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     before the Playwright layer is built:
 ///     <list type="number">
 ///         <item>
-///             The host serves the SPA same-origin at <c>/app</c> via <c>ServeNodeReactIndexAsync</c>,
+///             The host serves the SPA same-origin at root (<c>/</c>) via <c>ServeNodeReactIndexAsync</c>,
 ///             injecting a real <c>__XE_LOCAL_OPERATOR_TOKEN__</c> (not the <c>%XE_LOCAL_OPERATOR_TOKEN%</c> sentinel).
 ///         </item>
 ///         <item>
@@ -37,8 +37,8 @@ public sealed partial class TokenInjectionSpikeE2ETests
         var serverAddress = factory.ServerAddress.TrimEnd('/');
         using var client = new HttpClient();
 
-        // (3) GET /app must be served by ServeNodeReactIndexAsync (token-injected), not raw UseStaticFiles.
-        var appResponse = await client.GetAsync($"{serverAddress}/app");
+        // (3) GET / must be served by ServeNodeReactIndexAsync (token-injected), not raw UseStaticFiles.
+        var appResponse = await client.GetAsync($"{serverAddress}/");
         var appBody = await appResponse.Content.ReadAsStringAsync();
 
         await Assert.That((int)appResponse.StatusCode).IsEqualTo(200);
