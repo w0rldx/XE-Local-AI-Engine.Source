@@ -10,6 +10,7 @@
     "dev": "vite --port 5173",
     "start": "vite --port 3000",
     "build": "tsc --noEmit && biome lint && stylelint \"src/**/*.css\" && vite build",
+    "build:e2e": "vite build",
     "serve": "vite preview",
     "lint": "tsc --noEmit && biome lint && stylelint \"src/**/*.css\"",
     "lint:fix": "tsc --noEmit && biome lint --fix && stylelint \"src/**/*.css\" --fix",
