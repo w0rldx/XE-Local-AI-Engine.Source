@@ -9,9 +9,10 @@ using TUnit.Core.Interfaces;
 /// <summary>
 ///     Picks a free loopback port up front, runs <c>pnpm install --frozen-lockfile</c> +
 ///     <c>pnpm run build</c> in the XE React client directory with <c>VITE_API_URL</c> baked to
-///     that port, then copies the built <c>dist/</c> tree into <c>&lt;TempRoot&gt;/app/</c> so the
+///     that port, then copies the built <c>dist/</c> tree into <c>&lt;TempRoot&gt;</c> itself so the
 ///     factory's <c>UseWebRoot(TempRoot)</c> makes it available to <c>ServeNodeReactIndexAsync</c>
-///     and <c>UseStaticFiles</c> at the same origin.
+///     and <c>UseStaticFiles</c> at the same origin. Post-cutover the React client owns root, so the
+///     shell lives at the web-root rather than under an <c>/app</c> prefix.
 ///     No vite-preview server is started — the .NET host serves the SPA.
 ///     <para>
 ///         Concurrency safety: <see cref="BuildLock" /> serialises all install + build invocations
@@ -32,9 +33,9 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
     public int Port { get; private set; }
 
     /// <summary>
-    ///     Temp directory whose <c>app/</c> sub-directory contains the freshly built dist.
+    ///     Temp directory that contains the freshly built dist at its root.
     ///     Pass this to <see cref="XENodeE2EWebApplicationFactory" /> as the web root so that
-    ///     <c>&lt;TempRoot&gt;/app/index.html</c> is found by <c>ServeNodeReactIndexAsync</c>.
+    ///     <c>&lt;TempRoot&gt;/index.html</c> is found by <c>ServeNodeReactIndexAsync</c>.
     /// </summary>
     public string TempRoot { get; private set; } = string.Empty;
 
@@ -61,8 +62,9 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         Port = GetFreePort();
         TempRoot = Path.Combine(Path.GetTempPath(), $"xe-e2e-webroot-{Guid.NewGuid():N}");
 
-        var appOutputDir = Path.Combine(TempRoot, "app");
-        Directory.CreateDirectory(appOutputDir);
+        // Post-cutover the React shell is served at root, so the dist is copied to the web-root
+        // (TempRoot) itself rather than a TempRoot/app/ sub-directory.
+        Directory.CreateDirectory(TempRoot);
 
         var clientDir = FindReactClientDirectory();
 
@@ -100,14 +102,14 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             BuildLock.Release();
         }
 
-        // vite outputs to dist/ by default; copy the contents into <TempRoot>/app/
-        // so the host resolves wwwroot/app/index.html correctly via UseWebRoot(TempRoot).
+        // vite outputs to dist/ by default; copy the contents into <TempRoot> itself
+        // so the host resolves <TempRoot>/index.html at root via UseWebRoot(TempRoot).
         var distDir = Path.Combine(clientDir, "dist");
-        CopyDirectory(distDir, appOutputDir);
+        CopyDirectory(distDir, TempRoot);
 
-        if (!File.Exists(Path.Combine(appOutputDir, "index.html")))
+        if (!File.Exists(Path.Combine(TempRoot, "index.html")))
         {
-            throw new InvalidOperationException($"React build did not produce index.html at '{appOutputDir}'. " +
+            throw new InvalidOperationException($"React build did not produce index.html at '{TempRoot}'. " +
                                                 $"Check that '{distDir}' exists and the build succeeded.");
         }
     }

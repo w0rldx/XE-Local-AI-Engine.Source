@@ -8,7 +8,6 @@ using Serilog;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
-using XE_Local_AI_Engine.Client.Components;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -145,10 +144,14 @@ try
         app.MapDevUI();
     }
 
-    app.MapRazorComponents<App>()
-       .AddInteractiveServerRenderMode();
-
-    app.MapGet("/app/{*path:nonfile}", ServeNodeReactIndexAsync);
+    // Cutover (Plan Phase 7.2): the React client now owns root. The Blazor
+    // MapRazorComponents<App>().AddInteractiveServerRenderMode() endpoint mapping was
+    // removed so Blazor @page routes ("/", "/dashboard", "/chat", …) no longer claim
+    // root paths ahead of the SPA fallback. The Razor components, MudBlazor, and their
+    // DI registrations remain in place and are removed in WP-C2 after user approval.
+    // The React shell is served via the token-injecting fallback (not a static
+    // MapFallbackToFile) so the per-launch local-operator token is injected into index.html.
+    app.MapFallback(ServeNodeReactIndexAsync);
 
     await app.RunAsync();
 }
@@ -223,10 +226,10 @@ static bool IsNodeReactIndexRequest(HttpRequest request)
         return false;
     }
 
-    var path = request.Path.Value ?? string.Empty;
-    return path.Equals("/app", StringComparison.OrdinalIgnoreCase)
-           || path.Equals("/app/", StringComparison.OrdinalIgnoreCase)
-           || path.Equals("/app/index.html", StringComparison.OrdinalIgnoreCase);
+    var path = request.Path.Value;
+    return string.IsNullOrEmpty(path)
+           || path.Equals("/", StringComparison.OrdinalIgnoreCase)
+           || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase);
 }
 
 static async Task ServeNodeReactIndexAsync(HttpContext context,
@@ -237,7 +240,7 @@ static async Task ServeNodeReactIndexAsync(HttpContext context,
     ArgumentNullException.ThrowIfNull(environment);
     ArgumentNullException.ThrowIfNull(tokenProvider);
 
-    var indexFile = environment.WebRootFileProvider.GetFileInfo("app/index.html");
+    var indexFile = environment.WebRootFileProvider.GetFileInfo("index.html");
     if (!indexFile.Exists)
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;

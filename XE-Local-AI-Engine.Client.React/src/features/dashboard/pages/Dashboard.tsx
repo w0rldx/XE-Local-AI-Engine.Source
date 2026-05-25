@@ -53,7 +53,7 @@ export function Dashboard() {
 		connectMutation.isPending || disconnectMutation.isPending || enableAutoConnectMutation.isPending || disableAutoConnectMutation.isPending;
 
 	return (
-		<Container size="lg" py="lg">
+		<Container fluid={true} py="lg">
 			<Stack gap="lg">
 				<Stack gap={4}>
 					<Text size="sm" tt="uppercase" fw={700} c="dimmed">

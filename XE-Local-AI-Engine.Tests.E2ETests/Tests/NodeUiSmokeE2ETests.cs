@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     First browser-driven smoke tests for the XE node React client, ordered by risk (plan M2):
 ///     #1 is unpaired-safe (no authenticated data needed); #2 exercises the operator-token bootstrap
 ///     end-to-end in a real browser by rendering FakeOllama models from <c>/api/local/v1/models</c>.
-///     Both navigate to the token-injecting <c>/app</c> route so the SPA receives the operator token.
+///     Both navigate to the token-injecting root route so the SPA receives the operator token.
 /// </summary>
 public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
 {
@@ -15,7 +15,7 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
     [Category("Smoke")]
     public async Task Dashboard_Renders_For_Unpaired_Node()
     {
-        // /app/dashboard is served token-injected (deep link hits ServeNodeReactIndexAsync).
+        // /dashboard is served token-injected (deep link hits ServeNodeReactIndexAsync).
         await Page.GotoAsync($"{NodeAppUrl}/dashboard", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle

@@ -1,13 +1,6 @@
-.main-content-sidebar-expanded {
-	margin-left: 220px;
-	width: calc(100% - 220px);
-}
-
-.main-content-sidebar-collapsed {
-	margin-left: 56px;
-	width: calc(100% - 56px);
-}
-
-.main-content-sidebar-mobile {
-	width: 100%;
-}
+/*
+ * The main content area's marginLeft/width are driven solely by framer-motion's
+ * `animate` prop in Layout.tsx (single source of truth), so no margin/width classes
+ * live here. This file is intentionally empty of layout sizing rules; keep the import
+ * in Layout.tsx in case component-scoped styles are added later.
+ */

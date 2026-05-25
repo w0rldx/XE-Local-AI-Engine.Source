@@ -20,7 +20,7 @@ const coverageThresholds = process.env.VITEST_COVERAGE_CHECK === "true"
 	: undefined;
 
 export default defineConfig({
-	base: "/app/",
+	base: "/",
 	plugins: [
 		devtools(),
 		tanstackRouter({ target: "react", autoCodeSplitting: true }),
