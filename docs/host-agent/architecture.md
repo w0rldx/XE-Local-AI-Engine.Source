@@ -6,7 +6,7 @@ The local node runtime keeps the existing platform contract intact: only the Nod
 
 | Component | Runs as | Responsibility |
 | --- | --- | --- |
-| Node Web Server | Container on `xe-engine-net` | Blazor Manager UI, model control plane, chat hot path, existing `WorkerHub` connection. |
+| Node Web Server | Container on `xe-engine-net` | React Web UI, model control plane, chat hot path, existing `WorkerHub` connection. |
 | HostAgent.Windows | User-mode Windows process | WSL2 import/bootstrap/supervision, Windows-side admin API, bridge to HostAgent.Linux. |
 | HostAgent.Linux | `systemd --user` unit | Rootless Docker, manifest reconcile, container lifecycle, capabilities, gRPC server. |
 | Tray Launcher | Avalonia desktop tray app | User entry point, health badge, browser launch, local start/stop/restart commands. |
@@ -40,7 +40,7 @@ On Windows-managed installs, HostAgent.Windows also calls HostAgent.Linux over W
 
 There is no service auto-start, no Run-key, no Task Scheduler entry, and no XDG autostart. The user starts the runtime by launching the Tray. `Quit Tray` exits only the tray icon; `Stop Services` performs the graceful substrate shutdown.
 
-The bootstrap model (`qwen3:0.6b` by default) is pulled before the Node Web Server connects to `WorkerHub`. Larger models are pulled on demand and report progress through the Blazor Manager UI.
+The bootstrap model (`qwen3:0.6b` by default) is pulled before the Node Web Server connects to `WorkerHub`. Larger models are pulled on demand and report progress through the React Web UI.
 
 ## External references used
 

@@ -7,7 +7,7 @@ Bring-your-own (BYO) mode lets an operator use an existing OpenAI-compatible/Oll
 - HostAgent.Linux runs in `custom` lifecycle mode.
 - HostAgent does not start, stop, or reconcile the Ollama container.
 - The Node Web Server points `OLLAMA_BASE_URL` at the operator-provided endpoint.
-- The Blazor Manager UI displays `runtimeLifecycle: external`.
+- The React Web UI displays `runtimeLifecycle: external`.
 - The existing `WorkerHub` connection remains unchanged.
 
 ## What does not change
@@ -23,7 +23,7 @@ Bring-your-own (BYO) mode lets an operator use an existing OpenAI-compatible/Oll
 2. Set the external Ollama/OpenAI-compatible base URL for the Node Web Server.
 3. Validate that the endpoint is reachable from the Node Web Server environment.
 4. Validate that requested models are present or that on-demand pull is intentionally disabled/not applicable.
-5. Confirm the Blazor Manager UI shows external lifecycle state.
+5. Confirm the React Web UI shows external lifecycle state.
 
 ## Operator expectations
 

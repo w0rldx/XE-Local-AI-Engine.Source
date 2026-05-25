@@ -39,7 +39,7 @@ Likely causes:
 
 Actions:
 
-1. Open the Blazor Manager UI if available.
+1. Open the React Web UI if available.
 2. Check model pull progress.
 3. Inspect HostAgent.Linux logs and rootless Docker status.
 

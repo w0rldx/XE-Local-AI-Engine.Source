@@ -7,13 +7,11 @@ using System.Text.Json.Serialization.Metadata;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
-using MudBlazor.Services;
 using NSwag;
 using OllamaSharp;
 using Serilog;
@@ -61,8 +59,6 @@ public static class ConfigureServices
                                                                    .Enrich.FromLogContext()
                                                                    .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate));
 
-        builder.Services.AddRazorComponents()
-               .AddInteractiveServerComponents();
         builder.Services.ConfigureHttpJsonOptions(options => ConfigureJsonSerializerOptions(options.SerializerOptions));
         builder.Services.AddFastEndpoints(options =>
         {
@@ -103,9 +99,7 @@ public static class ConfigureServices
                 policy => policy.AddAuthenticationSchemes(LocalOperatorAuthorization.AuthenticationType)
                                 .RequireRole(LocalOperatorAuthorization.OperatorRole));
         });
-        builder.Services.AddCascadingAuthenticationState();
-        builder.Services.AddMudServices();
-
+        builder.Services.AddAntiforgery();
         builder.Services.AddOptions<CentralPlatformOptions>()
                .Bind(configuration.GetSection(CentralPlatformOptions.SectionName))
                .ValidateOnStart();
@@ -153,7 +147,6 @@ public static class ConfigureServices
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
         builder.Services.AddSingleton<ILocalOperatorTokenProvider, LocalOperatorTokenProvider>();
-        builder.Services.AddScoped<AuthenticationStateProvider, LocalOperatorAuthenticationStateProvider>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
         builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();

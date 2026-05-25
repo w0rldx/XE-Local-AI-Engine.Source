@@ -7,7 +7,7 @@ The XE AppHost can run the Node Web Server with no HostAgent, with a fast fake H
 | Mode | Enable with | Purpose | Docker behavior |
 | --- | --- | --- | --- |
 | Default | no flag | Run the Node Web Server, Ollama, embeddings, and SQLite without HostAgent wiring. | Aspire-managed Ollama only. |
-| Fast dev | `XE_ENABLE_HOST_AGENT_DEV=true` | Develop Blazor Manager UI and HostAgent client flows quickly. | HostAgent.Linux uses `HostAgent__Docker__UseFakeDriver=true`. |
+| Fast dev | `XE_ENABLE_HOST_AGENT_DEV=true` | Develop the React Web UI and HostAgent client flows quickly. | HostAgent.Linux uses `HostAgent__Docker__UseFakeDriver=true`. |
 | Runtime fidelity | `XE_ENABLE_HOST_AGENT_RUNTIME_FIDELITY=true` | Exercise the production-like socket/HMAC/startup-gate contract and real HostAgent.Linux Docker seam. | HostAgent.Linux uses the real Docker runtime client. |
 
 If both HostAgent flags are set, runtime-fidelity mode wins.

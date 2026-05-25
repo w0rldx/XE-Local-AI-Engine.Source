@@ -1,4 +1,6 @@
-# C0re React Client
+# XE Node React Client
+
+This is the standalone React management UI served by `XE-Local-AI-Engine.Client` at the web root after the Phase 7 cutover. It talks only to the node-local FastEndpoints API under `/api/local/v1` and uses the per-launch local-operator token injected by the host shell.
 
 ## OpenAPI client generation
 
@@ -6,7 +8,7 @@ The frontend uses `@hey-api/openapi-ts` to generate a typed Axios client from th
 
 ### Regenerate the client
 
-Run from `C0re.Client.React.Web`:
+Run from `Apps/XE-Local-AI-Engine/XE-Local-AI-Engine.Client.React`:
 
 ```sh
 pnpm run openapi
@@ -15,7 +17,7 @@ pnpm run openapi
 This fetches the current OpenAPI document and regenerates `src/core/api/generated/**`. For a local HTTPS API with a self-signed certificate, use:
 
 ```sh
-OPENAPI_INSECURE=1 OPENAPI_SPEC_URL="https://localhost:7003/openapi/v1/v1.json" pnpm run openapi
+OPENAPI_INSECURE=1 OPENAPI_SPEC_URL="https://localhost:50722/openapi/local/v1/v1.json" pnpm run openapi
 ```
 
 To regenerate from the committed snapshot only and check for drift:
@@ -33,9 +35,7 @@ pnpm run openapi:check
 
 ### Axios and auth behavior
 
-Generated SDK calls use the shared `axiosInstance`, so the existing auth header, 401 refresh queue, rate-limit toast, and ProblemDetails interceptors remain active.
-
-`src/core/auth/api/TokenRefresh.ts` intentionally stays on raw `axios`. Do not migrate it to the generated SDK or shared `axiosInstance`, because the refresh path must bypass the 401 interceptor to avoid recursive refresh loops.
+Generated SDK calls use the shared node-local `axiosInstance`, so the local-operator token header, rate-limit toast, and ProblemDetails interceptors remain active. The browser never receives cloud-provider credentials or platform worker credentials.
 
 ### Migration cookbook
 

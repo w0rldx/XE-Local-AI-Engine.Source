@@ -10,7 +10,7 @@
       fails with "Conflicting assets with the same target path 'index.html'" (and, in the dev manifest
       path, "Sequence contains more than one element") on rebuilds. The host serves the React shell +
       assets via app.UseStaticFiles() + ServeNodeReactIndexAsync (physical wwwroot files), NOT via the
-      StaticWebAssets/Blazor manifest, and MapRazorComponents is removed at cutover, so nothing depends
+      StaticWebAssets manifest, and Blazor endpoints are removed at cutover, so nothing depends
       on the SWA pipeline here. With it off there is no manifest to collide, which also makes the
       wwwroot copy idempotent across rebuilds. wwwroot content still publishes via the default
       <Content Include="wwwroot\**"> (CopyToPublishDirectory) for UseStaticFiles.
@@ -37,7 +37,6 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
     <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI"/>
     <PackageReference Include="Microsoft.Agents.AI.DevUI"/>
-    <PackageReference Include="MudBlazor"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Scalar.AspNetCore"/>
@@ -73,8 +72,7 @@
     rebuilds is provided by removing these outputs from SDK static-web-asset discovery (the
     Content Remove / None Include block above) so a populated wwwroot does not produce a duplicate
     or conflicting logical asset for /index.html on the second build.
-    Only the React build outputs are removed; the tracked wwwroot\.gitignore and wwwroot\app.css
-    (Blazor stylesheet, removed later in WP-C2) are preserved.
+    Only the React build outputs are removed; the tracked wwwroot\.gitignore is preserved.
   -->
   <Target Name="CopyNodeReactBuildToWwwroot"
           BeforeTargets="Build;ComputeFilesToPublish"
@@ -90,6 +88,7 @@
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)robots.txt"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)staticwebapp.config.json"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)web.config"/>
+      <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)app.css"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_mark.svg"/>
       <NodeReactStaleRootFiles Include="$(NodeReactWebRootDir)xen_logo_wordmark.svg"/>
     </ItemGroup>
