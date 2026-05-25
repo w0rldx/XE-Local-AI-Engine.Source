@@ -31,6 +31,7 @@
         <Project Path="XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj" />
         <Project Path="XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj" />
         <Project Path="XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj" />
+        <Project Path="XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj" />
     </Folder>
     <Folder Name="/Tests/Fixture/">
         <Project Path="XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj" />

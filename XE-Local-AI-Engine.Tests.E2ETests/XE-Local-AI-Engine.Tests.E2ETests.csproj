@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>XE_Local_AI_Engine.Tests.E2ETests</RootNamespace>
+    <UseAppHost Condition="'$(OS)' == 'Windows_NT'">false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
+    <PackageReference Include="Microsoft.Playwright"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
+    <PackageReference Include="Microsoft.Testing.Platform"/>
+    <PackageReference Include="NSubstitute"/>
+    <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="TUnit"/>
+    <PackageReference Include="TUnit.Playwright"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Testing\XE-Local-AI-Engine.Client.Testing.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
+    <Using Include="C0re.AI.Shared.Contracts.Events"/>
+  </ItemGroup>
+
+</Project>
