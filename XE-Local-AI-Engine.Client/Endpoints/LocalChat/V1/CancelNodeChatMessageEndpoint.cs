@@ -17,7 +17,7 @@ public sealed class CancelNodeChatMessageEndpoint(
     public override void Configure()
     {
         Post(LocalApiRoutes.LocalChat.Cancel);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancelNodeChatMessageRequest req, CancellationToken ct)

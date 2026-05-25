@@ -6,7 +6,6 @@ export const environment = createEnv({
 	clientPrefix: "VITE_",
 	client: {
 		VITE_APP_TITLE: z.string().min(1),
-		VITE_API_URL: z.string().url(),
 		VITE_API_VERSION: z
 			.string()
 			.regex(/^v\d+$/, "VITE_API_VERSION must follow the pattern v<number>.")

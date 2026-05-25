@@ -9,8 +9,8 @@ using TUnit.Core.Interfaces;
 /// <summary>
 ///     Picks a free loopback port up front, runs <c>pnpm install --frozen-lockfile</c> +
 ///     <c>pnpm run build</c> in the XE React client directory with <c>VITE_API_URL</c> baked to
-///     that port, then copies the built <c>dist/</c> tree into <c>&lt;TempRoot&gt;</c> itself so the
-///     factory's <c>UseWebRoot(TempRoot)</c> makes it available to <c>ServeNodeReactIndexAsync</c>
+    ///     that port, then copies the built <c>dist/</c> tree into <c>&lt;TempRoot&gt;</c> itself so the
+    ///     factory's <c>UseWebRoot(TempRoot)</c> makes it available to <c>MapFallbackToFile</c>
 ///     and <c>UseStaticFiles</c> at the same origin. Post-cutover the React client owns root, so the
 ///     shell lives at the web-root rather than under an <c>/app</c> prefix.
 ///     No vite-preview server is started — the .NET host serves the SPA.
@@ -35,7 +35,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
     /// <summary>
     ///     Temp directory that contains the freshly built dist at its root.
     ///     Pass this to <see cref="XENodeE2EWebApplicationFactory" /> as the web root so that
-    ///     <c>&lt;TempRoot&gt;/index.html</c> is found by <c>ServeNodeReactIndexAsync</c>.
+    ///     <c>&lt;TempRoot&gt;/index.html</c> is found by <c>MapFallbackToFile</c>.
     /// </summary>
     public string TempRoot { get; private set; } = string.Empty;
 

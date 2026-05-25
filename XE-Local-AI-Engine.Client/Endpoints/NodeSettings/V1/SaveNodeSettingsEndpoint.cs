@@ -18,7 +18,7 @@ public sealed class SaveNodeSettingsEndpoint(
     public override void Configure()
     {
         Put(LocalApiRoutes.NodeSettings.Settings);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(SaveNodeSettingsRequest req, CancellationToken ct)

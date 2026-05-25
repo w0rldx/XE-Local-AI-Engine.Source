@@ -45,12 +45,9 @@ vi.mock("@microsoft/signalr", () => ({
 	LogLevel: { Warning: 3 },
 }));
 
-import { localOperatorHeaderName } from "@/core/api/auth/LocalOperatorToken";
 import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-
-const localOperatorTokenGlobalKey = "__XE_LOCAL_OPERATOR_TOKEN__";
-const localGlobal = globalThis as unknown as Partial<Record<typeof localOperatorTokenGlobalKey, string>>;
 
 const streamRequest = {
 	conversationId: "conversation-1",
@@ -80,7 +77,7 @@ async function settle(): Promise<void> {
 describe("nodeChatAdapter SignalR streaming", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		localGlobal[localOperatorTokenGlobalKey] = "local-token";
+		useNodeAuthStore.getState().actions.clear();
 		signalRMock.state.currentSubscriber = undefined;
 		signalRMock.builder.withUrl.mockReturnValue(signalRMock.builder);
 		signalRMock.builder.configureLogging.mockReturnValue(signalRMock.builder);
@@ -95,15 +92,19 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		});
 	});
 
-	it("uses header-authenticated long polling so the browser does not put the local token in a WebSocket query string", async () => {
+	it("uses long polling for streaming", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
-		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(expect.stringContaining("/api/local/v1/chat/hub"), {
-			headers: { [localOperatorHeaderName]: "local-token" },
-			transport: 4,
-		});
+		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(
+			expect.stringContaining("/api/local/v1/chat/hub"),
+			expect.objectContaining({
+				accessTokenFactory: expect.any(Function),
+				transport: 4,
+			}),
+		);
+		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("");
 		expect(signalRMock.connection.stream).toHaveBeenCalledWith("SendMessage", streamRequest);
 
 		signalRMock.state.currentSubscriber?.next(streamEvent);
@@ -114,6 +115,18 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		await expect(completed).resolves.toMatchObject({ done: true });
 		expect(signalRMock.subscription.dispose).toHaveBeenCalled();
 		expect(signalRMock.connection.stop).toHaveBeenCalled();
+	});
+
+	it("supplies the current access token to SignalR", async () => {
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("access-token");
+
+		signalRMock.state.currentSubscriber?.complete();
+		await expect(first).resolves.toMatchObject({ done: true });
 	});
 
 	it("disposes the SignalR subscription when the send aborts", async () => {

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 
 public sealed class PersistenceEncryptionTests : IDisposable
@@ -149,7 +150,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             {
                 NodeName = nodeName
             }),
-            configuration);
+            new NodeOperatorSecretProvider(configuration));
 
         var actual = keyHolder.Key.ToArray();
         var expected = HkdfSha256(operatorSecret,
@@ -175,7 +176,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             {
                 NodeName = "worker-node-beta"
             }),
-            configuration);
+            new NodeOperatorSecretProvider(configuration));
 
         _ = keyHolder.Key.Span[0];
         keyHolder.Dispose();
@@ -194,12 +195,45 @@ public sealed class PersistenceEncryptionTests : IDisposable
                 {
                     NodeName = "worker-node-gamma"
                 }),
-                configuration);
+                new NodeOperatorSecretProvider(configuration));
         });
 
         AssertEx.True(exception.Message.Contains("Parameters:node-sqlite-key", StringComparison.Ordinal));
         AssertEx.True(exception.Message.Contains("dotnet user-secrets set", StringComparison.Ordinal));
         AssertEx.True(exception.Message.Contains("XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void NodeJwtKeyProvider_WhenConfigured_DerivesSeparateExpectedHkdfKey()
+    {
+        var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        const string nodeName = "worker-node-alpha";
+        var configuration = new ConfigurationBuilder()
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(operatorSecret)
+                            })
+                            .Build();
+
+        using var sqliteKeyHolder = new NodeSqliteKeyHolder(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = nodeName
+            }),
+            new NodeOperatorSecretProvider(configuration));
+        using var jwtKeyProvider = new NodeJwtKeyProvider(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = nodeName
+            }),
+            new NodeOperatorSecretProvider(configuration));
+
+        var actual = jwtKeyProvider.SigningKey.ToArray();
+        var expected = HkdfSha256(operatorSecret,
+            [],
+            Encoding.UTF8.GetBytes($"c0re-node-jwt|v1|{nodeName}"),
+            32);
+
+        AssertBytesEqual(expected, actual, "JWT signing key should match the HKDF-SHA256 reference implementation.");
+        AssertEx.False(sqliteKeyHolder.Key.Span.SequenceEqual(jwtKeyProvider.SigningKey.Span), "JWT and SQLite keys must use separate HKDF info strings.");
     }
 
     [Test]

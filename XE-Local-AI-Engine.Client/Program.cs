@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.Agents.AI.DevUI;
@@ -49,10 +48,19 @@ try
     var app = builder.Build();
 
     await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
+    await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
     await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
     RegisterWorkerShutdownDrain(app);
 
-    app.UseSerilogRequestLogging();
+    app.UseSerilogRequestLogging(static options =>
+    {
+        options.EnrichDiagnosticContext = static (diagnosticContext, httpContext) =>
+        {
+            var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
+            diagnosticContext.Set("RequestPathWithRedactedQuery", $"{httpContext.Request.Path}{redactedQuery}");
+            diagnosticContext.Set("QueryString", redactedQuery);
+        };
+    });
 
     // Configure the HTTP request pipeline.
     if (!app.Environment.IsDevelopment())
@@ -63,19 +71,6 @@ try
 
     app.UseHttpsRedirection();
     app.UseAntiforgery();
-
-    app.Use(async (context, next) =>
-    {
-        if (IsNodeReactIndexRequest(context.Request))
-        {
-            await ServeNodeReactIndexAsync(context,
-                app.Environment,
-                app.Services.GetRequiredService<ILocalOperatorTokenProvider>()).ConfigureAwait(false);
-            return;
-        }
-
-        await next().ConfigureAwait(false);
-    });
 
     app.UseStaticFiles();
     app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -104,6 +99,8 @@ try
     });
 
     app.UseMiddleware<LocalApiSecurityMiddleware>();
+    app.UseRouting();
+    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
 
@@ -114,9 +111,9 @@ try
         ConfigureServices.ConfigureJsonSerializerOptions(config.Serializer.Options);
     });
     app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)
-       .RequireAuthorization(LocalOperatorAuthorization.OperatorPolicy);
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<RuntimeManagerHub>(LocalApiRoutes.RuntimeManager.Hub)
-       .RequireAuthorization(LocalOperatorAuthorization.OperatorPolicy);
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
     if (!app.Environment.IsProduction())
     {
@@ -131,7 +128,7 @@ try
 
             settings.AddDocument("v1");
 
-            settings.AddPreferredSecuritySchemes("LocalOperator");
+            settings.AddPreferredSecuritySchemes("Bearer");
         }).AllowAnonymous();
     }
 
@@ -144,12 +141,7 @@ try
         app.MapDevUI();
     }
 
-    // Cutover (Plan Phase 7.2/7.3): the React client owns root. Blazor endpoint
-    // mapping and legacy component dependencies have been removed so
-    // server-rendered component routes no longer claim root paths ahead of the SPA fallback.
-    // The React shell is served via the token-injecting fallback (not a static
-    // MapFallbackToFile) so the per-launch local-operator token is injected into index.html.
-    app.MapFallback(ServeNodeReactIndexAsync);
+    app.MapFallbackToFile("index.html");
 
     await app.RunAsync();
 }
@@ -176,6 +168,16 @@ static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
     var migrationService = scope.ServiceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
     await migrationService.MigrateAsync().ConfigureAwait(false);
+}
+
+static async Task ApplyNodeIdentityMigrationsAsync(IServiceProvider services)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    await using var scope = services.CreateAsyncScope();
+    var initializationService = scope.ServiceProvider.GetRequiredService<NodeIdentityInitializationService>();
+
+    await initializationService.MigrateAndSeedAsync().ConfigureAwait(false);
 }
 
 static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider services)
@@ -213,59 +215,6 @@ static void RegisterWorkerShutdownDrain(WebApplication app)
                 exception.GetType().Name);
         }
     }, app.Services);
-}
-
-static bool IsNodeReactIndexRequest(HttpRequest request)
-{
-    ArgumentNullException.ThrowIfNull(request);
-
-    if (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method))
-    {
-        return false;
-    }
-
-    var path = request.Path.Value;
-    return string.IsNullOrEmpty(path)
-           || path.Equals("/", StringComparison.OrdinalIgnoreCase)
-           || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase);
-}
-
-static async Task ServeNodeReactIndexAsync(HttpContext context,
-    IWebHostEnvironment environment,
-    ILocalOperatorTokenProvider tokenProvider)
-{
-    ArgumentNullException.ThrowIfNull(context);
-    ArgumentNullException.ThrowIfNull(environment);
-    ArgumentNullException.ThrowIfNull(tokenProvider);
-
-    var indexFile = environment.WebRootFileProvider.GetFileInfo("index.html");
-    if (!indexFile.Exists)
-    {
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
-        return;
-    }
-
-    await using var indexStream = indexFile.CreateReadStream();
-    using var reader = new StreamReader(indexStream);
-    var html = await reader.ReadToEndAsync(context.RequestAborted).ConfigureAwait(false);
-    var responseHtml = InjectLocalOperatorToken(html, tokenProvider.Token);
-
-    context.Response.ContentType = "text/html; charset=utf-8";
-    if (HttpMethods.IsHead(context.Request.Method))
-    {
-        return;
-    }
-
-    await context.Response.WriteAsync(responseHtml, context.RequestAborted).ConfigureAwait(false);
-}
-
-static string InjectLocalOperatorToken(string html, string token)
-{
-    var tokenScript = $"<script>globalThis.__XE_LOCAL_OPERATOR_TOKEN__ = {JsonSerializer.Serialize(token)};</script>";
-    const string headCloseTag = "</head>";
-    var headCloseIndex = html.IndexOf(headCloseTag, StringComparison.OrdinalIgnoreCase);
-
-    return headCloseIndex < 0 ? string.Concat(tokenScript, html) : html.Insert(headCloseIndex, tokenScript);
 }
 
 namespace XE_Local_AI_Engine.Client

@@ -1,0 +1,129 @@
+.trigger-paper {
+	background: var(--mantine-color-body);
+	border: 1px solid var(--mantine-color-default-border);
+	transition: border-color 150ms ease;
+}
+
+.trigger-paper:hover {
+	border-color: var(--mantine-color-gray-4);
+}
+
+.trigger-paper-selected {
+	border-color: var(--mantine-primary-color-light-hover);
+}
+
+.compact-trigger {
+	width: 220px;
+}
+
+.compact-paper {
+	height: 34px;
+	display: flex;
+	align-items: center;
+}
+
+.compact-trigger-button {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	text-align: left;
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.compact-trigger-button:disabled,
+.compact-trigger-button[aria-disabled="true"] {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.chevron {
+	transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+	flex-shrink: 0;
+}
+
+.chevron-open {
+	transform: rotate(180deg);
+}
+
+.dropdown-label {
+	letter-spacing: 0.04em;
+}
+
+.option-button {
+	display: block;
+	width: 100%;
+	padding: 10px 10px 10px 6px;
+	border-radius: var(--mantine-radius-md);
+	text-align: left;
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	transition: background-color 120ms ease;
+	position: relative;
+	overflow: hidden;
+}
+
+.option-button:hover {
+	background: var(--mantine-color-gray-0);
+}
+
+.option-button-selected {
+	background: var(--mantine-primary-color-light);
+}
+
+.option-button-selected:hover {
+	background: var(--mantine-primary-color-light-hover);
+}
+
+.option-button-disabled {
+	cursor: not-allowed;
+	opacity: 0.62;
+}
+
+.option-button-disabled:hover {
+	background: transparent;
+}
+
+.status-accent {
+	width: 3px;
+	border-radius: 2px;
+	flex-shrink: 0;
+	align-self: stretch;
+	min-height: 32px;
+}
+
+.status-accent-available {
+	background: var(--mantine-color-primary-filled);
+}
+
+.status-accent-unavailable {
+	background: var(--mantine-color-gray-4);
+}
+
+.reasoning-badge {
+	flex-shrink: 0;
+	font-size: 9px;
+	height: 18px;
+	padding: 0 6px;
+}
+
+.option-chevron {
+	transition:
+		opacity 120ms ease,
+		transform 120ms ease;
+	opacity: 0;
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+
+.option-button:hover .option-chevron,
+.option-chevron-visible {
+	opacity: 1;
+}
+
+.search-input input {
+	background: var(--mantine-color-gray-0);
+}

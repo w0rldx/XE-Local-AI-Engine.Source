@@ -12,7 +12,7 @@ public sealed class PollNodeBindingEndpoint(INodeBindingService nodeBindingServi
     public override void Configure()
     {
         Post(LocalApiRoutes.NodeBinding.Poll);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(PollNodeBindingSessionRequest req, CancellationToken ct)

@@ -15,7 +15,7 @@ public sealed class CreateNodeChatConversationEndpoint(
     public override void Configure()
     {
         Post(LocalApiRoutes.LocalChat.Conversations);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CreateNodeChatConversationRequest req, CancellationToken ct)

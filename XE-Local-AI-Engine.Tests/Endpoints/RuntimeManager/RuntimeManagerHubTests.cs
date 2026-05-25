@@ -8,7 +8,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.RuntimeManager.V1;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Manager;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -41,14 +40,13 @@ public sealed class RuntimeManagerHubTests
         managerService.StreamLogsAsync("ollama", 25, true, Arg.Any<CancellationToken>())
                       .Returns(CreateLogStream("ollama"));
         await using var factory = CreateFactory(managerService);
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
         await using var connection = new HubConnectionBuilder()
-                                     .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
-                                     {
-                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                                         options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
-                                         options.Headers.Add("Origin", "http://localhost");
-                                     })
+                                      .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
+                                      {
+                                          options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                          options.Headers.Add("Origin", "http://localhost");
+                                      })
                                      .Build();
 
         await connection.StartAsync().ConfigureAwait(false);
@@ -74,14 +72,13 @@ public sealed class RuntimeManagerHubTests
     {
         var managerService = Substitute.For<IHostAgentManagerService>();
         await using var factory = CreateFactory(managerService);
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
         await using var connection = new HubConnectionBuilder()
-                                     .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
-                                     {
-                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                                         options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
-                                         options.Headers.Add("Origin", "http://localhost");
-                                     })
+                                      .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
+                                      {
+                                          options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                          options.Headers.Add("Origin", "http://localhost");
+                                      })
                                      .Build();
 
         await connection.StartAsync().ConfigureAwait(false);

@@ -9,7 +9,7 @@
       Microsoft.Agents.AI.DevUI package's own staticwebassets\index.html (also BasePath "/") — the SDK
       fails with "Conflicting assets with the same target path 'index.html'" (and, in the dev manifest
       path, "Sequence contains more than one element") on rebuilds. The host serves the React shell +
-      assets via app.UseStaticFiles() + ServeNodeReactIndexAsync (physical wwwroot files), NOT via the
+      assets via app.UseStaticFiles() + MapFallbackToFile("index.html") (physical wwwroot files), NOT via the
       StaticWebAssets manifest, and Blazor endpoints are removed at cutover, so nothing depends
       on the SWA pipeline here. With it off there is no manifest to collide, which also makes the
       wwwroot copy idempotent across rebuilds. wwwroot content still publishes via the default
@@ -30,8 +30,10 @@
     <PackageReference Include="FastEndpoints"/>
     <PackageReference Include="FastEndpoints.Swagger"/>
     <PackageReference Include="Grpc.Net.Client"/>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
@@ -67,7 +69,7 @@
 
   <!--
     Copy the node React build (dist) into wwwroot root for the host to serve via UseStaticFiles +
-    ServeNodeReactIndexAsync. The target deletes the previously copied React outputs (root files +
+    MapFallbackToFile("index.html"). The target deletes the previously copied React outputs (root files +
     assets/) before re-copying so it is hygienic across rebuilds. Idempotency across consecutive
     rebuilds is provided by removing these outputs from SDK static-web-asset discovery (the
     Content Remove / None Include block above) so a populated wwwroot does not produce a duplicate

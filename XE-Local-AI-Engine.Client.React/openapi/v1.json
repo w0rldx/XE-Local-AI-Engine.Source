@@ -61,9 +61,6 @@
         "security": [
           {
             "JWTBearerAuth": []
-          },
-          {
-            "LocalOperator": []
           }
         ]
       }
@@ -168,12 +165,6 @@
         "description": "Enter a JWT token to authorize the requests...",
         "scheme": "Bearer",
         "bearerFormat": "JWT"
-      },
-      "LocalOperator": {
-        "type": "apiKey",
-        "description": "Per-launch local operator token.",
-        "name": "X-Local-Operator",
-        "in": "header"
       }
     }
   }

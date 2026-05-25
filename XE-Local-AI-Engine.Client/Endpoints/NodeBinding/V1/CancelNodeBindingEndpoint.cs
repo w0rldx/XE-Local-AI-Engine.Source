@@ -11,7 +11,7 @@ public sealed class CancelNodeBindingEndpoint(INodeBindingService nodeBindingSer
     public override void Configure()
     {
         Post(LocalApiRoutes.NodeBinding.Cancel);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

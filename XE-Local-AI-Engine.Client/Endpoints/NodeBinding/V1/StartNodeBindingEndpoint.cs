@@ -12,7 +12,7 @@ public sealed class StartNodeBindingEndpoint(INodeBindingService nodeBindingServ
     public override void Configure()
     {
         Post(LocalApiRoutes.NodeBinding.Start);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

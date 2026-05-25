@@ -15,7 +15,7 @@ public sealed class DeleteNodeChatConversationEndpoint(
     public override void Configure()
     {
         Delete(LocalApiRoutes.LocalChat.ConversationById);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(DeleteNodeChatConversationRequest req, CancellationToken ct)

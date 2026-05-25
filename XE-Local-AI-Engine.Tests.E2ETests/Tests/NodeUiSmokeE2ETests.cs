@@ -4,10 +4,8 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     First browser-driven smoke tests for the XE node React client, ordered by risk (plan M2):
-///     #1 is unpaired-safe (no authenticated data needed); #2 exercises the operator-token bootstrap
-///     end-to-end in a real browser by rendering FakeOllama models from <c>/api/local/v1/models</c>.
-///     Both navigate to the token-injecting root route so the SPA receives the operator token.
+///     First browser-driven smoke tests for the XE node React client, ordered by risk (plan M2).
+///     Both navigate to the root-hosted SPA shell.
 /// </summary>
 public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
 {
@@ -15,7 +13,6 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
     [Category("Smoke")]
     public async Task Dashboard_Renders_For_Unpaired_Node()
     {
-        // /dashboard is served token-injected (deep link hits ServeNodeReactIndexAsync).
         await Page.GotoAsync($"{NodeAppUrl}/dashboard", new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
@@ -39,8 +36,7 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
-        // Proves the in-browser token bootstrap: a 200 from /api/local/v1/models surfaces a
-        // FakeOllama model name configured by the factory ("qwen3.5:0.8b").
+        // Phase 6 will replace this with the real setup/login browser flow.
         await Expect(Page.GetByText("qwen3.5:0.8b").First).ToBeVisibleAsync();
     }
 }

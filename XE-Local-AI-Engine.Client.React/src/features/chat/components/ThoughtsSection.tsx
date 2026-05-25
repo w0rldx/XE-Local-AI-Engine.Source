@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import { StreamCaret } from "@/features/chat/components/StreamCaret";
+import classes from "@/features/chat/components/ThoughtsSection.module.css";
 
 interface ThoughtsSectionProps {
 	messageId: string;
@@ -76,7 +77,7 @@ export function ThoughtsSection({
 
 	if (showsStreaming) {
 		return (
-			<Paper data-color-scheme={colorScheme} data-testid="chat-live-reasoning-stream" p="sm" withBorder={true}>
+			<Paper className={classes["streaming"]} data-color-scheme={colorScheme} data-testid="chat-live-reasoning-stream" p="sm">
 				<Stack gap="xs">
 					<Group gap="xs" wrap="nowrap" align="center">
 						<ThemeIcon size={22} radius="xl" variant="filled" style={{ background: CHAT_ACCENT_SOFT, color: CHAT_ACCENT }}>
@@ -97,7 +98,7 @@ export function ThoughtsSection({
 							</Text>
 						)}
 					</Group>
-					<Text ref={streamingBodyRef} component="div" size="sm" style={{ maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap" }}>
+					<Text ref={streamingBodyRef} component="div" size="sm" className={classes["streaming-body"]}>
 						{liveReasoning}
 						<StreamCaret />
 					</Text>
@@ -116,10 +117,10 @@ export function ThoughtsSection({
 	}
 
 	return (
-		<div>
-			<details data-testid={`chat-message-reasoning-${messageId}`} open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
-				<summary data-testid={`chat-message-reasoning-summary-${messageId}`} style={{ cursor: "pointer", listStyle: "none" }}>
-					<Group gap="xs" wrap="nowrap" align="center" justify="space-between">
+		<div className={classes["section"]}>
+			<details className={classes["details"]} data-testid={`chat-message-reasoning-${messageId}`} open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+				<summary className={`${classes["summary"]} mantine-focus-auto`} data-testid={`chat-message-reasoning-summary-${messageId}`}>
+					<span className={classes["summary-content"]}>
 						<Group gap="xs" wrap="nowrap" align="center">
 							<ThemeIcon size={22} radius="xl" variant="filled" style={{ background: CHAT_ACCENT_SOFT, color: CHAT_ACCENT }}>
 								<IconBrain size={11} />
@@ -131,7 +132,7 @@ export function ThoughtsSection({
 						<m.span style={{ display: "inline-flex" }} animate={{ rotate: expanded ? 0 : -90 }} transition={reduced ? { duration: 0 } : { duration: 0.2 }}>
 							<IconChevronDown size={14} />
 						</m.span>
-					</Group>
+					</span>
 				</summary>
 				<AnimatePresence initial={false}>
 					{expanded ? (
@@ -143,7 +144,7 @@ export function ThoughtsSection({
 							transition={reduced ? { duration: 0 } : { duration: 0.24 }}
 							style={{ overflow: "hidden" }}
 						>
-							<Text component="div" size="sm" style={{ whiteSpace: "pre-wrap" }}>
+							<Text component="div" size="sm" className={classes["reasoning-text"]}>
 								{finalReasoning}
 							</Text>
 						</m.div>

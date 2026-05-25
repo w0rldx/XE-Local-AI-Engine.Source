@@ -12,7 +12,7 @@ public sealed class GetRuntimeManagerStatusEndpoint(IHostAgentManagerService man
     public override void Configure()
     {
         Get(LocalApiRoutes.RuntimeManager.Status);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

@@ -50,7 +50,7 @@ public sealed class RuntimeManagerEndpointTests
     }
 
     [Test]
-    public async Task GetRuntimeStatus_WhenMissingLocalOperatorToken_ReturnsUnauthorized()
+    public async Task GetRuntimeStatus_WhenMissingBearerToken_ReturnsUnauthorized()
     {
         var managerService = Substitute.For<IHostAgentManagerService>();
         await using var factory = CreateFactory(managerService);
@@ -100,7 +100,7 @@ public sealed class RuntimeManagerEndpointTests
     }
 
     [Test]
-    public async Task ExecuteContainerAction_WhenMissingLocalOperatorToken_ReturnsUnauthorized()
+    public async Task ExecuteContainerAction_WhenMissingBearerToken_ReturnsUnauthorized()
     {
         var managerService = Substitute.For<IHostAgentManagerService>();
         await using var factory = CreateFactory(managerService);
@@ -131,8 +131,7 @@ public sealed class RuntimeManagerEndpointTests
     private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+        factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
         return request;
     }

@@ -18,7 +18,7 @@ public sealed class ClearCloudSettingsEndpoint(
     public override void Configure()
     {
         Delete(LocalApiRoutes.CloudSettings.Settings);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

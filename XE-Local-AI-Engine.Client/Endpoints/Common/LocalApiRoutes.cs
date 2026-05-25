@@ -9,6 +9,17 @@ public static class LocalApiRoutes
         public const string ValidationProblemProbe = "diagnostics/validation-probe";
     }
 
+    public static class Auth
+    {
+        public const string Status = "auth/status";
+        public const string Setup = "auth/setup";
+        public const string Login = "auth/login";
+        public const string Refresh = "auth/refresh";
+        public const string Logout = "auth/logout";
+        public const string ChangePassword = "auth/change-password";
+        public const string Me = "auth/me";
+    }
+
     public static class LocalChat
     {
         public const string Hub = "/api/local/v1/chat/hub";

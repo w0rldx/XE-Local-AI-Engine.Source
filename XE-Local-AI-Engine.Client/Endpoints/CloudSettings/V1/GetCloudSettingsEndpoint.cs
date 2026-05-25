@@ -12,7 +12,7 @@ public sealed class GetCloudSettingsEndpoint(ICloudCredentialStore cloudCredenti
     public override void Configure()
     {
         Get(LocalApiRoutes.CloudSettings.Settings);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

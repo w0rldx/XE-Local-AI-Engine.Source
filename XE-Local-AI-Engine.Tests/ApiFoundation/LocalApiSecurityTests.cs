@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class LocalApiSecurityTests
@@ -28,7 +26,8 @@ public sealed class LocalApiSecurityTests
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
-        using var request = CreateProbeRequest("invalid-token");
+        using var request = CreateProbeRequest();
+        request.Headers.Add("Authorization", "Bearer invalid-token");
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -40,8 +39,7 @@ public sealed class LocalApiSecurityTests
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        using var request = CreateProbeRequest(token);
+        using var request = CreateProbeRequest(factory);
         request.Headers.Host = "evil.example";
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -54,8 +52,7 @@ public sealed class LocalApiSecurityTests
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        using var request = CreateProbeRequest(token);
+        using var request = CreateProbeRequest(factory);
         request.Headers.Add("Origin", "https://evil.example");
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -68,8 +65,7 @@ public sealed class LocalApiSecurityTests
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        using var request = CreateProbeRequest(token);
+        using var request = CreateProbeRequest(factory);
         request.Headers.Add("Origin", "http://localhost");
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -77,7 +73,14 @@ public sealed class LocalApiSecurityTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    private static HttpRequestMessage CreateProbeRequest(string token)
+    private static HttpRequestMessage CreateProbeRequest(TestingWebAppFactory factory)
+    {
+        var request = CreateProbeRequest();
+        factory.AddNodeBearerToken(request);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateProbeRequest()
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
         {
@@ -86,7 +89,6 @@ public sealed class LocalApiSecurityTests
                 Name = "operator"
             })
         };
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
         return request;
     }
 }

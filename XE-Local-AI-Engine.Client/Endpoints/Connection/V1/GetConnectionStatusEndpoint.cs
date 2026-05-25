@@ -12,7 +12,7 @@ public sealed class GetConnectionStatusEndpoint(IConnectionControlService connec
     public override void Configure()
     {
         Get(LocalApiRoutes.Connection.Status);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

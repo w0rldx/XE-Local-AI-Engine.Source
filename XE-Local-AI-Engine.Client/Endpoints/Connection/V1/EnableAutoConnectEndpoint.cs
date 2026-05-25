@@ -12,7 +12,7 @@ public sealed class EnableAutoConnectEndpoint(IConnectionControlService connecti
     public override void Configure()
     {
         Post(LocalApiRoutes.Connection.EnableAutoConnect);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

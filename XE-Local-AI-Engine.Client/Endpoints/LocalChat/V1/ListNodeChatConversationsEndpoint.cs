@@ -13,7 +13,7 @@ public sealed class ListNodeChatConversationsEndpoint(INodeChatPersistenceServic
     public override void Configure()
     {
         Get(LocalApiRoutes.LocalChat.Conversations);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(ListNodeChatConversationsRequest req, CancellationToken ct)

@@ -5,14 +5,14 @@
 ## Current UI shape
 
 - The React Web UI owns the web root after the Phase 7 cutover.
-- Blazor/Razor components and MudBlazor dependencies have been removed from this host.
-- The SPA shell is served through the token-injecting fallback so browser requests can call the local API with the per-launch `X-Local-Operator` token.
+- Legacy Razor component dependencies have been removed from this host.
+- The SPA shell is served as a static `index.html`; browser requests authenticate with the node JWT flow.
 - Cloud-provider credentials and platform worker credentials stay server-side; they are never returned to the React client or written to logs.
 
 ## Main responsibilities
 
 - Serve the built React app from `wwwroot/index.html` and static assets from `wwwroot/assets/**`.
-- Expose local operator-authenticated APIs for chat, binding, settings, models, runtime manager, logs, and invocations.
+- Expose node JWT-authenticated APIs for chat, binding, settings, models, runtime manager, logs, and invocations.
 - Stream local chat and runtime-log events over local SignalR endpoints.
 - Apply SQLite migrations and recover interrupted chat messages at startup.
 - Coordinate HostAgent status/actions while keeping HostAgent and Tray local-substrate only.
@@ -23,7 +23,7 @@
 1. Build the React client from `../XE-Local-AI-Engine.Client.React` with `pnpm run build`.
 2. Build this host through the XE subtree solution; the project copies the React `dist/` output into `wwwroot` during build.
 3. Keep generated OpenAPI/React client files regenerated through their scripts instead of hand-editing generated output.
-4. Preserve the local endpoint security posture: loopback/local origin, operator authentication, strict host/origin checks, and no secret-bearing responses.
+4. Preserve the local endpoint security posture: loopback/local origin, JWT authentication, strict host/origin checks, and no secret-bearing responses.
 
 ## Validation
 

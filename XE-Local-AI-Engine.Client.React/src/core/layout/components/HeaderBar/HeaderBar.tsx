@@ -1,9 +1,12 @@
 import "./HeaderBar.css";
 
-import { ActionIcon } from "@mantine/core";
-import { IconMenu2 as MenuIcon } from "@tabler/icons-react";
+import { ActionIcon, Button } from "@mantine/core";
+import { IconLogout, IconMenu2 as MenuIcon } from "@tabler/icons-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { logoutNodeAuth } from "@/core/auth/api/NodeAuthApi";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
@@ -12,7 +15,21 @@ import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Inde
 
 export function HeaderBar() {
 	const [drawerOpen, setDrawerOpen] = useState(false);
+	const [logoutPending, setLogoutPending] = useState(false);
+	const navigate = useNavigate();
+	const clearAuth = useNodeAuthStore((state) => state.actions.clear);
 	const theme = useTheme();
+
+	const handleLogout = async (): Promise<void> => {
+		setLogoutPending(true);
+		try {
+			await logoutNodeAuth();
+		} finally {
+			clearAuth();
+			setLogoutPending(false);
+			await navigate({ to: "/login" });
+		}
+	};
 
 	return (
 		<>
@@ -33,6 +50,9 @@ export function HeaderBar() {
 					<ThemeModeToggle />
 					<ThemeConfiguratorDialogButton />
 					<LanguageMenu />
+					<Button variant="subtle" leftSection={<IconLogout size={16} />} loading={logoutPending} onClick={handleLogout}>
+						Logout
+					</Button>
 				</div>
 			</div>
 

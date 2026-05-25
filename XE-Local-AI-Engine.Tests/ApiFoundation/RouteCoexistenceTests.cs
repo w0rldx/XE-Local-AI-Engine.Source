@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class RouteCoexistenceTests
@@ -122,7 +120,7 @@ public sealed class RouteCoexistenceTests
                 Name = name
             })
         };
-        AddLocalOperatorHeaders(factory, request);
+        AddNodeAuthHeaders(factory, request);
         return request;
     }
 
@@ -132,14 +130,13 @@ public sealed class RouteCoexistenceTests
         {
             Content = new StringContent(string.Empty)
         };
-        AddLocalOperatorHeaders(factory, request);
+        AddNodeAuthHeaders(factory, request);
         return request;
     }
 
-    private static void AddLocalOperatorHeaders(TestingWebAppFactory factory, HttpRequestMessage request)
+    private static void AddNodeAuthHeaders(TestingWebAppFactory factory, HttpRequestMessage request)
     {
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+        factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
     }
 }

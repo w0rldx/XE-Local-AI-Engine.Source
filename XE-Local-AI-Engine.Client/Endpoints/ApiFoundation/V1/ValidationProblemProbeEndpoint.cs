@@ -30,7 +30,7 @@ public sealed class ValidationProblemProbeEndpoint : Endpoint<ValidationProblemP
     public override void Configure()
     {
         Post(LocalApiRoutes.ApiFoundation.ValidationProblemProbe);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(ValidationProblemProbeRequest req, CancellationToken ct)

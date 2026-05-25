@@ -35,10 +35,7 @@ export const xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbe
 		ThrowOnError
 	>({
 		responseType: "json",
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ name: "X-Local-Operator", type: "apiKey" },
-		],
+		security: [{ scheme: "bearer", type: "http" }],
 		url: "/api/local/v1/diagnostics/validation-probe",
 		...options,
 		headers: {

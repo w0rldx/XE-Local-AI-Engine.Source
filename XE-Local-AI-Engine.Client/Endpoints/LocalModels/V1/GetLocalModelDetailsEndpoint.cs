@@ -16,7 +16,7 @@ public sealed class GetLocalModelDetailsEndpoint(
     public override void Configure()
     {
         Get(LocalApiRoutes.LocalModels.ModelDetails);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(GetLocalModelDetailsRequest req, CancellationToken ct)

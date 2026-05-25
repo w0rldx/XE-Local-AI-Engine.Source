@@ -147,7 +147,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // The fresh dist as the web root so ServeNodeReactIndexAsync + UseStaticFiles resolve it.
+        // The fresh dist as the web root so MapFallbackToFile + UseStaticFiles resolve it.
         // (The real socket on _port is wired via UseKestrel(port) in the constructor.)
         builder.UseWebRoot(_webRoot);
 
