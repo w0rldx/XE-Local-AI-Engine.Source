@@ -8,8 +8,8 @@ public sealed class ConnectionControlService(
     ITokenStore tokenStore) : IConnectionControlService
 {
     private readonly ConnectionState _connectionState = connectionState ?? throw new ArgumentNullException(nameof(connectionState));
-    private readonly IWorkerHubConnection _workerHubConnection = workerHubConnection ?? throw new ArgumentNullException(nameof(workerHubConnection));
     private readonly ITokenStore _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+    private readonly IWorkerHubConnection _workerHubConnection = workerHubConnection ?? throw new ArgumentNullException(nameof(workerHubConnection));
 
     public Task<ConnectionControlStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {

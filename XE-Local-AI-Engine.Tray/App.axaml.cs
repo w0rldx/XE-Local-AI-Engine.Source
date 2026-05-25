@@ -245,22 +245,22 @@ public sealed class App : Application, IDisposable
 
     private async void StopServicesMenuItemOnClick(object? sender, EventArgs e)
     {
-        await ConfirmAndSendLifecycleActionAsync("Stop Services",
-            "Stop XE Local AI Engine services? Active work will be given the configured graceful shutdown window.",
+        await ConfirmAndSendLifecycleActionAsync(title: "Stop Services",
+            message: "Stop XE Local AI Engine services? Active work will be given the configured graceful shutdown window.",
             endpointName: "shutdown").ConfigureAwait(true);
     }
 
     private async void StartServicesMenuItemOnClick(object? sender, EventArgs e)
     {
-        await ConfirmAndSendLifecycleActionAsync("Start Services",
-            "Start XE Local AI Engine services?",
+        await ConfirmAndSendLifecycleActionAsync(title: "Start Services",
+            message: "Start XE Local AI Engine services?",
             endpointName: "startup").ConfigureAwait(true);
     }
 
     private async void RestartRuntimeMenuItemOnClick(object? sender, EventArgs e)
     {
-        await ConfirmAndSendLifecycleActionAsync("Restart Runtime",
-            "Restart the XE Local AI Engine runtime? Active work will be given the configured graceful shutdown window.",
+        await ConfirmAndSendLifecycleActionAsync(title: "Restart Runtime",
+            message: "Restart the XE Local AI Engine runtime? Active work will be given the configured graceful shutdown window.",
             endpointName: "restart").ConfigureAwait(true);
     }
 

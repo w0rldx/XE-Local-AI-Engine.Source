@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Invocations.V1;
 
-using C0re.AI.Shared.Contracts.Enums;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -72,8 +71,7 @@ internal static class InvocationMonitorResponseMapper
     private const string CancelledOperatorMessage = "Invocation was cancelled.";
     private const string FailedOperatorMessage = "Invocation ended with a failure. See local logs for details.";
 
-    public static InvocationMonitorResponse ToResponse(
-        InvocationState? current,
+    public static InvocationMonitorResponse ToResponse(InvocationState? current,
         IReadOnlyList<InvocationHistoryEntry> history,
         int historyCapacity)
     {

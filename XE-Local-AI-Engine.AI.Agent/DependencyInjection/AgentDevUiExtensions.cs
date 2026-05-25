@@ -9,16 +9,16 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 
 /// <summary>
-/// Development-only registration of a representative named agent so the Microsoft Agent
-/// Framework DevUI dashboard has an agent to list and chat with.
+///     Development-only registration of a representative named agent so the Microsoft Agent
+///     Framework DevUI dashboard has an agent to list and chat with.
 /// </summary>
 /// <remarks>
-/// Worker invocations build agents per-request via <see cref="Invocation.IInvocationAgentFactory"/>,
-/// which DevUI cannot enumerate. This registers a single long-lived agent that reuses the same
-/// decorated <see cref="IChatClient"/> (tool-invocation + function-invocation pipeline) and the
-/// same local-chat instructions, giving the DevUI playground a faithful view of the agent stack.
-/// Endpoint mapping (MapDevUI / MapOpenAIResponses) lives in the web host. Caller must guard with
-/// <c>IsDevelopment()</c>.
+///     Worker invocations build agents per-request via <see cref="Invocation.IInvocationAgentFactory" />,
+///     which DevUI cannot enumerate. This registers a single long-lived agent that reuses the same
+///     decorated <see cref="IChatClient" /> (tool-invocation + function-invocation pipeline) and the
+///     same local-chat instructions, giving the DevUI playground a faithful view of the agent stack.
+///     Endpoint mapping (MapDevUI / MapOpenAIResponses) lives in the web host. Caller must guard with
+///     <c>IsDevelopment()</c>.
 /// </remarks>
 public static class AgentDevUiExtensions
 {
@@ -35,8 +35,7 @@ public static class AgentDevUiExtensions
 
             // ChatClientAgent ctor order is (chatClient, instructions, name, description, ...).
             // The agent's Name must equal the registration key, so use the factory-supplied name.
-            return new ChatClientAgent(
-                chatClient,
+            return new ChatClientAgent(chatClient,
                 instructions,
                 agentName,
                 "XE Local AI Engine DevUI playground agent.",

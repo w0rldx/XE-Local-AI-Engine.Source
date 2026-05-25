@@ -12,21 +12,19 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
 
     public async Task<int> RecoverInterruptedMessagesAsync(long recoveredAtUtc, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
             async (dbContext, token) =>
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
 
-                var recoveredCount = await dbContext.Database.ExecuteSqlRawAsync(
-                    """
-                    UPDATE messages
-                    SET status = {0},
-                        updated_at_utc = {1},
-                        error = {2}
-                    WHERE role = {3}
-                      AND status IN ({4}, {5});
-                    """,
+                var recoveredCount = await dbContext.Database.ExecuteSqlRawAsync("""
+                                                                                 UPDATE messages
+                                                                                 SET status = {0},
+                                                                                     updated_at_utc = {1},
+                                                                                     error = {2}
+                                                                                 WHERE role = {3}
+                                                                                   AND status IN ({4}, {5});
+                                                                                 """,
                     [
                         NodeChatMessageStatusValues.Interrupted,
                         recoveredAtUtc,

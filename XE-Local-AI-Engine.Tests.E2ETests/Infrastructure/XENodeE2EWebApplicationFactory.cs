@@ -12,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using OllamaSharp;
-using TUnit.Core;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
@@ -24,13 +23,13 @@ using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 
 /// <summary>
-/// Boots the XE worker-node host for browser-driven E2E tests on a real, pre-chosen
-/// loopback port, serving the freshly built React dist same-origin from a temp web root.
-/// Config block mirrors <c>XE-Local-AI-Engine.Tests.TestingWebAppFactory</c> (Testing env,
-/// temp-file SQLite + key, local model provider + FakeOllama, no hosted services, unpaired
-/// token store). Unlike the unit factory this binds a real socket (so a browser can connect)
-/// and uses the local <see cref="StubTokenStore"/> instead of the shared unit-test mock.
-/// No CORS is added — the host serves the SPA same-origin and rejects cross-origin XHR by design.
+///     Boots the XE worker-node host for browser-driven E2E tests on a real, pre-chosen
+///     loopback port, serving the freshly built React dist same-origin from a temp web root.
+///     Config block mirrors <c>XE-Local-AI-Engine.Tests.TestingWebAppFactory</c> (Testing env,
+///     temp-file SQLite + key, local model provider + FakeOllama, no hosted services, unpaired
+///     token store). Unlike the unit factory this binds a real socket (so a browser can connect)
+///     and uses the local <see cref="StubTokenStore" /> instead of the shared unit-test mock.
+///     No CORS is added — the host serves the SPA same-origin and rejects cross-origin XHR by design.
 /// </summary>
 public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
@@ -44,12 +43,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     private string _webRoot = string.Empty;
 
     /// <summary>
-    /// TUnit / base-class path: parameterless so it is constructible via
-    /// <c>[ClassDataSource]</c>. The port + web root come from the nested
-    /// <see cref="ReactClient"/> fixture, resolved in <see cref="InitializeAsync"/>.
+    ///     TUnit / base-class path: parameterless so it is constructible via
+    ///     <c>[ClassDataSource]</c>. The port + web root come from the nested
+    ///     <see cref="ReactClient" /> fixture, resolved in <see cref="InitializeAsync" />.
     /// </summary>
     public XENodeE2EWebApplicationFactory()
-        : this(fakeOllamaOptions: null)
+        : this(null)
     {
     }
 
@@ -63,8 +62,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     }
 
     /// <summary>
-    /// Spike / direct-use path: the caller has already chosen the port and built the dist
-    /// (see <c>TokenInjectionSpikeE2ETests</c>, <c>HostBootSmokeE2ETests</c>).
+    ///     Spike / direct-use path: the caller has already chosen the port and built the dist
+    ///     (see <c>TokenInjectionSpikeE2ETests</c>, <c>HostBootSmokeE2ETests</c>).
     /// </summary>
     /// <param name="port">Free loopback port chosen up front (before the React build).</param>
     /// <param name="webRoot">Temp directory whose <c>app/index.html</c> is the freshly built dist (UseWebRoot).</param>
@@ -80,8 +79,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     }
 
     /// <summary>
-    /// The freshly built React client. Injected by TUnit when this factory is itself a
-    /// <c>[ClassDataSource]</c>; null on the explicit-ctor path where port + web root are supplied directly.
+    ///     The freshly built React client. Injected by TUnit when this factory is itself a
+    ///     <c>[ClassDataSource]</c>; null on the explicit-ctor path where port + web root are supplied directly.
     /// </summary>
     [ClassDataSource<XEReactClientFixture>(Shared = SharedType.PerTestSession)]
     public XEReactClientFixture? ReactClient { get; init; }
@@ -104,9 +103,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         {
             if (ReactClient is null)
             {
-                throw new InvalidOperationException(
-                    "XENodeE2EWebApplicationFactory requires either an explicit (port, webRoot) constructor " +
-                    "or an injected ReactClient fixture.");
+                throw new InvalidOperationException("XENodeE2EWebApplicationFactory requires either an explicit (port, webRoot) constructor " +
+                                                    "or an injected ReactClient fixture.");
             }
 
             _port = ReactClient.Port;

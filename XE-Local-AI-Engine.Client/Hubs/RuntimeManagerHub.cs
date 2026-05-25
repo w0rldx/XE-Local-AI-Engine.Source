@@ -13,8 +13,7 @@ public sealed class RuntimeManagerHub(IHostAgentManagerService managerService) :
     private const int DefaultTailLines = 200;
     private const int MaximumTailLines = 2_000;
 
-    public IAsyncEnumerable<RuntimeLogLineResponse> StreamLogs(
-        RuntimeLogsRequest request,
+    public IAsyncEnumerable<RuntimeLogLineResponse> StreamLogs(RuntimeLogsRequest request,
         CancellationToken cancellationToken)
     {
         var (containerName, tailLines, follow) = NormalizeRequest(request);
@@ -39,11 +38,11 @@ public sealed class RuntimeManagerHub(IHostAgentManagerService managerService) :
         return (containerName, tailLines, request.Follow);
     }
 
-    private async IAsyncEnumerable<RuntimeLogLineResponse> StreamLogsCore(
-        string containerName,
+    private async IAsyncEnumerable<RuntimeLogLineResponse> StreamLogsCore(string containerName,
         int tailLines,
         bool follow,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
     {
         await foreach (var line in managerService.StreamLogsAsync(containerName,
                            tailLines,

@@ -28,8 +28,7 @@ public sealed class DeleteNodeChatConversationEndpoint(
         }
 
         var deletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var result = await _chatPersistence.DeleteConversationAsync(
-            new NodeChatDeleteConversationRequest(req.ConversationId, deletedAtUtc, req.PurgeImmediately),
+        var result = await _chatPersistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(req.ConversationId, deletedAtUtc, req.PurgeImmediately),
             ct).ConfigureAwait(false);
 
         await Send.OkAsync(new NodeChatDeleteConversationResponse

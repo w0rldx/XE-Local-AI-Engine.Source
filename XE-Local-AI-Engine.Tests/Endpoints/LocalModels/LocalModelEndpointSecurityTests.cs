@@ -21,8 +21,14 @@ public sealed class LocalModelEndpointSecurityTests
 
         using var listResponse = await client.GetAsync("/api/local/v1/models").ConfigureAwait(false);
         using var detailsResponse = await client.GetAsync("/api/local/v1/models/llama3:8b/details").ConfigureAwait(false);
-        using var selectResponse = await client.PostAsJsonAsync("/api/local/v1/models/select", new SelectLocalModelRequest { ModelName = "llama3:8b" }).ConfigureAwait(false);
-        using var pullResponse = await client.PostAsJsonAsync("/api/local/v1/models/pull", new PullLocalModelRequest { ModelName = "llama3:8b" }).ConfigureAwait(false);
+        using var selectResponse = await client.PostAsJsonAsync("/api/local/v1/models/select", new SelectLocalModelRequest
+        {
+            ModelName = "llama3:8b"
+        }).ConfigureAwait(false);
+        using var pullResponse = await client.PostAsJsonAsync("/api/local/v1/models/pull", new PullLocalModelRequest
+        {
+            ModelName = "llama3:8b"
+        }).ConfigureAwait(false);
         using var deleteResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);

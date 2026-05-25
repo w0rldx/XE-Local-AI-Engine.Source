@@ -26,8 +26,7 @@ public sealed class CancelNodeChatMessageEndpoint(
         try
         {
             _ = _streamCancellationRegistry.TryCancel(correlation);
-            var result = await _chatPersistence.CancelMessageAsync(
-                new NodeChatCancelRequest(correlation, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+            var result = await _chatPersistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
                 ct).ConfigureAwait(false);
 
             await Send.OkAsync(new NodeChatCancelMessageResponse

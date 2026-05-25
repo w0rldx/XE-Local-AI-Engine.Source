@@ -1,10 +1,10 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+using Microsoft.Agents.AI.DevUI;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
 using Serilog;
-using Microsoft.Agents.AI.DevUI;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
@@ -69,8 +69,7 @@ try
     {
         if (IsNodeReactIndexRequest(context.Request))
         {
-            await ServeNodeReactIndexAsync(
-                context,
+            await ServeNodeReactIndexAsync(context,
                 app.Environment,
                 app.Services.GetRequiredService<ILocalOperatorTokenProvider>()).ConfigureAwait(false);
             return;
@@ -230,8 +229,7 @@ static bool IsNodeReactIndexRequest(HttpRequest request)
            || path.Equals("/app/index.html", StringComparison.OrdinalIgnoreCase);
 }
 
-static async Task ServeNodeReactIndexAsync(
-    HttpContext context,
+static async Task ServeNodeReactIndexAsync(HttpContext context,
     IWebHostEnvironment environment,
     ILocalOperatorTokenProvider tokenProvider)
 {

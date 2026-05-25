@@ -17,6 +17,9 @@ public sealed class CancelNodeBindingEndpoint(INodeBindingService nodeBindingSer
     public override async Task HandleAsync(CancellationToken ct)
     {
         await _nodeBindingService.CancelAsync().ConfigureAwait(false);
-        await Send.OkAsync(new CancelNodeBindingResponse { Cancelled = true }, ct).ConfigureAwait(false);
+        await Send.OkAsync(new CancelNodeBindingResponse
+        {
+            Cancelled = true
+        }, ct).ConfigureAwait(false);
     }
 }

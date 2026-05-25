@@ -43,20 +43,24 @@ public sealed class RuntimeManagerHubTests
         await using var factory = CreateFactory(managerService);
         var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
         await using var connection = new HubConnectionBuilder()
-            .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
-            {
-                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
-                options.Headers.Add("Origin", "http://localhost");
-            })
-            .Build();
+                                     .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
+                                     .Build();
 
         await connection.StartAsync().ConfigureAwait(false);
 
         var lines = new List<RuntimeLogLineResponse>();
-        await foreach (var line in connection.StreamAsync<RuntimeLogLineResponse>(
-                           "StreamLogs",
-                           new RuntimeLogsRequest { ContainerName = " ollama ", TailLines = 25, Follow = true }).ConfigureAwait(false))
+        await foreach (var line in connection.StreamAsync<RuntimeLogLineResponse>("StreamLogs",
+                           new RuntimeLogsRequest
+                           {
+                               ContainerName = " ollama ",
+                               TailLines = 25,
+                               Follow = true
+                           }).ConfigureAwait(false))
         {
             lines.Add(line);
         }
@@ -72,21 +76,25 @@ public sealed class RuntimeManagerHubTests
         await using var factory = CreateFactory(managerService);
         var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
         await using var connection = new HubConnectionBuilder()
-            .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
-            {
-                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
-                options.Headers.Add("Origin", "http://localhost");
-            })
-            .Build();
+                                     .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
+                                     .Build();
 
         await connection.StartAsync().ConfigureAwait(false);
 
         var read = async () =>
         {
-            await foreach (var line in connection.StreamAsync<RuntimeLogLineResponse>(
-                               "StreamLogs",
-                               new RuntimeLogsRequest { ContainerName = "ollama", TailLines = 2_001, Follow = true }).ConfigureAwait(false))
+            await foreach (var line in connection.StreamAsync<RuntimeLogLineResponse>("StreamLogs",
+                               new RuntimeLogsRequest
+                               {
+                                   ContainerName = "ollama",
+                                   TailLines = 2_001,
+                                   Follow = true
+                               }).ConfigureAwait(false))
             {
                 AssertEx.NotNull(line);
             }
@@ -109,7 +117,8 @@ public sealed class RuntimeManagerHubTests
     }
 
     private static async IAsyncEnumerable<HostAgentLogLineDto> CreateLogStream(string containerName,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();

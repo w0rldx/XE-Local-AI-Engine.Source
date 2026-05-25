@@ -18,8 +18,7 @@ public sealed class ListNodeChatConversationsEndpoint(INodeChatPersistenceServic
 
     public override async Task HandleAsync(ListNodeChatConversationsRequest req, CancellationToken ct)
     {
-        var summaries = await _chatPersistence.ListConversationsAsync(
-            new NodeChatListConversationsRequest(req.IncludeArchived, req.Limit),
+        var summaries = await _chatPersistence.ListConversationsAsync(new NodeChatListConversationsRequest(req.IncludeArchived, req.Limit),
             ct).ConfigureAwait(false);
 
         await Send.OkAsync(new ListNodeChatConversationsResponse

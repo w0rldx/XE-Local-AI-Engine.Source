@@ -1,21 +1,20 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 using Microsoft.Playwright;
-using TUnit.Core;
 using TUnit.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>
-/// Base for browser-driven XE node E2E tests. Mirrors the C0re <c>E2ETestBase</c> shell
-/// (headless-via-<c>HEADED</c> Chromium, tracing-on-failure to <c>test-results/traces/</c>,
-/// <c>PerTestSession</c> shared fixtures, bounded parallelism) but drops C0re's identity
-/// login/cookie helpers — the XE node is unpaired and same-origin.
-/// <para>
-/// Single origin: the host serves both the API and the SPA, so
-/// <see cref="FrontendBaseUrl"/> == <see cref="ApiBaseUrl"/> == the factory's ServerAddress.
-/// Navigate to <see cref="NodeAppUrl"/> (the token-injecting <c>/app</c> route) so the browser
-/// receives <c>__XE_LOCAL_OPERATOR_TOKEN__</c> and can call <c>/api/local/v1</c>.
-/// </para>
+///     Base for browser-driven XE node E2E tests. Mirrors the C0re <c>E2ETestBase</c> shell
+///     (headless-via-<c>HEADED</c> Chromium, tracing-on-failure to <c>test-results/traces/</c>,
+///     <c>PerTestSession</c> shared fixtures, bounded parallelism) but drops C0re's identity
+///     login/cookie helpers — the XE node is unpaired and same-origin.
+///     <para>
+///         Single origin: the host serves both the API and the SPA, so
+///         <see cref="FrontendBaseUrl" /> == <see cref="ApiBaseUrl" /> == the factory's ServerAddress.
+///         Navigate to <see cref="NodeAppUrl" /> (the token-injecting <c>/app</c> route) so the browser
+///         receives <c>__XE_LOCAL_OPERATOR_TOKEN__</c> and can call <c>/api/local/v1</c>.
+///     </para>
 /// </summary>
 // S101: "XEE2ETestBase" keeps the "XE" product prefix on "E2ETestBase"; the consecutive
 // capitals are the intentional, plan-mandated harness name, not a casing mistake.
@@ -38,8 +37,8 @@ public abstract class XEE2ETestBase : PageTest
     protected Uri FrontendBaseUrl => ApiBaseUrl;
 
     /// <summary>
-    /// The token-injecting SPA entry point: <c>{ServerAddress}/app</c>. Navigating here serves
-    /// <c>index.html</c> through <c>ServeNodeReactIndexAsync</c>, injecting the operator token.
+    ///     The token-injecting SPA entry point: <c>{ServerAddress}/app</c>. Navigating here serves
+    ///     <c>index.html</c> through <c>ServeNodeReactIndexAsync</c>, injecting the operator token.
     /// </summary>
     protected string NodeAppUrl => $"{Factory.ServerAddress.TrimEnd('/')}/app";
 

@@ -20,8 +20,7 @@ public sealed class GetInvocationMonitorEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var response = InvocationMonitorResponseMapper.ToResponse(
-            _eventDispatcher.CurrentInvocation,
+        var response = InvocationMonitorResponseMapper.ToResponse(_eventDispatcher.CurrentInvocation,
             _invocationHistory.Snapshot(),
             _invocationHistory.Capacity);
 

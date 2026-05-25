@@ -98,7 +98,7 @@ public sealed class NodeChatPersistenceWriterTests
         services.AddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite("Data Source=:memory:"));
 
-        return services.BuildServiceProvider(validateScopes: true);
+        return services.BuildServiceProvider(true);
     }
 
     private static NodeChatPersistenceWriter CreateWriter(ServiceProvider provider)
@@ -122,7 +122,6 @@ public sealed class NodeChatPersistenceWriterTests
             {
                 return;
             }
-        }
-        while (Interlocked.CompareExchange(ref maxActiveSections, active, observed) != observed);
+        } while (Interlocked.CompareExchange(ref maxActiveSections, active, observed) != observed);
     }
 }

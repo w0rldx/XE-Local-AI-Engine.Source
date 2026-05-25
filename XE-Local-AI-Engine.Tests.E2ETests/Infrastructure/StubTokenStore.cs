@@ -4,10 +4,10 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-/// Minimal unpaired <see cref="ITokenStore"/> for wave-1 E2E tests.
-/// Mirrors <c>MockTokenStore.Unpaired()</c> (the shared mock lives in the unit-test
-/// namespace with 11 references; per plan D3 we keep a local stub instead of moving it).
-/// Every accessor reports the never-paired state and the mutating calls are no-ops.
+///     Minimal unpaired <see cref="ITokenStore" /> for wave-1 E2E tests.
+///     Mirrors <c>MockTokenStore.Unpaired()</c> (the shared mock lives in the unit-test
+///     namespace with 11 references; per plan D3 we keep a local stub instead of moving it).
+///     Every accessor reports the never-paired state and the mutating calls are no-ops.
 /// </summary>
 public sealed class StubTokenStore : ITokenStore
 {
@@ -30,11 +30,20 @@ public sealed class StubTokenStore : ITokenStore
 
     public string? LastKnownNodeName => null;
 
-    public Task<string?> GetAccessTokenAsync() => Task.FromResult<string?>(null);
+    public Task<string?> GetAccessTokenAsync()
+    {
+        return Task.FromResult<string?>(null);
+    }
 
-    public Task<Guid?> GetClientNodeIdAsync() => Task.FromResult<Guid?>(null);
+    public Task<Guid?> GetClientNodeIdAsync()
+    {
+        return Task.FromResult<Guid?>(null);
+    }
 
-    public Task<string?> GetRefreshTokenAsync() => Task.FromResult<string?>(null);
+    public Task<string?> GetRefreshTokenAsync()
+    {
+        return Task.FromResult<string?>(null);
+    }
 
     public Task StoreTokensAsync(PairClientResponse pairingResponse, TokenStoreMetadata? metadata = null)
     {
@@ -42,9 +51,18 @@ public sealed class StubTokenStore : ITokenStore
         return Task.CompletedTask;
     }
 
-    public Task SetAutoConnectOnStartAsync(bool enabled) => Task.CompletedTask;
+    public Task SetAutoConnectOnStartAsync(bool enabled)
+    {
+        return Task.CompletedTask;
+    }
 
-    public Task ClearTokensAsync() => Task.CompletedTask;
+    public Task ClearTokensAsync()
+    {
+        return Task.CompletedTask;
+    }
 
-    public Task HandleKeyRotationAsync() => Task.CompletedTask;
+    public Task HandleKeyRotationAsync()
+    {
+        return Task.CompletedTask;
+    }
 }

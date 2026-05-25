@@ -37,7 +37,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             await context.Database.GetService<IMigrator>().MigrateAsync(InitialMigrationId).ConfigureAwait(false);
         }
 
-        await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, createdAtUtc: 1234).ConfigureAwait(false);
+        await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, 1234).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -147,9 +147,9 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = """
-                INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
-                VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, $purged);
-                """;
+                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
+                                  VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, $purged);
+                                  """;
             command.Parameters.AddWithValue("$conversation_id", conversationId.ToString());
             command.Parameters.AddWithValue("$title", "Historical");
             command.Parameters.AddWithValue("$user_id", "node");
@@ -163,9 +163,9 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = """
-                INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc)
-                VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc);
-                """;
+                                  INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc)
+                                  VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc);
+                                  """;
             command.Parameters.AddWithValue("$message_id", messageId.ToString());
             command.Parameters.AddWithValue("$conversation_id", conversationId.ToString());
             command.Parameters.AddWithValue("$sequence", 1);
@@ -210,8 +210,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             throw new AssertionException("Expected migrated message row to exist.");
         }
 
-        return new MigratedMessage(
-            reader.GetString(0),
+        return new MigratedMessage(reader.GetString(0),
             Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture),
             await reader.IsDBNullAsync(2).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(2)),
             await reader.IsDBNullAsync(3).ConfigureAwait(false) ? null : reader.GetString(3));

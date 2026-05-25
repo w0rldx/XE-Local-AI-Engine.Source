@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 
 public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
@@ -9,15 +8,13 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
     private readonly ConcurrentDictionary<NodeChatPersistenceWriteKey, SemaphoreSlim> _locks = new();
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
-    public async Task ExecuteAsync(
-        NodeChatPersistenceWriteKey key,
+    public async Task ExecuteAsync(NodeChatPersistenceWriteKey key,
         Func<NodeChatDbContext, CancellationToken, Task> persistenceOperation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(persistenceOperation);
 
-        await ExecuteAsync(
-            key,
+        await ExecuteAsync(key,
             async (dbContext, token) =>
             {
                 await persistenceOperation(dbContext, token).ConfigureAwait(false);
@@ -26,8 +23,7 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<TResult> ExecuteAsync<TResult>(
-        NodeChatPersistenceWriteKey key,
+    public async Task<TResult> ExecuteAsync<TResult>(NodeChatPersistenceWriteKey key,
         Func<NodeChatDbContext, CancellationToken, Task<TResult>> persistenceOperation,
         CancellationToken cancellationToken = default)
     {
@@ -51,7 +47,13 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
 
 public readonly record struct NodeChatPersistenceWriteKey(Guid ConversationId, Guid? MessageId)
 {
-    public static NodeChatPersistenceWriteKey ForConversation(Guid conversationId) => new(conversationId, null);
+    public static NodeChatPersistenceWriteKey ForConversation(Guid conversationId)
+    {
+        return new NodeChatPersistenceWriteKey(conversationId, null);
+    }
 
-    public static NodeChatPersistenceWriteKey ForMessage(Guid conversationId, Guid messageId) => new(conversationId, messageId);
+    public static NodeChatPersistenceWriteKey ForMessage(Guid conversationId, Guid messageId)
+    {
+        return new NodeChatPersistenceWriteKey(conversationId, messageId);
+    }
 }

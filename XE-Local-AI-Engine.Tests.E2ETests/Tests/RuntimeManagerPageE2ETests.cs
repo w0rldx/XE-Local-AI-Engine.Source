@@ -1,28 +1,24 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
-using System.Net.Http;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
-using TUnit.Core;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-/// Per-page interaction E2E tests for the Runtime Manager page (<c>/app/manager</c>).
-///
-/// <para>
-/// PROBE strategy (task #4): Before asserting tab content we issue a raw HTTP call to
-/// <c>GET /api/local/v1/runtime/status</c> (same token-extraction approach as
-/// <see cref="TokenInjectionSpikeE2ETests"/>) and inspect whether the response contains a
-/// usable snapshot. In an unpaired, HostAgent-free test environment the endpoint may return
-/// an error or an empty/null snapshot — in that case we assert only the static shell and tab
-/// list and skip deeper content (commented below). If the probe returns a valid 200 snapshot
-/// we also assert Status-tab content and tab-switching behaviour.
-/// </para>
-///
-/// <para>
-/// Branch taken at runtime: the probe result drives a runtime branch, but the compiled tests
-/// are always the same; the branch comment documents what each path covers.
-/// </para>
+///     Per-page interaction E2E tests for the Runtime Manager page (<c>/app/manager</c>).
+///     <para>
+///         PROBE strategy (task #4): Before asserting tab content we issue a raw HTTP call to
+///         <c>GET /api/local/v1/runtime/status</c> (same token-extraction approach as
+///         <see cref="TokenInjectionSpikeE2ETests" />) and inspect whether the response contains a
+///         usable snapshot. In an unpaired, HostAgent-free test environment the endpoint may return
+///         an error or an empty/null snapshot — in that case we assert only the static shell and tab
+///         list and skip deeper content (commented below). If the probe returns a valid 200 snapshot
+///         we also assert Status-tab content and tab-switching behaviour.
+///     </para>
+///     <para>
+///         Branch taken at runtime: the probe result drives a runtime branch, but the compiled tests
+///         are always the same; the branch comment documents what each path covers.
+///     </para>
 /// </summary>
 [Category("Page")]
 public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
@@ -32,8 +28,8 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
     private static partial Regex InjectedTokenRegex();
 
     /// <summary>
-    /// Extracts the injected operator token from the /app HTML response.
-    /// Mirrors the approach used in TokenInjectionSpikeE2ETests.
+    ///     Extracts the injected operator token from the /app HTML response.
+    ///     Mirrors the approach used in TokenInjectionSpikeE2ETests.
     /// </summary>
     private static string? ExtractInjectedToken(string html)
     {
@@ -42,8 +38,8 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
     }
 
     /// <summary>
-    /// Probes GET /api/local/v1/runtime/status with the operator token and Origin header.
-    /// Returns (statusCode, responseBody). A 200 with a non-empty body indicates a usable snapshot.
+    ///     Probes GET /api/local/v1/runtime/status with the operator token and Origin header.
+    ///     Returns (statusCode, responseBody). A 200 with a non-empty body indicates a usable snapshot.
     /// </summary>
     private async Task<(int StatusCode, string Body)> ProbeRuntimeStatusAsync()
     {
@@ -82,8 +78,8 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
         // In an unpaired test env without HostAgent the endpoint typically returns 4xx/5xx or
         // an empty/null snapshot — so the tab panels will not render.
         var hasSnapshot = probeStatus == 200
-            && probeBody.Contains("\"status\"", StringComparison.OrdinalIgnoreCase)
-            && probeBody.Contains("\"state\"", StringComparison.OrdinalIgnoreCase);
+                          && probeBody.Contains("\"status\"", StringComparison.OrdinalIgnoreCase)
+                          && probeBody.Contains("\"state\"", StringComparison.OrdinalIgnoreCase);
 
         await Page.GotoAsync($"{NodeAppUrl}/manager", new PageGotoOptions
         {
@@ -93,7 +89,10 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
         // --- Unconditional static shell (always rendered) ---
 
         // Page heading is rendered unconditionally before snapshot data arrives.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Runtime manager" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Runtime manager"
+            }))
             .ToBeVisibleAsync();
 
         // Subtitle is always present.
@@ -105,10 +104,22 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
         {
             // FULL BRANCH: snapshot available — assert tab list and tab-switching.
             // The Tabs component renders when getRuntimeManagerStatus returns a valid snapshot.
-            var statusTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Status" });
-            var componentsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Components" });
-            var manifestTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Manifest" });
-            var logsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Logs" });
+            var statusTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+            {
+                Name = "Status"
+            });
+            var componentsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+            {
+                Name = "Components"
+            });
+            var manifestTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+            {
+                Name = "Manifest"
+            });
+            var logsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+            {
+                Name = "Logs"
+            });
 
             await Expect(statusTab).ToBeVisibleAsync();
             await Expect(componentsTab).ToBeVisibleAsync();
@@ -116,12 +127,18 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
             await Expect(logsTab).ToBeVisibleAsync();
 
             // Status tab is selected by default — "Substrate status" card title visible.
-            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Substrate status" }))
+            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+                {
+                    Name = "Substrate status"
+                }))
                 .ToBeVisibleAsync();
 
             // Click Components tab and verify the panel switches.
             await componentsTab.ClickAsync();
-            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Runtime components" }))
+            await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+                {
+                    Name = "Runtime components"
+                }))
                 .ToBeVisibleAsync();
 
             // Click Manifest tab and verify the panel switches.
@@ -151,7 +168,10 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
             // timeout fallback, then accept an error alert.
             try
             {
-                await Expect(loader).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 3000 });
+                await Expect(loader).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+                {
+                    Timeout = 3000
+                });
             }
             catch (PlaywrightException)
             {
