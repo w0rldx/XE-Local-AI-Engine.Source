@@ -144,11 +144,9 @@ try
         app.MapDevUI();
     }
 
-    // Cutover (Plan Phase 7.2): the React client now owns root. The Blazor
-    // MapRazorComponents<App>().AddInteractiveServerRenderMode() endpoint mapping was
-    // removed so Blazor @page routes ("/", "/dashboard", "/chat", …) no longer claim
-    // root paths ahead of the SPA fallback. The Razor components, MudBlazor, and their
-    // DI registrations remain in place and are removed in WP-C2 after user approval.
+    // Cutover (Plan Phase 7.2/7.3): the React client owns root. Blazor endpoint
+    // mapping and legacy component dependencies have been removed so
+    // server-rendered component routes no longer claim root paths ahead of the SPA fallback.
     // The React shell is served via the token-injecting fallback (not a static
     // MapFallbackToFile) so the per-launch local-operator token is injected into index.html.
     app.MapFallback(ServeNodeReactIndexAsync);

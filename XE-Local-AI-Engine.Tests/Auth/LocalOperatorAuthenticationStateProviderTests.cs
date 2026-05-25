@@ -1,46 +1,38 @@
 namespace XE_Local_AI_Engine.Tests.Auth;
 
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
-public sealed class LocalOperatorAuthenticationStateProviderTests
+public sealed class LocalOperatorAuthorizationTests
 {
     [Test]
-    public async Task GetAuthenticationStateAsync_ReturnsAuthenticatedOperatorRole()
+    public async Task CreatePrincipal_ReturnsAuthenticatedOperatorRole()
     {
-        var provider = new LocalOperatorAuthenticationStateProvider();
+        await Task.CompletedTask;
 
-        var state = await provider.GetAuthenticationStateAsync();
+        var principal = LocalOperatorAuthorization.CreatePrincipal();
 
-        AssertEx.True(state.User.Identity?.IsAuthenticated ?? false);
-        AssertEx.Equal(LocalOperatorAuthorization.UserName, state.User.Identity?.Name);
-        AssertEx.True(state.User.IsInRole(LocalOperatorAuthorization.OperatorRole));
+        AssertEx.True(principal.Identity?.IsAuthenticated ?? false);
+        AssertEx.Equal(LocalOperatorAuthorization.UserName, principal.Identity?.Name);
+        AssertEx.True(principal.IsInRole(LocalOperatorAuthorization.OperatorRole));
     }
 
     [Test]
-    public async Task AuthenticationStateProvider_IsRegisteredInApplicationHost()
+    public async Task BlazorAndMudBlazorArtifacts_AreRemovedFromClientHost()
     {
-        await using var factory = new TestingWebAppFactory();
-        using var scope = factory.Services.CreateScope();
+        var clientRoot = GetClientPath();
+        var componentsRoot = Path.Combine(clientRoot, "Components");
+        var projectFile = await File.ReadAllTextAsync(Path.Combine(clientRoot, "XE-Local-AI-Engine.Client.csproj"));
+        var configureServices = await File.ReadAllTextAsync(Path.Combine(clientRoot, "ConfigureServices.cs"));
+        var razorFiles = Directory.Exists(componentsRoot)
+            ? Directory.EnumerateFiles(componentsRoot, "*.razor", SearchOption.AllDirectories)
+            : [];
 
-        var provider = scope.ServiceProvider.GetRequiredService<AuthenticationStateProvider>();
-
-        AssertEx.Equal(typeof(LocalOperatorAuthenticationStateProvider), provider.GetType());
-    }
-
-    [Test]
-    public async Task ManagerAuthorizationArtifacts_UseOperatorRoleAndAuthorizeRouteView()
-    {
-        var root = GetClientPath("Components");
-        var managerPage = await File.ReadAllTextAsync(Path.Combine(root, "Pages", "Manager", "ManagerOverview.razor"));
-        var routes = await File.ReadAllTextAsync(Path.Combine(root, "Routes.razor"));
-        var layout = await File.ReadAllTextAsync(Path.Combine(root, "Layout", "MainLayout.razor"));
-
-        AssertEx.Contains(managerPage, "@attribute [Authorize(Roles = LocalOperatorAuthorization.OperatorRole)]");
-        AssertEx.Contains(routes, "<AuthorizeRouteView");
-        AssertEx.Contains(layout, "<AuthorizeView Roles=\"@LocalOperatorAuthorization.OperatorRole\"");
+        AssertEx.False(razorFiles.Any());
+        AssertEx.False(File.Exists(Path.Combine(clientRoot, "_Imports.razor")));
+        AssertEx.False(projectFile.Contains("MudBlazor", StringComparison.Ordinal));
+        AssertEx.False(configureServices.Contains("AddRazorComponents", StringComparison.Ordinal));
+        AssertEx.False(configureServices.Contains("AddMudServices", StringComparison.Ordinal));
     }
 
     private static string GetClientPath(params string[] segments)

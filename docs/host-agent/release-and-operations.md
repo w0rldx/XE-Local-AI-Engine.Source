@@ -19,7 +19,7 @@ The local node runtime is intentionally node-side only:
 - The Node Web Server (`XE-Local-AI-Engine.Client`) remains the only component that talks to the central platform over the existing `WorkerHub` SignalR channel.
 - HostAgent.Windows, HostAgent.Linux, and the Tray are local substrate components only. They do not connect to the platform.
 - HostAgent.Linux owns rootless Docker, manifest reconciliation, container lifecycle, capabilities, and the local gRPC server.
-- The Tray is the user entry point and status surface. It is not a management UI; the Blazor Manager pages are the management UI.
+- The Tray is the user entry point and status surface. It is not a management UI; the Node Web Server serves the React Web UI for management workflows.
 - The bootstrap model is pulled before `WorkerHub` connects. Larger/default models are pulled on demand and may have first-call latency.
 
 ## Continue-working checklist
@@ -145,7 +145,7 @@ Expected evidence:
 7. `bootstrapModelReady=true`.
 8. Web Server connects to `WorkerHub`.
 9. Tray icon turns green.
-10. `Open Web UI` opens the Blazor Manager URL.
+10. `Open Web UI` opens the React Web UI URL.
 
 ### Linux clean install
 
@@ -167,11 +167,11 @@ After install, validate the runtime from the user's point of view:
 
 1. Launch `XE-Local-AI-Engine` normal mode.
 2. Confirm the Tray reaches green or clearly reports a degraded state.
-3. Open the Blazor Manager UI from the Tray.
+3. Open the React Web UI from the Tray.
 4. Confirm substrate status, container status, capabilities, manifest view, and logs render.
 5. Confirm the bootstrap model is present.
 6. Run one chat/invocation using the bootstrap model.
-7. Pull an on-demand model from the Blazor UI and confirm progress is shown.
+7. Pull an on-demand model from the React Web UI and confirm progress is shown.
 8. Use `Stop Services`; confirm the icon turns gray and the platform sees the node as offline through existing behavior.
 9. Use `Start Services`; confirm the runtime returns to green and `WorkerHub` reconnects.
 10. Use log mode for an early-boot diagnostic pass and confirm closing the log console does not stop HostAgent.

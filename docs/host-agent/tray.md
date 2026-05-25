@@ -1,6 +1,6 @@
 # Tray Launcher
 
-The Tray is a thin Avalonia desktop application. It is the user's local entry point and status surface, not a management UI. The Blazor Manager pages inside the Node Web Server remain the canonical management UI.
+The Tray is a thin Avalonia desktop application. It is the user's local entry point and status surface, not a management UI. The Node Web Server serves the React Web UI for canonical management workflows.
 
 ## Launch modes
 

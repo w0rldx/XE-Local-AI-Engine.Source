@@ -29,10 +29,9 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.7.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.3" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.59.0" />
-    <PackageVersion Include="MudBlazor" Version="9.4.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.60.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.25" />
-    <PackageVersion Include="TUnit.Playwright" Version="1.44.39" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.45.29" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
@@ -67,7 +66,7 @@
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.26.0.140279" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.8" />
-    <PackageVersion Include="TUnit" Version="1.45.22" />
+    <PackageVersion Include="TUnit" Version="1.45.29" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
 </Project>

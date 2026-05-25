@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using System.Security.Claims;
-using Microsoft.AspNetCore.Components.Authorization;
 
 public static class LocalOperatorAuthorization
 {
@@ -10,11 +9,6 @@ public static class LocalOperatorAuthorization
     public const string OperatorPolicy = "LocalOperatorOnly";
     public const string HeaderName = "X-Local-Operator";
     public const string UserName = "local-operator";
-
-    public static AuthenticationState CreateAuthenticationState()
-    {
-        return new AuthenticationState(CreatePrincipal());
-    }
 
     public static ClaimsPrincipal CreatePrincipal()
     {

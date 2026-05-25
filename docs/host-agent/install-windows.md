@@ -33,7 +33,7 @@ The installer must not register a Windows service, scheduled task, Run-key, or b
 7. HostAgent.Linux starts rootless Docker, the Ollama container, and the Node Web Server container.
 8. HostAgent.Linux pulls the bootstrap model.
 9. The Node Web Server connects to `WorkerHub` only after `bootstrapModelReady=true`.
-10. The Tray icon turns green and `Open Web UI` opens the Blazor Manager UI.
+10. The Tray icon turns green and `Open Web UI` opens the React Web UI.
 
 ## Runtime files
 
@@ -67,7 +67,7 @@ User launch: desktop shortcut invoked
 HostAgent admin status: state=running desired_state=running ollama=healthy web-server=healthy
 WorkerHub: connected
 Tray: green
-Open Web UI: browser launched Blazor URL
+Open Web UI: browser launched React Web UI URL
 ```
 
 Replace this section with the captured transcript before claiming H1 complete.

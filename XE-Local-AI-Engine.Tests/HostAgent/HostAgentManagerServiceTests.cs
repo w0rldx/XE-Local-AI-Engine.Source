@@ -74,21 +74,6 @@ public sealed class HostAgentManagerServiceTests
         AssertEx.NotNull(factory.Services.GetRequiredService<IHostAgentManagerService>());
     }
 
-    [Test]
-    public async Task ManagerOverviewPage_DeclaresExpectedManagerRouteAndSections()
-    {
-        var page = await File.ReadAllTextAsync(GetClientPath("Components", "Pages", "Manager", "ManagerOverview.razor"));
-
-        AssertEx.Contains(page, "@page \"/manager\"");
-        AssertEx.Contains(page, "@attribute [Authorize(Roles = LocalOperatorAuthorization.OperatorRole)]");
-        AssertEx.Contains(page, "IHostAgentManagerService");
-        AssertEx.Contains(page, "Substrate status");
-        AssertEx.Contains(page, "Model picker");
-        AssertEx.Contains(page, "Start");
-        AssertEx.Contains(page, "StreamLogsAsync");
-        AssertEx.Contains(page, "Manifest");
-    }
-
     private static IHostAgentClient CreateHostAgentClient()
     {
         var hostAgent = Substitute.For<IHostAgentClient>();
@@ -211,18 +196,5 @@ public sealed class HostAgentManagerServiceTests
             Line = "ready",
             ObservedAt = FrozenNow
         };
-    }
-
-    private static string GetClientPath(params string[] segments)
-    {
-        return Path.GetFullPath(Path.Combine([
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            "..",
-            "XE-Local-AI-Engine.Client",
-            ..segments
-        ]));
     }
 }
