@@ -18,7 +18,7 @@ public sealed class SaveCloudSettingsEndpoint(
     public override void Configure()
     {
         Put(LocalApiRoutes.CloudSettings.Settings);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(SaveCloudSettingsRequest req, CancellationToken ct)

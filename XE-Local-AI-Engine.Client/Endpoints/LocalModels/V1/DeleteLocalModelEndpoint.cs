@@ -16,7 +16,7 @@ public sealed class DeleteLocalModelEndpoint(
     public override void Configure()
     {
         Delete(LocalApiRoutes.LocalModels.ModelByName);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(DeleteLocalModelRequest req, CancellationToken ct)

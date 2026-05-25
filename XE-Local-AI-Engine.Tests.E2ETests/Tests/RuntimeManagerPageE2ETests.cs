@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
@@ -8,8 +7,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     Per-page interaction E2E tests for the Runtime Manager page (<c>/manager</c>).
 ///     <para>
 ///         PROBE strategy (task #4): Before asserting tab content we issue a raw HTTP call to
-///         <c>GET /api/local/v1/runtime/status</c> (same token-extraction approach as
-///         <see cref="TokenInjectionSpikeE2ETests" />) and inspect whether the response contains a
+///         <c>GET /api/local/v1/runtime/status</c> and inspect whether the response contains a
 ///         usable snapshot. In an unpaired, HostAgent-free test environment the endpoint may return
 ///         an error or an empty/null snapshot — in that case we assert only the static shell and tab
 ///         list and skip deeper content (commented below). If the probe returns a valid 200 snapshot
@@ -21,24 +19,10 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
+public sealed class RuntimeManagerPageE2ETests : XEE2ETestBase
 {
-    /// <summary>Matches: globalThis.__XE_LOCAL_OPERATOR_TOKEN__ = "&lt;hex-token&gt;";</summary>
-    [GeneratedRegex(@"__XE_LOCAL_OPERATOR_TOKEN__\s*=\s*""(?<token>[0-9a-f]{64})""")]
-    private static partial Regex InjectedTokenRegex();
-
     /// <summary>
-    ///     Extracts the injected operator token from the root HTML response.
-    ///     Mirrors the approach used in TokenInjectionSpikeE2ETests.
-    /// </summary>
-    private static string? ExtractInjectedToken(string html)
-    {
-        var match = InjectedTokenRegex().Match(html);
-        return match.Success ? match.Groups["token"].Value : null;
-    }
-
-    /// <summary>
-    ///     Probes GET /api/local/v1/runtime/status with the operator token and Origin header.
+    ///     Probes GET /api/local/v1/runtime/status with the Origin header.
     ///     Returns (statusCode, responseBody). A 200 with a non-empty body indicates a usable snapshot.
     /// </summary>
     private async Task<(int StatusCode, string Body)> ProbeRuntimeStatusAsync()
@@ -46,19 +30,7 @@ public sealed partial class RuntimeManagerPageE2ETests : XEE2ETestBase
         var serverAddress = Factory.ServerAddress.TrimEnd('/');
         using var client = new HttpClient();
 
-        // Step 1: extract the operator token from the root route (same as spike).
-        var appResponse = await client.GetAsync($"{serverAddress}/");
-        var appBody = await appResponse.Content.ReadAsStringAsync();
-        var token = ExtractInjectedToken(appBody);
-
-        if (token is null)
-        {
-            return ((int)appResponse.StatusCode, string.Empty);
-        }
-
-        // Step 2: call the runtime/status API with the extracted token + same-origin Origin.
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{serverAddress}/api/local/v1/runtime/status");
-        request.Headers.Add("X-Local-Operator", token);
         request.Headers.Add("Origin", serverAddress);
 
         var response = await client.SendAsync(request);

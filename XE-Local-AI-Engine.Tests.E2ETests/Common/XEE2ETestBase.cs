@@ -8,12 +8,11 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     Base for browser-driven XE node E2E tests. Mirrors the C0re <c>E2ETestBase</c> shell
 ///     (headless-via-<c>HEADED</c> Chromium, tracing-on-failure to <c>test-results/traces/</c>,
 ///     <c>PerTestSession</c> shared fixtures, bounded parallelism) but drops C0re's identity
-///     login/cookie helpers — the XE node is unpaired and same-origin.
+    ///     login/cookie helpers — the XE node is same-origin.
 ///     <para>
 ///         Single origin: the host serves both the API and the SPA, so
 ///         <see cref="FrontendBaseUrl" /> == <see cref="ApiBaseUrl" /> == the factory's ServerAddress.
-///         Navigate to <see cref="NodeAppUrl" /> (the token-injecting root route) so the browser
-///         receives <c>__XE_LOCAL_OPERATOR_TOKEN__</c> and can call <c>/api/local/v1</c>.
+    ///         Navigate to <see cref="NodeAppUrl" /> so the browser loads the SPA shell from the node host.
 ///     </para>
 /// </summary>
 // S101: "XEE2ETestBase" keeps the "XE" product prefix on "E2ETestBase"; the consecutive
@@ -37,10 +36,9 @@ public abstract class XEE2ETestBase : PageTest
     protected Uri FrontendBaseUrl => ApiBaseUrl;
 
     /// <summary>
-    ///     The token-injecting SPA entry point: the host root <c>{ServerAddress}</c>. Navigating here
-    ///     (or to a deep link below it, e.g. <c>{NodeAppUrl}/dashboard</c>) serves <c>index.html</c>
-    ///     through <c>ServeNodeReactIndexAsync</c>, injecting the operator token. Post-cutover the
-    ///     React client owns root, so there is no <c>/app</c> prefix.
+    ///     The SPA entry point: the host root <c>{ServerAddress}</c>. Navigating here
+    ///     (or to a deep link below it, e.g. <c>{NodeAppUrl}/dashboard</c>) serves <c>index.html</c>.
+    ///     The React client owns root, so there is no <c>/app</c> prefix.
     /// </summary>
     protected string NodeAppUrl => Factory.ServerAddress.TrimEnd('/');
 

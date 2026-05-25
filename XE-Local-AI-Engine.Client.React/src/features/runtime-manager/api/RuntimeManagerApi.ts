@@ -1,9 +1,9 @@
 import type { AxiosRequestConfig } from "axios";
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 
-import { getLocalOperatorToken, localOperatorHeaderName } from "@/core/api/auth/LocalOperatorToken";
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 export interface RuntimeComponentStatusDto {
   name: string;
@@ -123,18 +123,13 @@ export interface RuntimeLogLineDto {
   observedAt: string;
 }
 
-function buildHubHeaders(): Record<string, string> | undefined {
-  const token = getLocalOperatorToken();
-  return token ? { [localOperatorHeaderName]: token } : undefined;
-}
-
 function signalRStream<T>(hubPath: string, methodName: string, request: unknown, signal: AbortSignal): AsyncIterable<T> {
   return {
     async *[Symbol.asyncIterator](): AsyncIterator<T> {
       const connection = new HubConnectionBuilder()
         .withUrl(buildLocalApiUrl(hubPath), {
-          headers: buildHubHeaders(),
           transport: HttpTransportType.LongPolling,
+          accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
         })
         .configureLogging(LogLevel.Warning)
         .build();

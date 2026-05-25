@@ -22,7 +22,7 @@ public sealed class ListLocalModelsEndpoint(
     public override void Configure()
     {
         Get(LocalApiRoutes.LocalModels.Models);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

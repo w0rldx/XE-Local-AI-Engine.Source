@@ -2,12 +2,13 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using XE_Local_AI_Engine.Client.Endpoints.RuntimeManager.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Manager;
 
-[Authorize(AuthenticationSchemes = LocalOperatorAuthorization.AuthenticationType, Policy = LocalOperatorAuthorization.OperatorPolicy)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class RuntimeManagerHub(IHostAgentManagerService managerService) : Hub
 {
     private const int DefaultTailLines = 200;

@@ -45,11 +45,8 @@ vi.mock("@microsoft/signalr", () => ({
 	LogLevel: { Warning: 3 },
 }));
 
-import { localOperatorHeaderName } from "@/core/api/auth/LocalOperatorToken";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { streamRuntimeLogs, type RuntimeLogLineDto } from "@/features/runtime-manager/api/RuntimeManagerApi";
-
-const localOperatorTokenGlobalKey = "__XE_LOCAL_OPERATOR_TOKEN__";
-const localGlobal = globalThis as unknown as Partial<Record<typeof localOperatorTokenGlobalKey, string>>;
 
 const logLine: RuntimeLogLineDto = {
 	containerName: "ollama",
@@ -66,7 +63,7 @@ async function settle(): Promise<void> {
 describe("RuntimeManagerApi log streaming", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		localGlobal[localOperatorTokenGlobalKey] = "local-token";
+		useNodeAuthStore.getState().actions.clear();
 		signalRMock.state.currentSubscriber = undefined;
 		signalRMock.builder.withUrl.mockReturnValue(signalRMock.builder);
 		signalRMock.builder.configureLogging.mockReturnValue(signalRMock.builder);
@@ -81,16 +78,20 @@ describe("RuntimeManagerApi log streaming", () => {
 		});
 	});
 
-	it("uses header-authenticated long polling for runtime logs", async () => {
+	it("uses long polling for runtime logs", async () => {
 		const request = { containerName: "ollama", tailLines: 200, follow: true };
 		const iterator = streamRuntimeLogs(request, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
-		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(expect.stringContaining("/api/local/v1/runtime/hub"), {
-			headers: { [localOperatorHeaderName]: "local-token" },
-			transport: 4,
-		});
+		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(
+			expect.stringContaining("/api/local/v1/runtime/hub"),
+			expect.objectContaining({
+				accessTokenFactory: expect.any(Function),
+				transport: 4,
+			}),
+		);
+		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("");
 		expect(signalRMock.connection.stream).toHaveBeenCalledWith("StreamLogs", request);
 
 		signalRMock.state.currentSubscriber?.next(logLine);
@@ -101,6 +102,18 @@ describe("RuntimeManagerApi log streaming", () => {
 		await expect(completed).resolves.toMatchObject({ done: true });
 		expect(signalRMock.subscription.dispose).toHaveBeenCalled();
 		expect(signalRMock.connection.stop).toHaveBeenCalled();
+	});
+
+	it("supplies the current access token to SignalR", async () => {
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "runtime-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		const iterator = streamRuntimeLogs({ containerName: "ollama" }, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("runtime-token");
+
+		signalRMock.state.currentSubscriber?.complete();
+		await expect(first).resolves.toMatchObject({ done: true });
 	});
 
 	it("disposes the SignalR subscription when log follow aborts", async () => {

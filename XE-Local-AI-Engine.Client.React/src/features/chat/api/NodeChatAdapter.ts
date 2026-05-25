@@ -1,7 +1,7 @@
 import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
 
-import { getLocalOperatorToken, localOperatorHeaderName } from "@/core/api/auth/LocalOperatorToken";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import {
 	cancelMessage,
 	createConversation,
@@ -47,11 +47,6 @@ export interface NodeChatAdapter {
 	sendMessage(request: SendMessageRequest, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
 }
 
-function buildHubHeaders(): Record<string, string> | undefined {
-	const token = getLocalOperatorToken();
-	return token ? { [localOperatorHeaderName]: token } : undefined;
-}
-
 function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto {
 	return {
 		conversationId: request.conversationId,
@@ -68,8 +63,8 @@ function signalRStream<T>(request: NodeChatStreamRequestDto, signal: AbortSignal
 		async *[Symbol.asyncIterator](): AsyncIterator<T> {
 			const connection = new HubConnectionBuilder()
 				.withUrl(buildLocalApiUrl("chat/hub"), {
-					headers: buildHubHeaders(),
 					transport: HttpTransportType.LongPolling,
+					accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
 				})
 				.configureLogging(LogLevel.Warning)
 				.build();

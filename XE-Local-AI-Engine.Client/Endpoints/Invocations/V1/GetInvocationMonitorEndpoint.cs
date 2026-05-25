@@ -15,7 +15,7 @@ public sealed class GetInvocationMonitorEndpoint(
     public override void Configure()
     {
         Get(LocalApiRoutes.Invocations.Monitor);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

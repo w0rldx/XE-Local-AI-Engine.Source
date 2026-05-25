@@ -16,7 +16,7 @@ public sealed class SelectLocalModelEndpoint(
     public override void Configure()
     {
         Post(LocalApiRoutes.LocalModels.Select);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(SelectLocalModelRequest req, CancellationToken ct)

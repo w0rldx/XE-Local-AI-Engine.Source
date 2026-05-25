@@ -100,7 +100,7 @@ public sealed class InvocationMonitorEndpointTests
     }
 
     [Test]
-    public async Task GetInvocations_WhenMissingLocalOperatorToken_ReturnsUnauthorized()
+    public async Task GetInvocations_WhenMissingBearerToken_ReturnsUnauthorized()
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var history = Substitute.For<IInvocationHistory>();
@@ -130,8 +130,7 @@ public sealed class InvocationMonitorEndpointTests
     private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+        factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
         return request;
     }

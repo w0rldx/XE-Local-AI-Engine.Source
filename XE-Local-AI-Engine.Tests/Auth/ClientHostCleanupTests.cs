@@ -1,24 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Auth;
 
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
-public sealed class LocalOperatorAuthorizationTests
+public sealed class ClientHostCleanupTests
 {
     [Test]
-    public async Task CreatePrincipal_ReturnsAuthenticatedOperatorRole()
-    {
-        await Task.CompletedTask;
-
-        var principal = LocalOperatorAuthorization.CreatePrincipal();
-
-        AssertEx.True(principal.Identity?.IsAuthenticated ?? false);
-        AssertEx.Equal(LocalOperatorAuthorization.UserName, principal.Identity?.Name);
-        AssertEx.True(principal.IsInRole(LocalOperatorAuthorization.OperatorRole));
-    }
-
-    [Test]
-    public async Task BlazorAndMudBlazorArtifacts_AreRemovedFromClientHost()
+    public async Task LegacyUiArtifacts_AreRemovedFromClientHost()
     {
         var clientRoot = GetClientPath();
         var componentsRoot = Path.Combine(clientRoot, "Components");
@@ -30,9 +17,29 @@ public sealed class LocalOperatorAuthorizationTests
 
         AssertEx.False(razorFiles.Any());
         AssertEx.False(File.Exists(Path.Combine(clientRoot, "_Imports.razor")));
-        AssertEx.False(projectFile.Contains("MudBlazor", StringComparison.Ordinal));
+        AssertEx.False(projectFile.Contains(string.Concat("Mud", "Blazor"), StringComparison.Ordinal));
         AssertEx.False(configureServices.Contains("AddRazorComponents", StringComparison.Ordinal));
         AssertEx.False(configureServices.Contains("AddMudServices", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ProductionLoggingConfiguration_SuppressesSignalRAccessTokenRequestLogs()
+    {
+        var appSettings = await File.ReadAllTextAsync(GetClientPath("appsettings.json"));
+        var developmentAppSettings = await File.ReadAllTextAsync(GetClientPath("appsettings.Development.json"));
+        var startupLogger = await File.ReadAllTextAsync(GetClientPath("Common", "Extensions", "LoggerExtensions.cs"));
+
+        AssertLoggingOverrides(appSettings);
+        AssertLoggingOverrides(developmentAppSettings);
+        AssertEx.True(startupLogger.Contains("MinimumLevel.Override(\"Microsoft.AspNetCore.Hosting\", LogEventLevel.Warning)", StringComparison.Ordinal));
+        AssertEx.True(startupLogger.Contains("MinimumLevel.Override(\"Microsoft.AspNetCore.SignalR\", LogEventLevel.Warning)", StringComparison.Ordinal));
+    }
+
+    private static void AssertLoggingOverrides(string appSettings)
+    {
+        AssertEx.True(appSettings.Contains("\"Microsoft.AspNetCore.Hosting\": \"Warning\"", StringComparison.Ordinal));
+        AssertEx.True(appSettings.Contains("\"Microsoft.AspNetCore.Http.Connections\": \"Warning\"", StringComparison.Ordinal));
+        AssertEx.True(appSettings.Contains("\"Microsoft.AspNetCore.SignalR\": \"Warning\"", StringComparison.Ordinal));
     }
 
     private static string GetClientPath(params string[] segments)

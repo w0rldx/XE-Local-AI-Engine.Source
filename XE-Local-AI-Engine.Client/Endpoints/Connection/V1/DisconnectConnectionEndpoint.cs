@@ -12,7 +12,7 @@ public sealed class DisconnectConnectionEndpoint(IConnectionControlService conne
     public override void Configure()
     {
         Post(LocalApiRoutes.Connection.Disconnect);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

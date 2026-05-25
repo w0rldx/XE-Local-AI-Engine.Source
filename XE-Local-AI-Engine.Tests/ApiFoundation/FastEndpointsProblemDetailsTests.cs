@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class FastEndpointsProblemDetailsTests
@@ -14,7 +12,6 @@ public sealed class FastEndpointsProblemDetailsTests
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
-        var tokenProvider = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
         {
@@ -23,7 +20,7 @@ public sealed class FastEndpointsProblemDetailsTests
                 Name = string.Empty
             })
         };
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, tokenProvider.Token);
+        factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);

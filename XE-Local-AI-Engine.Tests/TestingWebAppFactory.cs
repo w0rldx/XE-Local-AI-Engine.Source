@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests;
 
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -13,6 +15,7 @@ using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
@@ -41,6 +44,26 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
     public bool SkipDefaultBaseUrlOverride { get; init; }
 
     public Action<IServiceCollection>? ConfigureAdditionalTestServices { get; init; }
+
+    public string CreateNodeAccessToken()
+    {
+        var tokenService = Services.GetRequiredService<INodeTokenService>();
+        var user = new NodeUser
+        {
+            Id = "node-admin-test",
+            UserName = "admin@example.test",
+            Email = "admin@example.test",
+            SetupCompleted = true
+        };
+
+        return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
+    }
+
+    public void AddNodeBearerToken(HttpRequestMessage request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNodeAccessToken());
+    }
 
     private static bool RunLocalIntegration =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),

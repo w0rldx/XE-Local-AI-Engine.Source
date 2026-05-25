@@ -16,7 +16,7 @@ public sealed class PullLocalModelEndpoint(
     public override void Configure()
     {
         Post(LocalApiRoutes.LocalModels.Pull);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(PullLocalModelRequest req, CancellationToken ct)

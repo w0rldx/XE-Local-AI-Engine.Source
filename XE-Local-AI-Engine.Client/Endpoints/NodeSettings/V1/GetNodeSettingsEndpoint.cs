@@ -12,7 +12,7 @@ public sealed class GetNodeSettingsEndpoint(INodeSettingsStore nodeSettingsStore
     public override void Configure()
     {
         Get(LocalApiRoutes.NodeSettings.Settings);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

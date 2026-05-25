@@ -16,7 +16,7 @@ public sealed class ExecuteRuntimeContainerActionEndpoint(IHostAgentManagerServi
     public override void Configure()
     {
         Post(LocalApiRoutes.RuntimeManager.ContainerAction);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(RuntimeContainerActionRequest req, CancellationToken ct)

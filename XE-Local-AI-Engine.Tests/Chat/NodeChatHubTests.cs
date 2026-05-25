@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -59,12 +58,11 @@ public sealed class NodeChatHubTests
                 services.AddScoped<INodeChatStreamService, DeterministicNodeChatStreamService>();
             }
         };
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
         await using var connection = new HubConnectionBuilder()
                                      .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
                                      {
                                          options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                                         options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                                          options.Headers.Add("Origin", "http://localhost");
                                      })
                                      .Build();
@@ -93,8 +91,7 @@ public sealed class NodeChatHubTests
         {
             Content = new StringContent(string.Empty)
         };
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+        factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
         return request;
     }

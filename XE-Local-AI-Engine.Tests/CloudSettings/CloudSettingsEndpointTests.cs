@@ -127,8 +127,7 @@ public sealed class CloudSettingsEndpointTests
     private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
     {
         var request = new HttpRequestMessage(method, uri);
-        var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
-        request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+        factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
         return request;
     }

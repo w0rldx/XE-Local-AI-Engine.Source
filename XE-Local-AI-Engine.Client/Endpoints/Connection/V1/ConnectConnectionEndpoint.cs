@@ -12,7 +12,7 @@ public sealed class ConnectConnectionEndpoint(IConnectionControlService connecti
     public override void Configure()
     {
         Post(LocalApiRoutes.Connection.Connect);
-        Policies(LocalOperatorAuthorization.OperatorPolicy);
+        Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(CancellationToken ct)

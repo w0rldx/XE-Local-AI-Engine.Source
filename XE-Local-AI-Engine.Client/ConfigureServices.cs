@@ -1,17 +1,21 @@
 namespace XE_Local_AI_Engine.Client;
 
 using System.Data.Common;
+using System.Threading.RateLimiting;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using FastEndpoints;
 using FastEndpoints.Swagger;
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using NSwag;
 using OllamaSharp;
 using Serilog;
@@ -20,8 +24,10 @@ using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -80,24 +86,76 @@ public static class ConfigureServices
                 settings.DocumentName = "v1";
                 settings.Title = "XE Local AI Engine";
                 settings.Version = "v1";
-                settings.AddAuth("LocalOperator", new OpenApiSecurityScheme
+                settings.AddAuth("Bearer", new OpenApiSecurityScheme
                 {
-                    Type = OpenApiSecuritySchemeType.ApiKey,
-                    Name = LocalOperatorAuthorization.HeaderName,
-                    In = OpenApiSecurityApiKeyLocation.Header,
-                    Description = "Per-launch local operator token."
+                    Type = OpenApiSecuritySchemeType.Http,
+                    Scheme = JwtBearerDefaults.AuthenticationScheme,
+                    BearerFormat = "JWT"
                 });
             };
 
             options.ExcludeNonFastEndpoints = true;
         });
-        builder.Services.AddAuthentication(LocalOperatorAuthorization.AuthenticationType)
-               .AddScheme<AuthenticationSchemeOptions, LocalOperatorAuthenticationHandler>(LocalOperatorAuthorization.AuthenticationType, _ => { });
+        builder.Services.AddIdentityCore<NodeUser>(options =>
+               {
+                   options.Password.RequiredLength = 12;
+                   options.User.RequireUniqueEmail = true;
+                   options.SignIn.RequireConfirmedAccount = false;
+                   options.Lockout.AllowedForNewUsers = true;
+                   options.Lockout.MaxFailedAccessAttempts = 5;
+                   options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                   options.ClaimsIdentity.UserIdClaimType = JwtRegisteredClaimNames.Sub;
+                   options.ClaimsIdentity.UserNameClaimType = JwtRegisteredClaimNames.Name;
+                   options.ClaimsIdentity.RoleClaimType = NodeAuthorizationPolicies.RoleClaimType;
+                })
+               .AddRoles<IdentityRole>()
+               .AddEntityFrameworkStores<NodeIdentityDbContext>()
+               .AddSignInManager();
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+               .AddJwtBearer();
+        builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+               .Configure<IOptions<NodeAuthOptions>, INodeJwtKeyProvider>((options, nodeAuthOptions, jwtKeyProvider) =>
+               {
+                   var jwtOptions = nodeAuthOptions.Value.Jwt;
+                   options.MapInboundClaims = false;
+                   options.TokenValidationParameters = new TokenValidationParameters
+                   {
+                       ValidateIssuer = true,
+                       ValidIssuer = jwtOptions.Issuer,
+                       ValidateAudience = true,
+                       ValidAudience = jwtOptions.Audience,
+                       ValidateIssuerSigningKey = true,
+                       IssuerSigningKey = new SymmetricSecurityKey(jwtKeyProvider.SigningKey.ToArray()),
+                       ValidateLifetime = true,
+                       ClockSkew = TimeSpan.FromSeconds(30),
+                       NameClaimType = JwtRegisteredClaimNames.Name,
+                       RoleClaimType = NodeAuthorizationPolicies.RoleClaimType
+                   };
+                   options.Events = new JwtBearerEvents
+                   {
+                       OnMessageReceived = context =>
+                       {
+                           var path = context.HttpContext.Request.Path;
+                           if (path.StartsWithSegments($"/{LocalApiRoutes.Prefix}", StringComparison.OrdinalIgnoreCase)
+                               && path.Value?.EndsWith("/hub", StringComparison.OrdinalIgnoreCase) == true)
+                           {
+                               var token = context.Request.Query["access_token"].FirstOrDefault();
+                               if (!string.IsNullOrWhiteSpace(token))
+                               {
+                                   context.Token = token;
+                               }
+                           }
+
+                           return Task.CompletedTask;
+                       }
+                   };
+               });
         builder.Services.AddAuthorization(options =>
         {
-            options.AddPolicy(LocalOperatorAuthorization.OperatorPolicy,
-                policy => policy.AddAuthenticationSchemes(LocalOperatorAuthorization.AuthenticationType)
-                                .RequireRole(LocalOperatorAuthorization.OperatorRole));
+            options.AddPolicy(NodeAuthorizationPolicies.Operator,
+                policy => policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                                .RequireAuthenticatedUser()
+                                .RequireRole(NodeAuthorizationPolicies.AdminRole));
         });
         builder.Services.AddAntiforgery();
         builder.Services.AddOptions<CentralPlatformOptions>()
@@ -107,8 +165,39 @@ public static class ConfigureServices
                .Bind(configuration.GetSection(WorkerNodeOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddOptions<ClientSecurityOptions>()
-               .Bind(configuration.GetSection(ClientSecurityOptions.SectionName))
-               .ValidateOnStart();
+                .Bind(configuration.GetSection(ClientSecurityOptions.SectionName))
+                .ValidateOnStart();
+        builder.Services.AddOptions<NodeAuthOptions>()
+                .Bind(configuration.GetSection(NodeAuthOptions.SectionName))
+                .ValidateDataAnnotations()
+                .Validate(static options => !string.IsNullOrWhiteSpace(options.Jwt.Issuer), "NodeAuth:Jwt:Issuer is required.")
+                .Validate(static options => !string.IsNullOrWhiteSpace(options.Jwt.Audience), "NodeAuth:Jwt:Audience is required.")
+                .Validate(static options => options.Jwt.AccessTokenMinutes is >= 1 and <= 1440, "NodeAuth:Jwt:AccessTokenMinutes must be between 1 and 1440.")
+                .Validate(static options => options.RefreshTokenDays is >= 1 and <= 365, "NodeAuth:RefreshTokenDays must be between 1 and 365.")
+                .ValidateOnStart();
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.AddPolicy(NodeAuthRateLimits.AuthPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
+                    static _ => new FixedWindowRateLimiterOptions
+                    {
+                        AutoReplenishment = true,
+                        PermitLimit = 10,
+                        QueueLimit = 0,
+                        Window = TimeSpan.FromMinutes(1)
+                    }));
+
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                context.HttpContext.Response.ContentType = "application/json";
+                context.HttpContext.Response.Headers["Retry-After"] = "60";
+                await context.HttpContext.Response.WriteAsJsonAsync(new
+                {
+                    message = "Too many auth attempts. Please try again later."
+                }, cancellationToken).ConfigureAwait(false);
+            };
+        });
         builder.Services.AddOptions<CloudProviderOptions>()
                .Bind(configuration.GetSection(CloudProviderOptions.SectionName))
                .ValidateOnStart();
@@ -132,7 +221,7 @@ public static class ConfigureServices
         {
             if (builder.Environment.IsDevelopment())
             {
-                Console.WriteLine("WARNING: CentralPlatform:BaseUrl is not HTTPS. Tokens may be transmitted in plaintext.");
+                Console.Error.WriteLine("WARNING: CentralPlatform:BaseUrl is not HTTPS. Tokens may be transmitted in plaintext.");
             }
             else
             {
@@ -146,7 +235,11 @@ public static class ConfigureServices
         }).AddStandardResilienceHandler();
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
-        builder.Services.AddSingleton<ILocalOperatorTokenProvider, LocalOperatorTokenProvider>();
+        builder.Services.AddSingleton<INodeOperatorSecretProvider, NodeOperatorSecretProvider>();
+        builder.Services.AddSingleton<INodeJwtKeyProvider, NodeJwtKeyProvider>();
+        builder.Services.AddSingleton<INodeTokenService, NodeTokenService>();
+        builder.Services.AddScoped<INodeAuthService, NodeAuthService>();
+        builder.Services.AddSingleton<NodeIdentityInitializationService>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
         builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
@@ -233,8 +326,17 @@ public static class ConfigureServices
 
             options.UseSqlite(connectionString)
                    .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                   .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
-                       serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+                    .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                        serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+        });
+
+        builder.Services.AddDbContext<NodeIdentityDbContext>(options =>
+        {
+            var connectionString = configuration.GetConnectionString("node-sqlite")
+                                   ?? throw new InvalidOperationException("Connection string 'node-sqlite' is required.");
+
+            options.UseSqlite(connectionString,
+                sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable));
         });
 
         builder.AddOllamaApiClient("embeddings")
@@ -344,6 +446,13 @@ public static class ConfigureServices
         ArgumentNullException.ThrowIfNull(configuration);
 
         return configuration.GetValue<bool>(UseLocalModelProviderConfigurationKey);
+    }
+
+    private static string GetRateLimitPartitionKey(HttpContext httpContext)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
     }
 
     private sealed record ChatConnectionSettings(Uri Endpoint, string Model);

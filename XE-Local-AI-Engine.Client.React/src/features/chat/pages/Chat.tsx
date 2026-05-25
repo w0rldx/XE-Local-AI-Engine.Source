@@ -11,17 +11,32 @@ import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/features/cha
 import type { ChatConversationModel, ChatStreamingState, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { listLocalModels } from "@/features/models/api/LocalModelsApi";
+import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
+import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
-const modelOptions: ModelOption[] = [
-	{
-		value: localDefaultModelValue,
-		label: "Local default",
-		displayName: "Local runtime default",
+const localDefaultModelOption: ModelOption = {
+	value: localDefaultModelValue,
+	label: "Local default",
+	displayName: "Local runtime default",
+	isReasoningModel: false,
+	isAvailable: true,
+	statusLabel: "Runtime-selected model",
+};
+
+function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOption {
+	const statusLabel = [model.isSelected ? "Node default" : undefined, model.parameterSize ?? undefined, model.quantizationLevel ?? undefined]
+		.filter((part): part is string => Boolean(part))
+		.join(" · ");
+
+	return {
+		value: model.modelName,
+		label: model.modelName,
 		isReasoningModel: false,
-		isAvailable: true,
-		statusLabel: "Runtime-selected model",
-	},
-];
+		isAvailable: nodeAvailable,
+		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
+	};
+}
 
 const chatUiCapabilities = buildChatUiCapabilities(nodeCapabilities.chat);
 const hiddenNodeSurfaces = hiddenChatSurfaceLabels(chatUiCapabilities).join(", ");
@@ -68,7 +83,7 @@ export function Chat() {
 	const activeStream = useRef<ActiveChatStream | null>(null);
 	const [requestedConversationId, setRequestedConversationId] = useState("");
 	const [collapsed, setCollapsed] = useState(false);
-	const [selectedModel, setSelectedModel] = useState(modelOptions[0]?.value ?? "");
+	const [selectedModel, setSelectedModel] = useState(localDefaultModelValue);
 	const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("medium");
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
 	const [streamError, setStreamError] = useState<string | undefined>();
@@ -77,6 +92,20 @@ export function Chat() {
 		queryKey: nodeChatQueryKeys.conversations(),
 		queryFn: ({ signal }) => nodeChatAdapter.listConversations({ signal }),
 	});
+
+	const localModelsQuery = useQuery({
+		queryKey: localModelsQueryKeys.list(),
+		queryFn: ({ signal }) => listLocalModels({ signal }),
+	});
+
+	const modelOptions = useMemo<ModelOption[]>(() => {
+		const response = localModelsQuery.data;
+		if (!response) {
+			return [localDefaultModelOption];
+		}
+
+		return [localDefaultModelOption, ...response.items.map((model) => toModelOption(model, response.isAvailable))];
+	}, [localModelsQuery.data]);
 
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
@@ -266,7 +295,7 @@ export function Chat() {
 	);
 
 	return (
-		<Box py="lg" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+		<Box py="lg" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
 			{isLoadingInitialConversations ? (
 				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
 					Loading local chat history…
@@ -295,7 +324,7 @@ export function Chat() {
 				inputStatus={{
 					isSending,
 					chatInputDisabled: isCreatingConversation,
-					modelSelectorDisabled: true,
+					modelSelectorDisabled: false,
 					sendDisabled: selectedConversationQuery.isLoading,
 				}}
 				conversationListCollapsed={collapsed}

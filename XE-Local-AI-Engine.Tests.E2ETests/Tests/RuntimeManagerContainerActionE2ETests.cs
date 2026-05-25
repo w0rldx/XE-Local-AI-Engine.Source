@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
@@ -23,20 +22,10 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     </para>
 /// </summary>
 [Category("Page")]
-public sealed partial class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
+public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
 {
-    /// <summary>Matches: globalThis.__XE_LOCAL_OPERATOR_TOKEN__ = "&lt;hex-token&gt;";</summary>
-    [GeneratedRegex(@"__XE_LOCAL_OPERATOR_TOKEN__\s*=\s*""(?<token>[0-9a-f]{64})""")]
-    private static partial Regex InjectedTokenRegex();
-
-    private static string? ExtractInjectedToken(string html)
-    {
-        var match = InjectedTokenRegex().Match(html);
-        return match.Success ? match.Groups["token"].Value : null;
-    }
-
     /// <summary>
-    ///     Probes GET /api/local/v1/runtime/status with the operator token.
+    ///     Probes GET /api/local/v1/runtime/status without browser auth bootstrap.
     ///     Returns (statusCode, responseBody). A 200 body containing "status" and "state"
     ///     fields indicates a usable HostAgent snapshot.
     /// </summary>
@@ -45,17 +34,7 @@ public sealed partial class RuntimeManagerContainerActionE2ETests : XEE2ETestBas
         var serverAddress = Factory.ServerAddress.TrimEnd('/');
         using var client = new HttpClient();
 
-        var appResponse = await client.GetAsync($"{serverAddress}/");
-        var appBody = await appResponse.Content.ReadAsStringAsync();
-        var token = ExtractInjectedToken(appBody);
-
-        if (token is null)
-        {
-            return ((int)appResponse.StatusCode, string.Empty);
-        }
-
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{serverAddress}/api/local/v1/runtime/status");
-        request.Headers.Add("X-Local-Operator", token);
         request.Headers.Add("Origin", serverAddress);
 
         var response = await client.SendAsync(request);
