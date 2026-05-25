@@ -39,10 +39,10 @@ public sealed class ListLocalModelsEndpoint(
                 SelectedModelName = selectedModelName,
                 ConfiguredDefaultModelName = _localChatOptions.Value.DefaultModel,
                 Items = models
-                    .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
-                    .Select(model => model.ToResponse(selectedModelName))
-                    .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
-                    .ToArray()
+                        .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
+                        .Select(model => model.ToResponse(selectedModelName))
+                        .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
+                        .ToArray()
             };
 
             await Send.OkAsync(response, ct).ConfigureAwait(false);

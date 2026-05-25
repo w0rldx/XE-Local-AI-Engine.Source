@@ -61,19 +61,18 @@ public sealed class NodeChatHubTests
         };
         var token = factory.Services.GetRequiredService<ILocalOperatorTokenProvider>().Token;
         await using var connection = new HubConnectionBuilder()
-            .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
-            {
-                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
-                options.Headers.Add("Origin", "http://localhost");
-            })
-            .Build();
+                                     .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
+                                     .Build();
 
         await connection.StartAsync().ConfigureAwait(false);
 
         var events = new List<ChatStreamEvent>();
-        await foreach (var streamEvent in connection.StreamAsync<ChatStreamEvent>(
-                           "SendMessage",
+        await foreach (var streamEvent in connection.StreamAsync<ChatStreamEvent>("SendMessage",
                            new NodeChatStreamRequest(conversationId, "hello", MessageId: messageId, RequestId: requestId)).ConfigureAwait(false))
         {
             events.Add(streamEvent);
@@ -102,9 +101,9 @@ public sealed class NodeChatHubTests
 
     private sealed class DeterministicNodeChatStreamService : INodeChatStreamService
     {
-        public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(
-            NodeChatStreamRequest request,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             var messageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
             var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
@@ -126,7 +125,7 @@ public sealed class NodeChatHubTests
                 NodeChatMessageStatusValues.Streaming,
                 1,
                 2,
-                Delta: "hi",
+                "hi",
                 Content: "hi");
             yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantCompleted,
                 request.ConversationId,

@@ -5,7 +5,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 
@@ -44,7 +43,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         var databasePath = GetDatabasePath("abandoned-lock.sqlite");
         await CreateAbandonedEfMigrationLockAsync(databasePath).ConfigureAwait(false);
 
-        await using var serviceProvider = BuildServiceProvider(databasePath, migrationAttemptTimeout: TimeSpan.FromSeconds(5));
+        await using var serviceProvider = BuildServiceProvider(databasePath, TimeSpan.FromSeconds(5));
         var migrationService = serviceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
         await migrationService.MigrateAsync();
@@ -74,8 +73,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsLock").ConfigureAwait(false), "EF lock table should remain untouched when startup ownership is not acquired.");
     }
 
-    private static ServiceProvider BuildServiceProvider(
-        string databasePath,
+    private static ServiceProvider BuildServiceProvider(string databasePath,
         TimeSpan? migrationAttemptTimeout = null,
         TimeSpan? startupLockTimeout = null)
     {
@@ -101,7 +99,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
                 });
         services.AddSingleton<NodeChatMigrationRecoveryService>();
 
-        return services.BuildServiceProvider(validateScopes: true);
+        return services.BuildServiceProvider(true);
     }
 
     private static async Task CreateAbandonedEfMigrationLockAsync(string databasePath)
@@ -111,12 +109,12 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            CREATE TABLE "__EFMigrationsLock" (
-                "Id" INTEGER NOT NULL CONSTRAINT "PK___EFMigrationsLock" PRIMARY KEY,
-                "Timestamp" TEXT NOT NULL
-            );
-            INSERT INTO "__EFMigrationsLock" ("Id", "Timestamp") VALUES (1, 'stale');
-            """;
+                              CREATE TABLE "__EFMigrationsLock" (
+                                  "Id" INTEGER NOT NULL CONSTRAINT "PK___EFMigrationsLock" PRIMARY KEY,
+                                  "Timestamp" TEXT NOT NULL
+                              );
+                              INSERT INTO "__EFMigrationsLock" ("Id", "Timestamp") VALUES (1, 'stale');
+                              """;
 
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }

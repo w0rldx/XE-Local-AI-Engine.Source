@@ -15,7 +15,10 @@ public sealed class LocalApiSecurityTests
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsJsonAsync("/api/local/v1/diagnostics/validation-probe",
-            new { Name = "operator" }).ConfigureAwait(false);
+            new
+            {
+                Name = "operator"
+            }).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -78,7 +81,10 @@ public sealed class LocalApiSecurityTests
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
         {
-            Content = JsonContent.Create(new { Name = "operator" })
+            Content = JsonContent.Create(new
+            {
+                Name = "operator"
+            })
         };
         request.Headers.Add(LocalOperatorAuthorization.HeaderName, token);
         return request;

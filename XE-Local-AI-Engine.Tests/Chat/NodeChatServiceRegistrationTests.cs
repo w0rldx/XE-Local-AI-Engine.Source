@@ -28,17 +28,15 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         builder.AddServices(builder.Configuration);
         builder.Services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
 
-        await using var provider = builder.Services.BuildServiceProvider(validateScopes: true);
+        await using var provider = builder.Services.BuildServiceProvider(true);
 
         var writer = provider.GetRequiredService<NodeChatPersistenceWriter>();
         var persistence = provider.GetRequiredService<INodeChatPersistenceService>();
         var restartRecovery = provider.GetRequiredService<NodeChatRestartRecoveryService>();
         var timeProvider = provider.GetRequiredService<TimeProvider>();
-        var firstContextId = await writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(Guid.NewGuid()),
+        var firstContextId = await writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.NewGuid()),
             (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId)).ConfigureAwait(false);
-        var secondContextId = await writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(Guid.NewGuid()),
+        var secondContextId = await writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.NewGuid()),
             (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId)).ConfigureAwait(false);
 
         AssertEx.NotNull(persistence);

@@ -21,7 +21,10 @@ public sealed class NodeSettingsEndpointTests
     {
         var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
         nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-                         .Returns(new StoredNodeSettings { MaxMessageRequestTimeoutSeconds = 120 });
+                         .Returns(new StoredNodeSettings
+                         {
+                             MaxMessageRequestTimeoutSeconds = 120
+                         });
         await using var factory = CreateFactory(nodeSettingsStore);
         using var client = factory.CreateClient();
 
@@ -46,14 +49,16 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest { MaxMessageRequestTimeoutSeconds = 600 });
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 600
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal(600, settings.MaxMessageRequestTimeoutSeconds);
-        await nodeSettingsStore.Received(1).SaveAsync(
-            Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 600),
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 600),
             Arg.Any<CancellationToken>());
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
@@ -67,7 +72,10 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
-        request.Content = JsonContent.Create(new SaveNodeSettingsRequest { MaxMessageRequestTimeoutSeconds = 1 });
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 1
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);

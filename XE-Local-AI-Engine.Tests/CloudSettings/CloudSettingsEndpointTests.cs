@@ -62,8 +62,7 @@ public sealed class CloudSettingsEndpointTests
         AssertEx.Equal("gpt-4o-mini", settings.DeploymentName);
         AssertEx.True(settings.HasStoredApiKey);
         AssertEx.False(body.Contains("new-secret-api-key", StringComparison.Ordinal));
-        await cloudCredentialStore.Received(1).SaveAsync(
-            Arg.Is<StoredCloudCredentials>(credentials => credentials.ApiKey == "new-secret-api-key" && credentials.DeploymentName == "gpt-4o-mini"),
+        await cloudCredentialStore.Received(1).SaveAsync(Arg.Is<StoredCloudCredentials>(credentials => credentials.ApiKey == "new-secret-api-key" && credentials.DeploymentName == "gpt-4o-mini"),
             Arg.Any<CancellationToken>());
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }

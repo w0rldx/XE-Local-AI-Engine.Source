@@ -22,7 +22,11 @@ public sealed class NodeChatEndpointTests
         using var createRequest = CreateJsonRequest(factory,
             HttpMethod.Post,
             "/api/local/v1/chat/conversations",
-            new { Title = "API chat", UserId = "local-operator" });
+            new
+            {
+                Title = "API chat",
+                UserId = "local-operator"
+            });
         using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
         var created = await ReadJsonAsync<NodeChatConversationResponse>(createResponse).ConfigureAwait(false);
 
@@ -47,14 +51,14 @@ public sealed class NodeChatEndpointTests
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel API", null, CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel API", null, 10)).ConfigureAwait(false);
         var targetMessageId = Guid.NewGuid();
         var otherMessageId = Guid.NewGuid();
         var targetRequestId = Guid.NewGuid();
         var otherRequestId = Guid.NewGuid();
 
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, targetMessageId, targetRequestId, CreatedAtUtc: 11)).ConfigureAwait(false);
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, otherMessageId, otherRequestId, CreatedAtUtc: 12)).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, targetMessageId, targetRequestId, 11)).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, otherMessageId, otherRequestId, 12)).ConfigureAwait(false);
 
         using var cancelRequest = CreateJsonRequest(factory,
             HttpMethod.Post,
@@ -83,7 +87,7 @@ public sealed class NodeChatEndpointTests
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete API", null, CreatedAtUtc: 20)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete API", null, 20)).ConfigureAwait(false);
 
         using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{conversation.ConversationId}");
         using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);

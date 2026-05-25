@@ -5,10 +5,10 @@ using System.Net.Sockets;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>
-/// Step-3 evidence: the XE node host boots under <see cref="XENodeE2EWebApplicationFactory"/>
-/// on a real, pre-chosen loopback port and answers liveness. No browser, no React build —
-/// this gates the Playwright layer (plan R1 retirement). Uses a throwaway web root since
-/// <c>/health/live</c> does not depend on the SPA assets.
+///     Step-3 evidence: the XE node host boots under <see cref="XENodeE2EWebApplicationFactory" />
+///     on a real, pre-chosen loopback port and answers liveness. No browser, no React build —
+///     this gates the Playwright layer (plan R1 retirement). Uses a throwaway web root since
+///     <c>/health/live</c> does not depend on the SPA assets.
 /// </summary>
 public sealed class HostBootSmokeE2ETests
 {

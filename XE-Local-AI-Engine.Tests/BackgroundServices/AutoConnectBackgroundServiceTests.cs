@@ -200,7 +200,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
                     ReconnectBackoffMaxMs = 1,
                     ReconnectBackoffJitterMs = 0,
                     ReconnectMaxAttempts = 3
-            });
+                });
             using var cancellationTokenSource = new CancellationTokenSource();
             cancellationTokenSource.CancelAfter(5000);
 

@@ -4,10 +4,10 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-/// Per-page interaction E2E tests for the node-settings page (plan M2, wave-2).
-/// The real backend answers GET /api/local/v1/node-settings 200 in-process, so the
-/// form populates from actual data stored in the per-session temp SQLite.
-/// Save writes back to the same SQLite — harmless and verifiable via the success alert.
+///     Per-page interaction E2E tests for the node-settings page (plan M2, wave-2).
+///     The real backend answers GET /api/local/v1/node-settings 200 in-process, so the
+///     form populates from actual data stored in the per-session temp SQLite.
+///     Save writes back to the same SQLite — harmless and verifiable via the success alert.
 /// </summary>
 [Category("Page")]
 public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
@@ -21,11 +21,17 @@ public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
         });
 
         // Main page heading rendered unconditionally.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Node settings" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Node settings"
+            }))
             .ToBeVisibleAsync();
 
         // Card heading for the runtime settings card.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Local chat runtime" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Local chat runtime"
+            }))
             .ToBeVisibleAsync();
     }
 
@@ -66,7 +72,10 @@ public sealed class NodeSettingsPageE2ETests : XEE2ETestBase
         await timeoutInput.FillAsync("300");
 
         // Save settings — button must be enabled after a valid change.
-        var saveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save settings" });
+        var saveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Save settings"
+        });
         await Expect(saveButton).ToBeEnabledAsync();
         await saveButton.ClickAsync();
 

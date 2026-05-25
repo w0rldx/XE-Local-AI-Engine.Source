@@ -21,8 +21,7 @@ public sealed class NodeChatStreamService(
 {
     private const int AgentDefinitionVersion = 1;
 
-    public IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(
-        NodeChatStreamRequest request,
+    public IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -31,9 +30,9 @@ public sealed class NodeChatStreamService(
         return SendMessageCoreAsync(request, cancellationToken);
     }
 
-    private async IAsyncEnumerable<ChatStreamEvent> SendMessageCoreAsync(
-        NodeChatStreamRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    private async IAsyncEnumerable<ChatStreamEvent> SendMessageCoreAsync(NodeChatStreamRequest request,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         var conversation = await persistence.GetConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
@@ -45,13 +44,11 @@ public sealed class NodeChatStreamService(
         var sequence = 0L;
         var startedAtUtc = NowUnixMilliseconds();
 
-        var userMessage = await persistence.PersistUserMessageAsync(
-            new NodeChatPersistUserMessageRequest(request.ConversationId, userMessageId, trimmedContent, startedAtUtc),
+        var userMessage = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(request.ConversationId, userMessageId, trimmedContent, startedAtUtc),
             cancellationToken).ConfigureAwait(false);
         yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence++);
 
-        var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(
-            new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
+        var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
                 assistantMessageId,
                 requestId,
                 NowUnixMilliseconds(),
@@ -130,8 +127,7 @@ public sealed class NodeChatStreamService(
         }
     }
 
-    private async Task RunInvocationAsync(
-        RuntimePackage package,
+    private async Task RunInvocationAsync(RuntimePackage package,
         Guid messageId,
         ChannelWriter<InvocationState> stateWriter,
         Guid requestId,
@@ -162,8 +158,7 @@ public sealed class NodeChatStreamService(
         }
     }
 
-    private async Task PumpInvocationStatesAsync(
-        ChannelReader<InvocationState> stateReader,
+    private async Task PumpInvocationStatesAsync(ChannelReader<InvocationState> stateReader,
         ChannelWriter<ChatStreamEvent> eventWriter,
         NodeChatMessageCorrelation correlation,
         string? requestedModel,
@@ -189,8 +184,7 @@ public sealed class NodeChatStreamService(
                     lastContent = state.StreamedContent;
                     lastReasoning = state.StreamedThinkingContent;
 
-                    var persisted = await persistence.FlushAssistantPartialAsync(
-                        new NodeChatPartialFlushRequest(correlation,
+                    var persisted = await persistence.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation,
                             lastContent,
                             string.IsNullOrEmpty(lastReasoning) ? null : lastReasoning,
                             NowUnixMilliseconds()),
@@ -220,8 +214,7 @@ public sealed class NodeChatStreamService(
                         _ => ChatStreamEventTypes.AssistantFailed
                     };
 
-                    var persisted = await persistence.TerminalizeAssistantMessageAsync(
-                        new NodeChatTerminalizeMessageRequest(correlation,
+                    var persisted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                             terminalStatus,
                             NowUnixMilliseconds(),
                             state.StreamedContent,
@@ -253,7 +246,7 @@ public sealed class NodeChatStreamService(
                 sequence,
                 lastContent,
                 lastReasoning,
-                wasCancelled: true).ConfigureAwait(false);
+                true).ConfigureAwait(false);
         }
         finally
         {
@@ -261,8 +254,7 @@ public sealed class NodeChatStreamService(
         }
     }
 
-    private async Task TerminalizeInterruptedStreamAsync(
-        ChannelWriter<ChatStreamEvent> eventWriter,
+    private async Task TerminalizeInterruptedStreamAsync(ChannelWriter<ChatStreamEvent> eventWriter,
         NodeChatMessageCorrelation correlation,
         long sequence,
         string lastContent,
@@ -276,8 +268,7 @@ public sealed class NodeChatStreamService(
             ? ChatStreamEventTypes.AssistantCancelled
             : ChatStreamEventTypes.AssistantInterrupted;
 
-        var persisted = await persistence.TerminalizeAssistantMessageAsync(
-            new NodeChatTerminalizeMessageRequest(correlation,
+        var persisted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 status,
                 NowUnixMilliseconds(),
                 lastContent,
@@ -288,25 +279,24 @@ public sealed class NodeChatStreamService(
         await eventWriter.WriteAsync(ToMessageEvent(eventType, correlation, persisted, sequence), CancellationToken.None).ConfigureAwait(false);
     }
 
-    private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(
-        NodeChatConversationDto conversation,
+    private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto userMessage)
     {
         var messages = conversation.Messages
-            .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
-                                     && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-            .Concat([userMessage])
-            .OrderBy(static message => message.Sequence)
-            .Select(static (message, index) => new ConversationMessageDto
-            {
-                Id = message.MessageId,
-                Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                Content = message.Content,
-                Thinking = message.Reasoning,
-                ModelUsed = message.Model,
-                SortOrder = index
-            })
-            .ToList();
+                                   .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
+                                                            && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+                                   .Concat([userMessage])
+                                   .OrderBy(static message => message.Sequence)
+                                   .Select(static (message, index) => new ConversationMessageDto
+                                   {
+                                       Id = message.MessageId,
+                                       Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
+                                       Content = message.Content,
+                                       Thinking = message.Reasoning,
+                                       ModelUsed = message.Model,
+                                       SortOrder = index
+                                   })
+                                   .ToList();
 
         return messages;
     }
@@ -323,8 +313,7 @@ public sealed class NodeChatStreamService(
         return reader.ReadToEnd();
     }
 
-    private ChatStreamEvent ToMessageEvent(
-        string type,
+    private ChatStreamEvent ToMessageEvent(string type,
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,
         long sequence,

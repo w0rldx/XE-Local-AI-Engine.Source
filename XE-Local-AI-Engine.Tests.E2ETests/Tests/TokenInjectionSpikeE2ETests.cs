@@ -4,15 +4,19 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>
-/// THE GATING SPIKE (plan Step 4). No browser — plain HTTP. Proves the make-or-break wiring
-/// before the Playwright layer is built:
-/// <list type="number">
-///   <item>The host serves the SPA same-origin at <c>/app</c> via <c>ServeNodeReactIndexAsync</c>,
-///   injecting a real <c>__XE_LOCAL_OPERATOR_TOKEN__</c> (not the <c>%XE_LOCAL_OPERATOR_TOKEN%</c> sentinel).</item>
-///   <item>An authenticated <c>GET /api/local/v1/models</c> carrying <c>X-Local-Operator</c> + a same-origin
-///   <c>Origin</c> header returns 200 — proving <c>LocalApiSecurityMiddleware</c> + the operator auth handler pass.</item>
-/// </list>
-/// If either assertion fails the downstream browser tasks must not proceed.
+///     THE GATING SPIKE (plan Step 4). No browser — plain HTTP. Proves the make-or-break wiring
+///     before the Playwright layer is built:
+///     <list type="number">
+///         <item>
+///             The host serves the SPA same-origin at <c>/app</c> via <c>ServeNodeReactIndexAsync</c>,
+///             injecting a real <c>__XE_LOCAL_OPERATOR_TOKEN__</c> (not the <c>%XE_LOCAL_OPERATOR_TOKEN%</c> sentinel).
+///         </item>
+///         <item>
+///             An authenticated <c>GET /api/local/v1/models</c> carrying <c>X-Local-Operator</c> + a same-origin
+///             <c>Origin</c> header returns 200 — proving <c>LocalApiSecurityMiddleware</c> + the operator auth handler pass.
+///         </item>
+///     </list>
+///     If either assertion fails the downstream browser tasks must not proceed.
 /// </summary>
 public sealed partial class TokenInjectionSpikeE2ETests
 {

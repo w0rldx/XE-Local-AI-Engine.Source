@@ -24,22 +24,24 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("restart-recovery.sqlite").ConfigureAwait(false);
         var persistence = CreatePersistenceService(provider);
         var recovery = CreateRecoveryService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Restart", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
-        var pendingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
-        var streamingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 12).ConfigureAwait(false);
-        var completedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 13).ConfigureAwait(false);
-        var cancelledCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 14).ConfigureAwait(false);
-        var failedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 15).ConfigureAwait(false);
-        var interruptedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 16).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Restart", "node", 10)).ConfigureAwait(false);
+        var pendingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, 11).ConfigureAwait(false);
+        var streamingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, 12).ConfigureAwait(false);
+        var completedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, 13).ConfigureAwait(false);
+        var cancelledCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, 14).ConfigureAwait(false);
+        var failedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, 15).ConfigureAwait(false);
+        var interruptedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, 16).ConfigureAwait(false);
 
-        await persistence.MarkAssistantStreamingAsync(streamingCorrelation, updatedAtUtc: 20).ConfigureAwait(false);
-        await persistence.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(streamingCorrelation, "partial answer", "partial reasoning", UpdatedAtUtc: 21)).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(completedCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 22, Content: "done")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(cancelledCorrelation, NodeChatMessageStatusValues.Cancelled, UpdatedAtUtc: 23)).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(failedCorrelation, NodeChatMessageStatusValues.Failed, UpdatedAtUtc: 24, Error: "provider failed")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(interruptedCorrelation, NodeChatMessageStatusValues.Interrupted, UpdatedAtUtc: 25, Error: "already interrupted")).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(streamingCorrelation, 20).ConfigureAwait(false);
+        await persistence.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(streamingCorrelation, "partial answer", "partial reasoning", 21)).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(completedCorrelation, NodeChatMessageStatusValues.Completed, 22, "done")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(cancelledCorrelation, NodeChatMessageStatusValues.Cancelled, 23)).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(failedCorrelation, NodeChatMessageStatusValues.Failed, 24, Error: "provider failed"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(interruptedCorrelation, NodeChatMessageStatusValues.Interrupted, 25, Error: "already interrupted"))
+                         .ConfigureAwait(false);
 
-        var recoveredCount = await recovery.RecoverInterruptedMessagesAsync(recoveredAtUtc: 99).ConfigureAwait(false);
+        var recoveredCount = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var pending = loaded.Messages.Single(message => message.MessageId == pendingCorrelation.MessageId);
@@ -76,10 +78,10 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         await using var provider = await BuildProviderAsync("restart-recovery-empty.sqlite").ConfigureAwait(false);
         var persistence = CreatePersistenceService(provider);
         var recovery = CreateRecoveryService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("No recovery", null, CreatedAtUtc: 30)).ConfigureAwait(false);
-        var userMessage = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hello", CreatedAtUtc: 31)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("No recovery", null, 30)).ConfigureAwait(false);
+        var userMessage = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hello", 31)).ConfigureAwait(false);
 
-        var recoveredCount = await recovery.RecoverInterruptedMessagesAsync(recoveredAtUtc: 100).ConfigureAwait(false);
+        var recoveredCount = await recovery.RecoverInterruptedMessagesAsync(100).ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var loadedUserMessage = loaded.Messages.Single(message => message.MessageId == userMessage.MessageId);
@@ -97,7 +99,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
         services.AddSingleton<NodeChatPersistenceWriter>();
 
-        var provider = services.BuildServiceProvider(validateScopes: true);
+        var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
@@ -116,8 +118,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         return new NodeChatRestartRecoveryService(provider.GetRequiredService<NodeChatPersistenceWriter>());
     }
 
-    private static async Task<NodeChatMessageCorrelation> CreateAssistantPlaceholderAsync(
-        NodeChatPersistenceService persistence,
+    private static async Task<NodeChatMessageCorrelation> CreateAssistantPlaceholderAsync(NodeChatPersistenceService persistence,
         Guid conversationId,
         long createdAtUtc)
     {

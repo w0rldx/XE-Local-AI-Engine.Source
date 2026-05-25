@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using OllamaSharp;
+using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -22,7 +23,10 @@ public sealed class LocalModelEndpointTests
     public async Task ListLocalModels_WhenAvailable_ReturnsModelsAndSelection()
     {
         await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
-        context.SettingsStore.Settings = new StoredNodeSettings { DefaultModelName = "llama3:8b" };
+        context.SettingsStore.Settings = new StoredNodeSettings
+        {
+            DefaultModelName = "llama3:8b"
+        };
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
@@ -43,7 +47,7 @@ public sealed class LocalModelEndpointTests
     public async Task ListLocalModels_WhenProviderUnavailable_ReturnsSafeUnavailableResponse()
     {
         var modelService = Substitute.For<IOllamaModelService>();
-        modelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns<Task<IEnumerable<OllamaSharp.Models.Model>>>(_ => throw new InvalidOperationException("provider offline"));
+        modelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns<Task<IEnumerable<Model>>>(_ => throw new InvalidOperationException("provider offline"));
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
@@ -84,12 +88,18 @@ public sealed class LocalModelEndpointTests
     public async Task SelectLocalModel_WhenValid_PersistsDefaultModelWithoutProviderSwitching()
     {
         var modelService = Substitute.For<IOllamaModelService>();
-        var settingsStore = new StubNodeSettingsStore(new StoredNodeSettings { MaxMessageRequestTimeoutSeconds = 120 });
+        var settingsStore = new StubNodeSettingsStore(new StoredNodeSettings
+        {
+            MaxMessageRequestTimeoutSeconds = 120
+        });
         await using var context = CreateContext(modelService, settingsStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/select");
-        request.Content = JsonContent.Create(new SelectLocalModelRequest { ModelName = "llama3:8b" });
+        request.Content = JsonContent.Create(new SelectLocalModelRequest
+        {
+            ModelName = "llama3:8b"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var selection = await ReadJsonAsync<SelectLocalModelResponse>(response).ConfigureAwait(false);
 
@@ -107,7 +117,10 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var pullRequest = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/pull");
-        pullRequest.Content = JsonContent.Create(new PullLocalModelRequest { ModelName = "orca-mini:latest" });
+        pullRequest.Content = JsonContent.Create(new PullLocalModelRequest
+        {
+            ModelName = "orca-mini:latest"
+        });
         using var pullResponse = await client.SendAsync(pullRequest).ConfigureAwait(false);
         var pull = await ReadJsonAsync<PullLocalModelResponse>(pullResponse).ConfigureAwait(false);
 
@@ -135,7 +148,10 @@ public sealed class LocalModelEndpointTests
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/pull");
-        request.Content = JsonContent.Create(new PullLocalModelRequest { ModelName = "../secret" });
+        request.Content = JsonContent.Create(new PullLocalModelRequest
+        {
+            ModelName = "../secret"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);

@@ -58,9 +58,9 @@ public sealed class NodeChatPersistenceContractTests
     public void CorrelatedOperations_RequireConversationMessageAndRequestIds()
     {
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        var cancel = new NodeChatCancelRequest(correlation, CancelledAtUtc: 42);
-        var flush = new NodeChatPartialFlushRequest(correlation, "partial", Reasoning: "thinking", UpdatedAtUtc: 43);
-        var terminal = new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 44);
+        var cancel = new NodeChatCancelRequest(correlation, 42);
+        var flush = new NodeChatPartialFlushRequest(correlation, "partial", "thinking", 43);
+        var terminal = new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 44);
 
         AssertEx.Equal(correlation, cancel.Correlation);
         AssertEx.Equal(correlation, flush.Correlation);
@@ -74,11 +74,11 @@ public sealed class NodeChatPersistenceContractTests
     public void Dtos_DoNotExposeEfEntitiesOrSecretBearingNames()
     {
         var dtoTypes = typeof(NodeChatConversationDto).Assembly
-                                                     .GetTypes()
-                                                     .Where(type => type.Namespace == typeof(NodeChatConversationDto).Namespace
-                                                                    && type.Name.StartsWith("NodeChat", StringComparison.Ordinal)
-                                                                    && type != typeof(INodeChatPersistenceService))
-                                                     .ToArray();
+                                                      .GetTypes()
+                                                      .Where(type => type.Namespace == typeof(NodeChatConversationDto).Namespace
+                                                                     && type.Name.StartsWith("NodeChat", StringComparison.Ordinal)
+                                                                     && type != typeof(INodeChatPersistenceService))
+                                                      .ToArray();
 
         AssertEx.True(dtoTypes.Length > 0, "Expected node chat DTO types to be discoverable.");
 

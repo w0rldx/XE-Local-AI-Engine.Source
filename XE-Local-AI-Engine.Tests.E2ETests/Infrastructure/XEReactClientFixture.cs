@@ -1,42 +1,60 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 using System.Diagnostics;
-using System.Net.Sockets;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using TUnit.Core.Interfaces;
 
 /// <summary>
-/// Picks a free loopback port up front, runs <c>pnpm install --frozen-lockfile</c> +
-/// <c>pnpm run build</c> in the XE React client directory with <c>VITE_API_URL</c> baked to
-/// that port, then copies the built <c>dist/</c> tree into <c>&lt;TempRoot&gt;/app/</c> so the
-/// factory's <c>UseWebRoot(TempRoot)</c> makes it available to <c>ServeNodeReactIndexAsync</c>
-/// and <c>UseStaticFiles</c> at the same origin.
-/// No vite-preview server is started — the .NET host serves the SPA.
-///
-/// <para>
-/// Concurrency safety: <see cref="BuildLock"/> serialises all install + build invocations
-/// process-wide so parallel fixture instances never touch the shared React client directory at
-/// the same time. <c>pnpm install --frozen-lockfile</c> is non-destructive (does not wipe
-/// node_modules) and idempotent when the lockfile is already satisfied.
-/// </para>
+///     Picks a free loopback port up front, runs <c>pnpm install --frozen-lockfile</c> +
+///     <c>pnpm run build</c> in the XE React client directory with <c>VITE_API_URL</c> baked to
+///     that port, then copies the built <c>dist/</c> tree into <c>&lt;TempRoot&gt;/app/</c> so the
+///     factory's <c>UseWebRoot(TempRoot)</c> makes it available to <c>ServeNodeReactIndexAsync</c>
+///     and <c>UseStaticFiles</c> at the same origin.
+///     No vite-preview server is started — the .NET host serves the SPA.
+///     <para>
+///         Concurrency safety: <see cref="BuildLock" /> serialises all install + build invocations
+///         process-wide so parallel fixture instances never touch the shared React client directory at
+///         the same time. <c>pnpm install --frozen-lockfile</c> is non-destructive (does not wipe
+///         node_modules) and idempotent when the lockfile is already satisfied.
+///     </para>
 /// </summary>
 public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
 {
     /// <summary>
-    /// Process-wide lock that serialises pnpm install + build so concurrent fixture instances
-    /// never race on the shared React client directory.
+    ///     Process-wide lock that serialises pnpm install + build so concurrent fixture instances
+    ///     never race on the shared React client directory.
     /// </summary>
     private static readonly SemaphoreSlim BuildLock = new(1, 1);
+
     /// <summary>Free loopback port chosen before the React build so it can be baked into VITE_API_URL.</summary>
     public int Port { get; private set; }
 
     /// <summary>
-    /// Temp directory whose <c>app/</c> sub-directory contains the freshly built dist.
-    /// Pass this to <see cref="XENodeE2EWebApplicationFactory"/> as the web root so that
-    /// <c>&lt;TempRoot&gt;/app/index.html</c> is found by <c>ServeNodeReactIndexAsync</c>.
+    ///     Temp directory whose <c>app/</c> sub-directory contains the freshly built dist.
+    ///     Pass this to <see cref="XENodeE2EWebApplicationFactory" /> as the web root so that
+    ///     <c>&lt;TempRoot&gt;/app/index.html</c> is found by <c>ServeNodeReactIndexAsync</c>.
     /// </summary>
     public string TempRoot { get; private set; } = string.Empty;
+
+    public ValueTask DisposeAsync()
+    {
+        if (!string.IsNullOrEmpty(TempRoot) && Directory.Exists(TempRoot))
+        {
+            try
+            {
+                Directory.Delete(TempRoot, true);
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup; temp files are reclaimed by the OS regardless.
+            }
+        }
+
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
+    }
 
     public async Task InitializeAsync()
     {
@@ -58,20 +76,19 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             // One retry handles transient ENOENT / pnpm store contention.
             try
             {
-                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
+                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, 300_000).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
             {
                 await Task.Delay(2_000).ConfigureAwait(false);
-                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
+                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, 300_000).ConfigureAwait(false);
             }
 
-            await RunProcessAsync(
-                "pnpm",
+            await RunProcessAsync("pnpm",
                 "run build",
                 clientDir,
-                timeoutMs: 300_000,
-                environmentOverrides: new Dictionary<string, string>
+                300_000,
+                new Dictionary<string, string>
                 {
                     ["VITE_API_URL"] = $"http://127.0.0.1:{Port}",
                     ["VITE_API_VERSION"] = "v1",
@@ -90,28 +107,9 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
 
         if (!File.Exists(Path.Combine(appOutputDir, "index.html")))
         {
-            throw new InvalidOperationException(
-                $"React build did not produce index.html at '{appOutputDir}'. " +
-                $"Check that '{distDir}' exists and the build succeeded.");
+            throw new InvalidOperationException($"React build did not produce index.html at '{appOutputDir}'. " +
+                                                $"Check that '{distDir}' exists and the build succeeded.");
         }
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        if (!string.IsNullOrEmpty(TempRoot) && Directory.Exists(TempRoot))
-        {
-            try
-            {
-                Directory.Delete(TempRoot, recursive: true);
-            }
-            catch (IOException)
-            {
-                // Best-effort cleanup; temp files are reclaimed by the OS regardless.
-            }
-        }
-
-        GC.SuppressFinalize(this);
-        return ValueTask.CompletedTask;
     }
 
     private static int GetFreePort()
@@ -140,18 +138,16 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             directory = directory.Parent;
         }
 
-        throw new InvalidOperationException(
-            "Could not find Apps/XE-Local-AI-Engine/XE-Local-AI-Engine.Client.React from the test assembly path. " +
-            "Ensure the test runs from within the C0re superproject worktree.");
+        throw new InvalidOperationException("Could not find Apps/XE-Local-AI-Engine/XE-Local-AI-Engine.Client.React from the test assembly path. " +
+                                            "Ensure the test runs from within the C0re superproject worktree.");
     }
 
     private static void CopyDirectory(string sourceDir, string destinationDir)
     {
         if (!Directory.Exists(sourceDir))
         {
-            throw new InvalidOperationException(
-                $"Expected build output directory '{sourceDir}' does not exist. " +
-                "Verify pnpm run build completed successfully.");
+            throw new InvalidOperationException($"Expected build output directory '{sourceDir}' does not exist. " +
+                                                "Verify pnpm run build completed successfully.");
         }
 
         foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
@@ -159,12 +155,11 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             var relative = Path.GetRelativePath(sourceDir, file);
             var destination = Path.Combine(destinationDir, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination, overwrite: true);
+            File.Copy(file, destination, true);
         }
     }
 
-    private static async Task RunProcessAsync(
-        string fileName,
+    private static async Task RunProcessAsync(string fileName,
         string arguments,
         string workingDirectory,
         int timeoutMs,
@@ -202,7 +197,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            process.Kill(entireProcessTree: true);
+            process.Kill(true);
             throw new TimeoutException($"Process '{fileName} {arguments}' did not complete within {timeoutMs}ms.");
         }
 

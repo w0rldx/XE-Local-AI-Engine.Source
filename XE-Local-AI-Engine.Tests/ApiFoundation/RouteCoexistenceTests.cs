@@ -123,7 +123,10 @@ public sealed class RouteCoexistenceTests
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
         {
-            Content = JsonContent.Create(new { Name = name })
+            Content = JsonContent.Create(new
+            {
+                Name = name
+            })
         };
         AddLocalOperatorHeaders(factory, request);
         return request;

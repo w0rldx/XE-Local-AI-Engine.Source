@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Invocations;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using C0re.AI.Shared.Contracts.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -16,9 +15,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class InvocationMonitorEndpointTests
 {
     private static readonly DateTimeOffset FrozenNow = DateTimeOffset.Parse("2026-05-25T10:00:00Z");
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
     [Test]

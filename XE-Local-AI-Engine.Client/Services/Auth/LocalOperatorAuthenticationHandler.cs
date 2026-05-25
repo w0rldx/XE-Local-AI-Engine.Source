@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -11,8 +10,7 @@ public sealed class LocalOperatorAuthenticationHandler : AuthenticationHandler<A
 {
     private readonly ILocalOperatorTokenProvider _tokenProvider;
 
-    public LocalOperatorAuthenticationHandler(
-        IOptionsMonitor<AuthenticationSchemeOptions> options,
+    public LocalOperatorAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
         ILocalOperatorTokenProvider tokenProvider)

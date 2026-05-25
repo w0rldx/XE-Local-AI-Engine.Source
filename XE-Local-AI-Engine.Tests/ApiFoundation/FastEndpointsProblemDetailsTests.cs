@@ -18,7 +18,10 @@ public sealed class FastEndpointsProblemDetailsTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
         {
-            Content = JsonContent.Create(new { Name = string.Empty })
+            Content = JsonContent.Create(new
+            {
+                Name = string.Empty
+            })
         };
         request.Headers.Add(LocalOperatorAuthorization.HeaderName, tokenProvider.Token);
         request.Headers.Add("Origin", "http://localhost");

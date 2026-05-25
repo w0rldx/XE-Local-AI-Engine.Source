@@ -16,9 +16,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class RuntimeManagerEndpointTests
 {
     private static readonly DateTimeOffset FrozenNow = DateTimeOffset.Parse("2026-05-24T12:00:00Z");
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
     [Test]
@@ -187,8 +191,7 @@ public sealed class RuntimeManagerEndpointTests
             }
         };
 
-        return new HostAgentManagerSnapshot(
-            new HostAgentStatusDto
+        return new HostAgentManagerSnapshot(new HostAgentStatusDto
             {
                 State = HostAgentState.Running,
                 DesiredState = HostAgentDesiredState.Running,

@@ -8,8 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 [Authorize(AuthenticationSchemes = LocalOperatorAuthorization.AuthenticationType, Policy = LocalOperatorAuthorization.OperatorPolicy)]
 public sealed class LocalChatHub(INodeChatStreamService streamService) : Hub
 {
-    public IAsyncEnumerable<ChatStreamEvent> SendMessage(
-        NodeChatStreamRequest request,
+    public IAsyncEnumerable<ChatStreamEvent> SendMessage(NodeChatStreamRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);

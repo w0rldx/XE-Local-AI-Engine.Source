@@ -1,23 +1,20 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
 using Microsoft.Playwright;
-using TUnit.Core;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-/// Per-page interaction E2E tests for the Cloud Settings page (<c>/app/cloud-settings</c>).
-///
-/// <para>
-/// Branch A (confirmed by source analysis): <c>getCloudSettings</c> returns 200 in-process
-/// (HTTP same-origin, token injected via <c>/app</c>). The <c>TextInput</c> / <c>PasswordInput</c>
-/// elements are rendered unconditionally — no <c>{settings ? ...}</c> gate in CloudSettings.tsx.
-/// </para>
-///
-/// <para>
-/// Locator strategy: CSS attribute selectors (<c>input[placeholder='...']</c>) target the
-/// underlying <c>&lt;input&gt;</c> directly, bypassing Playwright's label-resolution path which
-/// is unreliable with Mantine's dynamic element IDs.
-/// </para>
+///     Per-page interaction E2E tests for the Cloud Settings page (<c>/app/cloud-settings</c>).
+///     <para>
+///         Branch A (confirmed by source analysis): <c>getCloudSettings</c> returns 200 in-process
+///         (HTTP same-origin, token injected via <c>/app</c>). The <c>TextInput</c> / <c>PasswordInput</c>
+///         elements are rendered unconditionally — no <c>{settings ? ...}</c> gate in CloudSettings.tsx.
+///     </para>
+///     <para>
+///         Locator strategy: CSS attribute selectors (<c>input[placeholder='...']</c>) target the
+///         underlying <c>&lt;input&gt;</c> directly, bypassing Playwright's label-resolution path which
+///         is unreliable with Mantine's dynamic element IDs.
+///     </para>
 /// </summary>
 [Category("Page")]
 public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
@@ -27,8 +24,8 @@ public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
     private const string DeploymentInputSelector = "input[placeholder='gpt-4o']";
 
     /// <summary>
-    /// Navigates to cloud-settings and waits until the endpoint input is visible and enabled —
-    /// proving the component has mounted and the form is interactive.
+    ///     Navigates to cloud-settings and waits until the endpoint input is visible and enabled —
+    ///     proving the component has mounted and the form is interactive.
     /// </summary>
     private async Task NavigateAndWaitForFormAsync()
     {
@@ -54,14 +51,20 @@ public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
         });
 
         // Page heading — always rendered.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Cloud settings" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Cloud settings"
+            }))
             .ToBeVisibleAsync();
 
         // Worker Node breadcrumb.
         await Expect(Page.GetByText("Worker Node").First).ToBeVisibleAsync();
 
         // Azure OpenAI card heading.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Azure OpenAI" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Azure OpenAI"
+            }))
             .ToBeVisibleAsync();
 
         // Badge: settings?.hasStoredApiKey is undefined (falsy) before the query resolves,
@@ -116,7 +119,10 @@ public sealed class CloudSettingsPageE2ETests : XEE2ETestBase
         // Assert the Save button is visible. On an empty form validateCloudSettingsForm
         // returns errors for all three fields → hasErrors=true → disabled={hasErrors||isActionPending}
         // → the button is disabled. This is a deterministic validation-gating signal.
-        var saveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save cloud settings" });
+        var saveButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Save cloud settings"
+        });
         await Expect(saveButton).ToBeVisibleAsync();
         await Expect(saveButton).ToBeDisabledAsync();
     }

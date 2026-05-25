@@ -4,10 +4,10 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-/// First browser-driven smoke tests for the XE node React client, ordered by risk (plan M2):
-/// #1 is unpaired-safe (no authenticated data needed); #2 exercises the operator-token bootstrap
-/// end-to-end in a real browser by rendering FakeOllama models from <c>/api/local/v1/models</c>.
-/// Both navigate to the token-injecting <c>/app</c> route so the SPA receives the operator token.
+///     First browser-driven smoke tests for the XE node React client, ordered by risk (plan M2):
+///     #1 is unpaired-safe (no authenticated data needed); #2 exercises the operator-token bootstrap
+///     end-to-end in a real browser by rendering FakeOllama models from <c>/api/local/v1/models</c>.
+///     Both navigate to the token-injecting <c>/app</c> route so the SPA receives the operator token.
 /// </summary>
 public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
 {
@@ -22,7 +22,10 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
         });
 
         // The header renders unconditionally (no route guard redirects an unpaired node).
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Dashboard" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Dashboard"
+            }))
             .ToBeVisibleAsync();
         await Expect(Page.GetByText("Worker Node").First).ToBeVisibleAsync();
     }

@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests;
 
 /// <summary>
-/// Placeholder so the freshly scaffolded project compiles and the test platform
-/// discovers at least one test. Real harness tests land in later steps.
+///     Placeholder so the freshly scaffolded project compiles and the test platform
+///     discovers at least one test. Real harness tests land in later steps.
 /// </summary>
 public sealed class ScaffoldSmokeTests
 {

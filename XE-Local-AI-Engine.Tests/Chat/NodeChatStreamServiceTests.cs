@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
-using C0re.AI.Shared.Contracts.Enums;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -12,7 +11,6 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatStreamServiceTests
@@ -37,8 +35,7 @@ public sealed class NodeChatStreamServiceTests
             NullLogger<NodeChatStreamService>.Instance);
         using var cancellation = new CancellationTokenSource();
 
-        await foreach (var streamEvent in service.SendMessageAsync(
-                           new NodeChatStreamRequest(conversationId,
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
                                "hello",
                                MessageId: assistantMessageId,
                                RequestId: requestId),
@@ -59,8 +56,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal("thinking", terminalRequest.Reasoning);
     }
 
-    private static INodeChatPersistenceService CreatePersistence(
-        Guid conversationId,
+    private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
         Guid assistantMessageId,
         Guid requestId,
         Action<NodeChatTerminalizeMessageRequest> terminalized)
@@ -92,7 +88,10 @@ public sealed class NodeChatStreamServiceTests
             NodeChatMessageStatusValues.Pending,
             string.Empty,
             null);
-        var assistantStreaming = assistantPending with { Status = NodeChatMessageStatusValues.Streaming };
+        var assistantStreaming = assistantPending with
+        {
+            Status = NodeChatMessageStatusValues.Streaming
+        };
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>())
                    .Returns(conversation);
@@ -129,8 +128,7 @@ public sealed class NodeChatStreamServiceTests
         return persistence;
     }
 
-    private static NodeChatPersistedMessageDto CreateAssistantMessage(
-        Guid conversationId,
+    private static NodeChatPersistedMessageDto CreateAssistantMessage(Guid conversationId,
         Guid assistantMessageId,
         Guid requestId,
         string status,

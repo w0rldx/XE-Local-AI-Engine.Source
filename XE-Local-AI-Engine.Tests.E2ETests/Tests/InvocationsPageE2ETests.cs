@@ -4,9 +4,9 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-/// Per-page interaction E2E tests for the invocation-monitor page (plan M2, wave-2).
-/// The real backend returns an empty monitor in the test host, so assertions target
-/// static layout and the empty-state text rather than live invocation data.
+///     Per-page interaction E2E tests for the invocation-monitor page (plan M2, wave-2).
+///     The real backend returns an empty monitor in the test host, so assertions target
+///     static layout and the empty-state text rather than live invocation data.
 /// </summary>
 [Category("Page")]
 public sealed class InvocationsPageE2ETests : XEE2ETestBase
@@ -20,11 +20,17 @@ public sealed class InvocationsPageE2ETests : XEE2ETestBase
         });
 
         // Main page heading.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Invocation monitor" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Invocation monitor"
+            }))
             .ToBeVisibleAsync();
 
         // History card heading.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Invocation history" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Invocation history"
+            }))
             .ToBeVisibleAsync();
     }
 
@@ -37,15 +43,30 @@ public sealed class InvocationsPageE2ETests : XEE2ETestBase
         });
 
         // Table column headers defined in the component.
-        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions { Name = "Invocation" }))
+        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions
+            {
+                Name = "Invocation"
+            }))
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions { Name = "Status" }))
+        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions
+            {
+                Name = "Status"
+            }))
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions { Name = "Model" }))
+        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions
+            {
+                Name = "Model"
+            }))
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions { Name = "Completed" }))
+        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions
+            {
+                Name = "Completed"
+            }))
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions { Name = "Duration" }))
+        await Expect(Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions
+            {
+                Name = "Duration"
+            }))
             .ToBeVisibleAsync();
     }
 
@@ -71,12 +92,18 @@ public sealed class InvocationsPageE2ETests : XEE2ETestBase
         });
 
         // Refresh button is visible and clickable.
-        var refreshButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Refresh" });
+        var refreshButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Refresh"
+        });
         await Expect(refreshButton).ToBeVisibleAsync();
         await refreshButton.ClickAsync();
 
         // After refetch the heading must still be present — page did not navigate away or error.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Invocation monitor" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Invocation monitor"
+            }))
             .ToBeVisibleAsync();
     }
 }

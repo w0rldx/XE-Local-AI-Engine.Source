@@ -1,72 +1,60 @@
-using System;
-using Microsoft.EntityFrameworkCore.Migrations;
-
 #nullable disable
 
-namespace XE_Local_AI_Engine.Client.Persistence.Migrations
+namespace XE_Local_AI_Engine.Client.Persistence.Migrations;
+
+using Microsoft.EntityFrameworkCore.Migrations;
+
+/// <inheritdoc />
+public partial class AddNodeMessageLifecycleColumns : Migration
 {
     /// <inheritdoc />
-    public partial class AddNodeMessageLifecycleColumns : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "error",
-                table: "messages",
-                type: "TEXT",
-                nullable: true);
+        migrationBuilder.AddColumn<string>("error",
+            "messages",
+            "TEXT",
+            nullable: true);
 
-            migrationBuilder.AddColumn<Guid>(
-                name: "request_id",
-                table: "messages",
-                type: "TEXT",
-                nullable: true);
+        migrationBuilder.AddColumn<Guid>("request_id",
+            "messages",
+            "TEXT",
+            nullable: true);
 
-            migrationBuilder.AddColumn<string>(
-                name: "status",
-                table: "messages",
-                type: "TEXT",
-                nullable: false,
-                defaultValue: "completed");
+        migrationBuilder.AddColumn<string>("status",
+            "messages",
+            "TEXT",
+            nullable: false,
+            defaultValue: "completed");
 
-            migrationBuilder.AddColumn<long>(
-                name: "updated_at_utc",
-                table: "messages",
-                type: "INTEGER",
-                nullable: false,
-                defaultValue: 0L);
+        migrationBuilder.AddColumn<long>("updated_at_utc",
+            "messages",
+            "INTEGER",
+            nullable: false,
+            defaultValue: 0L);
 
-            migrationBuilder.Sql("UPDATE messages SET updated_at_utc = created_at_utc WHERE updated_at_utc = 0;");
+        migrationBuilder.Sql("UPDATE messages SET updated_at_utc = created_at_utc WHERE updated_at_utc = 0;");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_messages_request_id",
-                table: "messages",
-                column: "request_id");
-        }
+        migrationBuilder.CreateIndex("IX_messages_request_id",
+            "messages",
+            "request_id");
+    }
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropIndex(
-                name: "IX_messages_request_id",
-                table: "messages");
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropIndex("IX_messages_request_id",
+            "messages");
 
-            migrationBuilder.DropColumn(
-                name: "error",
-                table: "messages");
+        migrationBuilder.DropColumn("error",
+            "messages");
 
-            migrationBuilder.DropColumn(
-                name: "request_id",
-                table: "messages");
+        migrationBuilder.DropColumn("request_id",
+            "messages");
 
-            migrationBuilder.DropColumn(
-                name: "status",
-                table: "messages");
+        migrationBuilder.DropColumn("status",
+            "messages");
 
-            migrationBuilder.DropColumn(
-                name: "updated_at_utc",
-                table: "messages");
-        }
+        migrationBuilder.DropColumn("updated_at_utc",
+            "messages");
     }
 }

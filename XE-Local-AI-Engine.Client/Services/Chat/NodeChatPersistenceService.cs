@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -23,15 +23,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         var conversationId = Guid.NewGuid();
         var createdAtUtc = request.CreatedAtUtc;
 
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
             async (dbContext, token) =>
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                    INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
-                    VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0);
-                    """;
+                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
+                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0);
+                                      """;
                 AddParameter(command, "$conversation_id", conversationId);
                 AddParameter(command, "$title", request.Title);
                 AddParameter(command, "$user_id", request.UserId);
@@ -40,7 +39,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, Purged: false, []);
+                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, false, []);
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -54,65 +53,17 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             : await ListActiveConversationsAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
-    {
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
-            async (dbContext, token) =>
-            {
-                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = """
-                    SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                           m.content, m.status
-                    FROM conversations c
-                    LEFT JOIN messages m ON m.message_id = (
-                        SELECT mi.message_id FROM messages mi
-                        WHERE mi.conversation_id = c.conversation_id
-                        ORDER BY mi.sequence DESC LIMIT 1)
-                    WHERE c.purged = 0
-                    ORDER BY c.last_seen_utc DESC
-                    LIMIT $limit;
-                    """;
-                return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
-            },
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListAllConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
-    {
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
-            async (dbContext, token) =>
-            {
-                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = """
-                    SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                           m.content, m.status
-                    FROM conversations c
-                    LEFT JOIN messages m ON m.message_id = (
-                        SELECT mi.message_id FROM messages mi
-                        WHERE mi.conversation_id = c.conversation_id
-                        ORDER BY mi.sequence DESC LIMIT 1)
-                    ORDER BY c.last_seen_utc DESC
-                    LIMIT $limit;
-                    """;
-                return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
-            },
-            cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
             async (dbContext, token) =>
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.CommandText = """
-                    SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged
-                    FROM conversations
-                    WHERE conversation_id = $conversation_id AND purged = 0;
-                    """;
+                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged
+                                                  FROM conversations
+                                                  WHERE conversation_id = $conversation_id AND purged = 0;
+                                                  """;
                 AddParameter(conversationCommand, "$conversation_id", conversationId);
 
                 await OpenIfNeededAsync(conversationCommand.Connection, token).ConfigureAwait(false);
@@ -122,8 +73,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     return null;
                 }
 
-                var dto = new NodeChatConversationDto(
-                    Guid.Parse(conversationReader.GetString(0)),
+                var dto = new NodeChatConversationDto(Guid.Parse(conversationReader.GetString(0)),
                     await conversationReader.IsDBNullAsync(1, token).ConfigureAwait(false) ? null : conversationReader.GetString(1),
                     await conversationReader.IsDBNullAsync(2, token).ConfigureAwait(false) ? null : conversationReader.GetString(2),
                     conversationReader.GetInt64(3),
@@ -141,18 +91,17 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Content);
 
-        return InsertMessageAsync(
-            request.ConversationId,
+        return InsertMessageAsync(request.ConversationId,
             request.MessageId,
-            requestId: null,
+            null,
             UserRole,
             request.Content.Trim(),
-            reasoning: null,
+            null,
             NodeChatMessageStatusValues.Completed,
             request.CreatedAtUtc,
             request.CreatedAtUtc,
-            model: null,
-            error: null,
+            null,
+            null,
             request.MetadataJson,
             cancellationToken);
     }
@@ -165,33 +114,31 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             throw new ArgumentException("Assistant placeholders require a non-empty request id.", nameof(request));
         }
 
-        return InsertMessageAsync(
-            request.ConversationId,
+        return InsertMessageAsync(request.ConversationId,
             request.MessageId,
             request.RequestId,
             AssistantRole,
-            content: string.Empty,
-            reasoning: null,
+            string.Empty,
+            null,
             NodeChatMessageStatusValues.Pending,
             request.CreatedAtUtc,
             request.CreatedAtUtc,
             request.Model,
-            error: null,
+            null,
             request.MetadataJson,
             cancellationToken);
     }
 
     public Task<NodeChatPersistedMessageDto> MarkAssistantStreamingAsync(NodeChatMessageCorrelation correlation, long updatedAtUtc, CancellationToken cancellationToken = default)
     {
-        return UpdateCorrelatedMessageAsync(
-            correlation,
+        return UpdateCorrelatedMessageAsync(correlation,
             updatedAtUtc,
-            status: NodeChatMessageStatusValues.Streaming,
-            content: null,
-            reasoning: null,
-            error: null,
-            model: null,
-            replaceContent: true,
+            NodeChatMessageStatusValues.Streaming,
+            null,
+            null,
+            null,
+            null,
+            true,
             cancellationToken);
     }
 
@@ -199,14 +146,13 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return UpdateCorrelatedMessageAsync(
-            request.Correlation,
+        return UpdateCorrelatedMessageAsync(request.Correlation,
             request.UpdatedAtUtc,
-            status: null,
+            null,
             request.Content,
             request.Reasoning,
-            error: null,
-            model: null,
+            null,
+            null,
             request.ReplaceContent,
             cancellationToken);
     }
@@ -219,15 +165,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             throw new ArgumentException($"Status '{request.Status}' is not terminal.", nameof(request));
         }
 
-        return UpdateCorrelatedMessageAsync(
-            request.Correlation,
+        return UpdateCorrelatedMessageAsync(request.Correlation,
             request.UpdatedAtUtc,
             request.Status,
             request.Content,
             request.Reasoning,
             request.Error,
             request.Model,
-            replaceContent: true,
+            true,
             cancellationToken);
     }
 
@@ -235,37 +180,34 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var message = await UpdateCorrelatedMessageAsync(
-            request.Correlation,
+        var message = await UpdateCorrelatedMessageAsync(request.Correlation,
             request.CancelledAtUtc,
             NodeChatMessageStatusValues.Cancelled,
-            content: null,
-            reasoning: null,
-            error: null,
-            model: null,
-            replaceContent: true,
+            null,
+            null,
+            null,
+            null,
+            true,
             cancellationToken).ConfigureAwait(false);
 
-        return new NodeChatCancelResultDto(request.Correlation, message.Status, Cancelled: true);
+        return new NodeChatCancelResultDto(request.Correlation, message.Status, true);
     }
 
     public async Task<NodeChatDeleteResultDto> DeleteConversationAsync(NodeChatDeleteConversationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
             async (dbContext, token) =>
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
 
-                var cancelCount = await dbContext.Database.ExecuteSqlRawAsync(
-                    """
-                    UPDATE messages
-                    SET status = {0}, updated_at_utc = {1}
-                    WHERE conversation_id = {2}
-                      AND status IN ({3}, {4});
-                    """,
+                var cancelCount = await dbContext.Database.ExecuteSqlRawAsync("""
+                                                                              UPDATE messages
+                                                                              SET status = {0}, updated_at_utc = {1}
+                                                                              WHERE conversation_id = {2}
+                                                                                AND status IN ({3}, {4});
+                                                                              """,
                     [NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Streaming],
                     token).ConfigureAwait(false);
 
@@ -278,8 +220,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 }
                 else
                 {
-                    await dbContext.Database.ExecuteSqlRawAsync(
-                        "UPDATE conversations SET purged = 1, last_seen_utc = {0} WHERE conversation_id = {1};",
+                    await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET purged = 1, last_seen_utc = {0} WHERE conversation_id = {1};",
                         [request.DeletedAtUtc, request.ConversationId],
                         token).ConfigureAwait(false);
                 }
@@ -290,8 +231,52 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<NodeChatPersistedMessageDto> InsertMessageAsync(
-        Guid conversationId,
+    private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
+    {
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = """
+                                      SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
+                                             m.content, m.status
+                                      FROM conversations c
+                                      LEFT JOIN messages m ON m.message_id = (
+                                          SELECT mi.message_id FROM messages mi
+                                          WHERE mi.conversation_id = c.conversation_id
+                                          ORDER BY mi.sequence DESC LIMIT 1)
+                                      WHERE c.purged = 0
+                                      ORDER BY c.last_seen_utc DESC
+                                      LIMIT $limit;
+                                      """;
+                return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListAllConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
+    {
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = """
+                                      SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
+                                             m.content, m.status
+                                      FROM conversations c
+                                      LEFT JOIN messages m ON m.message_id = (
+                                          SELECT mi.message_id FROM messages mi
+                                          WHERE mi.conversation_id = c.conversation_id
+                                          ORDER BY mi.sequence DESC LIMIT 1)
+                                      ORDER BY c.last_seen_utc DESC
+                                      LIMIT $limit;
+                                      """;
+                return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<NodeChatPersistedMessageDto> InsertMessageAsync(Guid conversationId,
         Guid messageId,
         Guid? requestId,
         string role,
@@ -305,8 +290,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         string? metadataJson,
         CancellationToken cancellationToken)
     {
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
             async (dbContext, token) =>
             {
                 var sequence = await NextSequenceAsync(dbContext, conversationId, token).ConfigureAwait(false);
@@ -314,9 +298,9 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                    INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error)
-                    VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error);
-                    """;
+                                      INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error)
+                                      VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error);
+                                      """;
                 AddParameter(command, "$message_id", messageId);
                 AddParameter(command, "$conversation_id", conversationId);
                 AddParameter(command, "$sequence", sequence);
@@ -338,8 +322,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<NodeChatPersistedMessageDto> UpdateCorrelatedMessageAsync(
-        NodeChatMessageCorrelation correlation,
+    private async Task<NodeChatPersistedMessageDto> UpdateCorrelatedMessageAsync(NodeChatMessageCorrelation correlation,
         long updatedAtUtc,
         string? status,
         string? content,
@@ -351,8 +334,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     {
         ValidateCorrelation(correlation);
 
-        return await _writer.ExecuteAsync(
-            NodeChatPersistenceWriteKey.ForMessage(correlation.ConversationId, correlation.MessageId),
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(correlation.ConversationId, correlation.MessageId),
             async (dbContext, token) =>
             {
                 var current = await ReadMessageAsync(dbContext, correlation.ConversationId, correlation.MessageId, token).ConfigureAwait(false)
@@ -371,12 +353,12 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                    UPDATE messages
-                    SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
-                    WHERE conversation_id = $conversation_id
-                      AND message_id = $message_id
-                      AND request_id = $request_id;
-                    """;
+                                      UPDATE messages
+                                      SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
+                                      WHERE conversation_id = $conversation_id
+                                        AND message_id = $message_id
+                                        AND request_id = $request_id;
+                                      """;
                 AddParameter(command, "$content", Encode(nextContent));
                 AddParameter(command, "$metadata_json", metadata);
                 AddParameter(command, "$updated_at_utc", updatedAtUtc);
@@ -423,11 +405,11 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
-            SELECT message_id, conversation_id, request_id, sequence, role, content, metadata_json, status, created_at_utc, updated_at_utc, error
-            FROM messages
-            WHERE conversation_id = $conversation_id
-            ORDER BY sequence ASC;
-            """;
+                              SELECT message_id, conversation_id, request_id, sequence, role, content, metadata_json, status, created_at_utc, updated_at_utc, error
+                              FROM messages
+                              WHERE conversation_id = $conversation_id
+                              ORDER BY sequence ASC;
+                              """;
         AddParameter(command, "$conversation_id", conversationId);
 
         await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
@@ -439,8 +421,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 ? null
                 : Decode(await reader.GetFieldValueAsync<byte[]>(6, cancellationToken).ConfigureAwait(false));
             var metadata = DeserializeMetadata(metadataJson);
-            messages.Add(new NodeChatPersistedMessageDto(
-                Guid.Parse(reader.GetString(0)),
+            messages.Add(new NodeChatPersistedMessageDto(Guid.Parse(reader.GetString(0)),
                 Guid.Parse(reader.GetString(1)),
                 await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(2)),
                 reader.GetInt32(3),
@@ -470,8 +451,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             var content = await reader.IsDBNullAsync(5, cancellationToken).ConfigureAwait(false)
                 ? null
                 : Decode(await reader.GetFieldValueAsync<byte[]>(5, cancellationToken).ConfigureAwait(false));
-            conversations.Add(new NodeChatConversationSummaryDto(
-                Guid.Parse(reader.GetString(0)),
+            conversations.Add(new NodeChatConversationSummaryDto(Guid.Parse(reader.GetString(0)),
                 await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
                 reader.GetInt64(2),
                 reader.GetInt64(3),
@@ -485,8 +465,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
 
     private static async Task TouchConversationAsync(NodeChatDbContext dbContext, Guid conversationId, long lastSeenUtc, CancellationToken cancellationToken)
     {
-        await dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE conversations SET last_seen_utc = {0} WHERE conversation_id = {1};",
+        await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET last_seen_utc = {0} WHERE conversation_id = {1};",
             [lastSeenUtc, conversationId],
             cancellationToken).ConfigureAwait(false);
     }
@@ -507,9 +486,15 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                || string.Equals(status, NodeChatMessageStatusValues.Interrupted, StringComparison.Ordinal);
     }
 
-    private static byte[] Encode(string value) => Encoding.UTF8.GetBytes(value);
+    private static byte[] Encode(string value)
+    {
+        return Encoding.UTF8.GetBytes(value);
+    }
 
-    private static string Decode(byte[] value) => Encoding.UTF8.GetString(value);
+    private static string Decode(byte[] value)
+    {
+        return Encoding.UTF8.GetString(value);
+    }
 
     private static string ResolveNextContent(string currentContent, string? content, bool replaceContent)
     {
@@ -559,7 +544,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             throw new InvalidOperationException("The node chat database connection was not available.");
         }
 
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -573,7 +558,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         command.Parameters.Add(parameter);
     }
 
-    private static object DbValue(object? value) => value ?? DBNull.Value;
+    private static object DbValue(object? value)
+    {
+        return value ?? DBNull.Value;
+    }
 
     private sealed record NodeChatMessageMetadata(string? MetadataJson, string? Reasoning, string? Model);
 }

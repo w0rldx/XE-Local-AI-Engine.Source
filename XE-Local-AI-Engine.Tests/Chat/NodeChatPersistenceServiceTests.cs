@@ -23,18 +23,20 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("lifecycle.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", 10)).ConfigureAwait(false);
         var userMessageId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, requestId);
 
-        var user = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, " hello ", CreatedAtUtc: 11)).ConfigureAwait(false);
-        var placeholder = await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, requestId, CreatedAtUtc: 12, Model: "llama")).ConfigureAwait(false);
-        var streaming = await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 13).ConfigureAwait(false);
-        var partial = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "Hello", Reasoning: "thinking", UpdatedAtUtc: 14)).ConfigureAwait(false);
-        var appended = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, " world", Reasoning: null, UpdatedAtUtc: 15, ReplaceContent: false)).ConfigureAwait(false);
-        var completed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 16, Content: appended.Content, Model: "llama")).ConfigureAwait(false);
+        var user = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, " hello ", 11)).ConfigureAwait(false);
+        var placeholder = await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, requestId, 12, "llama"))
+                                       .ConfigureAwait(false);
+        var streaming = await service.MarkAssistantStreamingAsync(correlation, 13).ConfigureAwait(false);
+        var partial = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "Hello", "thinking", 14)).ConfigureAwait(false);
+        var appended = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, " world", null, 15, false)).ConfigureAwait(false);
+        var completed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 16, appended.Content, Model: "llama"))
+                                     .ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, user.Status);
         AssertEx.Equal("hello", user.Content);
@@ -60,16 +62,17 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("cancel.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel", null, CreatedAtUtc: 20)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel", null, 20)).ConfigureAwait(false);
         var targetMessageId = Guid.NewGuid();
         var otherMessageId = Guid.NewGuid();
         var targetCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, targetMessageId, Guid.NewGuid());
         var otherCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, otherMessageId, Guid.NewGuid());
 
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, targetMessageId, targetCorrelation.RequestId, CreatedAtUtc: 21)).ConfigureAwait(false);
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, otherMessageId, otherCorrelation.RequestId, CreatedAtUtc: 22)).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, targetMessageId, targetCorrelation.RequestId, 21))
+                     .ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, otherMessageId, otherCorrelation.RequestId, 22)).ConfigureAwait(false);
 
-        var cancel = await service.CancelMessageAsync(new NodeChatCancelRequest(targetCorrelation, CancelledAtUtc: 23)).ConfigureAwait(false);
+        var cancel = await service.CancelMessageAsync(new NodeChatCancelRequest(targetCorrelation, 23)).ConfigureAwait(false);
 
         AssertEx.True(cancel.Cancelled);
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, cancel.Status);
@@ -84,21 +87,20 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("failed-terminal.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Failure", null, CreatedAtUtc: 24)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Failure", null, 24)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
 
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 25)).ConfigureAwait(false);
-        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 26).ConfigureAwait(false);
-        await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "partial answer", Reasoning: "partial reasoning", UpdatedAtUtc: 27)).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 25)).ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, 26).ConfigureAwait(false);
+        await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "partial answer", "partial reasoning", 27)).ConfigureAwait(false);
 
-        var failed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-            correlation,
+        var failed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
             NodeChatMessageStatusValues.Failed,
-            UpdatedAtUtc: 28,
-            Content: "partial answer",
-            Reasoning: "partial reasoning",
-            Error: "local-chat-stream-failed")).ConfigureAwait(false);
+            28,
+            "partial answer",
+            "partial reasoning",
+            "local-chat-stream-failed")).ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var loadedAssistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
@@ -114,12 +116,12 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("list.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
-        var keep = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Keep", null, CreatedAtUtc: 30)).ConfigureAwait(false);
-        var purge = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Purge", null, CreatedAtUtc: 31)).ConfigureAwait(false);
+        var keep = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Keep", null, 30)).ConfigureAwait(false);
+        var purge = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Purge", null, 31)).ConfigureAwait(false);
 
-        var second = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(keep.ConversationId, Guid.NewGuid(), "second visible", CreatedAtUtc: 33)).ConfigureAwait(false);
-        var first = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(keep.ConversationId, Guid.NewGuid(), "first visible", CreatedAtUtc: 32)).ConfigureAwait(false);
-        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(purge.ConversationId, DeletedAtUtc: 34)).ConfigureAwait(false);
+        var second = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(keep.ConversationId, Guid.NewGuid(), "second visible", 33)).ConfigureAwait(false);
+        var first = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(keep.ConversationId, Guid.NewGuid(), "first visible", 32)).ConfigureAwait(false);
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(purge.ConversationId, 34)).ConfigureAwait(false);
 
         var summaries = await service.ListConversationsAsync(new NodeChatListConversationsRequest()).ConfigureAwait(false);
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(keep.ConversationId).ConfigureAwait(false));
@@ -137,11 +139,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         await using var provider = await BuildProviderAsync("delete.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete", null, CreatedAtUtc: 40)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Delete", null, 40)).ConfigureAwait(false);
 
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 41)).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, Guid.NewGuid(), Guid.NewGuid(), 41)).ConfigureAwait(false);
 
-        var result = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 42)).ConfigureAwait(false);
+        var result = await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, 42)).ConfigureAwait(false);
         var loaded = await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false);
 
         AssertEx.True(result.CancelRequested);
@@ -157,7 +159,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
         services.AddSingleton<NodeChatPersistenceWriter>();
 
-        var provider = services.BuildServiceProvider(validateScopes: true);
+        var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
         await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);

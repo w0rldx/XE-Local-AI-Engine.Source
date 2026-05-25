@@ -15,8 +15,7 @@ public sealed class NodeChatMigrationRecoveryService
     private readonly NodeChatMigrationRecoveryOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public NodeChatMigrationRecoveryService(
-        IServiceScopeFactory scopeFactory,
+    public NodeChatMigrationRecoveryService(IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         IOptions<NodeChatMigrationRecoveryOptions> options,
         ILogger<NodeChatMigrationRecoveryService> logger)
@@ -39,8 +38,7 @@ public sealed class NodeChatMigrationRecoveryService
             return;
         }
 
-        _logger.LogWarning(
-            "Node SQLite migration attempt timed out after {Timeout}. Recovering possible stale {LockTable} table before one retry.",
+        _logger.LogWarning("Node SQLite migration attempt timed out after {Timeout}. Recovering possible stale {LockTable} table before one retry.",
             _options.MigrationAttemptTimeout,
             EfMigrationsLockTableName);
 
@@ -48,8 +46,7 @@ public sealed class NodeChatMigrationRecoveryService
 
         if (!await TryMigrateOnceAsync(cancellationToken).ConfigureAwait(false))
         {
-            throw new TimeoutException(
-                $"Node SQLite migration still did not complete within {_options.MigrationAttemptTimeout} after clearing {EfMigrationsLockTableName}.");
+            throw new TimeoutException($"Node SQLite migration still did not complete within {_options.MigrationAttemptTimeout} after clearing {EfMigrationsLockTableName}.");
         }
     }
 
@@ -77,8 +74,7 @@ public sealed class NodeChatMigrationRecoveryService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-        await dbContext.Database.ExecuteSqlRawAsync(
-            $"DROP TABLE IF EXISTS \"{EfMigrationsLockTableName}\";",
+        await dbContext.Database.ExecuteSqlRawAsync($"DROP TABLE IF EXISTS \"{EfMigrationsLockTableName}\";",
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -108,8 +104,7 @@ public sealed class NodeChatMigrationRecoveryService
 
             if (DateTimeOffset.UtcNow >= deadline)
             {
-                throw new InvalidOperationException(
-                    $"Could not acquire node SQLite migration startup lock '{lockPath}'. Another node process may be applying migrations.");
+                throw new InvalidOperationException($"Could not acquire node SQLite migration startup lock '{lockPath}'. Another node process may be applying migrations.");
             }
 
             await Task.Delay(pollInterval, cancellationToken).ConfigureAwait(false);
