@@ -133,7 +133,7 @@ export function RuntimeManager() {
   useEffect(() => stopLogFollow, [stopLogFollow]);
 
   return (
-    <Container size="xl" py="lg">
+    <Container fluid py="lg">
       <Stack gap="lg">
         <Group justify="space-between" align="flex-start">
           <Stack gap={4}>

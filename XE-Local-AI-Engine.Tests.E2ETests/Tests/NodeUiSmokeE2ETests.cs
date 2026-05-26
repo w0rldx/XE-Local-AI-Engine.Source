@@ -39,4 +39,21 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
         // Phase 6 will replace this with the real setup/login browser flow.
         await Expect(Page.GetByText("qwen3.5:0.8b").First).ToBeVisibleAsync();
     }
+
+    [Test]
+    [Category("Smoke")]
+    public async Task Root_Route_Renders_Home_Welcome()
+    {
+        await Page.GotoAsync($"{NodeAppUrl}/", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
+
+        // Root "/" is the _layout index route rendering the Home page.
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Welcome!"
+            }))
+            .ToBeVisibleAsync();
+    }
 }
