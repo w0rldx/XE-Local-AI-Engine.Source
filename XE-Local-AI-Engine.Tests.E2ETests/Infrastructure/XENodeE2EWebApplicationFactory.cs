@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.AI;
@@ -15,6 +16,7 @@ using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -35,6 +37,15 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
     private static readonly SemaphoreSlim HostStartupLock = new(1, 1);
+
+    /// <summary>Email of the admin user seeded into the node Identity DB for browser login in E2E.</summary>
+    public const string AdminEmail = "e2e-admin@example.test";
+
+    /// <summary>
+    ///     Password of the seeded admin. Meets the node policy (>= 12 chars, upper/lower/digit/symbol).
+    ///     Used by <c>XEE2ETestBase</c> to drive the real /login flow before each test.
+    /// </summary>
+    public const string AdminPassword = "E2eAdminPassw0rd!";
 
     private readonly FakeOllamaServer _fakeOllamaServer;
 
@@ -128,7 +139,44 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             throw new InvalidOperationException("Kestrel server address was not resolved during XE node E2E factory initialization.");
         }
 
-        await Task.CompletedTask.ConfigureAwait(false);
+        // Seed the single admin so the SPA presents /login (not the one-time /setup screen) and
+        // browser tests can authenticate with a known password. Identity migrations + the Admin role
+        // are applied by the host startup pipeline (Program.ApplyNodeIdentityMigrationsAsync) before
+        // this runs. Idempotent: the PerTestSession factory initializes once per run.
+        await SeedAdminUserAsync().ConfigureAwait(false);
+    }
+
+    private async Task SeedAdminUserAsync()
+    {
+        using var scope = Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<NodeUser>>();
+
+        if (await userManager.FindByEmailAsync(AdminEmail).ConfigureAwait(false) is not null)
+        {
+            return;
+        }
+
+        var admin = new NodeUser
+        {
+            Email = AdminEmail,
+            UserName = AdminEmail,
+            SetupCompleted = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        var createResult = await userManager.CreateAsync(admin, AdminPassword).ConfigureAwait(false);
+        if (!createResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Failed to seed E2E admin user: " + string.Join(", ", createResult.Errors.Select(error => error.Description)));
+        }
+
+        var roleResult = await userManager.AddToRoleAsync(admin, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
+        if (!roleResult.Succeeded)
+        {
+            throw new InvalidOperationException(
+                "Failed to assign Admin role to E2E admin user: " + string.Join(", ", roleResult.Errors.Select(error => error.Description)));
+        }
     }
 
     protected override IHost CreateHost(IHostBuilder builder)

@@ -63,6 +63,30 @@ public abstract class XEE2ETestBase : PageTest
         }).ConfigureAwait(false);
     }
 
+    [Before(Test)]
+    public async Task AuthenticateAsync()
+    {
+        // The harness seeds a single admin (XENodeE2EWebApplicationFactory.AdminEmail / AdminPassword),
+        // so a fresh browser context lands on /login (not the one-time /setup screen). Drive the real
+        // password login so the context holds the HttpOnly refresh cookie; the SPA's session-restore
+        // then re-mints the in-memory access token on every full navigation a test performs afterwards.
+        await Page.GotoAsync(NodeAppUrl, new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        }).ConfigureAwait(false);
+
+        // Target the input directly: the login form has a single password field, and Mantine's
+        // PasswordInput also renders a "Toggle password visibility" button plus a required-asterisk
+        // label, so GetByLabel("Password") is either ambiguous (matches the toggle) or empty (exact
+        // misses the asterisk). The type='password' input is unique on this page.
+        await Page.Locator("input[type='password']")
+            .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword).ConfigureAwait(false);
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign in" }).ClickAsync().ConfigureAwait(false);
+
+        // On success the SPA navigates away from /login.
+        await Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);
+    }
+
     [After(Test)]
     public async Task StopTracingAsync(TestContext context)
     {
