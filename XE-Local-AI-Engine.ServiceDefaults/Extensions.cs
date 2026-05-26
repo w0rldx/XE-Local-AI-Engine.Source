@@ -68,7 +68,7 @@ public static class Extensions
             return builder;
         }
 
-        private TBuilder AddOpenTelemetryExporters()
+        private void AddOpenTelemetryExporters()
         {
             var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
 
@@ -76,8 +76,6 @@ public static class Extensions
             {
                 builder.Services.AddOpenTelemetry().UseOtlpExporter();
             }
-
-            return builder;
         }
     }
 }
