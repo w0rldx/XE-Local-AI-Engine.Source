@@ -41,7 +41,6 @@ vi.mock("@microsoft/signalr", () => ({
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		return signalRMock.builder;
 	}),
-	HttpTransportType: { LongPolling: 4 },
 	LogLevel: { Warning: 3 },
 }));
 
@@ -92,7 +91,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		});
 	});
 
-	it("uses long polling for streaming", async () => {
+	it("lets SignalR negotiate the best transport for streaming", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
@@ -101,9 +100,9 @@ describe("nodeChatAdapter SignalR streaming", () => {
 			expect.stringContaining("/api/local/v1/chat/hub"),
 			expect.objectContaining({
 				accessTokenFactory: expect.any(Function),
-				transport: 4,
 			}),
 		);
+		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1]).not.toHaveProperty("transport");
 		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("");
 		expect(signalRMock.connection.stream).toHaveBeenCalledWith("SendMessage", streamRequest);
 

@@ -1,4 +1,4 @@
-import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
+import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -63,7 +63,6 @@ function signalRStream<T>(request: NodeChatStreamRequestDto, signal: AbortSignal
 		async *[Symbol.asyncIterator](): AsyncIterator<T> {
 			const connection = new HubConnectionBuilder()
 				.withUrl(buildLocalApiUrl("chat/hub"), {
-					transport: HttpTransportType.LongPolling,
 					accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
 				})
 				.configureLogging(LogLevel.Warning)
