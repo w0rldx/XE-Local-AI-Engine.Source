@@ -97,7 +97,7 @@ export function NodeBinding() {
 	const canCancel = session !== undefined && pollMutation.isPending;
 
 	return (
-		<Container size="lg" py="lg">
+		<Container fluid py="lg">
 			<Stack gap="lg">
 				<Stack gap={4}>
 					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
