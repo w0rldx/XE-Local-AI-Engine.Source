@@ -265,7 +265,11 @@ public sealed class InvocationRunner : IInvocationRunner
                 }, invocationToken).ConfigureAwait(false);
             }
 
-            await dispatcher.ReportInvocationCompletedAsync(package.InvocationId).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
+                usageSnapshot?.InputTokens,
+                usageSnapshot?.OutputTokens,
+                usageSnapshot?.TotalTokens,
+                usageSnapshot?.ReasoningTokens).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {

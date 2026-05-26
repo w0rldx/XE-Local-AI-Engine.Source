@@ -420,13 +420,17 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         return Task.CompletedTask;
     }
 
-    public Task ReportInvocationCompletedAsync(Guid invocationId)
+    public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null)
     {
         UpdateInvocation(invocationId,
-            static state =>
+            state =>
             {
                 state.Status = InvocationStatus.Completed;
                 state.CompletedAt = DateTimeOffset.UtcNow;
+                state.InputTokens = inputTokens;
+                state.OutputTokens = outputTokens;
+                state.TotalTokens = totalTokens;
+                state.ReasoningTokens = reasoningTokens;
                 state.PendingApproval = null;
                 state.PendingToolCalls = [];
                 return state;
@@ -560,6 +564,10 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
             Error = state.Error,
             FailureCategory = state.FailureCategory,
             ModelUsed = state.ModelUsed,
+            InputTokens = state.InputTokens,
+            OutputTokens = state.OutputTokens,
+            TotalTokens = state.TotalTokens,
+            ReasoningTokens = state.ReasoningTokens,
             PendingApproval = state.PendingApproval,
             LastApprovalResolution = state.LastApprovalResolution,
             PendingToolCalls = [.. state.PendingToolCalls],

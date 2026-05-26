@@ -16,6 +16,43 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class NodeChatStreamServiceTests
 {
     [Test]
+    public async Task SendMessageAsync_WhenInvocationReportsUsage_StreamsTerminalTokenCounts()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var terminalRequest = default(NodeChatTerminalizeMessageRequest);
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+        var events = new List<ChatStreamEvent>();
+
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        var completed = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantCompleted);
+        AssertEx.Equal(10, completed.InputTokens);
+        AssertEx.Equal(3, completed.OutputTokens);
+        AssertEx.Equal(13, completed.TotalTokens);
+        AssertEx.Equal(1, completed.ReasoningTokens);
+        AssertEx.Equal(10, terminalRequest!.InputCount);
+        AssertEx.Equal(13, terminalRequest.TotalCount);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenConsumerCancelsEnumeration_TerminalizesAssistantAsCancelled()
     {
         var conversationId = Guid.NewGuid();
@@ -192,6 +229,48 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
+    private sealed class CompletingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
+            await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
     private sealed class RecordingWorkerEventDispatcher : IWorkerEventDispatcher
     {
         public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
@@ -278,12 +357,16 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationCompletedAsync(Guid invocationId)
+        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null)
         {
             if (CurrentInvocation is not null)
             {
                 CurrentInvocation.Status = InvocationStatus.Completed;
                 CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
+                CurrentInvocation.InputTokens = inputTokens;
+                CurrentInvocation.OutputTokens = outputTokens;
+                CurrentInvocation.TotalTokens = totalTokens;
+                CurrentInvocation.ReasoningTokens = reasoningTokens;
                 RaiseChanged();
             }
 

@@ -138,6 +138,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             null,
             null,
             null,
+            null,
+            null,
+            null,
+            null,
             true,
             cancellationToken);
     }
@@ -151,6 +155,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             null,
             request.Content,
             request.Reasoning,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             request.ReplaceContent,
@@ -172,6 +180,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             request.Reasoning,
             request.Error,
             request.Model,
+            request.InputCount,
+            request.OutputCount,
+            request.TotalCount,
+            request.ReasoningCount,
             true,
             cancellationToken);
     }
@@ -183,6 +195,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         var message = await UpdateCorrelatedMessageAsync(request.Correlation,
             request.CancelledAtUtc,
             NodeChatMessageStatusValues.Cancelled,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -294,7 +310,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             async (dbContext, token) =>
             {
                 var sequence = await NextSequenceAsync(dbContext, conversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(metadataJson, reasoning, model);
+                var metadata = SerializeMetadata(metadataJson, reasoning, model, null, null, null, null);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -329,6 +345,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         string? reasoning,
         string? error,
         string? model,
+        int? inputTokens,
+        int? outputTokens,
+        int? totalTokens,
+        int? reasoningTokens,
         bool replaceContent,
         CancellationToken cancellationToken)
     {
@@ -349,7 +369,11 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 var nextModel = model ?? current.Model;
                 var nextStatus = status ?? current.Status;
                 var nextError = error ?? current.Error;
-                var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel);
+                var nextInputTokens = inputTokens ?? current.InputCount;
+                var nextOutputTokens = outputTokens ?? current.OutputCount;
+                var nextTotalTokens = totalTokens ?? current.TotalCount;
+                var nextReasoningTokens = reasoningTokens ?? current.ReasoningCount;
+                var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -379,7 +403,11 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     Status = nextStatus,
                     UpdatedAtUtc = updatedAtUtc,
                     Model = nextModel,
-                    Error = nextError
+                    Error = nextError,
+                    InputCount = nextInputTokens,
+                    OutputCount = nextOutputTokens,
+                    TotalCount = nextTotalTokens,
+                    ReasoningCount = nextReasoningTokens
                 };
             },
             cancellationToken).ConfigureAwait(false);
@@ -433,7 +461,11 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 reader.GetInt64(9),
                 metadata.Model,
                 await reader.IsDBNullAsync(10, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(10),
-                metadata.MetadataJson));
+                metadata.MetadataJson,
+                metadata.InputCount,
+                metadata.OutputCount,
+                metadata.TotalCount,
+                metadata.ReasoningCount));
         }
 
         return messages;
@@ -517,24 +549,30 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         return trimmed.Length <= 120 ? trimmed : trimmed[..120];
     }
 
-    private static byte[]? SerializeMetadata(string? metadataJson, string? reasoning, string? model)
+    private static byte[]? SerializeMetadata(string? metadataJson,
+        string? reasoning,
+        string? model,
+        int? inputTokens,
+        int? outputTokens,
+        int? totalTokens,
+        int? reasoningTokens)
     {
-        if (metadataJson is null && reasoning is null && model is null)
+        if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null)
         {
             return null;
         }
 
-        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model), MetadataJsonOptions));
+        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens), MetadataJsonOptions));
     }
 
     private static NodeChatMessageMetadata DeserializeMetadata(string? metadataJson)
     {
         if (string.IsNullOrWhiteSpace(metadataJson))
         {
-            return new NodeChatMessageMetadata(null, null, null);
+            return new NodeChatMessageMetadata(null, null, null, null, null, null, null);
         }
 
-        return JsonSerializer.Deserialize<NodeChatMessageMetadata>(metadataJson, MetadataJsonOptions) ?? new NodeChatMessageMetadata(metadataJson, null, null);
+        return JsonSerializer.Deserialize<NodeChatMessageMetadata>(metadataJson, MetadataJsonOptions) ?? new NodeChatMessageMetadata(metadataJson, null, null, null, null, null, null);
     }
 
     private static async Task OpenIfNeededAsync(DbConnection? connection, CancellationToken cancellationToken)
@@ -563,5 +601,12 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         return value ?? DBNull.Value;
     }
 
-    private sealed record NodeChatMessageMetadata(string? MetadataJson, string? Reasoning, string? Model);
+    private sealed record NodeChatMessageMetadata(
+        string? MetadataJson,
+        string? Reasoning,
+        string? Model,
+        int? InputCount,
+        int? OutputCount,
+        int? TotalCount,
+        int? ReasoningCount);
 }

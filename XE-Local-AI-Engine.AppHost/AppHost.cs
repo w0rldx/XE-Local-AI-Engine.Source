@@ -126,7 +126,10 @@ builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithEnvironment("VITE_PROXY_TARGET", $"{app.GetEndpoint("https")}")
        .WithRunScript("dev")
        .WithBuildScript("build")
-       .WithPnpm();
+       .WithPnpm()
+       .WithBrowserLogs(
+           browser: "/usr/bin/chromium-browser",
+           userDataMode: BrowserUserDataMode.Isolated);
 
 if (hostAgentLinux is not null && hostAgentHmacSecret is not null)
 {

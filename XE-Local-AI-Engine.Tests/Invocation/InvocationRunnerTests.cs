@@ -183,7 +183,8 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenPlainContextReceivesUsageContent_SendsAuthoritativeTokenCounts()
     {
         var sender = new MockHubMessageSender();
-        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: null),
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: null),
             (Text: " world", Usage: new UsageDetails
             {
                 InputTokenCount = 10,
@@ -198,6 +199,7 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(10, sender.SentCompletions[0].InputTokens);
         AssertEx.Equal(2, sender.SentCompletions[0].OutputTokens);
         AssertEx.Equal(12, sender.SentCompletions[0].TokensUsed);
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId, 10, 2, 12, null);
     }
 
     [Test]

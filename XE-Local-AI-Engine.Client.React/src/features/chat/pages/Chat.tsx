@@ -9,9 +9,10 @@ import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { appendOptimisticNodeChatSend, applyNodeChatStreamEvent, markNodeChatStreamTerminated } from "@/features/chat/api/NodeChatStreamState";
 import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatConversationModel, ChatStreamingState, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
-import { listLocalModels } from "@/features/models/api/LocalModelsApi";
+import { getLocalModelDetails, listLocalModels } from "@/features/models/api/LocalModelsApi";
 import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
 import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
@@ -106,6 +107,20 @@ export function Chat() {
 
 		return [localDefaultModelOption, ...response.items.map((model) => toModelOption(model, response.isAvailable))];
 	}, [localModelsQuery.data]);
+	const selectedModelOption = useMemo(
+		() => modelOptions.find((option) => option.value === selectedModel),
+		[modelOptions, selectedModel],
+	);
+	const selectedConcreteModelName = useMemo(() => {
+		const requestModel = toNodeChatRequestModel(selectedModel);
+		return requestModel ?? localModelsQuery.data?.selectedModelName ?? localModelsQuery.data?.configuredDefaultModelName ?? "";
+	}, [localModelsQuery.data?.configuredDefaultModelName, localModelsQuery.data?.selectedModelName, selectedModel]);
+
+	const selectedModelDetailsQuery = useQuery({
+		queryKey: localModelsQueryKeys.details(selectedConcreteModelName),
+		queryFn: ({ signal }) => getLocalModelDetails(selectedConcreteModelName, { signal }),
+		enabled: selectedConcreteModelName.length > 0,
+	});
 
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
@@ -131,6 +146,10 @@ export function Chat() {
 		() => mergeSelectedConversation(conversations, selectedConversationQuery.data),
 		[conversations, selectedConversationQuery.data],
 	);
+	const activeConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
+	const usedContextTokens = useMemo(() => deriveUsedContextTokens(activeConversation?.messages ?? []), [activeConversation?.messages]);
+	const effectiveMaxContextTokens = selectedModelDetailsQuery.data?.maxContextTokens ?? undefined;
+	const contextModelLabel = selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
 	const isLoadingInitialConversations = conversationsQuery.isLoading && displayConversations.length === 0;
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
@@ -315,8 +334,10 @@ export function Chat() {
 				availableReasoningEfforts={["none", "low", "medium", "high"]}
 				capabilities={chatUiCapabilities}
 				contextUsage={{
-					isAuthoritative: true,
-					modelLabel: "Local runtime default",
+					usedTokens: usedContextTokens,
+					maxTokens: effectiveMaxContextTokens,
+					isAuthoritative: usedContextTokens !== undefined,
+					modelLabel: contextModelLabel,
 					nodeLabel: "Local node",
 				}}
 				streamingMessage={streamingMessage}

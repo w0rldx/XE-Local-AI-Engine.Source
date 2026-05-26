@@ -60,14 +60,14 @@ describe("node chat stream state", () => {
 		const partial = applyNodeChatStreamEvent(optimistic, streamEvent({ content: "hello back", delta: "hello back" }));
 		const terminal = applyNodeChatStreamEvent(
 			partial.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.assistantCompleted, status: "completed", content: "hello back", delta: null }),
+			streamEvent({ type: nodeChatStreamEventTypes.assistantCompleted, status: "completed", content: "hello back", delta: null, inputTokens: 10, outputTokens: 3, totalTokens: 13 }),
 		);
 
 		expect(partial.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "hello back", isActive: true });
-		expect(terminal.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "hello back", isActive: false });
+		expect(terminal.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "hello back", isActive: false, totalTokens: 13 });
 		expect(terminal.conversation.messages).toMatchObject([
 			{ id: "user-1", role: "user", content: "hello", status: "completed" },
-			{ id: "assistant-1", role: "assistant", content: "hello back", status: "completed" },
+			{ id: "assistant-1", role: "assistant", content: "hello back", status: "completed", inputTokens: 10, outputTokens: 3, totalTokens: 13 },
 		]);
 	});
 

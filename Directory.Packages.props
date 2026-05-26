@@ -3,6 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.3.5-preview.1.26270.6" />
     <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.3.5" />
     <PackageVersion Include="Avalonia" Version="12.0.3" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.3" />

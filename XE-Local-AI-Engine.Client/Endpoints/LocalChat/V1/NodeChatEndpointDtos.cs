@@ -101,6 +101,14 @@ public sealed class NodeChatMessageResponse
     public string? Model { get; init; }
 
     public string? Error { get; init; }
+
+    public int? InputTokens { get; init; }
+
+    public int? OutputTokens { get; init; }
+
+    public int? TotalTokens { get; init; }
+
+    public int? ReasoningTokens { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse
@@ -174,7 +182,11 @@ internal static class NodeChatEndpointDtoMapper
             CreatedAtUtc = message.CreatedAtUtc,
             UpdatedAtUtc = message.UpdatedAtUtc,
             Model = message.Model,
-            Error = message.Error
+            Error = message.Error,
+            InputTokens = message.InputCount,
+            OutputTokens = message.OutputCount,
+            TotalTokens = message.TotalCount,
+            ReasoningTokens = message.ReasoningCount
         };
     }
 }

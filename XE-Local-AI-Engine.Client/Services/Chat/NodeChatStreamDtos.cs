@@ -33,4 +33,8 @@ public sealed record ChatStreamEvent(
     string? Content = null,
     string? Reasoning = null,
     string? Error = null,
-    string? Model = null);
+    string? Model = null,
+    int? InputTokens = null,
+    int? OutputTokens = null,
+    int? TotalTokens = null,
+    int? ReasoningTokens = null);

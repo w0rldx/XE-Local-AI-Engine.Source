@@ -81,7 +81,11 @@ public sealed record NodeChatTerminalizeMessageRequest(
     string? Content = null,
     string? Reasoning = null,
     string? Error = null,
-    string? Model = null);
+    string? Model = null,
+    int? InputCount = null,
+    int? OutputCount = null,
+    int? TotalCount = null,
+    int? ReasoningCount = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,
@@ -105,7 +109,11 @@ public sealed record NodeChatPersistedMessageDto(
     long UpdatedAtUtc,
     string? Model,
     string? Error,
-    string? MetadataJson);
+    string? MetadataJson,
+    int? InputCount = null,
+    int? OutputCount = null,
+    int? TotalCount = null,
+    int? ReasoningCount = null);
 
 public sealed record NodeChatCancelResultDto(
     NodeChatMessageCorrelation Correlation,
