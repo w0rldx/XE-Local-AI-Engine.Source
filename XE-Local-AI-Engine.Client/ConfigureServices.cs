@@ -175,14 +175,18 @@ public static class ConfigureServices
                 .Validate(static options => options.Jwt.AccessTokenMinutes is >= 1 and <= 1440, "NodeAuth:Jwt:AccessTokenMinutes must be between 1 and 1440.")
                 .Validate(static options => options.RefreshTokenDays is >= 1 and <= 365, "NodeAuth:RefreshTokenDays must be between 1 and 365.")
                 .ValidateOnStart();
+        // Production limit is 10/min per client IP. Test environments drive many auth calls from a
+        // single loopback IP (one partition), so relax the cap there to keep E2E/integration runs
+        // deterministic without weakening the production control.
+        var authPermitLimit = builder.Environment.IsEnvironment("Testing") ? 10_000 : 10;
         builder.Services.AddRateLimiter(options =>
         {
             options.AddPolicy(NodeAuthRateLimits.AuthPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(GetRateLimitPartitionKey(httpContext),
-                    static _ => new FixedWindowRateLimiterOptions
+                    _ => new FixedWindowRateLimiterOptions
                     {
                         AutoReplenishment = true,
-                        PermitLimit = 10,
+                        PermitLimit = authPermitLimit,
                         QueueLimit = 0,
                         Window = TimeSpan.FromMinutes(1)
                     }));
