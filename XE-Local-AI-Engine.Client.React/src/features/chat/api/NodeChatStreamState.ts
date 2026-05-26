@@ -120,6 +120,10 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 				content: currentAssistant?.content ?? event.content ?? "",
 				reasoning: currentAssistant?.reasoning ?? event.reasoning ?? undefined,
 				isActive: true,
+				inputTokens: currentAssistant?.inputTokens ?? event.inputTokens ?? undefined,
+				outputTokens: currentAssistant?.outputTokens ?? event.outputTokens ?? undefined,
+				totalTokens: currentAssistant?.totalTokens ?? event.totalTokens ?? undefined,
+				reasoningTokens: currentAssistant?.reasoningTokens ?? event.reasoningTokens ?? undefined,
 			},
 			isTerminal: false,
 		};
@@ -143,6 +147,10 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 		sortOrder: existing?.sortOrder ?? maxSortOrder(conversation.messages) + 1,
 		model: event.model ?? existing?.model,
 		error: event.error ?? undefined,
+		inputTokens: event.inputTokens ?? existing?.inputTokens,
+		outputTokens: event.outputTokens ?? existing?.outputTokens,
+		totalTokens: event.totalTokens ?? existing?.totalTokens,
+		reasoningTokens: event.reasoningTokens ?? existing?.reasoningTokens,
 	};
 	const nextConversation: ChatConversationModel = {
 		...conversation,
@@ -161,6 +169,10 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 			reasoning: reasoning ?? undefined,
 			isActive: !isTerminal,
 			error: event.error ?? undefined,
+			inputTokens: assistantMessage.inputTokens,
+			outputTokens: assistantMessage.outputTokens,
+			totalTokens: assistantMessage.totalTokens,
+			reasoningTokens: assistantMessage.reasoningTokens,
 		},
 		isTerminal,
 	};
@@ -186,6 +198,10 @@ export function markNodeChatStreamTerminated(
 		sortOrder: existing?.sortOrder ?? maxSortOrder(conversation.messages) + 1,
 		model: existing?.model,
 		error,
+		inputTokens: existing?.inputTokens,
+		outputTokens: existing?.outputTokens,
+		totalTokens: existing?.totalTokens,
+		reasoningTokens: existing?.reasoningTokens,
 	};
 	const nextConversation = {
 		...conversation,
@@ -203,6 +219,10 @@ export function markNodeChatStreamTerminated(
 			reasoning: assistantMessage.reasoning,
 			isActive: false,
 			error,
+			inputTokens: assistantMessage.inputTokens,
+			outputTokens: assistantMessage.outputTokens,
+			totalTokens: assistantMessage.totalTokens,
+			reasoningTokens: assistantMessage.reasoningTokens,
 		},
 		isTerminal: true,
 	};

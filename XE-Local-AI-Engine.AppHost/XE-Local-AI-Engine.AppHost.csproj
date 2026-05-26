@@ -1,5 +1,5 @@
 <Project>
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.3.5"/>
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.3.5" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,15 +8,20 @@
     <UserSecretsId>2b47b277-b0a5-4afd-90bf-b644cb1b1228</UserSecretsId>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);ASPIREBROWSERLOGS001</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Linux\XE-Local-AI-Engine.HostAgent.Linux.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj" />
+    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Linux\XE-Local-AI-Engine.HostAgent.Linux.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost"/>
-    <PackageReference Include="Aspire.Hosting.JavaScript"/>
-    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama"/>
-    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Sqlite"/>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.Browsers" />
+    <PackageReference Include="Aspire.Hosting.JavaScript" />
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama" />
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Sqlite" />
   </ItemGroup>
 </Project>

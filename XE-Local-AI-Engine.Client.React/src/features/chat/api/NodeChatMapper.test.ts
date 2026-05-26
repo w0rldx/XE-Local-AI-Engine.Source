@@ -46,6 +46,10 @@ describe("node chat mapper", () => {
 					updatedAtUtc: 1_700_000_002_000,
 					model: "local-model",
 					error: null,
+					inputTokens: 10,
+					outputTokens: 2,
+					totalTokens: 12,
+					reasoningTokens: 1,
 				},
 			],
 		});
@@ -64,6 +68,10 @@ describe("node chat mapper", () => {
 				sortOrder: 2,
 				model: "local-model",
 				error: undefined,
+				inputTokens: 10,
+				outputTokens: 2,
+				totalTokens: 12,
+				reasoningTokens: 1,
 			},
 		]);
 	});

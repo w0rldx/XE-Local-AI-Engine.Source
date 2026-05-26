@@ -30,6 +30,14 @@ public sealed class InvocationState
 
     public string? ModelUsed { get; set; }
 
+    public int? InputTokens { get; set; }
+
+    public int? OutputTokens { get; set; }
+
+    public int? TotalTokens { get; set; }
+
+    public int? ReasoningTokens { get; set; }
+
     public InvocationApprovalState? PendingApproval { get; set; }
 
     public InvocationApprovalResolutionState? LastApprovalResolution { get; set; }

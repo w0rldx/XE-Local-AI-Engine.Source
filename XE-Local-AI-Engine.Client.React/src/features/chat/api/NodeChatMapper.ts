@@ -40,6 +40,10 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		sortOrder: dto.sequence,
 		model: dto.model ?? undefined,
 		error: dto.error ?? undefined,
+		inputTokens: dto.inputTokens ?? undefined,
+		outputTokens: dto.outputTokens ?? undefined,
+		totalTokens: dto.totalTokens ?? undefined,
+		reasoningTokens: dto.reasoningTokens ?? undefined,
 	};
 }
 

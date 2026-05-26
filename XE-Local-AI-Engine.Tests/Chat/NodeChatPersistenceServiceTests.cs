@@ -35,8 +35,16 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var streaming = await service.MarkAssistantStreamingAsync(correlation, 13).ConfigureAwait(false);
         var partial = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "Hello", "thinking", 14)).ConfigureAwait(false);
         var appended = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, " world", null, 15, false)).ConfigureAwait(false);
-        var completed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 16, appended.Content, Model: "llama"))
-                                     .ConfigureAwait(false);
+        var completed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                16,
+                appended.Content,
+                Model: "llama",
+                InputCount: 10,
+                OutputCount: 3,
+                TotalCount: 13,
+                ReasoningCount: 1))
+                                      .ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, user.Status);
         AssertEx.Equal("hello", user.Content);
@@ -48,6 +56,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal("Hello world", appended.Content);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, completed.Status);
         AssertEx.Equal(16L, completed.UpdatedAtUtc);
+        AssertEx.Equal(13, completed.TotalCount);
 
         var loaded = await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false);
         var messages = AssertEx.NotNull(loaded).Messages;
@@ -55,6 +64,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal(userMessageId, messages[0].MessageId);
         AssertEx.Equal(assistantMessageId, messages[1].MessageId);
         AssertEx.Equal("Hello world", messages[1].Content);
+        AssertEx.Equal(10, messages[1].InputCount);
+        AssertEx.Equal(3, messages[1].OutputCount);
+        AssertEx.Equal(13, messages[1].TotalCount);
+        AssertEx.Equal(1, messages[1].ReasoningCount);
     }
 
     [Test]

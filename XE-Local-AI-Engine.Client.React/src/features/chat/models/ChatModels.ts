@@ -30,6 +30,10 @@ export interface ChatMessageModel {
 	sortOrder: number;
 	model?: string;
 	error?: string;
+	inputTokens?: number;
+	outputTokens?: number;
+	totalTokens?: number;
+	reasoningTokens?: number;
 }
 
 export interface ChatConversationModel {
@@ -54,6 +58,10 @@ export interface ChatStreamingState {
 	isDelayed?: boolean;
 	error?: string;
 	failureCategory?: string;
+	inputTokens?: number;
+	outputTokens?: number;
+	totalTokens?: number;
+	reasoningTokens?: number;
 }
 
 export interface ChatTimelineEntry {

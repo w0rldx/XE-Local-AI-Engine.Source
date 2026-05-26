@@ -220,11 +220,15 @@ public sealed class NodeChatStreamService(
                             state.StreamedContent,
                             string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
                             state.Error,
-                            state.ModelUsed ?? requestedModel),
+                            state.ModelUsed ?? requestedModel,
+                            state.InputTokens,
+                            state.OutputTokens,
+                            state.TotalTokens,
+                            state.ReasoningTokens),
                         CancellationToken.None).ConfigureAwait(false);
                     terminalPersisted = true;
 
-                    await eventWriter.WriteAsync(ToMessageEvent(eventType, correlation, persisted, sequence++), CancellationToken.None).ConfigureAwait(false);
+                    await eventWriter.WriteAsync(ToMessageEvent(eventType, correlation, persisted, sequence++, inputTokens: state.InputTokens, outputTokens: state.OutputTokens, totalTokens: state.TotalTokens, reasoningTokens: state.ReasoningTokens), CancellationToken.None).ConfigureAwait(false);
                     break;
                 }
             }
@@ -318,7 +322,11 @@ public sealed class NodeChatStreamService(
         NodeChatPersistedMessageDto message,
         long sequence,
         string? delta = null,
-        string? reasoningDelta = null)
+        string? reasoningDelta = null,
+        int? inputTokens = null,
+        int? outputTokens = null,
+        int? totalTokens = null,
+        int? reasoningTokens = null)
     {
         return new ChatStreamEvent(type,
             correlation.ConversationId,
@@ -332,7 +340,11 @@ public sealed class NodeChatStreamService(
             message.Content,
             message.Reasoning,
             message.Error,
-            message.Model);
+            message.Model,
+            inputTokens ?? message.InputCount,
+            outputTokens ?? message.OutputCount,
+            totalTokens ?? message.TotalCount,
+            reasoningTokens ?? message.ReasoningCount);
     }
 
     private long NowUnixMilliseconds()

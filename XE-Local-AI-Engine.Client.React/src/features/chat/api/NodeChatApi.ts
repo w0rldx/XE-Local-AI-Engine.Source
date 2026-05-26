@@ -50,6 +50,10 @@ export interface NodeChatMessageResponseDto {
 	updatedAtUtc: number;
 	model?: string | null;
 	error?: string | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	totalTokens?: number | null;
+	reasoningTokens?: number | null;
 }
 
 export interface CancelNodeChatMessageRequestDto {
@@ -95,6 +99,10 @@ export interface NodeChatStreamEventDto {
 	reasoning?: string | null;
 	error?: string | null;
 	model?: string | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	totalTokens?: number | null;
+	reasoningTokens?: number | null;
 }
 
 export async function listConversations(
