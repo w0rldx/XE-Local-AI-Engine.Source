@@ -100,14 +100,20 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                              DisplayText = "Scalar API docs",
                              Endpoint = https
                          });
-                         context.Urls.Add(new ResourceUrlAnnotation
-                         {
-                             Url = "/openapi/local/v1/v1.json",
-                             DisplayText = "OpenAPI spec (v1)",
-                             Endpoint = https
-                         });
-                     }
-                 });
+                          context.Urls.Add(new ResourceUrlAnnotation
+                          {
+                              Url = "/openapi/local/v1/v1.json",
+                              DisplayText = "OpenAPI spec (v1)",
+                              Endpoint = https
+                          });
+                          context.Urls.Add(new ResourceUrlAnnotation
+                          {
+                              Url = "/devui",
+                              DisplayText = "Microsoft Agent DevUI",
+                              Endpoint = https
+                          });
+                      }
+                  });
 
 builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithEnvironment("BROWSER", "none")

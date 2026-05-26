@@ -1,5 +1,5 @@
 import type { AxiosRequestConfig } from "axios";
-import { HubConnectionBuilder, HttpTransportType, LogLevel } from "@microsoft/signalr";
+import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
@@ -128,7 +128,6 @@ function signalRStream<T>(hubPath: string, methodName: string, request: unknown,
     async *[Symbol.asyncIterator](): AsyncIterator<T> {
       const connection = new HubConnectionBuilder()
         .withUrl(buildLocalApiUrl(hubPath), {
-          transport: HttpTransportType.LongPolling,
           accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
         })
         .configureLogging(LogLevel.Warning)
