@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using TUnit.Playwright;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>
@@ -49,6 +51,20 @@ public abstract class XEE2ETestBase : PageTest
         var options = base.ContextOptions(testContext) ?? new BrowserNewContextOptions();
         options.IgnoreHTTPSErrors = true;
         return options;
+    }
+
+    [Before(Test)]
+    public void ResetWorkerEventDispatcher()
+    {
+        // The host registers ONE real WorkerEventDispatcher and the harness shares it via
+        // SharedType.PerTestSession. Production never resets CurrentInvocation (it is only assigned),
+        // so a completed Chat test would otherwise leak an invocation into InvocationsPageE2ETests'
+        // empty-state assertion. Clearing it before every test keeps that isolation while letting the
+        // real dispatcher complete local replies. Test-only — no production behavior change.
+        if (Factory.Services.GetRequiredService<IWorkerEventDispatcher>() is WorkerEventDispatcher dispatcher)
+        {
+            dispatcher.ResetForTests();
+        }
     }
 
     [Before(Test)]

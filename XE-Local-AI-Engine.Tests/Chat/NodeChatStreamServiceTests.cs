@@ -213,7 +213,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenConsumerCancelsEnumeration_TerminalizesAssistantAsCancelled()
+    public async Task SendMessageAsync_WhenUserCancelsThroughRegistry_TerminalizesAssistantAsCancelled()
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -222,6 +222,55 @@ public sealed class NodeChatStreamServiceTests
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new StreamingUntilCancelledInvocationRunner(dispatcher);
+        var cancellationRegistry = new NodeChatStreamCancellationRegistry();
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            cancellationRegistry,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        // The stop button is a SEPARATE request that routes through the cancellation registry (the real cancel
+        // path), NOT the client connection token. Trigger it mid-stream and assert the runner-driven Cancelled
+        // terminal is persisted.
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                               "hello",
+                               MessageId: assistantMessageId,
+                               RequestId: requestId)).ConfigureAwait(false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
+            {
+                AssertEx.True(cancellationRegistry.TryCancel(new NodeChatMessageCorrelation(conversationId, assistantMessageId, requestId)),
+                    "Expected the active stream to be registered for cancellation.");
+            }
+        }
+
+        await AssertEx.EventuallyAsync(() => terminalRequest is not null, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, terminalRequest!.Status);
+        AssertEx.Equal(conversationId, terminalRequest.Correlation.ConversationId);
+        AssertEx.Equal(assistantMessageId, terminalRequest.Correlation.MessageId);
+        AssertEx.Equal(requestId, terminalRequest.Correlation.RequestId);
+        AssertEx.Equal("thinking", terminalRequest.Reasoning);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenClientDisconnectsBeforeRunnerCompletes_PersistsCompletedNotInterrupted()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var terminalRequest = default(NodeChatTerminalizeMessageRequest);
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+
+        // The runner publishes a delta, then BLOCKS until the test signals — simulating the runner still working
+        // when the client disconnects. Once released it reports the real Completed terminal.
+        var releaseRunner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new GatedCompletingInvocationRunner(dispatcher, releaseRunner.Task);
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
             new NodeChatMutationGuard(persistence),
@@ -232,27 +281,41 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
-        using var cancellation = new CancellationTokenSource();
+        using var clientCancellation = new CancellationTokenSource();
+        var events = new List<ChatStreamEvent>();
+        var clientDisconnected = false;
 
-        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
-                               "hello",
-                               MessageId: assistantMessageId,
-                               RequestId: requestId),
-                           cancellation.Token).ConfigureAwait(false))
+        try
         {
-            if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
+            await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                                   "hello",
+                                   MessageId: assistantMessageId,
+                                   RequestId: requestId),
+                               clientCancellation.Token).ConfigureAwait(false))
             {
-                await cancellation.CancelAsync().ConfigureAwait(false);
-                break;
+                events.Add(streamEvent);
+
+                // Simulate a SignalR/SSE client disconnect mid-stream: cancel the client token (which cancels the
+                // enumeration) WHILE the runner is still blocked, then release the runner to report Completed.
+                if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta && !clientDisconnected)
+                {
+                    clientDisconnected = true;
+                    await clientCancellation.CancelAsync().ConfigureAwait(false);
+                    releaseRunner.SetResult();
+                }
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Expected: cancelling the client token aborts the SSE enumeration. Persistence must still complete.
+        }
 
-        await AssertEx.EventuallyAsync(() => terminalRequest is not null, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, terminalRequest!.Status);
-        AssertEx.Equal(conversationId, terminalRequest.Correlation.ConversationId);
-        AssertEx.Equal(assistantMessageId, terminalRequest.Correlation.MessageId);
-        AssertEx.Equal(requestId, terminalRequest.Correlation.RequestId);
-        AssertEx.Equal("thinking", terminalRequest.Reasoning);
+        // The async-iterator finally block awaits Task.WhenAll(runTask, pumpTask) before propagating the OCE,
+        // so by the time we reach here the pump has already persisted the runner's terminal. Direct assert —
+        // no polling or wall-clock timeout needed.
+        AssertEx.NotNull(terminalRequest, "Expected the pump to have persisted a terminal status.");
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, terminalRequest!.Status);
+        AssertEx.True(terminalRequest.Status != NodeChatMessageStatusValues.Interrupted, "Client disconnect must not force interrupted.");
     }
 
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
@@ -364,6 +427,50 @@ public sealed class NodeChatStreamServiceTests
         {
             await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    private sealed class GatedCompletingInvocationRunner(RecordingWorkerEventDispatcher dispatcher, Task release) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            // Emit a delta so the consumer can disconnect, then block until released to report the real Completed
+            // terminal. This reproduces a client disconnecting while the shared runner is still working.
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
+            await release.ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)

@@ -130,9 +130,21 @@ Use this matrix before declaring a release candidate complete.
 
 ## Clean-install release tests
 
-The existing install docs contain placeholder transcript sections. Before claiming documentation/release completion, replace those placeholders with captured transcripts from reproducible clean-install runners.
+Clean-install runner entry points are tracked in `ci/host-agent/`. Before claiming documentation/release completion, run those scripts against RC artifacts on clean runners and replace the pending transcript sections in the install docs with captured evidence.
 
 ### Windows clean install
+
+Runner entry point:
+
+```powershell
+pwsh .\ci\host-agent\windows-clean-install.ps1 `
+  -MsiPath .\artifacts\XE-Local-AI-Engine.msi `
+  -TranscriptPath .\artifacts\windows-clean-install.transcript.txt `
+  -ExpectedSha256 <msi-sha256> `
+  -RequireTrustedSignature
+```
+
+Optional flags: use `-TimeoutSeconds <seconds>` to adjust the install budget, and use `-AllowRebootRequired` only when the RC plan explicitly accepts MSI exit code `3010` as a blocked/reboot-required state.
 
 Expected evidence:
 
@@ -148,6 +160,18 @@ Expected evidence:
 10. `Open Web UI` opens the React Web UI URL.
 
 ### Linux clean install
+
+Runner entry point:
+
+```bash
+bash ci/host-agent/linux-clean-install.sh \
+  --package ./artifacts/xe-local-ai-engine.deb \
+  --transcript ./artifacts/linux-clean-install.transcript.txt \
+  --expected-sha256 <package-sha256> \
+  --require-package-signature
+```
+
+Optional flags: use `--timeout-seconds <seconds>` to adjust the install budget. For `.deb` packages, use `--allow-apt-deb-install` only when the clean-runner contract allows dependency resolution from configured apt repositories instead of strict `dpkg -i` installation.
 
 Expected evidence:
 

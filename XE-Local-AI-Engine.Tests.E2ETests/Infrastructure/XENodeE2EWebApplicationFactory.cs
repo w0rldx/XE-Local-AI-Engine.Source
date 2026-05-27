@@ -19,7 +19,6 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
-using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
@@ -226,15 +225,14 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
 
-            // Replace the real WorkerEventDispatcher with an inert stub so that
-            // IWorkerEventDispatcher.CurrentInvocation always returns null.
-            // Without this, a Chat e2e test that successfully sends a message sets
-            // CurrentInvocation on the shared singleton, causing InvocationsPageE2ETests
-            // to see an active invocation and fail the empty-state assertion.
-            // NSubstitute's default for a reference-typed property is null — no extra
-            // setup required.
-            services.RemoveAll<IWorkerEventDispatcher>();
-            services.AddSingleton<IWorkerEventDispatcher>(_ => Substitute.For<IWorkerEventDispatcher>());
+            // The REAL WorkerEventDispatcher from the app's DI stands here (in-memory, no hosted
+            // service) so it raises InvocationStateChanged and processes ReportInvocationCompletedAsync —
+            // the terminal Completed state then reaches NodeChatStreamService's pump and the local
+            // assistant reply persists as `completed` (not `interrupted`), keeping regenerate/branch/
+            // feedback actions visible. CurrentInvocation leaking into InvocationsPageE2ETests'
+            // empty-state assertion (this dispatcher is shared via PerTestSession and never self-resets)
+            // is prevented by per-test isolation: XEE2ETestBase calls WorkerEventDispatcher.ResetForTests()
+            // in a [Before(Test)] hook.
 
             services.RemoveAll<IOllamaApiClient>();
             services.RemoveAll<IChatClient>();

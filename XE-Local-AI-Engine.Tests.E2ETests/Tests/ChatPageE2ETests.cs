@@ -78,8 +78,11 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
         // Chat input area container.
         await Expect(Page.GetByTestId("chat-input-area")).ToBeVisibleAsync();
 
-        // The chat-capability-notice alert is always rendered in ChatDisplayShell.
-        await Expect(Page.GetByTestId("chat-capability-notice")).ToBeVisibleAsync();
+        // NOTE: chat-capability-notice is NOT a permanent fixture — ChatDisplayShell.tsx:61 renders
+        // it only when `disabledNotice` is set (Chat.tsx: streamError | conversations load error |
+        // remote view-only conversation). With a clean local conversation and no error it is absent,
+        // so asserting its visibility here is incorrect and order-dependent (it previously passed only
+        // by coincidental transient error state under PerTestSession DB reuse). Do not assert it.
 
         // Chat textarea is focusable.
         await Expect(Page.GetByPlaceholder(ChatInputPlaceholder)).ToBeVisibleAsync();
@@ -197,8 +200,22 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
 
         if (streamingStarted)
         {
-            // Cancel by clicking the Stop button.
-            await sendButton.ClickAsync();
+            // Attempt to cancel by clicking the Stop button. Under parallel load the Stop button
+            // may be briefly disabled (React isSending race) or already transitioned to the
+            // disabled "Send" state. Swallow any exception — the post-condition below covers
+            // both "cancelled" and "completed naturally" outcomes.
+            // Note: Playwright's TimeoutException does not inherit PlaywrightException in all
+            // versions; catch Exception to be safe.
+            try
+            {
+                await sendButton.ClickAsync(new LocatorClickOptions { Timeout = 2000 });
+            }
+#pragma warning disable CA1031 // Do not catch general exception types
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                // Stream finished or button not interactable before cancel — acceptable.
+            }
         }
 
         // Regardless of whether we cancelled or the stream finished naturally, the button

@@ -58,22 +58,35 @@ The package must not create a dedicated `xe-engine` user on native Linux. That u
 
 ## Reproducible headless transcript
 
-H1's acceptance criteria require an embedded transcript captured from a reproducible Ubuntu/Debian clean-install runner. That capture requires package artifacts and a runner script, which are not present in this checkout.
+H1's acceptance criteria require an embedded transcript captured from a reproducible Ubuntu/Debian clean-install runner. The runner entry point is tracked in this repo; the transcript remains pending until an RC deb/rpm artifact is available and the script is executed on a clean supported image.
 
-Expected runner shape:
+Runner command:
 
 ```bash
-# run from a clean Ubuntu 22.04/24.04 VM or container-capable CI VM
+# run from a clean Ubuntu 22.04/24.04 VM or container-capable CI VM at the repository root
 bash ci/host-agent/linux-clean-install.sh \
   --package ./artifacts/xe-local-ai-engine.deb \
-  --transcript ./artifacts/linux-clean-install.transcript.txt
+  --transcript ./artifacts/linux-clean-install.transcript.txt \
+  --expected-sha256 <package-sha256> \
+  --require-package-signature
 ```
+
+Runner options:
+
+| Option | Purpose |
+| --- | --- |
+| `--timeout-seconds <seconds>` | Override the package install timeout budget. Default is `900`. |
+| `--expected-sha256 <hash>` | Validate the deb/rpm SHA-256 before install and record the actual hash in the transcript. |
+| `--require-package-signature` | Require package signature validation where supported (`rpm --checksig`, `debsig-verify`, or `dpkg-sig`). |
+| `--allow-apt-deb-install` | For `.deb` packages, use `apt-get install` with the local package path to resolve dependencies from configured repos; omit for stricter `dpkg -i` behavior. |
 
 The transcript must end with equivalent evidence:
 
 ```text
 Package install exit code: 0
-Autostart guard: no XDG autostart, unit not enabled, linger disabled
+Package SHA-256 validation: passed
+Package signature validation: passed
+Autostart guard: no enabled system/user unit, no linger, no XDG autostart
 User launch: desktop launcher invoked
 systemctl --user is-active xe-host-agent.service: active
 HostAgent admin status: state=running desired_state=running ollama=healthy web-server=healthy
@@ -81,7 +94,7 @@ WorkerHub: connected
 Tray: green
 ```
 
-Replace this section with the captured transcript before claiming H1 complete.
+Status: `(blocked: clean Ubuntu/Debian runner transcript pending RC package artifact)`. Replace this section with the captured transcript before claiming H1 complete.
 
 ## Troubleshooting pointers
 

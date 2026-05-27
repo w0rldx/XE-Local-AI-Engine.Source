@@ -106,4 +106,51 @@ describe("useNodeChatConnectionReadiness", () => {
 		expect(manager.ensureConnection).toHaveBeenCalledTimes(2);
 		expect(result.current.readiness).toBe("connecting");
 	});
+
+	it("clears the error and becomes ready when the subscriber fires connected after an error", async () => {
+		manager.ensureConnection.mockReturnValue(Promise.reject(new Error("hub down")));
+
+		const { result } = renderHook(() => useNodeChatConnectionReadiness());
+		await waitFor(() => expect(result.current.readiness).toBe("error"));
+
+		emitStatus("connected");
+
+		expect(result.current.readiness).toBe("ready");
+		expect(result.current.error).toBeUndefined();
+	});
+
+	it("retry skips ensureConnection and immediately shows ready when already connected via subscriber", async () => {
+		manager.ensureConnection.mockReturnValueOnce(Promise.reject(new Error("hub down")));
+
+		const { result } = renderHook(() => useNodeChatConnectionReadiness());
+		await waitFor(() => expect(result.current.readiness).toBe("error"));
+
+		// Hub reconnects on its own before the user clicks Retry.
+		emitStatus("connected");
+		expect(result.current.readiness).toBe("ready");
+
+		// Clicking Retry should be a cheap no-op: hasConnectedRef is latched, no ensureConnection call.
+		act(() => result.current.retry());
+
+		expect(manager.ensureConnection).toHaveBeenCalledTimes(1);
+		expect(result.current.readiness).toBe("ready");
+	});
+
+	it("formats a plain-string error without wrapping it", async () => {
+		manager.ensureConnection.mockReturnValue(Promise.reject("plain string error"));
+
+		const { result } = renderHook(() => useNodeChatConnectionReadiness());
+
+		await waitFor(() => expect(result.current.readiness).toBe("error"));
+		expect(result.current.error).toBe("plain string error");
+	});
+
+	it("falls back to a generic message for unknown error shapes", async () => {
+		manager.ensureConnection.mockReturnValue(Promise.reject({ code: 42 }));
+
+		const { result } = renderHook(() => useNodeChatConnectionReadiness());
+
+		await waitFor(() => expect(result.current.readiness).toBe("error"));
+		expect(result.current.error).toBe("Unable to connect to the local chat hub.");
+	});
 });
