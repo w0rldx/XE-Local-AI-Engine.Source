@@ -1,4 +1,1 @@
-.mobile-navigation-bar-paper {
-	/* stylelint-disable-next-line custom-property-pattern */
-	--Paper-overlay: none !important; /* This is a workaround to remove the overlay from the paper */
-}
+/* MobileNavigationBar styles */

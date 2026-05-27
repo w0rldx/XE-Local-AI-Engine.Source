@@ -85,12 +85,12 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 			opened={drawerOpen}
 			onClose={() => setDrawerOpen(false)}
 			withCloseButton={false}
-			withOverlay={false}
+			withOverlay={true}
+			overlayProps={{ backgroundOpacity: 0.5, blur: 0 }}
 			className="flex flex-col h-full"
 			styles={{
 				content: {
-					width: "60%",
-					minWidth: width >= 420 ? "400px" : "100%",
+					width: width < 420 ? "100%" : "min(400px, 100vw)",
 					backgroundColor: theme.palette.background.default,
 				},
 			}}
