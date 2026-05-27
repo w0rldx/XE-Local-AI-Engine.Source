@@ -21,6 +21,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<NodePurgedTombstone> PurgedTombstones => Set<NodePurgedTombstone>();
 
+    internal DbSet<NodeMessageFeedback> MessageFeedback => Set<NodeMessageFeedback>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -31,6 +33,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigureMessage(modelBuilder.Entity<NodeMessage>());
         ConfigureToolEvent(modelBuilder.Entity<NodeToolEvent>());
         ConfigurePurgedTombstone(modelBuilder.Entity<NodePurgedTombstone>());
+        ConfigureMessageFeedback(modelBuilder.Entity<NodeMessageFeedback>());
     }
 
     private static void ConfigureConversation(EntityTypeBuilder<NodeConversation> builder)
@@ -55,6 +58,21 @@ public sealed class NodeChatDbContext : DbContext
 
         builder.Property(entity => entity.Purged)
                .HasColumnName("purged");
+
+        builder.Property(entity => entity.IsPinned)
+               .HasColumnName("is_pinned")
+               .HasDefaultValue(false);
+
+        builder.Property(entity => entity.Archived)
+               .HasColumnName("archived")
+               .HasDefaultValue(false);
+
+        builder.Property(entity => entity.Origin)
+               .HasColumnName("origin")
+               .HasDefaultValue(NodeChatOrigin.Local);
+
+        builder.Property(entity => entity.BranchOfConversationId)
+               .HasColumnName("branch_of_conversation_id");
 
         builder.HasMany(entity => entity.Messages)
                .WithOne(entity => entity.Conversation)
@@ -100,13 +118,25 @@ public sealed class NodeChatDbContext : DbContext
                .HasColumnName("status")
                .HasDefaultValue(NodeMessageStatus.Completed);
 
+        builder.Property(entity => entity.Origin)
+               .HasColumnName("origin")
+               .HasDefaultValue(NodeChatOrigin.Local);
+
         builder.Property(entity => entity.RequestId)
                .HasColumnName("request_id");
 
         builder.Property(entity => entity.Error)
                .HasColumnName("error");
 
+        builder.Property(entity => entity.ParentMessageId)
+               .HasColumnName("parent_message_id");
+
+        builder.Property(entity => entity.VariantGroupId)
+               .HasColumnName("variant_group_id");
+
         builder.HasIndex(entity => entity.RequestId);
+        builder.HasIndex(entity => entity.ParentMessageId);
+        builder.HasIndex(entity => entity.VariantGroupId);
     }
 
     private static void ConfigureToolEvent(EntityTypeBuilder<NodeToolEvent> builder)
@@ -149,5 +179,36 @@ public sealed class NodeChatDbContext : DbContext
 
         builder.Property(entity => entity.AckedAtUtc)
                .HasColumnName("acked_at_utc");
+    }
+
+    private static void ConfigureMessageFeedback(EntityTypeBuilder<NodeMessageFeedback> builder)
+    {
+        builder.ToTable("message_feedback");
+        builder.HasKey(entity => entity.MessageId);
+
+        builder.Property(entity => entity.MessageId)
+               .HasColumnName("message_id");
+
+        builder.Property(entity => entity.ConversationId)
+               .HasColumnName("conversation_id");
+
+        builder.Property(entity => entity.Rating)
+               .HasColumnName("rating");
+
+        builder.Property(entity => entity.Comment)
+               .HasColumnName("comment");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        builder.HasOne(entity => entity.Message)
+               .WithOne()
+               .HasForeignKey<NodeMessageFeedback>(entity => entity.MessageId)
+               .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(entity => entity.ConversationId);
     }
 }

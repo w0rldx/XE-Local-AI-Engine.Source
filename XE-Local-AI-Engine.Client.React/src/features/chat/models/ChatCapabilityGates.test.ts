@@ -11,7 +11,7 @@ describe("chat capability gates", () => {
 			showEncryptedConversationControls: false,
 			showClientNodeRoutingControls: false,
 			showToolApprovalControls: false,
-			showConversationFeedbackControls: false,
+			showConversationFeedbackControls: true,
 			showFileAttachmentControls: false,
 			showImageAttachmentControls: false,
 			showLocalToolControls: true,
@@ -21,6 +21,6 @@ describe("chat capability gates", () => {
 	it("explains the hidden capability surfaces for the chat notice", () => {
 		const hiddenSurfaces = hiddenChatSurfaceLabels(buildChatUiCapabilities(nodeCapabilities.chat));
 
-		expect(hiddenSurfaces).toEqual(["encrypted chat controls", "client-node routing controls", "tool approval controls", "conversation feedback controls"]);
+		expect(hiddenSurfaces).toEqual(["encrypted chat controls", "client-node routing controls", "tool approval controls"]);
 	});
 });

@@ -6,46 +6,54 @@ interface StreamSubscriber<T> {
 	complete(): void;
 }
 
-const signalRMock = vi.hoisted(() => {
-	const connection = {
-		start: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-		stop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-		stream: vi.fn(),
-	};
-	const subscription = {
-		dispose: vi.fn(),
-	};
-	const builder = {
-		withUrl: vi.fn(),
-		configureLogging: vi.fn(),
-		build: vi.fn(),
-	};
+interface ConnectionListener {
+	onReconnected?: (connectionId: string | undefined) => void;
+	onClose?: (error: Error | undefined) => void;
+	onStatusChange?: (status: string) => void;
+	onReconnecting?: (error: Error | undefined) => void;
+}
+
+const connectionMock = vi.hoisted(() => {
 	const state = {
 		currentSubscriber: undefined as StreamSubscriber<unknown> | undefined,
+		lastMethod: undefined as string | undefined,
+		lastPayload: undefined as unknown,
+		status: "connected" as string,
+		listeners: new Set<ConnectionListener>(),
+	};
+	const subscription = { dispose: vi.fn() };
+	const connection = {
+		stream: vi.fn((method: string, payload: unknown) => {
+			state.lastMethod = method;
+			state.lastPayload = payload;
+			return {
+				subscribe: vi.fn((subscriber: StreamSubscriber<unknown>) => {
+					state.currentSubscriber = subscriber;
+					return subscription;
+				}),
+			};
+		}),
+	};
+	const nodeChatConnection = {
+		ensureConnection: vi.fn<() => Promise<typeof connection>>().mockResolvedValue(connection),
+		current: vi.fn(() => connection),
+		subscribe: vi.fn((listener: ConnectionListener) => {
+			state.listeners.add(listener);
+			return () => state.listeners.delete(listener);
+		}),
+		get status() {
+			return state.status;
+		},
 	};
 
-	builder.withUrl.mockReturnValue(builder);
-	builder.configureLogging.mockReturnValue(builder);
-	builder.build.mockReturnValue(connection);
-	connection.stream.mockReturnValue({
-		subscribe: vi.fn((subscriber: StreamSubscriber<unknown>) => {
-			state.currentSubscriber = subscriber;
-			return subscription;
-		}),
-	});
-
-	return { builder, connection, subscription, state };
+	return { connection, subscription, state, nodeChatConnection };
 });
 
-vi.mock("@microsoft/signalr", () => ({
-	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
-		return signalRMock.builder;
-	}),
-	LogLevel: { Warning: 3 },
+vi.mock("@/features/chat/api/NodeChatConnection", () => ({
+	nodeChatConnection: connectionMock.nodeChatConnection,
 }));
 
 import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 
 const streamRequest = {
@@ -56,19 +64,23 @@ const streamRequest = {
 	requestId: "request-1",
 };
 
-const streamEvent: NodeChatStreamEventDto = {
-	type: "assistant-delta",
-	conversationId: "conversation-1",
-	messageId: "assistant-1",
-	requestId: "request-1",
-	status: "streaming",
-	sequence: 1,
-	occurredAtUtc: 1_700_000_001_000,
-	delta: "hi",
-	content: "hi",
-};
+function streamEvent(overrides: Partial<NodeChatStreamEventDto> = {}): NodeChatStreamEventDto {
+	return {
+		type: "assistant-delta",
+		conversationId: "conversation-1",
+		messageId: "assistant-1",
+		requestId: "request-1",
+		status: "streaming",
+		sequence: 1,
+		occurredAtUtc: 1_700_000_001_000,
+		delta: "hi",
+		content: "hi",
+		...overrides,
+	};
+}
 
 async function settle(): Promise<void> {
+	await Promise.resolve();
 	await Promise.resolve();
 	await Promise.resolve();
 }
@@ -76,56 +88,155 @@ async function settle(): Promise<void> {
 describe("nodeChatAdapter SignalR streaming", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		useNodeAuthStore.getState().actions.clear();
-		signalRMock.state.currentSubscriber = undefined;
-		signalRMock.builder.withUrl.mockReturnValue(signalRMock.builder);
-		signalRMock.builder.configureLogging.mockReturnValue(signalRMock.builder);
-		signalRMock.builder.build.mockReturnValue(signalRMock.connection);
-		signalRMock.connection.start.mockResolvedValue(undefined);
-		signalRMock.connection.stop.mockResolvedValue(undefined);
-		signalRMock.connection.stream.mockReturnValue({
-			subscribe: vi.fn((subscriber: StreamSubscriber<unknown>) => {
-				signalRMock.state.currentSubscriber = subscriber;
-				return signalRMock.subscription;
-			}),
+		connectionMock.state.currentSubscriber = undefined;
+		connectionMock.state.lastMethod = undefined;
+		connectionMock.state.lastPayload = undefined;
+		connectionMock.state.status = "connected";
+		connectionMock.state.listeners.clear();
+		connectionMock.nodeChatConnection.ensureConnection.mockResolvedValue(connectionMock.connection);
+		connectionMock.nodeChatConnection.current.mockReturnValue(connectionMock.connection);
+		connectionMock.connection.stream.mockImplementation((method: string, payload: unknown) => {
+			connectionMock.state.lastMethod = method;
+			connectionMock.state.lastPayload = payload;
+			return {
+				subscribe: vi.fn((subscriber: StreamSubscriber<unknown>) => {
+					connectionMock.state.currentSubscriber = subscriber;
+					return connectionMock.subscription;
+				}),
+			};
 		});
 	});
 
-	it("lets SignalR negotiate the best transport for streaming", async () => {
+	it("streams over the shared persistent connection", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
-		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(
-			expect.stringContaining("/api/local/v1/chat/hub"),
-			expect.objectContaining({
-				accessTokenFactory: expect.any(Function),
-			}),
-		);
-		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1]).not.toHaveProperty("transport");
-		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("");
-		expect(signalRMock.connection.stream).toHaveBeenCalledWith("SendMessage", streamRequest);
+		expect(connectionMock.nodeChatConnection.ensureConnection).toHaveBeenCalledTimes(1);
+		expect(connectionMock.state.lastMethod).toBe("SendMessage");
 
-		signalRMock.state.currentSubscriber?.next(streamEvent);
-		await expect(first).resolves.toEqual({ value: streamEvent, done: false });
+		connectionMock.state.currentSubscriber?.next(streamEvent());
+		await expect(first).resolves.toEqual({ value: streamEvent(), done: false });
 
 		const completed = iterator.next();
-		signalRMock.state.currentSubscriber?.complete();
+		connectionMock.state.currentSubscriber?.complete();
 		await expect(completed).resolves.toMatchObject({ done: true });
-		expect(signalRMock.subscription.dispose).toHaveBeenCalled();
-		expect(signalRMock.connection.stop).toHaveBeenCalled();
+		expect(connectionMock.subscription.dispose).toHaveBeenCalled();
 	});
 
-	it("supplies the current access token to SignalR", async () => {
-		useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+	it("resumes via ResumeMessage after a reconnect and remaps the message id", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
-		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("access-token");
+		// First delta over the original SendMessage stream.
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, content: "hi", delta: "hi" }));
+		await expect(first).resolves.toMatchObject({ value: { content: "hi" }, done: false });
 
-		signalRMock.state.currentSubscriber?.complete();
-		await expect(first).resolves.toMatchObject({ done: true });
+		// Connection drops mid-stream while reconnecting; the subscription errors but the send must not fail.
+		connectionMock.state.status = "reconnecting";
+		connectionMock.state.currentSubscriber?.error(new Error("connection lost"));
+
+		// Reconnected with a new id -> adapter re-attaches via ResumeMessage(invocationId == requestId).
+		connectionMock.state.status = "connected";
+		for (const listener of connectionMock.state.listeners) {
+			listener.onReconnected?.("connection-2");
+		}
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+		expect(connectionMock.state.lastPayload).toBe("request-1");
+
+		// The resume registry stamps the invocation id as the message id; the adapter remaps it back.
+		const resumed = iterator.next();
+		connectionMock.state.currentSubscriber?.next(streamEvent({ messageId: "request-1", sequence: 2, content: "hi there", delta: " there" }));
+		await expect(resumed).resolves.toMatchObject({ value: { messageId: "assistant-1", content: "hi there" }, done: false });
+
+		const done = iterator.next();
+		connectionMock.state.currentSubscriber?.next(streamEvent({ type: "assistant-completed", messageId: "request-1", sequence: 3, status: "completed", content: "hi there" }));
+		await settle();
+		connectionMock.state.currentSubscriber?.complete();
+		await expect(done).resolves.toMatchObject({ value: { type: "assistant-completed", messageId: "assistant-1" } });
+	});
+
+	it("completes cleanly (no error) when ResumeMessage throws an unknown/terminal invocation", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 1, content: "hi", delta: "hi" }));
+		await expect(first).resolves.toMatchObject({ value: { content: "hi" }, done: false });
+
+		// Drop + reconnect -> adapter re-attaches via ResumeMessage.
+		connectionMock.state.status = "reconnecting";
+		connectionMock.state.currentSubscriber?.error(new Error("connection lost"));
+		connectionMock.state.status = "connected";
+		for (const listener of connectionMock.state.listeners) {
+			listener.onReconnected?.("connection-2");
+		}
+		await settle();
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+
+		// The registry throws because the invocation already finished server-side. The stream must end
+		// cleanly (done, no rejection) so the caller refetches the persisted conversation.
+		const ended = iterator.next();
+		connectionMock.state.currentSubscriber?.error(new Error("Invocation request-1 is not resumable."));
+		await expect(ended).resolves.toMatchObject({ done: true });
+	});
+
+	it("fails the send when the connection closes without reconnecting before completion", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const pending = iterator.next();
+		await settle();
+
+		connectionMock.state.status = "disconnected";
+		for (const listener of connectionMock.state.listeners) {
+			listener.onClose?.(new Error("closed"));
+		}
+
+		await expect(pending).rejects.toThrow("closed");
+	});
+
+	it("streams a regenerate over RegenerateMessage and yields the server-minted variant", async () => {
+		const iterator = nodeChatAdapter.regenerateMessage("conversation-1", "assistant-1", new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("RegenerateMessage");
+		// First positional arg is the conversation id (the mock captures only the first arg as payload).
+		expect(connectionMock.state.lastPayload).toBe("conversation-1");
+
+		// The server mints a fresh variant id + requestId; the adapter surfaces it unchanged on the fresh stream.
+		const variantEvent = streamEvent({ messageId: "variant-9", requestId: "request-9" });
+		connectionMock.state.currentSubscriber?.next(variantEvent);
+		await expect(first).resolves.toEqual({ value: variantEvent, done: false });
+	});
+
+	it("resumes a regenerate via ResumeMessage using the invocation id latched from the first event", async () => {
+		const iterator = nodeChatAdapter.regenerateMessage("conversation-1", "assistant-1", new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		// Latch the server-minted variant id + requestId from the first event.
+		connectionMock.state.currentSubscriber?.next(streamEvent({ messageId: "variant-9", requestId: "request-9", sequence: 1, content: "draft", delta: "draft" }));
+		await expect(first).resolves.toMatchObject({ value: { messageId: "variant-9", content: "draft" }, done: false });
+
+		// Drop + reconnect -> adapter re-attaches via ResumeMessage keyed by the latched requestId.
+		connectionMock.state.status = "reconnecting";
+		connectionMock.state.currentSubscriber?.error(new Error("connection lost"));
+		connectionMock.state.status = "connected";
+		for (const listener of connectionMock.state.listeners) {
+			listener.onReconnected?.("connection-2");
+		}
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+		expect(connectionMock.state.lastPayload).toBe("request-9");
+
+		// Resume events stamp the invocation id as the message id; the adapter remaps to the latched variant id.
+		const resumed = iterator.next();
+		connectionMock.state.currentSubscriber?.next(streamEvent({ messageId: "request-9", sequence: 2, content: "draft done", delta: " done" }));
+		await expect(resumed).resolves.toMatchObject({ value: { messageId: "variant-9", content: "draft done" }, done: false });
 	});
 
 	it("disposes the SignalR subscription when the send aborts", async () => {
@@ -137,7 +248,6 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		abortController.abort();
 
 		await expect(pending).resolves.toMatchObject({ done: true });
-		expect(signalRMock.subscription.dispose).toHaveBeenCalled();
-		expect(signalRMock.connection.stop).toHaveBeenCalled();
+		expect(connectionMock.subscription.dispose).toHaveBeenCalled();
 	});
 });

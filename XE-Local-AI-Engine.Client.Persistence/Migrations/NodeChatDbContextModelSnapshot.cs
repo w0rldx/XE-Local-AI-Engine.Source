@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", b =>
                 {
@@ -24,13 +24,36 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("conversation_id");
 
+                    b.Property<bool>("Archived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("archived");
+
+                    b.Property<Guid?>("BranchOfConversationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch_of_conversation_id");
+
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<bool>("IsPinned")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_pinned");
+
                     b.Property<long>("LastSeenUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("last_seen_utc");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Local")
+                        .HasColumnName("origin");
 
                     b.Property<bool>("Purged")
                         .HasColumnType("INTEGER")
@@ -77,6 +100,17 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("BLOB")
                         .HasColumnName("metadata_json");
 
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Local")
+                        .HasColumnName("origin");
+
+                    b.Property<Guid?>("ParentMessageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_message_id");
+
                     b.Property<Guid?>("RequestId")
                         .HasColumnType("TEXT")
                         .HasColumnName("request_id");
@@ -92,9 +126,54 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
-                        .HasColumnName("status")
-                        .HasDefaultValue("completed");
+                        .HasDefaultValue("completed")
+                        .HasColumnName("status");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<Guid?>("VariantGroupId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("variant_group_id");
+
+                    b.HasKey("MessageId");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("ParentMessageId");
+
+                    b.HasIndex("RequestId");
+
+                    b.HasIndex("VariantGroupId");
+
+                    b.ToTable("messages", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeMessageFeedback", b =>
+                {
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("message_id");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("comment");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Rating")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("rating");
 
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
@@ -104,9 +183,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
 
                     b.HasIndex("ConversationId");
 
-                    b.HasIndex("RequestId");
-
-                    b.ToTable("messages", (string)null);
+                    b.ToTable("message_feedback", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodePurgedTombstone", b =>
@@ -178,6 +255,17 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeMessageFeedback", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeMessage", "Message")
+                        .WithOne()
+                        .HasForeignKey("XE_Local_AI_Engine.Client.Persistence.Entities.NodeMessageFeedback", "MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeToolEvent", b =>

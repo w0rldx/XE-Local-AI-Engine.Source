@@ -21,6 +21,7 @@ public sealed class NodeChatPersistenceContractTests
             nameof(INodeChatPersistenceService.GetConversationAsync),
             nameof(INodeChatPersistenceService.PersistUserMessageAsync),
             nameof(INodeChatPersistenceService.CreateAssistantPlaceholderAsync),
+            nameof(INodeChatPersistenceService.MarkAssistantQueuedAsync),
             nameof(INodeChatPersistenceService.MarkAssistantStreamingAsync),
             nameof(INodeChatPersistenceService.FlushAssistantPartialAsync),
             nameof(INodeChatPersistenceService.TerminalizeAssistantMessageAsync),
@@ -40,6 +41,7 @@ public sealed class NodeChatPersistenceContractTests
         var expected = new[]
         {
             "pending",
+            "queued",
             "streaming",
             "completed",
             "cancelled",

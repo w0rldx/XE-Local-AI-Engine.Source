@@ -4,6 +4,7 @@ import type { ChatConversationModel, ChatMessageModel, ChatStreamingState, Messa
 export const nodeChatStreamEventTypes = {
 	userMessagePersisted: "user-message-persisted",
 	assistantPending: "assistant-pending",
+	assistantQueued: "assistant-queued",
 	assistantStreaming: "assistant-streaming",
 	assistantDelta: "assistant-delta",
 	assistantCompleted: "assistant-completed",
@@ -12,7 +13,7 @@ export const nodeChatStreamEventTypes = {
 	assistantInterrupted: "assistant-interrupted",
 } as const;
 
-const knownStatuses = new Set<MessageStatus>(["pending", "streaming", "completed", "cancelled", "failed", "interrupted"]);
+const knownStatuses = new Set<MessageStatus>(["pending", "queued", "streaming", "completed", "cancelled", "failed", "interrupted"]);
 
 export interface OptimisticNodeChatSendIds {
 	userMessageId: string;
@@ -119,6 +120,7 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 				messageId: event.messageId,
 				content: currentAssistant?.content ?? event.content ?? "",
 				reasoning: currentAssistant?.reasoning ?? event.reasoning ?? undefined,
+				startedAt: currentAssistant?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
 				isActive: true,
 				inputTokens: currentAssistant?.inputTokens ?? event.inputTokens ?? undefined,
 				outputTokens: currentAssistant?.outputTokens ?? event.outputTokens ?? undefined,
@@ -130,7 +132,9 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 	}
 
 	const existing = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
-	const fallbackStatus: MessageStatus = terminalStatus ?? (event.type === nodeChatStreamEventTypes.assistantPending ? "pending" : "streaming");
+	const isQueued = event.type === nodeChatStreamEventTypes.assistantQueued;
+	const fallbackStatus: MessageStatus =
+		terminalStatus ?? (isQueued ? "queued" : event.type === nodeChatStreamEventTypes.assistantPending ? "pending" : "streaming");
 	const status = normalizeStatus(event.status, fallbackStatus);
 	const eventTime = isoFromUnixMilliseconds(event.occurredAtUtc);
 	const content = event.content ?? `${existing?.content ?? ""}${event.delta ?? ""}`;
@@ -167,7 +171,10 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 			messageId: event.messageId,
 			content,
 			reasoning: reasoning ?? undefined,
+			startedAt: assistantMessage.createdAt,
 			isActive: !isTerminal,
+			// Queued turns are live (isActive) but not yet streaming; clear once the streaming event arrives.
+			isQueued: status === "queued",
 			error: event.error ?? undefined,
 			inputTokens: assistantMessage.inputTokens,
 			outputTokens: assistantMessage.outputTokens,
@@ -183,6 +190,7 @@ export function markNodeChatStreamTerminated(
 	messageId: string,
 	status: Extract<MessageStatus, "cancelled" | "failed" | "interrupted">,
 	error?: string,
+	failureCategory?: string,
 ): AppliedNodeChatStreamEvent {
 	const nowIso = new Date().toISOString();
 	const existing = conversation.messages.find((message) => message.id === messageId && message.role === "assistant");
@@ -217,8 +225,10 @@ export function markNodeChatStreamTerminated(
 			messageId,
 			content: assistantMessage.content,
 			reasoning: assistantMessage.reasoning,
+			startedAt: assistantMessage.createdAt,
 			isActive: false,
 			error,
+			failureCategory,
 			inputTokens: assistantMessage.inputTokens,
 			outputTokens: assistantMessage.outputTokens,
 			totalTokens: assistantMessage.totalTokens,

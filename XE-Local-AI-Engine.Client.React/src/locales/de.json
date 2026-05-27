@@ -126,6 +126,9 @@
 			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Kopple und verbinde zuerst einen Worker-Node, bevor du Unterhaltungen erstellst.",
 			"waitingForStreamedResponse": "Warte auf gestreamte Antwort",
 			"waitingForResponse": "Warte auf Antwort",
+			"queued": "In Warteschlange — warte auf aktuelle Aufgabe",
+			"remoteViewOnlyTitle": "Remote-Unterhaltung",
+			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
 			"streamErrors": {
 				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuche es erneut.",
 				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuche es erneut oder aktualisiere die Unterhaltung."
@@ -175,6 +178,8 @@
 				"collapseAria": "Seitenleiste einklappen",
 				"untitled": "Unbenannte Unterhaltung",
 				"archived": "Archiviert",
+				"remote": "Remote",
+				"remoteTooltip": "Von einem gekoppelten Client gestartet. Auf diesem Knoten nur lesbar.",
 				"noClientAssigned": "Kein Client zugewiesen",
 				"empty": "Noch keine Unterhaltungen.",
 				"delete": "Löschen",
@@ -365,6 +370,8 @@
 				"branch": "Unterhaltung verzweigen",
 				"branchSuccess": "Verzweigte Unterhaltung wurde erstellt.",
 				"copy": "Nachricht kopieren",
+				"copyCode": "Code kopieren",
+				"copyCodeSuccess": "Kopiert",
 				"copySuccess": "Nachricht wurde in die Zwischenablage kopiert.",
 				"feedback": "Feedback geben",
 				"regenerate": "Antwort neu generieren",

@@ -1,5 +1,19 @@
-import { ActionIcon, Badge, Box, Group, Paper, ScrollArea, Stack, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconChevronLeft, IconChevronRight, IconMessage, IconPinnedFilled, IconPlus, IconSearch } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Menu, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
+import {
+	IconArchive,
+	IconArchiveOff,
+	IconChevronLeft,
+	IconChevronRight,
+	IconDots,
+	IconMessage,
+	IconPencil,
+	IconPin,
+	IconPinned,
+	IconPinnedFilled,
+	IconPlus,
+	IconSearch,
+} from "@tabler/icons-react";
+import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
@@ -9,9 +23,17 @@ interface ConversationListProps {
 	selectedConversationId?: string;
 	collapsed?: boolean;
 	disabled?: boolean;
+	searchQuery?: string;
+	showArchived?: boolean;
+	mutatingConversationId?: string;
 	onCreateConversation: () => void;
 	onSelect: (conversationId: string) => void;
 	onToggleCollapse: () => void;
+	onSearchChange?: (query: string) => void;
+	onToggleShowArchived?: (showArchived: boolean) => void;
+	onRename?: (conversationId: string, title: string) => void;
+	onTogglePin?: (conversationId: string, isPinned: boolean) => void;
+	onToggleArchive?: (conversationId: string, archived: boolean) => void;
 }
 
 function formatRelative(iso?: string): string {
@@ -41,22 +63,77 @@ function initials(title: string): string {
 	return matches.slice(0, 2).join("").toUpperCase() || title.slice(0, 2).toUpperCase();
 }
 
+function matchesQuery(conversation: ChatConversationModel, query: string): boolean {
+	if (query.length === 0) {
+		return true;
+	}
+
+	const haystack = `${conversation.title} ${conversation.lastMessagePreview ?? ""}`.toLowerCase();
+	return haystack.includes(query);
+}
+
 export function ConversationList({
 	conversations,
 	selectedConversationId,
 	collapsed = false,
 	disabled = false,
+	searchQuery = "",
+	showArchived = false,
+	mutatingConversationId,
 	onCreateConversation,
 	onSelect,
 	onToggleCollapse,
+	onSearchChange,
+	onToggleShowArchived,
+	onRename,
+	onTogglePin,
+	onToggleArchive,
 }: ConversationListProps) {
 	const { t } = useTranslation();
-	const pinned = conversations.filter((conversation) => conversation.isPinned);
-	const recent = conversations.filter((conversation) => !conversation.isPinned);
+	const [renamingId, setRenamingId] = useState<string | undefined>();
+	const [renameDraft, setRenameDraft] = useState("");
+
+	const normalizedQuery = searchQuery.trim().toLowerCase();
+	// Archived conversations only surface when the operator opts in; search always narrows the visible set.
+	const visible = conversations.filter(
+		(conversation) => (showArchived || !conversation.isArchived) && matchesQuery(conversation, normalizedQuery),
+	);
+	const pinned = visible.filter((conversation) => conversation.isPinned && !conversation.isArchived);
+	const recent = visible.filter((conversation) => !conversation.isPinned && !conversation.isArchived);
+	const archived = visible.filter((conversation) => conversation.isArchived);
 	const sections = [
 		{ id: "pinned", title: t("pages.chat.conversationList.pinned", "Pinned"), items: pinned, icon: <IconPinnedFilled size={10} /> },
 		{ id: "recent", title: t("pages.chat.conversationList.recent", "Recent"), items: recent, icon: undefined },
+		{ id: "archived", title: t("pages.chat.conversationList.archived", "Archived"), items: archived, icon: <IconArchive size={10} /> },
 	];
+
+	const beginRename = (conversation: ChatConversationModel): void => {
+		setRenamingId(conversation.id);
+		setRenameDraft(conversation.title.trim());
+	};
+
+	const cancelRename = (): void => {
+		setRenamingId(undefined);
+		setRenameDraft("");
+	};
+
+	const commitRename = (conversationId: string): void => {
+		const trimmed = renameDraft.trim();
+		if (trimmed.length > 0) {
+			onRename?.(conversationId, trimmed);
+		}
+		cancelRename();
+	};
+
+	const handleRenameKeyDown = (event: KeyboardEvent<HTMLInputElement>, conversationId: string): void => {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			commitRename(conversationId);
+		} else if (event.key === "Escape") {
+			event.preventDefault();
+			cancelRename();
+		}
+	};
 
 	if (collapsed) {
 		return (
@@ -107,61 +184,176 @@ export function ConversationList({
 				</Tooltip>
 			</Group>
 			<Group gap={8} px="md" pb="xs" wrap="nowrap">
-				<TextInput placeholder={t("pages.chat.conversationList.searchPlaceholder", "Search")} leftSection={<IconSearch size={14} />} size="xs" disabled={true} style={{ flex: 1 }} />
+				<TextInput
+					placeholder={t("pages.chat.conversationList.searchPlaceholder", "Search")}
+					leftSection={<IconSearch size={14} />}
+					size="xs"
+					value={searchQuery}
+					onChange={(event) => onSearchChange?.(event.currentTarget.value)}
+					disabled={!onSearchChange}
+					style={{ flex: 1 }}
+					data-testid="conversation-search"
+					aria-label={t("pages.chat.conversationList.searchAria", "Search conversations")}
+				/>
 				<ActionIcon variant="filled" color="dark" size={30} radius="md" onClick={onCreateConversation} aria-label={t("pages.chat.newConversation", "New conversation")}>
 					<IconPlus size={15} />
 				</ActionIcon>
 			</Group>
+			{onToggleShowArchived ? (
+				<Group px="md" pb="xs">
+					<Switch
+						size="xs"
+						checked={showArchived}
+						onChange={(event) => onToggleShowArchived(event.currentTarget.checked)}
+						label={t("pages.chat.conversationList.showArchived", "Show archived")}
+						data-testid="conversation-show-archived"
+					/>
+				</Group>
+			) : null}
 			<ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto" px="xs">
 				<Stack gap={2} pb="md">
-					{sections.map((section) => (
-						<Stack key={section.id} gap={2}>
-							<Group gap={6} px="sm" py={6}>
-								{section.icon}
-								<Text size="xs" fw={700} c="dimmed" tt="uppercase">
-									{section.title}
-								</Text>
-							</Group>
-							{section.items.map((conversation) => (
-								<Paper
-									key={conversation.id}
-									p="sm"
-									radius="md"
-									data-testid={`conversation-item-${conversation.id}`}
-									onClick={() => {
-										if (!disabled) {
-											onSelect(conversation.id);
-										}
-									}}
-									style={{
-										cursor: disabled ? "not-allowed" : "pointer",
-										background: conversation.id === selectedConversationId ? "var(--mantine-primary-color-light)" : "transparent",
-									}}
-								>
-									<Stack gap={4}>
-										<Group justify="space-between" wrap="nowrap" gap={8}>
-											<Text fw={600} size="sm" lineClamp={1}>
-												{conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled")}
-											</Text>
-											<Text size="xs" c="dimmed">
-												{formatRelative(conversation.lastActivity ?? conversation.updatedAt)}
-											</Text>
-										</Group>
-										<Text size="xs" c="dimmed" lineClamp={1}>
-											{conversation.lastMessagePreview?.trim() || t("pages.chat.noMessages", "No messages")}
-										</Text>
-										{conversation.isArchived ? (
-											<Box>
-												<Badge variant="light" color="gray" size="xs">
-													{t("pages.chat.conversationList.archived", "Archived")}
-												</Badge>
-											</Box>
-										) : null}
-									</Stack>
-								</Paper>
-							))}
-						</Stack>
-					))}
+					{visible.length === 0 ? (
+						<Text size="xs" c="dimmed" px="sm" py="md" data-testid="conversation-list-empty">
+							{normalizedQuery.length > 0
+								? t("pages.chat.conversationList.noMatches", "No conversations match your search.")
+								: t("pages.chat.conversationList.empty", "No conversations yet.")}
+						</Text>
+					) : null}
+					{sections.map((section) =>
+						section.items.length === 0 ? null : (
+							<Stack key={section.id} gap={2}>
+								<Group gap={6} px="sm" py={6}>
+									{section.icon}
+									<Text size="xs" fw={700} c="dimmed" tt="uppercase">
+										{section.title}
+									</Text>
+								</Group>
+								{section.items.map((conversation) => {
+									const isRemote = conversation.origin === "remote";
+									const isRenaming = renamingId === conversation.id;
+									const isMutating = mutatingConversationId === conversation.id;
+									const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive));
+
+									return (
+										<Paper
+											key={conversation.id}
+											p="sm"
+											radius="md"
+											data-testid={`conversation-item-${conversation.id}`}
+											onClick={() => {
+												if (!disabled && !isRenaming) {
+													onSelect(conversation.id);
+												}
+											}}
+											style={{
+												cursor: disabled || isRenaming ? "default" : "pointer",
+												background: conversation.id === selectedConversationId ? "var(--mantine-primary-color-light)" : "transparent",
+											}}
+										>
+											<Stack gap={4}>
+												<Group justify="space-between" wrap="nowrap" gap={8}>
+													{isRenaming ? (
+														<TextInput
+															size="xs"
+															value={renameDraft}
+															autoFocus={true}
+															onClick={(event) => event.stopPropagation()}
+															onChange={(event) => setRenameDraft(event.currentTarget.value)}
+															onKeyDown={(event) => handleRenameKeyDown(event, conversation.id)}
+															onBlur={() => commitRename(conversation.id)}
+															style={{ flex: 1 }}
+															data-testid={`conversation-rename-input-${conversation.id}`}
+															aria-label={t("pages.chat.conversationList.renameAria", "Rename conversation")}
+														/>
+													) : (
+														<Text fw={600} size="sm" lineClamp={1} style={{ flex: 1, minWidth: 0 }}>
+															{conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled")}
+														</Text>
+													)}
+													{isRenaming ? null : (
+														<Group gap={4} wrap="nowrap">
+															<Text size="xs" c="dimmed">
+																{formatRelative(conversation.lastActivity ?? conversation.updatedAt)}
+															</Text>
+															{canManage ? (
+																<Menu position="bottom-end" withinPortal={true} disabled={isMutating}>
+																	<Menu.Target>
+																		<ActionIcon
+																			variant="subtle"
+																			color="gray"
+																			size="sm"
+																			loading={isMutating}
+																			onClick={(event) => event.stopPropagation()}
+																			aria-label={t("pages.chat.conversationList.actionsAria", "Conversation actions")}
+																			data-testid={`conversation-actions-${conversation.id}`}
+																		>
+																			<IconDots size={14} />
+																		</ActionIcon>
+																	</Menu.Target>
+																	<Menu.Dropdown onClick={(event) => event.stopPropagation()}>
+																		{onRename ? (
+																			<Menu.Item
+																				leftSection={<IconPencil size={14} />}
+																				onClick={() => beginRename(conversation)}
+																				data-testid={`conversation-rename-${conversation.id}`}
+																			>
+																				{t("pages.chat.conversationList.rename", "Rename")}
+																			</Menu.Item>
+																		) : null}
+																		{onTogglePin ? (
+																			<Menu.Item
+																				leftSection={conversation.isPinned ? <IconPinned size={14} /> : <IconPin size={14} />}
+																				onClick={() => onTogglePin(conversation.id, !conversation.isPinned)}
+																				data-testid={`conversation-pin-${conversation.id}`}
+																			>
+																				{conversation.isPinned
+																					? t("pages.chat.conversationList.unpin", "Unpin")
+																					: t("pages.chat.conversationList.pin", "Pin")}
+																			</Menu.Item>
+																		) : null}
+																		{onToggleArchive ? (
+																			<Menu.Item
+																				leftSection={conversation.isArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />}
+																				onClick={() => onToggleArchive(conversation.id, !conversation.isArchived)}
+																				data-testid={`conversation-archive-${conversation.id}`}
+																			>
+																				{conversation.isArchived
+																					? t("pages.chat.conversationList.unarchive", "Unarchive")
+																					: t("pages.chat.conversationList.archive", "Archive")}
+																			</Menu.Item>
+																		) : null}
+																	</Menu.Dropdown>
+																</Menu>
+															) : null}
+														</Group>
+													)}
+												</Group>
+												<Text size="xs" c="dimmed" lineClamp={1}>
+													{conversation.lastMessagePreview?.trim() || t("pages.chat.noMessages", "No messages")}
+												</Text>
+												{isRemote || conversation.isArchived ? (
+													<Group gap={4}>
+														{isRemote ? (
+															<Tooltip label={t("pages.chat.conversationList.remoteTooltip", "Started from a paired client. View-only on this node.")} withArrow={true}>
+																<Badge variant="light" color="blue" size="xs" data-testid={`conversation-remote-badge-${conversation.id}`}>
+																	{t("pages.chat.conversationList.remote", "Remote")}
+																</Badge>
+															</Tooltip>
+														) : null}
+														{conversation.isArchived ? (
+															<Badge variant="light" color="gray" size="xs">
+																{t("pages.chat.conversationList.archived", "Archived")}
+															</Badge>
+														) : null}
+													</Group>
+												) : null}
+											</Stack>
+										</Paper>
+									);
+								})}
+							</Stack>
+						),
+					)}
 				</Stack>
 			</ScrollArea>
 		</Paper>

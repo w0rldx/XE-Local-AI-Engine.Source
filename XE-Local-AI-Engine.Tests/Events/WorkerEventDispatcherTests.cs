@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -109,6 +110,74 @@ public sealed class WorkerEventDispatcherTests
         await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>());
         await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == second.InvocationId), Arg.Any<CancellationToken>());
         AssertEx.Equal(second.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhenSlotFree_SetsCurrentInvocationAndReturnsLease()
+    {
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        var lease = await dispatcher.ReportInvocationAssignedAsync(package);
+
+        AssertEx.Equal(package.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+        await lease.DisposeAsync();
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhenRemoteRunning_QueuesUntilRemoteSlotReleased()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var remoteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(remoteGate.Task);
+
+        var dispatcher = CreateDispatcher(runner);
+
+        // Remote invocation starts and holds the shared slot.
+        var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
+        await Task.Delay(20);
+
+        // Local assignment must QUEUE (not throw) while the remote holds the slot.
+        var localAssign = dispatcher.ReportInvocationAssignedAsync(local);
+        await Task.Delay(20);
+        AssertEx.False(localAssign.IsCompleted);
+        AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+
+        // Releasing the remote lets the queued local assignment proceed.
+        remoteGate.SetResult();
+        await remoteDispatch;
+        var lease = await localAssign;
+
+        AssertEx.Equal(local.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+        await lease.DisposeAsync();
+    }
+
+    [Test]
+    public async Task ReportInvocationAssignedAsync_WhenCancelledWhileQueued_AbortsWaitWithoutAssigning()
+    {
+        var runner = Substitute.For<IInvocationRunner>();
+        var remoteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(remoteGate.Task);
+
+        var dispatcher = CreateDispatcher(runner);
+        var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
+        await Task.Delay(20);
+
+        using var localCancellation = new CancellationTokenSource();
+        var localAssign = dispatcher.ReportInvocationAssignedAsync(local, localCancellation.Token);
+        await Task.Delay(20);
+
+        await localCancellation.CancelAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => localAssign);
+        AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+
+        remoteGate.SetResult();
+        await remoteDispatch;
     }
 
     [Test]
@@ -318,6 +387,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -349,6 +419,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -388,7 +459,29 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => hubMessageSender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
+    }
+
+    private static INodeChatRemotePersistenceCoordinator CreateRemotePersistenceCoordinator()
+    {
+        // A real session over a substitute pump that returns benign results, so the dispatcher's persistence
+        // drain runs without NPEs while these tests focus on the agent-run wiring.
+        var pump = Substitute.For<INodeChatInvocationPump>();
+        pump.FlushDeltaAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<InvocationState>(), Arg.Any<NodeChatPumpCursor>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), null, null, null));
+
+        var coordinator = Substitute.For<INodeChatRemotePersistenceCoordinator>();
+        coordinator.BeginAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo =>
+                   {
+                       var package = callInfo.ArgAt<RuntimePackage>(0);
+                       return new NodeChatRemotePersistenceSession(pump,
+                           new NodeChatMessageCorrelation(package.ConversationId, Guid.NewGuid(), package.InvocationId),
+                           package.ModelProfile);
+                   });
+
+        return coordinator;
     }
 
     [Test]
@@ -405,6 +498,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
@@ -431,6 +525,7 @@ public sealed class WorkerEventDispatcherTests
             new Lazy<IHubMessageSender>(() => sender),
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
+            CreateRemotePersistenceCoordinator(),
             NullLogger<WorkerEventDispatcher>.Instance);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);

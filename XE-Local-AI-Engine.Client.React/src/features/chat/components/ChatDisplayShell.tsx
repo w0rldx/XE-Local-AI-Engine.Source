@@ -20,6 +20,9 @@ export function ChatDisplayShell({
 	timelineEntries = [],
 	capabilities = defaultChatUiCapabilities,
 	inputStatus,
+	conversationSearchQuery,
+	showArchivedConversations,
+	mutatingConversationId,
 	onSelectConversation,
 	onCreateConversation,
 	onToggleConversationList,
@@ -27,6 +30,18 @@ export function ChatDisplayShell({
 	onReasoningEffortChange,
 	onSend,
 	onCancel,
+	onRegenerate,
+	onConversationSearchChange,
+	onToggleShowArchivedConversations,
+	onRenameConversation,
+	onToggleConversationPinned,
+	onToggleConversationArchived,
+	onBranchFromMessage,
+	activeRevisionByGroup,
+	onSelectRevision,
+	feedbackByMessageId,
+	pendingFeedbackMessageId,
+	onSubmitFeedback,
 	conversationListCollapsed = false,
 	disabledNotice,
 }: ChatDisplayShellProps) {
@@ -55,9 +70,17 @@ export function ChatDisplayShell({
 					selectedConversationId={selectedConversationId}
 					collapsed={conversationListCollapsed}
 					disabled={inputStatus.chatInputDisabled}
+					searchQuery={conversationSearchQuery}
+					showArchived={showArchivedConversations}
+					mutatingConversationId={mutatingConversationId}
 					onCreateConversation={onCreateConversation}
 					onSelect={onSelectConversation}
 					onToggleCollapse={onToggleConversationList}
+					onSearchChange={onConversationSearchChange}
+					onToggleShowArchived={onToggleShowArchivedConversations}
+					onRename={onRenameConversation}
+					onTogglePin={onToggleConversationPinned}
+					onToggleArchive={onToggleConversationArchived}
 				/>
 				<Paper
 					withBorder={true}
@@ -74,7 +97,19 @@ export function ChatDisplayShell({
 									{t("pages.chat.localPreviewSubtitle", "Local node display shell — safe mock data")}
 								</Text>
 							</Stack>
-							<ChatMessageList conversation={conversation} streamingMessage={streamingMessage} timelineEntries={timelineEntries} />
+							<ChatMessageList
+								conversation={conversation}
+								streamingMessage={streamingMessage}
+								timelineEntries={timelineEntries}
+								onRegenerate={onRegenerate}
+								onBranch={onBranchFromMessage}
+								activeRevisionByGroup={activeRevisionByGroup}
+								onSelectRevision={onSelectRevision}
+								showFeedbackControls={capabilities.showConversationFeedbackControls}
+								feedbackByMessageId={feedbackByMessageId}
+								pendingFeedbackMessageId={pendingFeedbackMessageId}
+								onSubmitFeedback={onSubmitFeedback}
+							/>
 							<ChatInputArea
 								availableReasoningEfforts={availableReasoningEfforts}
 								capabilities={capabilities}

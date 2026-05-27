@@ -1,14 +1,23 @@
-import { Avatar, Badge, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconChecks, IconSparkles } from "@tabler/icons-react";
+import { ActionIcon, Avatar, Badge, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { IconCheck, IconChecks, IconChevronLeft, IconChevronRight, IconCopy, IconGitBranch, IconRefresh, IconSparkles } from "@tabler/icons-react";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
+import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
 import { ChatActivityTimeline, ToolCallDisplay } from "@/features/chat/components/ToolCallDisplay";
 import { ThoughtsSection } from "@/features/chat/components/ThoughtsSection";
-import type { ChatMessageModel, ChatTimelineEntry, ChatToolCall } from "@/features/chat/models/ChatModels";
+import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel, ChatTimelineEntry, ChatToolCall } from "@/features/chat/models/ChatModels";
+
+/** Prev/next navigation across the sibling revisions (variant group) of an assistant turn (Phase 5.2). */
+export interface ChatMessageRevisionNav {
+	activeIndex: number;
+	total: number;
+	onPrevious: () => void;
+	onNext: () => void;
+}
 
 interface ChatMessageProps {
 	message: ChatMessageModel;
@@ -18,6 +27,13 @@ interface ChatMessageProps {
 	streamingReasoning?: string;
 	streamingReasoningOverflowBytes?: number;
 	entries?: ChatTimelineEntry[];
+	onRegenerate?: (messageId: string) => void;
+	revisionNav?: ChatMessageRevisionNav;
+	onBranch?: (messageId: string) => void;
+	showFeedbackControls?: boolean;
+	feedback?: ChatMessageFeedback;
+	feedbackPending?: boolean;
+	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 }
 
 function timeText(iso?: string): string {
@@ -53,6 +69,13 @@ export function ChatMessage({
 	streamingReasoning,
 	streamingReasoningOverflowBytes = 0,
 	entries = [],
+	onRegenerate,
+	revisionNav,
+	onBranch,
+	showFeedbackControls = false,
+	feedback,
+	feedbackPending = false,
+	onSubmitFeedback,
 }: ChatMessageProps) {
 	const { t } = useTranslation();
 	const reducedMotion = useReducedMotion();
@@ -63,6 +86,102 @@ export function ChatMessage({
 	const time = timeText(message.updatedAt ?? message.createdAt);
 	const hasContentStarted = message.content.trim().length > 0;
 	const toolCalls = assistantMessage ? calls(entries) : [];
+	const canCopy = hasContentStarted && !isStreaming;
+	const canRegenerate = assistantMessage && !isStreaming && Boolean(onRegenerate);
+	const canBranch = assistantMessage && !isStreaming && Boolean(onBranch);
+	const showRevisionNav = assistantMessage && !isStreaming && Boolean(revisionNav) && (revisionNav?.total ?? 0) > 1;
+	const showFeedback = assistantMessage && !isStreaming && showFeedbackControls && Boolean(onSubmitFeedback) && hasContentStarted;
+	const hasActions = canCopy || canRegenerate || canBranch || showRevisionNav || showFeedback;
+
+	const actions = hasActions ? (
+		<Group gap={2} align="center" data-testid={`chat-message-actions-${message.id}`}>
+			{showRevisionNav && revisionNav ? (
+				<Group gap={0} align="center" data-testid={`message-revision-nav-${message.id}`}>
+					<Tooltip label={t("pages.chat.revisions.previous", "Previous revision")} withArrow={true}>
+						<ActionIcon
+							aria-label={t("pages.chat.revisions.previous", "Previous revision")}
+							color="gray"
+							variant="subtle"
+							size="sm"
+							disabled={revisionNav.activeIndex <= 0}
+							onClick={revisionNav.onPrevious}
+							data-testid={`message-revision-prev-${message.id}`}
+						>
+							<IconChevronLeft size={14} />
+						</ActionIcon>
+					</Tooltip>
+					<Text size="xs" c="dimmed" data-testid={`message-revision-count-${message.id}`}>
+						{revisionNav.activeIndex + 1}/{revisionNav.total}
+					</Text>
+					<Tooltip label={t("pages.chat.revisions.next", "Next revision")} withArrow={true}>
+						<ActionIcon
+							aria-label={t("pages.chat.revisions.next", "Next revision")}
+							color="gray"
+							variant="subtle"
+							size="sm"
+							disabled={revisionNav.activeIndex >= revisionNav.total - 1}
+							onClick={revisionNav.onNext}
+							data-testid={`message-revision-next-${message.id}`}
+						>
+							<IconChevronRight size={14} />
+						</ActionIcon>
+					</Tooltip>
+				</Group>
+			) : null}
+			{canCopy ? (
+				<CopyButton value={message.content} timeout={2000}>
+					{({ copied, copy }) => (
+						<Tooltip label={copied ? t("pages.chat.actions.copySuccess", "Message copied to clipboard.") : t("pages.chat.actions.copy", "Copy message")} withArrow={true}>
+							<ActionIcon
+								aria-label={t("pages.chat.actions.copy", "Copy message")}
+								color={copied ? "teal" : "gray"}
+								variant="subtle"
+								size="sm"
+								onClick={copy}
+							>
+								{copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+							</ActionIcon>
+						</Tooltip>
+					)}
+				</CopyButton>
+			) : null}
+			{canRegenerate ? (
+				<Tooltip label={t("pages.chat.actions.regenerate", "Regenerate response")} withArrow={true}>
+					<ActionIcon
+						aria-label={t("pages.chat.actions.regenerate", "Regenerate response")}
+						color="gray"
+						variant="subtle"
+						size="sm"
+						onClick={() => onRegenerate?.(message.id)}
+					>
+						<IconRefresh size={14} />
+					</ActionIcon>
+				</Tooltip>
+			) : null}
+			{canBranch ? (
+				<Tooltip label={t("pages.chat.actions.branch", "Branch from here")} withArrow={true}>
+					<ActionIcon
+						aria-label={t("pages.chat.actions.branch", "Branch from here")}
+						color="gray"
+						variant="subtle"
+						size="sm"
+						onClick={() => onBranch?.(message.id)}
+						data-testid={`message-branch-${message.id}`}
+					>
+						<IconGitBranch size={14} />
+					</ActionIcon>
+				</Tooltip>
+			) : null}
+			{showFeedback && onSubmitFeedback ? (
+				<MessageFeedbackControl
+					messageId={message.id}
+					feedback={feedback}
+					pending={feedbackPending}
+					onSubmit={(rating, comment) => onSubmitFeedback(message.id, rating, comment)}
+				/>
+			) : null}
+		</Group>
+	) : null;
 
 	if (userMessage) {
 		return (
@@ -81,6 +200,7 @@ export function ChatMessage({
 							</Text>
 						) : null}
 						<IconChecks size={12} color="var(--mantine-color-teal-6)" />
+						{actions}
 					</Group>
 					{footer}
 				</Stack>
@@ -152,6 +272,7 @@ export function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
+				{actions}
 				{footer}
 			</Stack>
 		</Group>

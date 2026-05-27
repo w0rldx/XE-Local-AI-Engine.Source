@@ -13,6 +13,9 @@ describe("node chat mapper", () => {
 				lastMessagePreview: "Hello",
 				lastMessageStatus: "completed",
 				purged: false,
+				origin: "Remote",
+				isPinned: true,
+				archived: false,
 			}),
 		).toMatchObject({
 			id: "conversation-1",
@@ -20,6 +23,9 @@ describe("node chat mapper", () => {
 			createdAt: "2023-11-14T22:13:20.000Z",
 			updatedAt: "2023-11-14T22:13:21.000Z",
 			lastMessagePreview: "Hello",
+			origin: "remote",
+			isPinned: true,
+			isArchived: false,
 			messages: [],
 		});
 	});
@@ -32,6 +38,9 @@ describe("node chat mapper", () => {
 			createdAtUtc: 1_700_000_000_000,
 			lastSeenUtc: 1_700_000_002_000,
 			purged: false,
+			origin: "Local",
+			isPinned: false,
+			archived: true,
 			messages: [
 				{
 					messageId: "message-1",
@@ -44,6 +53,7 @@ describe("node chat mapper", () => {
 					status: "Streaming",
 					createdAtUtc: 1_700_000_001_000,
 					updatedAtUtc: 1_700_000_002_000,
+					origin: "Local",
 					model: "local-model",
 					error: null,
 					inputTokens: 10,
@@ -51,14 +61,37 @@ describe("node chat mapper", () => {
 					totalTokens: 12,
 					reasoningTokens: 1,
 				},
+				{
+					messageId: "message-2",
+					conversationId: "conversation-1",
+					requestId: "request-2",
+					sequence: 3,
+					role: "Assistant",
+					content: "",
+					reasoning: null,
+					status: "queued",
+					createdAtUtc: 1_700_000_003_000,
+					updatedAtUtc: 1_700_000_003_000,
+					origin: "Local",
+					model: null,
+					error: null,
+					inputTokens: null,
+					outputTokens: null,
+					totalTokens: null,
+					reasoningTokens: null,
+				},
 			],
 		});
 
 		expect(conversation.title).toBe("Untitled conversation");
+		// isArchived maps from the dedicated `archived` column (M2), not `purged`.
+		expect(conversation.isArchived).toBe(true);
+		expect(conversation.isPinned).toBe(false);
 		expect(conversation.messages).toEqual([
 			{
 				id: "message-1",
 				conversationId: "conversation-1",
+				requestId: "request-1",
 				role: "assistant",
 				content: "Hi",
 				reasoning: undefined,
@@ -68,10 +101,34 @@ describe("node chat mapper", () => {
 				sortOrder: 2,
 				model: "local-model",
 				error: undefined,
+				origin: "local",
 				inputTokens: 10,
 				outputTokens: 2,
 				totalTokens: 12,
 				reasoningTokens: 1,
+				parentMessageId: undefined,
+				variantGroupId: undefined,
+			},
+			{
+				id: "message-2",
+				conversationId: "conversation-1",
+				requestId: "request-2",
+				role: "assistant",
+				content: "",
+				reasoning: undefined,
+				status: "queued",
+				createdAt: "2023-11-14T22:13:23.000Z",
+				updatedAt: "2023-11-14T22:13:23.000Z",
+				sortOrder: 3,
+				model: undefined,
+				error: undefined,
+				origin: "local",
+				inputTokens: undefined,
+				outputTokens: undefined,
+				totalTokens: undefined,
+				reasoningTokens: undefined,
+				parentMessageId: undefined,
+				variantGroupId: undefined,
 			},
 		]);
 	});

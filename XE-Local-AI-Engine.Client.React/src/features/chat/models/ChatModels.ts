@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
-export type MessageStatus = "pending" | "streaming" | "completed" | "cancelled" | "failed" | "interrupted";
+export type MessageStatus = "pending" | "queued" | "streaming" | "completed" | "cancelled" | "failed" | "interrupted";
+
+export type ChatOrigin = "local" | "remote";
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
@@ -21,6 +23,9 @@ export type TimelineEventType =
 export interface ChatMessageModel {
 	id: string;
 	conversationId: string;
+	// The run's invocation/request id when this is a (re)generated assistant turn. Used to re-attach to a
+	// server-driven run via the resume registry (e.g. streaming a regenerate's variant).
+	requestId?: string;
 	role: ChatRole;
 	content: string;
 	reasoning?: string;
@@ -30,10 +35,30 @@ export interface ChatMessageModel {
 	sortOrder: number;
 	model?: string;
 	error?: string;
+	origin?: ChatOrigin;
 	inputTokens?: number;
 	outputTokens?: number;
 	totalTokens?: number;
 	reasoningTokens?: number;
+	parentMessageId?: string;
+	variantGroupId?: string;
+}
+
+export type ChatFeedbackRating = "up" | "down";
+
+export interface ChatMessageFeedback {
+	messageId: string;
+	conversationId: string;
+	rating: ChatFeedbackRating;
+	comment?: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface ChatMessageRevisions {
+	messageId: string;
+	variantGroupId?: string;
+	variants: ChatMessageModel[];
 }
 
 export interface ChatConversationModel {
@@ -45,6 +70,8 @@ export interface ChatConversationModel {
 	lastMessagePreview?: string;
 	isPinned?: boolean;
 	isArchived?: boolean;
+	origin?: ChatOrigin;
+	branchOfConversationId?: string;
 	messages: ChatMessageModel[];
 }
 
@@ -54,8 +81,13 @@ export interface ChatStreamingState {
 	content: string;
 	reasoning?: string;
 	reasoningOverflowBytes?: number;
+	// The assistant turn's own start timestamp (server-stamped when available). Used to label the
+	// transient streaming placeholder so it does not borrow the conversation's last-updated time.
+	startedAt?: string;
 	isActive: boolean;
 	isDelayed?: boolean;
+	// True while the assistant turn is queued behind another active invocation (before it starts streaming).
+	isQueued?: boolean;
 	error?: string;
 	failureCategory?: string;
 	inputTokens?: number;
@@ -133,6 +165,9 @@ export interface ChatDisplayShellProps {
 	timelineEntries?: ChatTimelineEntry[];
 	capabilities: ChatUiCapabilities;
 	inputStatus: ChatInputStatus;
+	conversationSearchQuery?: string;
+	showArchivedConversations?: boolean;
+	mutatingConversationId?: string;
 	onSelectConversation: (conversationId: string) => void;
 	onCreateConversation: () => void;
 	onToggleConversationList: () => void;
@@ -140,6 +175,18 @@ export interface ChatDisplayShellProps {
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 	onCancel: () => void;
+	onRegenerate?: (messageId: string) => void;
+	onConversationSearchChange?: (query: string) => void;
+	onToggleShowArchivedConversations?: (showArchived: boolean) => void;
+	onRenameConversation?: (conversationId: string, title: string) => void;
+	onToggleConversationPinned?: (conversationId: string, isPinned: boolean) => void;
+	onToggleConversationArchived?: (conversationId: string, archived: boolean) => void;
+	onBranchFromMessage?: (messageId: string) => void;
+	activeRevisionByGroup?: Readonly<Record<string, string>>;
+	onSelectRevision?: (variantGroupId: string, messageId: string) => void;
+	feedbackByMessageId?: Readonly<Record<string, ChatMessageFeedback>>;
+	pendingFeedbackMessageId?: string;
+	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 	conversationListCollapsed?: boolean;
 	disabledNotice?: ReactNode;
 }

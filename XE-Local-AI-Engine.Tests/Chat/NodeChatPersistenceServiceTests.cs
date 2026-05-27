@@ -164,6 +164,272 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Null(loaded);
     }
 
+    [Test]
+    public async Task EnsureConversationAsync_WhenConversationIsNew_InsertsRemoteOriginRow()
+    {
+        await using var provider = await BuildProviderAsync("ensure-new.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversationId = Guid.NewGuid();
+
+        var ensured = await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId,
+                "Remote thread",
+                "node",
+                100,
+                NodeChatOriginValues.Remote))
+            .ConfigureAwait(false);
+
+        AssertEx.Equal(conversationId, ensured.ConversationId);
+        AssertEx.Equal("Remote thread", ensured.Title);
+        AssertEx.Equal(NodeChatOriginValues.Remote, ensured.Origin);
+        AssertEx.Equal(100L, ensured.CreatedAtUtc);
+
+        var loaded = await service.GetConversationAsync(conversationId).ConfigureAwait(false);
+        AssertEx.Equal(NodeChatOriginValues.Remote, AssertEx.NotNull(loaded).Origin);
+    }
+
+    [Test]
+    public async Task EnsureConversationAsync_WhenConversationExists_ReturnsExistingRowWithoutOverwriting()
+    {
+        await using var provider = await BuildProviderAsync("ensure-existing.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Original", "node", 200)).ConfigureAwait(false);
+
+        var ensured = await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(created.ConversationId,
+                "Should be ignored",
+                "other",
+                999,
+                NodeChatOriginValues.Remote))
+            .ConfigureAwait(false);
+
+        // Existing rows are never overwritten: title/origin/timestamps from the original CreateConversationAsync persist.
+        AssertEx.Equal("Original", ensured.Title);
+        AssertEx.Equal(NodeChatOriginValues.Local, ensured.Origin);
+        AssertEx.Equal(200L, ensured.CreatedAtUtc);
+    }
+
+    [Test]
+    public async Task EnsureConversationAsync_WhenCalledTwice_IsIdempotentAndDoesNotDuplicate()
+    {
+        await using var provider = await BuildProviderAsync("ensure-idempotent.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversationId = Guid.NewGuid();
+        var request = new NodeChatEnsureConversationRequest(conversationId, "Remote thread", "node", 300, NodeChatOriginValues.Remote);
+
+        var first = await service.EnsureConversationAsync(request).ConfigureAwait(false);
+        var second = await service.EnsureConversationAsync(request with { Title = "Different", CreatedAtUtc = 400 }).ConfigureAwait(false);
+
+        AssertEx.Equal(first.ConversationId, second.ConversationId);
+        AssertEx.Equal("Remote thread", second.Title);
+        AssertEx.Equal(300L, second.CreatedAtUtc);
+
+        var summaries = await service.ListConversationsAsync(new NodeChatListConversationsRequest(true)).ConfigureAwait(false);
+        AssertEx.Equal(1, summaries.Count(summary => summary.ConversationId == conversationId));
+    }
+
+    [Test]
+    public async Task RenamePinArchive_PersistMappedColumnsAndArchivedConversationsAreHiddenUnlessRequested()
+    {
+        await using var provider = await BuildProviderAsync("rename-pin-archive.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Original", "node", 600)).ConfigureAwait(false);
+
+        var renamed = AssertEx.NotNull(await service.RenameConversationAsync(new NodeChatRenameConversationRequest(conversation.ConversationId, "  Renamed  ", 601)).ConfigureAwait(false));
+        AssertEx.Equal("Renamed", renamed.Title);
+
+        var pinned = AssertEx.NotNull(await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(conversation.ConversationId, true, 602)).ConfigureAwait(false));
+        AssertEx.True(pinned.IsPinned);
+
+        // Active listing keeps a pinned, unarchived conversation visible.
+        var active = await service.ListConversationsAsync(new NodeChatListConversationsRequest()).ConfigureAwait(false);
+        AssertEx.Contains(active.Select(summary => summary.ConversationId), conversation.ConversationId);
+        AssertEx.True(active.Single(summary => summary.ConversationId == conversation.ConversationId).IsPinned);
+
+        // Archiving hides it from the default (active) listing but not from the include-archived listing.
+        var archived = AssertEx.NotNull(await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest(conversation.ConversationId, true, 603)).ConfigureAwait(false));
+        AssertEx.True(archived.Archived);
+
+        var activeAfterArchive = await service.ListConversationsAsync(new NodeChatListConversationsRequest()).ConfigureAwait(false);
+        AssertEx.False(activeAfterArchive.Any(summary => summary.ConversationId == conversation.ConversationId));
+
+        var includingArchived = await service.ListConversationsAsync(new NodeChatListConversationsRequest(true)).ConfigureAwait(false);
+        var listedArchived = includingArchived.Single(summary => summary.ConversationId == conversation.ConversationId);
+        AssertEx.True(listedArchived.Archived);
+        AssertEx.True(listedArchived.IsPinned);
+
+        // Unarchiving restores it to the active listing.
+        await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest(conversation.ConversationId, false, 604)).ConfigureAwait(false);
+        var activeAfterUnarchive = await service.ListConversationsAsync(new NodeChatListConversationsRequest()).ConfigureAwait(false);
+        AssertEx.Contains(activeAfterUnarchive.Select(summary => summary.ConversationId), conversation.ConversationId);
+    }
+
+    [Test]
+    public async Task RenamePinArchive_WhenConversationMissing_ReturnsNull()
+    {
+        await using var provider = await BuildProviderAsync("rename-pin-archive-missing.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var missingId = Guid.NewGuid();
+
+        AssertEx.Null(await service.RenameConversationAsync(new NodeChatRenameConversationRequest(missingId, "Nope", 700)).ConfigureAwait(false));
+        AssertEx.Null(await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(missingId, true, 701)).ConfigureAwait(false));
+        AssertEx.Null(await service.SetConversationArchivedAsync(new NodeChatSetConversationArchivedRequest(missingId, true, 702)).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task MutationGuard_AllowsLocalRejectsRemoteAndIgnoresMissing()
+    {
+        await using var provider = await BuildProviderAsync("guard.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var guard = new NodeChatMutationGuard(service);
+
+        var local = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local", "node", 500)).ConfigureAwait(false);
+        var remoteId = Guid.NewGuid();
+        await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(remoteId, "Remote", "node", 501, NodeChatOriginValues.Remote)).ConfigureAwait(false);
+
+        // Local origin: no-op (no throw).
+        await guard.EnsureMutableAsync(local.ConversationId).ConfigureAwait(false);
+
+        // Missing conversation: no-op (guard never masks NotFound).
+        await guard.EnsureMutableAsync(Guid.NewGuid()).ConfigureAwait(false);
+
+        // Remote origin: rejected.
+        var rejection = await AssertEx.ThrowsAsync<NodeChatReadOnlyConversationException>(() => guard.EnsureMutableAsync(remoteId)).ConfigureAwait(false);
+        AssertEx.Equal(remoteId, rejection.ConversationId);
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_ClonesMessagesUpToCutoffIntoNewLocalConversation()
+    {
+        await using var provider = await BuildProviderAsync("branch.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", 800)).ConfigureAwait(false);
+
+        var first = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "first", 801)).ConfigureAwait(false);
+        var assistantId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(source.ConversationId, assistantId, Guid.NewGuid(), 802)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "after cutoff", 803)).ConfigureAwait(false);
+
+        // Branch at the assistant message (sequence 1): only the first two messages should be copied.
+        var branch = AssertEx.NotNull(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, assistantId, 810)).ConfigureAwait(false));
+        AssertEx.Equal(2, branch.CopiedMessageCount);
+        AssertEx.Equal(source.ConversationId, branch.SourceConversationId);
+
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        AssertEx.Equal(NodeChatOriginValues.Local, branched.Origin);
+        AssertEx.Equal(source.ConversationId, branched.BranchOfConversationId);
+        AssertEx.Equal(2, branched.Messages.Count);
+        AssertEx.Equal("first", branched.Messages[0].Content);
+        // Copies are fresh rows: the branch does not reuse the source message ids.
+        AssertEx.False(branched.Messages.Any(message => message.MessageId == first.MessageId || message.MessageId == assistantId));
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_WhenMessageNotInConversation_ReturnsNull()
+    {
+        await using var provider = await BuildProviderAsync("branch-missing.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", 820)).ConfigureAwait(false);
+
+        AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, Guid.NewGuid(), 821)).ConfigureAwait(false));
+        AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(Guid.NewGuid(), Guid.NewGuid(), 822)).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task CreateMessageVariantAsync_CreatesSiblingSharingVariantGroupAndBackstampsOriginal()
+    {
+        await using var provider = await BuildProviderAsync("variant.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Variants", "node", 900)).ConfigureAwait(false);
+        var userId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userId, "question", 901)).ConfigureAwait(false);
+        var originalAssistantId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalAssistantId, Guid.NewGuid(), 902)).ConfigureAwait(false);
+
+        var variant = AssertEx.NotNull(await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId,
+                originalAssistantId,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                903))
+            .ConfigureAwait(false));
+
+        AssertEx.Equal(originalAssistantId, variant.OriginalMessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Pending, variant.Variant.Status);
+        AssertEx.Equal(originalAssistantId, variant.Variant.ParentMessageId);
+
+        // Both the original and the new sibling now share one variant group, listed together.
+        var variants = await service.ListMessageVariantsAsync(conversation.ConversationId, originalAssistantId).ConfigureAwait(false);
+        AssertEx.Equal(2, variants.Count);
+        AssertEx.True(variants.All(message => message.VariantGroupId == variant.VariantGroupId));
+        AssertEx.Contains(variants.Select(message => message.MessageId), originalAssistantId);
+        AssertEx.Contains(variants.Select(message => message.MessageId), variant.Variant.MessageId);
+    }
+
+    [Test]
+    public async Task CreateMessageVariantAsync_WhenOriginalMissing_ReturnsNull()
+    {
+        await using var provider = await BuildProviderAsync("variant-missing.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Variants", "node", 910)).ConfigureAwait(false);
+
+        AssertEx.Null(await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                911))
+            .ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task SetMessageFeedbackAsync_UpsertsRatingAndComment()
+    {
+        await using var provider = await BuildProviderAsync("feedback.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Feedback", "node", 1000)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, messageId, Guid.NewGuid(), 1001)).ConfigureAwait(false);
+
+        var created = await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Up, "  great  ", 1002)).ConfigureAwait(false);
+        AssertEx.Equal(NodeChatFeedbackRatingValues.Up, created.Rating);
+        AssertEx.Equal("great", created.Comment);
+        AssertEx.Equal(1002L, created.CreatedAtUtc);
+
+        // Re-submitting overwrites rating/comment but preserves the first-seen created_at_utc.
+        var updated = await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Down, null, 1003)).ConfigureAwait(false);
+        AssertEx.Equal(NodeChatFeedbackRatingValues.Down, updated.Rating);
+        AssertEx.Null(updated.Comment);
+        AssertEx.Equal(1002L, updated.CreatedAtUtc);
+        AssertEx.Equal(1003L, updated.UpdatedAtUtc);
+
+        var loaded = AssertEx.NotNull(await service.GetMessageFeedbackAsync(conversation.ConversationId, messageId).ConfigureAwait(false));
+        AssertEx.Equal(NodeChatFeedbackRatingValues.Down, loaded.Rating);
+    }
+
+    [Test]
+    public async Task GetMessageFeedbackAsync_WhenNone_ReturnsNull()
+    {
+        await using var provider = await BuildProviderAsync("feedback-missing.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Feedback", "node", 1010)).ConfigureAwait(false);
+
+        AssertEx.Null(await service.GetMessageFeedbackAsync(conversation.ConversationId, Guid.NewGuid()).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task DeleteConversationAsync_WhenPurging_RemovesMessageFeedbackRows()
+    {
+        await using var provider = await BuildProviderAsync("feedback-purge.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Feedback", "node", 1100)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, messageId, Guid.NewGuid(), 1101)).ConfigureAwait(false);
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Up, "keep private", 1102)).ConfigureAwait(false);
+
+        // SQLite ON DELETE CASCADE is not enforced (no PRAGMA foreign_keys=ON), so the purge must delete the
+        // feedback row explicitly or plaintext feedback orphans after the conversation is gone (privacy gap).
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, 1103, PurgeImmediately: true)).ConfigureAwait(false);
+
+        AssertEx.Null(await service.GetMessageFeedbackAsync(conversation.ConversationId, messageId).ConfigureAwait(false));
+    }
+
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
     {
         var databasePath = GetDatabasePath(fileName);

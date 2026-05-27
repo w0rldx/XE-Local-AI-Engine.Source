@@ -71,6 +71,51 @@ describe("node chat stream state", () => {
 		]);
 	});
 
+	it("marks the assistant turn queued, then clears the queued flag when streaming begins", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const queued = applyNodeChatStreamEvent(
+			optimistic,
+			// Mirrors the runner's wire shape: type "assistant-queued", status "queued" (NodeChatMessageStatusValues.Queued).
+			streamEvent({ type: nodeChatStreamEventTypes.assistantQueued, status: "queued", content: null, delta: null }),
+		);
+		expect(queued.streamingMessage).toMatchObject({ messageId: "assistant-1", isQueued: true, isActive: true, content: "" });
+		expect(queued.isTerminal).toBe(false);
+		expect(queued.conversation.messages.find((message) => message.id === "assistant-1")?.status).toBe("queued");
+
+		const streaming = applyNodeChatStreamEvent(
+			queued.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantStreaming, status: "streaming", content: "hi", delta: "hi" }),
+		);
+		expect(streaming.streamingMessage).toMatchObject({ messageId: "assistant-1", isQueued: false, isActive: true, content: "hi" });
+		expect(streaming.conversation.messages.find((message) => message.id === "assistant-1")?.status).toBe("streaming");
+	});
+
+	it("stamps the streaming state with the assistant turn's own start time, not the conversation update time", () => {
+		// Optimistic assistant turn started at 00:00:01; a later conversation update must not be borrowed.
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const conversationWithLaterUpdate = { ...optimistic, updatedAt: "2026-05-24T09:30:00.000Z" };
+
+		const persisted = applyNodeChatStreamEvent(
+			conversationWithLaterUpdate,
+			streamEvent({ type: nodeChatStreamEventTypes.userMessagePersisted, status: "completed", content: "hello" }),
+		);
+		const streaming = applyNodeChatStreamEvent(persisted.conversation, streamEvent({ content: "hi", delta: "hi" }));
+
+		expect(persisted.streamingMessage.startedAt).toBe("2026-05-24T00:00:01.000Z");
+		expect(streaming.streamingMessage.startedAt).toBe("2026-05-24T00:00:01.000Z");
+	});
+
 	it("does not let a user-persisted event clobber the optimistic assistant placeholder", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
