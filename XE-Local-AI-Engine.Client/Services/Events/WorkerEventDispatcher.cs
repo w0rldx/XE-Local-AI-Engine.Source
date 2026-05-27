@@ -783,6 +783,21 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         }
     }
 
+    /// <summary>
+    ///     TEST-ONLY: clears <see cref="CurrentInvocation" /> back to null under the dispatcher's lock.
+    ///     Production never resets the slot (it is only ever assigned), so e2e tests that share a single
+    ///     <see cref="WorkerEventDispatcher" /> via <c>PerTestSession</c> use this to stop a completed
+    ///     chat's invocation from leaking into the Invocations empty-state assertions. Exposed to the e2e
+    ///     test assembly via <c>InternalsVisibleTo</c>; not part of the public contract.
+    /// </summary>
+    internal void ResetForTests()
+    {
+        lock (_syncRoot)
+        {
+            CurrentInvocation = null;
+        }
+    }
+
     private InvocationState? GetCurrentInvocationSnapshot()
     {
         lock (_syncRoot)
@@ -825,6 +840,23 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         {
             if (CurrentInvocation?.InvocationId != invocationId)
             {
+                // The current slot was replaced (or cleared) before this update arrived. A dropped terminal here
+                // would silently leave the message non-terminal; we apply the update against the matching id only,
+                // so probe the dropped status outside the lock to surface terminal drops for diagnosis.
+                var dropped = update(new InvocationState
+                {
+                    InvocationId = invocationId,
+                    ConversationId = CurrentInvocation?.ConversationId ?? Guid.Empty
+                });
+
+                if (NodeChatInvocationPump.IsTerminal(dropped.Status))
+                {
+                    _logger.LogWarning("Dropped a terminal {Status} update for invocation {InvocationId} because the current invocation is {CurrentInvocationId}. The terminal will not be persisted via this slot.",
+                        dropped.Status,
+                        invocationId,
+                        CurrentInvocation?.InvocationId);
+                }
+
                 return;
             }
 

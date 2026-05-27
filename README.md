@@ -1,43 +1,112 @@
-# AI Chat with Custom Data
+# XE Local AI Engine
 
-This project is an AI chat application that demonstrates how to chat with custom data using an AI language model. Please note that this template is currently in an early preview stage. If you have
-feedback, please take a [brief survey](https://aka.ms/dotnet-chat-templatePreview2-survey).
+XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform `WorkerHub` connection, and coordinates local model/runtime workflows through HostAgent and Tray components.
 
-> [!NOTE]
-> Before running this project you need to configure the API keys or endpoints for the providers you have chosen. See below for details specific to your choices.
+The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
-### Known Issues
+## What ships from this repo
 
-#### Errors running Ollama or Docker
+- **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub` connection.
+- **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, models, and HostAgent actions.
+- **HostAgent.Windows / HostAgent.Linux** — local substrate components for Windows-managed WSL2 and Linux-native runtime management.
+- **Tray Launcher** (`XE-Local-AI-Engine.Tray`) — desktop entry point, status surface, and local start/stop/restart control.
+- **Providers and agents** — local provider abstractions, Ollama provider integration, and shared agent execution loop.
+- **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama support.
 
-A recent incompatibility was found between Ollama and Docker Desktop. This issue results in runtime errors when connecting to Ollama, and the workaround for that can lead to Docker not working for
-Aspire projects.
+## Architecture rules
 
-This incompatibility can be addressed by upgrading to Docker Desktop 4.41.1. See [ollama/ollama#9509](https://github.com/ollama/ollama/issues/9509#issuecomment-2842461831) for more information and a
-link to install the version of Docker Desktop with the fix.
+- Only the Node Web Server talks to the C0re platform over `WorkerHub`.
+- HostAgent and Tray are local substrate components only; they do not connect to the platform.
+- Worker credentials, admin tokens, HMAC secrets, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to the browser or written to logs/transcripts.
+- Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
+- Windows and Linux installers must not create background autostart behavior unless a new approved plan changes that contract.
 
-# Configure the AI Model Provider
+See [HostAgent architecture](docs/host-agent/architecture.md) for the full component and security-boundary model.
 
-## Setting up a local environment using Ollama
+## Documentation map
 
-This project is configured to use Ollama, an application that allows you to run AI models locally on your workstation. Note: Ollama is an excellent open source product, but it is not maintained by
-Microsoft.
+Start with the HostAgent documentation index:
 
-### 1. Install Ollama
+- [HostAgent docs](docs/host-agent/README.md)
+- [Release and operations](docs/host-agent/release-and-operations.md)
+- [Aspire development modes](docs/host-agent/aspire-dev.md)
+- [Windows installation](docs/host-agent/install-windows.md)
+- [Linux installation](docs/host-agent/install-linux.md)
+- [Tray launcher](docs/host-agent/tray.md)
+- [Bring your own runtime](docs/host-agent/byo.md)
+- [Troubleshooting](docs/host-agent/troubleshooting.md)
 
-First, download and install Ollama from their [official website](https://www.ollama.com). Follow the installation instructions specific to your operating system.
+Component-specific notes:
 
-### 2. Choose and Install Models
+- [Node Web Server README](XE-Local-AI-Engine.Client/README.md)
+- [React Client README](XE-Local-AI-Engine.Client.React/README.md)
 
-This project uses the `llama3.2` and `all-minilm` language models. To install these models, use the following commands in your terminal once Ollama has been installed:
+## Local development
 
-```sh
-ollama pull llama3.2
-ollama pull all-minilm
+### Prerequisites
+
+- .NET SDK from [`global.json`](global.json)
+- Node.js compatible with `XE-Local-AI-Engine.Client.React/package.json`
+- pnpm via Corepack or a local install
+- Docker/rootless Docker and Ollama when exercising runtime-fidelity or release-like paths
+
+### Common commands
+
+From the repository root:
+
+```bash
+dotnet restore XE-Local-AI-Engine.slnx
+dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
+dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build
 ```
 
-### 3. Learn more about Ollama
+For the React client:
 
-Once the models are installed, you can start using them in your application. Refer to the [Ollama documentation](https://github.com/ollama/ollama/blob/main/docs/README.md) for detailed instructions on
-how to explore models locally.
+```bash
+cd XE-Local-AI-Engine.Client.React
+pnpm install --frozen-lockfile
+pnpm run lint
+pnpm test
+pnpm run build
+```
 
+The repository validation wrapper mirrors these commands:
+
+```bash
+bash .opencode/scripts/project-validate.sh --scope changed --serial
+```
+
+E2E validation is ask-gated because it may require browser/runtime setup:
+
+```bash
+bash .opencode/scripts/project-validate.sh --scope e2e --confirm-e2e --serial
+```
+
+## Aspire modes
+
+Use Aspire for local development and integration checks, not as a replacement for installer clean-install tests.
+
+```bash
+dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https
+dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https-fast-dev
+dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https-runtime-fidelity
+```
+
+See [Aspire development modes](docs/host-agent/aspire-dev.md) for mode details and limitations.
+
+## RC readiness status
+
+Do not mark release or documentation work complete until matching validation evidence is available.
+
+Required evidence includes:
+
+- restore/build/test transcripts
+- generated schema/sample manifest validation
+- digest-pinned runtime images and package checksums
+- Windows clean-install transcript
+- Linux clean-install transcript
+- runtime smoke-test transcript
+
+Clean-install runner scripts are tracked under `ci/host-agent/`. Their transcripts remain pending until RC MSI/deb/rpm artifacts are produced and executed on clean runners.
+
+Use [Release and operations](docs/host-agent/release-and-operations.md) as the release checklist and evidence index.

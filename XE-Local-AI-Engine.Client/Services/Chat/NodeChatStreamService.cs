@@ -68,11 +68,18 @@ public sealed class NodeChatStreamService(
         var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
 
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection. When the
+        // client cancellationToken fires on disconnect we must only stop forwarding SSE events to the browser;
+        // we must never cancel the run or the persistence pump, otherwise the pump would terminalize the message
+        // as interrupted before the runner reported its real terminal of Completed or Failed. runCancellation is
+        // therefore deliberately NOT linked to cancellationToken — it is tripped only by a genuine user cancel,
+        // the stop button routed through the cancellation registry via CancelNodeChatMessageEndpoint, which also
+        // cancels the runner's own loop so the pump persists the true Cancelled terminal.
+        using var runCancellation = new CancellationTokenSource();
         using var registration = cancellationRegistry.Register(correlation, () =>
         {
             invocationRunner.Cancel(requestId);
-            linkedCancellation.Cancel();
+            runCancellation.Cancel();
         });
 
         var stateChannel = Channel.CreateUnbounded<InvocationState>(new UnboundedChannelOptions
@@ -130,7 +137,7 @@ public sealed class NodeChatStreamService(
             correlation,
             request.Model,
             sequence,
-            linkedCancellation.Token);
+            runCancellation.Token);
         var runTask = RunInvocationAsync(package,
             assistantMessageId,
             stateChannel.Writer,
@@ -138,10 +145,13 @@ public sealed class NodeChatStreamService(
             correlation,
             requestId,
             sequence,
-            linkedCancellation.Token);
+            runCancellation.Token);
 
         try
         {
+            // Forward persisted events to the client. The client cancellationToken stops THIS loop only (e.g. the
+            // browser/SignalR stream unsubscribed or disconnected). It does not cancel the run or the pump: those
+            // keep going on runCancellation.Token so the runner reaches its real terminal and the pump persists it.
             await foreach (var streamEvent in eventChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 yield return streamEvent;
@@ -149,10 +159,14 @@ public sealed class NodeChatStreamService(
         }
         finally
         {
-            eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
-            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
-            await linkedCancellation.CancelAsync().ConfigureAwait(false);
-
+            // Do NOT cancel runCancellation here on a client disconnect. Let runTask and pumpTask drain to the
+            // runner's true terminal (Completed/Failed/Cancelled) so persistence follows the runner's lifecycle,
+            // not the client connection's. A genuine user cancel already tripped runCancellation via the registry.
+            //
+            // IMPORTANT: unsubscribe AFTER awaiting runTask/pumpTask, not before. The runner may fire
+            // InvocationStateChanged (the Completed terminal) after the SSE loop exits. If we unsubscribe first,
+            // the terminal state never reaches the stateChannel, the pump ends without a terminal, and the message
+            // is falsely persisted as interrupted.
             try
             {
                 await Task.WhenAll(runTask, pumpTask).ConfigureAwait(false);
@@ -160,6 +174,11 @@ public sealed class NodeChatStreamService(
             catch (OperationCanceledException)
             {
                 // The terminal cancelled/interrupted event is persisted by the pump.
+            }
+            finally
+            {
+                eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+                eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             }
         }
     }

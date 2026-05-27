@@ -47,22 +47,35 @@ HostAgent removes `runtime.json` on graceful shutdown. A stale file after a cras
 
 ## Reproducible headless transcript
 
-H1's acceptance criteria require an embedded transcript captured from a reproducible Windows 11 headless runner. That capture requires the VM/packer/Pester runner and installer artifacts, which are not present in this checkout.
+H1's acceptance criteria require an embedded transcript captured from a reproducible Windows 11 headless runner. The runner entry point is tracked in this repo; the transcript remains pending until an RC MSI artifact is available and the script is executed on a clean Windows 11 image.
 
-Expected runner shape:
+Runner command:
 
 ```powershell
-# run from a clean Windows 11 VM image
+# run from a clean Windows 11 VM image at the repository root
 pwsh .\ci\host-agent\windows-clean-install.ps1 `
   -MsiPath .\artifacts\XE-Local-AI-Engine.msi `
-  -TranscriptPath .\artifacts\windows-clean-install.transcript.txt
+  -TranscriptPath .\artifacts\windows-clean-install.transcript.txt `
+  -ExpectedSha256 <msi-sha256> `
+  -RequireTrustedSignature
 ```
+
+Runner options:
+
+| Option | Purpose |
+| --- | --- |
+| `-TimeoutSeconds <seconds>` | Override the MSI install timeout budget. Default is `900`. |
+| `-ExpectedSha256 <hash>` | Validate the MSI SHA-256 before install and record the actual hash in the transcript. |
+| `-RequireTrustedSignature` | Require a valid Authenticode signature and record signer subject/thumbprint. |
+| `-AllowRebootRequired` | Accept MSI exit code `3010`; use only when the release plan explicitly treats reboot-required as blocked evidence, not completed install evidence. |
 
 The transcript must end with equivalent evidence:
 
 ```text
 MSI exit code: 0
-Autostart guard: no service, no scheduled task, no Run-key
+MSI SHA-256 validation: passed
+MSI Authenticode signature validation: passed
+Autostart guard: no service, no scheduled task, no registry Run/RunOnce entry, no startup folder entry
 User launch: desktop shortcut invoked
 HostAgent admin status: state=running desired_state=running ollama=healthy web-server=healthy
 WorkerHub: connected
@@ -70,7 +83,7 @@ Tray: green
 Open Web UI: browser launched React Web UI URL
 ```
 
-Replace this section with the captured transcript before claiming H1 complete.
+Status: `(blocked: clean Windows 11 runner transcript pending RC MSI artifact)`. Replace this section with the captured transcript before claiming H1 complete.
 
 ## Troubleshooting pointers
 
