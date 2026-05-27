@@ -1,0 +1,32 @@
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade
+
+allowBuilds:
+  msgpackr-extract: true
+
+trustPolicyExclude:
+  - 'semver@6.3.1'
+
+minimumReleaseAgeExclude:
+  - '@tanstack/form-core@1.32.1'
+  - '@tanstack/form-devtools@0.2.28'
+  - '@tanstack/query-core@5.100.14'
+  - '@tanstack/query-devtools@5.100.14'
+  - '@tanstack/react-form-devtools@0.2.28'
+  - '@tanstack/react-form@1.32.1'
+  - '@tanstack/react-query-devtools@5.100.14'
+  - '@tanstack/react-query@5.100.14'
+  - '@tanstack/router-core@1.171.6'
+  - '@tanstack/router-generator@1.167.10'
+  - '@tanstack/router-plugin@1.168.11'
+  - '@tanstack/router-utils@1.162.1'
+  - '@vitest/coverage-v8@4.1.7'
+  - '@vitest/expect@4.1.7'
+  - '@vitest/mocker@4.1.7'
+  - '@vitest/pretty-format@4.1.7'
+  - '@vitest/runner@4.1.7'
+  - '@vitest/snapshot@4.1.7'
+  - '@vitest/spy@4.1.7'
+  - '@vitest/ui@4.1.7'
+  - '@vitest/utils@4.1.7'
+  - vitest@4.1.7

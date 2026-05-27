@@ -1,12 +1,12 @@
 import { Alert, Button, Card, Container, Group, Loader, NumberInput, Stack, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getNodeSettings, type NodeSettingsDto, saveNodeSettings } from "@/features/node-settings/api/NodeSettingsApi";
 import {
-	nodeSettingsDefaults,
 	type NodeSettingsTimeoutInput,
+	nodeSettingsDefaults,
 	toValidNodeSettingsTimeoutSeconds,
 } from "@/features/node-settings/models/NodeSettingsModel";
 import { nodeSettingsQueryKeys } from "@/features/node-settings/queries/NodeSettingsQueryKeys";
@@ -22,7 +22,9 @@ export function NodeSettings() {
 		queryFn: ({ signal }) => getNodeSettings({ signal }),
 	});
 	const settings = settingsQuery.data;
-	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(nodeSettingsDefaults.maxMessageRequestTimeoutSeconds);
+	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
+		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
+	);
 	const [message, setMessage] = useState<string | undefined>();
 
 	useEffect(() => {
@@ -32,22 +34,24 @@ export function NodeSettings() {
 	}, [settings]);
 
 	const minTimeout = settings?.minMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.minMessageRequestTimeoutSeconds;
-	const maxTimeout = settings?.maxAllowedMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxAllowedMessageRequestTimeoutSeconds;
-	const timeoutToSave = useMemo(() => toValidNodeSettingsTimeoutSeconds(timeoutSeconds, minTimeout, maxTimeout), [maxTimeout, minTimeout, timeoutSeconds]);
+	const maxTimeout =
+		settings?.maxAllowedMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxAllowedMessageRequestTimeoutSeconds;
+	const timeoutToSave = useMemo(
+		() => toValidNodeSettingsTimeoutSeconds(timeoutSeconds, minTimeout, maxTimeout),
+		[maxTimeout, minTimeout, timeoutSeconds],
+	);
 
-	const applySettings = useCallback(
-		async (updatedSettings: NodeSettingsDto) => {
+	const saveMutation = useMutation({
+		mutationFn: () =>
+			saveNodeSettings({
+				maxMessageRequestTimeoutSeconds: timeoutToSave ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
+			}),
+		onSuccess: async (updatedSettings: NodeSettingsDto) => {
 			setMessage("Node settings saved. Capability reporting was requested for the worker connection.");
 			setTimeoutSeconds(updatedSettings.maxMessageRequestTimeoutSeconds);
 			queryClient.setQueryData(nodeSettingsQueryKeys.settings(), updatedSettings);
 			await queryClient.invalidateQueries({ queryKey: nodeSettingsQueryKeys.settings() });
 		},
-		[queryClient],
-	);
-
-	const saveMutation = useMutation({
-		mutationFn: () => saveNodeSettings({ maxMessageRequestTimeoutSeconds: timeoutToSave ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds }),
-		onSuccess: applySettings,
 	});
 
 	const canSave = timeoutToSave !== undefined && !saveMutation.isPending;
@@ -66,7 +70,7 @@ export function NodeSettings() {
 				{settingsQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">Loading node settings...</Text>
+						<Text c="dimmed">Loading node settings…</Text>
 					</Group>
 				) : null}
 
@@ -91,7 +95,8 @@ export function NodeSettings() {
 							<IconSettings size={22} />
 						</Group>
 						<Text c="dimmed">
-							The maximum message request timeout is included in capability reports so the platform can respect this worker's local runtime limit.
+							The maximum message request timeout is included in capability reports so the platform can respect this worker's
+							local runtime limit.
 						</Text>
 						<NumberInput
 							label="Maximum message request timeout"
@@ -106,10 +111,20 @@ export function NodeSettings() {
 							error={timeoutToSave === undefined ? `Enter a whole number from ${minTimeout} to ${maxTimeout}.` : undefined}
 						/>
 						<Group>
-							<Button leftSection={<IconDeviceFloppy size={16} />} onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={!canSave}>
+							<Button
+								leftSection={<IconDeviceFloppy size={16} />}
+								onClick={() => saveMutation.mutate()}
+								loading={saveMutation.isPending}
+								disabled={!canSave}
+							>
 								Save settings
 							</Button>
-							<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={() => settingsQuery.refetch()} disabled={settingsQuery.isFetching}>
+							<Button
+								variant="subtle"
+								leftSection={<IconRefresh size={16} />}
+								onClick={() => settingsQuery.refetch()}
+								disabled={settingsQuery.isFetching}
+							>
 								Reload
 							</Button>
 						</Group>

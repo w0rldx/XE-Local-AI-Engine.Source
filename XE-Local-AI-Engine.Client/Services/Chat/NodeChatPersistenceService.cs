@@ -870,11 +870,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     private static async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ReadMessagesAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        // LEFT JOIN the node-local feedback row so the conversation read carries each message's feedback state
+        // (rating/comment) inline — the client derives feedback from the message instead of a per-message GET.
         command.CommandText = """
-                              SELECT message_id, conversation_id, request_id, sequence, role, content, metadata_json, status, created_at_utc, updated_at_utc, error, origin, parent_message_id, variant_group_id
-                              FROM messages
-                              WHERE conversation_id = $conversation_id
-                              ORDER BY sequence ASC;
+                              SELECT m.message_id, m.conversation_id, m.request_id, m.sequence, m.role, m.content, m.metadata_json, m.status, m.created_at_utc, m.updated_at_utc, m.error, m.origin, m.parent_message_id, m.variant_group_id, f.rating, f.comment
+                              FROM messages m
+                              LEFT JOIN message_feedback f ON f.message_id = m.message_id
+                              WHERE m.conversation_id = $conversation_id
+                              ORDER BY m.sequence ASC;
                               """;
         AddParameter(command, "$conversation_id", conversationId);
 
@@ -906,7 +909,9 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 metadata.ReasoningCount,
                 reader.GetString(11),
                 await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(12)),
-                await reader.IsDBNullAsync(13, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(13))));
+                await reader.IsDBNullAsync(13, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(13)),
+                await reader.IsDBNullAsync(14, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(14),
+                await reader.IsDBNullAsync(15, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(15)));
         }
 
         return messages;

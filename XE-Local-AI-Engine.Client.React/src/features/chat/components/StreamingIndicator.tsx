@@ -2,6 +2,8 @@ import { Badge, Group, Text } from "@mantine/core";
 import { IconClock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+/* eslint-disable react-doctor/no-many-boolean-props */
+
 interface StreamingIndicatorProps {
 	error?: string;
 	failureCategory?: string;
@@ -11,7 +13,14 @@ interface StreamingIndicatorProps {
 	isActive: boolean;
 }
 
-export function StreamingIndicator({ error, failureCategory, hasContent = false, isDelayed = false, isQueued = false, isActive }: StreamingIndicatorProps) {
+export function StreamingIndicator({
+	error,
+	failureCategory,
+	hasContent = false,
+	isDelayed = false,
+	isQueued = false,
+	isActive,
+}: StreamingIndicatorProps) {
 	const { t } = useTranslation();
 
 	if (error) {
@@ -33,7 +42,13 @@ export function StreamingIndicator({ error, failureCategory, hasContent = false,
 	// invocation, so show a paused clock affordance with no typing text.
 	if (isQueued && isActive) {
 		return (
-			<Badge color="gray" size="sm" variant="light" leftSection={<IconClock size={12} />} data-testid="chat-stream-queued-indicator">
+			<Badge
+				color="gray"
+				size="sm"
+				variant="light"
+				leftSection={<IconClock size={12} />}
+				data-testid="chat-stream-queued-indicator"
+			>
 				{t("pages.chat.queued", "Queued — waiting for current task")}
 			</Badge>
 		);

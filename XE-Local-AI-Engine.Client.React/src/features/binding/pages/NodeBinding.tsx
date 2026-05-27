@@ -1,9 +1,14 @@
 import { Alert, Anchor, Button, Card, Container, Group, List, Stack, Table, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconExternalLink, IconInfoCircle } from "@tabler/icons-react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { cancelNodeBinding, type NodeBindingSessionDto, pollNodeBinding, startNodeBinding } from "@/features/binding/api/NodeBindingApi";
+import {
+	cancelNodeBinding,
+	type NodeBindingSessionDto,
+	pollNodeBinding,
+	startNodeBinding,
+} from "@/features/binding/api/NodeBindingApi";
 
 function statusColor(status: string): "blue" | "green" | "orange" | "red" {
 	const normalized = status.toLowerCase();
@@ -29,6 +34,7 @@ function formatDate(value: string): string {
 }
 
 export function NodeBinding() {
+	const queryClient = useQueryClient();
 	const pollAbortController = useRef<AbortController | null>(null);
 	const [session, setSession] = useState<NodeBindingSessionDto | undefined>();
 	const [status, setStatus] = useState("not-started");
@@ -57,29 +63,32 @@ export function NodeBinding() {
 				setError(errorMessage(pollError));
 			}
 		},
-		onSettled: () => {
+		onSettled: async () => {
+			await queryClient.invalidateQueries();
 			pollAbortController.current = null;
 		},
 	});
 
 	const startMutation = useMutation({
 		mutationFn: () => startNodeBinding(),
-		onSuccess: (startedSession) => {
+		onSuccess: async (startedSession) => {
 			setSession(startedSession);
 			setStatus("pending");
 			setMessage("Binding started. Approve this worker in the Central Platform.");
 			setError(undefined);
 			pollMutation.mutate(startedSession);
+			await queryClient.invalidateQueries();
 		},
 		onError: (startError) => setError(errorMessage(startError)),
 	});
 
 	const cancelMutation = useMutation({
 		mutationFn: () => cancelNodeBinding(),
-		onSettled: () => {
+		onSettled: async () => {
 			pollAbortController.current?.abort();
 			setStatus("cancelled");
 			setMessage("Binding polling was cancelled locally.");
+			await queryClient.invalidateQueries();
 		},
 	});
 
@@ -104,7 +113,9 @@ export function NodeBinding() {
 						Worker Node
 					</Text>
 					<Title order={2}>Bind this node to your Central Platform account</Title>
-					<Text c="dimmed">Start binding here, then approve the request in the Central Platform using the displayed user code.</Text>
+					<Text c="dimmed">
+						Start binding here, then approve the request in the Central Platform using the displayed user code.
+					</Text>
 				</Stack>
 
 				{message ? (
@@ -156,7 +167,13 @@ export function NodeBinding() {
 										<Button variant="outline" onClick={handleCancel} disabled={!canCancel || cancelMutation.isPending}>
 											{cancelMutation.isPending ? "Cancelling..." : "Cancel polling"}
 										</Button>
-										<Button component="a" href={session.verificationUriComplete} target="_blank" rel="noreferrer" rightSection={<IconExternalLink size={14} />}>
+										<Button
+											component="a"
+											href={session.verificationUriComplete}
+											target="_blank"
+											rel="noreferrer"
+											rightSection={<IconExternalLink size={14} />}
+										>
 											Open approval link
 										</Button>
 									</Group>
@@ -178,7 +195,9 @@ export function NodeBinding() {
 							<List icon={<IconCheck size={16} />} spacing="sm">
 								<List.Item>Click Start binding to request a one-time user code.</List.Item>
 								<List.Item>Open the approval link and sign in to the Central Platform.</List.Item>
-								<List.Item>The worker polls at the server-provided interval and stores credentials only after approval.</List.Item>
+								<List.Item>
+									The worker polls at the server-provided interval and stores credentials only after approval.
+								</List.Item>
 							</List>
 						</Stack>
 					</Card>

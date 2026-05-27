@@ -1,9 +1,27 @@
-import { Alert, Badge, Button, Card, Container, Group, Loader, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Button,
+	Card,
+	Container,
+	Group,
+	Loader,
+	PasswordInput,
+	Stack,
+	Text,
+	TextInput,
+	Title,
+} from "@mantine/core";
 import { IconAlertTriangle, IconCloud, IconDeviceFloppy, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { clearCloudSettings, type CloudSettingsDto, getCloudSettings, saveCloudSettings } from "@/features/cloud-settings/api/CloudSettingsApi";
+import {
+	type CloudSettingsDto,
+	clearCloudSettings,
+	getCloudSettings,
+	saveCloudSettings,
+} from "@/features/cloud-settings/api/CloudSettingsApi";
 import { type CloudSettingsFormValues, validateCloudSettingsForm } from "@/features/cloud-settings/models/CloudSettingsModel";
 import { cloudSettingsQueryKeys } from "@/features/cloud-settings/queries/CloudSettingsQueryKeys";
 
@@ -39,20 +57,6 @@ export function CloudSettings() {
 	const errors = useMemo(() => validateCloudSettingsForm(formValues), [formValues]);
 	const hasErrors = Object.keys(errors).length > 0;
 
-	const applySettings = useCallback(
-		async (settings: CloudSettingsDto) => {
-			setMessage(settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.");
-			setFormValues({
-				endpoint: settings.endpoint ?? "",
-				apiKey: "",
-				deploymentName: settings.deploymentName ?? "",
-			});
-			queryClient.setQueryData(cloudSettingsQueryKeys.settings(), settings);
-			await queryClient.invalidateQueries({ queryKey: cloudSettingsQueryKeys.settings() });
-		},
-		[queryClient],
-	);
-
 	const saveMutation = useMutation({
 		mutationFn: () =>
 			saveCloudSettings({
@@ -61,10 +65,35 @@ export function CloudSettings() {
 				apiKey: formValues.apiKey.trim(),
 				deploymentName: formValues.deploymentName.trim(),
 			}),
-		onSuccess: applySettings,
+		onSuccess: async (settings: CloudSettingsDto) => {
+			setMessage(
+				settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
+			);
+			setFormValues({
+				endpoint: settings.endpoint ?? "",
+				apiKey: "",
+				deploymentName: settings.deploymentName ?? "",
+			});
+			queryClient.setQueryData(cloudSettingsQueryKeys.settings(), settings);
+			await queryClient.invalidateQueries({ queryKey: cloudSettingsQueryKeys.settings() });
+		},
 	});
 
-	const clearMutation = useMutation({ mutationFn: () => clearCloudSettings(), onSuccess: applySettings });
+	const clearMutation = useMutation({
+		mutationFn: () => clearCloudSettings(),
+		onSuccess: async (settings: CloudSettingsDto) => {
+			setMessage(
+				settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
+			);
+			setFormValues({
+				endpoint: settings.endpoint ?? "",
+				apiKey: "",
+				deploymentName: settings.deploymentName ?? "",
+			});
+			queryClient.setQueryData(cloudSettingsQueryKeys.settings(), settings);
+			await queryClient.invalidateQueries({ queryKey: cloudSettingsQueryKeys.settings() });
+		},
+	});
 	const actionError = saveMutation.error ?? clearMutation.error;
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
 	const settings = settingsQuery.data;
@@ -77,13 +106,15 @@ export function CloudSettings() {
 						Worker Node
 					</Text>
 					<Title order={2}>Cloud settings</Title>
-					<Text c="dimmed">Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.</Text>
+					<Text c="dimmed">
+						Store Azure OpenAI credentials locally for cloud-backed runtime mode. Saved API keys are never returned to this page.
+					</Text>
 				</Stack>
 
 				{settingsQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">Loading cloud settings...</Text>
+						<Text c="dimmed">Loading cloud settings…</Text>
 					</Group>
 				) : null}
 
@@ -105,10 +136,13 @@ export function CloudSettings() {
 					<Stack gap="md">
 						<Group justify="space-between" align="center">
 							<Title order={3}>Azure OpenAI</Title>
-							<Badge color={settings?.hasStoredApiKey ? "green" : "gray"}>{settings?.hasStoredApiKey ? "Configured" : "Not configured"}</Badge>
+							<Badge color={settings?.hasStoredApiKey ? "green" : "gray"}>
+								{settings?.hasStoredApiKey ? "Configured" : "Not configured"}
+							</Badge>
 						</Group>
 						<Text c="dimmed">
-							Cloud credentials are encrypted on this worker. Enter the API key every time you save because stored keys are write-only.
+							Cloud credentials are encrypted on this worker. Enter the API key every time you save because stored keys are
+							write-only.
 						</Text>
 						<TextInput
 							label="Azure OpenAI endpoint"
@@ -126,19 +160,40 @@ export function CloudSettings() {
 						/>
 						<PasswordInput
 							label="API key"
-							description={settings?.hasStoredApiKey ? "A key is stored. Enter a key to save or rotate cloud settings." : "The key is sent only to the local worker API."}
+							description={
+								settings?.hasStoredApiKey
+									? "A key is stored. Enter a key to save or rotate cloud settings."
+									: "The key is sent only to the local worker API."
+							}
 							value={formValues.apiKey}
 							onChange={(event) => setFormValues((current) => ({ ...current, apiKey: event.currentTarget.value }))}
 							error={errors.apiKey}
 						/>
 						<Group>
-							<Button leftSection={<IconDeviceFloppy size={16} />} onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={hasErrors || isActionPending}>
+							<Button
+								leftSection={<IconDeviceFloppy size={16} />}
+								onClick={() => saveMutation.mutate()}
+								loading={saveMutation.isPending}
+								disabled={hasErrors || isActionPending}
+							>
 								Save cloud settings
 							</Button>
-							<Button variant="outline" color="red" leftSection={<IconTrash size={16} />} onClick={() => clearMutation.mutate()} loading={clearMutation.isPending} disabled={!settings?.hasStoredApiKey || isActionPending}>
+							<Button
+								variant="outline"
+								color="red"
+								leftSection={<IconTrash size={16} />}
+								onClick={() => clearMutation.mutate()}
+								loading={clearMutation.isPending}
+								disabled={!settings?.hasStoredApiKey || isActionPending}
+							>
 								Clear saved credentials
 							</Button>
-							<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={() => settingsQuery.refetch()} disabled={settingsQuery.isFetching}>
+							<Button
+								variant="subtle"
+								leftSection={<IconRefresh size={16} />}
+								onClick={() => settingsQuery.refetch()}
+								disabled={settingsQuery.isFetching}
+							>
 								Reload
 							</Button>
 						</Group>

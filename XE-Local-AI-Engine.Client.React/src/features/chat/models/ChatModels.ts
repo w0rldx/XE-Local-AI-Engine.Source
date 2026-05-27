@@ -42,6 +42,10 @@ export interface ChatMessageModel {
 	reasoningTokens?: number;
 	parentMessageId?: string;
 	variantGroupId?: string;
+	// Node-local feedback on this assistant turn, carried on the message read DTO (Phase 5.3). Undefined when
+	// no feedback has been recorded; presence drives the feedback control's active state.
+	feedbackRating?: ChatFeedbackRating;
+	feedbackComment?: string;
 }
 
 export type ChatFeedbackRating = "up" | "down";
@@ -198,4 +202,7 @@ export interface ChatDisplayShellProps {
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 	conversationListCollapsed?: boolean;
 	disabledNotice?: ReactNode;
+	// True while the selected conversation's full payload (with messages) is loading. Forwarded to the
+	// message list so the empty-state never flashes over a populated thread during the refetch.
+	isLoadingMessages?: boolean;
 }

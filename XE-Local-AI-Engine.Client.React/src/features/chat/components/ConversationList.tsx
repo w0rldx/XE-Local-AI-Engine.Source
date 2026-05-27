@@ -14,10 +14,12 @@ import {
 	IconSearch,
 	IconTrash,
 } from "@tabler/icons-react";
-import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { type KeyboardEvent, type MouseEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+
+/* eslint-disable react-doctor/no-giant-component */
 
 interface ConversationListProps {
 	conversations: ChatConversationModel[];
@@ -105,9 +107,19 @@ export function ConversationList({
 	const recent = visible.filter((conversation) => !conversation.isPinned && !conversation.isArchived);
 	const archived = visible.filter((conversation) => conversation.isArchived);
 	const sections = [
-		{ id: "pinned", title: t("pages.chat.conversationList.pinned", "Pinned"), items: pinned, icon: <IconPinnedFilled size={10} /> },
+		{
+			id: "pinned",
+			title: t("pages.chat.conversationList.pinned", "Pinned"),
+			items: pinned,
+			icon: <IconPinnedFilled size={10} />,
+		},
 		{ id: "recent", title: t("pages.chat.conversationList.recent", "Recent"), items: recent, icon: undefined },
-		{ id: "archived", title: t("pages.chat.conversationList.archived", "Archived"), items: archived, icon: <IconArchive size={10} /> },
+		{
+			id: "archived",
+			title: t("pages.chat.conversationList.archived", "Archived"),
+			items: archived,
+			icon: <IconArchive size={10} />,
+		},
 	];
 
 	const beginRename = (conversation: ChatConversationModel): void => {
@@ -140,13 +152,27 @@ export function ConversationList({
 
 	if (collapsed) {
 		return (
-			<Paper withBorder={true} h="100%" data-testid="conversation-list" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 8 }}>
+			<Paper
+				withBorder={true}
+				h="100%"
+				data-testid="conversation-list"
+				style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 8 }}
+			>
 				<Tooltip label={t("pages.chat.conversationList.show", "Show conversations")} position="right">
-					<ActionIcon variant="subtle" onClick={onToggleCollapse} aria-label={t("pages.chat.conversationList.expandAria", "Expand conversations")}>
+					<ActionIcon
+						variant="subtle"
+						onClick={onToggleCollapse}
+						aria-label={t("pages.chat.conversationList.expandAria", "Expand conversations")}
+					>
 						<IconChevronRight size={16} />
 					</ActionIcon>
 				</Tooltip>
-				<ActionIcon variant="filled" color="dark" onClick={onCreateConversation} aria-label={t("pages.chat.newConversation", "New conversation")}>
+				<ActionIcon
+					variant="filled"
+					color="dark"
+					onClick={onCreateConversation}
+					aria-label={t("pages.chat.newConversation", "New conversation")}
+				>
 					<IconPlus size={15} />
 				</ActionIcon>
 				<ScrollArea style={{ flex: 1, width: "100%", minHeight: 0 }} type="auto">
@@ -177,11 +203,20 @@ export function ConversationList({
 	}
 
 	return (
-		<Paper withBorder={true} h="100%" data-testid="conversation-list" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+		<Paper
+			withBorder={true}
+			h="100%"
+			data-testid="conversation-list"
+			style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+		>
 			<Group justify="space-between" px="md" pt="md" pb="xs">
 				<Text fw={700}>{t("pages.chat.conversations", "Conversations")}</Text>
 				<Tooltip label={t("pages.chat.conversationList.hide", "Hide conversations")} position="left">
-					<ActionIcon variant="subtle" onClick={onToggleCollapse} aria-label={t("pages.chat.conversationList.collapseAria", "Collapse conversations")}>
+					<ActionIcon
+						variant="subtle"
+						onClick={onToggleCollapse}
+						aria-label={t("pages.chat.conversationList.collapseAria", "Collapse conversations")}
+					>
 						<IconChevronLeft size={16} />
 					</ActionIcon>
 				</Tooltip>
@@ -198,7 +233,14 @@ export function ConversationList({
 					data-testid="conversation-search"
 					aria-label={t("pages.chat.conversationList.searchAria", "Search conversations")}
 				/>
-				<ActionIcon variant="filled" color="dark" size={30} radius="md" onClick={onCreateConversation} aria-label={t("pages.chat.newConversation", "New conversation")}>
+				<ActionIcon
+					variant="filled"
+					color="dark"
+					size={30}
+					radius="md"
+					onClick={onCreateConversation}
+					aria-label={t("pages.chat.newConversation", "New conversation")}
+				>
 					<IconPlus size={15} />
 				</ActionIcon>
 			</Group>
@@ -235,7 +277,8 @@ export function ConversationList({
 									const isRemote = conversation.origin === "remote";
 									const isRenaming = renamingId === conversation.id;
 									const isMutating = mutatingConversationId === conversation.id;
-									const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
+									const canManage =
+										!isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
 
 									return (
 										<Paper
@@ -250,7 +293,8 @@ export function ConversationList({
 											}}
 											style={{
 												cursor: disabled || isRenaming ? "default" : "pointer",
-												background: conversation.id === selectedConversationId ? "var(--mantine-primary-color-light)" : "transparent",
+												background:
+													conversation.id === selectedConversationId ? "var(--mantine-primary-color-light)" : "transparent",
 											}}
 										>
 											<Stack gap={4}>
@@ -316,7 +360,9 @@ export function ConversationList({
 																		) : null}
 																		{onToggleArchive ? (
 																			<Menu.Item
-																				leftSection={conversation.isArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />}
+																				leftSection={
+																					conversation.isArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />
+																				}
 																				onClick={() => onToggleArchive(conversation.id, !conversation.isArchived)}
 																				data-testid={`conversation-archive-${conversation.id}`}
 																			>
@@ -327,7 +373,10 @@ export function ConversationList({
 																		) : null}
 																		{onDelete ? (
 																			<Tooltip
-																				label={t("pages.chat.conversationList.deleteShiftHint", "Shift-click to skip confirmation")}
+																				label={t(
+																					"pages.chat.conversationList.deleteShiftHint",
+																					"Shift-click to skip confirmation",
+																				)}
 																				position="left"
 																				withArrow={true}
 																				openDelay={300}
@@ -335,7 +384,9 @@ export function ConversationList({
 																				<Menu.Item
 																					color="red"
 																					leftSection={<IconTrash size={14} />}
-																					onClick={(event: MouseEvent<HTMLButtonElement>) => onDelete(conversation.id, event.shiftKey)}
+																					onClick={(event: MouseEvent<HTMLButtonElement>) =>
+																						onDelete(conversation.id, event.shiftKey)
+																					}
 																					data-testid={`conversation-delete-${conversation.id}`}
 																				>
 																					{t("pages.chat.conversationList.delete", "Delete")}
@@ -354,8 +405,19 @@ export function ConversationList({
 												{isRemote || conversation.isArchived ? (
 													<Group gap={4}>
 														{isRemote ? (
-															<Tooltip label={t("pages.chat.conversationList.remoteTooltip", "Started from a paired client. View-only on this node.")} withArrow={true}>
-																<Badge variant="light" color="blue" size="xs" data-testid={`conversation-remote-badge-${conversation.id}`}>
+															<Tooltip
+																label={t(
+																	"pages.chat.conversationList.remoteTooltip",
+																	"Started from a paired client. View-only on this node.",
+																)}
+																withArrow={true}
+															>
+																<Badge
+																	variant="light"
+																	color="blue"
+																	size="xs"
+																	data-testid={`conversation-remote-badge-${conversation.id}`}
+																>
 																	{t("pages.chat.conversationList.remote", "Remote")}
 																</Badge>
 															</Tooltip>

@@ -1,4 +1,4 @@
-import { ScrollArea, Stack, Text } from "@mantine/core";
+import { Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,8 +11,11 @@ import type {
 	ChatMessageModel,
 	ChatStreamingState,
 	ChatTimelineEntry,
+	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { groupMessageRevisions } from "@/features/chat/models/MessageRevisionGrouping";
+
+const EMPTY_TIMELINE_ENTRIES: ChatTimelineEntry[] = [];
 
 interface ChatMessageListProps {
 	conversation?: ChatConversationModel;
@@ -27,6 +30,12 @@ interface ChatMessageListProps {
 	feedbackByMessageId?: Readonly<Record<string, ChatMessageFeedback>>;
 	pendingFeedbackMessageId?: string;
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
+	// True while the selected conversation's full payload (with messages) is loading. Suppresses the
+	// "No messages yet" empty-state so it never flashes over a populated thread mid-fetch.
+	isLoadingMessages?: boolean;
+	// Active composer reasoning effort; forwarded to each message so the bypass note can flag reasoning
+	// emitted while "none" is selected.
+	reasoningEffort?: ReasoningEffort;
 }
 
 function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
@@ -41,7 +50,7 @@ export function ChatMessageList({
 	conversation,
 	messages,
 	streamingMessage,
-	timelineEntries = [],
+	timelineEntries = EMPTY_TIMELINE_ENTRIES,
 	onRegenerate,
 	onBranch,
 	activeRevisionByGroup,
@@ -50,16 +59,25 @@ export function ChatMessageList({
 	feedbackByMessageId,
 	pendingFeedbackMessageId,
 	onSubmitFeedback,
+	isLoadingMessages = false,
+	reasoningEffort,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	const endRef = useRef<HTMLDivElement>(null);
 	const normalizedMessages = useMemo(
-		() => (messages ?? conversation?.messages ?? []).filter((message) => hasText(message.content) || hasText(message.reasoning)).toSorted(bySortOrder),
+		() =>
+			(messages ?? conversation?.messages ?? [])
+				.filter((message) => hasText(message.content) || hasText(message.reasoning))
+				.toSorted(bySortOrder),
 		[conversation?.messages, messages],
 	);
 	// Collapse sibling assistant variants (shared variant_group_id) to one entry with prev/next nav (Phase 5.2).
-	const revisionGroups = useMemo(() => groupMessageRevisions(normalizedMessages, activeRevisionByGroup ?? {}), [activeRevisionByGroup, normalizedMessages]);
-	const scopedStreamingMessage = conversation?.id && streamingMessage?.conversationId === conversation.id ? streamingMessage : undefined;
+	const revisionGroups = useMemo(
+		() => groupMessageRevisions(normalizedMessages, activeRevisionByGroup ?? {}),
+		[activeRevisionByGroup, normalizedMessages],
+	);
+	const scopedStreamingMessage =
+		conversation?.id && streamingMessage?.conversationId === conversation.id ? streamingMessage : undefined;
 	const streamingContent = scopedStreamingMessage?.content ?? "";
 	const hasStreamingContent = streamingContent.trim().length > 0;
 	const streamingPlaceholder = hasStreamingContent
@@ -78,7 +96,9 @@ export function ChatMessageList({
 	// which tracks the latest mutation (the just-sent user message) and would mislabel the reply.
 	const streamingStartedAt =
 		scopedStreamingMessage?.startedAt ??
-		(conversation?.messages ?? []).find((message) => message.id === scopedStreamingMessage?.messageId && message.role === "assistant")?.createdAt;
+		(conversation?.messages ?? []).find(
+			(message) => message.id === scopedStreamingMessage?.messageId && message.role === "assistant",
+		)?.createdAt;
 	const scrollKey = `${revisionGroups.length}:${timelineEntries.length}:${streamingContent.length}:${scopedStreamingMessage?.isActive ?? false}`;
 
 	useEffect(() => {
@@ -115,7 +135,9 @@ export function ChatMessageList({
 							key={message.id}
 							message={message}
 							entries={messageEntries}
-							isStreaming={isStreamingTarget ? (scopedStreamingMessage?.isActive ?? false) && !scopedStreamingMessage?.isQueued : false}
+							isStreaming={
+								isStreamingTarget ? (scopedStreamingMessage?.isActive ?? false) && !scopedStreamingMessage?.isQueued : false
+							}
 							streamingReasoning={isStreamingTarget ? scopedStreamingMessage?.reasoning : undefined}
 							streamingReasoningOverflowBytes={isStreamingTarget ? scopedStreamingMessage?.reasoningOverflowBytes : undefined}
 							placeholder={isStreamingTarget ? streamingPlaceholder : undefined}
@@ -126,6 +148,7 @@ export function ChatMessageList({
 							feedback={feedbackByMessageId?.[message.id]}
 							feedbackPending={pendingFeedbackMessageId === message.id}
 							onSubmitFeedback={onSubmitFeedback}
+							reasoningEffort={reasoningEffort}
 							footer={
 								isStreamingTarget ? (
 									<StreamingIndicator
@@ -157,6 +180,7 @@ export function ChatMessageList({
 						streamingReasoning={scopedStreamingMessage.reasoning}
 						streamingReasoningOverflowBytes={scopedStreamingMessage.reasoningOverflowBytes}
 						isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
+						reasoningEffort={reasoningEffort}
 						entries={timelineEntries.filter((entry) => entry.messageId === scopedStreamingMessage.messageId)}
 						footer={
 							<StreamingIndicator
@@ -177,7 +201,16 @@ export function ChatMessageList({
 					</Text>
 				) : null}
 
-				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage ? (
+				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && isLoadingMessages ? (
+					<Stack align="center" py="md" gap="xs">
+						<Loader size="sm" />
+						<Text size="sm" c="dimmed">
+							{t("pages.chat.loadingMessages", "Loading messages…")}
+						</Text>
+					</Stack>
+				) : null}
+
+				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && !isLoadingMessages ? (
 					<Text size="sm" c="dimmed">
 						{t("pages.chat.noMessages", "No messages yet.")}
 					</Text>

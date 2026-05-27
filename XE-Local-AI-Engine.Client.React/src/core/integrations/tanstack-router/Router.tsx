@@ -1,14 +1,13 @@
 import { createRouter } from "@tanstack/react-router";
 
-import * as TanStackQueryProvider from "@/core/integrations/tanstack-query/Provider";
+import { getContext as getTanStackQueryContext } from "@/core/integrations/tanstack-query/Context";
 import { NavigationLoadingIndicator } from "@/core/ui/components/NavigationLoadingIndicator/NavigationLoadingIndicator";
-
 import { routeTree } from "@/routeTree.gen";
 
 export const router = createRouter({
 	routeTree,
 	context: {
-		...TanStackQueryProvider.getContext(),
+		...getTanStackQueryContext(),
 	},
 	defaultPendingComponent: () => <NavigationLoadingIndicator />,
 	scrollRestoration: true,

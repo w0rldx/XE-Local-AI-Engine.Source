@@ -34,13 +34,15 @@ public sealed class NodeChatRegenerationService(
 
     public IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
+        string? reasoningEffort = null,
         CancellationToken cancellationToken = default)
     {
-        return RegenerateCoreAsync(conversationId, originalMessageId, cancellationToken);
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
         Guid originalMessageId,
+        string? reasoningEffort,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
@@ -117,7 +119,8 @@ public sealed class NodeChatRegenerationService(
             original.Model ?? localChatOptions.Value.DefaultModel,
             AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability]));
+            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            ReasoningEffort: reasoningEffort));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,

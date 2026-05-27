@@ -456,6 +456,31 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task GetConversationAsync_CarriesFeedbackStateInlineOnMessages()
+    {
+        await using var provider = await BuildProviderAsync("feedback-inline.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Feedback", "node", 1200)).ConfigureAwait(false);
+
+        // Two assistant turns: one with stored feedback, one without.
+        var ratedMessageId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, ratedMessageId, Guid.NewGuid(), 1201)).ConfigureAwait(false);
+        var unratedMessageId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, unratedMessageId, Guid.NewGuid(), 1202)).ConfigureAwait(false);
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, ratedMessageId, NodeChatFeedbackRatingValues.Up, "spot on", 1203)).ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+
+        var rated = loaded.Messages.Single(message => message.MessageId == ratedMessageId);
+        AssertEx.Equal(NodeChatFeedbackRatingValues.Up, rated.FeedbackRating);
+        AssertEx.Equal("spot on", rated.FeedbackComment);
+
+        var unrated = loaded.Messages.Single(message => message.MessageId == unratedMessageId);
+        AssertEx.Null(unrated.FeedbackRating);
+        AssertEx.Null(unrated.FeedbackComment);
+    }
+
+    [Test]
     public async Task GetMessageFeedbackAsync_WhenNone_ReturnsNull()
     {
         await using var provider = await BuildProviderAsync("feedback-missing.sqlite").ConfigureAwait(false);

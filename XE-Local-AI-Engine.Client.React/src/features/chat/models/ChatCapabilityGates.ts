@@ -31,5 +31,12 @@ export function buildChatUiCapabilities(capabilities: ChatCapabilities): ChatUiC
 }
 
 export function hiddenChatSurfaceLabels(capabilities: ChatUiCapabilities): string[] {
-	return hiddenSurfaceLabels.filter(([key]) => !capabilities[key]).map(([, label]) => label);
+	const labels: string[] = [];
+	for (const [key, label] of hiddenSurfaceLabels) {
+		if (!capabilities[key]) {
+			labels.push(label);
+		}
+	}
+
+	return labels;
 }

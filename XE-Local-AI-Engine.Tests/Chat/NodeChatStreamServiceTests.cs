@@ -145,6 +145,74 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_ThreadsReasoningEffortIntoRuntimePackage()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           ReasoningEffort: "low")).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal("low", runner.LastReasoningEffort);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenReasoningEffortOmitted_LeavesRuntimePackageReasoningNull()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the invocation runner to observe the package.");
+        AssertEx.True(runner.LastReasoningEffort is null, "Expected reasoning effort to default to null.");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenConsumerCancelsEnumeration_TerminalizesAssistantAsCancelled()
     {
         var conversationId = Guid.NewGuid();
@@ -337,6 +405,55 @@ public sealed class NodeChatStreamServiceTests
         {
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    private sealed class ReasoningCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        // The reasoning effort carried on the runtime package handed to the invocation; the test asserts the
+        // value selected on the send request reaches the runtime package (or stays null when none was selected).
+        public string? LastReasoningEffort { get; private set; }
+
+        public bool CaptureObserved { get; private set; }
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            LastReasoningEffort = context.Package.ReasoningEffort;
+            CaptureObserved = true;
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
         }
 

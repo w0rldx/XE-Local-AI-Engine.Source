@@ -4,22 +4,28 @@ import {
 	createConversation,
 	deleteConversation,
 	getConversation,
-	getMessageFeedback,
 	listConversations,
 	listMessageRevisions,
-	renameConversation,
-	setConversationArchived,
-	setConversationPinned,
-	setMessageFeedback,
 	type NodeChatBranchConversationResponseDto,
 	type NodeChatFeedbackRating,
 	type NodeChatStreamEventDto,
 	type NodeChatStreamRequestDto,
+	renameConversation,
+	setConversationArchived,
+	setConversationPinned,
+	setMessageFeedback,
 } from "@/features/chat/api/NodeChatApi";
 import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
+import {
+	mapConversation,
+	mapConversationSummary,
+	mapMessageFeedback,
+	mapMessageRevisions,
+} from "@/features/chat/api/NodeChatMapper";
 import { guardNodeChatStream } from "@/features/chat/api/NodeChatStreamGuard";
-import { mapConversation, mapConversationSummary, mapMessageFeedback, mapMessageRevisions } from "@/features/chat/api/NodeChatMapper";
 import type { ChatConversationModel, ChatMessageFeedback, ChatMessageRevisions } from "@/features/chat/models/ChatModels";
+
+/* eslint-disable react-doctor/async-await-in-loop */
 
 interface RequestOptions {
 	signal?: AbortSignal;
@@ -48,6 +54,7 @@ export interface SendMessageRequest {
 	requestId?: string;
 	model?: string;
 	useLocalTools?: boolean;
+	reasoningEffort?: string;
 }
 
 export interface NodeChatAdapter {
@@ -58,9 +65,12 @@ export interface NodeChatAdapter {
 	renameConversation(conversationId: string, title: string, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationPinned(conversationId: string, isPinned: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationArchived(conversationId: string, archived: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
-	branchConversation(conversationId: string, messageId: string, options?: RequestOptions): Promise<NodeChatBranchConversationResponseDto>;
+	branchConversation(
+		conversationId: string,
+		messageId: string,
+		options?: RequestOptions,
+	): Promise<NodeChatBranchConversationResponseDto>;
 	listMessageRevisions(conversationId: string, messageId: string, options?: RequestOptions): Promise<ChatMessageRevisions | null>;
-	getMessageFeedback(conversationId: string, messageId: string, options?: RequestOptions): Promise<ChatMessageFeedback | null>;
 	setMessageFeedback(
 		conversationId: string,
 		messageId: string,
@@ -70,7 +80,12 @@ export interface NodeChatAdapter {
 	): Promise<ChatMessageFeedback>;
 	cancelMessage(request: CancelMessageRequest, options?: RequestOptions): Promise<void>;
 	sendMessage(request: SendMessageRequest, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
-	regenerateMessage(conversationId: string, originalMessageId: string, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
+	regenerateMessage(
+		conversationId: string,
+		originalMessageId: string,
+		reasoningEffort: string | undefined,
+		signal: AbortSignal,
+	): AsyncIterable<NodeChatStreamEventDto>;
 }
 
 function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto {
@@ -82,6 +97,7 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		requestId: request.requestId,
 		model: request.model,
 		useLocalTools: request.useLocalTools,
+		reasoningEffort: request.reasoningEffort,
 	};
 }
 
@@ -151,7 +167,11 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 				notify();
 			};
 
-			const subscribe = (methodName: "SendMessage" | "RegenerateMessage" | "ResumeMessage", args: unknown[], isResume: boolean): void => {
+			const subscribe = (
+				methodName: "SendMessage" | "RegenerateMessage" | "ResumeMessage",
+				args: unknown[],
+				isResume: boolean,
+			): void => {
 				const connection = nodeChatConnection.current();
 				if (!connection) {
 					return;
@@ -279,12 +299,10 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		const response = await listMessageRevisions(conversationId, messageId, { signal: options?.signal });
 		return response ? mapMessageRevisions(response) : null;
 	},
-	async getMessageFeedback(conversationId, messageId, options) {
-		const response = await getMessageFeedback(conversationId, messageId, { signal: options?.signal });
-		return response ? mapMessageFeedback(response) : null;
-	},
 	async setMessageFeedback(conversationId, messageId, rating, comment, options) {
-		return mapMessageFeedback(await setMessageFeedback(conversationId, messageId, { rating, comment }, { signal: options?.signal }));
+		return mapMessageFeedback(
+			await setMessageFeedback(conversationId, messageId, { rating, comment }, { signal: options?.signal }),
+		);
 	},
 	async cancelMessage(request, options) {
 		await cancelMessage(request, { signal: options?.signal });
@@ -292,12 +310,23 @@ export const nodeChatAdapter: NodeChatAdapter = {
 	sendMessage(request, signal) {
 		const streamRequest = toStreamRequest(request);
 		return guardNodeChatStream(
-			signalRStream({ method: "SendMessage", args: [streamRequest], assistantMessageId: streamRequest.messageId, knownInvocationId: streamRequest.requestId }, signal),
+			signalRStream(
+				{
+					method: "SendMessage",
+					args: [streamRequest],
+					assistantMessageId: streamRequest.messageId,
+					knownInvocationId: streamRequest.requestId,
+				},
+				signal,
+			),
 		);
 	},
-	regenerateMessage(conversationId, originalMessageId, signal) {
+	regenerateMessage(conversationId, originalMessageId, reasoningEffort, signal) {
 		// Server mints the sibling variant + drives the run (Phase 5.2); the variant messageId + requestId arrive
-		// on the stream events and are latched for reconnect/resume. Streams exactly like a send.
-		return guardNodeChatStream(signalRStream({ method: "RegenerateMessage", args: [conversationId, originalMessageId] }, signal));
+		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
+		// current reasoning selection via the hub's third arg (RegenerateMessage(conversationId, messageId, effort)).
+		return guardNodeChatStream(
+			signalRStream({ method: "RegenerateMessage", args: [conversationId, originalMessageId, reasoningEffort] }, signal),
+		);
 	},
 };

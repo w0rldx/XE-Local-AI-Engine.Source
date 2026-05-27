@@ -182,6 +182,10 @@ public sealed class NodeChatMessageResponse
     public Guid? ParentMessageId { get; init; }
 
     public Guid? VariantGroupId { get; init; }
+
+    public string? FeedbackRating { get; init; }
+
+    public string? FeedbackComment { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse
@@ -348,7 +352,9 @@ internal static class NodeChatEndpointDtoMapper
             TotalTokens = message.TotalCount,
             ReasoningTokens = message.ReasoningCount,
             ParentMessageId = message.ParentMessageId,
-            VariantGroupId = message.VariantGroupId
+            VariantGroupId = message.VariantGroupId,
+            FeedbackRating = message.FeedbackRating,
+            FeedbackComment = message.FeedbackComment
         };
     }
 }

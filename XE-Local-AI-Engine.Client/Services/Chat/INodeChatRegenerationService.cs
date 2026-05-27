@@ -22,5 +22,6 @@ public interface INodeChatRegenerationService
     /// </summary>
     IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
+        string? reasoningEffort = null,
         CancellationToken cancellationToken = default);
 }

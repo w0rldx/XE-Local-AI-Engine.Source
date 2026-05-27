@@ -145,6 +145,80 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_ThreadsReasoningEffortIntoRuntimePackage()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-reasoning.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        // Seed a completed turn: user question + a completed assistant answer (the "original" to regenerate).
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x")).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            capturingRunner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, "high").ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.Equal("high", capturingRunner.LastReasoningEffort);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenReasoningEffortOmitted_LeavesRuntimePackageReasoningNull()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-reasoning-default.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x")).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            capturingRunner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.True(capturingRunner.LastContext is not null, "Expected the invocation runner to observe the package.");
+        AssertEx.True(capturingRunner.LastReasoningEffort is null, "Expected reasoning effort to default to null.");
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenOriginRemote_ThrowsReadOnly()
     {
         await using var provider = await BuildProviderAsync("regeneration-remote.sqlite").ConfigureAwait(false);
@@ -238,9 +312,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // regenerate never includes a sibling assistant answer.
         public IReadOnlyList<ConversationMessageDto>? LastContext { get; private set; }
 
+        // The reasoning effort carried on the runtime package; the test asserts the regenerate honors the
+        // current reasoning selection threaded from the hub.
+        public string? LastReasoningEffort { get; private set; }
+
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             LastContext = context.Package.ConversationContext;
+            LastReasoningEffort = context.Package.ReasoningEffort;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }

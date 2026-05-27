@@ -18,14 +18,16 @@ const connectionMock = vi.hoisted(() => {
 		currentSubscriber: undefined as StreamSubscriber<unknown> | undefined,
 		lastMethod: undefined as string | undefined,
 		lastPayload: undefined as unknown,
+		lastArgs: [] as unknown[],
 		status: "connected" as string,
 		listeners: new Set<ConnectionListener>(),
 	};
 	const subscription = { dispose: vi.fn() };
 	const connection = {
-		stream: vi.fn((method: string, payload: unknown) => {
+		stream: vi.fn((method: string, ...args: unknown[]) => {
 			state.lastMethod = method;
-			state.lastPayload = payload;
+			state.lastPayload = args[0];
+			state.lastArgs = args;
 			return {
 				subscribe: vi.fn((subscriber: StreamSubscriber<unknown>) => {
 					state.currentSubscriber = subscriber;
@@ -91,13 +93,15 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		connectionMock.state.currentSubscriber = undefined;
 		connectionMock.state.lastMethod = undefined;
 		connectionMock.state.lastPayload = undefined;
+		connectionMock.state.lastArgs = [];
 		connectionMock.state.status = "connected";
 		connectionMock.state.listeners.clear();
 		connectionMock.nodeChatConnection.ensureConnection.mockResolvedValue(connectionMock.connection);
 		connectionMock.nodeChatConnection.current.mockReturnValue(connectionMock.connection);
-		connectionMock.connection.stream.mockImplementation((method: string, payload: unknown) => {
+		connectionMock.connection.stream.mockImplementation((method: string, ...args: unknown[]) => {
 			connectionMock.state.lastMethod = method;
-			connectionMock.state.lastPayload = payload;
+			connectionMock.state.lastPayload = args[0];
+			connectionMock.state.lastArgs = args;
 			return {
 				subscribe: vi.fn((subscriber: StreamSubscriber<unknown>) => {
 					connectionMock.state.currentSubscriber = subscriber;
@@ -122,6 +126,14 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		connectionMock.state.currentSubscriber?.complete();
 		await expect(completed).resolves.toMatchObject({ done: true });
 		expect(connectionMock.subscription.dispose).toHaveBeenCalled();
+	});
+
+	it("threads the selected reasoning effort into the SendMessage stream request", async () => {
+		nodeChatAdapter.sendMessage({ ...streamRequest, reasoningEffort: "none" }, new AbortController().signal)[Symbol.asyncIterator]().next();
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("SendMessage");
+		expect(connectionMock.state.lastPayload).toMatchObject({ reasoningEffort: "none" });
 	});
 
 	it("forwards useLocalTools on the SendMessage stream payload", async () => {
@@ -206,12 +218,16 @@ describe("nodeChatAdapter SignalR streaming", () => {
 	});
 
 	it("streams a regenerate over RegenerateMessage and yields the server-minted variant", async () => {
-		const iterator = nodeChatAdapter.regenerateMessage("conversation-1", "assistant-1", new AbortController().signal)[Symbol.asyncIterator]();
+		const iterator = nodeChatAdapter
+			.regenerateMessage("conversation-1", "assistant-1", "high", new AbortController().signal)
+			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
 		expect(connectionMock.state.lastMethod).toBe("RegenerateMessage");
-		// First positional arg is the conversation id (the mock captures only the first arg as payload).
+		// Hub args are (conversationId, originalMessageId, reasoningEffort): the current reasoning selection
+		// must travel as the third positional arg so regenerate honors it like a send.
+		expect(connectionMock.state.lastArgs).toEqual(["conversation-1", "assistant-1", "high"]);
 		expect(connectionMock.state.lastPayload).toBe("conversation-1");
 
 		// The server mints a fresh variant id + requestId; the adapter surfaces it unchanged on the fresh stream.
@@ -221,7 +237,9 @@ describe("nodeChatAdapter SignalR streaming", () => {
 	});
 
 	it("resumes a regenerate via ResumeMessage using the invocation id latched from the first event", async () => {
-		const iterator = nodeChatAdapter.regenerateMessage("conversation-1", "assistant-1", new AbortController().signal)[Symbol.asyncIterator]();
+		const iterator = nodeChatAdapter
+			.regenerateMessage("conversation-1", "assistant-1", "medium", new AbortController().signal)
+			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 

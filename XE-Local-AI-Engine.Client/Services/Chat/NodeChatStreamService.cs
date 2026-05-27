@@ -122,7 +122,8 @@ public sealed class NodeChatStreamService(
             AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: allowedTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability]));
+            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+            ReasoningEffort: request.ReasoningEffort));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,

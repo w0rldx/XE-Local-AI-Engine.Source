@@ -1,24 +1,40 @@
 import { Alert, Box, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatApi";
 import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
-import { accumulateToolTimelineEntry, appendOptimisticNodeChatSend, applyNodeChatStreamEvent, markNodeChatStreamTerminated } from "@/features/chat/api/NodeChatStreamState";
-import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatConversationModel, ChatFeedbackRating, ChatMessageFeedback, ChatStreamingState, ChatTimelineEntry, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import {
+	accumulateToolTimelineEntry,
+	appendOptimisticNodeChatSend,
+	applyNodeChatStreamEvent,
+	markNodeChatStreamTerminated,
+} from "@/features/chat/api/NodeChatStreamState";
+import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
+import type {
+	ChatConversationModel,
+	ChatFeedbackRating,
+	ChatMessageFeedback,
+	ChatStreamingState,
+	ChatTimelineEntry,
+	ModelOption,
+	ReasoningEffort,
+} from "@/features/chat/models/ChatModels";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
-import { getLocalModelDetails, listLocalModels } from "@/features/models/api/LocalModelsApi";
+import { reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
+import { getLocalModelDetails, listLocalModels } from "@/features/models/api/LocalModelsApi";
 import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
+
+/* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
 
 const localDefaultModelOption: ModelOption = {
 	value: localDefaultModelValue,
@@ -30,7 +46,11 @@ const localDefaultModelOption: ModelOption = {
 };
 
 function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOption {
-	const statusLabel = [model.isSelected ? "Node default" : undefined, model.parameterSize ?? undefined, model.quantizationLevel ?? undefined]
+	const statusLabel = [
+		model.isSelected ? "Node default" : undefined,
+		model.parameterSize ?? undefined,
+		model.quantizationLevel ?? undefined,
+	]
 		.filter((part): part is string => Boolean(part))
 		.join(" · ");
 
@@ -44,7 +64,6 @@ function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOptio
 }
 
 const chatUiCapabilities = buildChatUiCapabilities(nodeCapabilities.chat);
-const hiddenNodeSurfaces = hiddenChatSurfaceLabels(chatUiCapabilities).join(", ");
 const emptyConversations: ChatConversationModel[] = [];
 
 interface ActiveChatStream {
@@ -93,9 +112,12 @@ export function Chat() {
 	const deletedConversationIds = useRef<Set<string>>(new Set());
 	const [requestedConversationId, setRequestedConversationId] = useState("");
 	const [collapsed, setCollapsed] = useState(false);
-	const [selectedModel, setSelectedModel] = useState(localDefaultModelValue);
-	const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("medium");
-	const [toolsEnabled, setToolsEnabled] = useState(false);
+	// Composer selections persist across reloads via localStorage (NodeChatPreferencesStore), mirroring the
+	// platform ToolCallingStore. Persisted values are validated against the live model list / effort set below.
+	const selectedModel = useNodeChatPreferencesStore((state) => state.selectedModel);
+	const reasoningEffort = useNodeChatPreferencesStore((state) => state.reasoningEffort);
+	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
+	const { setSelectedModel, setReasoningEffort, toggleTools } = useNodeChatPreferencesStore((state) => state.actions);
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
 	// Tool-call activity entries accumulated over the current streaming turn (keyed by tool call id). Reset per turn.
 	const [timelineEntries, setTimelineEntries] = useState<ChatTimelineEntry[]>([]);
@@ -108,7 +130,6 @@ export function Chat() {
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 	// Conversations whose first message has already promoted their title (avoids re-renaming on every send).
 	const titledConversations = useRef<Set<string>>(new Set());
-	const feedbackControlsEnabled = chatUiCapabilities.showConversationFeedbackControls;
 
 	const conversationsQuery = useQuery({
 		queryKey: nodeChatQueryKeys.conversationList(showArchivedConversations),
@@ -118,6 +139,10 @@ export function Chat() {
 	const localModelsQuery = useQuery({
 		queryKey: localModelsQueryKeys.list(),
 		queryFn: ({ signal }) => listLocalModels({ signal }),
+		// Keep the prior model list while a refetch is in flight so a transient response that momentarily omits
+		// the selected model can't trip the reconcile effect and reset selectedModel to the default (which would
+		// undercut the persisted selection from #4).
+		placeholderData: keepPreviousData,
 	});
 
 	const modelOptions = useMemo<ModelOption[]>(() => {
@@ -132,6 +157,19 @@ export function Chat() {
 		() => modelOptions.find((option) => option.value === selectedModel),
 		[modelOptions, selectedModel],
 	);
+	// Reconcile a persisted model selection against the live list: once the models query has resolved, a
+	// stored model that no longer exists (renamed/removed on the node) falls back to the local default so the
+	// composer never points at a phantom model. Guarded on loaded data so the initial default-only list
+	// (before the query settles) does not clobber a still-valid persisted concrete model.
+	useEffect(() => {
+		if (!localModelsQuery.data) {
+			return;
+		}
+
+		if (!modelOptions.some((option) => option.value === selectedModel)) {
+			setSelectedModel(localDefaultModelValue);
+		}
+	}, [localModelsQuery.data, modelOptions, selectedModel, setSelectedModel]);
 	const selectedConcreteModelName = useMemo(() => {
 		const requestModel = toNodeChatRequestModel(selectedModel);
 		return requestModel ?? localModelsQuery.data?.selectedModelName ?? localModelsQuery.data?.configuredDefaultModelName ?? "";
@@ -146,10 +184,10 @@ export function Chat() {
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
 		onSuccess: async (conversation) => {
-			queryClient.setQueryData<ChatConversationModel[]>(nodeChatQueryKeys.conversationList(showArchivedConversations), (current = emptyConversations) => [
-				conversation,
-				...current,
-			]);
+			queryClient.setQueryData<ChatConversationModel[]>(
+				nodeChatQueryKeys.conversationList(showArchivedConversations),
+				(current = emptyConversations) => [conversation, ...current],
+			);
 			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
 			setRequestedConversationId(conversation.id);
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
@@ -164,7 +202,17 @@ export function Chat() {
 		queryKey: nodeChatQueryKeys.conversation(selectedConversationId),
 		queryFn: ({ signal }) => nodeChatAdapter.getConversation(selectedConversationId, { signal }),
 		enabled: selectedConversationId.length > 0,
+		// Keep the prior conversation's full payload mounted while the newly selected one loads so the message
+		// list never collapses to the summary entry (no messages) and flashes the empty-state mid-switch.
+		placeholderData: keepPreviousData,
 	});
+	// The full payload (with messages) hasn't settled for the currently selected conversation yet: either the
+	// first load, or a switch where keepPreviousData is still showing the prior thread (isPlaceholderData).
+	const isLoadingSelectedConversation =
+		selectedConversationId.length > 0 &&
+		(selectedConversationQuery.isLoading ||
+			selectedConversationQuery.isPlaceholderData ||
+			selectedConversationQuery.data?.id !== selectedConversationId);
 
 	const displayConversations = useMemo(
 		() => mergeSelectedConversation(conversations, selectedConversationQuery.data),
@@ -174,34 +222,32 @@ export function Chat() {
 	// Remote conversations are view-only on this node (server enforces the guard; this is the cosmetic UI hide).
 	const isRemoteConversation = activeConversation?.origin === "remote";
 
-	const assistantMessageIds = useMemo(
-		() =>
-			(activeConversation?.messages ?? [])
-				.filter((message) => message.role === "assistant" && message.content.trim().length > 0)
-				.map((message) => message.id),
+	// Node-local feedback now travels ON each message in the loaded conversation (Phase 5.3, platform parity):
+	// derive the by-message map from the conversation read instead of firing a GET per assistant turn (which
+	// 404'd and triggered a react-query retry storm before any feedback existed).
+	const feedbackByMessageId = useMemo<Record<string, ChatMessageFeedback>>(() => {
+		const byMessageId: Record<string, ChatMessageFeedback> = {};
+		for (const message of activeConversation?.messages ?? []) {
+			if (message.feedbackRating) {
+				byMessageId[message.id] = {
+					messageId: message.id,
+					conversationId: message.conversationId,
+					rating: message.feedbackRating,
+					comment: message.feedbackComment,
+					createdAt: message.createdAt,
+					updatedAt: message.updatedAt ?? message.createdAt,
+				};
+			}
+		}
+		return byMessageId;
+	}, [activeConversation?.messages]);
+	const usedContextTokens = useMemo(
+		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
 		[activeConversation?.messages],
 	);
-	// Node-local feedback for every assistant turn in the open conversation (Phase 5.3). GET 404 → no feedback yet.
-	const feedbackQuery = useQuery({
-		queryKey: nodeChatQueryKeys.feedback(selectedConversationId),
-		queryFn: async ({ signal }) => {
-			const entries = await Promise.all(
-				assistantMessageIds.map(async (messageId) => nodeChatAdapter.getMessageFeedback(selectedConversationId, messageId, { signal })),
-			);
-			const byMessageId: Record<string, ChatMessageFeedback> = {};
-			for (const entry of entries) {
-				if (entry) {
-					byMessageId[entry.messageId] = entry;
-				}
-			}
-			return byMessageId;
-		},
-		enabled: feedbackControlsEnabled && !isRemoteConversation && selectedConversationId.length > 0 && assistantMessageIds.length > 0,
-	});
-	const feedbackByMessageId = feedbackQuery.data;
-	const usedContextTokens = useMemo(() => deriveUsedContextTokens(activeConversation?.messages ?? []), [activeConversation?.messages]);
 	const effectiveMaxContextTokens = selectedModelDetailsQuery.data?.maxContextTokens ?? undefined;
-	const contextModelLabel = selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
+	const contextModelLabel =
+		selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
 	const isLoadingInitialConversations = conversationsQuery.isLoading && displayConversations.length === 0;
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
@@ -209,8 +255,9 @@ export function Chat() {
 	const cacheConversation = useCallback(
 		(conversation: ChatConversationModel): void => {
 			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
-			queryClient.setQueryData<ChatConversationModel[]>(nodeChatQueryKeys.conversationList(showArchivedConversations), (current = emptyConversations) =>
-				mergeSelectedConversation(current, conversation),
+			queryClient.setQueryData<ChatConversationModel[]>(
+				nodeChatQueryKeys.conversationList(showArchivedConversations),
+				(current = emptyConversations) => mergeSelectedConversation(current, conversation),
 			);
 		},
 		[queryClient, showArchivedConversations],
@@ -248,7 +295,7 @@ export function Chat() {
 	);
 
 	const handleSend = useCallback(
-		async (content: string, _effort: ReasoningEffort, model: string): Promise<void> => {
+		async (content: string, effort: ReasoningEffort, model: string): Promise<void> => {
 			if (activeStream.current) {
 				return;
 			}
@@ -266,7 +313,9 @@ export function Chat() {
 			// using the rename endpoint (no in-place client title hack). Best-effort and silent — a failure
 			// here must not block the send.
 			const hasPriorUserMessage = conversation.messages.some((message) => message.role === "user");
-			const hasPlaceholderTitle = conversation.origin !== "remote" && (conversation.title.trim().length === 0 || conversation.title.trim() === "New conversation");
+			const hasPlaceholderTitle =
+				conversation.origin !== "remote" &&
+				(conversation.title.trim().length === 0 || conversation.title.trim() === "New conversation");
 			if (!hasPriorUserMessage && hasPlaceholderTitle && !titledConversations.current.has(conversation.id)) {
 				titledConversations.current.add(conversation.id);
 				try {
@@ -312,6 +361,7 @@ export function Chat() {
 						requestId: ids.requestId,
 						model: requestModel,
 						useLocalTools: toolsEnabled,
+						reasoningEffort: effort,
 					},
 					abortController.signal,
 				)) {
@@ -320,7 +370,9 @@ export function Chat() {
 					if (deletedConversationIds.current.has(conversation.id)) {
 						break;
 					}
-					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? optimisticConversation;
+					const currentConversation =
+						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
+						optimisticConversation;
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					cacheConversation(applied.conversation);
 					setStreamingMessage(applied.streamingMessage);
@@ -333,15 +385,25 @@ export function Chat() {
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					const message = errorMessage(error);
 					const failureCategory = error instanceof StreamWatchdogError ? error.category : undefined;
-					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? optimisticConversation;
-					const failed = markNodeChatStreamTerminated(currentConversation, ids.assistantMessageId, "failed", message, failureCategory);
+					const currentConversation =
+						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
+						optimisticConversation;
+					const failed = markNodeChatStreamTerminated(
+						currentConversation,
+						ids.assistantMessageId,
+						"failed",
+						message,
+						failureCategory,
+					);
 					cacheConversation(failed.conversation);
 					setStreamingMessage(failed.streamingMessage);
 					setStreamError(message);
 				}
 			} finally {
 				activeStream.current = null;
-				setStreamingMessage((current) => (current?.messageId === ids.assistantMessageId ? { ...current, isActive: false } : current));
+				setStreamingMessage((current) =>
+					current?.messageId === ids.assistantMessageId ? { ...current, isActive: false } : current,
+				);
 				if (!deletedConversationIds.current.has(conversation.id)) {
 					await refreshConversation(conversation.id);
 				}
@@ -375,16 +437,26 @@ export function Chat() {
 			setStreamingMessage({ conversationId: conversation.id, messageId: "", content: "", isActive: true });
 
 			try {
-				for await (const streamEvent of nodeChatAdapter.regenerateMessage(conversation.id, assistantMessageId, abortController.signal)) {
+				for await (const streamEvent of nodeChatAdapter.regenerateMessage(
+					conversation.id,
+					assistantMessageId,
+					reasoningEffort,
+					abortController.signal,
+				)) {
 					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
 					// neither re-create the removed cache entry nor be refetched in the finally below.
 					if (deletedConversationIds.current.has(conversation.id)) {
 						break;
 					}
 					if (activeStream.current) {
-						activeStream.current = { ...activeStream.current, messageId: streamEvent.messageId, requestId: streamEvent.requestId };
+						activeStream.current = {
+							...activeStream.current,
+							messageId: streamEvent.messageId,
+							requestId: streamEvent.requestId,
+						};
 					}
-					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? conversation;
+					const currentConversation =
+						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? conversation;
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					cacheConversation(applied.conversation);
 					setStreamingMessage(applied.streamingMessage);
@@ -398,7 +470,9 @@ export function Chat() {
 			} catch (error) {
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					if (isNodeChatReadOnlyConflict(error)) {
-						setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
+						setStreamError(
+							t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
+						);
 					} else {
 						setStreamError(errorMessage(error));
 					}
@@ -412,7 +486,7 @@ export function Chat() {
 				}
 			}
 		},
-		[cacheConversation, displayConversations, queryClient, refreshConversation, selectedConversationId, t],
+		[cacheConversation, displayConversations, queryClient, reasoningEffort, refreshConversation, selectedConversationId, t],
 	);
 
 	const handleRegenerate = useCallback(
@@ -438,7 +512,9 @@ export function Chat() {
 			setStreamError(errorMessage(error));
 		} finally {
 			active.abortController.abort();
-			const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(active.conversationId));
+			const currentConversation = queryClient.getQueryData<ChatConversationModel>(
+				nodeChatQueryKeys.conversation(active.conversationId),
+			);
 			if (currentConversation) {
 				const cancelled = markNodeChatStreamTerminated(currentConversation, active.messageId, "cancelled");
 				cacheConversation(cancelled.conversation);
@@ -460,7 +536,9 @@ export function Chat() {
 				// Remote-origin conversations are view-only; the node rejects writes with a 409. Surface a clear
 				// notice and refresh so the UI re-reflects authoritative (unchanged) server state.
 				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
+					setStreamError(
+						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
+					);
 					await refreshConversation(conversationId);
 					return;
 				}
@@ -475,8 +553,8 @@ export function Chat() {
 	const handleRenameConversation = useCallback(
 		(conversationId: string, title: string): void => {
 			titledConversations.current.add(conversationId);
-			runConversationMutation(conversationId, () => nodeChatAdapter.renameConversation(conversationId, title)).catch((error: unknown) =>
-				setStreamError(errorMessage(error)),
+			runConversationMutation(conversationId, () => nodeChatAdapter.renameConversation(conversationId, title)).catch(
+				(error: unknown) => setStreamError(errorMessage(error)),
 			);
 		},
 		[runConversationMutation],
@@ -484,8 +562,8 @@ export function Chat() {
 
 	const handleToggleConversationPinned = useCallback(
 		(conversationId: string, isPinned: boolean): void => {
-			runConversationMutation(conversationId, () => nodeChatAdapter.setConversationPinned(conversationId, isPinned)).catch((error: unknown) =>
-				setStreamError(errorMessage(error)),
+			runConversationMutation(conversationId, () => nodeChatAdapter.setConversationPinned(conversationId, isPinned)).catch(
+				(error: unknown) => setStreamError(errorMessage(error)),
 			);
 		},
 		[runConversationMutation],
@@ -493,8 +571,8 @@ export function Chat() {
 
 	const handleToggleConversationArchived = useCallback(
 		(conversationId: string, archived: boolean): void => {
-			runConversationMutation(conversationId, () => nodeChatAdapter.setConversationArchived(conversationId, archived)).catch((error: unknown) =>
-				setStreamError(errorMessage(error)),
+			runConversationMutation(conversationId, () => nodeChatAdapter.setConversationArchived(conversationId, archived)).catch(
+				(error: unknown) => setStreamError(errorMessage(error)),
 			);
 		},
 		[runConversationMutation],
@@ -542,7 +620,9 @@ export function Chat() {
 				await deleteConversationMutation.mutateAsync(conversationId);
 			} catch (error) {
 				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
+					setStreamError(
+						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
+					);
 					await refreshConversation(conversationId);
 					return;
 				}
@@ -575,7 +655,9 @@ export function Chat() {
 				setRequestedConversationId(result.branchedConversationId);
 			} catch (error) {
 				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
+					setStreamError(
+						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
+					);
 					return;
 				}
 				setStreamError(errorMessage(error));
@@ -601,10 +683,14 @@ export function Chat() {
 			setPendingFeedbackMessageId(messageId);
 			try {
 				await nodeChatAdapter.setMessageFeedback(selectedConversationId, messageId, rating, comment);
-				await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.feedback(selectedConversationId) });
+				// Feedback is read from the conversation's messages now (not a per-message GET); refetch the
+				// conversation so the just-saved rating/comment re-renders.
+				await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(selectedConversationId) });
 			} catch (error) {
 				if (isNodeChatReadOnlyConflict(error)) {
-					setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
+					setStreamError(
+						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),
+					);
 					return;
 				}
 				setStreamError(errorMessage(error));
@@ -626,6 +712,8 @@ export function Chat() {
 		[selectedConversationId, submitFeedback],
 	);
 
+	// Only an actual error / remote-view-only condition surfaces a notice; the always-on informational banner
+	// was dropped (RC #3). When undefined, ChatDisplayShell renders no alert.
 	const notice = useMemo(
 		() =>
 			streamError ? (
@@ -641,11 +729,11 @@ export function Chat() {
 			) : isRemoteConversation ? (
 				<Stack gap={2}>
 					<Text fw={700}>{t("pages.chat.remoteViewOnlyTitle", "Remote conversation")}</Text>
-					<Text size="sm">{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}</Text>
+					<Text size="sm">
+						{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}
+					</Text>
 				</Stack>
-			) : (
-				`Local conversation history is loaded from the node API. Send, stream, and cancel are wired to the local SignalR hub. Node mode hides ${hiddenNodeSurfaces}.`
-			),
+			) : undefined,
 		[conversationsQuery.error, conversationsQuery.isError, isRemoteConversation, streamError, t],
 	);
 
@@ -667,7 +755,7 @@ export function Chat() {
 				modelOptions={modelOptions}
 				selectedModel={selectedModel}
 				reasoningEffort={reasoningEffort}
-				availableReasoningEfforts={["none", "low", "medium", "high"]}
+				availableReasoningEfforts={[...reasoningEfforts]}
 				toolsEnabled={toolsEnabled}
 				capabilities={chatUiCapabilities}
 				contextUsage={{
@@ -680,6 +768,7 @@ export function Chat() {
 				streamingMessage={streamingMessage}
 				timelineEntries={timelineEntries}
 				disabledNotice={notice}
+				isLoadingMessages={isLoadingSelectedConversation}
 				inputStatus={{
 					isSending,
 					chatInputDisabled: isCreatingConversation || isRemoteConversation,
@@ -699,7 +788,7 @@ export function Chat() {
 				onToggleConversationList={() => setCollapsed((value) => !value)}
 				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}
-				onToggleTools={() => setToolsEnabled((value) => !value)}
+				onToggleTools={toggleTools}
 				onSend={(content, effort, model) => {
 					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}

@@ -1,15 +1,33 @@
 import { ActionIcon, Avatar, Badge, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
-import { IconCheck, IconChecks, IconChevronLeft, IconChevronRight, IconCopy, IconGitBranch, IconRefresh, IconSparkles } from "@tabler/icons-react";
+import {
+	IconCheck,
+	IconChecks,
+	IconChevronLeft,
+	IconChevronRight,
+	IconCopy,
+	IconGitBranch,
+	IconRefresh,
+	IconSparkles,
+} from "@tabler/icons-react";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
-import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
-import { ChatActivityTimeline, ToolCallDisplay } from "@/features/chat/components/ToolCallDisplay";
+import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import { ThoughtsSection } from "@/features/chat/components/ThoughtsSection";
-import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel, ChatTimelineEntry, ChatToolCall } from "@/features/chat/models/ChatModels";
+import { ChatActivityTimeline, ToolCallDisplay } from "@/features/chat/components/ToolCallDisplay";
+import type {
+	ChatFeedbackRating,
+	ChatMessageFeedback,
+	ChatMessageModel,
+	ChatTimelineEntry,
+	ChatToolCall,
+	ReasoningEffort,
+} from "@/features/chat/models/ChatModels";
+
+const EMPTY_ENTRIES: ChatTimelineEntry[] = [];
 
 /** Prev/next navigation across the sibling revisions (variant group) of an assistant turn (Phase 5.2). */
 export interface ChatMessageRevisionNav {
@@ -34,6 +52,8 @@ interface ChatMessageProps {
 	feedback?: ChatMessageFeedback;
 	feedbackPending?: boolean;
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
+	// The active composer reasoning effort, used to flag reasoning emitted while "none" is selected.
+	reasoningEffort?: ReasoningEffort;
 }
 
 function timeText(iso?: string): string {
@@ -50,16 +70,22 @@ function roleLabel(role: ChatMessageModel["role"]): string {
 }
 
 function calls(entries: ChatTimelineEntry[]): ChatToolCall[] {
-	return entries
-		.filter((entry) => entry.toolName)
-		.map((entry) => ({
+	return entries.reduce<ChatToolCall[]>((accumulator, entry) => {
+		if (!entry.toolName) {
+			return accumulator;
+		}
+
+		accumulator.push({
 			id: entry.id,
-			name: entry.toolName ?? "tool",
+			name: entry.toolName,
 			state: entry.state ?? (entry.type === "ToolResult" ? "received" : "waiting"),
 			args: entry.toolArgs,
 			result: entry.toolResult,
 			requiresApproval: entry.requiresApproval,
-		}));
+		});
+
+		return accumulator;
+	}, []);
 }
 
 export function ChatMessage({
@@ -69,7 +95,7 @@ export function ChatMessage({
 	isStreaming = false,
 	streamingReasoning,
 	streamingReasoningOverflowBytes = 0,
-	entries = [],
+	entries = EMPTY_ENTRIES,
 	onRegenerate,
 	revisionNav,
 	onBranch,
@@ -77,6 +103,7 @@ export function ChatMessage({
 	feedback,
 	feedbackPending = false,
 	onSubmitFeedback,
+	reasoningEffort,
 }: ChatMessageProps) {
 	const { t } = useTranslation();
 	const reducedMotion = useReducedMotion();
@@ -132,7 +159,14 @@ export function ChatMessage({
 			{canCopy ? (
 				<CopyButton value={message.content} timeout={2000}>
 					{({ copied, copy }) => (
-						<Tooltip label={copied ? t("pages.chat.actions.copySuccess", "Message copied to clipboard.") : t("pages.chat.actions.copy", "Copy message")} withArrow={true}>
+						<Tooltip
+							label={
+								copied
+									? t("pages.chat.actions.copySuccess", "Message copied to clipboard.")
+									: t("pages.chat.actions.copy", "Copy message")
+							}
+							withArrow={true}
+						>
 							<ActionIcon
 								aria-label={t("pages.chat.actions.copy", "Copy message")}
 								color={copied ? "teal" : "gray"}
@@ -250,13 +284,18 @@ export function ChatMessage({
 						streamingOverflowBytes={streamingReasoningOverflowBytes}
 						isStreaming={isStreaming}
 						hasContentStarted={hasContentStarted}
+						reasoningBypassed={reasoningEffort === "none" && (message.reasoning?.trim().length ?? 0) > 0}
 					/>
 				) : null}
 				{assistantMessage && isStreaming ? <ToolCallDisplay calls={toolCalls} /> : null}
 				{assistantMessage && !isStreaming ? <ChatActivityTimeline entries={entries} /> : null}
 				<AnimatePresence initial={false}>
 					{content ? (
-						<m.div key="answer" initial={reducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+						<m.div
+							key="answer"
+							initial={reducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -6 }}
+							animate={{ opacity: 1, y: 0 }}
+						>
 							<Paper
 								withBorder={true}
 								p="sm"
