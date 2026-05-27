@@ -155,6 +155,55 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task ReportInvocationAssignedAsync_WhileRemoteHoldsCollisionQueue_BlocksUntilRemoteReleasesThenProceeds()
+    {
+        // Deterministic collision-queue test: the remote run is gated on a TaskCompletionSource the test owns, and
+        // we synchronize on the runner actually entering (remoteEntered) before starting the local turn, so there
+        // is no sleep-before-dispatch race. The local turn's blocked/unblocked transition is observed via the
+        // returned ReportInvocationAssignedAsync task plus CurrentInvocation ordering, not timing.
+        var runner = Substitute.For<IInvocationRunner>();
+        var remoteEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRemote = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  remoteEntered.TrySetResult();
+                  return releaseRemote.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+
+        // Remote invocation starts and holds the shared _remoteInvocationQueue lease.
+        var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
+        await remoteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The local send must WAIT on the same gate before claiming the slot: its task does not complete and the
+        // current invocation stays the remote one.
+        var localAssign = dispatcher.ReportInvocationAssignedAsync(local);
+        var localAcquiredEarly = await Task.WhenAny(localAssign, Task.Delay(TimeSpan.FromMilliseconds(200))) == localAssign;
+
+        AssertEx.False(localAcquiredEarly, "The local send must queue behind the remote invocation and not acquire the slot while the remote holds it.");
+        AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+
+        // No spurious failed/persisted noise while queued: the local turn never reached the runner and the tracked
+        // invocation is still the running remote one (not a failed local one).
+        await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+        AssertEx.NotEqual(InvocationStatus.Failed, dispatcher.CurrentInvocation?.Status ?? InvocationStatus.Failed);
+
+        // Releasing the remote lease lets the queued local turn acquire the slot and become current.
+        releaseRemote.SetResult();
+        await remoteDispatch;
+        var lease = await localAssign.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(local.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
+        // The local turn does not drive the agent runner, so no additional RunAsync call was made for it.
+        await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+        await lease.DisposeAsync();
+    }
+
+    [Test]
     public async Task ReportInvocationAssignedAsync_WhenCancelledWhileQueued_AbortsWaitWithoutAssigning()
     {
         var runner = Substitute.For<IInvocationRunner>();

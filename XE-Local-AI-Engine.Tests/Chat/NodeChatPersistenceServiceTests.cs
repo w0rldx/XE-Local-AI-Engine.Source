@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -224,6 +225,57 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         var summaries = await service.ListConversationsAsync(new NodeChatListConversationsRequest(true)).ConfigureAwait(false);
         AssertEx.Equal(1, summaries.Count(summary => summary.ConversationId == conversationId));
+    }
+
+    [Test]
+    public async Task OriginColumn_RoundTripsLocalViaLocalPathAndRemoteViaPlatformPath()
+    {
+        await using var provider = await BuildProviderAsync("origin-roundtrip.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        // Local path: CreateConversationAsync defaults Origin=Local; PersistUserMessageAsync defaults Origin=Local.
+        var localConversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", 1)).ConfigureAwait(false);
+        var localMessageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(localConversation.ConversationId, localMessageId, "local question", 2)).ConfigureAwait(false);
+
+        // Platform (remote) path: EnsureConversationAsync mirrors the conversation Origin=Remote; the user turn is
+        // persisted with Origin=Remote, exactly as NodeChatRemotePersistenceCoordinator drives it.
+        var remoteConversationId = Guid.NewGuid();
+        await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(remoteConversationId, "Remote chat", "node", 3, NodeChatOriginValues.Remote)).ConfigureAwait(false);
+        var remoteMessageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(remoteConversationId, remoteMessageId, "remote question", 4, Origin: NodeChatOriginValues.Remote)).ConfigureAwait(false);
+
+        // Read both back and assert the persisted origin column for each conversation and message.
+        var loadedLocal = AssertEx.NotNull(await service.GetConversationAsync(localConversation.ConversationId).ConfigureAwait(false));
+        var loadedRemote = AssertEx.NotNull(await service.GetConversationAsync(remoteConversationId).ConfigureAwait(false));
+
+        AssertEx.Equal(NodeChatOriginValues.Local, loadedLocal.Origin);
+        AssertEx.Equal(NodeChatOriginValues.Local, await ReadMessageOriginAsync(provider, localMessageId).ConfigureAwait(false));
+        AssertEx.Equal(NodeChatOriginValues.Remote, loadedRemote.Origin);
+        AssertEx.Equal(NodeChatOriginValues.Remote, await ReadMessageOriginAsync(provider, remoteMessageId).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task RemoteMessageContent_IsStoredAsPlaintextUtf8AtRest()
+    {
+        await using var provider = await BuildProviderAsync("remote-plaintext.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        const string plaintext = "remote at-rest plaintext content";
+
+        // Persist an Origin=Remote message via the raw-SQL persistence path (PersistUserMessageAsync issues a
+        // direct ADO.NET INSERT, never EF SaveChanges, so no EF interceptor touches the content column).
+        var remoteConversationId = Guid.NewGuid();
+        await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(remoteConversationId, "Remote", "node", 10, NodeChatOriginValues.Remote)).ConfigureAwait(false);
+        var remoteMessageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(remoteConversationId, remoteMessageId, plaintext, 11, Origin: NodeChatOriginValues.Remote)).ConfigureAwait(false);
+
+        // Read the raw content column with a direct SQL command (bypassing the service's Decode path and any
+        // interceptor) and assert it is the original UTF-8 plaintext. This DELIBERATELY documents the
+        // plaintext-at-rest posture for remote-origin rows (F8 / schema sheet): it is intentional, not a bug.
+        var rawContent = await ReadRawMessageContentAsync(provider, remoteMessageId).ConfigureAwait(false);
+
+        AssertEx.True(rawContent.SequenceEqual(Encoding.UTF8.GetBytes(plaintext)), "Remote-origin content is stored as plaintext UTF-8 at rest by design.");
+        AssertEx.Equal(plaintext, Encoding.UTF8.GetString(rawContent));
     }
 
     [Test]
@@ -456,5 +508,37 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
+    }
+
+    private static async Task<string> ReadMessageOriginAsync(ServiceProvider provider, Guid messageId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT origin FROM messages WHERE message_id = $message_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$message_id";
+        parameter.Value = messageId;
+        command.Parameters.Add(parameter);
+        var origin = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return (string)origin!;
+    }
+
+    private static async Task<byte[]> ReadRawMessageContentAsync(ServiceProvider provider, Guid messageId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT content FROM messages WHERE message_id = $message_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$message_id";
+        parameter.Value = messageId;
+        command.Parameters.Add(parameter);
+        var content = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return (byte[])content!;
     }
 }
