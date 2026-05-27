@@ -486,6 +486,7 @@ export function Chat() {
 					conversation.id,
 					assistantMessageId,
 					reasoningEffort,
+					toolsEnabled,
 					abortController.signal,
 				)) {
 					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
@@ -538,7 +539,7 @@ export function Chat() {
 				}
 			}
 		},
-		[cacheConversation, displayConversations, queryClient, reasoningEffort, refreshConversation, selectedConversationId, t],
+		[cacheConversation, displayConversations, queryClient, reasoningEffort, refreshConversation, selectedConversationId, t, toolsEnabled],
 	);
 
 	const handleRegenerate = useCallback(
@@ -811,6 +812,9 @@ export function Chat() {
 								<Text size="sm">
 									{connectionError ?? t("pages.chat.connectionFailed", "Could not connect to the local chat hub.")}
 								</Text>
+								{/* Retry re-arms connect(): readiness flips error → connecting and this whole gate re-renders to
+								    the centered Loader above. Accepted as-is — no in-button spinner; the connecting state IS
+								    the feedback, and the gate swap is a clean replace, not a flicker. */}
 								<Button size="xs" variant="light" onClick={retryConnection}>
 									{t("pages.chat.retryConnection", "Retry")}
 								</Button>

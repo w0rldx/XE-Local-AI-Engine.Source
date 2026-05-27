@@ -35,14 +35,16 @@ public sealed class NodeChatRegenerationService(
     public IAsyncEnumerable<ChatStreamEvent> RegenerateAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort = null,
+        bool useLocalTools = false,
         CancellationToken cancellationToken = default)
     {
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, cancellationToken);
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort,
+        bool useLocalTools,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
@@ -112,6 +114,12 @@ public sealed class NodeChatRegenerationService(
 
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
 
+        // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
+        // client asked AND the node has the tool engine enabled. No local tool catalog exists yet, so the offered
+        // set is empty today; threading the flag keeps regenerate's gate identical to send for when one lands.
+        var offerTools = useLocalTools && localChatOptions.Value.EnableTools;
+        IReadOnlyList<AllowedToolDto>? allowedTools = offerTools ? [] : null;
+
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             conversationId,
             LoadResolvedSystemPrompt(localChatOptions.Value),
@@ -119,6 +127,7 @@ public sealed class NodeChatRegenerationService(
             original.Model ?? localChatOptions.Value.DefaultModel,
             AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: reasoningEffort));
 
