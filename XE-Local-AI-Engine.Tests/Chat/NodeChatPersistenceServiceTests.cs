@@ -375,6 +375,37 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task BranchConversationAsync_FromChosenRevision_CopiesOnlyThatVariantAsLinearThread()
+    {
+        await using var provider = await BuildProviderAsync("branch-revision.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", 840)).ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "question", 841)).ConfigureAwait(false);
+        var originalAssistantId = Guid.NewGuid();
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(source.ConversationId, originalAssistantId, Guid.NewGuid(), 842)).ConfigureAwait(false);
+
+        // Regenerate => a newer sibling variant (the 2nd revision) sharing the original's variant group.
+        var variant = AssertEx.NotNull(await service.CreateMessageVariantAsync(
+                new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, Guid.NewGuid(), Guid.NewGuid(), 843))
+            .ConfigureAwait(false));
+
+        // Branch from the chosen (newer) revision: the branch must be a LINEAR thread carrying only that revision
+        // as the assistant turn — the sibling original must NOT be copied (otherwise variant_group_id is dropped
+        // on copy and the two revisions render as duplicate stacked assistant turns). RC variant-branch fix.
+        var branch = AssertEx.NotNull(await service.BranchConversationAsync(
+                new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, 850)).ConfigureAwait(false));
+        AssertEx.Equal(2, branch.CopiedMessageCount);
+
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        AssertEx.Equal(2, branched.Messages.Count);
+        AssertEx.Equal(1, branched.Messages.Count(message => string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)));
+        AssertEx.Equal("question", branched.Messages.Single(message => string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase)).Content);
+        // The branched assistant turn is no longer a variant — a fresh linear thread.
+        AssertEx.True(branched.Messages.All(message => message.VariantGroupId is null));
+    }
+
+    [Test]
     public async Task BranchConversationAsync_WhenMessageNotInConversation_ReturnsNull()
     {
         await using var provider = await BuildProviderAsync("branch-missing.sqlite").ConfigureAwait(false);

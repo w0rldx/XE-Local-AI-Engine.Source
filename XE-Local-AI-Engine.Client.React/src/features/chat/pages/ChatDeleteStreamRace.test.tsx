@@ -37,6 +37,16 @@ vi.mock("@/features/models/api/LocalModelsApi", () => ({
 	getLocalModelDetails: vi.fn(),
 }));
 
+// The A9 readiness gate eager-connects the shared hub on mount; stub it as already connected so the page
+// renders past the connecting gate (a real SignalR connection can't be built in jsdom).
+vi.mock("@/features/chat/api/NodeChatConnection", () => ({
+	nodeChatConnection: {
+		status: "connected",
+		subscribe: vi.fn(() => () => undefined),
+		ensureConnection: vi.fn(() => Promise.resolve(undefined)),
+	},
+}));
+
 const adapter = vi.mocked(nodeChatAdapter);
 const listLocalModelsMock = vi.mocked(listLocalModels);
 
