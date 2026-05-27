@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
@@ -23,6 +25,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
+    private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly SemaphoreSlim _remoteInvocationQueue = new(1, 1);
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
     private readonly object _syncRoot = new();
@@ -33,6 +36,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         Lazy<IHubMessageSender> hubMessageSender,
         INodeKeyRegistry nodeKeyRegistry,
         IInvocationHistory invocationHistory,
+        INodeChatRemotePersistenceCoordinator remotePersistenceCoordinator,
         ILogger<WorkerEventDispatcher> logger)
     {
         _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
@@ -40,6 +44,7 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         _hubMessageSender = hubMessageSender ?? throw new ArgumentNullException(nameof(hubMessageSender));
         _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
         _invocationHistory = invocationHistory ?? throw new ArgumentNullException(nameof(invocationHistory));
+        _remotePersistenceCoordinator = remotePersistenceCoordinator ?? throw new ArgumentNullException(nameof(remotePersistenceCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -196,25 +201,27 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         };
     }
 
-    public Task ReportInvocationAssignedAsync(RuntimePackage package)
+    public async Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(package);
+
+        // Queue the local turn behind any in-flight invocation (local or remote) using the SAME slot the
+        // remote dispatch paths hold, instead of throwing when busy. The slot is held until the returned lease
+        // is disposed (when the local run terminates), so local and platform invocations stay mutually
+        // exclusive. Cancelling the local turn while it is still queued aborts the wait here.
+        await _remoteInvocationQueue.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         InvocationState snapshot;
 
         lock (_syncRoot)
         {
-            if (IsInvocationActive(CurrentInvocation))
-            {
-                throw new InvalidOperationException($"Cannot assign local invocation {package.InvocationId} while invocation {CurrentInvocation!.InvocationId} is still active.");
-            }
-
             CurrentInvocation = CreateInvocationState(package);
             snapshot = Clone(CurrentInvocation);
         }
 
         PublishStateChanged(snapshot);
-        return Task.CompletedTask;
+        return new LocalInvocationLease(_remoteInvocationQueue);
     }
 
     public Task DispatchToolCallResultAsync(ToolCallResultEvent evt)
@@ -544,7 +551,89 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
         _logger.LogInformation("Dispatched invocation assignment for {InvocationId}.", runtimePackage.InvocationId);
         PublishStateChanged(snapshot);
 
-        await RunInvocationAsync(context).ConfigureAwait(false);
+        await RunInvocationWithRemotePersistenceAsync(context, runtimePackage).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a platform-served invocation while persisting its chat content to node SQLite with Origin=Remote.
+    /// The dispatcher stays thin: it opens a persistence session (ensure-conversation + user/assistant rows),
+    /// fans this invocation's <see cref="InvocationStateChanged"/> deltas into the shared pump via the session,
+    /// then terminalizes. All persistence translation lives in the coordinator/pump, not here.
+    /// </summary>
+    private async Task RunInvocationWithRemotePersistenceAsync(InvocationExecutionContext context, RuntimePackage runtimePackage)
+    {
+        NodeChatRemotePersistenceSession session;
+
+        try
+        {
+            session = await _remotePersistenceCoordinator.BeginAsync(runtimePackage).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Persistence is best-effort relative to the agent run: never block/fail a platform invocation
+            // because the node-local mirror could not be written. Run without persistence in that case.
+            _logger.LogError(exception, "Failed to begin remote persistence for invocation {InvocationId}; running without node-local persistence.", runtimePackage.InvocationId);
+            await RunInvocationAsync(context).ConfigureAwait(false);
+            return;
+        }
+
+        var stateChannel = Channel.CreateUnbounded<InvocationState>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
+
+        void OnInvocationStateChanged(object? _, InvocationStateChangedEventArgs args)
+        {
+            if (args.State.InvocationId == runtimePackage.InvocationId)
+            {
+                stateChannel.Writer.TryWrite(args.State);
+            }
+        }
+
+        InvocationStateChanged += OnInvocationStateChanged;
+        var persistenceTask = DrainRemotePersistenceAsync(session, stateChannel.Reader, runtimePackage.InvocationId);
+
+        try
+        {
+            await RunInvocationAsync(context).ConfigureAwait(false);
+        }
+        finally
+        {
+            InvocationStateChanged -= OnInvocationStateChanged;
+            stateChannel.Writer.TryComplete();
+            await persistenceTask.ConfigureAwait(false);
+        }
+    }
+
+    private async Task DrainRemotePersistenceAsync(NodeChatRemotePersistenceSession session,
+        ChannelReader<InvocationState> stateReader,
+        Guid invocationId)
+    {
+        var terminalPersisted = false;
+
+        try
+        {
+            await foreach (var state in stateReader.ReadAllAsync().ConfigureAwait(false))
+            {
+                terminalPersisted = await session.ApplyAsync(state).ConfigureAwait(false);
+                if (terminalPersisted)
+                {
+                    break;
+                }
+            }
+
+            if (!terminalPersisted)
+            {
+                // The run ended without a terminal state reaching us (process/stream loss). Terminalize the
+                // node-local mirror as interrupted so it does not hang in a non-terminal state.
+                await session.TerminalizeInterruptedAsync(wasCancelled: false).ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Remote persistence drain failed for invocation {InvocationId}.", invocationId);
+        }
     }
 
     private static InvocationState Clone(InvocationState state)
@@ -743,5 +832,24 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         _invocationHistory.Record(state);
         Volatile.Read(ref InvocationStateChanged)?.Invoke(this, new InvocationStateChangedEventArgs(Clone(state)));
+    }
+
+    /// <summary>
+    /// Holds the shared invocation slot for the duration of a local run. Disposing it releases the slot so the
+    /// next queued invocation (local or remote) can proceed. Release is idempotent.
+    /// </summary>
+    private sealed class LocalInvocationLease(SemaphoreSlim queue) : IAsyncDisposable
+    {
+        private int _disposed;
+
+        public ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                _ = queue.Release();
+            }
+
+            return ValueTask.CompletedTask;
+        }
     }
 }

@@ -26,6 +26,8 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
@@ -53,6 +55,47 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_EmitsQueuedBeforeStreaming()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+        var events = new List<ChatStreamEvent>();
+
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        var queuedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued);
+        var streamingIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming);
+
+        AssertEx.True(queuedIndex >= 0, "Expected an assistant-queued event.");
+        AssertEx.True(streamingIndex >= 0, "Expected an assistant-streaming event.");
+        AssertEx.True(queuedIndex < streamingIndex, "assistant-queued must precede assistant-streaming.");
+        AssertEx.Equal(NodeChatMessageStatusValues.Queued, events[queuedIndex].Status);
+
+        // Sequence numbers stay monotonic across the queued (front-door) and streaming (post-lease) producers.
+        AssertEx.True(events[queuedIndex].Sequence < events[streamingIndex].Sequence, "Sequence must be monotonic.");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenConsumerCancelsEnumeration_TerminalizesAssistantAsCancelled()
     {
         var conversationId = Guid.NewGuid();
@@ -63,6 +106,8 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new StreamingUntilCancelledInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
@@ -125,6 +170,10 @@ public sealed class NodeChatStreamServiceTests
             NodeChatMessageStatusValues.Pending,
             string.Empty,
             null);
+        var assistantQueued = assistantPending with
+        {
+            Status = NodeChatMessageStatusValues.Queued
+        };
         var assistantStreaming = assistantPending with
         {
             Status = NodeChatMessageStatusValues.Streaming
@@ -136,6 +185,8 @@ public sealed class NodeChatStreamServiceTests
                    .Returns(userMessage);
         persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>())
                    .Returns(assistantPending);
+        persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                   .Returns(assistantQueued);
         persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
                    .Returns(assistantStreaming);
         persistence.FlushAssistantPartialAsync(Arg.Any<NodeChatPartialFlushRequest>(), Arg.Any<CancellationToken>())
@@ -313,7 +364,7 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationAssignedAsync(RuntimePackage package)
+        public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
             CurrentInvocation = new InvocationState
             {
@@ -324,7 +375,7 @@ public sealed class NodeChatStreamServiceTests
                 LastUpdatedAt = DateTimeOffset.UtcNow
             };
             RaiseChanged();
-            return Task.CompletedTask;
+            return Task.FromResult<IAsyncDisposable>(NoopLease.Instance);
         }
 
         public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)
@@ -400,6 +451,16 @@ public sealed class NodeChatStreamServiceTests
         private void RaiseChanged()
         {
             InvocationStateChanged?.Invoke(this, new InvocationStateChangedEventArgs(CurrentInvocation!));
+        }
+
+        private sealed class NoopLease : IAsyncDisposable
+        {
+            public static readonly NoopLease Instance = new();
+
+            public ValueTask DisposeAsync()
+            {
+                return ValueTask.CompletedTask;
+            }
         }
     }
 }

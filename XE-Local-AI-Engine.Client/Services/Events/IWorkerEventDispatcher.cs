@@ -26,7 +26,13 @@ public interface IWorkerEventDispatcher
 
     Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt);
 
-    Task ReportInvocationAssignedAsync(RuntimePackage package);
+    /// <summary>
+    /// Reports a local invocation assignment, queueing behind any in-flight invocation (local or platform)
+    /// instead of throwing when busy. The returned lease holds the shared invocation slot until disposed,
+    /// which the caller must do when the local run terminates. Cancelling <paramref name="cancellationToken"/>
+    /// while the turn is still queued aborts the wait.
+    /// </summary>
+    Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default);
 
     Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk);
 

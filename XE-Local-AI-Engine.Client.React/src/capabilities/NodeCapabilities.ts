@@ -28,7 +28,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		localModelManagement: true,
 		localTools: true,
 		toolApprovals: false,
-		conversationFeedback: false,
+		conversationFeedback: true,
 		offlineFirst: true,
 		encryptedConversations: false,
 		clientNodeRouting: false,

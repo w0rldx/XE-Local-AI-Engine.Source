@@ -1,12 +1,25 @@
 import type {
 	NodeChatConversationResponseDto,
 	NodeChatConversationSummaryResponseDto,
+	NodeChatMessageFeedbackResponseDto,
 	NodeChatMessageResponseDto,
+	NodeChatMessageRevisionsResponseDto,
 } from "@/features/chat/api/NodeChatApi";
-import type { ChatConversationModel, ChatMessageModel, ChatRole, MessageStatus } from "@/features/chat/models/ChatModels";
+import type {
+	ChatConversationModel,
+	ChatFeedbackRating,
+	ChatMessageFeedback,
+	ChatMessageModel,
+	ChatMessageRevisions,
+	ChatOrigin,
+	ChatRole,
+	MessageStatus,
+} from "@/features/chat/models/ChatModels";
 
 const knownRoles = new Set<ChatRole>(["user", "assistant", "system", "tool"]);
-const knownStatuses = new Set<MessageStatus>(["pending", "streaming", "completed", "cancelled", "failed", "interrupted"]);
+const knownStatuses = new Set<MessageStatus>(["pending", "queued", "streaming", "completed", "cancelled", "failed", "interrupted"]);
+const knownOrigins = new Set<ChatOrigin>(["local", "remote"]);
+const knownRatings = new Set<ChatFeedbackRating>(["up", "down"]);
 
 function toIso(unixMilliseconds: number): string {
 	const date = new Date(unixMilliseconds);
@@ -23,6 +36,11 @@ function toStatus(status: string): MessageStatus {
 	return knownStatuses.has(normalized) ? normalized : "completed";
 }
 
+function toOrigin(origin: string | null | undefined): ChatOrigin {
+	const normalized = (origin ?? "").toLowerCase() as ChatOrigin;
+	return knownOrigins.has(normalized) ? normalized : "local";
+}
+
 function titleOrFallback(title: string | null | undefined): string {
 	return title?.trim() || "Untitled conversation";
 }
@@ -31,6 +49,7 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 	return {
 		id: dto.messageId,
 		conversationId: dto.conversationId,
+		requestId: dto.requestId ?? undefined,
 		role: toRole(dto.role),
 		content: dto.content,
 		reasoning: dto.reasoning ?? undefined,
@@ -40,10 +59,13 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		sortOrder: dto.sequence,
 		model: dto.model ?? undefined,
 		error: dto.error ?? undefined,
+		origin: toOrigin(dto.origin),
 		inputTokens: dto.inputTokens ?? undefined,
 		outputTokens: dto.outputTokens ?? undefined,
 		totalTokens: dto.totalTokens ?? undefined,
 		reasoningTokens: dto.reasoningTokens ?? undefined,
+		parentMessageId: dto.parentMessageId ?? undefined,
+		variantGroupId: dto.variantGroupId ?? undefined,
 	};
 }
 
@@ -57,7 +79,9 @@ export function mapConversationSummary(dto: NodeChatConversationSummaryResponseD
 		updatedAt: lastSeen,
 		lastActivity: lastSeen,
 		lastMessagePreview: dto.lastMessagePreview ?? undefined,
-		isArchived: dto.purged,
+		isPinned: dto.isPinned,
+		isArchived: dto.archived,
+		origin: toOrigin(dto.origin),
 		messages: [],
 	};
 }
@@ -71,7 +95,34 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		createdAt: toIso(dto.createdAtUtc),
 		updatedAt: lastSeen,
 		lastActivity: lastSeen,
-		isArchived: dto.purged,
+		isPinned: dto.isPinned,
+		isArchived: dto.archived,
+		origin: toOrigin(dto.origin),
+		branchOfConversationId: dto.branchOfConversationId ?? undefined,
 		messages: dto.messages.map(mapMessage),
+	};
+}
+
+function toRating(rating: string): ChatFeedbackRating {
+	const normalized = rating.toLowerCase() as ChatFeedbackRating;
+	return knownRatings.has(normalized) ? normalized : "up";
+}
+
+export function mapMessageRevisions(dto: NodeChatMessageRevisionsResponseDto): ChatMessageRevisions {
+	return {
+		messageId: dto.messageId,
+		variantGroupId: dto.variantGroupId ?? undefined,
+		variants: dto.variants.map(mapMessage).toSorted((left, right) => left.sortOrder - right.sortOrder),
+	};
+}
+
+export function mapMessageFeedback(dto: NodeChatMessageFeedbackResponseDto): ChatMessageFeedback {
+	return {
+		messageId: dto.messageId,
+		conversationId: dto.conversationId,
+		rating: toRating(dto.rating),
+		comment: dto.comment ?? undefined,
+		createdAt: toIso(dto.createdAtUtc),
+		updatedAt: toIso(dto.updatedAtUtc),
 	};
 }

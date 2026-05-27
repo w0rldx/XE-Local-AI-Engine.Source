@@ -20,9 +20,23 @@ internal sealed record class NodeMessage
 
     public string Status { get; set; } = NodeMessageStatus.Completed;
 
+    public string Origin { get; set; } = NodeChatOrigin.Local;
+
     public Guid? RequestId { get; set; }
 
     public string? Error { get; set; }
+
+    /// <summary>
+    /// The message this one descends from (branch/revision provenance). Null for original turns.
+    /// </summary>
+    public Guid? ParentMessageId { get; set; }
+
+    /// <summary>
+    /// Groups sibling variants of one logical turn (regenerate produces siblings, never an in-place
+    /// overwrite). All variants of a turn share this id; the active variant is selected client-side. Null
+    /// for turns that have never been regenerated.
+    /// </summary>
+    public Guid? VariantGroupId { get; set; }
 
     public NodeConversation? Conversation { get; set; }
 }

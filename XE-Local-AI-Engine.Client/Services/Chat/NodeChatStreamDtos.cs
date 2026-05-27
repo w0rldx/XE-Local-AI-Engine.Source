@@ -4,6 +4,7 @@ public static class ChatStreamEventTypes
 {
     public const string UserMessagePersisted = "user-message-persisted";
     public const string AssistantPending = "assistant-pending";
+    public const string AssistantQueued = "assistant-queued";
     public const string AssistantStreaming = "assistant-streaming";
     public const string AssistantDelta = "assistant-delta";
     public const string AssistantCompleted = "assistant-completed";

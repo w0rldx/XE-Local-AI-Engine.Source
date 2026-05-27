@@ -126,6 +126,9 @@
 			"noOnlineClientNodes": "No online client nodes are available. Pair and connect a worker node before creating conversations.",
 			"waitingForStreamedResponse": "Waiting for streamed response",
 			"waitingForResponse": "Waiting for response",
+			"queued": "Queued — waiting for current task",
+			"remoteViewOnlyTitle": "Remote conversation",
+			"remoteViewOnly": "This conversation was started from a paired client and is view-only on this node.",
 			"streamErrors": {
 				"epochKeyMissing": "Encryption keys are still syncing — please retry.",
 				"eventHandlerError": "A local chat update failed. Please retry or refresh the conversation."
@@ -175,6 +178,8 @@
 				"collapseAria": "Minimize sidebar",
 				"untitled": "Untitled conversation",
 				"archived": "Archived",
+				"remote": "Remote",
+				"remoteTooltip": "Started from a paired client. View-only on this node.",
 				"noClientAssigned": "No client assigned",
 				"empty": "No conversations yet.",
 				"delete": "Delete",
@@ -365,6 +370,8 @@
 				"branch": "Branch conversation",
 				"branchSuccess": "Branched conversation created.",
 				"copy": "Copy message",
+				"copyCode": "Copy code",
+				"copyCodeSuccess": "Copied",
 				"copySuccess": "Message copied to clipboard.",
 				"feedback": "Give feedback",
 				"regenerate": "Regenerate response",

@@ -284,11 +284,15 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
-        builder.Services.AddScoped<ILocalChatInvocationService, LocalChatInvocationService>();
         builder.Services.AddSingleton<NodeChatPersistenceWriter>();
         builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
+        builder.Services.AddSingleton<INodeChatInvocationPump, NodeChatInvocationPump>();
+        builder.Services.AddSingleton<INodeChatRemotePersistenceCoordinator, NodeChatRemotePersistenceCoordinator>();
+        builder.Services.AddSingleton<INodeChatMutationGuard, NodeChatMutationGuard>();
         builder.Services.AddSingleton<INodeChatStreamCancellationRegistry, NodeChatStreamCancellationRegistry>();
+        builder.Services.AddSingleton<IInvocationResumeRegistry, InvocationResumeRegistry>();
         builder.Services.AddScoped<INodeChatStreamService, NodeChatStreamService>();
+        builder.Services.AddScoped<INodeChatRegenerationService, NodeChatRegenerationService>();
         builder.Services.AddSingleton<NodeChatRestartRecoveryService>();
         builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
         builder.Services.AddSingleton<WorkerHubConnection>(sp =>

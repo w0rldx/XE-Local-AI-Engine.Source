@@ -50,6 +50,7 @@ try
     await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
     await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
     await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
+    ActivateInvocationResumeRegistry(app.Services);
     RegisterWorkerShutdownDrain(app);
 
     app.UseSerilogRequestLogging(static options =>
@@ -189,6 +190,15 @@ static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider servi
     var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
 
     await recoveryService.RecoverInterruptedMessagesAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds()).ConfigureAwait(false);
+}
+
+static void ActivateInvocationResumeRegistry(IServiceProvider services)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    // Eagerly resolve the registry so it subscribes to the dispatcher before any invocation can start,
+    // ensuring it observes every live invocation from the first one (Phase 2.2 resume support).
+    _ = services.GetRequiredService<IInvocationResumeRegistry>();
 }
 
 static void RegisterWorkerShutdownDrain(WebApplication app)

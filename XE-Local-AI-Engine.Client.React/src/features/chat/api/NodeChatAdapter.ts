@@ -1,21 +1,32 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
-
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import {
+	branchConversation,
 	cancelMessage,
 	createConversation,
 	deleteConversation,
 	getConversation,
+	getMessageFeedback,
 	listConversations,
+	listMessageRevisions,
+	renameConversation,
+	setConversationArchived,
+	setConversationPinned,
+	setMessageFeedback,
+	type NodeChatBranchConversationResponseDto,
+	type NodeChatFeedbackRating,
 	type NodeChatStreamEventDto,
 	type NodeChatStreamRequestDto,
 } from "@/features/chat/api/NodeChatApi";
-import { mapConversation, mapConversationSummary } from "@/features/chat/api/NodeChatMapper";
-import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
+import { guardNodeChatStream } from "@/features/chat/api/NodeChatStreamGuard";
+import { mapConversation, mapConversationSummary, mapMessageFeedback, mapMessageRevisions } from "@/features/chat/api/NodeChatMapper";
+import type { ChatConversationModel, ChatMessageFeedback, ChatMessageRevisions } from "@/features/chat/models/ChatModels";
 
 interface RequestOptions {
 	signal?: AbortSignal;
+}
+
+interface ListConversationsOptions extends RequestOptions {
+	includeArchived?: boolean;
 }
 
 export interface CreateConversationRequest {
@@ -39,12 +50,26 @@ export interface SendMessageRequest {
 }
 
 export interface NodeChatAdapter {
-	listConversations(options?: RequestOptions): Promise<ChatConversationModel[]>;
+	listConversations(options?: ListConversationsOptions): Promise<ChatConversationModel[]>;
 	getConversation(conversationId: string, options?: RequestOptions): Promise<ChatConversationModel>;
 	createConversation(request?: CreateConversationRequest, options?: RequestOptions): Promise<ChatConversationModel>;
 	deleteConversation(conversationId: string, purgeImmediately?: boolean, options?: RequestOptions): Promise<void>;
+	renameConversation(conversationId: string, title: string, options?: RequestOptions): Promise<ChatConversationModel>;
+	setConversationPinned(conversationId: string, isPinned: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
+	setConversationArchived(conversationId: string, archived: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
+	branchConversation(conversationId: string, messageId: string, options?: RequestOptions): Promise<NodeChatBranchConversationResponseDto>;
+	listMessageRevisions(conversationId: string, messageId: string, options?: RequestOptions): Promise<ChatMessageRevisions | null>;
+	getMessageFeedback(conversationId: string, messageId: string, options?: RequestOptions): Promise<ChatMessageFeedback | null>;
+	setMessageFeedback(
+		conversationId: string,
+		messageId: string,
+		rating: NodeChatFeedbackRating,
+		comment: string | undefined,
+		options?: RequestOptions,
+	): Promise<ChatMessageFeedback>;
 	cancelMessage(request: CancelMessageRequest, options?: RequestOptions): Promise<void>;
 	sendMessage(request: SendMessageRequest, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
+	regenerateMessage(conversationId: string, originalMessageId: string, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
 }
 
 function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto {
@@ -58,49 +83,137 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 	};
 }
 
-function signalRStream<T>(request: NodeChatStreamRequestDto, signal: AbortSignal): AsyncIterable<T> {
+// A terminal stream event ends the invocation; after one of these there is nothing left to resume.
+const terminalStreamEventTypes = new Set<string>([
+	"assistant-completed",
+	"assistant-cancelled",
+	"assistant-failed",
+	"assistant-interrupted",
+]);
+
+function isTerminalStreamEvent(event: NodeChatStreamEventDto): boolean {
+	return terminalStreamEventTypes.has(event.type);
+}
+
+/** The opening hub call for a stream: a local send, a server-driven regenerate, or a re-attach to a run. */
+interface StreamOpening {
+	method: "SendMessage" | "RegenerateMessage" | "ResumeMessage";
+	args: unknown[];
+	// The assistant message id the caller renders into. Known up front for a send; for a regenerate it is the
+	// server-minted variant id, latched from the first event; for a resume it is the target id that resume
+	// events (stamped with the invocation id) are remapped onto.
+	assistantMessageId?: string;
+	// The invocation/resume key (== requestId). Known up front for a send and a direct resume; for a regenerate
+	// it is latched from the first event's requestId (server-minted run), enabling resume after a reconnect.
+	knownInvocationId?: string;
+	// True when the OPENING call is itself a ResumeMessage (re-attaching to a server-driven run). Then an
+	// opening error means "unknown/terminal invocation" → complete cleanly, rather than surfacing a failure.
+	isResumeOpening?: boolean;
+}
+
+/**
+ * Streams a chat turn over the persistent connection and transparently resumes after a reconnect. When the
+ * underlying connection drops mid-stream, the active SignalR subscription errors; rather than failing the
+ * turn, we wait for the connection to reconnect with a new id and re-attach via the hub's `ResumeMessage`
+ * (keyed by the invocation/request id). Resumed events carry the invocation id as their message id, so they
+ * are remapped back to the assistant message id the caller is rendering. Used for both local sends and
+ * server-driven regenerations (Phase 5.2) — the regenerate latches its server-minted ids from the first event.
+ */
+function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto> {
 	return {
-		async *[Symbol.asyncIterator](): AsyncIterator<T> {
-			const connection = new HubConnectionBuilder()
-				.withUrl(buildLocalApiUrl("chat/hub"), {
-					accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-				})
-				.configureLogging(LogLevel.Warning)
-				.build();
-			const values: T[] = [];
+		async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+			const values: NodeChatStreamEventDto[] = [];
 			let completed = false;
 			let failure: unknown;
 			let wake: (() => void) | undefined;
+			let reachedTerminal = false;
+			let activeSubscription: { dispose: () => void } | undefined;
+			// The request id doubles as the invocation id the resume registry keys on. Known up front for sends and
+			// direct resumes; otherwise latched from the first event below.
+			let invocationId = opening.knownInvocationId;
+			let assistantMessageId = opening.assistantMessageId;
 
 			const notify = (): void => {
 				wake?.();
 				wake = undefined;
 			};
 
-			await connection.start();
-			const subscription = connection.stream<T>("SendMessage", request).subscribe({
-				next: (value) => {
-					values.push(value);
-					notify();
-				},
-				error: (error) => {
-					failure = error;
-					completed = true;
-					notify();
-				},
-				complete: () => {
-					completed = true;
-					notify();
+			const pushEvent = (event: NodeChatStreamEventDto): void => {
+				// Latch ids from the first event when not known up front, so a reconnect can resume the run.
+				invocationId ??= event.requestId || undefined;
+				assistantMessageId ??= event.messageId || undefined;
+				if (isTerminalStreamEvent(event)) {
+					reachedTerminal = true;
+				}
+				values.push(event);
+				notify();
+			};
+
+			const subscribe = (methodName: "SendMessage" | "RegenerateMessage" | "ResumeMessage", args: unknown[], isResume: boolean): void => {
+				const connection = nodeChatConnection.current();
+				if (!connection) {
+					return;
+				}
+
+				activeSubscription = connection.stream<NodeChatStreamEventDto>(methodName, ...args).subscribe({
+					next: (value) => {
+						// Resume events stamp the invocation id as the message id; remap to the assistant id
+						// so the caller updates the same message instead of spawning a new one.
+						pushEvent(isResume && assistantMessageId ? { ...value, messageId: assistantMessageId } : value);
+					},
+					error: (error) => {
+						activeSubscription = undefined;
+						// A ResumeMessage stream throws when the invocation is unknown/terminal — the response already
+						// finished server-side. Complete cleanly so the caller refetches the persisted conversation
+						// instead of showing a spurious failure.
+						if (isResume) {
+							completed = true;
+							notify();
+							return;
+						}
+						// A drop while the connection is reconnecting is recoverable via resume; otherwise fail.
+						if (signal.aborted || reachedTerminal || !invocationId || nodeChatConnection.status === "disconnected") {
+							failure = error;
+							completed = true;
+						}
+						notify();
+					},
+					complete: () => {
+						completed = true;
+						notify();
+					},
+				});
+			};
+
+			const resumeAfterReconnect = (): void => {
+				if (completed || reachedTerminal || !invocationId || activeSubscription) {
+					return;
+				}
+				subscribe("ResumeMessage", [invocationId], true);
+			};
+
+			const unsubscribeFromConnection = nodeChatConnection.subscribe({
+				onReconnected: () => resumeAfterReconnect(),
+				onClose: (error) => {
+					if (!reachedTerminal && !signal.aborted) {
+						failure = error ?? new Error("The local chat connection closed before the response completed.");
+						completed = true;
+						notify();
+					}
 				},
 			});
 
 			const abort = (): void => {
-				subscription.dispose();
+				activeSubscription?.dispose();
+				activeSubscription = undefined;
 				completed = true;
 				notify();
 			};
 
 			signal.addEventListener("abort", abort, { once: true });
+
+			await nodeChatConnection.ensureConnection();
+			subscribe(opening.method, opening.args, opening.isResumeOpening ?? false);
 
 			try {
 				while (!completed || values.length > 0) {
@@ -124,9 +237,11 @@ function signalRStream<T>(request: NodeChatStreamRequestDto, signal: AbortSignal
 					throw failure;
 				}
 			} finally {
+				// The connection is shared and long-lived; only the per-send subscription and the reconnect
+				// listener are torn down here. The persistent connection is reused for the next send.
 				signal.removeEventListener("abort", abort);
-				subscription.dispose();
-				await connection.stop();
+				unsubscribeFromConnection();
+				activeSubscription?.dispose();
 			}
 		},
 	};
@@ -134,7 +249,7 @@ function signalRStream<T>(request: NodeChatStreamRequestDto, signal: AbortSignal
 
 export const nodeChatAdapter: NodeChatAdapter = {
 	async listConversations(options) {
-		const response = await listConversations({ includeArchived: false }, { signal: options?.signal });
+		const response = await listConversations({ includeArchived: options?.includeArchived ?? false }, { signal: options?.signal });
 		return response.items.map(mapConversationSummary);
 	},
 	async getConversation(conversationId, options) {
@@ -146,10 +261,41 @@ export const nodeChatAdapter: NodeChatAdapter = {
 	async deleteConversation(conversationId, purgeImmediately, options) {
 		await deleteConversation(conversationId, purgeImmediately ?? false, { signal: options?.signal });
 	},
+	async renameConversation(conversationId, title, options) {
+		return mapConversation(await renameConversation(conversationId, { title }, { signal: options?.signal }));
+	},
+	async setConversationPinned(conversationId, isPinned, options) {
+		return mapConversation(await setConversationPinned(conversationId, { isPinned }, { signal: options?.signal }));
+	},
+	async setConversationArchived(conversationId, archived, options) {
+		return mapConversation(await setConversationArchived(conversationId, { archived }, { signal: options?.signal }));
+	},
+	async branchConversation(conversationId, messageId, options) {
+		return branchConversation(conversationId, messageId, { signal: options?.signal });
+	},
+	async listMessageRevisions(conversationId, messageId, options) {
+		const response = await listMessageRevisions(conversationId, messageId, { signal: options?.signal });
+		return response ? mapMessageRevisions(response) : null;
+	},
+	async getMessageFeedback(conversationId, messageId, options) {
+		const response = await getMessageFeedback(conversationId, messageId, { signal: options?.signal });
+		return response ? mapMessageFeedback(response) : null;
+	},
+	async setMessageFeedback(conversationId, messageId, rating, comment, options) {
+		return mapMessageFeedback(await setMessageFeedback(conversationId, messageId, { rating, comment }, { signal: options?.signal }));
+	},
 	async cancelMessage(request, options) {
 		await cancelMessage(request, { signal: options?.signal });
 	},
 	sendMessage(request, signal) {
-		return signalRStream<NodeChatStreamEventDto>(toStreamRequest(request), signal);
+		const streamRequest = toStreamRequest(request);
+		return guardNodeChatStream(
+			signalRStream({ method: "SendMessage", args: [streamRequest], assistantMessageId: streamRequest.messageId, knownInvocationId: streamRequest.requestId }, signal),
+		);
+	},
+	regenerateMessage(conversationId, originalMessageId, signal) {
+		// Server mints the sibling variant + drives the run (Phase 5.2); the variant messageId + requestId arrive
+		// on the stream events and are latched for reconnect/resume. Streams exactly like a send.
+		return guardNodeChatStream(signalRStream({ method: "RegenerateMessage", args: [conversationId, originalMessageId] }, signal));
 	},
 };

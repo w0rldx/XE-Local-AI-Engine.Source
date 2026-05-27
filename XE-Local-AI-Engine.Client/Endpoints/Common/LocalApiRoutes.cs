@@ -25,6 +25,12 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/chat/hub";
         public const string Conversations = "chat/conversations";
         public const string ConversationById = "chat/conversations/{conversationId}";
+        public const string RenameConversation = "chat/conversations/{conversationId}/rename";
+        public const string PinConversation = "chat/conversations/{conversationId}/pin";
+        public const string ArchiveConversation = "chat/conversations/{conversationId}/archive";
+        public const string BranchConversation = "chat/conversations/{conversationId}/branch/{messageId}";
+        public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
+        public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";
         public const string Cancel = "chat/cancel";
     }
 

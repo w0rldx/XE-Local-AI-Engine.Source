@@ -73,6 +73,44 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RecoverInterruptedMessagesAsync_TerminalizesQueuedAndRemoteOriginAssistantMessages()
+    {
+        await using var provider = await BuildProviderAsync("restart-recovery-remote-queued.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var recovery = CreateRecoveryService(provider);
+
+        // An Origin=Remote conversation whose assistant placeholder is stuck in `queued` (the state held before
+        // the collision lease is acquired) plus a Remote streaming row — both must be terminalized. A Remote
+        // completed row must be left alone. Recovery filters by role+status only, so Origin never excludes a row.
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Remote", "node", 40, Origin: NodeChatOriginValues.Remote)).ConfigureAwait(false);
+        var queuedCorrelation = await CreateRemoteAssistantPlaceholderAsync(persistence, conversation.ConversationId, 41).ConfigureAwait(false);
+        var streamingCorrelation = await CreateRemoteAssistantPlaceholderAsync(persistence, conversation.ConversationId, 42).ConfigureAwait(false);
+        var completedCorrelation = await CreateRemoteAssistantPlaceholderAsync(persistence, conversation.ConversationId, 43).ConfigureAwait(false);
+
+        await persistence.MarkAssistantQueuedAsync(queuedCorrelation, 44).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(streamingCorrelation, 45).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(completedCorrelation, NodeChatMessageStatusValues.Completed, 46, "done")).ConfigureAwait(false);
+
+        var recoveredCount = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var queued = loaded.Messages.Single(message => message.MessageId == queuedCorrelation.MessageId);
+        var streaming = loaded.Messages.Single(message => message.MessageId == streamingCorrelation.MessageId);
+        var completed = loaded.Messages.Single(message => message.MessageId == completedCorrelation.MessageId);
+
+        AssertEx.Equal(2, recoveredCount);
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, queued.Status);
+        AssertEx.Equal(NodeChatOriginValues.Remote, queued.Origin);
+        AssertEx.Equal(99L, queued.UpdatedAtUtc);
+        AssertEx.Equal(NodeChatRestartRecoveryService.RestartInterruptedError, queued.Error);
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, streaming.Status);
+        AssertEx.Equal(NodeChatOriginValues.Remote, streaming.Origin);
+        AssertEx.Equal(99L, streaming.UpdatedAtUtc);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, completed.Status);
+        AssertEx.Equal(46L, completed.UpdatedAtUtc);
+    }
+
+    [Test]
     public async Task RecoverInterruptedMessagesAsync_ReturnsZeroWhenNoNonterminalMessagesExist()
     {
         await using var provider = await BuildProviderAsync("restart-recovery-empty.sqlite").ConfigureAwait(false);
@@ -125,6 +163,20 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc)).ConfigureAwait(false);
+        return new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+    }
+
+    private static async Task<NodeChatMessageCorrelation> CreateRemoteAssistantPlaceholderAsync(NodeChatPersistenceService persistence,
+        Guid conversationId,
+        long createdAtUtc)
+    {
+        var messageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId,
+            messageId,
+            requestId,
+            createdAtUtc,
+            Origin: NodeChatOriginValues.Remote)).ConfigureAwait(false);
         return new NodeChatMessageCorrelation(conversationId, messageId, requestId);
     }
 

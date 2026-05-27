@@ -11,6 +11,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 
 public sealed class NodeChatStreamService(
     INodeChatPersistenceService persistence,
+    INodeChatInvocationPump invocationPump,
+    INodeChatMutationGuard mutationGuard,
     ILocalChatRuntimePackageBuilder runtimePackageBuilder,
     IInvocationRunner invocationRunner,
     IWorkerEventDispatcher eventDispatcher,
@@ -34,6 +36,10 @@ public sealed class NodeChatStreamService(
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
+        // Reject sends to a remote-origin (view-only) conversation before any persistence happens. The guard is
+        // authoritative; throwing here propagates to the hub caller.
+        await mutationGuard.EnsureMutableAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+
         var conversation = await persistence.GetConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
         var trimmedContent = request.Content.Trim();
@@ -41,12 +47,12 @@ public sealed class NodeChatStreamService(
         var assistantMessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
         var requestId = request.RequestId.GetValueOrDefault(Guid.NewGuid());
         var correlation = new NodeChatMessageCorrelation(request.ConversationId, assistantMessageId, requestId);
-        var sequence = 0L;
+        var sequence = new NodeChatStreamSequence();
         var startedAtUtc = NowUnixMilliseconds();
 
         var userMessage = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(request.ConversationId, userMessageId, trimmedContent, startedAtUtc),
             cancellationToken).ConfigureAwait(false);
-        yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence++);
+        yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
 
         var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
                 assistantMessageId,
@@ -54,10 +60,13 @@ public sealed class NodeChatStreamService(
                 NowUnixMilliseconds(),
                 request.Model),
             cancellationToken).ConfigureAwait(false);
-        yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence++);
+        yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
-        var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
-        yield return ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence++);
+        // The turn is Queued until the collision-queue lease is acquired in RunInvocationAsync; it transitions to
+        // Streaming only when the invocation actually starts. This keeps a turn waiting behind another invocation
+        // visibly "queued" rather than prematurely "streaming".
+        var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
 
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var registration = cancellationRegistry.Register(correlation, () =>
@@ -74,7 +83,9 @@ public sealed class NodeChatStreamService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            SingleWriter = true
+            // Two producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync
+            // and the delta/terminal emits in PumpInvocationStatesAsync. SingleWriter must be false.
+            SingleWriter = false
         });
 
         void OnInvocationStateChanged(object? _, InvocationStateChangedEventArgs args)
@@ -102,7 +113,14 @@ public sealed class NodeChatStreamService(
             request.Model,
             sequence,
             linkedCancellation.Token);
-        var runTask = RunInvocationAsync(package, assistantMessageId, stateChannel.Writer, requestId, linkedCancellation.Token);
+        var runTask = RunInvocationAsync(package,
+            assistantMessageId,
+            stateChannel.Writer,
+            eventChannel.Writer,
+            correlation,
+            requestId,
+            sequence,
+            linkedCancellation.Token);
 
         try
         {
@@ -130,12 +148,26 @@ public sealed class NodeChatStreamService(
     private async Task RunInvocationAsync(RuntimePackage package,
         Guid messageId,
         ChannelWriter<InvocationState> stateWriter,
+        ChannelWriter<ChatStreamEvent> eventWriter,
+        NodeChatMessageCorrelation correlation,
         Guid requestId,
+        NodeChatStreamSequence sequence,
         CancellationToken cancellationToken)
     {
+        // Queue behind any in-flight invocation (local or platform) before assigning, rather than failing the
+        // turn. The lease holds the shared slot for this run; cancelling while still queued aborts the wait and
+        // terminalizes the turn as cancelled below.
+        IAsyncDisposable? lease = null;
+
         try
         {
-            await eventDispatcher.ReportInvocationAssignedAsync(package).ConfigureAwait(false);
+            lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken).ConfigureAwait(false);
+
+            // The lease is held => the invocation is actually starting. Transition Queued -> Streaming and emit
+            // the streaming event so the client leaves the queued state.
+            var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+            await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
+
             using var context = InvocationExecutionContext.CreatePlain(package, messageId);
             await invocationRunner.RunAsync(context, cancellationToken).ConfigureAwait(false);
         }
@@ -154,6 +186,11 @@ public sealed class NodeChatStreamService(
         }
         finally
         {
+            if (lease is not null)
+            {
+                await lease.DisposeAsync().ConfigureAwait(false);
+            }
+
             stateWriter.TryComplete();
         }
     }
@@ -162,73 +199,47 @@ public sealed class NodeChatStreamService(
         ChannelWriter<ChatStreamEvent> eventWriter,
         NodeChatMessageCorrelation correlation,
         string? requestedModel,
-        long startingSequence,
+        NodeChatStreamSequence sequence,
         CancellationToken cancellationToken)
     {
-        var sequence = startingSequence;
-        var lastContent = string.Empty;
-        var lastReasoning = string.Empty;
+        // The shared pump (invocationPump) owns all persistence; this front door only fans the persisted
+        // results out as SSE ChatStreamEvents for the local response. The sequence counter is shared with the
+        // streaming-transition event emitted from RunInvocationAsync so all events stay monotonically ordered.
+        var cursor = NodeChatPumpCursor.Empty;
         var terminalPersisted = false;
 
         try
         {
             await foreach (var state in stateReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                var hasContentDelta = state.StreamedContent.Length > lastContent.Length;
-                var hasReasoningDelta = state.StreamedThinkingContent.Length > lastReasoning.Length;
+                var flush = await invocationPump.FlushDeltaAsync(correlation, state, cursor, cancellationToken).ConfigureAwait(false);
+                cursor = flush.Cursor;
 
-                if (hasContentDelta || hasReasoningDelta)
+                if (flush.Persisted is not null)
                 {
-                    var contentDelta = hasContentDelta ? state.StreamedContent[lastContent.Length..] : null;
-                    var reasoningDelta = hasReasoningDelta ? state.StreamedThinkingContent[lastReasoning.Length..] : null;
-                    lastContent = state.StreamedContent;
-                    lastReasoning = state.StreamedThinkingContent;
-
-                    var persisted = await persistence.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation,
-                            lastContent,
-                            string.IsNullOrEmpty(lastReasoning) ? null : lastReasoning,
-                            NowUnixMilliseconds()),
-                        cancellationToken).ConfigureAwait(false);
-
                     await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantDelta,
                             correlation,
-                            persisted,
-                            sequence++,
-                            contentDelta,
-                            reasoningDelta),
+                            flush.Persisted,
+                            sequence.Next(),
+                            flush.ContentDelta,
+                            flush.ReasoningDelta),
                         cancellationToken).ConfigureAwait(false);
                 }
 
-                if (state.Status is InvocationStatus.Completed or InvocationStatus.Cancelled or InvocationStatus.Failed)
+                if (NodeChatInvocationPump.IsTerminal(state.Status))
                 {
-                    var terminalStatus = state.Status switch
-                    {
-                        InvocationStatus.Completed => NodeChatMessageStatusValues.Completed,
-                        InvocationStatus.Cancelled => NodeChatMessageStatusValues.Cancelled,
-                        _ => NodeChatMessageStatusValues.Failed
-                    };
-                    var eventType = state.Status switch
-                    {
-                        InvocationStatus.Completed => ChatStreamEventTypes.AssistantCompleted,
-                        InvocationStatus.Cancelled => ChatStreamEventTypes.AssistantCancelled,
-                        _ => ChatStreamEventTypes.AssistantFailed
-                    };
-
-                    var persisted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                            terminalStatus,
-                            NowUnixMilliseconds(),
-                            state.StreamedContent,
-                            string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-                            state.Error,
-                            state.ModelUsed ?? requestedModel,
-                            state.InputTokens,
-                            state.OutputTokens,
-                            state.TotalTokens,
-                            state.ReasoningTokens),
-                        CancellationToken.None).ConfigureAwait(false);
+                    var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel).ConfigureAwait(false);
                     terminalPersisted = true;
 
-                    await eventWriter.WriteAsync(ToMessageEvent(eventType, correlation, persisted, sequence++, inputTokens: state.InputTokens, outputTokens: state.OutputTokens, totalTokens: state.TotalTokens, reasoningTokens: state.ReasoningTokens), CancellationToken.None).ConfigureAwait(false);
+                    await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
+                            correlation,
+                            terminal.Persisted,
+                            sequence.Next(),
+                            inputTokens: state.InputTokens,
+                            outputTokens: state.OutputTokens,
+                            totalTokens: state.TotalTokens,
+                            reasoningTokens: state.ReasoningTokens),
+                        CancellationToken.None).ConfigureAwait(false);
                     break;
                 }
             }
@@ -237,9 +248,8 @@ public sealed class NodeChatStreamService(
             {
                 await TerminalizeInterruptedStreamAsync(eventWriter,
                     correlation,
-                    sequence,
-                    lastContent,
-                    lastReasoning,
+                    sequence.Next(),
+                    cursor,
                     cancellationToken.IsCancellationRequested).ConfigureAwait(false);
             }
         }
@@ -247,9 +257,8 @@ public sealed class NodeChatStreamService(
         {
             await TerminalizeInterruptedStreamAsync(eventWriter,
                 correlation,
-                sequence,
-                lastContent,
-                lastReasoning,
+                sequence.Next(),
+                cursor,
                 true).ConfigureAwait(false);
         }
         finally
@@ -261,26 +270,12 @@ public sealed class NodeChatStreamService(
     private async Task TerminalizeInterruptedStreamAsync(ChannelWriter<ChatStreamEvent> eventWriter,
         NodeChatMessageCorrelation correlation,
         long sequence,
-        string lastContent,
-        string lastReasoning,
+        NodeChatPumpCursor cursor,
         bool wasCancelled)
     {
-        var status = wasCancelled
-            ? NodeChatMessageStatusValues.Cancelled
-            : NodeChatMessageStatusValues.Interrupted;
-        var eventType = wasCancelled
-            ? ChatStreamEventTypes.AssistantCancelled
-            : ChatStreamEventTypes.AssistantInterrupted;
+        var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled).ConfigureAwait(false);
 
-        var persisted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                status,
-                NowUnixMilliseconds(),
-                lastContent,
-                string.IsNullOrEmpty(lastReasoning) ? null : lastReasoning,
-                status),
-            CancellationToken.None).ConfigureAwait(false);
-
-        await eventWriter.WriteAsync(ToMessageEvent(eventType, correlation, persisted, sequence), CancellationToken.None).ConfigureAwait(false);
+        await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType, correlation, terminal.Persisted, sequence), CancellationToken.None).ConfigureAwait(false);
     }
 
     private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(NodeChatConversationDto conversation,

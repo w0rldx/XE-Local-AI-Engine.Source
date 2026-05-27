@@ -257,9 +257,9 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationAssignedAsync(RuntimePackage package)
+        public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
-            return Task.CompletedTask;
+            return Task.FromResult<IAsyncDisposable>(NoopLease.Instance);
         }
 
         public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)
@@ -290,6 +290,16 @@ public sealed class WorkerShutdownDrainServiceTests
         public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
         {
             return Task.CompletedTask;
+        }
+
+        private sealed class NoopLease : IAsyncDisposable
+        {
+            public static readonly NoopLease Instance = new();
+
+            public ValueTask DisposeAsync()
+            {
+                return ValueTask.CompletedTask;
+            }
         }
     }
 

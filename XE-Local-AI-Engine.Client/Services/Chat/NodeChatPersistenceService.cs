@@ -28,18 +28,83 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged)
-                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0);
+                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin)
+                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin);
                                       """;
                 AddParameter(command, "$conversation_id", conversationId);
                 AddParameter(command, "$title", request.Title);
                 AddParameter(command, "$user_id", request.UserId);
                 AddParameter(command, "$created_at_utc", createdAtUtc);
                 AddParameter(command, "$last_seen_utc", createdAtUtc);
+                AddParameter(command, "$origin", request.Origin);
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, false, []);
+                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, false, [], request.Origin);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetConversationOriginAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT origin FROM conversations WHERE conversation_id = $conversation_id;";
+                AddParameter(command, "$conversation_id", conversationId);
+
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                var result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
+                return result as string;
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatConversationDto> EnsureConversationAsync(NodeChatEnsureConversationRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.ConversationId == Guid.Empty)
+        {
+            throw new ArgumentException("EnsureConversationAsync requires a non-empty conversation id.", nameof(request));
+        }
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+            async (dbContext, token) =>
+            {
+                // Read the existing row regardless of purged state: an already-purged row still occupies the id,
+                // so we must NOT attempt to recreate it. INSERT OR IGNORE makes the insert race-safe against the
+                // serialized remote dispatch path.
+                var existing = await ReadConversationRowAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                if (existing is not null)
+                {
+                    return existing with
+                    {
+                        Messages = await ReadMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false)
+                    };
+                }
+
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = """
+                                      INSERT OR IGNORE INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin)
+                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin);
+                                      """;
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                AddParameter(command, "$title", request.Title);
+                AddParameter(command, "$user_id", request.UserId);
+                AddParameter(command, "$created_at_utc", request.CreatedAtUtc);
+                AddParameter(command, "$last_seen_utc", request.CreatedAtUtc);
+                AddParameter(command, "$origin", request.Origin);
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                // Re-read so a concurrent insert that won the race (IGNORE) still returns the authoritative row.
+                var ensured = await ReadConversationRowAsync(dbContext, request.ConversationId, token).ConfigureAwait(false)
+                              ?? throw new InvalidOperationException("The node chat conversation could not be ensured.");
+                return ensured with
+                {
+                    Messages = await ReadMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false)
+                };
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -60,7 +125,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.CommandText = """
-                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged
+                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id
                                                   FROM conversations
                                                   WHERE conversation_id = $conversation_id AND purged = 0;
                                                   """;
@@ -79,7 +144,11 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     conversationReader.GetInt64(3),
                     conversationReader.GetInt64(4),
                     conversationReader.GetBoolean(5),
-                    await ReadMessagesAsync(dbContext, conversationId, token).ConfigureAwait(false));
+                    await ReadMessagesAsync(dbContext, conversationId, token).ConfigureAwait(false),
+                    conversationReader.GetString(6),
+                    conversationReader.GetBoolean(7),
+                    conversationReader.GetBoolean(8),
+                    await conversationReader.IsDBNullAsync(9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)));
 
                 return dto;
             },
@@ -103,6 +172,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             null,
             null,
             request.MetadataJson,
+            request.Origin,
             cancellationToken);
     }
 
@@ -126,6 +196,24 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             request.Model,
             null,
             request.MetadataJson,
+            request.Origin,
+            cancellationToken);
+    }
+
+    public Task<NodeChatPersistedMessageDto> MarkAssistantQueuedAsync(NodeChatMessageCorrelation correlation, long updatedAtUtc, CancellationToken cancellationToken = default)
+    {
+        return UpdateCorrelatedMessageAsync(correlation,
+            updatedAtUtc,
+            NodeChatMessageStatusValues.Queued,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
             cancellationToken);
     }
 
@@ -222,13 +310,16 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                                                                               UPDATE messages
                                                                               SET status = {0}, updated_at_utc = {1}
                                                                               WHERE conversation_id = {2}
-                                                                                AND status IN ({3}, {4});
+                                                                                AND status IN ({3}, {4}, {5});
                                                                               """,
-                    [NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Streaming],
+                    [NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued, NodeChatMessageStatusValues.Streaming],
                     token).ConfigureAwait(false);
 
                 if (request.PurgeImmediately)
                 {
+                    // ON DELETE CASCADE is NOT enforced on the node-sqlite connection (no PRAGMA foreign_keys=ON),
+                    // so every child table must be purged explicitly or plaintext rows orphan (privacy gap).
+                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM message_feedback WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM messages WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM tool_events WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
@@ -247,6 +338,316 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+            async (dbContext, token) =>
+            {
+                var updated = await dbContext.Database.ExecuteSqlRawAsync(
+                    "UPDATE conversations SET title = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
+                    [(object?)title ?? DBNull.Value, request.UpdatedAtUtc, request.ConversationId],
+                    token).ConfigureAwait(false);
+
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatConversationDto?> SetConversationPinnedAsync(NodeChatSetConversationPinnedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+            async (dbContext, token) =>
+            {
+                var updated = await dbContext.Database.ExecuteSqlRawAsync(
+                    "UPDATE conversations SET is_pinned = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
+                    [request.IsPinned, request.UpdatedAtUtc, request.ConversationId],
+                    token).ConfigureAwait(false);
+
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+            async (dbContext, token) =>
+            {
+                var updated = await dbContext.Database.ExecuteSqlRawAsync(
+                    "UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
+                    [request.Archived, request.UpdatedAtUtc, request.ConversationId],
+                    token).ConfigureAwait(false);
+
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Read the source (including its messages) on its own write key, then create the branch under the new
+        // conversation's write key. Two serialized scopes avoid a cross-conversation lock-ordering hazard.
+        var source = await GetConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+        if (source is null)
+        {
+            return null;
+        }
+
+        var cutoff = source.Messages.FirstOrDefault(message => message.MessageId == request.MessageId);
+        if (cutoff is null)
+        {
+            return null;
+        }
+
+        var copies = source.Messages.Where(message => message.Sequence <= cutoff.Sequence)
+                           .OrderBy(message => message.Sequence)
+                           .ToArray();
+        var branchedConversationId = Guid.NewGuid();
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(branchedConversationId),
+            async (dbContext, token) =>
+            {
+                await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                conversationCommand.CommandText = """
+                                                  INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id)
+                                                  VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id);
+                                                  """;
+                AddParameter(conversationCommand, "$conversation_id", branchedConversationId);
+                AddParameter(conversationCommand, "$title", source.Title);
+                AddParameter(conversationCommand, "$user_id", source.UserId);
+                AddParameter(conversationCommand, "$created_at_utc", request.CreatedAtUtc);
+                AddParameter(conversationCommand, "$last_seen_utc", request.CreatedAtUtc);
+                // A branch is always a fresh node-local conversation, even when branched from a remote mirror.
+                AddParameter(conversationCommand, "$origin", NodeChatOriginValues.Local);
+                AddParameter(conversationCommand, "$branch_of_conversation_id", request.ConversationId);
+                await OpenIfNeededAsync(conversationCommand.Connection, token).ConfigureAwait(false);
+                await conversationCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                foreach (var message in copies)
+                {
+                    await using var messageCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                    messageCommand.CommandText = """
+                                                 INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
+                                                 VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
+                                                 """;
+                    AddParameter(messageCommand, "$message_id", Guid.NewGuid());
+                    AddParameter(messageCommand, "$conversation_id", branchedConversationId);
+                    AddParameter(messageCommand, "$sequence", message.Sequence);
+                    AddParameter(messageCommand, "$role", message.Role);
+                    AddParameter(messageCommand, "$content", Encode(message.Content));
+                    AddParameter(messageCommand, "$metadata_json", SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount));
+                    AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);
+                    AddParameter(messageCommand, "$updated_at_utc", message.UpdatedAtUtc);
+                    AddParameter(messageCommand, "$status", message.Status);
+                    AddParameter(messageCommand, "$request_id", message.RequestId);
+                    AddParameter(messageCommand, "$error", message.Error);
+                    AddParameter(messageCommand, "$origin", NodeChatOriginValues.Local);
+                    // Branch copies are a fresh linear thread; provenance is on the conversation, not per message.
+                    AddParameter(messageCommand, "$parent_message_id", null);
+                    AddParameter(messageCommand, "$variant_group_id", null);
+                    await OpenIfNeededAsync(messageCommand.Connection, token).ConfigureAwait(false);
+                    await messageCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                }
+
+                return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Length);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.NewMessageId == Guid.Empty || request.RequestId == Guid.Empty)
+        {
+            throw new ArgumentException("Variant messages require non-empty message and request ids.", nameof(request));
+        }
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(request.ConversationId, request.NewMessageId),
+            async (dbContext, token) =>
+            {
+                var original = await ReadMessageAsync(dbContext, request.ConversationId, request.OriginalMessageId, token).ConfigureAwait(false);
+                if (original is null)
+                {
+                    return null;
+                }
+
+                // The whole turn shares a variant group; mint one and back-stamp the original when it has none.
+                var variantGroupId = original.VariantGroupId ?? Guid.NewGuid();
+                if (original.VariantGroupId is null)
+                {
+                    await using var stampCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                    stampCommand.CommandText = "UPDATE messages SET variant_group_id = $variant_group_id WHERE conversation_id = $conversation_id AND message_id = $message_id;";
+                    AddParameter(stampCommand, "$variant_group_id", variantGroupId);
+                    AddParameter(stampCommand, "$conversation_id", request.ConversationId);
+                    AddParameter(stampCommand, "$message_id", request.OriginalMessageId);
+                    await OpenIfNeededAsync(stampCommand.Connection, token).ConfigureAwait(false);
+                    await stampCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                }
+
+                // The new sibling variant is an assistant placeholder: same parent (the user turn), shared group.
+                var sequence = await NextSequenceAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+                var metadata = SerializeMetadata(request.MetadataJson, null, request.Model, null, null, null, null);
+
+                await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                insertCommand.CommandText = """
+                                            INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
+                                            VALUES ($message_id, $conversation_id, $sequence, $role, '', $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, NULL, $origin, $parent_message_id, $variant_group_id);
+                                            """;
+                AddParameter(insertCommand, "$message_id", request.NewMessageId);
+                AddParameter(insertCommand, "$conversation_id", request.ConversationId);
+                AddParameter(insertCommand, "$sequence", sequence);
+                AddParameter(insertCommand, "$role", AssistantRole);
+                AddParameter(insertCommand, "$metadata_json", metadata);
+                AddParameter(insertCommand, "$created_at_utc", request.CreatedAtUtc);
+                AddParameter(insertCommand, "$updated_at_utc", request.CreatedAtUtc);
+                AddParameter(insertCommand, "$status", NodeChatMessageStatusValues.Pending);
+                AddParameter(insertCommand, "$request_id", request.RequestId);
+                AddParameter(insertCommand, "$origin", NodeChatOriginValues.Local);
+                AddParameter(insertCommand, "$parent_message_id", request.OriginalMessageId);
+                AddParameter(insertCommand, "$variant_group_id", variantGroupId);
+                await OpenIfNeededAsync(insertCommand.Connection, token).ConfigureAwait(false);
+                await insertCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token).ConfigureAwait(false);
+
+                var variant = new NodeChatPersistedMessageDto(request.NewMessageId,
+                    request.ConversationId,
+                    request.RequestId,
+                    sequence,
+                    AssistantRole,
+                    string.Empty,
+                    null,
+                    NodeChatMessageStatusValues.Pending,
+                    request.CreatedAtUtc,
+                    request.CreatedAtUtc,
+                    request.Model,
+                    null,
+                    request.MetadataJson,
+                    Origin: NodeChatOriginValues.Local,
+                    ParentMessageId: request.OriginalMessageId,
+                    VariantGroupId: variantGroupId);
+
+                return new NodeChatMessageVariantDto(variantGroupId, request.OriginalMessageId, variant);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ListMessageVariantsAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+            async (dbContext, token) =>
+            {
+                var messages = await ReadMessagesAsync(dbContext, conversationId, token).ConfigureAwait(false);
+                var anchor = messages.SingleOrDefault(message => message.MessageId == messageId);
+                if (anchor is null)
+                {
+                    return (IReadOnlyList<NodeChatPersistedMessageDto>)[];
+                }
+
+                // No variant group yet → the message is its own sole variant.
+                if (anchor.VariantGroupId is null)
+                {
+                    return [anchor];
+                }
+
+                return messages.Where(message => message.VariantGroupId == anchor.VariantGroupId)
+                               .OrderBy(message => message.Sequence)
+                               .ToArray();
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatMessageFeedbackDto> SetMessageFeedbackAsync(NodeChatSetMessageFeedbackRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!NodeChatFeedbackRatingValues.All.Contains(request.Rating))
+        {
+            throw new ArgumentException($"Rating '{request.Rating}' is not a recognized feedback rating.", nameof(request));
+        }
+
+        var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(request.ConversationId, request.MessageId),
+            async (dbContext, token) =>
+            {
+                // Upsert keyed on the message id: re-submitting feedback overwrites rating/comment but preserves the
+                // first-seen created_at_utc.
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = """
+                                      INSERT INTO message_feedback (message_id, conversation_id, rating, comment, created_at_utc, updated_at_utc)
+                                      VALUES ($message_id, $conversation_id, $rating, $comment, $created_at_utc, $updated_at_utc)
+                                      ON CONFLICT(message_id) DO UPDATE SET
+                                          conversation_id = excluded.conversation_id,
+                                          rating = excluded.rating,
+                                          comment = excluded.comment,
+                                          updated_at_utc = excluded.updated_at_utc;
+                                      """;
+                AddParameter(command, "$message_id", request.MessageId);
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                AddParameter(command, "$rating", request.Rating);
+                AddParameter(command, "$comment", comment);
+                AddParameter(command, "$created_at_utc", request.UpdatedAtUtc);
+                AddParameter(command, "$updated_at_utc", request.UpdatedAtUtc);
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                return await ReadFeedbackAsync(dbContext, request.ConversationId, request.MessageId, token).ConfigureAwait(false)
+                       ?? throw new InvalidOperationException("The message feedback row could not be persisted.");
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatMessageFeedbackDto?> GetMessageFeedbackAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
+            (dbContext, token) => ReadFeedbackAsync(dbContext, conversationId, messageId, token),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<NodeChatMessageFeedbackDto?> ReadFeedbackAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.CommandText = """
+                              SELECT message_id, conversation_id, rating, comment, created_at_utc, updated_at_utc
+                              FROM message_feedback
+                              WHERE conversation_id = $conversation_id AND message_id = $message_id;
+                              """;
+        AddParameter(command, "$conversation_id", conversationId);
+        AddParameter(command, "$message_id", messageId);
+
+        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return new NodeChatMessageFeedbackDto(Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)),
+            reader.GetString(2),
+            await reader.IsDBNullAsync(3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
+            reader.GetInt64(4),
+            reader.GetInt64(5));
+    }
+
+    private static async Task<NodeChatConversationDto?> ReadConversationWithMessagesAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
+    {
+        var conversation = await ReadConversationRowAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false);
+        return conversation is null
+            ? null
+            : conversation with { Messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false) };
+    }
+
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
     {
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
@@ -255,14 +656,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status
+                                             m.content, m.status, c.origin, c.is_pinned, c.archived
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                           ORDER BY mi.sequence DESC LIMIT 1)
-                                      WHERE c.purged = 0
-                                      ORDER BY c.last_seen_utc DESC
+                                      WHERE c.purged = 0 AND c.archived = 0
+                                      ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
                 return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
@@ -278,13 +679,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status
+                                             m.content, m.status, c.origin, c.is_pinned, c.archived
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
                                           WHERE mi.conversation_id = c.conversation_id
                                           ORDER BY mi.sequence DESC LIMIT 1)
-                                      ORDER BY c.last_seen_utc DESC
+                                      WHERE c.purged = 0
+                                      ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
                 return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
@@ -304,7 +706,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         string? model,
         string? error,
         string? metadataJson,
-        CancellationToken cancellationToken)
+        string origin,
+        CancellationToken cancellationToken,
+        Guid? parentMessageId = null,
+        Guid? variantGroupId = null)
     {
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
             async (dbContext, token) =>
@@ -314,8 +719,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                                      INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error)
-                                      VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error);
+                                      INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
+                                      VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
                                       """;
                 AddParameter(command, "$message_id", messageId);
                 AddParameter(command, "$conversation_id", conversationId);
@@ -328,12 +733,15 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 AddParameter(command, "$status", status);
                 AddParameter(command, "$request_id", requestId);
                 AddParameter(command, "$error", error);
+                AddParameter(command, "$origin", origin);
+                AddParameter(command, "$parent_message_id", parentMessageId);
+                AddParameter(command, "$variant_group_id", variantGroupId);
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
                 await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token).ConfigureAwait(false);
 
-                return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson);
+                return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson, Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId);
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -423,6 +831,36 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
+    private static async Task<NodeChatConversationDto?> ReadConversationRowAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.CommandText = """
+                              SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id
+                              FROM conversations
+                              WHERE conversation_id = $conversation_id;
+                              """;
+        AddParameter(command, "$conversation_id", conversationId);
+
+        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return new NodeChatConversationDto(Guid.Parse(reader.GetString(0)),
+            await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
+            await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(2),
+            reader.GetInt64(3),
+            reader.GetInt64(4),
+            reader.GetBoolean(5),
+            [],
+            reader.GetString(6),
+            reader.GetBoolean(7),
+            reader.GetBoolean(8),
+            await reader.IsDBNullAsync(9, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(9)));
+    }
+
     private static async Task<NodeChatPersistedMessageDto?> ReadMessageAsync(NodeChatDbContext dbContext, Guid conversationId, Guid messageId, CancellationToken cancellationToken)
     {
         var messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false);
@@ -433,7 +871,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.CommandText = """
-                              SELECT message_id, conversation_id, request_id, sequence, role, content, metadata_json, status, created_at_utc, updated_at_utc, error
+                              SELECT message_id, conversation_id, request_id, sequence, role, content, metadata_json, status, created_at_utc, updated_at_utc, error, origin, parent_message_id, variant_group_id
                               FROM messages
                               WHERE conversation_id = $conversation_id
                               ORDER BY sequence ASC;
@@ -465,7 +903,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 metadata.InputCount,
                 metadata.OutputCount,
                 metadata.TotalCount,
-                metadata.ReasoningCount));
+                metadata.ReasoningCount,
+                reader.GetString(11),
+                await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(12)),
+                await reader.IsDBNullAsync(13, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(13))));
         }
 
         return messages;
@@ -489,7 +930,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 reader.GetInt64(3),
                 Preview(content),
                 await reader.IsDBNullAsync(6, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(6),
-                reader.GetBoolean(4)));
+                reader.GetBoolean(4),
+                reader.GetString(7),
+                reader.GetBoolean(8),
+                reader.GetBoolean(9)));
         }
 
         return conversations;
