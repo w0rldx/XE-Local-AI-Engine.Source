@@ -124,6 +124,14 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.subscription.dispose).toHaveBeenCalled();
 	});
 
+	it("forwards useLocalTools on the SendMessage stream payload", async () => {
+		nodeChatAdapter.sendMessage({ ...streamRequest, useLocalTools: true }, new AbortController().signal)[Symbol.asyncIterator]().next();
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("SendMessage");
+		expect(connectionMock.state.lastPayload).toMatchObject({ useLocalTools: true });
+	});
+
 	it("resumes via ResumeMessage after a reconnect and remaps the message id", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();

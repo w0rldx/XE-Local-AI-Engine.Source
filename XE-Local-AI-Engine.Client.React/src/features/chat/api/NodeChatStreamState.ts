@@ -1,5 +1,6 @@
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
-import type { ChatConversationModel, ChatMessageModel, ChatStreamingState, MessageStatus } from "@/features/chat/models/ChatModels";
+import { nodeChatToolStreamEventTypes, type NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
+import { mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
+import type { ChatConversationModel, ChatMessageModel, ChatStreamingState, ChatTimelineEntry, MessageStatus } from "@/features/chat/models/ChatModels";
 
 export const nodeChatStreamEventTypes = {
 	userMessagePersisted: "user-message-persisted",
@@ -11,7 +12,14 @@ export const nodeChatStreamEventTypes = {
 	assistantCancelled: "assistant-cancelled",
 	assistantFailed: "assistant-failed",
 	assistantInterrupted: "assistant-interrupted",
+	// Tool lifecycle events (Phase D6) reuse the dedicated tool-event constant so the wire names stay DRY.
+	toolCallRequested: nodeChatToolStreamEventTypes.toolCallRequested,
+	toolCallCompleted: nodeChatToolStreamEventTypes.toolCallCompleted,
 } as const;
+
+function isToolStreamEvent(eventType: string): boolean {
+	return eventType === nodeChatStreamEventTypes.toolCallRequested || eventType === nodeChatStreamEventTypes.toolCallCompleted;
+}
 
 const knownStatuses = new Set<MessageStatus>(["pending", "queued", "streaming", "completed", "cancelled", "failed", "interrupted"]);
 
@@ -25,6 +33,59 @@ export interface AppliedNodeChatStreamEvent {
 	conversation: ChatConversationModel;
 	streamingMessage: ChatStreamingState;
 	isTerminal: boolean;
+	// A tool-lifecycle event yields a timeline entry to accumulate (keyed by tool call id) instead of mutating
+	// assistant content; assistant/lifecycle events leave this undefined.
+	timelineEntry?: ChatTimelineEntry;
+}
+
+/**
+ * Wraps the `ChatToolCall` mapped from a tool-lifecycle event into the `ChatTimelineEntry` the render pipeline
+ * (`ChatMessage`'s `calls()` helper) consumes — scoped to the streaming assistant message so `ChatMessageList`
+ * filters it onto the right turn. The tool call id is the entry id so a `tool-call-completed` collapses onto its
+ * matching `tool-call-requested` entry instead of duplicating it.
+ */
+function toToolTimelineEntry(event: NodeChatStreamEventDto): ChatTimelineEntry | undefined {
+	const toolCall = mapToolCallEvent(event);
+	if (!toolCall) {
+		return undefined;
+	}
+
+	return {
+		id: toolCall.id,
+		messageId: event.messageId,
+		invocationId: event.requestId || undefined,
+		type: event.type === nodeChatStreamEventTypes.toolCallCompleted ? "ToolResult" : "ToolCall",
+		toolName: toolCall.name,
+		toolArgs: toolCall.args,
+		toolResult: toolCall.result,
+		state: toolCall.state,
+		requiresApproval: toolCall.requiresApproval,
+		createdAt: isoFromUnixMilliseconds(event.occurredAtUtc),
+	};
+}
+
+/**
+ * Accumulates a tool timeline entry per streaming turn: a `tool-call-completed` updates the matching
+ * `tool-call-requested` entry (same tool call id) in place rather than appending a duplicate.
+ */
+export function accumulateToolTimelineEntry(entries: ChatTimelineEntry[], entry: ChatTimelineEntry): ChatTimelineEntry[] {
+	const existingIndex = entries.findIndex((candidate) => candidate.id === entry.id);
+	if (existingIndex < 0) {
+		return [...entries, entry];
+	}
+
+	return entries.map((candidate, index) =>
+		index === existingIndex
+			? {
+					...candidate,
+					...entry,
+					// The completed tool-event omits the approval requirement (it lives only on the requested
+					// event), so preserve it from whichever entry defines it instead of letting the spread
+					// clobber the flag to undefined.
+					requiresApproval: entry.requiresApproval ?? candidate.requiresApproval,
+				}
+			: candidate,
+	);
 }
 
 function normalizeStatus(status: string | null | undefined, fallback: MessageStatus): MessageStatus {
@@ -107,6 +168,30 @@ export function appendOptimisticNodeChatSend(
 export function applyNodeChatStreamEvent(conversation: ChatConversationModel, event: NodeChatStreamEventDto): AppliedNodeChatStreamEvent {
 	const terminalStatus = terminalStatusForEvent(event.type);
 	const isTerminal = terminalStatus !== undefined;
+
+	// Tool-lifecycle events feed the activity timeline only — they must NOT mutate assistant content or status.
+	// The conversation is returned untouched and the streaming state is re-derived from the in-flight assistant
+	// turn so the turn stays live (isActive) while tools run.
+	if (isToolStreamEvent(event.type)) {
+		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
+		return {
+			conversation,
+			streamingMessage: {
+				conversationId: event.conversationId,
+				messageId: event.messageId,
+				content: current?.content ?? "",
+				reasoning: current?.reasoning,
+				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
+				isActive: true,
+				inputTokens: current?.inputTokens,
+				outputTokens: current?.outputTokens,
+				totalTokens: current?.totalTokens,
+				reasoningTokens: current?.reasoningTokens,
+			},
+			isTerminal: false,
+			timelineEntry: toToolTimelineEntry(event),
+		};
+	}
 
 	// The local stream optimistically inserts the user message using the request's userMessageId.
 	// Some backend stream versions report the assistant correlation id on the user-persisted event,

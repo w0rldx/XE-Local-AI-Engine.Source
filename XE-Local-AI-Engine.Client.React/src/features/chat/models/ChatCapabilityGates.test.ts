@@ -14,7 +14,7 @@ describe("chat capability gates", () => {
 			showConversationFeedbackControls: true,
 			showFileAttachmentControls: false,
 			showImageAttachmentControls: false,
-			showLocalToolControls: true,
+			showLocalToolControls: false,
 		});
 	});
 

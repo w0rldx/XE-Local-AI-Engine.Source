@@ -5,13 +5,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatApi";
 import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
-import { appendOptimisticNodeChatSend, applyNodeChatStreamEvent, markNodeChatStreamTerminated } from "@/features/chat/api/NodeChatStreamState";
+import { accumulateToolTimelineEntry, appendOptimisticNodeChatSend, applyNodeChatStreamEvent, markNodeChatStreamTerminated } from "@/features/chat/api/NodeChatStreamState";
 import { buildChatUiCapabilities, hiddenChatSurfaceLabels } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatConversationModel, ChatFeedbackRating, ChatMessageFeedback, ChatStreamingState, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatFeedbackRating, ChatMessageFeedback, ChatStreamingState, ChatTimelineEntry, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
@@ -84,13 +85,20 @@ function titleFromContent(content: string): string {
 
 export function Chat() {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
 	const queryClient = useQueryClient();
 	const activeStream = useRef<ActiveChatStream | null>(null);
+	// Conversations deleted while a stream was in flight. The streaming loops consult this set so an aborted
+	// turn cannot re-cache or refetch (404 / resurrect) a thread the operator just removed.
+	const deletedConversationIds = useRef<Set<string>>(new Set());
 	const [requestedConversationId, setRequestedConversationId] = useState("");
 	const [collapsed, setCollapsed] = useState(false);
 	const [selectedModel, setSelectedModel] = useState(localDefaultModelValue);
 	const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("medium");
+	const [toolsEnabled, setToolsEnabled] = useState(false);
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
+	// Tool-call activity entries accumulated over the current streaming turn (keyed by tool call id). Reset per turn.
+	const [timelineEntries, setTimelineEntries] = useState<ChatTimelineEntry[]>([]);
 	const [streamError, setStreamError] = useState<string | undefined>();
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
 	const [showArchivedConversations, setShowArchivedConversations] = useState(false);
@@ -280,6 +288,7 @@ export function Chat() {
 			const abortController = new AbortController();
 
 			cacheConversation(optimisticConversation);
+			setTimelineEntries([]);
 			setStreamingMessage({
 				conversationId: conversation.id,
 				messageId: ids.assistantMessageId,
@@ -302,16 +311,26 @@ export function Chat() {
 						messageId: ids.assistantMessageId,
 						requestId: ids.requestId,
 						model: requestModel,
+						useLocalTools: toolsEnabled,
 					},
 					abortController.signal,
 				)) {
+					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
+					// neither re-create the removed cache entry nor be refetched in the finally below.
+					if (deletedConversationIds.current.has(conversation.id)) {
+						break;
+					}
 					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? optimisticConversation;
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					cacheConversation(applied.conversation);
 					setStreamingMessage(applied.streamingMessage);
+					const toolEntry = applied.timelineEntry;
+					if (toolEntry) {
+						setTimelineEntries((current) => accumulateToolTimelineEntry(current, toolEntry));
+					}
 				}
 			} catch (error) {
-				if (!abortController.signal.aborted) {
+				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					const message = errorMessage(error);
 					const failureCategory = error instanceof StreamWatchdogError ? error.category : undefined;
 					const currentConversation = queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? optimisticConversation;
@@ -323,10 +342,12 @@ export function Chat() {
 			} finally {
 				activeStream.current = null;
 				setStreamingMessage((current) => (current?.messageId === ids.assistantMessageId ? { ...current, isActive: false } : current));
-				await refreshConversation(conversation.id);
+				if (!deletedConversationIds.current.has(conversation.id)) {
+					await refreshConversation(conversation.id);
+				}
 			}
 		},
-		[cacheConversation, queryClient, refreshConversation, resolveSendConversation],
+		[cacheConversation, queryClient, refreshConversation, resolveSendConversation, toolsEnabled],
 	);
 
 	const regenerate = useCallback(
@@ -350,10 +371,16 @@ export function Chat() {
 			// and groupMessageRevisions later collapses it into the variant_group with prev/next nav.
 			const abortController = new AbortController();
 			activeStream.current = { conversationId: conversation.id, messageId: "", requestId: "", abortController };
+			setTimelineEntries([]);
 			setStreamingMessage({ conversationId: conversation.id, messageId: "", content: "", isActive: true });
 
 			try {
 				for await (const streamEvent of nodeChatAdapter.regenerateMessage(conversation.id, assistantMessageId, abortController.signal)) {
+					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
+					// neither re-create the removed cache entry nor be refetched in the finally below.
+					if (deletedConversationIds.current.has(conversation.id)) {
+						break;
+					}
 					if (activeStream.current) {
 						activeStream.current = { ...activeStream.current, messageId: streamEvent.messageId, requestId: streamEvent.requestId };
 					}
@@ -361,11 +388,15 @@ export function Chat() {
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					cacheConversation(applied.conversation);
 					setStreamingMessage(applied.streamingMessage);
+					const toolEntry = applied.timelineEntry;
+					if (toolEntry) {
+						setTimelineEntries((current) => accumulateToolTimelineEntry(current, toolEntry));
+					}
 				}
 				// The stream events don't carry variant_group_id; the post-stream refetch loads it from persistence
 				// and groupMessageRevisions surfaces the newest sibling by default, so no explicit selection here.
 			} catch (error) {
-				if (!abortController.signal.aborted) {
+				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					if (isNodeChatReadOnlyConflict(error)) {
 						setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
 					} else {
@@ -376,7 +407,9 @@ export function Chat() {
 				const finishedMessageId = activeStream.current?.messageId;
 				activeStream.current = null;
 				setStreamingMessage((current) => (current?.messageId === finishedMessageId ? { ...current, isActive: false } : current));
-				await refreshConversation(conversation.id);
+				if (!deletedConversationIds.current.has(conversation.id)) {
+					await refreshConversation(conversation.id);
+				}
 			}
 		},
 		[cacheConversation, displayConversations, queryClient, refreshConversation, selectedConversationId, t],
@@ -465,6 +498,67 @@ export function Chat() {
 			);
 		},
 		[runConversationMutation],
+	);
+
+	const deleteConversationMutation = useMutation({
+		mutationFn: (conversationId: string) => nodeChatAdapter.deleteConversation(conversationId),
+		onSuccess: async (_result, conversationId) => {
+			// Drop the deleted thread from caches and, when it was the open one, clear the selection so the
+			// list falls back to the newest remaining conversation.
+			queryClient.removeQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId) });
+			if (requestedConversationId === conversationId) {
+				setRequestedConversationId("");
+			}
+			titledConversations.current.delete(conversationId);
+			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
+		},
+	});
+
+	const deleteConversation = useCallback(
+		async (conversationId: string, skipConfirm: boolean): Promise<void> => {
+			// Shift-click skips the confirm and deletes immediately, mirroring the platform client.
+			if (!skipConfirm) {
+				const confirmed = await confirm({
+					title: t("pages.chat.conversationList.delete", "Delete"),
+					description: t("pages.chat.conversationList.deleteConfirm", "Delete this conversation? This cannot be undone."),
+					confirmationText: t("pages.chat.conversationList.delete", "Delete"),
+					cancellationText: t("common.cancel", "Cancel"),
+				});
+				if (!confirmed) {
+					return;
+				}
+			}
+
+			// Abort an in-flight stream for this thread before deleting, and flag it so the streaming loop stops
+			// re-caching/refetching the just-removed conversation (otherwise the abort resurrects it as a 404).
+			deletedConversationIds.current.add(conversationId);
+			if (activeStream.current?.conversationId === conversationId) {
+				activeStream.current.abortController.abort();
+			}
+
+			setStreamError(undefined);
+			setMutatingConversationId(conversationId);
+			try {
+				await deleteConversationMutation.mutateAsync(conversationId);
+			} catch (error) {
+				if (isNodeChatReadOnlyConflict(error)) {
+					setStreamError(t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."));
+					await refreshConversation(conversationId);
+					return;
+				}
+				setStreamError(errorMessage(error));
+			} finally {
+				setMutatingConversationId(undefined);
+			}
+		},
+		[confirm, deleteConversationMutation, refreshConversation, t],
+	);
+
+	const handleDeleteConversation = useCallback(
+		(conversationId: string, skipConfirm: boolean): void => {
+			deleteConversation(conversationId, skipConfirm).catch((error: unknown) => setStreamError(errorMessage(error)));
+		},
+		[deleteConversation],
 	);
 
 	const handleSelectRevision = useCallback((variantGroupId: string, messageId: string): void => {
@@ -574,6 +668,7 @@ export function Chat() {
 				selectedModel={selectedModel}
 				reasoningEffort={reasoningEffort}
 				availableReasoningEfforts={["none", "low", "medium", "high"]}
+				toolsEnabled={toolsEnabled}
 				capabilities={chatUiCapabilities}
 				contextUsage={{
 					usedTokens: usedContextTokens,
@@ -583,6 +678,7 @@ export function Chat() {
 					nodeLabel: "Local node",
 				}}
 				streamingMessage={streamingMessage}
+				timelineEntries={timelineEntries}
 				disabledNotice={notice}
 				inputStatus={{
 					isSending,
@@ -603,6 +699,7 @@ export function Chat() {
 				onToggleConversationList={() => setCollapsed((value) => !value)}
 				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}
+				onToggleTools={() => setToolsEnabled((value) => !value)}
 				onSend={(content, effort, model) => {
 					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}
@@ -615,6 +712,7 @@ export function Chat() {
 				onRenameConversation={handleRenameConversation}
 				onToggleConversationPinned={handleToggleConversationPinned}
 				onToggleConversationArchived={handleToggleConversationArchived}
+				onDeleteConversation={handleDeleteConversation}
 				onBranchFromMessage={isRemoteConversation ? undefined : handleBranch}
 				activeRevisionByGroup={activeRevisionByGroup}
 				onSelectRevision={handleSelectRevision}

@@ -12,6 +12,13 @@ public interface IWorkerEventDispatcher
 
     event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
 
+    /// <summary>
+    /// Raised once per tool-call lifecycle transition (requested/completed). The local chat stream subscribes
+    /// to surface these as <c>tool-call-requested</c>/<c>tool-call-completed</c> stream events alongside the
+    /// content deltas; the platform-served path does not consume it.
+    /// </summary>
+    event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
+
     void StopAcceptingRemoteInvocations();
 
     Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
@@ -45,4 +52,10 @@ public interface IWorkerEventDispatcher
     Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload);
 
     Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload);
+
+    /// <summary>
+    /// Reports a tool-call lifecycle transition (requested or completed) for the in-flight invocation, raising
+    /// <see cref="ToolCallLifecycleChanged"/> so a subscribed local chat stream can fan it out.
+    /// </summary>
+    Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload);
 }

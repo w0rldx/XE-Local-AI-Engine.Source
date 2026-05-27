@@ -336,9 +336,20 @@ public sealed class InvocationRunner : IInvocationRunner
         CancelPendingToolCalls(invocationId);
     }
 
+    public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
+        string toolName,
+        string parameters,
+        CancellationToken cancellationToken = default)
+    {
+        // Default to the approval-gated path; the per-tool overload below is what BuildInvocationTools wires in,
+        // passing the tool's RequiresApproval flag so non-approval tools auto-execute.
+        return ExecuteApiToolCallAsync(invocationId, toolName, parameters, true, cancellationToken);
+    }
+
     public async Task<string> ExecuteApiToolCallAsync(Guid invocationId,
         string toolName,
         string parameters,
+        bool requiresApproval,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
@@ -349,20 +360,20 @@ public sealed class InvocationRunner : IInvocationRunner
         var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pendingToolCall = new PendingToolCall(invocationId, DateTimeOffset.UtcNow, approvalCompletion, resultCompletion);
         var sender = _hubSender.Value;
+        var dispatcher = _eventDispatcher.Value;
 
         if (!_pendingToolCalls.TryAdd(requestId, pendingToolCall))
         {
             throw new InvalidOperationException("Failed to register pending tool call.");
         }
 
+        // Tracks whether the Requested lifecycle phase was emitted so the timeout/cancel catch paths can emit a
+        // matching Completed (IsError=true) exactly once. The React UI only clears a tool card on Completed, so a
+        // timed-out tool without this would stay stuck in requesting/waiting forever.
+        var requestedLifecycleEmitted = false;
+
         try
         {
-            var approvalPayload = new ApprovalRequestPayload
-            {
-                InvocationId = invocationId,
-                RequestId = requestId,
-                Description = $"Tool '{toolName}' requested with parameters: {parameters}"
-            };
             var payload = new ToolCallRequestPayload
             {
                 InvocationId = invocationId,
@@ -371,45 +382,109 @@ public sealed class InvocationRunner : IInvocationRunner
                 Parameters = parameters
             };
 
-            await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
-            await _eventDispatcher.Value.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
-
-            using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
-
-            var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
-            if (!approved)
+            // Approval gating: only tools that opt in (RequiresApproval) run the approval round-trip. All beta
+            // tools ship as non-approval, so this branch is dormant today but keeps the wiring in place for a
+            // future approval UI.
+            if (requiresApproval)
             {
-                throw new WorkerToolCallException(toolName, "Tool call was rejected by the user.");
+                var approvalPayload = new ApprovalRequestPayload
+                {
+                    InvocationId = invocationId,
+                    RequestId = requestId,
+                    Description = $"Tool '{toolName}' requested with parameters: {parameters}"
+                };
+
+                await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
+                await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
+
+                using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+
+                var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+                if (!approved)
+                {
+                    throw new WorkerToolCallException(toolName, "Tool call was rejected by the user.");
+                }
             }
 
             await sender.SendToolCallRequestAsync(payload,
                 cancellationToken).ConfigureAwait(false);
-            await _eventDispatcher.Value.ReportToolCallRequestedAsync(payload).ConfigureAwait(false);
+            await dispatcher.ReportToolCallRequestedAsync(payload).ConfigureAwait(false);
+            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            {
+                InvocationId = invocationId,
+                ToolCallId = requestId,
+                ToolName = toolName,
+                Phase = ToolCallLifecyclePhase.Requested,
+                Arguments = parameters,
+                RequiresApproval = requiresApproval
+            }).ConfigureAwait(false);
+            requestedLifecycleEmitted = true;
 
             using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
             var result = await resultCompletion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(result.Error))
+            var isError = !string.IsNullOrWhiteSpace(result.Error);
+
+            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
             {
-                throw new WorkerToolCallException(toolName, result.Error);
+                InvocationId = invocationId,
+                ToolCallId = requestId,
+                ToolName = toolName,
+                Phase = ToolCallLifecyclePhase.Completed,
+                Result = isError ? result.Error : result.Result,
+                IsError = isError
+            }).ConfigureAwait(false);
+
+            if (isError)
+            {
+                throw new WorkerToolCallException(toolName, result.Error!);
             }
 
             return result.Result;
         }
         catch (TimeoutException timeoutException)
         {
+            await TryEmitTimeoutCompletedLifecycleAsync(dispatcher, requestedLifecycleEmitted, invocationId, requestId, toolName, timeoutException.Message).ConfigureAwait(false);
             throw new WorkerToolCallException(toolName, timeoutException.Message, timeoutException);
         }
         catch (OperationCanceledException operationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new WorkerToolCallException(toolName, "Tool call timed out waiting for a result.", operationCanceledException);
+            const string TimeoutReason = "Tool call timed out waiting for a result.";
+            await TryEmitTimeoutCompletedLifecycleAsync(dispatcher, requestedLifecycleEmitted, invocationId, requestId, toolName, TimeoutReason).ConfigureAwait(false);
+            throw new WorkerToolCallException(toolName, TimeoutReason, operationCanceledException);
         }
         finally
         {
             _pendingToolCalls.TryRemove(requestId, out _);
         }
+    }
+
+    // Mirrors the normal Completed lifecycle emission for the timeout/cancel rethrow paths, emitting Completed with
+    // IsError=true so a tool card the UI parked on Requested gets cleared instead of spinning forever. Skips when no
+    // Requested was emitted (e.g. a timeout during the approval wait), so Completed never fires without a Requested.
+    private static async Task TryEmitTimeoutCompletedLifecycleAsync(IWorkerEventDispatcher dispatcher,
+        bool requestedLifecycleEmitted,
+        Guid invocationId,
+        string requestId,
+        string toolName,
+        string error)
+    {
+        if (!requestedLifecycleEmitted)
+        {
+            return;
+        }
+
+        await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+        {
+            InvocationId = invocationId,
+            ToolCallId = requestId,
+            ToolName = toolName,
+            Phase = ToolCallLifecyclePhase.Completed,
+            Result = error,
+            IsError = true
+        }).ConfigureAwait(false);
     }
 
     public void CancelAll()
@@ -559,7 +634,7 @@ public sealed class InvocationRunner : IInvocationRunner
         return package.AllowedTools
                       .Where(static tool => tool.Location == ToolLocation.ApiSide)
                       .Select(tool => InvocationToolBridge.Create(tool.Name,
-                          (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, cancellationToken)))
+                          (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)))
                       .ToList();
     }
 

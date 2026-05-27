@@ -15,6 +15,7 @@ export function ChatDisplayShell({
 	selectedModel,
 	reasoningEffort,
 	availableReasoningEfforts,
+	toolsEnabled = false,
 	contextUsage,
 	streamingMessage,
 	timelineEntries = [],
@@ -28,6 +29,7 @@ export function ChatDisplayShell({
 	onToggleConversationList,
 	onModelChange,
 	onReasoningEffortChange,
+	onToggleTools,
 	onSend,
 	onCancel,
 	onRegenerate,
@@ -36,6 +38,7 @@ export function ChatDisplayShell({
 	onRenameConversation,
 	onToggleConversationPinned,
 	onToggleConversationArchived,
+	onDeleteConversation,
 	onBranchFromMessage,
 	activeRevisionByGroup,
 	onSelectRevision,
@@ -81,6 +84,7 @@ export function ChatDisplayShell({
 					onRename={onRenameConversation}
 					onTogglePin={onToggleConversationPinned}
 					onToggleArchive={onToggleConversationArchived}
+					onDelete={onDeleteConversation}
 				/>
 				<Paper
 					withBorder={true}
@@ -121,9 +125,11 @@ export function ChatDisplayShell({
 								sendDisabled={inputStatus.sendDisabled}
 								selectedModel={selectedModel}
 								reasoningEffort={reasoningEffort}
+								toolsEnabled={toolsEnabled}
 								onCancel={onCancel}
 								onModelChange={onModelChange}
 								onReasoningEffortChange={onReasoningEffortChange}
+								onToggleTools={onToggleTools}
 								onSend={onSend}
 							/>
 					</Stack>

@@ -58,6 +58,7 @@ function calls(entries: ChatTimelineEntry[]): ChatToolCall[] {
 			state: entry.state ?? (entry.type === "ToolResult" ? "received" : "waiting"),
 			args: entry.toolArgs,
 			result: entry.toolResult,
+			requiresApproval: entry.requiresApproval,
 		}));
 }
 

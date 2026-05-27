@@ -26,7 +26,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	chat: {
 		localRuntime: true,
 		localModelManagement: true,
-		localTools: true,
+		// infra wired end-to-end; kept off until a local tool catalog ships — see Plans/chat-capability-gap-rc.md D6
+		localTools: false,
 		toolApprovals: false,
 		conversationFeedback: true,
 		offlineFirst: true,

@@ -96,6 +96,55 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenToolLifecycleReported_StreamsToolCallEvents()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ToolEmittingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+        var events = new List<ChatStreamEvent>();
+
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        var requested = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallRequested);
+        AssertEx.Equal("call-1", requested.ToolCallId);
+        AssertEx.Equal("weather", requested.ToolName);
+        AssertEx.Equal("{\"city\":\"berlin\"}", requested.Arguments);
+        AssertEx.Equal(false, requested.RequiresApproval);
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, requested.Status);
+
+        var completed = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallCompleted);
+        AssertEx.Equal("call-1", completed.ToolCallId);
+        AssertEx.Equal("weather", completed.ToolName);
+        AssertEx.Equal("sunny", completed.Result);
+        AssertEx.Equal(false, completed.IsError);
+
+        var requestedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallRequested);
+        var completedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallCompleted);
+        AssertEx.True(requestedIndex < completedIndex, "tool-call-requested must precede tool-call-completed.");
+        AssertEx.True(events[requestedIndex].Sequence < events[completedIndex].Sequence, "Sequence must be monotonic.");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenConsumerCancelsEnumeration_TerminalizesAssistantAsCancelled()
     {
         var conversationId = Guid.NewGuid();
@@ -322,9 +371,70 @@ public sealed class NodeChatStreamServiceTests
         }
     }
 
+    private sealed class ToolEmittingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            {
+                InvocationId = context.Package.InvocationId,
+                ToolCallId = "call-1",
+                ToolName = "weather",
+                Phase = ToolCallLifecyclePhase.Requested,
+                Arguments = "{\"city\":\"berlin\"}",
+                RequiresApproval = false
+            }).ConfigureAwait(false);
+            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            {
+                InvocationId = context.Package.InvocationId,
+                ToolCallId = "call-1",
+                ToolName = "weather",
+                Phase = ToolCallLifecyclePhase.Completed,
+                Result = "sunny",
+                IsError = false
+            }).ConfigureAwait(false);
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
     private sealed class RecordingWorkerEventDispatcher : IWorkerEventDispatcher
     {
         public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
+
+        public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
         public InvocationState? CurrentInvocation { get; private set; }
 
@@ -445,6 +555,12 @@ public sealed class NodeChatStreamServiceTests
 
         public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
         {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
+        {
+            ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
             return Task.CompletedTask;
         }
 

@@ -19,9 +19,11 @@ interface ChatInputAreaProps {
 	sendDisabled?: boolean;
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
+	toolsEnabled?: boolean;
 	onCancel: () => void;
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
+	onToggleTools?: () => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 }
 
@@ -40,9 +42,11 @@ export function ChatInputArea({
 	sendDisabled: sendDisabledProp = false,
 	selectedModel,
 	reasoningEffort,
+	toolsEnabled = false,
 	onCancel,
 	onModelChange,
 	onReasoningEffortChange,
+	onToggleTools,
 	onSend,
 }: ChatInputAreaProps) {
 	const { t } = useTranslation();
@@ -115,8 +119,16 @@ export function ChatInputArea({
 							</Menu.Dropdown>
 						</Menu>
 						{capabilities.showLocalToolControls ? (
-							<Tooltip label={t("pages.chat.localToolsDisabled", "Local tools will be wired in a later phase")}>
-								<ActionIcon variant="subtle" color="gray" disabled={true} aria-label={t("pages.chat.localToolsLabel", "Local tools")}>
+							<Tooltip label={toolsEnabled ? t("pages.chat.localToolsEnabled", "Local tools enabled") : t("pages.chat.localToolsDisabled", "Local tools disabled")}>
+								<ActionIcon
+									variant={toolsEnabled ? "light" : "subtle"}
+									color={toolsEnabled ? "primary" : "gray"}
+									disabled={disabled || isSending || !onToggleTools}
+									onClick={onToggleTools}
+									aria-label={t("pages.chat.localToolsLabel", "Local tools")}
+									aria-pressed={toolsEnabled}
+									data-testid="chat-local-tools-toggle"
+								>
 									<IconDeviceDesktop size={15} />
 								</ActionIcon>
 							</Tooltip>

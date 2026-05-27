@@ -274,6 +274,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
 
+        public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
+
         public InvocationState? CurrentInvocation { get; private set; }
 
         public bool IsAcceptingRemoteInvocations => true;
@@ -371,6 +373,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         public Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload) => Task.CompletedTask;
 
         public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload) => Task.CompletedTask;
+
+        public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
+        {
+            ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
+            return Task.CompletedTask;
+        }
 
         private void RaiseChanged()
         {
