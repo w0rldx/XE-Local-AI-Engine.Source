@@ -10,6 +10,8 @@ import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSele
 const SELECTED_MODEL_STORAGE_KEY = "xe-node-chat-selected-model";
 const REASONING_EFFORT_STORAGE_KEY = "xe-node-chat-reasoning-effort";
 const TOOLS_ENABLED_STORAGE_KEY = "xe-node-chat-tools-enabled";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "xe-node-chat-sidebar-collapsed";
+const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
 
 // Single source of truth for the selectable reasoning efforts: the hydrate-validation set here and the
 // composer's availableReasoningEfforts prop both read from this list.
@@ -19,11 +21,16 @@ interface NodeChatPreferencesStore {
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
 	toolsEnabled: boolean;
+	sidebarCollapsed: boolean;
+	selectedConversationId: string;
 	actions: {
 		setSelectedModel: (value: string) => void;
 		setReasoningEffort: (value: ReasoningEffort) => void;
 		setToolsEnabled: (value: boolean) => void;
 		toggleTools: () => void;
+		setSidebarCollapsed: (value: boolean) => void;
+		toggleSidebar: () => void;
+		setSelectedConversationId: (value: string) => void;
 	};
 }
 
@@ -57,10 +64,20 @@ function readStoredToolsEnabled(): boolean {
 	return readStoredString(TOOLS_ENABLED_STORAGE_KEY) === "true";
 }
 
+function readStoredSidebarCollapsed(): boolean {
+	return readStoredString(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+}
+
+function readStoredSelectedConversationId(): string {
+	return readStoredString(SELECTED_CONVERSATION_STORAGE_KEY) ?? "";
+}
+
 export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((set) => ({
 	selectedModel: readStoredModel(),
 	reasoningEffort: readStoredReasoningEffort(),
 	toolsEnabled: readStoredToolsEnabled(),
+	sidebarCollapsed: readStoredSidebarCollapsed(),
+	selectedConversationId: readStoredSelectedConversationId(),
 	actions: {
 		setSelectedModel: (value) => {
 			writeStoredValue(SELECTED_MODEL_STORAGE_KEY, value);
@@ -81,6 +98,22 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 
 				return { toolsEnabled: nextValue };
 			});
+		},
+		setSidebarCollapsed: (value) => {
+			writeStoredValue(SIDEBAR_COLLAPSED_STORAGE_KEY, String(value));
+			set({ sidebarCollapsed: value });
+		},
+		toggleSidebar: () => {
+			set((state) => {
+				const nextValue = !state.sidebarCollapsed;
+				writeStoredValue(SIDEBAR_COLLAPSED_STORAGE_KEY, String(nextValue));
+
+				return { sidebarCollapsed: nextValue };
+			});
+		},
+		setSelectedConversationId: (value) => {
+			writeStoredValue(SELECTED_CONVERSATION_STORAGE_KEY, value);
+			set({ selectedConversationId: value });
 		},
 	},
 }));

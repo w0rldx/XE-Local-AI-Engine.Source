@@ -30,7 +30,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		localTools: false,
 		toolApprovals: false,
 		conversationFeedback: true,
-		offlineFirst: true,
+		// server-side SQLite is the source of truth; node has no client Dexie/offline queue — see Plans/chat-capability-gap-rc.md E (N/A-LOCAL)
+		offlineFirst: false,
 		encryptedConversations: false,
 		clientNodeRouting: false,
 		fileAttachments: false,

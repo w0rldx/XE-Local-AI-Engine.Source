@@ -7,10 +7,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
 			localModelManagement: true,
-			localTools: true,
+			localTools: false,
 			toolApprovals: false,
 			conversationFeedback: true,
-			offlineFirst: true,
+			offlineFirst: false,
 			encryptedConversations: false,
 			clientNodeRouting: false,
 			fileAttachments: false,

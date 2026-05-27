@@ -1,4 +1,4 @@
-import { Alert, Box, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Box, Button, Center, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import {
 	applyNodeChatStreamEvent,
 	markNodeChatStreamTerminated,
 } from "@/features/chat/api/NodeChatStreamState";
+import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type {
@@ -102,6 +103,34 @@ function titleFromContent(content: string): string {
 	return normalized.length > 48 ? `${normalized.slice(0, 45)}…` : normalized || "New conversation";
 }
 
+// During a regenerate the server-minted variant streams in WITHOUT a variant_group_id (the stream events
+// don't carry it — it only arrives on the post-stream refetch). Left ungrouped, the new turn renders as a
+// second assistant message stacked below the original until the refetch collapses them. Stamping both the
+// original and the streaming variant into a shared group up front collapses them immediately, so the new turn
+// streams in place as the active revision with the prev/next selector. The id is the original's existing group
+// when it already has siblings, otherwise a synthetic group keyed on the original message id; either way the
+// refetch later replaces it with the authoritative server group id.
+function stampVariantGroup(
+	conversation: ChatConversationModel,
+	originalMessageId: string,
+	variantMessageId: string,
+	variantGroupId: string,
+): ChatConversationModel {
+	return {
+		...conversation,
+		messages: conversation.messages.map((message) => {
+			if (message.id === variantMessageId) {
+				return { ...message, variantGroupId };
+			}
+			// Only seed the original when it isn't already part of a group — never clobber a real group id.
+			if (message.id === originalMessageId && !message.variantGroupId) {
+				return { ...message, variantGroupId };
+			}
+			return message;
+		}),
+	};
+}
+
 export function Chat() {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
@@ -110,14 +139,23 @@ export function Chat() {
 	// Conversations deleted while a stream was in flight. The streaming loops consult this set so an aborted
 	// turn cannot re-cache or refetch (404 / resurrect) a thread the operator just removed.
 	const deletedConversationIds = useRef<Set<string>>(new Set());
-	const [requestedConversationId, setRequestedConversationId] = useState("");
-	const [collapsed, setCollapsed] = useState(false);
-	// Composer selections persist across reloads via localStorage (NodeChatPreferencesStore), mirroring the
-	// platform ToolCallingStore. Persisted values are validated against the live model list / effort set below.
+	// Composer selections, the last-selected conversation, and the sidebar collapsed state all persist across
+	// reloads via localStorage (NodeChatPreferencesStore), mirroring the platform ToolCallingStore. Persisted
+	// values are validated below: the model against the live model list / effort set, and the last-selected
+	// conversation against the loaded list (a stale id falls back to the first conversation).
 	const selectedModel = useNodeChatPreferencesStore((state) => state.selectedModel);
 	const reasoningEffort = useNodeChatPreferencesStore((state) => state.reasoningEffort);
 	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
-	const { setSelectedModel, setReasoningEffort, toggleTools } = useNodeChatPreferencesStore((state) => state.actions);
+	const requestedConversationId = useNodeChatPreferencesStore((state) => state.selectedConversationId);
+	const collapsed = useNodeChatPreferencesStore((state) => state.sidebarCollapsed);
+	const {
+		setSelectedModel,
+		setReasoningEffort,
+		toggleTools,
+		setSelectedConversationId: setRequestedConversationId,
+		toggleSidebar,
+	} = useNodeChatPreferencesStore((state) => state.actions);
+	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
 	// Tool-call activity entries accumulated over the current streaming turn (keyed by tool call id). Reset per turn.
 	const [timelineEntries, setTimelineEntries] = useState<ChatTimelineEntry[]>([]);
@@ -207,10 +245,13 @@ export function Chat() {
 		placeholderData: keepPreviousData,
 	});
 	// The full payload (with messages) hasn't settled for the currently selected conversation yet: either the
-	// first load, or a switch where keepPreviousData is still showing the prior thread (isPlaceholderData).
+	// first load, a switch where keepPreviousData is still showing the prior thread (isPlaceholderData), or a
+	// background refetch over a cached message-less entry. isFetching is the key signal — isLoading alone is
+	// false whenever ANY cached/placeholder data exists for the id, which let the empty-state flash mid-fetch.
 	const isLoadingSelectedConversation =
 		selectedConversationId.length > 0 &&
 		(selectedConversationQuery.isLoading ||
+			selectedConversationQuery.isFetching ||
 			selectedConversationQuery.isPlaceholderData ||
 			selectedConversationQuery.data?.id !== selectedConversationId);
 
@@ -281,7 +322,7 @@ export function Chat() {
 			setRequestedConversationId(created.id);
 			return created;
 		},
-		[cacheConversation, displayConversations, selectedConversationId, selectedConversationQuery.data],
+		[cacheConversation, displayConversations, selectedConversationId, selectedConversationQuery.data, setRequestedConversationId],
 	);
 
 	const refreshConversation = useCallback(
@@ -429,8 +470,12 @@ export function Chat() {
 			setStreamError(undefined);
 			// Regenerate via the shared runner over the hub (Phase 5.2): the server mints a sibling variant and
 			// drives + streams the run exactly like a send. The variant messageId + requestId arrive on the
-			// events, so there is no client-known id up front; applyNodeChatStreamEvent appends the new variant,
-			// and groupMessageRevisions later collapses it into the variant_group with prev/next nav.
+			// events, so there is no client-known id up front; applyNodeChatStreamEvent appends the new variant.
+			// The group id used to collapse the streaming variant onto the original in place (the server's real
+			// id arrives on the post-stream refetch): the original's own group when it already has siblings,
+			// otherwise a synthetic group keyed on the original message id.
+			const originalMessage = conversation.messages.find((message) => message.id === assistantMessageId);
+			const variantGroupId = originalMessage?.variantGroupId ?? assistantMessageId;
 			const abortController = new AbortController();
 			activeStream.current = { conversationId: conversation.id, messageId: "", requestId: "", abortController };
 			setTimelineEntries([]);
@@ -458,7 +503,14 @@ export function Chat() {
 					const currentConversation =
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? conversation;
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
-					cacheConversation(applied.conversation);
+					// Collapse the streaming variant onto the original in place (applyNodeChatStreamEvent rebuilds the
+					// variant row per event without a group id, so re-stamp every iteration). Only once the server id
+					// is latched and differs from the original — i.e. a genuine sibling, not an in-place re-render.
+					const grouped =
+						streamEvent.messageId && streamEvent.messageId !== assistantMessageId
+							? stampVariantGroup(applied.conversation, assistantMessageId, streamEvent.messageId, variantGroupId)
+							: applied.conversation;
+					cacheConversation(grouped);
 					setStreamingMessage(applied.streamingMessage);
 					const toolEntry = applied.timelineEntry;
 					if (toolEntry) {
@@ -663,7 +715,7 @@ export function Chat() {
 				setStreamError(errorMessage(error));
 			}
 		},
-		[queryClient, selectedConversationId, t],
+		[queryClient, selectedConversationId, setRequestedConversationId, t],
 	);
 
 	const handleBranch = useCallback(
@@ -737,6 +789,39 @@ export function Chat() {
 		[conversationsQuery.error, conversationsQuery.isError, isRemoteConversation, streamError, t],
 	);
 
+	// A9 module-readiness gate (platform parity): block the chat behind a connecting/error state until the
+	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.
+	if (connectionReadiness !== "ready") {
+		return (
+			<Box py="lg" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+				<Center style={{ flex: 1 }}>
+					{connectionReadiness === "connecting" ? (
+						<Stack align="center" gap="sm">
+							<Loader />
+							<Text c="dimmed">{t("pages.chat.connecting", "Connecting to local chat…")}</Text>
+						</Stack>
+					) : (
+						<Alert
+							color="red"
+							variant="light"
+							icon={<IconAlertTriangle size={16} />}
+							title={t("pages.chat.connectionFailedTitle", "Local chat unavailable")}
+						>
+							<Stack gap="sm" align="flex-start">
+								<Text size="sm">
+									{connectionError ?? t("pages.chat.connectionFailed", "Could not connect to the local chat hub.")}
+								</Text>
+								<Button size="xs" variant="light" onClick={retryConnection}>
+									{t("pages.chat.retryConnection", "Retry")}
+								</Button>
+							</Stack>
+						</Alert>
+					)}
+				</Center>
+			</Box>
+		);
+	}
+
 	return (
 		<Box py="lg" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
 			{isLoadingInitialConversations ? (
@@ -785,7 +870,7 @@ export function Chat() {
 						createConversationMutation.mutate();
 					}
 				}}
-				onToggleConversationList={() => setCollapsed((value) => !value)}
+				onToggleConversationList={toggleSidebar}
 				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}
 				onToggleTools={toggleTools}

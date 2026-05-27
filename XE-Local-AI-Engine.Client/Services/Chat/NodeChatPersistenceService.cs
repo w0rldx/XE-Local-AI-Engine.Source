@@ -409,9 +409,25 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             return null;
         }
 
-        var copies = source.Messages.Where(message => message.Sequence <= cutoff.Sequence)
-                           .OrderBy(message => message.Sequence)
-                           .ToArray();
+        // Collapse variant groups so the branch is a LINEAR thread: the branched-from turn contributes only the
+        // chosen revision (the cutoff message), and every other variant group contributes only its newest member
+        // (matching the client's default-active = newest revision). Non-variant messages always pass through.
+        // Without this, branching from a revision copies the sibling variants too, and since variant_group_id is
+        // dropped on copy (below) they render as duplicate stacked assistant turns instead of one. (RC fix.)
+        var eligible = source.Messages.Where(message => message.Sequence <= cutoff.Sequence).ToArray();
+        var newestSequenceByGroup = eligible
+                                    .Where(message => message.VariantGroupId is not null && message.VariantGroupId != cutoff.VariantGroupId)
+                                    .GroupBy(message => message.VariantGroupId!.Value)
+                                    .ToDictionary(group => group.Key, group => group.Max(message => message.Sequence));
+
+        var copies = eligible
+                     .Where(message => message.VariantGroupId is null
+                                       || message.MessageId == cutoff.MessageId
+                                       || (message.VariantGroupId != cutoff.VariantGroupId
+                                           && newestSequenceByGroup.TryGetValue(message.VariantGroupId.Value, out var newestSequence)
+                                           && message.Sequence == newestSequence))
+                     .OrderBy(message => message.Sequence)
+                     .ToArray();
         var branchedConversationId = Guid.NewGuid();
 
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(branchedConversationId),

@@ -93,6 +93,31 @@ export function mapConversationSummary(dto: NodeChatConversationSummaryResponseD
 	};
 }
 
+// The summary list carries a server-computed lastMessagePreview; the full conversation payload does not. Derive
+// an equivalent preview from the loaded messages so that when the selected conversation is merged into the list
+// (mergeSelectedConversation swaps the summary for the full model) its list item keeps a preview instead of
+// collapsing to "No messages". Undefined for a genuinely empty conversation, which correctly shows "No messages".
+const MAX_PREVIEW_LENGTH = 120;
+function previewFromMessages(messages: NodeChatMessageResponseDto[]): string | undefined {
+	let latest: NodeChatMessageResponseDto | undefined;
+	for (const message of messages) {
+		if (message.content.trim().length === 0) {
+			continue;
+		}
+
+		if (!latest || message.sequence > latest.sequence) {
+			latest = message;
+		}
+	}
+
+	if (!latest) {
+		return undefined;
+	}
+
+	const normalized = latest.content.replace(/\s+/g, " ").trim();
+	return normalized.length > MAX_PREVIEW_LENGTH ? `${normalized.slice(0, MAX_PREVIEW_LENGTH - 1)}…` : normalized;
+}
+
 export function mapConversation(dto: NodeChatConversationResponseDto): ChatConversationModel {
 	const lastSeen = toIso(dto.lastSeenUtc);
 
@@ -102,6 +127,7 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		createdAt: toIso(dto.createdAtUtc),
 		updatedAt: lastSeen,
 		lastActivity: lastSeen,
+		lastMessagePreview: previewFromMessages(dto.messages),
 		isPinned: dto.isPinned,
 		isArchived: dto.archived,
 		origin: toOrigin(dto.origin),
