@@ -144,6 +144,76 @@ describe("ConversationList management actions", () => {
 		expect(onToggleArchive).toHaveBeenCalledWith("local-1", true);
 	});
 
+	it("invokes onDelete with skipConfirm=false for a plain click", async () => {
+		const onDelete = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", origin: "local" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-local-1"));
+		fireEvent.click(await screen.findByTestId("conversation-delete-local-1"));
+
+		expect(onDelete).toHaveBeenCalledWith("local-1", false);
+	});
+
+	it("invokes onDelete with skipConfirm=true when the delete item is Shift-clicked", async () => {
+		const onDelete = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", origin: "local" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-local-1"));
+		fireEvent.click(await screen.findByTestId("conversation-delete-local-1"), { shiftKey: true });
+
+		expect(onDelete).toHaveBeenCalledWith("local-1", true);
+	});
+
+	it("surfaces a Shift-click hint on the delete item without changing the skip behavior", async () => {
+		const onDelete = vi.fn();
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "local-1", origin: "local" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onDelete={onDelete}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("conversation-actions-local-1"));
+		const deleteItem = await screen.findByTestId("conversation-delete-local-1");
+
+		// The hint becomes discoverable on hover and does not alter the existing skip-confirm behavior.
+		fireEvent.mouseEnter(deleteItem);
+		expect(await screen.findByText("Shift-click to skip confirmation")).toBeTruthy();
+	});
+
+	it("does not render the delete item for remote-origin (view-only) conversations", () => {
+		renderWithProviders(
+			<ConversationList
+				conversations={[conversation({ id: "remote-1", origin: "remote" })]}
+				onCreateConversation={vi.fn()}
+				onSelect={vi.fn()}
+				onToggleCollapse={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
+		);
+
+		expect(screen.queryByTestId("conversation-delete-remote-1")).toBeNull();
+	});
+
 	it("commits a rename on Enter and does not re-select the conversation while editing", async () => {
 		const onRename = vi.fn();
 		const onSelect = vi.fn();

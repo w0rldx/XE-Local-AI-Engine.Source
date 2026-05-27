@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import {
+	accumulateToolTimelineEntry,
 	appendOptimisticNodeChatSend,
 	applyNodeChatStreamEvent,
 	markNodeChatStreamTerminated,
@@ -133,6 +134,116 @@ describe("node chat stream state", () => {
 			{ id: "user-1", role: "user", content: "hello", status: "completed" },
 			{ id: "assistant-1", role: "assistant", content: "", status: "pending" },
 		]);
+	});
+
+	it("turns a tool-call-requested event into a timeline entry without clobbering assistant content", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const streaming = applyNodeChatStreamEvent(optimistic, streamEvent({ content: "partial", delta: "partial" }));
+
+		const requested = applyNodeChatStreamEvent(
+			streaming.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-1",
+				toolName: "search_docs",
+				arguments: '{"q":"x"}',
+				requiresApproval: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(requested.timelineEntry).toMatchObject({
+			id: "call-1",
+			messageId: "assistant-1",
+			type: "ToolCall",
+			toolName: "search_docs",
+			toolArgs: '{"q":"x"}',
+			state: "requesting",
+			requiresApproval: false,
+		});
+		// The tool event leaves the assistant message content/status untouched and keeps the turn live.
+		expect(requested.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({ content: "partial", status: "streaming" });
+		expect(requested.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "partial", isActive: true });
+		expect(requested.isTerminal).toBe(false);
+	});
+
+	it("carries the approval flag onto a tool-call-requested timeline entry", () => {
+		const requested = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-9",
+				toolName: "delete_file",
+				requiresApproval: true,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(requested.timelineEntry).toMatchObject({ id: "call-9", state: "waiting", requiresApproval: true });
+	});
+
+	it("transitions the requested entry to received on tool-call-completed, keyed by tool call id", () => {
+		const requested = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, toolCallId: "call-1", toolName: "search_docs", content: null, delta: null }),
+		);
+		const completed = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, toolCallId: "call-1", toolName: "search_docs", result: "3 results", isError: false, content: null, delta: null }),
+		);
+
+		const requestedEntry = requested.timelineEntry;
+		const completedEntry = completed.timelineEntry;
+		if (!requestedEntry || !completedEntry) {
+			throw new Error("expected tool timeline entries");
+		}
+
+		const accumulated = accumulateToolTimelineEntry(accumulateToolTimelineEntry([], requestedEntry), completedEntry);
+
+		// The completed event collapses onto the requested entry (same id) instead of appending a duplicate.
+		expect(accumulated).toHaveLength(1);
+		expect(accumulated[0]).toMatchObject({ id: "call-1", type: "ToolResult", state: "received", toolResult: "3 results" });
+	});
+
+	it("preserves the requiresApproval flag when the completed entry merges over the requested entry", () => {
+		const requested = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, toolCallId: "call-1", toolName: "delete_file", requiresApproval: true, content: null, delta: null }),
+		);
+		const completed = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, toolCallId: "call-1", toolName: "delete_file", result: "ok", isError: false, content: null, delta: null }),
+		);
+
+		const requestedEntry = requested.timelineEntry;
+		const completedEntry = completed.timelineEntry;
+		if (!requestedEntry || !completedEntry) {
+			throw new Error("expected tool timeline entries");
+		}
+
+		// The completed tool-event omits requiresApproval; the merge must keep the requested entry's flag rather
+		// than letting the object-spread clobber it to undefined.
+		expect(completedEntry.requiresApproval).toBeUndefined();
+		const accumulated = accumulateToolTimelineEntry(accumulateToolTimelineEntry([], requestedEntry), completedEntry);
+
+		expect(accumulated).toHaveLength(1);
+		expect(accumulated[0]).toMatchObject({ id: "call-1", type: "ToolResult", state: "received", requiresApproval: true });
+	});
+
+	it("maps a failed tool-call-completed event to a failed timeline entry", () => {
+		const failed = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, toolCallId: "call-1", toolName: "search_docs", result: "boom", isError: true, content: null, delta: null }),
+		);
+
+		expect(failed.timelineEntry).toMatchObject({ id: "call-1", state: "failed", toolResult: "boom" });
 	});
 
 	it("marks only the active assistant message as cancelled during local cancellation", () => {

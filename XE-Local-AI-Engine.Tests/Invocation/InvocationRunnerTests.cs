@@ -724,6 +724,97 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task ExecuteApiToolCallAsync_WhenTimedOut_EmitsCompletedLifecycleWithError()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, workerOptions: new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 10,
+            MaxPendingToolCallAgeMinutes = 1
+        });
+        SetMaxPendingToolCallAge(runner, TimeSpan.Zero);
+        var invocationId = Guid.NewGuid();
+
+        // requiresApproval: false guarantees the Requested lifecycle fires before the result-wait timeout, so the
+        // timeout path must emit a matching Completed (IsError=true) to clear the UI card.
+        await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() =>
+            runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
+
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.InvocationId == invocationId
+            && payload.ToolName == "test-tool"
+            && payload.Phase == ToolCallLifecyclePhase.Requested));
+        await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.InvocationId == invocationId
+            && payload.ToolName == "test-tool"
+            && payload.Phase == ToolCallLifecyclePhase.Completed
+            && payload.IsError
+            && !string.IsNullOrWhiteSpace(payload.Result)));
+    }
+
+    [Test]
+    public async Task ExecuteApiToolCallAsync_WhenApprovalNotRequired_SkipsApprovalAndExecutes()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher);
+        var invocationId = Guid.NewGuid();
+
+        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
+        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(0, sender.SentApprovals.Count);
+
+        var requestId = sender.SentToolCalls.Single().RequestId;
+        runner.ResolveToolCallResult(new ToolCallResultEvent
+        {
+            RequestId = requestId,
+            Result = "tool-output"
+        });
+
+        var result = await task;
+        AssertEx.Equal("tool-output", result);
+
+        await dispatcher.Received().ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Requested
+            && !payload.RequiresApproval
+            && payload.ToolName == "test-tool"));
+        await dispatcher.Received().ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
+            payload.Phase == ToolCallLifecyclePhase.Completed
+            && payload.Result == "tool-output"
+            && !payload.IsError));
+    }
+
+    [Test]
+    public async Task ExecuteApiToolCallAsync_WhenApprovalRequired_SendsApprovalBeforeExecuting()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender);
+        var invocationId = Guid.NewGuid();
+
+        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: true);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(0, sender.SentToolCalls.Count);
+
+        var approvalRequestId = sender.SentApprovals.Single().RequestId;
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
+        await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
+
+        var requestId = sender.SentToolCalls.Single().RequestId;
+        runner.ResolveToolCallResult(new ToolCallResultEvent
+        {
+            RequestId = requestId,
+            Result = "tool-output"
+        });
+
+        var result = await task;
+        AssertEx.Equal("tool-output", result);
+    }
+
+    [Test]
     public async Task CleanupStaleToolCalls_RemovesEntriesOlderThanMaxAge()
     {
         var sender = new MockHubMessageSender();

@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { mapConversation, mapConversationSummary } from "@/features/chat/api/NodeChatMapper";
+import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
+import { mapConversation, mapConversationSummary, mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
+
+function streamEvent(overrides: Partial<NodeChatStreamEventDto>): NodeChatStreamEventDto {
+	return {
+		type: "assistant-streaming",
+		conversationId: "conversation-1",
+		messageId: "message-1",
+		requestId: "request-1",
+		status: "streaming",
+		sequence: 1,
+		occurredAtUtc: 1_700_000_000_000,
+		...overrides,
+	};
+}
 
 describe("node chat mapper", () => {
 	it("maps conversation summaries into local chat list models", () => {
@@ -131,5 +145,87 @@ describe("node chat mapper", () => {
 				variantGroupId: undefined,
 			},
 		]);
+	});
+});
+
+describe("node chat tool-call event mapper", () => {
+	it("maps a tool-call-requested event without approval into a requesting tool call", () => {
+		expect(
+			mapToolCallEvent(
+				streamEvent({
+					type: "tool-call-requested",
+					toolCallId: "call-1",
+					toolName: "search_docs",
+					arguments: '{"query":"abc"}',
+					requiresApproval: false,
+				}),
+			),
+		).toEqual({
+			id: "call-1",
+			name: "search_docs",
+			state: "requesting",
+			args: '{"query":"abc"}',
+			requiresApproval: false,
+		});
+	});
+
+	it("maps a tool-call-requested event requiring approval into a waiting tool call carrying the flag", () => {
+		expect(
+			mapToolCallEvent(
+				streamEvent({
+					type: "tool-call-requested",
+					toolCallId: "call-2",
+					toolName: "delete_file",
+					requiresApproval: true,
+				}),
+			),
+		).toEqual({
+			id: "call-2",
+			name: "delete_file",
+			state: "waiting",
+			args: undefined,
+			requiresApproval: true,
+		});
+	});
+
+	it("maps a successful tool-call-completed event into a received tool call", () => {
+		expect(
+			mapToolCallEvent(
+				streamEvent({
+					type: "tool-call-completed",
+					toolCallId: "call-1",
+					toolName: "search_docs",
+					result: "3 results",
+					isError: false,
+				}),
+			),
+		).toEqual({
+			id: "call-1",
+			name: "search_docs",
+			state: "received",
+			result: "3 results",
+		});
+	});
+
+	it("maps a failed tool-call-completed event into a failed tool call", () => {
+		expect(
+			mapToolCallEvent(
+				streamEvent({
+					type: "tool-call-completed",
+					toolCallId: "call-1",
+					toolName: "search_docs",
+					result: "boom",
+					isError: true,
+				}),
+			),
+		).toMatchObject({ id: "call-1", state: "failed", result: "boom" });
+	});
+
+	it("falls back to the message id when no tool call id is present", () => {
+		expect(mapToolCallEvent(streamEvent({ type: "tool-call-requested", messageId: "message-9", toolName: "noop" }))?.id).toBe("message-9");
+	});
+
+	it("returns null for non-tool stream events", () => {
+		expect(mapToolCallEvent(streamEvent({ type: "assistant-delta", delta: "hi" }))).toBeNull();
 	});
 });

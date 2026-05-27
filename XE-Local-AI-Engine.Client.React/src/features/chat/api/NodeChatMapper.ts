@@ -1,9 +1,11 @@
-import type {
-	NodeChatConversationResponseDto,
-	NodeChatConversationSummaryResponseDto,
-	NodeChatMessageFeedbackResponseDto,
-	NodeChatMessageResponseDto,
-	NodeChatMessageRevisionsResponseDto,
+import {
+	nodeChatToolStreamEventTypes,
+	type NodeChatConversationResponseDto,
+	type NodeChatConversationSummaryResponseDto,
+	type NodeChatMessageFeedbackResponseDto,
+	type NodeChatMessageResponseDto,
+	type NodeChatMessageRevisionsResponseDto,
+	type NodeChatStreamEventDto,
 } from "@/features/chat/api/NodeChatApi";
 import type {
 	ChatConversationModel,
@@ -13,6 +15,7 @@ import type {
 	ChatMessageRevisions,
 	ChatOrigin,
 	ChatRole,
+	ChatToolCall,
 	MessageStatus,
 } from "@/features/chat/models/ChatModels";
 
@@ -114,6 +117,36 @@ export function mapMessageRevisions(dto: NodeChatMessageRevisionsResponseDto): C
 		variantGroupId: dto.variantGroupId ?? undefined,
 		variants: dto.variants.map(mapMessage).toSorted((left, right) => left.sortOrder - right.sortOrder),
 	};
+}
+
+/**
+ * Maps a tool-lifecycle stream event into the `ChatToolCall` shape `ToolCallDisplay` renders. Returns null for
+ * non-tool events. `tool-call-requested` → `waiting` when the tool needs approval (beta ships none) else
+ * `requesting`; `tool-call-completed` → `failed` when `isError` else `received`. The tool call id is the stable
+ * key so a completed event can later collapse onto its requested entry.
+ */
+export function mapToolCallEvent(event: NodeChatStreamEventDto): ChatToolCall | null {
+	if (event.type === nodeChatToolStreamEventTypes.toolCallRequested) {
+		const requiresApproval = event.requiresApproval ?? false;
+		return {
+			id: event.toolCallId ?? event.messageId,
+			name: event.toolName ?? "tool",
+			state: requiresApproval ? "waiting" : "requesting",
+			args: event.arguments ?? undefined,
+			requiresApproval,
+		};
+	}
+
+	if (event.type === nodeChatToolStreamEventTypes.toolCallCompleted) {
+		return {
+			id: event.toolCallId ?? event.messageId,
+			name: event.toolName ?? "tool",
+			state: event.isError ? "failed" : "received",
+			result: event.result ?? undefined,
+		};
+	}
+
+	return null;
 }
 
 export function mapMessageFeedback(dto: NodeChatMessageFeedbackResponseDto): ChatMessageFeedback {

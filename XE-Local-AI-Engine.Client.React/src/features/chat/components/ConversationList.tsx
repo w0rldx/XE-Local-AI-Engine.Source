@@ -12,8 +12,9 @@ import {
 	IconPinnedFilled,
 	IconPlus,
 	IconSearch,
+	IconTrash,
 } from "@tabler/icons-react";
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
@@ -34,6 +35,7 @@ interface ConversationListProps {
 	onRename?: (conversationId: string, title: string) => void;
 	onTogglePin?: (conversationId: string, isPinned: boolean) => void;
 	onToggleArchive?: (conversationId: string, archived: boolean) => void;
+	onDelete?: (conversationId: string, skipConfirm: boolean) => void;
 }
 
 function formatRelative(iso?: string): string {
@@ -88,6 +90,7 @@ export function ConversationList({
 	onRename,
 	onTogglePin,
 	onToggleArchive,
+	onDelete,
 }: ConversationListProps) {
 	const { t } = useTranslation();
 	const [renamingId, setRenamingId] = useState<string | undefined>();
@@ -232,7 +235,7 @@ export function ConversationList({
 									const isRemote = conversation.origin === "remote";
 									const isRenaming = renamingId === conversation.id;
 									const isMutating = mutatingConversationId === conversation.id;
-									const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive));
+									const canManage = !isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
 
 									return (
 										<Paper
@@ -321,6 +324,23 @@ export function ConversationList({
 																					? t("pages.chat.conversationList.unarchive", "Unarchive")
 																					: t("pages.chat.conversationList.archive", "Archive")}
 																			</Menu.Item>
+																		) : null}
+																		{onDelete ? (
+																			<Tooltip
+																				label={t("pages.chat.conversationList.deleteShiftHint", "Shift-click to skip confirmation")}
+																				position="left"
+																				withArrow={true}
+																				openDelay={300}
+																			>
+																				<Menu.Item
+																					color="red"
+																					leftSection={<IconTrash size={14} />}
+																					onClick={(event: MouseEvent<HTMLButtonElement>) => onDelete(conversation.id, event.shiftKey)}
+																					data-testid={`conversation-delete-${conversation.id}`}
+																				>
+																					{t("pages.chat.conversationList.delete", "Delete")}
+																				</Menu.Item>
+																			</Tooltip>
 																		) : null}
 																	</Menu.Dropdown>
 																</Menu>

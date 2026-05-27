@@ -111,6 +111,7 @@ export interface NodeChatStreamRequestDto {
 	messageId?: string;
 	requestId?: string;
 	model?: string;
+	useLocalTools?: boolean;
 }
 
 export interface NodeChatStreamEventDto {
@@ -131,7 +132,19 @@ export interface NodeChatStreamEventDto {
 	outputTokens?: number | null;
 	totalTokens?: number | null;
 	reasoningTokens?: number | null;
+	// Tool lifecycle fields (Phase D6): present on `tool-call-requested` / `tool-call-completed` events only.
+	toolCallId?: string | null;
+	toolName?: string | null;
+	arguments?: string | null;
+	requiresApproval?: boolean | null;
+	result?: string | null;
+	isError?: boolean | null;
 }
+
+export const nodeChatToolStreamEventTypes = {
+	toolCallRequested: "tool-call-requested",
+	toolCallCompleted: "tool-call-completed",
+} as const;
 
 export async function listConversations(
 	request: ListNodeChatConversationsRequestDto = {},

@@ -11,6 +11,8 @@ public static class ChatStreamEventTypes
     public const string AssistantCancelled = "assistant-cancelled";
     public const string AssistantFailed = "assistant-failed";
     public const string AssistantInterrupted = "assistant-interrupted";
+    public const string ToolCallRequested = "tool-call-requested";
+    public const string ToolCallCompleted = "tool-call-completed";
 }
 
 public sealed record NodeChatStreamRequest(
@@ -19,7 +21,8 @@ public sealed record NodeChatStreamRequest(
     Guid? UserMessageId = null,
     Guid? MessageId = null,
     Guid? RequestId = null,
-    string? Model = null);
+    string? Model = null,
+    bool UseLocalTools = false);
 
 public sealed record ChatStreamEvent(
     string Type,
@@ -38,4 +41,10 @@ public sealed record ChatStreamEvent(
     int? InputTokens = null,
     int? OutputTokens = null,
     int? TotalTokens = null,
-    int? ReasoningTokens = null);
+    int? ReasoningTokens = null,
+    string? ToolCallId = null,
+    string? ToolName = null,
+    string? Arguments = null,
+    bool? RequiresApproval = null,
+    string? Result = null,
+    bool? IsError = null);

@@ -47,6 +47,7 @@ export interface SendMessageRequest {
 	messageId?: string;
 	requestId?: string;
 	model?: string;
+	useLocalTools?: boolean;
 }
 
 export interface NodeChatAdapter {
@@ -80,6 +81,7 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		messageId: request.messageId,
 		requestId: request.requestId,
 		model: request.model,
+		useLocalTools: request.useLocalTools,
 	};
 }
 

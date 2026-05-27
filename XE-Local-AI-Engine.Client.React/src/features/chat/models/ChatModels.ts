@@ -107,6 +107,9 @@ export interface ChatTimelineEntry {
 	toolArgs?: string;
 	toolResult?: string;
 	state?: ToolCallState;
+	// Carried from the tool-call event so the rendered tool call can surface the approval requirement; beta
+	// ships only auto-execute tools, so this is currently always false.
+	requiresApproval?: boolean;
 	createdAt: string;
 }
 
@@ -117,6 +120,9 @@ export interface ChatToolCall {
 	args?: string;
 	result?: string;
 	duration?: string;
+	// Tool-level metadata: whether the tool requires explicit approval before executing. Carried so a future
+	// tools-overview UI can surface/toggle it. Beta ships only auto-execute tools, so no approval dialog yet.
+	requiresApproval?: boolean;
 }
 
 export interface ModelOption {
@@ -160,6 +166,7 @@ export interface ChatDisplayShellProps {
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
 	availableReasoningEfforts: ReasoningEffort[];
+	toolsEnabled?: boolean;
 	contextUsage?: ContextUsageModel;
 	streamingMessage?: ChatStreamingState;
 	timelineEntries?: ChatTimelineEntry[];
@@ -173,6 +180,7 @@ export interface ChatDisplayShellProps {
 	onToggleConversationList: () => void;
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
+	onToggleTools?: () => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 	onCancel: () => void;
 	onRegenerate?: (messageId: string) => void;
@@ -181,6 +189,7 @@ export interface ChatDisplayShellProps {
 	onRenameConversation?: (conversationId: string, title: string) => void;
 	onToggleConversationPinned?: (conversationId: string, isPinned: boolean) => void;
 	onToggleConversationArchived?: (conversationId: string, archived: boolean) => void;
+	onDeleteConversation?: (conversationId: string, skipConfirm: boolean) => void;
 	onBranchFromMessage?: (messageId: string) => void;
 	activeRevisionByGroup?: Readonly<Record<string, string>>;
 	onSelectRevision?: (variantGroupId: string, messageId: string) => void;

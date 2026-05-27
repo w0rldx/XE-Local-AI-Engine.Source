@@ -50,6 +50,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;
 
+    public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
+
     public InvocationState? CurrentInvocation { get; private set; }
 
     public bool IsAcceptingRemoteInvocations
@@ -493,6 +495,15 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
                 state.PendingApproval = new InvocationApprovalState(payload.RequestId, payload.Description, DateTimeOffset.UtcNow);
                 return state;
             });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
 
         return Task.CompletedTask;
     }

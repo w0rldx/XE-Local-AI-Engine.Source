@@ -83,8 +83,9 @@ public sealed class NodeChatStreamService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Two producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync
-            // and the delta/terminal emits in PumpInvocationStatesAsync. SingleWriter must be false.
+            // Three producers write this channel concurrently: the delta/terminal emits in PumpInvocationStatesAsync
+            // (the invocation-state pump), the streaming-transition emit in RunInvocationAsync (the run-transition),
+            // and the tool-call lifecycle emits in OnToolCallLifecycleChanged. SingleWriter must be false.
             SingleWriter = false
         });
 
@@ -96,7 +97,22 @@ public sealed class NodeChatStreamService(
             }
         }
 
+        void OnToolCallLifecycleChanged(object? _, ToolCallLifecycleChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                eventChannel.Writer.TryWrite(ToToolCallEvent(correlation, args.Payload, sequence.Next()));
+            }
+        }
+
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
+
+        // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
+        // tool engine enabled. There is no local tool catalog yet (all beta tools are non-approval, none defined),
+        // so the offered set is empty today; the flag wiring keeps the gate in place for when one lands.
+        var offerTools = request.UseLocalTools && localChatOptions.Value.EnableTools;
+        IReadOnlyList<AllowedToolDto>? allowedTools = offerTools ? [] : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
@@ -105,6 +121,7 @@ public sealed class NodeChatStreamService(
             request.Model ?? localChatOptions.Value.DefaultModel,
             AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
+            AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability]));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
@@ -132,6 +149,7 @@ public sealed class NodeChatStreamService(
         finally
         {
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             await linkedCancellation.CancelAsync().ConfigureAwait(false);
 
             try
@@ -340,6 +358,29 @@ public sealed class NodeChatStreamService(
             outputTokens ?? message.OutputCount,
             totalTokens ?? message.TotalCount,
             reasoningTokens ?? message.ReasoningCount);
+    }
+
+    private ChatStreamEvent ToToolCallEvent(NodeChatMessageCorrelation correlation,
+        ToolCallLifecyclePayload payload,
+        long sequence)
+    {
+        var type = payload.Phase == ToolCallLifecyclePhase.Requested
+            ? ChatStreamEventTypes.ToolCallRequested
+            : ChatStreamEventTypes.ToolCallCompleted;
+
+        return new ChatStreamEvent(type,
+            correlation.ConversationId,
+            correlation.MessageId,
+            correlation.RequestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            NowUnixMilliseconds(),
+            ToolCallId: payload.ToolCallId,
+            ToolName: payload.ToolName,
+            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
+            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
+            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
+            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
     }
 
     private long NowUnixMilliseconds()

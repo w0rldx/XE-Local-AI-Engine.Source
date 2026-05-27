@@ -221,6 +221,12 @@ public sealed class WorkerShutdownDrainServiceTests
             remove => _ = value;
         }
 
+        event EventHandler<ToolCallLifecycleChangedEventArgs>? IWorkerEventDispatcher.ToolCallLifecycleChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
         public void StopAcceptingRemoteInvocations()
         {
             IsAcceptingRemoteInvocations = false;
@@ -288,6 +294,11 @@ public sealed class WorkerShutdownDrainServiceTests
         }
 
         public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
         {
             return Task.CompletedTask;
         }
