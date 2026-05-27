@@ -1,5 +1,5 @@
 import { Button, Input, MantineProvider, Paper, Text } from "@mantine/core";
-import { useMemo, useReducer, useRef, type ChangeEventHandler } from "react";
+import { type ChangeEventHandler, useMemo, useReducer, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { normalizeThemeConfiguration, type ThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
@@ -122,6 +122,7 @@ export function ThemeConfigurator() {
 				<label className="flex flex-col gap-1">
 					<Text size="sm">{t("pages.userSettings.themeConfigurator.mode")}</Text>
 					<select
+						aria-label={t("pages.userSettings.themeConfigurator.mode")}
 						className="rounded border border-zinc-300 p-2"
 						value={draft.palette.mode}
 						onChange={(event) => {
@@ -143,6 +144,7 @@ export function ThemeConfigurator() {
 				<label className="flex flex-col gap-1">
 					<Text size="sm">{t("pages.userSettings.themeConfigurator.fontFamily")}</Text>
 					<input
+						aria-label={t("pages.userSettings.themeConfigurator.fontFamily")}
 						className="rounded border border-zinc-300 p-2"
 						value={draft.typography.fontFamily}
 						onChange={(event) => {
@@ -195,6 +197,7 @@ export function ThemeConfigurator() {
 							<Text size="sm">{key.toUpperCase()}</Text>
 							<input
 								type="number"
+								aria-label={`${t("pages.userSettings.themeConfigurator.breakpoints")} ${key.toUpperCase()}`}
 								className="rounded border border-zinc-300 p-2"
 								value={draft.breakpoints.values[key]}
 								onChange={(event) => {
@@ -258,7 +261,14 @@ export function ThemeConfigurator() {
 				<Button variant="outline" color="secondary" onClick={handleImportClick}>
 					{t("pages.userSettings.themeConfigurator.importJson")}
 				</Button>
-				<input ref={fileInputReference} type="file" accept="application/json" className="hidden" onChange={handleImportFile} />
+				<input
+					ref={fileInputReference}
+					type="file"
+					aria-label={t("pages.userSettings.themeConfigurator.importJson")}
+					accept="application/json"
+					className="hidden"
+					onChange={handleImportFile}
+				/>
 			</div>
 		</div>
 	);

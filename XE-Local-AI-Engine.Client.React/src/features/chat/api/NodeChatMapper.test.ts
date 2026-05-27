@@ -1,7 +1,43 @@
 import { describe, expect, it } from "vitest";
 
 import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
+import type { NodeChatMessageResponseDto } from "@/features/chat/api/NodeChatApi";
 import { mapConversation, mapConversationSummary, mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
+
+function messageDto(overrides: Partial<NodeChatMessageResponseDto> = {}): NodeChatMessageResponseDto {
+	return {
+		messageId: "message-1",
+		conversationId: "conversation-1",
+		sequence: 1,
+		role: "Assistant",
+		content: "Hi",
+		status: "completed",
+		createdAtUtc: 1_700_000_001_000,
+		updatedAtUtc: 1_700_000_002_000,
+		origin: "Local",
+		...overrides,
+	};
+}
+
+function mapSingleMessage(overrides: Partial<NodeChatMessageResponseDto> = {}) {
+	const [message] = mapConversation({
+		conversationId: "conversation-1",
+		title: "t",
+		userId: null,
+		createdAtUtc: 1_700_000_000_000,
+		lastSeenUtc: 1_700_000_002_000,
+		purged: false,
+		origin: "Local",
+		isPinned: false,
+		archived: false,
+		messages: [messageDto(overrides)],
+	}).messages;
+	if (!message) {
+		throw new Error("expected one mapped message");
+	}
+
+	return message;
+}
 
 function streamEvent(overrides: Partial<NodeChatStreamEventDto>): NodeChatStreamEventDto {
 	return {
@@ -101,6 +137,7 @@ describe("node chat mapper", () => {
 		// isArchived maps from the dedicated `archived` column (M2), not `purged`.
 		expect(conversation.isArchived).toBe(true);
 		expect(conversation.isPinned).toBe(false);
+		// New keys (feedbackRating/feedbackComment) are undefined here; toEqual ignores undefined props.
 		expect(conversation.messages).toEqual([
 			{
 				id: "message-1",
@@ -145,6 +182,24 @@ describe("node chat mapper", () => {
 				variantGroupId: undefined,
 			},
 		]);
+	});
+
+	it("maps message-borne feedback (rating + comment) onto the message model", () => {
+		expect(mapSingleMessage({ feedbackRating: "up", feedbackComment: "Clear answer" })).toMatchObject({
+			feedbackRating: "up",
+			feedbackComment: "Clear answer",
+		});
+	});
+
+	it("normalizes the feedback rating casing", () => {
+		expect(mapSingleMessage({ feedbackRating: "DOWN" }).feedbackRating).toBe("down");
+	});
+
+	it("leaves feedback undefined when no rating is present, even if a stray comment is returned", () => {
+		const message = mapSingleMessage({ feedbackRating: null, feedbackComment: "ignored" });
+
+		expect(message.feedbackRating).toBeUndefined();
+		expect(message.feedbackComment).toBeUndefined();
 	});
 });
 

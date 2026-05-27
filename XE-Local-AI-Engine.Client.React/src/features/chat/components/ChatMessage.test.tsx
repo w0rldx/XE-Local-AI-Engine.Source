@@ -137,4 +137,26 @@ describe("ChatMessage actions", () => {
 
 		expect(onSubmitFeedback).toHaveBeenCalledWith("assistant-1", "up", "Clear and concise");
 	});
+
+	it("flags reasoning emitted while the 'none' effort is selected", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ reasoning: "Considering the request." })} reasoningEffort="none" />,
+		);
+
+		expect(screen.getByTestId("chat-message-reasoning-bypass-assistant-1")).toBeTruthy();
+	});
+
+	it("does not flag a bypass when the effort is not 'none'", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ reasoning: "Considering the request." })} reasoningEffort="medium" />,
+		);
+
+		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
+	});
+
+	it("does not flag a bypass when 'none' is selected but no reasoning was emitted", () => {
+		renderWithProviders(<ChatMessage message={assistantMessage()} reasoningEffort="none" />);
+
+		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
+	});
 });

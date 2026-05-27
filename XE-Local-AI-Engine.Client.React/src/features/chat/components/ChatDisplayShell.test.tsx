@@ -119,4 +119,26 @@ describe("ChatDisplayShell tool-call timeline pass-through", () => {
 
 		expect(screen.queryByTestId("chat-tool-call-group")).toBeNull();
 	});
+
+	it("suppresses the empty-state while the selected conversation's messages are loading", () => {
+		const emptyConversation: ChatConversationModel = { ...conversation, messages: [] };
+
+		renderWithProviders(
+			<ChatDisplayShell {...shellProps({ conversations: [emptyConversation], isLoadingMessages: true })} />,
+		);
+
+		expect(screen.queryByText("No messages yet.")).toBeNull();
+		expect(screen.getByText("Loading messages…")).toBeTruthy();
+	});
+
+	it("shows the empty-state once a settled conversation truly has no messages", () => {
+		const emptyConversation: ChatConversationModel = { ...conversation, messages: [] };
+
+		renderWithProviders(
+			<ChatDisplayShell {...shellProps({ conversations: [emptyConversation], isLoadingMessages: false })} />,
+		);
+
+		expect(screen.getByText("No messages yet.")).toBeTruthy();
+		expect(screen.queryByText("Loading messages…")).toBeNull();
+	});
 });

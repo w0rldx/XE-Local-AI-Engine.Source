@@ -26,9 +26,10 @@ public sealed class LocalChatHub(INodeChatStreamService streamService,
     /// </summary>
     public IAsyncEnumerable<ChatStreamEvent> RegenerateMessage(Guid conversationId,
         Guid originalMessageId,
+        string? reasoningEffort,
         CancellationToken cancellationToken)
     {
-        return regenerationService.RegenerateAsync(conversationId, originalMessageId, cancellationToken);
+        return regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, cancellationToken);
     }
 
     /// <summary>

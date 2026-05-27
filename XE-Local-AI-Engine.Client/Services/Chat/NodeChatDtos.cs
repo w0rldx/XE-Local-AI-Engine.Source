@@ -162,7 +162,9 @@ public sealed record NodeChatPersistedMessageDto(
     int? ReasoningCount = null,
     string Origin = NodeChatOriginValues.Local,
     Guid? ParentMessageId = null,
-    Guid? VariantGroupId = null);
+    Guid? VariantGroupId = null,
+    string? FeedbackRating = null,
+    string? FeedbackComment = null);
 
 public sealed record NodeChatCancelResultDto(
     NodeChatMessageCorrelation Correlation,

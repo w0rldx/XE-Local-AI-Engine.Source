@@ -1,17 +1,27 @@
 import { Alert, Badge, Button, Card, Container, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconPlugConnected, IconPlugConnectedX, IconRefresh, IconSettingsAutomation } from "@tabler/icons-react";
+import {
+	IconAlertTriangle,
+	IconPlugConnected,
+	IconPlugConnectedX,
+	IconRefresh,
+	IconSettingsAutomation,
+} from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
 
 import {
+	type ConnectionStatusDto,
 	connectWorker,
 	disableAutoConnect,
 	disconnectWorker,
 	enableAutoConnect,
 	getConnectionStatus,
-	type ConnectionStatusDto,
 } from "@/features/dashboard/api/ConnectionApi";
-import { connectionActionHint, connectionStatusColor, connectionStatusLabel, formatOptionalDate } from "@/features/dashboard/models/ConnectionStatusModel";
+import {
+	connectionActionHint,
+	connectionStatusColor,
+	connectionStatusLabel,
+	formatOptionalDate,
+} from "@/features/dashboard/models/ConnectionStatusModel";
 import { connectionQueryKeys } from "@/features/dashboard/queries/ConnectionQueryKeys";
 
 function errorMessage(error: unknown): string {
@@ -34,23 +44,43 @@ export function Dashboard() {
 		refetchInterval: 5000,
 	});
 
-	const applyStatus = useCallback(
-		async (status: ConnectionStatusDto) => {
+	const connectMutation = useMutation({
+		mutationFn: () => connectWorker(),
+		onSuccess: async (status: ConnectionStatusDto) => {
 			queryClient.setQueryData(connectionQueryKeys.status(), status);
 			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
 		},
-		[queryClient],
-	);
-
-	const connectMutation = useMutation({ mutationFn: () => connectWorker(), onSuccess: applyStatus });
-	const disconnectMutation = useMutation({ mutationFn: () => disconnectWorker(), onSuccess: applyStatus });
-	const enableAutoConnectMutation = useMutation({ mutationFn: () => enableAutoConnect(), onSuccess: applyStatus });
-	const disableAutoConnectMutation = useMutation({ mutationFn: () => disableAutoConnect(), onSuccess: applyStatus });
+	});
+	const disconnectMutation = useMutation({
+		mutationFn: () => disconnectWorker(),
+		onSuccess: async (status: ConnectionStatusDto) => {
+			queryClient.setQueryData(connectionQueryKeys.status(), status);
+			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
+		},
+	});
+	const enableAutoConnectMutation = useMutation({
+		mutationFn: () => enableAutoConnect(),
+		onSuccess: async (status: ConnectionStatusDto) => {
+			queryClient.setQueryData(connectionQueryKeys.status(), status);
+			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
+		},
+	});
+	const disableAutoConnectMutation = useMutation({
+		mutationFn: () => disableAutoConnect(),
+		onSuccess: async (status: ConnectionStatusDto) => {
+			queryClient.setQueryData(connectionQueryKeys.status(), status);
+			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
+		},
+	});
 
 	const status = statusQuery.data;
-	const actionError = connectMutation.error ?? disconnectMutation.error ?? enableAutoConnectMutation.error ?? disableAutoConnectMutation.error;
+	const actionError =
+		connectMutation.error ?? disconnectMutation.error ?? enableAutoConnectMutation.error ?? disableAutoConnectMutation.error;
 	const isActionPending =
-		connectMutation.isPending || disconnectMutation.isPending || enableAutoConnectMutation.isPending || disableAutoConnectMutation.isPending;
+		connectMutation.isPending ||
+		disconnectMutation.isPending ||
+		enableAutoConnectMutation.isPending ||
+		disableAutoConnectMutation.isPending;
 
 	return (
 		<Container fluid={true} py="lg">
@@ -66,7 +96,7 @@ export function Dashboard() {
 				{statusQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">Loading connection status...</Text>
+						<Text c="dimmed">Loading connection status…</Text>
 					</Group>
 				) : null}
 
@@ -116,7 +146,12 @@ export function Dashboard() {
 									>
 										Disconnect
 									</Button>
-									<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={() => statusQuery.refetch()} disabled={statusQuery.isFetching}>
+									<Button
+										variant="subtle"
+										leftSection={<IconRefresh size={16} />}
+										onClick={() => statusQuery.refetch()}
+										disabled={statusQuery.isFetching}
+									>
 										Refresh
 									</Button>
 								</Group>
@@ -127,7 +162,9 @@ export function Dashboard() {
 							<Stack gap="md">
 								<Group justify="space-between" align="center">
 									<Title order={3}>Startup connection</Title>
-									<Badge color={status.autoConnectOnStart ? "green" : "gray"}>{status.autoConnectOnStart ? "Enabled" : "Disabled"}</Badge>
+									<Badge color={status.autoConnectOnStart ? "green" : "gray"}>
+										{status.autoConnectOnStart ? "Enabled" : "Disabled"}
+									</Badge>
 								</Group>
 								<Text c="dimmed">Auto-connect stays disabled by default after binding until you explicitly enable it.</Text>
 								<Group>

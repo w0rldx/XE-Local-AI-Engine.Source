@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import type { ChatFeedbackRating, ChatMessageFeedback } from "@/features/chat/models/ChatModels";
 
+/* eslint-disable react-doctor/no-derived-state, react-doctor/no-event-handler */
+
 interface MessageFeedbackControlProps {
 	messageId: string;
 	feedback?: ChatMessageFeedback;
@@ -46,7 +48,15 @@ export function MessageFeedbackControl({ messageId, feedback, pending = false, o
 	const downActive = feedback?.rating === "down";
 
 	return (
-		<Popover opened={opened} onChange={setOpened} position="top" withArrow={true} trapFocus={true} width={280} data-testid={`message-feedback-${messageId}`}>
+		<Popover
+			opened={opened}
+			onChange={setOpened}
+			position="top"
+			withArrow={true}
+			trapFocus={true}
+			width={280}
+			data-testid={`message-feedback-${messageId}`}
+		>
 			<Popover.Target>
 				<Group gap={2} align="center">
 					<Tooltip label={t("pages.chat.feedback.up", "Good response")} withArrow={true}>

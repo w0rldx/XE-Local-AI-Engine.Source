@@ -22,7 +22,8 @@ public sealed record NodeChatStreamRequest(
     Guid? MessageId = null,
     Guid? RequestId = null,
     string? Model = null,
-    bool UseLocalTools = false);
+    bool UseLocalTools = false,
+    string? ReasoningEffort = null);
 
 public sealed record ChatStreamEvent(
     string Type,

@@ -2,6 +2,8 @@ import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 
 export type StreamWatchdogCategory = "no-first-chunk" | "inter-chunk-stall";
 
+/* eslint-disable react-doctor/async-await-in-loop */
+
 /**
  * Raised when the client-side watchdog gives up on a stalled stream. The category distinguishes a stream that
  * never produced a first chunk from one that went silent mid-flight so the UI can label the failure.
@@ -117,7 +119,7 @@ export function guardNodeChatStream(
 				}
 
 				// Flush any trailing buffered events whose preceding gap never filled (best-effort, ordered).
-				for (const sequence of [...buffered.keys()].sort((left, right) => left - right)) {
+				for (const sequence of [...buffered.keys()].toSorted((left, right) => left - right)) {
 					const pending = buffered.get(sequence);
 					if (pending) {
 						yield pending.value;

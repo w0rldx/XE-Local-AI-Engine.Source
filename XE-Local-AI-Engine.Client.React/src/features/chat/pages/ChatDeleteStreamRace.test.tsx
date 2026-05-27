@@ -26,7 +26,6 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 		setConversationArchived: vi.fn(),
 		branchConversation: vi.fn(),
 		listMessageRevisions: vi.fn(),
-		getMessageFeedback: vi.fn(),
 		setMessageFeedback: vi.fn(),
 		createConversation: vi.fn(),
 		cancelMessage: vi.fn(),

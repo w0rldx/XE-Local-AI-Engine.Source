@@ -4,6 +4,8 @@ import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
+/* eslint-disable react-doctor/async-await-in-loop */
+
 const chatHubPath = "chat/hub";
 
 // SignalR's withAutomaticReconnect retries dropped connections on this schedule but

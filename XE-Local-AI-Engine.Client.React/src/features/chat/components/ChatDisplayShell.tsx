@@ -8,6 +8,10 @@ import { ConversationList } from "@/features/chat/components/ConversationList";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
+const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
+
+/* eslint-disable react-doctor/no-inline-exhaustive-style */
+
 export function ChatDisplayShell({
 	conversations,
 	selectedConversationId,
@@ -18,7 +22,7 @@ export function ChatDisplayShell({
 	toolsEnabled = false,
 	contextUsage,
 	streamingMessage,
-	timelineEntries = [],
+	timelineEntries = EMPTY_TIMELINE_ENTRIES,
 	capabilities = defaultChatUiCapabilities,
 	inputStatus,
 	conversationSearchQuery,
@@ -47,15 +51,18 @@ export function ChatDisplayShell({
 	onSubmitFeedback,
 	conversationListCollapsed = false,
 	disabledNotice,
+	isLoadingMessages = false,
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
 
 	return (
 		<Stack gap="md" h="100%" mih={620}>
-			<Alert color="blue" variant="light" icon={<IconInfoCircle size={16} />} data-testid="chat-capability-notice">
-				{disabledNotice ?? t("pages.chat.phase41Notice", "Display preview only. Sending and model changes are disabled until the local chat adapter is wired.")}
-			</Alert>
+			{disabledNotice ? (
+				<Alert color="blue" variant="light" icon={<IconInfoCircle size={16} />} data-testid="chat-capability-notice">
+					{disabledNotice}
+				</Alert>
+			) : null}
 			<div
 				style={{
 					position: "relative",
@@ -90,48 +97,56 @@ export function ChatDisplayShell({
 					withBorder={true}
 					p="md"
 					h="100%"
-					style={{ display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, borderRadius: "0 var(--mantine-radius-md) var(--mantine-radius-md) 0" }}
+					style={{
+						display: "flex",
+						flexDirection: "column",
+						minHeight: 0,
+						minWidth: 0,
+						borderRadius: "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
+					}}
 				>
 					<Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
-							<Stack gap={4}>
-								<Text fw={700} data-testid="chat-window-title" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
-									{conversation?.title?.trim() || t("pages.chat.windowTitle", "Local chat")}
-								</Text>
-								<Text size="xs" c="dimmed">
-									{t("pages.chat.localPreviewSubtitle", "Local node display shell — safe mock data")}
-								</Text>
-							</Stack>
-							<ChatMessageList
-								conversation={conversation}
-								streamingMessage={streamingMessage}
-								timelineEntries={timelineEntries}
-								onRegenerate={onRegenerate}
-								onBranch={onBranchFromMessage}
-								activeRevisionByGroup={activeRevisionByGroup}
-								onSelectRevision={onSelectRevision}
-								showFeedbackControls={capabilities.showConversationFeedbackControls}
-								feedbackByMessageId={feedbackByMessageId}
-								pendingFeedbackMessageId={pendingFeedbackMessageId}
-								onSubmitFeedback={onSubmitFeedback}
-							/>
-							<ChatInputArea
-								availableReasoningEfforts={availableReasoningEfforts}
-								capabilities={capabilities}
-								contextUsage={contextUsage}
-								disabled={inputStatus.chatInputDisabled}
-								isSending={inputStatus.isSending}
-								modelOptions={modelOptions}
-								modelSelectorDisabled={inputStatus.modelSelectorDisabled}
-								sendDisabled={inputStatus.sendDisabled}
-								selectedModel={selectedModel}
-								reasoningEffort={reasoningEffort}
-								toolsEnabled={toolsEnabled}
-								onCancel={onCancel}
-								onModelChange={onModelChange}
-								onReasoningEffortChange={onReasoningEffortChange}
-								onToggleTools={onToggleTools}
-								onSend={onSend}
-							/>
+						<Stack gap={4}>
+							<Text fw={700} data-testid="chat-window-title" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
+								{conversation?.title?.trim() || t("pages.chat.windowTitle", "Local chat")}
+							</Text>
+							<Text size="xs" c="dimmed">
+								{t("pages.chat.localPreviewSubtitle", "Local node display shell — safe mock data")}
+							</Text>
+						</Stack>
+						<ChatMessageList
+							conversation={conversation}
+							streamingMessage={streamingMessage}
+							timelineEntries={timelineEntries}
+							onRegenerate={onRegenerate}
+							onBranch={onBranchFromMessage}
+							activeRevisionByGroup={activeRevisionByGroup}
+							onSelectRevision={onSelectRevision}
+							showFeedbackControls={capabilities.showConversationFeedbackControls}
+							feedbackByMessageId={feedbackByMessageId}
+							pendingFeedbackMessageId={pendingFeedbackMessageId}
+							onSubmitFeedback={onSubmitFeedback}
+							isLoadingMessages={isLoadingMessages}
+							reasoningEffort={reasoningEffort}
+						/>
+						<ChatInputArea
+							availableReasoningEfforts={availableReasoningEfforts}
+							capabilities={capabilities}
+							contextUsage={contextUsage}
+							disabled={inputStatus.chatInputDisabled}
+							isSending={inputStatus.isSending}
+							modelOptions={modelOptions}
+							modelSelectorDisabled={inputStatus.modelSelectorDisabled}
+							sendDisabled={inputStatus.sendDisabled}
+							selectedModel={selectedModel}
+							reasoningEffort={reasoningEffort}
+							toolsEnabled={toolsEnabled}
+							onCancel={onCancel}
+							onModelChange={onModelChange}
+							onReasoningEffortChange={onReasoningEffortChange}
+							onToggleTools={onToggleTools}
+							onSend={onSend}
+						/>
 					</Stack>
 				</Paper>
 			</div>

@@ -82,6 +82,10 @@ export interface NodeChatMessageResponseDto {
 	reasoningTokens?: number | null;
 	parentMessageId?: string | null;
 	variantGroupId?: string | null;
+	// Node-local feedback carried on the message (Phase 5.3): rating "up"|"down" (null = no feedback recorded)
+	// plus an optional free-text comment. Presence is derived from feedbackRating != null (no hasFeedback flag).
+	feedbackRating?: string | null;
+	feedbackComment?: string | null;
 }
 
 export interface CancelNodeChatMessageRequestDto {
@@ -112,6 +116,8 @@ export interface NodeChatStreamRequestDto {
 	requestId?: string;
 	model?: string;
 	useLocalTools?: boolean;
+	// Reasoning budget for the turn ("none" | "low" | "medium" | "high"); null/absent lets the model default.
+	reasoningEffort?: string;
 }
 
 export interface NodeChatStreamEventDto {
@@ -303,26 +309,6 @@ export async function listMessageRevisions(
 	try {
 		const { data } = await axiosInstance.get<NodeChatMessageRevisionsResponseDto>(
 			buildLocalApiUrl(`chat/conversations/${conversationId}/messages/${messageId}/revisions`),
-			config,
-		);
-		return data;
-	} catch (error) {
-		if (isAxiosError(error) && error.response?.status === 404) {
-			return null;
-		}
-		throw error;
-	}
-}
-
-/** Reads node-local feedback for a message. Returns null when no feedback has been recorded (404). */
-export async function getMessageFeedback(
-	conversationId: string,
-	messageId: string,
-	config?: AxiosRequestConfig,
-): Promise<NodeChatMessageFeedbackResponseDto | null> {
-	try {
-		const { data } = await axiosInstance.get<NodeChatMessageFeedbackResponseDto>(
-			buildLocalApiUrl(`chat/conversations/${conversationId}/messages/${messageId}/feedback`),
 			config,
 		);
 		return data;
