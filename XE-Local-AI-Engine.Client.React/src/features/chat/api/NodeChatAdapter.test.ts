@@ -219,15 +219,15 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 	it("streams a regenerate over RegenerateMessage and yields the server-minted variant", async () => {
 		const iterator = nodeChatAdapter
-			.regenerateMessage("conversation-1", "assistant-1", "high", new AbortController().signal)
+			.regenerateMessage("conversation-1", "assistant-1", "high", true, new AbortController().signal)
 			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
 
 		expect(connectionMock.state.lastMethod).toBe("RegenerateMessage");
-		// Hub args are (conversationId, originalMessageId, reasoningEffort): the current reasoning selection
-		// must travel as the third positional arg so regenerate honors it like a send.
-		expect(connectionMock.state.lastArgs).toEqual(["conversation-1", "assistant-1", "high"]);
+		// Hub args are (conversationId, originalMessageId, reasoningEffort, useLocalTools): the current reasoning
+		// and local-tools selections both travel as positional args so regenerate honors them like a send.
+		expect(connectionMock.state.lastArgs).toEqual(["conversation-1", "assistant-1", "high", true]);
 		expect(connectionMock.state.lastPayload).toBe("conversation-1");
 
 		// The server mints a fresh variant id + requestId; the adapter surfaces it unchanged on the fresh stream.
@@ -238,7 +238,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 	it("resumes a regenerate via ResumeMessage using the invocation id latched from the first event", async () => {
 		const iterator = nodeChatAdapter
-			.regenerateMessage("conversation-1", "assistant-1", "medium", new AbortController().signal)
+			.regenerateMessage("conversation-1", "assistant-1", "medium", false, new AbortController().signal)
 			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();
