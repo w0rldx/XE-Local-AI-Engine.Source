@@ -42,6 +42,7 @@
 		"nodeSettings": "Node-Einstellungen",
 		"cloudSettings": "Cloud-Einstellungen",
 		"models": "Modelle",
+		"tools": "Tools",
 		"manager": "Manager",
 		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
@@ -73,6 +74,20 @@
 		}
 	},
 	"pages": {
+		"about": {
+			"title": "Über",
+			"applicationTab": "Anwendung",
+			"licensesTab": "Lizenzen",
+			"version": "Version",
+			"website": "Webseite",
+			"repository": "Repository",
+			"licensesIntro": "Drittanbieter-Pakete, die mit dieser Anwendung gebündelt sind.",
+			"searchPackages": "Pakete suchen",
+			"packageName": "Paket",
+			"packageVersion": "Version",
+			"packageLicense": "Lizenz",
+			"noPackagesFound": "Keine Pakete gefunden."
+		},
 		"chat": {
 			"windowTitle": "Chatfenster",
 			"lockedState": "Diese Unterhaltung ist gesperrt. Entsperre sie, um Nachrichten anzuzeigen.",

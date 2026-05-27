@@ -26,8 +26,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	chat: {
 		localRuntime: true,
 		localModelManagement: true,
-		// infra wired end-to-end; kept off until a local tool catalog ships — see Plans/chat-capability-gap-rc.md D6
-		localTools: false,
+		// catalog ships with RC (time/date + calculator); toggle OFF by default, user-toggleable — see Plans/2026-05-27-local-tools-rc-team-plan.md
+		localTools: true,
 		toolApprovals: false,
 		conversationFeedback: true,
 		// server-side SQLite is the source of truth; node has no client Dexie/offline queue — see Plans/chat-capability-gap-rc.md E (N/A-LOCAL)
@@ -56,6 +56,8 @@ export const nodeRoutePaths = {
 	models: "/models",
 	manager: "/manager",
 	invocations: "/invocations",
+	// local tools catalog page — extension seam: MCP tools will populate the same list later
+	tools: "/tools",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;

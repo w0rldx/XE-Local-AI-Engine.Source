@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -131,6 +132,10 @@ public sealed class InvocationRunner : IInvocationRunner
             var definition = BuildInvocationDefinition(package, resolvedModel);
             await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
 
+            // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
+            // from the earlier FunctionCallContent with the matching CallId.
+            var pendingLocalToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
             await foreach (var update in agentContext.Agent.RunStreamingAsync(agentContext.SeedMessages, null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
             {
                 var textChunk = update.Text;
@@ -146,6 +151,51 @@ public sealed class InvocationRunner : IInvocationRunner
                         usageSnapshot.OutputTokens,
                         usageSnapshot.ReasoningTokens,
                         usageSnapshot.TotalTokens);
+                }
+
+                // Local (ClientSide) tools execute via FunctionInvokingChatClient and never reach
+                // ExecuteApiToolCallAsync, so their lifecycle events would otherwise be lost.
+                // Detect FunctionCallContent / FunctionResultContent in streaming updates and
+                // fire the matching lifecycle phases so the SSE stream carries tool-call events.
+                if (update.Contents is { Count: > 0 })
+                {
+                    foreach (var content in update.Contents)
+                    {
+                        if (content is FunctionCallContent functionCall)
+                        {
+                            var callId = functionCall.CallId ?? functionCall.Name;
+                            pendingLocalToolCallNames[callId] = functionCall.Name;
+
+                            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                            {
+                                InvocationId = package.InvocationId,
+                                ToolCallId = callId,
+                                ToolName = functionCall.Name,
+                                Phase = ToolCallLifecyclePhase.Requested,
+                                Arguments = functionCall.Arguments is not null
+                                    ? JsonSerializer.Serialize(functionCall.Arguments)
+                                    : null,
+                                RequiresApproval = false
+                            }).ConfigureAwait(false);
+                        }
+                        else if (content is FunctionResultContent functionResult)
+                        {
+                            var resultCallId = functionResult.CallId ?? string.Empty;
+                            var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
+                                ? name
+                                : resultCallId;
+
+                            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                            {
+                                InvocationId = package.InvocationId,
+                                ToolCallId = resultCallId,
+                                ToolName = toolName,
+                                Phase = ToolCallLifecyclePhase.Completed,
+                                Result = functionResult.Result?.ToString(),
+                                IsError = functionResult.Exception is not null
+                            }).ConfigureAwait(false);
+                        }
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(thinkingChunk))
@@ -631,11 +681,19 @@ public sealed class InvocationRunner : IInvocationRunner
 
     private IReadOnlyList<AITool> BuildInvocationTools(Models.RuntimePackage package)
     {
-        return package.AllowedTools
-                      .Where(static tool => tool.Location == ToolLocation.ApiSide)
-                      .Select(tool => InvocationToolBridge.Create(tool.Name,
-                          (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)))
-                      .ToList();
+        // The runtime package only carries the OFFER list. Api-side tools get a real bridge that round-trips to the
+        // platform; client-local (catalog) tools get a name-only placeholder, and the invocation factory swaps it for
+        // the matching executable from IAgentToolRegistry before the agent runs.
+        return
+        [
+            .. package.AllowedTools.Select(tool => tool.Location switch
+            {
+                ToolLocation.ApiSide => InvocationToolBridge.Create(tool.Name,
+                    (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
+                ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name),
+                _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
+            })
+        ];
     }
 
     private static ChatRole MapRole(MessageRole role)

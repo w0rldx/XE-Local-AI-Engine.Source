@@ -18,6 +18,7 @@ public sealed class NodeChatStreamService(
     IWorkerEventDispatcher eventDispatcher,
     IOptions<LocalChatAgentOptions> localChatOptions,
     INodeChatStreamCancellationRegistry cancellationRegistry,
+    ILocalToolOfferProvider localToolOfferProvider,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -116,10 +117,10 @@ public sealed class NodeChatStreamService(
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
-        // tool engine enabled. There is no local tool catalog yet (all beta tools are non-approval, none defined),
-        // so the offered set is empty today; the flag wiring keeps the gate in place for when one lands.
+        // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
+        // list; the invocation factory resolves the matching executables from the registry by name.
         var offerTools = request.UseLocalTools && localChatOptions.Value.EnableTools;
-        IReadOnlyList<AllowedToolDto>? allowedTools = offerTools ? [] : null;
+        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : (IReadOnlyList<AllowedToolDto>?)null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,

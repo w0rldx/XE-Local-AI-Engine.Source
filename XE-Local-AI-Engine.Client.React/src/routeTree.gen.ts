@@ -13,6 +13,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
 import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
@@ -39,6 +40,11 @@ const LayoutRoute = LayoutRouteImport.update({
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutToolsRoute = LayoutToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutNodeSettingsRoute = LayoutNodeSettingsRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
+  '/tools': typeof LayoutToolsRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
+  '/tools': typeof LayoutToolsRoute
   '/': typeof LayoutIndexRoute
 }
 export interface FileRoutesById {
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/_layout/models': typeof LayoutModelsRoute
   '/_layout/node-binding': typeof LayoutNodeBindingRoute
   '/_layout/node-settings': typeof LayoutNodeSettingsRoute
+  '/_layout/tools': typeof LayoutToolsRoute
   '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/node-binding'
     | '/node-settings'
+    | '/tools'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/node-binding'
     | '/node-settings'
+    | '/tools'
     | '/'
   id:
     | '__root__'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/_layout/models'
     | '/_layout/node-binding'
     | '/_layout/node-settings'
+    | '/_layout/tools'
     | '/_layout/'
   fileRoutesById: FileRoutesById
 }
@@ -200,6 +212,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/tools': {
+      id: '/_layout/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof LayoutToolsRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/node-settings': {
@@ -270,6 +289,7 @@ interface LayoutRouteChildren {
   LayoutModelsRoute: typeof LayoutModelsRoute
   LayoutNodeBindingRoute: typeof LayoutNodeBindingRoute
   LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
+  LayoutToolsRoute: typeof LayoutToolsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
@@ -282,6 +302,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutModelsRoute: LayoutModelsRoute,
   LayoutNodeBindingRoute: LayoutNodeBindingRoute,
   LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,
+  LayoutToolsRoute: LayoutToolsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }
 

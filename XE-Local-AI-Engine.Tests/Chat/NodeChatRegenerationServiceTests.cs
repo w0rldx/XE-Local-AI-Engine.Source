@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -51,6 +52,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -86,6 +88,147 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenToolLifecycleReported_StreamsToolCallEvents()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-tool-lifecycle.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        // Seed a completed turn: user question + a completed assistant answer (the "original" to regenerate).
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is the weather?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "cloudy", Model: "model-x")).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenToolEmittingRunner(dispatcher);
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        // Regenerate streams the tool-call lifecycle symmetric with the send path: requested then completed.
+        var requested = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallRequested);
+        AssertEx.Equal("call-1", requested.ToolCallId);
+        AssertEx.Equal("weather", requested.ToolName);
+        AssertEx.Equal("{\"city\":\"berlin\"}", requested.Arguments);
+        AssertEx.Equal(false, requested.RequiresApproval);
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, requested.Status);
+
+        var completed = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallCompleted);
+        AssertEx.Equal("call-1", completed.ToolCallId);
+        AssertEx.Equal("weather", completed.ToolName);
+        AssertEx.Equal("sunny", completed.Result);
+        AssertEx.Equal(false, completed.IsError);
+
+        var requestedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallRequested);
+        var completedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallCompleted);
+        AssertEx.True(requestedIndex < completedIndex, "tool-call-requested must precede tool-call-completed.");
+        AssertEx.True(events[requestedIndex].Sequence < events[completedIndex].Sequence, "Sequence must be monotonic.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenLocalToolsEnabled_OffersCatalogToolsInRuntimePackage()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-offer-tools.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "noon", Model: "model-x")).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(
+            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            capturingRunner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.Equal(2, capturingRunner.LastAllowedTools.Count);
+        AssertEx.Contains(capturingRunner.LastAllowedTools, tool => tool.Name == "GetCurrentTime");
+        AssertEx.Contains(capturingRunner.LastAllowedTools, tool => tool.Name == "Calculate");
+        foreach (var tool in capturingRunner.LastAllowedTools)
+        {
+            AssertEx.Equal(ToolLocation.ClientLocal, tool.Location);
+            AssertEx.NotNullOrEmpty(tool.ParameterSchema);
+        }
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenLocalToolsDisabled_OffersNoTools()
+    {
+        await using var provider = await BuildProviderAsync("regeneration-no-offer-tools.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "noon", Model: "model-x")).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var capturingRunner = new RegenContextCapturingRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(
+            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            capturingRunner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: false).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.Empty(capturingRunner.LastAllowedTools);
+    }
+
+    [Test]
     public async Task RegenerateAsync_OfVariant_ExcludesAllSiblingAssistantAnswersFromContext()
     {
         await using var provider = await BuildProviderAsync("regeneration-variant-context.sqlite").ConfigureAwait(false);
@@ -111,6 +254,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -168,6 +312,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -204,6 +349,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -236,6 +382,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -267,6 +414,25 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
 
         return provider;
+    }
+
+    private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
+    {
+        var provider = Substitute.For<ILocalToolOfferProvider>();
+        provider.GetOfferedTools().Returns(tools);
+        return provider;
+    }
+
+    private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
+    {
+        return new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ClientLocal,
+            ParameterSchema = parameterSchema,
+            RequiresApproval = false
+        };
     }
 
     private sealed class RegenCompletingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
@@ -316,10 +482,68 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // current reasoning selection threaded from the hub.
         public string? LastReasoningEffort { get; private set; }
 
+        // The offer list carried on the runtime package; the test asserts the local tool catalog reaches the
+        // runtime package on regenerate only when the client opted in.
+        public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
+
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             LastContext = context.Package.ConversationContext;
             LastReasoningEffort = context.Package.ReasoningEffort;
+            LastAllowedTools = context.Package.AllowedTools;
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    private sealed class RegenToolEmittingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            {
+                InvocationId = context.Package.InvocationId,
+                ToolCallId = "call-1",
+                ToolName = "weather",
+                Phase = ToolCallLifecyclePhase.Requested,
+                Arguments = "{\"city\":\"berlin\"}",
+                RequiresApproval = false
+            }).ConfigureAwait(false);
+            await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+            {
+                InvocationId = context.Package.InvocationId,
+                ToolCallId = "call-1",
+                ToolName = "weather",
+                Phase = ToolCallLifecyclePhase.Completed,
+                Result = "sunny",
+                IsError = false
+            }).ConfigureAwait(false);
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }

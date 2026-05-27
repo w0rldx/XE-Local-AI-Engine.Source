@@ -17,6 +17,7 @@ public sealed class FakeOllamaState
         ModelInfo = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
         RunningModels = [];
         ChatScript = options.ChatTokenScript;
+        ToolCallScript = options.ToolCallScript;
         EmbeddingDimensions = options.EmbeddingDimensions > 0 ? options.EmbeddingDimensions : 384;
         ControlEndpointToken = options.ControlEndpointToken;
     }
@@ -30,6 +31,13 @@ public sealed class FakeOllamaState
     public IReadOnlyList<FakeOllamaRunningModel> RunningModels { get; set; }
 
     public Func<ChatRequest, IAsyncEnumerable<string>>? ChatScript { get; set; }
+
+    /// <summary>
+    ///     When set, checked before <see cref="ChatScript" /> on every chat request.
+    ///     Return a <see cref="FakeOllamaToolCall" /> to emit an Ollama tool-call wire chunk;
+    ///     return <c>null</c> to fall through to the normal text path.
+    /// </summary>
+    public Func<IReadOnlyList<Message>, FakeOllamaToolCall?>? ToolCallScript { get; set; }
 
     public int EmbeddingDimensions { get; set; }
 

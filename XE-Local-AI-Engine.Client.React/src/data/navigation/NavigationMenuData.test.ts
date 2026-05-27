@@ -15,6 +15,7 @@ describe("navigationLinks", () => {
 			["models", nodeRoutePaths.models],
 			["manager", nodeRoutePaths.manager],
 			["invocations", nodeRoutePaths.invocations],
+			["tools", nodeRoutePaths.tools],
 		]);
 	});
 });

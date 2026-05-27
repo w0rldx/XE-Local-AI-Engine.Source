@@ -284,6 +284,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
+        builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
         builder.Services.AddSingleton<NodeChatPersistenceWriter>();
         builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
         builder.Services.AddSingleton<INodeChatInvocationPump, NodeChatInvocationPump>();

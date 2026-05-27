@@ -58,15 +58,34 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
-    public async Task CreateAsync_WithNonEmptyTools_IgnoresToolsAndReturnsContext()
+    public async Task CreateAsync_WithOfferedNameInRegistry_EnablesToolsAndResolvesExecutable()
     {
+        var registry = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [InvocationToolBridge.CreateOfferPlaceholder("Calculate")],
+            []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient, registry);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        AssertEx.NotNull(context.Agent);
+        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithOfferedNameNotInRegistry_SkipsToolAndDisablesTools()
+    {
+        var registry = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));
         var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [InvocationToolBridge.Create("echo", (input, _) => Task.FromResult(input))],
             []);
 
         using var chatClient = new FakeChatClient();
-        var sut = CreateSut(chatClient);
+        var sut = CreateSut(chatClient, registry);
 
         await using var context = await sut.CreateAsync(definition);
 
@@ -94,13 +113,38 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal("second", context.SeedMessages[2].Text);
     }
 
-    private static InvocationAgentFactory CreateSut(FakeChatClient chatClient)
+    private static InvocationAgentFactory CreateSut(FakeChatClient chatClient, IAgentToolRegistry? toolRegistry = null)
     {
         return new InvocationAgentFactory(chatClient,
             Options.Create(new InvocationAgentOptions()),
             NullLogger<InvocationAgentFactory>.Instance,
             NullLoggerFactory.Instance,
-            FakeServiceProvider.Instance);
+            FakeServiceProvider.Instance,
+            toolRegistry ?? new FakeToolRegistry());
+    }
+
+    private sealed class FakeToolRegistry : IAgentToolRegistry
+    {
+        private readonly IReadOnlyList<AITool> _tools;
+
+        public FakeToolRegistry(params AITool[] tools)
+        {
+            _tools = tools;
+        }
+
+        public IReadOnlyList<AITool> GetLocalChatTools()
+        {
+            return _tools;
+        }
+
+        public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()
+        {
+            return
+            [
+                .. _tools.OfType<AIFunction>()
+                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), false))
+            ];
+        }
     }
 
     private sealed class FakeServiceProvider : IServiceProvider

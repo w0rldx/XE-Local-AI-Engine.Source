@@ -11,6 +11,7 @@ import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBa
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
 import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
+import { AboutDialogButton } from "@/features/about/components/AboutDialogButton/AboutDialogButton";
 import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Index";
 
 export function HeaderBar() {
@@ -49,6 +50,7 @@ export function HeaderBar() {
 				<div className="hidden md:flex flex-row items-center gap-2">
 					<ThemeModeToggle />
 					<ThemeConfiguratorDialogButton />
+					<AboutDialogButton />
 					<LanguageMenu />
 					<Button variant="subtle" leftSection={<IconLogout size={16} />} loading={logoutPending} onClick={handleLogout}>
 						Logout

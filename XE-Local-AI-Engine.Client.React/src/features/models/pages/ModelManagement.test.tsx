@@ -2,9 +2,9 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiMock, confirmMock } = vi.hoisted(() => ({
 	apiMock: {
@@ -81,6 +81,10 @@ describe("ModelManagement", () => {
 		confirmMock.mockResolvedValue(true);
 	});
 
+	afterEach(() => {
+		cleanup();
+	});
+
 	it("renders local models and details", async () => {
 		renderWithProviders(<ModelManagement />);
 
@@ -119,5 +123,16 @@ describe("ModelManagement", () => {
 
 		expect(await screen.findByText("Local model provider is unavailable.")).toBeTruthy();
 		expect(screen.getByText("Ollama offline")).toBeTruthy();
+	});
+
+	it("shows the license preview and opens the full license dialog", async () => {
+		renderWithProviders(<ModelManagement />);
+
+		const expandButton = await screen.findByText("Show full");
+		fireEvent.click(expandButton);
+
+		const dialog = await screen.findByRole("dialog");
+		expect(within(dialog).getByText("Model license")).toBeTruthy();
+		expect(within(dialog).getByText("fake")).toBeTruthy();
 	});
 });
