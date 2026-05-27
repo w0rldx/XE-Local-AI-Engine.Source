@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
@@ -21,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 
@@ -99,6 +101,14 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     /// <summary>The bound loopback address (e.g. <c>http://127.0.0.1:{port}</c>) resolved after the host starts.</summary>
     public string ServerAddress { get; private set; } = string.Empty;
 
+    /// <summary>
+    ///     Mutable FakeOllama state; tests may set <c>ToolCallScript</c> (or <c>ChatScript</c>)
+    ///     before sending a message to control what the fake model returns.  Always reset to
+    ///     <c>null</c> in a <c>[After(Test)]</c> hook (or at the start of the test) so the shared
+    ///     <see cref="SharedType.PerTestSession" /> instance does not leak scripts across tests.
+    /// </summary>
+    public FakeOllamaState FakeOllamaState => _fakeOllamaServer.State;
+
     public new async ValueTask DisposeAsync()
     {
         await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
@@ -137,6 +147,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         {
             throw new InvalidOperationException("Kestrel server address was not resolved during XE node E2E factory initialization.");
         }
+
+        // Diagnostic: verify the React bundle baked in the correct API URL.
+        var bundlePortInDist = FindBundledApiUrl(_webRoot);
+        await Console.Out.WriteLineAsync(
+            $"[FACTORY-DIAG] port={_port} ServerAddress={ServerAddress} webRoot={_webRoot} bundledApiUrl={bundlePortInDist}")
+            .ConfigureAwait(false);
 
         // Seed the single admin so the SPA presents /login (not the one-time /setup screen) and
         // browser tests can authenticate with a known password. Identity migrations + the Admin role
@@ -239,16 +255,49 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<ILocalModelProvider>();
             services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer.BaseAddress));
             services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
-            services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILocalModelProvider>().CreateChatClient(new LocalModelSelection
-            {
-                ModelName = "qwen3.5:0.8b",
-                ProviderName = OllamaLocalModelProvider.OllamaProviderName
-            }));
+            // Register the base IChatClient pointing directly at FakeOllama, then re-apply the full
+            // agent pipeline decoration (ToolInvocationObservabilityChatClient + UseFunctionInvocation)
+            // so tool-call lifecycle events reach the SignalR stream (chat-tool-call-group in the UI).
+            var fakeOllamaBase = _fakeOllamaServer.BaseAddress;
+            services.AddSingleton<IChatClient>(_ => new OllamaApiClient(fakeOllamaBase, "qwen3.5:0.8b"));
+            services.DecorateChatClientPipeline();
 
             services.RemoveAll<IHttpClientFactory>();
             services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());
         });
 
         base.ConfigureWebHost(builder);
+    }
+
+    /// <summary>
+    ///     Scans the first JS asset in the web root for a baked <c>127.0.0.1:{port}</c> pattern,
+    ///     returning the matched URL or <c>"(not found)"</c> for diagnostics.
+    /// </summary>
+    private static string FindBundledApiUrl(string webRoot)
+    {
+        try
+        {
+            var assetsDir = Path.Combine(webRoot, "assets");
+            if (!Directory.Exists(assetsDir))
+            {
+                return "(no assets dir)";
+            }
+
+            foreach (var jsFile in Directory.EnumerateFiles(assetsDir, "*.js"))
+            {
+                var content = File.ReadAllText(jsFile);
+                var match = System.Text.RegularExpressions.Regex.Match(content, @"127\.0\.0\.1:\d+");
+                if (match.Success)
+                {
+                    return match.Value;
+                }
+            }
+
+            return "(no 127.0.0.1 match in assets)";
+        }
+        catch (Exception ex)
+        {
+            return $"(error: {ex.Message})";
+        }
     }
 }

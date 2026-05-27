@@ -9,6 +9,7 @@ import {
 	IconPlugConnected,
 	IconServerCog,
 	IconSettings,
+	IconTools,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
@@ -79,5 +80,11 @@ export const navigationLinks: INavigationLink[] = [
 		icon: IconListDetails,
 		translationKey: "navigation.invocations",
 		to: nodeRoutePaths.invocations,
+	},
+	{
+		id: "tools",
+		icon: IconTools,
+		translationKey: "navigation.tools",
+		to: nodeRoutePaths.tools,
 	},
 ];

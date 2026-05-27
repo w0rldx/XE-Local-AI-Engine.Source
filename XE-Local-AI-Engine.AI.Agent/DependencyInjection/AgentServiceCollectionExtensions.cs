@@ -33,15 +33,34 @@ public static class AgentServiceCollectionExtensions
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
 
         // Requires a prior IChatClient registration in the host composition root.
+        DecorateChatClientPipeline(services);
+
+        _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
+        _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();
+        _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
+        return services;
+    }
+
+    /// <summary>
+    ///     Decorates the registered <see cref="IChatClient" /> with the agent pipeline:
+    ///     <see cref="ToolInvocationObservabilityChatClient" /> (tool-call lifecycle events) +
+    ///     <c>UseFunctionInvocation</c> (automatic tool execution).
+    ///     <para>
+    ///         Exposed as a public method so test harnesses that replace the base
+    ///         <see cref="IChatClient" /> with a fake (e.g. FakeOllama) can reapply
+    ///         the full pipeline decoration after their <c>RemoveAll</c> + <c>AddSingleton</c>.
+    ///     </para>
+    /// </summary>
+    public static IServiceCollection DecorateChatClientPipeline(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
         _ = services.Decorate<IChatClient>((inner, serviceProvider) =>
             inner.AsBuilder()
                  .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                  .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>())
                  .Build());
 
-        _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
-        _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();
-        _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
         return services;
     }
 }

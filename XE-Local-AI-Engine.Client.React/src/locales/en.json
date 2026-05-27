@@ -42,6 +42,7 @@
 		"nodeSettings": "Node Settings",
 		"cloudSettings": "Cloud Settings",
 		"models": "Models",
+		"tools": "Tools",
 		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
@@ -73,6 +74,20 @@
 		}
 	},
 	"pages": {
+		"about": {
+			"title": "About",
+			"applicationTab": "Application",
+			"licensesTab": "Licenses",
+			"version": "Version",
+			"website": "Website",
+			"repository": "Repository",
+			"licensesIntro": "Third-party packages bundled with this application.",
+			"searchPackages": "Search packages",
+			"packageName": "Package",
+			"packageVersion": "Version",
+			"packageLicense": "License",
+			"noPackagesFound": "No packages found."
+		},
 		"chat": {
 			"windowTitle": "Chat window",
 			"lockedState": "This conversation is locked. Unlock it to view messages.",

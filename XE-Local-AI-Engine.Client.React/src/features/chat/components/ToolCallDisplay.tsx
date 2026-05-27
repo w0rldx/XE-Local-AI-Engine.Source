@@ -117,7 +117,7 @@ export function ChatActivityTimeline({ entries }: ChatActivityTimelineProps) {
 	}
 
 	return (
-		<Paper withBorder={true} p="sm">
+		<Paper withBorder={true} p="sm" data-testid="chat-activity-timeline">
 			<Stack gap="xs">
 				<Group justify="space-between">
 					<Text fw={600} size="sm">
@@ -128,7 +128,7 @@ export function ChatActivityTimeline({ entries }: ChatActivityTimelineProps) {
 					</Badge>
 				</Group>
 				{entries.map((entry) => (
-					<Paper key={entry.id} p="xs" withBorder={true}>
+					<Paper key={entry.id} p="xs" withBorder={true} data-testid={`chat-activity-entry-${entry.toolName ?? entry.id}`}>
 						<Stack gap={4}>
 							<Badge color={entry.type === "Error" || entry.type === "WorkflowStepFailed" ? "red" : "teal"} variant="light" w="fit-content">
 								{entry.type}

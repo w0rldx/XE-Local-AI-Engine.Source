@@ -25,6 +25,7 @@ public sealed class NodeChatRegenerationService(
     IWorkerEventDispatcher eventDispatcher,
     IOptions<LocalChatAgentOptions> localChatOptions,
     INodeChatStreamCancellationRegistry cancellationRegistry,
+    ILocalToolOfferProvider localToolOfferProvider,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -99,8 +100,9 @@ public sealed class NodeChatRegenerationService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Two producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync
-            // and the delta/terminal emits in PumpInvocationStatesAsync. SingleWriter must be false.
+            // Three producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync,
+            // the delta/terminal emits in PumpInvocationStatesAsync, and the tool-call lifecycle emits in
+            // OnToolCallLifecycleChanged. SingleWriter must be false.
             SingleWriter = false
         });
 
@@ -112,13 +114,23 @@ public sealed class NodeChatRegenerationService(
             }
         }
 
+        void OnToolCallLifecycleChanged(object? _, ToolCallLifecycleChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                eventChannel.Writer.TryWrite(ToToolCallEvent(correlation, args.Payload, sequence.Next()));
+            }
+        }
+
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
         // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
-        // client asked AND the node has the tool engine enabled. No local tool catalog exists yet, so the offered
-        // set is empty today; threading the flag keeps regenerate's gate identical to send for when one lands.
+        // client asked AND the node has the tool engine enabled. When offered, the catalog's local tools travel in
+        // the runtime package as the offer list; the invocation factory resolves the matching executables from the
+        // registry by name.
         var offerTools = useLocalTools && localChatOptions.Value.EnableTools;
-        IReadOnlyList<AllowedToolDto>? allowedTools = offerTools ? [] : null;
+        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : (IReadOnlyList<AllowedToolDto>?)null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             conversationId,
@@ -156,6 +168,7 @@ public sealed class NodeChatRegenerationService(
         finally
         {
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
+            eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             await linkedCancellation.CancelAsync().ConfigureAwait(false);
 
             try
@@ -399,6 +412,29 @@ public sealed class NodeChatRegenerationService(
             outputTokens ?? message.OutputCount,
             totalTokens ?? message.TotalCount,
             reasoningTokens ?? message.ReasoningCount);
+    }
+
+    private ChatStreamEvent ToToolCallEvent(NodeChatMessageCorrelation correlation,
+        ToolCallLifecyclePayload payload,
+        long sequence)
+    {
+        var type = payload.Phase == ToolCallLifecyclePhase.Requested
+            ? ChatStreamEventTypes.ToolCallRequested
+            : ChatStreamEventTypes.ToolCallCompleted;
+
+        return new ChatStreamEvent(type,
+            correlation.ConversationId,
+            correlation.MessageId,
+            correlation.RequestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            NowUnixMilliseconds(),
+            ToolCallId: payload.ToolCallId,
+            ToolName: payload.ToolName,
+            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
+            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
+            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
+            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
     }
 
     private long NowUnixMilliseconds()

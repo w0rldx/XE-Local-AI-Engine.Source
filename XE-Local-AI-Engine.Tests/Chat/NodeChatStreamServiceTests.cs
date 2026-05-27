@@ -33,6 +33,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -71,6 +72,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -112,6 +114,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -161,6 +164,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -195,6 +199,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -210,6 +215,89 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.True(runner.CaptureObserved, "Expected the invocation runner to observe the package.");
         AssertEx.True(runner.LastReasoningEffort is null, "Expected reasoning effort to default to null.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenUseLocalTools_OffersCatalogToolsOnRuntimePackage()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(
+            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(2, runner.LastAllowedTools.Count);
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "GetCurrentTime");
+        AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "Calculate");
+        foreach (var tool in runner.LastAllowedTools)
+        {
+            AssertEx.Equal(ToolLocation.ClientLocal, tool.Location);
+            AssertEx.NotNullOrEmpty(tool.ParameterSchema);
+        }
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenLocalToolsDisabled_OffersNoTools()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(
+            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: false)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Empty(runner.LastAllowedTools);
     }
 
     [Test]
@@ -231,6 +319,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             cancellationRegistry,
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -279,6 +368,7 @@ public sealed class NodeChatStreamServiceTests
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -316,6 +406,25 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.NotNull(terminalRequest, "Expected the pump to have persisted a terminal status.");
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, terminalRequest!.Status);
         AssertEx.True(terminalRequest.Status != NodeChatMessageStatusValues.Interrupted, "Client disconnect must not force interrupted.");
+    }
+
+    private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
+    {
+        var provider = Substitute.For<ILocalToolOfferProvider>();
+        provider.GetOfferedTools().Returns(tools);
+        return provider;
+    }
+
+    private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
+    {
+        return new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Location = ToolLocation.ClientLocal,
+            ParameterSchema = parameterSchema,
+            RequiresApproval = false
+        };
     }
 
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
@@ -554,11 +663,16 @@ public sealed class NodeChatStreamServiceTests
         // value selected on the send request reaches the runtime package (or stays null when none was selected).
         public string? LastReasoningEffort { get; private set; }
 
+        // The offer list carried on the runtime package; the test asserts the local tool catalog reaches the
+        // runtime package only when the client opted in.
+        public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
+
         public bool CaptureObserved { get; private set; }
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
             LastReasoningEffort = context.Package.ReasoningEffort;
+            LastAllowedTools = context.Package.AllowedTools;
             CaptureObserved = true;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);

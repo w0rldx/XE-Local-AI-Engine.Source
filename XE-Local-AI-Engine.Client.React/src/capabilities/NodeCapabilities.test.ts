@@ -7,7 +7,7 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
 			localModelManagement: true,
-			localTools: false,
+			localTools: true,
 			toolApprovals: false,
 			conversationFeedback: true,
 			offlineFirst: false,
@@ -29,6 +29,7 @@ describe("nodeCapabilities", () => {
 			models: "/models",
 			manager: "/manager",
 			invocations: "/invocations",
+			tools: "/tools",
 		});
 	});
 });

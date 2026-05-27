@@ -19,6 +19,7 @@ import { IconAlertTriangle, IconCheck, IconCloudDownload, IconRefresh, IconRobot
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ExpandableTextField } from "@/core/ui/components/ExpandableTextField/ExpandableTextField";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import {
 	deleteLocalModel,
@@ -258,9 +259,7 @@ export function ModelManagement() {
 									) : null}
 									{detailsQuery.data?.system ? <Alert color="blue">System prompt: {detailsQuery.data.system}</Alert> : null}
 									{detailsQuery.data?.license ? (
-										<Text size="sm" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-											License: {detailsQuery.data.license}
-										</Text>
+										<ExpandableTextField label="License" value={detailsQuery.data.license} dialogTitle="Model license" />
 									) : null}
 								</Stack>
 							) : (
