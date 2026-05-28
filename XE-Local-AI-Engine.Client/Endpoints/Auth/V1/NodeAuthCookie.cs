@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.Auth;
+namespace XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 
