@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -454,6 +455,11 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);
 
+        if (failureCategory != FailureCategory.Cancelled)
+        {
+            NodeMetrics.InvocationFailedTotal.Add(1, new KeyValuePair<string, object?>("source", failureCategory.ToString()));
+        }
+
         UpdateInvocation(invocationId,
             state =>
             {
@@ -710,6 +716,11 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
     private async Task EmitEncryptedFailureAsync(EncryptedRuntimePackageDto package, string error, FailureCategory failureCategory = FailureCategory.AgentRuntime)
     {
+        if (failureCategory == FailureCategory.HashMismatch)
+        {
+            NodeMetrics.EnvelopeHashMismatchTotal.Add(1, new KeyValuePair<string, object?>("reason", error));
+        }
+
         await _hubMessageSender.Value.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
         {
             ConversationId = package.ConversationId,

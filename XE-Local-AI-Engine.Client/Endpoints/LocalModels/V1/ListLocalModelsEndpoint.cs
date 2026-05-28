@@ -4,6 +4,7 @@ using FastEndpoints;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -33,17 +34,7 @@ public sealed class ListLocalModelsEndpoint(
         try
         {
             var models = await _modelService.ListLocalModelsAsync(ct).ConfigureAwait(false);
-            var response = new ListLocalModelsResponse
-            {
-                IsAvailable = true,
-                SelectedModelName = selectedModelName,
-                ConfiguredDefaultModelName = _localChatOptions.Value.DefaultModel,
-                Items = models
-                        .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
-                        .Select(model => model.ToResponse(selectedModelName))
-                        .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
-                        .ToArray()
-            };
+            var response = LocalModelsMapper.ToListResponse(models, selectedModelName, _localChatOptions.Value.DefaultModel);
 
             await Send.OkAsync(response, ct).ConfigureAwait(false);
         }
@@ -54,14 +45,12 @@ public sealed class ListLocalModelsEndpoint(
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Local model list could not be loaded.");
-            await Send.OkAsync(new ListLocalModelsResponse
-            {
-                IsAvailable = false,
-                SelectedModelName = selectedModelName,
-                ConfiguredDefaultModelName = _localChatOptions.Value.DefaultModel,
-                Error = "Local model provider is unavailable.",
-                Items = []
-            }, ct).ConfigureAwait(false);
+            await Send.OkAsync(
+                LocalModelsMapper.ToUnavailableListResponse(
+                    selectedModelName,
+                    _localChatOptions.Value.DefaultModel,
+                    "Local model provider is unavailable."),
+                ct).ConfigureAwait(false);
         }
     }
 }

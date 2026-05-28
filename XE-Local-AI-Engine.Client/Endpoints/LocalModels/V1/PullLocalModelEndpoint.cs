@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
@@ -38,13 +39,7 @@ public sealed class PullLocalModelEndpoint(
             completedBytes = progress.Completed;
         }
 
-        await Send.OkAsync(new PullLocalModelResponse
-        {
-            ModelName = modelName,
-            Status = status,
-            TotalBytes = totalBytes,
-            CompletedBytes = completedBytes
-        }, ct).ConfigureAwait(false);
+        await Send.OkAsync(LocalModelsMapper.ToPullResponse(modelName, status, totalBytes, completedBytes), ct).ConfigureAwait(false);
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)

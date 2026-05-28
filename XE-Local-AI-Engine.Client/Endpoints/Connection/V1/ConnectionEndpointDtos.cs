@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Connection.V1;
 
-using XE_Local_AI_Engine.Client.Services.Connection;
-
 public sealed record ConnectionStatusResponse
 {
     public required string State { get; init; }
@@ -27,26 +25,4 @@ public sealed record ConnectionStatusResponse
     public bool CanEnableAutoConnect { get; init; }
 
     public bool CanDisableAutoConnect { get; init; }
-}
-
-internal static class ConnectionEndpointDtoMapper
-{
-    public static ConnectionStatusResponse ToResponse(this ConnectionControlStatus status)
-    {
-        return new ConnectionStatusResponse
-        {
-            State = status.State,
-            LastError = status.LastError,
-            LastUpdatedAt = status.LastUpdatedAt,
-            IsPaired = status.IsPaired,
-            AutoConnectOnStart = status.AutoConnectOnStart,
-            BindingMethod = status.BindingMethod,
-            LastKnownNodeName = status.LastKnownNodeName,
-            TokenExpiresAt = status.TokenExpiresAt,
-            CanConnect = status.CanConnect,
-            CanDisconnect = status.CanDisconnect,
-            CanEnableAutoConnect = status.CanEnableAutoConnect,
-            CanDisableAutoConnect = status.CanDisableAutoConnect
-        };
-    }
 }

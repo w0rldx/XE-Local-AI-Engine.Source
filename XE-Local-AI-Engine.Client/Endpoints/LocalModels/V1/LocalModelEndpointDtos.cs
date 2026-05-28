@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
-using OllamaSharp.Models;
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 public sealed class ListLocalModelsResponse
 {
     public required bool IsAvailable { get; init; }
@@ -87,45 +84,4 @@ public sealed class DeleteLocalModelResponse
     public required string ModelName { get; init; }
 
     public required bool Deleted { get; init; }
-}
-
-internal static class LocalModelEndpointDtoMapper
-{
-    public static LocalModelResponse ToResponse(this Model model, string? selectedModelName)
-    {
-        ArgumentNullException.ThrowIfNull(model);
-
-        var modelName = model.ReadModelName();
-        return new LocalModelResponse
-        {
-            ModelName = modelName,
-            SizeBytes = model.Size,
-            ModifiedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
-            Family = model.Details?.Family,
-            ParameterSize = model.Details?.ParameterSize,
-            QuantizationLevel = model.Details?.QuantizationLevel,
-            IsSelected = string.Equals(modelName, selectedModelName, StringComparison.OrdinalIgnoreCase)
-        };
-    }
-
-    public static LocalModelDetailsResponse ToResponse(this OllamaModelDetails modelDetails, string modelName)
-    {
-        ArgumentNullException.ThrowIfNull(modelDetails);
-
-        return new LocalModelDetailsResponse
-        {
-            ModelName = modelName,
-            MaxContextTokens = modelDetails.MaxContextTokens,
-            Template = modelDetails.Response.Template,
-            System = modelDetails.Response.System,
-            License = modelDetails.Response.License
-        };
-    }
-
-    private static string ReadModelName(this Model model)
-    {
-        return !string.IsNullOrWhiteSpace(model.ModelName)
-            ? model.ModelName
-            : model.Name ?? string.Empty;
-    }
 }
