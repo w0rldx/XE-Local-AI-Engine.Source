@@ -43,6 +43,15 @@ public sealed class DeleteNodeChatConversationRequestValidator : Validator<Delet
     }
 }
 
+public sealed class SetNodeChatSelectedPathRequestValidator : Validator<SetNodeChatSelectedPathRequest>
+{
+    public SetNodeChatSelectedPathRequestValidator()
+    {
+        RuleFor(static request => request.ConversationId)
+            .NotEmpty();
+    }
+}
+
 public sealed class CancelNodeChatMessageRequestValidator : Validator<CancelNodeChatMessageRequest>
 {
     public CancelNodeChatMessageRequestValidator()

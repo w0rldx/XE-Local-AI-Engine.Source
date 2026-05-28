@@ -74,7 +74,8 @@ public sealed record NodeChatConversationDto(
     string Origin = NodeChatOriginValues.Local,
     bool IsPinned = false,
     bool Archived = false,
-    Guid? BranchOfConversationId = null);
+    Guid? BranchOfConversationId = null,
+    IReadOnlyDictionary<Guid, Guid>? SelectedPath = null);
 
 public sealed record NodeChatPersistUserMessageRequest(
     Guid ConversationId,
@@ -147,6 +148,8 @@ public sealed record NodeChatPersistedMessageDto(
     Guid ConversationId,
     Guid? RequestId,
     int Sequence,
+    // ISelectedPathMessage is satisfied by the existing MessageId/Sequence/VariantGroupId/CreatedAtUtc members,
+    // so the SelectedPathResolver can collapse these messages to the selected variant path with no projection.
     string Role,
     string Content,
     string? Reasoning,
@@ -164,7 +167,7 @@ public sealed record NodeChatPersistedMessageDto(
     Guid? ParentMessageId = null,
     Guid? VariantGroupId = null,
     string? FeedbackRating = null,
-    string? FeedbackComment = null);
+    string? FeedbackComment = null) : ISelectedPathMessage;
 
 public sealed record NodeChatCancelResultDto(
     NodeChatMessageCorrelation Correlation,
@@ -222,6 +225,15 @@ public sealed record NodeChatMessageVariantDto(
     Guid VariantGroupId,
     Guid OriginalMessageId,
     NodeChatPersistedMessageDto Variant);
+
+/// <summary>
+/// Persists the conversation's selected-path map {variantGroupId-&gt;selectedMessageId} (which sibling variant is
+/// chosen on each branched turn). Selection metadata only — the conversation tree topology lives on the messages.
+/// </summary>
+public sealed record NodeChatSetSelectedPathRequest(
+    Guid ConversationId,
+    IReadOnlyDictionary<Guid, Guid>? SelectedPath,
+    long UpdatedAtUtc);
 
 public sealed record NodeChatSetMessageFeedbackRequest(
     Guid ConversationId,

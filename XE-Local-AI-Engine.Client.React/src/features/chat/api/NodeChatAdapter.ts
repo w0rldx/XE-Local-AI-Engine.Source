@@ -14,6 +14,7 @@ import {
 	setConversationArchived,
 	setConversationPinned,
 	setMessageFeedback,
+	setSelectedPath,
 } from "@/features/chat/api/NodeChatApi";
 import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
 import {
@@ -55,6 +56,7 @@ export interface SendMessageRequest {
 	model?: string;
 	useLocalTools?: boolean;
 	reasoningEffort?: string;
+	selectedPath?: Record<string, string>;
 }
 
 export interface NodeChatAdapter {
@@ -79,12 +81,18 @@ export interface NodeChatAdapter {
 		options?: RequestOptions,
 	): Promise<ChatMessageFeedback>;
 	cancelMessage(request: CancelMessageRequest, options?: RequestOptions): Promise<void>;
+	persistSelectedPath(
+		conversationId: string,
+		selectedPath: Record<string, string>,
+		options?: RequestOptions,
+	): Promise<Record<string, string>>;
 	sendMessage(request: SendMessageRequest, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto>;
 	regenerateMessage(
 		conversationId: string,
 		originalMessageId: string,
 		reasoningEffort: string | undefined,
 		useLocalTools: boolean,
+		selectedPath: Record<string, string> | undefined,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
 }
@@ -99,6 +107,7 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		model: request.model,
 		useLocalTools: request.useLocalTools,
 		reasoningEffort: request.reasoningEffort,
+		selectedPath: request.selectedPath,
 	};
 }
 
@@ -308,6 +317,10 @@ export const nodeChatAdapter: NodeChatAdapter = {
 	async cancelMessage(request, options) {
 		await cancelMessage(request, { signal: options?.signal });
 	},
+	async persistSelectedPath(conversationId, selectedPath, options) {
+		const response = await setSelectedPath(conversationId, { selectedPath }, { signal: options?.signal });
+		return response.selectedPath;
+	},
 	sendMessage(request, signal) {
 		const streamRequest = toStreamRequest(request);
 		return guardNodeChatStream(
@@ -322,14 +335,14 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			),
 		);
 	},
-	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, signal) {
+	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, signal) {
 		// Server mints the sibling variant + drives the run (Phase 5.2); the variant messageId + requestId arrive
 		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
-		// current reasoning + local-tools selection via the hub args
-		// (RegenerateMessage(conversationId, messageId, effort, useLocalTools)).
+		// current reasoning + local-tools selection plus the active conversation-tree path via the hub args
+		// (RegenerateMessage(conversationId, messageId, effort, useLocalTools, selectedPath)).
 		return guardNodeChatStream(
 			signalRStream(
-				{ method: "RegenerateMessage", args: [conversationId, originalMessageId, reasoningEffort, useLocalTools] },
+				{ method: "RegenerateMessage", args: [conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath ?? null] },
 				signal,
 			),
 		);

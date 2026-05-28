@@ -168,6 +168,9 @@ export function Chat() {
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 	// Conversations whose first message has already promoted their title (avoids re-renaming on every send).
 	const titledConversations = useRef<Set<string>>(new Set());
+	// The conversation whose persisted selected-path has already seeded activeRevisionByGroup, so a background
+	// refetch of the same conversation never clobbers an in-session selection the operator just navigated.
+	const seededSelectionConversationId = useRef<string | undefined>(undefined);
 
 	const conversationsQuery = useQuery({
 		queryKey: nodeChatQueryKeys.conversationList(showArchivedConversations),
@@ -262,6 +265,23 @@ export function Chat() {
 	const activeConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
 	// Remote conversations are view-only on this node (server enforces the guard; this is the cosmetic UI hide).
 	const isRemoteConversation = activeConversation?.origin === "remote";
+
+	// Hydrate the active-revision selection from the conversation's persisted selected-path once its full payload
+	// loads, so navigating < N/N > variants survives a reload. Seeds once per conversation (tracked by ref) — a
+	// later background refetch of the same conversation must not overwrite a selection the operator just made.
+	const loadedConversation = selectedConversationQuery.data;
+	useEffect(() => {
+		if (!loadedConversation || loadedConversation.id !== selectedConversationId) {
+			return;
+		}
+
+		if (seededSelectionConversationId.current === selectedConversationId) {
+			return;
+		}
+
+		seededSelectionConversationId.current = selectedConversationId;
+		setActiveRevisionByGroup(loadedConversation.selectedPath ?? {});
+	}, [loadedConversation, selectedConversationId]);
 
 	// Node-local feedback now travels ON each message in the loaded conversation (Phase 5.3, platform parity):
 	// derive the by-message map from the conversation read instead of firing a GET per assistant turn (which
@@ -403,6 +423,9 @@ export function Chat() {
 						model: requestModel,
 						useLocalTools: toolsEnabled,
 						reasoningEffort: effort,
+						// Send the active conversation-tree path so the server assembles context from the selected
+						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
+						selectedPath: Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
 					},
 					abortController.signal,
 				)) {
@@ -450,7 +473,7 @@ export function Chat() {
 				}
 			}
 		},
-		[cacheConversation, queryClient, refreshConversation, resolveSendConversation, toolsEnabled],
+		[activeRevisionByGroup, cacheConversation, queryClient, refreshConversation, resolveSendConversation, toolsEnabled],
 	);
 
 	const regenerate = useCallback(
@@ -487,6 +510,9 @@ export function Chat() {
 					assistantMessageId,
 					reasoningEffort,
 					toolsEnabled,
+					// Send the active conversation-tree path so the regenerated turn's context follows the selected
+					// branch only. Omit when nothing was navigated so the server keeps the stored map.
+					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
 					abortController.signal,
 				)) {
 					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
@@ -539,7 +565,17 @@ export function Chat() {
 				}
 			}
 		},
-		[cacheConversation, displayConversations, queryClient, reasoningEffort, refreshConversation, selectedConversationId, t, toolsEnabled],
+		[
+			activeRevisionByGroup,
+			cacheConversation,
+			displayConversations,
+			queryClient,
+			reasoningEffort,
+			refreshConversation,
+			selectedConversationId,
+			t,
+			toolsEnabled,
+		],
 	);
 
 	const handleRegenerate = useCallback(
@@ -694,9 +730,20 @@ export function Chat() {
 		[deleteConversation],
 	);
 
-	const handleSelectRevision = useCallback((variantGroupId: string, messageId: string): void => {
-		setActiveRevisionByGroup((current) => ({ ...current, [variantGroupId]: messageId }));
-	}, []);
+	const handleSelectRevision = useCallback(
+		(variantGroupId: string, messageId: string): void => {
+			const nextSelection: Record<string, string> = { ...activeRevisionByGroup, [variantGroupId]: messageId };
+			setActiveRevisionByGroup(nextSelection);
+			// Persist the navigated selection so a reload restores it even without sending a message. Fire-and-forget,
+			// consistent with other adapter calls; a failure surfaces in the error banner but never blocks the UI.
+			if (selectedConversationId) {
+				nodeChatAdapter
+					.persistSelectedPath(selectedConversationId, nextSelection)
+					.catch((error: unknown) => setStreamError(errorMessage(error)));
+			}
+		},
+		[activeRevisionByGroup, selectedConversationId],
+	);
 
 	const branchConversation = useCallback(
 		async (messageId: string): Promise<void> => {

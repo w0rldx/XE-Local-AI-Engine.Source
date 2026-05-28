@@ -106,6 +106,38 @@ public sealed class NodeChatEndpointTests
         AssertEx.False(listed.Items.Any(item => item.ConversationId == conversation.ConversationId));
     }
 
+    [Test]
+    public async Task SetSelectedPath_WhenOriginLocal_PersistsAndReturnsMap()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Selected path API", null, 50)).ConfigureAwait(false);
+        var groupId = Guid.NewGuid();
+        var chosenId = Guid.NewGuid();
+
+        using var request = CreateJsonRequest(factory,
+            HttpMethod.Put,
+            $"/api/local/v1/chat/conversations/{conversation.ConversationId}/selected-path",
+            new
+            {
+                SelectedPath = new Dictionary<Guid, Guid>
+                {
+                    [groupId] = chosenId
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await ReadJsonAsync<NodeChatSelectedPathResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(conversation.ConversationId, body.ConversationId);
+        AssertEx.Equal(chosenId, body.SelectedPath[groupId]);
+
+        // The selection is persisted: a follow-up service read returns the same map.
+        var persisted = AssertEx.NotNull(await persistence.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(chosenId, persisted[groupId]);
+    }
+
     private static HttpRequestMessage CreateJsonRequest<T>(TestingWebAppFactory factory, HttpMethod method, string uri, T content)
     {
         var request = CreateRequest(factory, method, uri);

@@ -27,6 +27,13 @@ internal sealed record class NodeConversation
     /// </summary>
     public Guid? BranchOfConversationId { get; set; }
 
+    /// <summary>
+    /// JSON metadata map of variantGroupId-&gt;selectedMessageId capturing which sibling variant is selected on each
+    /// branched turn. Topology lives on the messages (parent/variant-group); this column is selection metadata only,
+    /// so it is additive, nullable, and E2E-safe (never required to reconstruct the conversation tree).
+    /// </summary>
+    public string? SelectedPathJson { get; set; }
+
     public List<NodeMessage> Messages { get; } = [];
 
     public List<NodeToolEvent> ToolEvents { get; } = [];

@@ -31,6 +31,7 @@ public static class LocalApiRoutes
         public const string BranchConversation = "chat/conversations/{conversationId}/branch/{messageId}";
         public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";
+        public const string SelectedPath = "chat/conversations/{conversationId}/selected-path";
         public const string Cancel = "chat/cancel";
     }
 

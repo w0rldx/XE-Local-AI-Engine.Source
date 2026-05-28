@@ -133,6 +133,30 @@ public sealed class NodeChatReadOnlyEndpointTests
         await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task SetSelectedPath_WhenOriginRemote_Returns409ReadOnly()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        var conversationId = await SeedRemoteConversationAsync(factory).ConfigureAwait(false);
+
+        // Persisting a selection is a mutation of conversation metadata, so it is guarded on a remote-mirror
+        // (view-only) conversation, mirroring the rename/pin/branch/feedback boundary.
+        using var request = CreateJsonRequest(factory,
+            HttpMethod.Put,
+            $"/api/local/v1/chat/conversations/{conversationId}/selected-path",
+            new
+            {
+                SelectedPath = new Dictionary<Guid, Guid>
+                {
+                    [Guid.NewGuid()] = Guid.NewGuid()
+                }
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
+    }
+
     private static async Task<Guid> SeedRemoteConversationAsync(TestingWebAppFactory factory)
     {
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();

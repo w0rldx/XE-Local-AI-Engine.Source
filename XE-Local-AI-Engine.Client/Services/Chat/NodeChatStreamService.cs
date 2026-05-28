@@ -43,6 +43,14 @@ public sealed class NodeChatStreamService(
 
         var conversation = await persistence.GetConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
+
+        // A selection map on the request is the authoritative, just-clicked path: persist it before building
+        // context so the stored selection and the context agree. With no map on the request, fall back to the
+        // selection already persisted on the conversation (loaded into the DTO).
+        var selectedPath = request.SelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(request.ConversationId, request.SelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : conversation.SelectedPath;
+
         var trimmedContent = request.Content.Trim();
         var userMessageId = request.UserMessageId.GetValueOrDefault(Guid.NewGuid());
         var assistantMessageId = request.MessageId.GetValueOrDefault(Guid.NewGuid());
@@ -125,7 +133,7 @@ public sealed class NodeChatStreamService(
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
             LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildConversationContext(conversation, userMessage),
+            BuildConversationContext(conversation, userMessage, selectedPath),
             request.Model ?? localChatOptions.Value.DefaultModel,
             AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
@@ -324,23 +332,29 @@ public sealed class NodeChatStreamService(
     }
 
     private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto userMessage)
+        NodeChatPersistedMessageDto userMessage,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath)
     {
-        var messages = conversation.Messages
-                                   .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
-                                                            && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                                   .Concat([userMessage])
-                                   .OrderBy(static message => message.Sequence)
-                                   .Select(static (message, index) => new ConversationMessageDto
-                                   {
-                                       Id = message.MessageId,
-                                       Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                                       Content = message.Content,
-                                       Thinking = message.Reasoning,
-                                       ModelUsed = message.Model,
-                                       SortOrder = index
-                                   })
-                                   .ToList();
+        // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
+        // apply the existing content/status filters. Without this every regenerated sibling would be sent as
+        // context; the resolver keeps only the chosen branch.
+        var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
+
+        var messages = selected
+                       .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
+                                                && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+                       .Concat([userMessage])
+                       .OrderBy(static message => message.Sequence)
+                       .Select(static (message, index) => new ConversationMessageDto
+                       {
+                           Id = message.MessageId,
+                           Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
+                           Content = message.Content,
+                           Thinking = message.Reasoning,
+                           ModelUsed = message.Model,
+                           SortOrder = index
+                       })
+                       .ToList();
 
         return messages;
     }

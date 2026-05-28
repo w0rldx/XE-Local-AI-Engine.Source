@@ -132,6 +132,7 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		isArchived: dto.archived,
 		origin: toOrigin(dto.origin),
 		branchOfConversationId: dto.branchOfConversationId ?? undefined,
+		selectedPath: dto.selectedPath ?? undefined,
 		messages: dto.messages.map(mapMessage),
 	};
 }

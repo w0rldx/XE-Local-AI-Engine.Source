@@ -74,6 +74,9 @@ public sealed class NodeChatDbContext : DbContext
         builder.Property(entity => entity.BranchOfConversationId)
                .HasColumnName("branch_of_conversation_id");
 
+        builder.Property(entity => entity.SelectedPathJson)
+               .HasColumnName("selected_path_json");
+
         builder.HasMany(entity => entity.Messages)
                .WithOne(entity => entity.Conversation)
                .HasForeignKey(entity => entity.ConversationId)

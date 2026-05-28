@@ -59,6 +59,9 @@ export interface NodeChatConversationResponseDto {
 	isPinned: boolean;
 	archived: boolean;
 	branchOfConversationId?: string | null;
+	// Persisted selected-path map {variantGroupId -> selectedMessageId} for the conversation tree. Absent/null
+	// when no selection has been recorded (every branched turn then defaults to its newest variant).
+	selectedPath?: Record<string, string> | null;
 	messages: NodeChatMessageResponseDto[];
 }
 
@@ -118,6 +121,9 @@ export interface NodeChatStreamRequestDto {
 	useLocalTools?: boolean;
 	// Reasoning budget for the turn ("none" | "low" | "medium" | "high"); null/absent lets the model default.
 	reasoningEffort?: string;
+	// Selected-path map {variantGroupId -> selectedMessageId} for the just-clicked conversation tree path. The
+	// server persists it and assembles context from the selected branch only; absent falls back to the stored map.
+	selectedPath?: Record<string, string>;
 }
 
 export interface NodeChatStreamEventDto {
@@ -318,6 +324,33 @@ export async function listMessageRevisions(
 		}
 		throw error;
 	}
+}
+
+export interface SetNodeChatSelectedPathRequestDto {
+	// Map {variantGroupId -> selectedMessageId}. An empty/omitted map clears the persisted selection.
+	selectedPath?: Record<string, string>;
+}
+
+export interface NodeChatSelectedPathResponseDto {
+	conversationId: string;
+	selectedPath: Record<string, string>;
+}
+
+/**
+ * Persists the conversation's selected-path map {variantGroupId -> selectedMessageId} without sending a
+ * message, so navigating < N/N > variants survives a reload. An empty map clears the stored selection.
+ */
+export async function setSelectedPath(
+	conversationId: string,
+	request: SetNodeChatSelectedPathRequestDto,
+	config?: AxiosRequestConfig,
+): Promise<NodeChatSelectedPathResponseDto> {
+	const { data } = await axiosInstance.put<NodeChatSelectedPathResponseDto>(
+		buildLocalApiUrl(`chat/conversations/${conversationId}/selected-path`),
+		request,
+		config,
+	);
+	return data;
 }
 
 /** Upserts node-local feedback (thumbs + optional comment) for a message. */
