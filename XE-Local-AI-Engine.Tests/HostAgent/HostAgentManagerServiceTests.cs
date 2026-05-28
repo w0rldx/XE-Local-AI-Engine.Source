@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.Manager;
+using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;

@@ -25,26 +25,45 @@ using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Embeddings;
+using XE_Local_AI_Engine.Client.Services.Embeddings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
+using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage.Implementation;
 using XE_Local_AI_Engine.Client.Services.Manager;
+using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
+using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
@@ -64,6 +83,13 @@ public static class ConfigureServices
                                                                    .ReadFrom.Services(serviceCollection)
                                                                    .Enrich.FromLogContext()
                                                                    .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate));
+
+        // Error handling - the order of the exception handlers is important: specific handlers first,
+        // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.
+        builder.Services
+               .AddExceptionHandler<ConflictExceptionHandler>()
+               .AddExceptionHandler<DefaultExceptionHandler>();
+        builder.Services.AddProblemDetails();
 
         builder.Services.ConfigureHttpJsonOptions(options => ConfigureJsonSerializerOptions(options.SerializerOptions));
         builder.Services.AddFastEndpoints(options =>

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using TUnit.Playwright;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>

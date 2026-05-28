@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 
 using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeKeyRegistryTests

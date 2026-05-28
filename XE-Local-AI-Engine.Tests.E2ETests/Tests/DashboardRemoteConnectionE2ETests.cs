@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
 using Microsoft.Playwright;
+using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>

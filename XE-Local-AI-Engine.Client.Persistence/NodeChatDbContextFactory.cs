@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 public sealed class NodeChatDbContextFactory : IDesignTimeDbContextFactory<NodeChatDbContext>
 {

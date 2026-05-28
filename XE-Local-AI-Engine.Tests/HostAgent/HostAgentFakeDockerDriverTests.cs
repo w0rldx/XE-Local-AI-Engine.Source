@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.HostAgent;
 
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
+using XE_Local_AI_Engine.HostAgent.Linux.Docker.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class HostAgentFakeDockerDriverTests

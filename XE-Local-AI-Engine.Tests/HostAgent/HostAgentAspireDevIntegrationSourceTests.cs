@@ -57,7 +57,7 @@ public sealed class HostAgentAspireDevIntegrationSourceTests
     {
         var program = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.HostAgent.Linux", "Program.cs"));
         var options = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.HostAgent.Linux", "Docker", "HostAgentDockerOptions.cs"));
-        var fakeDriver = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.HostAgent.Linux", "Docker", "FakeDockerRuntimeClient.cs"));
+        var fakeDriver = await File.ReadAllTextAsync(GetXePath("XE-Local-AI-Engine.HostAgent.Linux", "Docker", "Implementation", "FakeDockerRuntimeClient.cs"));
 
         AssertEx.Contains(options, "UseFakeDriver");
         AssertEx.Contains(program, "UseFakeDriver");

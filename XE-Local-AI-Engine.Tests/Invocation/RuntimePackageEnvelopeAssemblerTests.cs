@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
+using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class RuntimePackageEnvelopeAssemblerTests

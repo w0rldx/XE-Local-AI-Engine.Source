@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class AzureFoundryChatClientFactoryTests

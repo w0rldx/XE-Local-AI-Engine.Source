@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
 /// <summary>
 ///     Caps concurrent browser-backed E2E tests. Forced to 1 (sequential): the node enforces a

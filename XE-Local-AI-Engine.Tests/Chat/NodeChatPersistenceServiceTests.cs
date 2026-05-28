@@ -4,7 +4,9 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatPersistenceServiceTests : IDisposable

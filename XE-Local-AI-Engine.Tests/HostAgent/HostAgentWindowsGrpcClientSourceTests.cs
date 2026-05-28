@@ -11,7 +11,7 @@ public sealed class HostAgentWindowsGrpcClientSourceTests
     {
         var project = await File.ReadAllTextAsync(GetWindowsProjectPath("XE-Local-AI-Engine.HostAgent.Windows.csproj"));
         var program = await File.ReadAllTextAsync(GetWindowsProjectPath("Program.cs"));
-        var client = await File.ReadAllTextAsync(GetWindowsProjectPath("HostAgentLinuxGrpcClient.cs"));
+        var client = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "HostAgentLinuxGrpcClient.cs"));
         var options = await File.ReadAllTextAsync(GetWindowsProjectPath("HostAgentLinuxGrpcOptions.cs"));
 
         AssertEx.Contains(project, "Grpc.Net.Client");
