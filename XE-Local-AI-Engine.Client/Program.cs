@@ -64,9 +64,12 @@ try
     });
 
     // Configure the HTTP request pipeline.
+    // Standardized typed exception handling (mirrors the central platform): translates domain
+    // exceptions into RFC7807 ProblemDetails. Registered before UseFastEndpoints so it wraps endpoints.
+    app.UseExceptionHandler();
+
     if (!app.Environment.IsDevelopment())
     {
-        app.UseExceptionHandler("/Error", true);
         app.UseHsts();
     }
 

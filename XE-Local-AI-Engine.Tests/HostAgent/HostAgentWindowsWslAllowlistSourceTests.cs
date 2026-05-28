@@ -58,7 +58,7 @@ public sealed class HostAgentWindowsWslAllowlistSourceTests
     [Test]
     public async Task ProcessRunner_WhenScaffolded_UsesArgumentListAndNoShellInterpolation()
     {
-        var runner = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "WindowsProcessRunner.cs"));
+        var runner = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "WindowsProcessRunner.cs"));
 
         AssertEx.Contains(runner, "UseShellExecute = false");
         AssertEx.Contains(runner, "startInfo.ArgumentList.Add(argument)");

@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 
 using System.Net;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 using XE_Local_AI_Engine.HostAgent.Windows.Wsl;
+using XE_Local_AI_Engine.HostAgent.Windows.Wsl.Implementation;
 
 public static class Program
 {

@@ -86,7 +86,7 @@ public sealed class HostAgentWindowsScaffoldTests
     [Test]
     public async Task SecretStorage_WhenScaffolded_UsesCurrentUserDpapi()
     {
-        var protector = await File.ReadAllTextAsync(GetWindowsProjectPath("DpapiCurrentUserSecretProtector.cs"));
+        var protector = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "DpapiCurrentUserSecretProtector.cs"));
 
         AssertEx.Contains(protector, "ProtectedData.Protect");
         AssertEx.Contains(protector, "ProtectedData.Unprotect");
@@ -127,7 +127,7 @@ public sealed class HostAgentWindowsScaffoldTests
     {
         var driver = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Wsl2Driver.cs"));
         var allowlist = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "WslCommandAllowlist.cs"));
-        var runner = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "WindowsProcessRunner.cs"));
+        var runner = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "WindowsProcessRunner.cs"));
         var linuxInstallScript = await File.ReadAllTextAsync(Path.Combine(ProjectRoot,
             "Apps",
             "XE-Local-AI-Engine",
