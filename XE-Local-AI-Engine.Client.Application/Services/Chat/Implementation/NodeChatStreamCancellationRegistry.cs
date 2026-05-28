@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 using System.Collections.Concurrent;
 
 public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancellationRegistry

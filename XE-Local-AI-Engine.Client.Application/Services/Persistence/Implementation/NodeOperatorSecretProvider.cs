@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Persistence;
-
 public sealed class NodeOperatorSecretProvider : INodeOperatorSecretProvider
 {
     public const int ExpectedSecretLength = 32;

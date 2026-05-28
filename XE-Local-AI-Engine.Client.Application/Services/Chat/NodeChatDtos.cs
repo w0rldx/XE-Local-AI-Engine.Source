@@ -192,9 +192,9 @@ public static class NodeChatFeedbackRatingValues
 }
 
 /// <summary>
-/// Branch (Phase 5.1): clones the source conversation's messages up to and including <see cref="MessageId"/>
-/// into a NEW conversation. The new conversation is Origin=Local and records
-/// <c>branch_of_conversation_id</c> = source for provenance.
+///     Branch (Phase 5.1): clones the source conversation's messages up to and including <see cref="MessageId" />
+///     into a NEW conversation. The new conversation is Origin=Local and records
+///     <c>branch_of_conversation_id</c> = source for provenance.
 /// </summary>
 public sealed record NodeChatBranchConversationRequest(
     Guid ConversationId,
@@ -207,10 +207,10 @@ public sealed record NodeChatBranchResultDto(
     int CopiedMessageCount);
 
 /// <summary>
-/// Revision (Phase 5.2): records a regenerated assistant turn as a SIBLING VARIANT (never an in-place
-/// overwrite). All variants of one logical turn share a <c>variant_group_id</c>; <see cref="ParentMessageId"/>
-/// is the user turn the variants answer. When <see cref="VariantGroupId"/> is null a fresh group is minted and
-/// the originating message is back-stamped into it.
+///     Revision (Phase 5.2): records a regenerated assistant turn as a SIBLING VARIANT (never an in-place
+///     overwrite). All variants of one logical turn share a <c>variant_group_id</c>; <see cref="ParentMessageId" />
+///     is the user turn the variants answer. When <see cref="VariantGroupId" /> is null a fresh group is minted and
+///     the originating message is back-stamped into it.
 /// </summary>
 public sealed record NodeChatCreateMessageVariantRequest(
     Guid ConversationId,
@@ -227,8 +227,8 @@ public sealed record NodeChatMessageVariantDto(
     NodeChatPersistedMessageDto Variant);
 
 /// <summary>
-/// Persists the conversation's selected-path map {variantGroupId-&gt;selectedMessageId} (which sibling variant is
-/// chosen on each branched turn). Selection metadata only — the conversation tree topology lives on the messages.
+///     Persists the conversation's selected-path map {variantGroupId-&gt;selectedMessageId} (which sibling variant is
+///     chosen on each branched turn). Selection metadata only — the conversation tree topology lives on the messages.
 /// </summary>
 public sealed record NodeChatSetSelectedPathRequest(
     Guid ConversationId,

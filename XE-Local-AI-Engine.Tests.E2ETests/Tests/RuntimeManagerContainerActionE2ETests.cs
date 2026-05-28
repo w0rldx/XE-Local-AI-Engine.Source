@@ -42,10 +42,12 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
         return ((int)response.StatusCode, body);
     }
 
-    private static bool IsUsableSnapshot(int statusCode, string body) =>
-        statusCode == 200
-        && body.Contains("\"status\"", StringComparison.OrdinalIgnoreCase)
-        && body.Contains("\"state\"", StringComparison.OrdinalIgnoreCase);
+    private static bool IsUsableSnapshot(int statusCode, string body)
+    {
+        return statusCode == 200
+               && body.Contains("\"status\"", StringComparison.OrdinalIgnoreCase)
+               && body.Contains("\"state\"", StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task NavigateToManagerAsync()
     {
@@ -105,7 +107,10 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
         }
 
         // FULL BRANCH: snapshot present — switch to Components tab.
-        var componentsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Components" });
+        var componentsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+        {
+            Name = "Components"
+        });
         await Expect(componentsTab).ToBeVisibleAsync();
         await componentsTab.ClickAsync();
 
@@ -125,11 +130,20 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
         // At least one row: all three action buttons must be present in the DOM.
         // The buttons are disabled={actionMutation.isPending} only — they are enabled
         // when no mutation is in flight, regardless of container state.
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Start" }).First)
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = "Start"
+            }).First)
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Stop" }).First)
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = "Stop"
+            }).First)
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Restart" }).First)
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = "Restart"
+            }).First)
             .ToBeVisibleAsync();
     }
 
@@ -152,7 +166,10 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
             return;
         }
 
-        var componentsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Components" });
+        var componentsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+        {
+            Name = "Components"
+        });
         await componentsTab.ClickAsync();
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
@@ -168,12 +185,14 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
 
         // Stop is a consistent choice: all three buttons share identical enabled/disabled logic
         // (disabled only while actionMutation.isPending), so any enabled button works.
-        var stopButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Stop" }).First;
+        var stopButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Stop"
+        }).First;
         await Expect(stopButton).ToBeVisibleAsync();
         await Expect(stopButton).ToBeEnabledAsync();
 
-        await Page.RunAndWaitForRequestAsync(
-            async () => await stopButton.ClickAsync(),
+        await Page.RunAndWaitForRequestAsync(async () => await stopButton.ClickAsync(),
             request => request.Url.Contains("runtime/containers/action", StringComparison.OrdinalIgnoreCase)
                        && string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase));
     }
@@ -200,7 +219,10 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
             return;
         }
 
-        var logsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Logs" });
+        var logsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+        {
+            Name = "Logs"
+        });
         await Expect(logsTab).ToBeVisibleAsync();
         await logsTab.ClickAsync();
 
@@ -218,14 +240,20 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
         {
             // No containers in snapshot — Follow logs button is disabled (no container selected).
             // Assert it is at least visible to confirm the panel rendered correctly.
-            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Follow logs" }))
+            await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+                {
+                    Name = "Follow logs"
+                }))
                 .ToBeVisibleAsync();
             return;
         }
 
         // Containers present — the first container is auto-selected (see RuntimeManager.tsx
         // useEffect) so Follow logs must be enabled.
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Follow logs" }))
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = "Follow logs"
+            }))
             .ToBeEnabledAsync();
     }
 
@@ -248,7 +276,10 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
             return;
         }
 
-        var logsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Logs" });
+        var logsTab = Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+        {
+            Name = "Logs"
+        });
         await logsTab.ClickAsync();
         await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
             {
@@ -256,7 +287,10 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
             }))
             .ToBeVisibleAsync();
 
-        var followButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Follow logs" });
+        var followButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Follow logs"
+        });
         await Expect(followButton).ToBeVisibleAsync();
 
         if (!await followButton.IsEnabledAsync())
@@ -269,9 +303,11 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
 
         // Clicking Follow logs starts the SignalR hub connection. The client posts to the
         // negotiate endpoint before opening the streaming connection.
-        await Page.RunAndWaitForRequestAsync(
-            async () => await followButton.ClickAsync(),
+        await Page.RunAndWaitForRequestAsync(async () => await followButton.ClickAsync(),
             request => request.Url.Contains("runtime/hub", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForRequestOptions { Timeout = 5000 });
+            new PageRunAndWaitForRequestOptions
+            {
+                Timeout = 5000
+            });
     }
 }

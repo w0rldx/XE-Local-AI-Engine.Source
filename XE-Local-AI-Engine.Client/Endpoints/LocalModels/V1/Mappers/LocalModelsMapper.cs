@@ -5,8 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal static class LocalModelsMapper
 {
-    public static ListLocalModelsResponse ToListResponse(
-        IEnumerable<Model> models,
+    public static ListLocalModelsResponse ToListResponse(IEnumerable<Model> models,
         string? selectedModelName,
         string? configuredDefaultModelName)
     {
@@ -25,8 +24,7 @@ internal static class LocalModelsMapper
         };
     }
 
-    public static ListLocalModelsResponse ToUnavailableListResponse(
-        string? selectedModelName,
+    public static ListLocalModelsResponse ToUnavailableListResponse(string? selectedModelName,
         string? configuredDefaultModelName,
         string error)
     {
@@ -40,8 +38,7 @@ internal static class LocalModelsMapper
         };
     }
 
-    public static PullLocalModelResponse ToPullResponse(
-        string modelName,
+    public static PullLocalModelResponse ToPullResponse(string modelName,
         string status,
         long? totalBytes,
         long? completedBytes)

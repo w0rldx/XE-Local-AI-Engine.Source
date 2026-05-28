@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Events;
-
 #pragma warning disable CA1812 // Instantiated by DI container.
 internal sealed class InvocationHistory : IInvocationHistory
 #pragma warning restore CA1812

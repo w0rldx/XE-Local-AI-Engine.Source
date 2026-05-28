@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -11,20 +12,16 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OllamaSharp;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
-using XE_Local_AI_Engine.Client.Services.Events.Implementation;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 
@@ -39,8 +36,6 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 /// </summary>
 public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
-    private static readonly SemaphoreSlim HostStartupLock = new(1, 1);
-
     /// <summary>Email of the admin user seeded into the node Identity DB for browser login in E2E.</summary>
     public const string AdminEmail = "e2e-admin@example.test";
 
@@ -49,6 +44,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     ///     Used by <c>XEE2ETestBase</c> to drive the real /login flow before each test.
     /// </summary>
     public const string AdminPassword = "E2eAdminPassw0rd!";
+
+    private static readonly SemaphoreSlim HostStartupLock = new(1, 1);
 
     private readonly FakeOllamaServer _fakeOllamaServer;
 
@@ -152,9 +149,8 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
         // Diagnostic: verify the React bundle baked in the correct API URL.
         var bundlePortInDist = FindBundledApiUrl(_webRoot);
-        await Console.Out.WriteLineAsync(
-            $"[FACTORY-DIAG] port={_port} ServerAddress={ServerAddress} webRoot={_webRoot} bundledApiUrl={bundlePortInDist}")
-            .ConfigureAwait(false);
+        await Console.Out.WriteLineAsync($"[FACTORY-DIAG] port={_port} ServerAddress={ServerAddress} webRoot={_webRoot} bundledApiUrl={bundlePortInDist}")
+                     .ConfigureAwait(false);
 
         // Seed the single admin so the SPA presents /login (not the one-time /setup screen) and
         // browser tests can authenticate with a known password. Identity migrations + the Admin role
@@ -184,15 +180,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         var createResult = await userManager.CreateAsync(admin, AdminPassword).ConfigureAwait(false);
         if (!createResult.Succeeded)
         {
-            throw new InvalidOperationException(
-                "Failed to seed E2E admin user: " + string.Join(", ", createResult.Errors.Select(error => error.Description)));
+            throw new InvalidOperationException("Failed to seed E2E admin user: " + string.Join(", ", createResult.Errors.Select(error => error.Description)));
         }
 
         var roleResult = await userManager.AddToRoleAsync(admin, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
         if (!roleResult.Succeeded)
         {
-            throw new InvalidOperationException(
-                "Failed to assign Admin role to E2E admin user: " + string.Join(", ", roleResult.Errors.Select(error => error.Description)));
+            throw new InvalidOperationException("Failed to assign Admin role to E2E admin user: " + string.Join(", ", roleResult.Errors.Select(error => error.Description)));
         }
     }
 
@@ -288,7 +282,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             foreach (var jsFile in Directory.EnumerateFiles(assetsDir, "*.js"))
             {
                 var content = File.ReadAllText(jsFile);
-                var match = System.Text.RegularExpressions.Regex.Match(content, @"127\.0\.0\.1:\d+");
+                var match = Regex.Match(content, @"127\.0\.0\.1:\d+");
                 if (match.Success)
                 {
                     return match.Value;

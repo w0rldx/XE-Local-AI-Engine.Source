@@ -77,12 +77,12 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithUrlForEndpoint("https", url => url.DisplayText = "XE Local AI Engine (https)")
                  .WithUrlForEndpoint("http", url => url.DisplayText = "XE Local AI Engine (http)")
                  .WithEnvironment("ASPIRE_ENABLED", "true")
-                  .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
-                  .WithEnvironment("XE_HOST_AGENT_ASPIRE_MODE", hostAgentMode)
-                  .WithEnvironment("XE_NODE_SQLITE_KEY", nodeSqliteKey)
-                  .WithEnvironment("NodeAuth__Jwt__Issuer", "xe-local-ai-engine")
-                  .WithEnvironment("NodeAuth__Jwt__Audience", "xe-local-ai-engine")
-                  .WithReference(chatModel)
+                 .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+                 .WithEnvironment("XE_HOST_AGENT_ASPIRE_MODE", hostAgentMode)
+                 .WithEnvironment("XE_NODE_SQLITE_KEY", nodeSqliteKey)
+                 .WithEnvironment("NodeAuth__Jwt__Issuer", "xe-local-ai-engine")
+                 .WithEnvironment("NodeAuth__Jwt__Audience", "xe-local-ai-engine")
+                 .WithReference(chatModel)
                  .WithReference(embeddingsModel)
                  .WithReference(nodeSqlite)
                  .WaitFor(chatModel)
@@ -100,20 +100,20 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                              DisplayText = "Scalar API docs",
                              Endpoint = https
                          });
-                          context.Urls.Add(new ResourceUrlAnnotation
-                          {
-                              Url = "/openapi/local/v1/v1.json",
-                              DisplayText = "OpenAPI spec (v1)",
-                              Endpoint = https
-                          });
-                          context.Urls.Add(new ResourceUrlAnnotation
-                          {
-                              Url = "/devui",
-                              DisplayText = "Microsoft Agent DevUI",
-                              Endpoint = https
-                          });
-                      }
-                  });
+                         context.Urls.Add(new ResourceUrlAnnotation
+                         {
+                             Url = "/openapi/local/v1/v1.json",
+                             DisplayText = "OpenAPI spec (v1)",
+                             Endpoint = https
+                         });
+                         context.Urls.Add(new ResourceUrlAnnotation
+                         {
+                             Url = "/devui",
+                             DisplayText = "Microsoft Agent DevUI",
+                             Endpoint = https
+                         });
+                     }
+                 });
 
 builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithEnvironment("BROWSER", "none")
@@ -127,8 +127,7 @@ builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithRunScript("dev")
        .WithBuildScript("build")
        .WithPnpm()
-       .WithBrowserLogs(
-           browser: "/usr/bin/chromium-browser",
+       .WithBrowserLogs(browser: "/usr/bin/chromium-browser",
            userDataMode: BrowserUserDataMode.Isolated);
 
 if (hostAgentLinux is not null && hostAgentHmacSecret is not null)

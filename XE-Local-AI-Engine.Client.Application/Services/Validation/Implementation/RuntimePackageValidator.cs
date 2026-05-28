@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Validation;
-
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;

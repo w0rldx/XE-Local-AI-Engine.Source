@@ -41,8 +41,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
@@ -100,8 +102,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is the weather?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "cloudy", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "cloudy", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenToolEmittingRunner(dispatcher);
@@ -153,13 +157,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "noon", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "noon", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(
-            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatRegenerationService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -167,7 +172,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             TimeProvider.System,
@@ -200,13 +208,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what time is it?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "noon", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "noon", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(
-            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatRegenerationService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -214,7 +223,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new LocalChatRuntimePackageBuilder(),
             capturingRunner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             TimeProvider.System,
@@ -242,8 +254,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, userMessageId, "what is 2+2?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         // First regenerate makes variant B (a sibling of the original whose parent is the ORIGINAL assistant turn).
         var dispatcher = new RegenRecordingDispatcher();
@@ -301,8 +315,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -338,8 +354,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x")).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x")).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
@@ -447,9 +465,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }
 
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
 
         public void Cancel(Guid invocationId)
         {
@@ -474,8 +498,6 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
     private sealed class RegenContextCapturingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
     {
-        public int ActiveInvocationCount => 0;
-
         // The conversation context handed to the most recent invocation; the test asserts the variant
         // regenerate never includes a sibling assistant answer.
         public IReadOnlyList<ConversationMessageDto>? LastContext { get; private set; }
@@ -487,6 +509,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The offer list carried on the runtime package; the test asserts the local tool catalog reaches the
         // runtime package on regenerate only when the client opted in.
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
+        public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
@@ -497,9 +520,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }
 
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
 
         public void Cancel(Guid invocationId)
         {
@@ -550,9 +579,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }
 
-        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
 
-        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
 
         public void Cancel(Guid invocationId)
         {
@@ -589,17 +624,35 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
         }
 
-        public Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package) => Task.CompletedTask;
+        public Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope) => Task.CompletedTask;
+        public Task DispatchInvocationAssignedV2Async(InvocationAssignedEnvelope envelope)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DispatchToolCallResultAsync(ToolCallResultEvent evt) => Task.CompletedTask;
+        public Task DispatchToolCallResultAsync(ToolCallResultEvent evt)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt) => Task.CompletedTask;
+        public Task DispatchDisconnectRequestedAsync(DisconnectRequestedEvent evt)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt) => Task.CompletedTask;
+        public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt) => Task.CompletedTask;
+        public Task DispatchInvocationCancelledAsync(InvocationCancelledEvent evt)
+        {
+            return Task.CompletedTask;
+        }
 
         public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
@@ -675,9 +728,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload) => Task.CompletedTask;
+        public Task ReportToolCallRequestedAsync(ToolCallRequestPayload payload)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload) => Task.CompletedTask;
+        public Task ReportApprovalRequestedAsync(ApprovalRequestPayload payload)
+        {
+            return Task.CompletedTask;
+        }
 
         public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
         {
@@ -694,7 +753,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         {
             public static readonly NoopLease Instance = new();
 
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            public ValueTask DisposeAsync()
+            {
+                return ValueTask.CompletedTask;
+            }
         }
     }
 }

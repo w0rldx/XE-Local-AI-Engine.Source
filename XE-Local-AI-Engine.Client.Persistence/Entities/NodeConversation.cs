@@ -21,16 +21,16 @@ internal sealed record class NodeConversation
     public string Origin { get; set; } = NodeChatOrigin.Local;
 
     /// <summary>
-    /// When this conversation was created by branching another, the source conversation id. Null for
-    /// conversations that were not branched. Provenance only — branched rows are independent
-    /// (Origin=Local) and never sync back.
+    ///     When this conversation was created by branching another, the source conversation id. Null for
+    ///     conversations that were not branched. Provenance only — branched rows are independent
+    ///     (Origin=Local) and never sync back.
     /// </summary>
     public Guid? BranchOfConversationId { get; set; }
 
     /// <summary>
-    /// JSON metadata map of variantGroupId-&gt;selectedMessageId capturing which sibling variant is selected on each
-    /// branched turn. Topology lives on the messages (parent/variant-group); this column is selection metadata only,
-    /// so it is additive, nullable, and E2E-safe (never required to reconstruct the conversation tree).
+    ///     JSON metadata map of variantGroupId-&gt;selectedMessageId capturing which sibling variant is selected on each
+    ///     branched turn. Topology lives on the messages (parent/variant-group); this column is selection metadata only,
+    ///     so it is additive, nullable, and E2E-safe (never required to reconstruct the conversation tree).
     /// </summary>
     public string? SelectedPathJson { get; set; }
 

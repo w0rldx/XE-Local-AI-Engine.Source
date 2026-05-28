@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Embeddings.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Embeddings;
-
 using Microsoft.Extensions.AI;
 
 public sealed class LocalEmbeddingService(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator) : ILocalEmbeddingService

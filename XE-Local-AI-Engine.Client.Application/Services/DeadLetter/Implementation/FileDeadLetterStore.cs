@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
-
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;

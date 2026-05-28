@@ -65,5 +65,4 @@ public sealed class NodeSqliteKeyHolder : INodeSqliteKeyHolder
 
         return derivedKey;
     }
-
 }

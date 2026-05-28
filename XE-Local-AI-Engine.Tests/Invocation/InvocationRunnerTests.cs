@@ -23,7 +23,6 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -201,7 +200,7 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(10, sender.SentCompletions[0].InputTokens);
         AssertEx.Equal(2, sender.SentCompletions[0].OutputTokens);
         AssertEx.Equal(12, sender.SentCompletions[0].TokensUsed);
-        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId, 10, 2, 12, null);
+        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId, 10, 2, 12);
     }
 
     [Test]

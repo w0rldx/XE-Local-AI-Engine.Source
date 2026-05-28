@@ -108,8 +108,7 @@ public sealed class NodeAuthEndpointTests
         using var firstClient = factory.CreateClient();
         using var secondClient = factory.CreateClient();
 
-        var responses = await Task.WhenAll(
-            SetupAsync(firstClient, "first@example.test"),
+        var responses = await Task.WhenAll(SetupAsync(firstClient, "first@example.test"),
             SetupAsync(secondClient, "second@example.test")).ConfigureAwait(false);
 
         try

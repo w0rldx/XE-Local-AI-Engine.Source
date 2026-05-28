@@ -106,9 +106,8 @@ public sealed class ViewportLayoutE2ETests : XEE2ETestBase
         // Strategy: assert that the content area (the scrollable pane the heading lives in)
         // fills more than 50% of the total viewport width. With desktop nav expanded (220px)
         // on a 1280px viewport the content area is ~1060px — well over 50%.
-        var contentAreaWidth = await Page.EvaluateAsync<double>(
-            "() => { const el = document.querySelector('[class*=\"overflow-y-auto\"]'); " +
-            "return el ? el.getBoundingClientRect().width : window.innerWidth; }");
+        var contentAreaWidth = await Page.EvaluateAsync<double>("() => { const el = document.querySelector('[class*=\"overflow-y-auto\"]'); " +
+                                                                "return el ? el.getBoundingClientRect().width : window.innerWidth; }");
 
         await Assert.That(contentAreaWidth).IsGreaterThan(WideViewportWidth * 0.5);
     }

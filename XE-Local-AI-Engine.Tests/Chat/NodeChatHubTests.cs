@@ -62,7 +62,7 @@ public sealed class NodeChatHubTests
                                      .WithUrl("http://localhost" + LocalApiRoutes.LocalChat.Hub, options =>
                                      {
                                          options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                         options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
                                          options.Headers.Add("Origin", "http://localhost");
                                      })
                                      .Build();

@@ -19,7 +19,7 @@ public static class AccessTokenQueryRedactor
             return hasQuestionPrefix ? "?" : string.Empty;
         }
 
-        var segments = query.Split('&', StringSplitOptions.None);
+        var segments = query.Split('&');
         var redacted = false;
         for (var i = 0; i < segments.Length; i++)
         {

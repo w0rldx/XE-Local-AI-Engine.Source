@@ -1,25 +1,22 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-/// Live-invocation tracker backing reconnect/resume (Phase 2.2). It mirrors the dispatcher's
-/// <see cref="IWorkerEventDispatcher.InvocationStateChanged"/> stream into a per-invocation snapshot + state
-/// fan-out so a reconnecting client can re-attach with a fresh consumer. It owns no agent logic — it only
-/// translates <see cref="InvocationState"/> snapshots into <see cref="ChatStreamEvent"/>s the same way the
-/// local pump does.
+///     Live-invocation tracker backing reconnect/resume (Phase 2.2). It mirrors the dispatcher's
+///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> stream into a per-invocation snapshot + state
+///     fan-out so a reconnecting client can re-attach with a fresh consumer. It owns no agent logic — it only
+///     translates <see cref="InvocationState" /> snapshots into <see cref="ChatStreamEvent" />s the same way the
+///     local pump does.
 /// </summary>
 public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 {
     private readonly ConcurrentDictionary<Guid, LiveInvocation> _live = new();
-    private readonly TimeProvider _timeProvider;
     private readonly ILogger<InvocationResumeRegistry> _logger;
+    private readonly TimeProvider _timeProvider;
 
     public InvocationResumeRegistry(IWorkerEventDispatcher eventDispatcher,
         TimeProvider timeProvider,
@@ -46,8 +43,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     {
         if (!_live.TryGetValue(invocationId, out var live) || !IsNonTerminal(live.LatestState.Status))
         {
-            throw new InvalidOperationException(
-                $"Invocation {invocationId} is not resumable. It is unknown or has already reached a terminal state.");
+            throw new InvalidOperationException($"Invocation {invocationId} is not resumable. It is unknown or has already reached a terminal state.");
         }
 
         return ResumeCoreAsync(live, cancellationToken);
@@ -237,13 +233,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    /// One live invocation: the latest snapshot plus the set of attached resume consumers. Each consumer gets
-    /// its own unbounded channel so a slow reader never blocks the dispatcher's publish path.
+    ///     One live invocation: the latest snapshot plus the set of attached resume consumers. Each consumer gets
+    ///     its own unbounded channel so a slow reader never blocks the dispatcher's publish path.
     /// </summary>
     private sealed class LiveInvocation(InvocationState initialState)
     {
-        private readonly object _syncRoot = new();
         private readonly List<Channel<InvocationState>> _subscribers = [];
+        private readonly object _syncRoot = new();
 
         public InvocationState LatestState { get; private set; } = Clone(initialState);
 

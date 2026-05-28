@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Tools;
 
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -47,7 +46,10 @@ public sealed class LocalAgentToolRegistryTests
     {
         var calculate = GetTool("Calculate");
 
-        var result = await InvokeAsync(calculate, new Dictionary<string, object?> { ["expression"] = "12 * 9" });
+        var result = await InvokeAsync(calculate, new Dictionary<string, object?>
+        {
+            ["expression"] = "12 * 9"
+        });
 
         AssertEx.Contains(result, "108");
     }
@@ -57,7 +59,10 @@ public sealed class LocalAgentToolRegistryTests
     {
         var calculate = GetTool("Calculate");
 
-        var result = await InvokeAsync(calculate, new Dictionary<string, object?> { ["expression"] = "drop table users" });
+        var result = await InvokeAsync(calculate, new Dictionary<string, object?>
+        {
+            ["expression"] = "drop table users"
+        });
 
         AssertEx.Contains(result, "Unable to evaluate", StringComparison.OrdinalIgnoreCase);
     }
@@ -79,7 +84,10 @@ public sealed class LocalAgentToolRegistryTests
     {
         var time = GetTool("GetCurrentTime");
 
-        var result = await InvokeAsync(time, new Dictionary<string, object?> { ["timezone"] = "Not/AZone" });
+        var result = await InvokeAsync(time, new Dictionary<string, object?>
+        {
+            ["timezone"] = "Not/AZone"
+        });
 
         AssertEx.Contains(result, "was not recognized", StringComparison.OrdinalIgnoreCase);
     }

@@ -1,15 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-/// Default <see cref="INodeChatRemotePersistenceCoordinator"/>. Persistence-only sibling of the local front
-/// door: it ensures the conversation, persists the synthesized user turn + assistant placeholder with
-/// Origin=Remote, and hands back a session that drives the shared <see cref="INodeChatInvocationPump"/>.
+///     Default <see cref="INodeChatRemotePersistenceCoordinator" />. Persistence-only sibling of the local front
+///     door: it ensures the conversation, persists the synthesized user turn + assistant placeholder with
+///     Origin=Remote, and hands back a session that drives the shared <see cref="INodeChatInvocationPump" />.
 /// </summary>
 public sealed class NodeChatRemotePersistenceCoordinator(
     INodeChatPersistenceService persistence,
@@ -17,9 +13,9 @@ public sealed class NodeChatRemotePersistenceCoordinator(
     TimeProvider timeProvider) : INodeChatRemotePersistenceCoordinator
 {
     private const int RemoteTitleMaxLength = 120;
+    private readonly INodeChatInvocationPump _invocationPump = invocationPump ?? throw new ArgumentNullException(nameof(invocationPump));
 
     private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-    private readonly INodeChatInvocationPump _invocationPump = invocationPump ?? throw new ArgumentNullException(nameof(invocationPump));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public async Task<NodeChatRemotePersistenceSession> BeginAsync(RuntimePackage package,

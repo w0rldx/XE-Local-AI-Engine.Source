@@ -19,10 +19,16 @@ public sealed class SelectedPathResolverTests
         var selection = new Dictionary<Guid, Guid>
         {
             [groupA] = a1.MessageId,
-            [groupB] = b2.MessageId,
+            [groupB] = b2.MessageId
         };
 
-        var path = SelectedPathResolver.Resolve(new[] { a2, b1, a1, b2 }, selection);
+        var path = SelectedPathResolver.Resolve(new[]
+        {
+            a2,
+            b1,
+            a1,
+            b2
+        }, selection);
 
         AssertEx.Equal(2, path.Count);
         AssertEx.Equal(a1.MessageId, path[0].MessageId);
@@ -37,7 +43,12 @@ public sealed class SelectedPathResolverTests
         var middle = Message(seq: 1, group: group, createdAt: 200);
         var newest = Message(seq: 1, group: group, createdAt: 300);
 
-        var path = SelectedPathResolver.Resolve(new[] { middle, newest, oldest }, selection: null);
+        var path = SelectedPathResolver.Resolve(new[]
+        {
+            middle,
+            newest,
+            oldest
+        }, selection: null);
 
         AssertEx.Equal(1, path.Count);
         AssertEx.Equal(newest.MessageId, path[0].MessageId);
@@ -54,14 +65,24 @@ public sealed class SelectedPathResolverTests
         var assistantB = Message(seq: 2, group: userGroup, createdAt: 200);
         var followUp = Message(seq: 3, group: null, createdAt: 300);
 
-        var messages = new[] { prompt, assistantA, assistantB, followUp };
+        var messages = new[]
+        {
+            prompt,
+            assistantA,
+            assistantB,
+            followUp
+        };
 
-        var selectA = SelectedPathResolver.Resolve(
-            messages,
-            new Dictionary<Guid, Guid> { [userGroup] = assistantA.MessageId });
-        var selectB = SelectedPathResolver.Resolve(
-            messages,
-            new Dictionary<Guid, Guid> { [userGroup] = assistantB.MessageId });
+        var selectA = SelectedPathResolver.Resolve(messages,
+            new Dictionary<Guid, Guid>
+            {
+                [userGroup] = assistantA.MessageId
+            });
+        var selectB = SelectedPathResolver.Resolve(messages,
+            new Dictionary<Guid, Guid>
+            {
+                [userGroup] = assistantB.MessageId
+            });
 
         AssertEx.Equal(assistantA.MessageId, selectA[1].MessageId);
         AssertEx.Equal(assistantB.MessageId, selectB[1].MessageId);
@@ -81,9 +102,17 @@ public sealed class SelectedPathResolverTests
         var variant2 = Message(seq: 2, group: group, createdAt: 300);
         var trailing = Message(seq: 3, group: null, createdAt: 400);
 
-        var path = SelectedPathResolver.Resolve(
-            new[] { user, variant1, variant2, trailing },
-            new Dictionary<Guid, Guid> { [group] = variant1.MessageId });
+        var path = SelectedPathResolver.Resolve(new[]
+            {
+                user,
+                variant1,
+                variant2,
+                trailing
+            },
+            new Dictionary<Guid, Guid>
+            {
+                [group] = variant1.MessageId
+            });
 
         AssertEx.Equal(3, path.Count);
         AssertEx.Contains(path, message => message.MessageId == user.MessageId);
@@ -98,7 +127,12 @@ public sealed class SelectedPathResolverTests
         var second = Message(seq: 2, group: null, createdAt: 200);
         var third = Message(seq: 3, group: null, createdAt: 300);
 
-        var path = SelectedPathResolver.Resolve(new[] { third, first, second }, selection: null);
+        var path = SelectedPathResolver.Resolve(new[]
+        {
+            third,
+            first,
+            second
+        }, selection: null);
 
         AssertEx.Equal(3, path.Count);
         AssertEx.Equal(first.MessageId, path[0].MessageId);
@@ -121,21 +155,30 @@ public sealed class SelectedPathResolverTests
         var older = Message(seq: 1, group: group, createdAt: 100);
         var newer = Message(seq: 1, group: group, createdAt: 200);
 
-        var path = SelectedPathResolver.Resolve(
-            new[] { older, newer },
-            new Dictionary<Guid, Guid> { [group] = Guid.NewGuid() });
+        var path = SelectedPathResolver.Resolve(new[]
+            {
+                older,
+                newer
+            },
+            new Dictionary<Guid, Guid>
+            {
+                [group] = Guid.NewGuid()
+            });
 
         AssertEx.Equal(1, path.Count);
         AssertEx.Equal(newer.MessageId, path[0].MessageId);
     }
 
-    private static TestMessage Message(int seq, Guid? group, long createdAt) => new()
+    private static TestMessage Message(int seq, Guid? group, long createdAt)
     {
-        MessageId = Guid.NewGuid(),
-        Sequence = seq,
-        VariantGroupId = group,
-        CreatedAtUtc = createdAt,
-    };
+        return new TestMessage
+        {
+            MessageId = Guid.NewGuid(),
+            Sequence = seq,
+            VariantGroupId = group,
+            CreatedAtUtc = createdAt
+        };
+    }
 
     private sealed class TestMessage : ISelectedPathMessage
     {

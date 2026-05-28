@@ -227,8 +227,7 @@ public sealed class NodeChatStreamServiceTests
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(
-            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -236,7 +235,10 @@ public sealed class NodeChatStreamServiceTests
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             TimeProvider.System,
@@ -272,8 +274,7 @@ public sealed class NodeChatStreamServiceTests
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
-        var offerProvider = CreateOfferProvider(
-            CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -281,7 +282,10 @@ public sealed class NodeChatStreamServiceTests
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             TimeProvider.System,
@@ -328,9 +332,9 @@ public sealed class NodeChatStreamServiceTests
         // path), NOT the client connection token. Trigger it mid-stream and assert the runner-driven Cancelled
         // terminal is persisted.
         await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
-                               "hello",
-                               MessageId: assistantMessageId,
-                               RequestId: requestId)).ConfigureAwait(false))
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
         {
             if (streamEvent.Type == ChatStreamEventTypes.AssistantDelta)
             {
@@ -436,7 +440,10 @@ public sealed class NodeChatStreamServiceTests
         var olderVariantId = Guid.NewGuid();
         var newerVariantId = Guid.NewGuid();
         // Explicitly select the OLDER variant; the resolver would otherwise default to the newest sibling.
-        var selectedPath = new Dictionary<Guid, Guid> { [variantGroupId] = olderVariantId };
+        var selectedPath = new Dictionary<Guid, Guid>
+        {
+            [variantGroupId] = olderVariantId
+        };
 
         var runner = await RunWithVariantConversationAsync(conversationId,
             variantGroupId,
@@ -485,7 +492,10 @@ public sealed class NodeChatStreamServiceTests
         var newerVariantId = Guid.NewGuid();
         // No persisted selection; the request rides a selection for the OLDER variant. The service must persist it
         // (SetSelectedPathAsync) and use it to build context.
-        var requestSelection = new Dictionary<Guid, Guid> { [variantGroupId] = olderVariantId };
+        var requestSelection = new Dictionary<Guid, Guid>
+        {
+            [variantGroupId] = olderVariantId
+        };
 
         var runner = await RunWithVariantConversationAsync(conversationId,
             variantGroupId,
@@ -630,13 +640,21 @@ public sealed class NodeChatStreamServiceTests
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(newUserMessage);
         persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>()).Returns(assistantPending);
         persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-                   .Returns(assistantPending with { Status = NodeChatMessageStatusValues.Queued });
+                   .Returns(assistantPending with
+                   {
+                       Status = NodeChatMessageStatusValues.Queued
+                   });
         persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-                   .Returns(assistantPending with { Status = NodeChatMessageStatusValues.Streaming });
+                   .Returns(assistantPending with
+                   {
+                       Status = NodeChatMessageStatusValues.Streaming
+                   });
         persistence.FlushAssistantPartialAsync(Arg.Any<NodeChatPartialFlushRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Streaming, callInfo.ArgAt<NodeChatPartialFlushRequest>(0).Content, null));
+                   .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Streaming,
+                       callInfo.ArgAt<NodeChatPartialFlushRequest>(0).Content, null));
         persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Status, callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Content ?? string.Empty, null));
+                   .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Status,
+                       callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Content ?? string.Empty, null));
 
         return persistence;
     }
@@ -829,8 +847,6 @@ public sealed class NodeChatStreamServiceTests
 
     private sealed class ContextCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
     {
-        public int ActiveInvocationCount => 0;
-
         // The conversation context assembled onto the runtime package; the selected-path tests assert which
         // variant the service included.
         public IReadOnlyList<ConversationMessageDto> CapturedContext { get; private set; } = [];
@@ -840,6 +856,7 @@ public sealed class NodeChatStreamServiceTests
         // Set by RunWithVariantConversationAsync after the run, from a NSubstitute Received() check on the mock —
         // exposed here so the test reads one object.
         public bool SelectionPersisted { get; set; }
+        public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {
@@ -924,8 +941,6 @@ public sealed class NodeChatStreamServiceTests
 
     private sealed class ReasoningCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
     {
-        public int ActiveInvocationCount => 0;
-
         // The reasoning effort carried on the runtime package handed to the invocation; the test asserts the
         // value selected on the send request reaches the runtime package (or stays null when none was selected).
         public string? LastReasoningEffort { get; private set; }
@@ -935,6 +950,7 @@ public sealed class NodeChatStreamServiceTests
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
 
         public bool CaptureObserved { get; private set; }
+        public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
         {

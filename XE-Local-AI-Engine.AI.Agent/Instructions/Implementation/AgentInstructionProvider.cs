@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.AI.Agent.Instructions.Implementation;
 using System.Reflection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
-using XE_Local_AI_Engine.AI.Agent.Instructions;
 
 internal sealed class AgentInstructionProvider : IAgentInstructionProvider
 {

@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -12,11 +10,11 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
 /// <summary>
-/// Default <see cref="INodeChatRegenerationService"/>. Reuses the shared runner/pump/dispatcher the local send
-/// path uses (<see cref="NodeChatStreamService"/>); the only structural differences are that the assistant
-/// message is a sibling VARIANT (minted via <see cref="INodeChatPersistenceService.CreateMessageVariantAsync"/>,
-/// not a fresh placeholder) and the conversation context is built UP TO the parent user turn so the regenerate
-/// answers the same question without seeing the original answer or other sibling variants.
+///     Default <see cref="INodeChatRegenerationService" />. Reuses the shared runner/pump/dispatcher the local send
+///     path uses (<see cref="NodeChatStreamService" />); the only structural differences are that the assistant
+///     message is a sibling VARIANT (minted via <see cref="INodeChatPersistenceService.CreateMessageVariantAsync" />,
+///     not a fresh placeholder) and the conversation context is built UP TO the parent user turn so the regenerate
+///     answers the same question without seeing the original answer or other sibling variants.
 /// </summary>
 public sealed class NodeChatRegenerationService(
     INodeChatPersistenceService persistence,
@@ -76,13 +74,13 @@ public sealed class NodeChatRegenerationService(
         // Reuse the backend mint: creates the sibling placeholder (pending, shared variant_group_id, parent copied
         // from the original) — never an in-place overwrite. We do NOT duplicate mint logic here.
         var variant = await persistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversationId,
-                originalMessageId,
-                newMessageId,
-                requestId,
-                startedAtUtc,
-                original.Model),
-            cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
+                              originalMessageId,
+                              newMessageId,
+                              requestId,
+                              startedAtUtc,
+                              original.Model),
+                          cancellationToken).ConfigureAwait(false)
+                      ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
 
         var placeholder = variant.Variant;
         var correlation = new NodeChatMessageCorrelation(conversationId, placeholder.MessageId, requestId);
@@ -140,7 +138,7 @@ public sealed class NodeChatRegenerationService(
         // the runtime package as the offer list; the invocation factory resolves the matching executables from the
         // registry by name.
         var offerTools = useLocalTools && localChatOptions.Value.EnableTools;
-        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : (IReadOnlyList<AllowedToolDto>?)null;
+        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             conversationId,
@@ -324,13 +322,13 @@ public sealed class NodeChatRegenerationService(
     }
 
     /// <summary>
-    /// Builds the regeneration context: every completed message UP TO AND INCLUDING the USER turn that precedes
-    /// the turn being regenerated, excluding the original assistant answer and any sibling variants. Assistant
-    /// placeholders are minted with no parent_message_id (the variant's parent is the prior assistant, not the
-    /// user turn), so a parent walk cannot reach the user turn. Instead the cutoff is the latest USER turn
-    /// strictly before the EARLIEST member of the original's variant group — every member of that group (the
-    /// original answer and all sibling variants) sorts at or after that user turn and is therefore excluded.
-    /// When no preceding user turn exists, falls back to everything strictly before the earliest group member.
+    ///     Builds the regeneration context: every completed message UP TO AND INCLUDING the USER turn that precedes
+    ///     the turn being regenerated, excluding the original assistant answer and any sibling variants. Assistant
+    ///     placeholders are minted with no parent_message_id (the variant's parent is the prior assistant, not the
+    ///     user turn), so a parent walk cannot reach the user turn. Instead the cutoff is the latest USER turn
+    ///     strictly before the EARLIEST member of the original's variant group — every member of that group (the
+    ///     original answer and all sibling variants) sorts at or after that user turn and is therefore excluded.
+    ///     When no preceding user turn exists, falls back to everything strictly before the earliest group member.
     /// </summary>
     private static IReadOnlyList<ConversationMessageDto> BuildRegenerationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
@@ -345,39 +343,39 @@ public sealed class NodeChatRegenerationService(
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
         var messages = selected
-                                   .Where(message => message.Sequence <= cutoffSequence
-                                                     && !string.IsNullOrWhiteSpace(message.Content)
-                                                     && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                                   .OrderBy(static message => message.Sequence)
-                                   .Select(static (message, index) => new ConversationMessageDto
-                                   {
-                                       Id = message.MessageId,
-                                       Role = string.Equals(message.Role, AssistantRole, StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                                       Content = message.Content,
-                                       Thinking = message.Reasoning,
-                                       ModelUsed = message.Model,
-                                       SortOrder = index
-                                   })
-                                   .ToList();
+                       .Where(message => message.Sequence <= cutoffSequence
+                                         && !string.IsNullOrWhiteSpace(message.Content)
+                                         && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+                       .OrderBy(static message => message.Sequence)
+                       .Select(static (message, index) => new ConversationMessageDto
+                       {
+                           Id = message.MessageId,
+                           Role = string.Equals(message.Role, AssistantRole, StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
+                           Content = message.Content,
+                           Thinking = message.Reasoning,
+                           ModelUsed = message.Model,
+                           SortOrder = index
+                       })
+                       .ToList();
 
         return messages;
     }
 
     /// <summary>
-    /// Resolves the cutoff sequence (inclusive) for the regeneration context: the latest USER turn strictly
-    /// before the earliest member of the original's variant group. The group spans the original answer and every
-    /// sibling variant, so anchoring on its earliest member keeps all of them out of context whichever member is
-    /// being regenerated. With no preceding user turn, returns the slot before the earliest group member so the
-    /// context is everything that came before — never the answer being replaced.
+    ///     Resolves the cutoff sequence (inclusive) for the regeneration context: the latest USER turn strictly
+    ///     before the earliest member of the original's variant group. The group spans the original answer and every
+    ///     sibling variant, so anchoring on its earliest member keeps all of them out of context whichever member is
+    ///     being regenerated. With no preceding user turn, returns the slot before the earliest group member so the
+    ///     context is everything that came before — never the answer being replaced.
     /// </summary>
     private static int ResolvePrecedingUserTurnCutoff(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original)
     {
         var earliestGroupSequence = original.VariantGroupId is { } groupId
             ? conversation.Messages.Where(message => message.VariantGroupId == groupId)
-                                   .Select(message => message.Sequence)
-                                   .DefaultIfEmpty(original.Sequence)
-                                   .Min()
+                          .Select(message => message.Sequence)
+                          .DefaultIfEmpty(original.Sequence)
+                          .Min()
             : original.Sequence;
 
         var precedingUserTurn = conversation.Messages

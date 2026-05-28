@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Shutdown;
-
 using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Connection;

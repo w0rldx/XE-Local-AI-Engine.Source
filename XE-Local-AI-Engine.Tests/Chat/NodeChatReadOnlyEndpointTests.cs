@@ -9,10 +9,10 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// HTTP-layer enforcement of the read-only (Origin=Remote) boundary. The guard + persistence layers are
-/// unit-tested elsewhere; these drive the actual FastEndpoints pipeline and assert the authoritative wire
-/// contract: 409 Conflict with body {code:"conversation-read-only", reason:"remote-origin"}. This is the
-/// security-relevant boundary that stops a node-local operator from mutating a platform-owned conversation.
+///     HTTP-layer enforcement of the read-only (Origin=Remote) boundary. The guard + persistence layers are
+///     unit-tested elsewhere; these drive the actual FastEndpoints pipeline and assert the authoritative wire
+///     contract: 409 Conflict with body {code:"conversation-read-only", reason:"remote-origin"}. This is the
+///     security-relevant boundary that stops a node-local operator from mutating a platform-owned conversation.
 /// </summary>
 public sealed class NodeChatReadOnlyEndpointTests
 {
@@ -89,7 +89,9 @@ public sealed class NodeChatReadOnlyEndpointTests
         using var request = CreateJsonRequest(factory,
             HttpMethod.Post,
             $"/api/local/v1/chat/conversations/{conversationId}/branch/{Guid.NewGuid()}",
-            new { });
+            new
+            {
+            });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
@@ -108,7 +110,9 @@ public sealed class NodeChatReadOnlyEndpointTests
         using var request = CreateJsonRequest(factory,
             HttpMethod.Post,
             $"/api/local/v1/chat/conversations/{conversationId}/messages/{Guid.NewGuid()}/revisions",
-            new { });
+            new
+            {
+            });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         await AssertReadOnlyConflictAsync(response).ConfigureAwait(false);
@@ -162,11 +166,11 @@ public sealed class NodeChatReadOnlyEndpointTests
         var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
         var conversationId = Guid.NewGuid();
         await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId,
-                "Platform conversation",
-                "client-node",
-                10,
-                NodeChatOriginValues.Remote))
-            .ConfigureAwait(false);
+                             "Platform conversation",
+                             "client-node",
+                             10,
+                             NodeChatOriginValues.Remote))
+                         .ConfigureAwait(false);
         return conversationId;
     }
 

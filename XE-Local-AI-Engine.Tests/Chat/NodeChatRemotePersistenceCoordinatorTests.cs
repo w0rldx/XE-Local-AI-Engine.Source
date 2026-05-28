@@ -19,10 +19,10 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
 
         // WithUserMessage clears the builder's seed message, so the context is exactly these three (ordered).
         var package = RuntimePackageBuilder.Valid()
-            .WithUserMessage("first question")
-            .WithConversationMessage(MessageRole.Assistant, "first answer", 1)
-            .WithConversationMessage(MessageRole.User, "latest question", 2)
-            .Build();
+                                           .WithUserMessage("first question")
+                                           .WithConversationMessage(MessageRole.Assistant, "first answer", 1)
+                                           .WithConversationMessage(MessageRole.User, "latest question", 2)
+                                           .Build();
 
         await coordinator.BeginAsync(package);
 

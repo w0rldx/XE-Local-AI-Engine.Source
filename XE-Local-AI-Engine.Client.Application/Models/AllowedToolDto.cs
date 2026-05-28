@@ -13,9 +13,9 @@ public sealed record AllowedToolDto
     public string? ParameterSchema { get; init; }
 
     /// <summary>
-    /// When true, the tool must be gated behind an approval round-trip before it executes. All current beta
-    /// tools ship as non-approval (auto-execute); the gating layer reads this flag so a future approval flow
-    /// can opt individual tools in without changing the execution path.
+    ///     When true, the tool must be gated behind an approval round-trip before it executes. All current beta
+    ///     tools ship as non-approval (auto-execute); the gating layer reads this flag so a future approval flow
+    ///     can opt individual tools in without changing the execution path.
     /// </summary>
     public bool RequiresApproval { get; init; }
 }
