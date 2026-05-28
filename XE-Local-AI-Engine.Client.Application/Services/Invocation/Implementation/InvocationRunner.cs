@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Invocation;
-
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
@@ -85,7 +83,7 @@ public sealed class InvocationRunner : IInvocationRunner
 
     public int ActiveInvocationCount => _activeInvocationCompletions.Count;
 
-    public async Task RunAsync(Models.RuntimePackage package, CancellationToken cancellationToken = default)
+    public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
     {
         using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
         await RunAsync(context, cancellationToken).ConfigureAwait(false);
@@ -388,6 +386,67 @@ public sealed class InvocationRunner : IInvocationRunner
         CancelPendingToolCalls(invocationId);
     }
 
+    public void CancelAll()
+    {
+        CancellationTokenSource? invocationCancellationTokenSource;
+
+        lock (_syncRoot)
+        {
+            invocationCancellationTokenSource = _invocationCancellationTokenSource;
+        }
+
+        invocationCancellationTokenSource?.Cancel();
+
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
+                removedPendingToolCall.ResultCompletion.TrySetCanceled();
+            }
+        }
+    }
+
+    public void CleanupStaleToolCalls(TimeSpan maxAge)
+    {
+        var cutoff = DateTimeOffset.UtcNow - maxAge;
+
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (pendingToolCall.Value.CreatedAt >= cutoff)
+            {
+                continue;
+            }
+
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                var timeoutException = new TimeoutException("Tool call timed out during cleanup.");
+                removedPendingToolCall.ApprovalCompletion.TrySetException(timeoutException);
+                removedPendingToolCall.ResultCompletion.TrySetException(timeoutException);
+            }
+        }
+    }
+
+    public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
+        {
+            pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
+        }
+    }
+
+    public void ResolveToolCallResult(ToolCallResultEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
+        {
+            pendingToolCall.ResultCompletion.TrySetResult(evt);
+        }
+    }
+
     public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
         string toolName,
         string parameters,
@@ -539,67 +598,6 @@ public sealed class InvocationRunner : IInvocationRunner
         }).ConfigureAwait(false);
     }
 
-    public void CancelAll()
-    {
-        CancellationTokenSource? invocationCancellationTokenSource;
-
-        lock (_syncRoot)
-        {
-            invocationCancellationTokenSource = _invocationCancellationTokenSource;
-        }
-
-        invocationCancellationTokenSource?.Cancel();
-
-        foreach (var pendingToolCall in _pendingToolCalls)
-        {
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-            {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
-                removedPendingToolCall.ResultCompletion.TrySetCanceled();
-            }
-        }
-    }
-
-    public void CleanupStaleToolCalls(TimeSpan maxAge)
-    {
-        var cutoff = DateTimeOffset.UtcNow - maxAge;
-
-        foreach (var pendingToolCall in _pendingToolCalls)
-        {
-            if (pendingToolCall.Value.CreatedAt >= cutoff)
-            {
-                continue;
-            }
-
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-            {
-                var timeoutException = new TimeoutException("Tool call timed out during cleanup.");
-                removedPendingToolCall.ApprovalCompletion.TrySetException(timeoutException);
-                removedPendingToolCall.ResultCompletion.TrySetException(timeoutException);
-            }
-        }
-    }
-
-    public void ResolveApprovalResult(ApprovalResolvedEvent evt)
-    {
-        ArgumentNullException.ThrowIfNull(evt);
-
-        if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
-        {
-            pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
-        }
-    }
-
-    public void ResolveToolCallResult(ToolCallResultEvent evt)
-    {
-        ArgumentNullException.ThrowIfNull(evt);
-
-        if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
-        {
-            pendingToolCall.ResultCompletion.TrySetResult(evt);
-        }
-    }
-
     private async Task TryReportCapabilitiesAfterInvocationAsync(Guid invocationId)
     {
         try
@@ -652,7 +650,7 @@ public sealed class InvocationRunner : IInvocationRunner
         return _defaultModel;
     }
 
-    private InvocationAgentDefinition BuildInvocationDefinition(Models.RuntimePackage package, string resolvedModel)
+    private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package, string resolvedModel)
     {
         var messages = BuildChatMessages(package);
 
@@ -663,7 +661,7 @@ public sealed class InvocationRunner : IInvocationRunner
             package.ReasoningEffort);
     }
 
-    private static IReadOnlyList<ChatMessage> BuildChatMessages(Models.RuntimePackage package)
+    private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)
     {
         return package.ConversationContext
                       .OrderBy(message => message.SortOrder)
@@ -681,7 +679,7 @@ public sealed class InvocationRunner : IInvocationRunner
                       .ToList();
     }
 
-    private IReadOnlyList<AITool> BuildInvocationTools(Models.RuntimePackage package)
+    private IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)
     {
         // The runtime package only carries the OFFER list. Api-side tools get a real bridge that round-trips to the
         // platform; client-local (catalog) tools get a name-only placeholder, and the invocation factory swaps it for
@@ -814,7 +812,7 @@ public sealed class InvocationRunner : IInvocationRunner
         return message.Length > 512 ? message[..512] : message;
     }
 
-    private static bool IsLocalLoopbackInvocation(Models.RuntimePackage package)
+    private static bool IsLocalLoopbackInvocation(RuntimePackage package)
     {
         ArgumentNullException.ThrowIfNull(package);
 
