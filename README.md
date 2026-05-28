@@ -1,12 +1,14 @@
 # XE Local AI Engine
 
-XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform `WorkerHub` connection, and coordinates local model/runtime workflows through HostAgent and Tray components.
+XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform
+`WorkerHub` connection, and coordinates local model/runtime workflows through HostAgent and Tray components.
 
 The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
 ## What ships from this repo
 
-- **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub` connection.
+- **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
+  connection.
 - **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, models, and HostAgent actions.
 - **HostAgent.Windows / HostAgent.Linux** — local substrate components for Windows-managed WSL2 and Linux-native runtime management.
 - **Tray Launcher** (`XE-Local-AI-Engine.Tray`) — desktop entry point, status surface, and local start/stop/restart control.
