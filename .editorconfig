@@ -177,6 +177,8 @@ csharp_style_prefer_utf8_string_literals = true:suggestion
 dotnet_diagnostic.CA1032.severity = none
 dotnet_diagnostic.CA1812.severity = none
 dotnet_diagnostic.S6667.severity = none
+# Rider Code Cleanup reorders type members and splits overloads apart; let the layout win instead of fighting S4136 every build.
+dotnet_diagnostic.S4136.severity = none
 
 # ReSharper properties
 resharper_enforce_line_ending_style = true
