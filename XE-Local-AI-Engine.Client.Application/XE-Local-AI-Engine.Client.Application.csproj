@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Client</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI"/>
+    <PackageReference Include="BouncyCastle.Cryptography"/>
+    <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
+    <PackageReference Include="Grpc.Net.Client"/>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"/>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
+    <PackageReference Include="Microsoft.Extensions.AI"/>
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
+    <PackageReference Include="NSec.Cryptography"/>
+    <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="Serilog"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
+    <ProjectReference Include="..\..\..\C0re.AI.Shared.Contracts\C0re.AI.Shared.Contracts.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
+    <Using Include="C0re.AI.Shared.Contracts.Events"/>
+    <Using Include="Microsoft.Extensions.Configuration"/>
+    <Using Include="Microsoft.Extensions.DependencyInjection"/>
+    <Using Include="Microsoft.Extensions.Hosting"/>
+    <Using Include="Microsoft.Extensions.Logging"/>
+    <Using Include="System.Net.Http.Json"/>
+  </ItemGroup>
+
+</Project>

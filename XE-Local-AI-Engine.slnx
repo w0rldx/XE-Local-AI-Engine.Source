@@ -10,6 +10,7 @@
         <Project Path="XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj"/>
         <Project Path="XE-Local-AI-Engine.Tray/XE-Local-AI-Engine.Tray.csproj"/>
     </Folder>
