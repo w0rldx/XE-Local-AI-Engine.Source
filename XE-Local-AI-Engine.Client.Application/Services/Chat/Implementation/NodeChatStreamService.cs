@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -130,7 +128,7 @@ public sealed class NodeChatStreamService(
         // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
         // list; the invocation factory resolves the matching executables from the registry by name.
         var offerTools = request.UseLocalTools && localChatOptions.Value.EnableTools;
-        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : (IReadOnlyList<AllowedToolDto>?)null;
+        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,

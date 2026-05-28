@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-
 using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;

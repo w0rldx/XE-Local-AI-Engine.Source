@@ -1,23 +1,22 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-/// Shared per-invocation persistence pump (Phase 0.2). It consumes the <see cref="InvocationState"/> deltas a
-/// single agent run produces and persists them to node SQLite through <see cref="INodeChatPersistenceService"/>
-/// — flushing streamed partials and terminalizing the assistant message — for BOTH front doors:
-/// <list type="bullet">
-/// <item>local loopback (<see cref="NodeChatStreamService"/>), which additionally turns each persisted state
-/// into a <see cref="ChatStreamEvent"/> for its SSE response;</item>
-/// <item>the platform path (<c>WorkerEventDispatcher</c>), which only needs the persistence side.</item>
-/// </list>
-/// The pump owns no agent logic and no transport: it is driven one <see cref="InvocationState"/> at a time by
-/// the caller (the caller decides where states come from — a local channel or the dispatcher's
-/// <c>InvocationStateChanged</c> stream). It is the write counterpart to the read-only
-/// <see cref="InvocationResumeRegistry"/>, which translates the same states into resume events.
+///     Shared per-invocation persistence pump (Phase 0.2). It consumes the <see cref="InvocationState" /> deltas a
+///     single agent run produces and persists them to node SQLite through <see cref="INodeChatPersistenceService" />
+///     — flushing streamed partials and terminalizing the assistant message — for BOTH front doors:
+///     <list type="bullet">
+///         <item>
+///             local loopback (<see cref="NodeChatStreamService" />), which additionally turns each persisted state
+///             into a <see cref="ChatStreamEvent" /> for its SSE response;
+///         </item>
+///         <item>the platform path (<c>WorkerEventDispatcher</c>), which only needs the persistence side.</item>
+///     </list>
+///     The pump owns no agent logic and no transport: it is driven one <see cref="InvocationState" /> at a time by
+///     the caller (the caller decides where states come from — a local channel or the dispatcher's
+///     <c>InvocationStateChanged</c> stream). It is the write counterpart to the read-only
+///     <see cref="InvocationResumeRegistry" />, which translates the same states into resume events.
 /// </summary>
 public sealed class NodeChatInvocationPump(
     INodeChatPersistenceService persistence,
@@ -27,10 +26,10 @@ public sealed class NodeChatInvocationPump(
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <summary>
-    /// Persists a streamed content/reasoning delta if the incoming state has advanced past
-    /// <paramref name="cursor"/>. Returns the updated cursor and, when a delta was persisted, the persisted
-    /// message plus the raw delta slices so the caller can emit a stream event. When nothing advanced the
-    /// returned <see cref="NodeChatPumpFlushResult.Persisted"/> is null and the cursor is unchanged.
+    ///     Persists a streamed content/reasoning delta if the incoming state has advanced past
+    ///     <paramref name="cursor" />. Returns the updated cursor and, when a delta was persisted, the persisted
+    ///     message plus the raw delta slices so the caller can emit a stream event. When nothing advanced the
+    ///     returned <see cref="NodeChatPumpFlushResult.Persisted" /> is null and the cursor is unchanged.
     /// </summary>
     public async Task<NodeChatPumpFlushResult> FlushDeltaAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
@@ -61,9 +60,9 @@ public sealed class NodeChatInvocationPump(
     }
 
     /// <summary>
-    /// Terminalizes the assistant message from a terminal <see cref="InvocationState"/> (Completed / Cancelled /
-    /// Failed). Always persists on <see cref="CancellationToken.None"/> so the terminal row is written even when
-    /// the run was cancelled. Returns the persisted message and the resolved terminal status/event type.
+    ///     Terminalizes the assistant message from a terminal <see cref="InvocationState" /> (Completed / Cancelled /
+    ///     Failed). Always persists on <see cref="CancellationToken.None" /> so the terminal row is written even when
+    ///     the run was cancelled. Returns the persisted message and the resolved terminal status/event type.
     /// </summary>
     public async Task<NodeChatPumpTerminalResult> TerminalizeAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
@@ -93,8 +92,8 @@ public sealed class NodeChatInvocationPump(
     }
 
     /// <summary>
-    /// Terminalizes a stream that ended WITHOUT a terminal invocation state — interrupted (process/stream loss)
-    /// or cancelled (client cancellation). Writes the last-seen content under the chosen terminal status.
+    ///     Terminalizes a stream that ended WITHOUT a terminal invocation state — interrupted (process/stream loss)
+    ///     or cancelled (client cancellation). Writes the last-seen content under the chosen terminal status.
     /// </summary>
     public async Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
         NodeChatPumpCursor cursor,

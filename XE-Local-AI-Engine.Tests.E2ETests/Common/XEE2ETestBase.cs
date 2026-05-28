@@ -11,11 +11,11 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     Base for browser-driven XE node E2E tests. Mirrors the C0re <c>E2ETestBase</c> shell
 ///     (headless-via-<c>HEADED</c> Chromium, tracing-on-failure to <c>test-results/traces/</c>,
 ///     <c>PerTestSession</c> shared fixtures, bounded parallelism) but drops C0re's identity
-    ///     login/cookie helpers — the XE node is same-origin.
+///     login/cookie helpers — the XE node is same-origin.
 ///     <para>
 ///         Single origin: the host serves both the API and the SPA, so
 ///         <see cref="FrontendBaseUrl" /> == <see cref="ApiBaseUrl" /> == the factory's ServerAddress.
-    ///         Navigate to <see cref="NodeAppUrl" /> so the browser loads the SPA shell from the node host.
+///         Navigate to <see cref="NodeAppUrl" /> so the browser loads the SPA shell from the node host.
 ///     </para>
 /// </summary>
 // S101: "XEE2ETestBase" keeps the "XE" product prefix on "E2ETestBase"; the consecutive
@@ -97,8 +97,11 @@ public abstract class XEE2ETestBase : PageTest
         // label, so GetByLabel("Password") is either ambiguous (matches the toggle) or empty (exact
         // misses the asterisk). The type='password' input is unique on this page.
         await Page.Locator("input[type='password']")
-            .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword).ConfigureAwait(false);
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Sign in" }).ClickAsync().ConfigureAwait(false);
+                  .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword).ConfigureAwait(false);
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Sign in"
+        }).ClickAsync().ConfigureAwait(false);
 
         // On success the SPA navigates away from /login.
         await Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);

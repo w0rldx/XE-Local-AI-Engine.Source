@@ -36,7 +36,7 @@ public static class AgentServiceCollectionExtensions
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
 
         // Requires a prior IChatClient registration in the host composition root.
-        DecorateChatClientPipeline(services);
+        services.DecorateChatClientPipeline();
 
         _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
         _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();

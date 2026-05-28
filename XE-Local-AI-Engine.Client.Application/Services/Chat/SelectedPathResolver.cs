@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-/// Minimal, node-agnostic view of a single conversation message that the
-/// <see cref="SelectedPathResolver"/> needs in order to resolve the selected linear path.
-/// Callers map their own message type (node <c>NodeChatMessageResponse</c>, platform DTOs, etc.)
-/// into this shape. Only the fields the resolution algorithm reads live here; the resolver returns
-/// the caller's original objects, so no other message data needs to be projected.
+///     Minimal, node-agnostic view of a single conversation message that the
+///     <see cref="SelectedPathResolver" /> needs in order to resolve the selected linear path.
+///     Callers map their own message type (node <c>NodeChatMessageResponse</c>, platform DTOs, etc.)
+///     into this shape. Only the fields the resolution algorithm reads live here; the resolver returns
+///     the caller's original objects, so no other message data needs to be projected.
 /// </summary>
 public interface ISelectedPathMessage
 {
@@ -16,51 +16,50 @@ public interface ISelectedPathMessage
     int Sequence { get; }
 
     /// <summary>
-    /// Group that ties variant siblings together. <c>null</c> for ordinary single messages,
-    /// which are always included in the path.
+    ///     Group that ties variant siblings together. <c>null</c> for ordinary single messages,
+    ///     which are always included in the path.
     /// </summary>
     Guid? VariantGroupId { get; }
 
     /// <summary>
-    /// Creation timestamp (epoch millis) used only as a deterministic tie-break when selecting the
-    /// default (newest) sibling of a variant group and two siblings share the same <see cref="Sequence"/>.
+    ///     Creation timestamp (epoch millis) used only as a deterministic tie-break when selecting the
+    ///     default (newest) sibling of a variant group and two siblings share the same <see cref="Sequence" />.
     /// </summary>
     long CreatedAtUtc { get; }
 }
 
 /// <summary>
-/// Standalone, dependency-free resolver that collapses a conversation's full message set into the
-/// linear "selected path" — exactly one variant per variant group, ordered by sequence.
-///
-/// IMPORTANT: This component must stay node-agnostic so the platform side can reuse it. Do NOT add
-/// references to node-only services (DbContext, persistence, SignalR, FastEndpoints, DTOs). It operates
-/// solely on the <see cref="ISelectedPathMessage"/> abstraction plus the caller-supplied selection map.
-///
-/// Resolution rules:
-/// <list type="bullet">
-/// <item>Messages without a <c>VariantGroupId</c> are always included.</item>
-/// <item>For each variant group, include ONLY the selected variant. The selection comes from the
-/// supplied map (<c>variantGroupId -&gt; selectedMessageId</c>); if the group has no recorded selection
-/// (or the recorded id is no longer present), default to the NEWEST sibling — highest <c>Sequence</c>,
-/// tie-broken by latest <c>CreatedAtUtc</c> then largest <c>MessageId</c>.</item>
-/// <item>Non-destructive: deselected siblings are simply omitted from the output, never mutated.</item>
-/// <item>The output is ordered by <c>Sequence</c> ascending.</item>
-/// </list>
+///     Standalone, dependency-free resolver that collapses a conversation's full message set into the
+///     linear "selected path" — exactly one variant per variant group, ordered by sequence.
+///     IMPORTANT: This component must stay node-agnostic so the platform side can reuse it. Do NOT add
+///     references to node-only services (DbContext, persistence, SignalR, FastEndpoints, DTOs). It operates
+///     solely on the <see cref="ISelectedPathMessage" /> abstraction plus the caller-supplied selection map.
+///     Resolution rules:
+///     <list type="bullet">
+///         <item>Messages without a <c>VariantGroupId</c> are always included.</item>
+///         <item>
+///             For each variant group, include ONLY the selected variant. The selection comes from the
+///             supplied map (<c>variantGroupId -&gt; selectedMessageId</c>); if the group has no recorded selection
+///             (or the recorded id is no longer present), default to the NEWEST sibling — highest <c>Sequence</c>,
+///             tie-broken by latest <c>CreatedAtUtc</c> then largest <c>MessageId</c>.
+///         </item>
+///         <item>Non-destructive: deselected siblings are simply omitted from the output, never mutated.</item>
+///         <item>The output is ordered by <c>Sequence</c> ascending.</item>
+///     </list>
 /// </summary>
 public static class SelectedPathResolver
 {
     /// <summary>
-    /// Resolves the selected linear path from <paramref name="messages"/> using <paramref name="selection"/>.
+    ///     Resolves the selected linear path from <paramref name="messages" /> using <paramref name="selection" />.
     /// </summary>
-    /// <typeparam name="TMessage">The caller's message type, adapted to <see cref="ISelectedPathMessage"/>.</typeparam>
+    /// <typeparam name="TMessage">The caller's message type, adapted to <see cref="ISelectedPathMessage" />.</typeparam>
     /// <param name="messages">All conversation messages (any order). Not mutated.</param>
     /// <param name="selection">
-    /// Map of <c>variantGroupId -&gt; selectedMessageId</c>. May be <c>null</c> or empty, in which case every
-    /// group falls back to its newest sibling.
+    ///     Map of <c>variantGroupId -&gt; selectedMessageId</c>. May be <c>null</c> or empty, in which case every
+    ///     group falls back to its newest sibling.
     /// </param>
-    /// <returns>The selected path, ordered by <see cref="ISelectedPathMessage.Sequence"/> ascending.</returns>
-    public static IReadOnlyList<TMessage> Resolve<TMessage>(
-        IEnumerable<TMessage> messages,
+    /// <returns>The selected path, ordered by <see cref="ISelectedPathMessage.Sequence" /> ascending.</returns>
+    public static IReadOnlyList<TMessage> Resolve<TMessage>(IEnumerable<TMessage> messages,
         IReadOnlyDictionary<Guid, Guid>? selection)
         where TMessage : ISelectedPathMessage
     {
@@ -118,8 +117,7 @@ public static class SelectedPathResolver
         return selected;
     }
 
-    private static TMessage ChooseVariant<TMessage>(
-        IReadOnlyList<TMessage> siblings,
+    private static TMessage ChooseVariant<TMessage>(IReadOnlyList<TMessage> siblings,
         IReadOnlyDictionary<Guid, Guid>? selection,
         Guid groupId)
         where TMessage : ISelectedPathMessage

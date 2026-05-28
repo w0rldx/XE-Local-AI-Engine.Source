@@ -147,7 +147,11 @@ internal static class ChatEndpoint
             eval_duration = 1
         };
 
-        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, new object[] { toolCallChunk, doneChunk }).ConfigureAwait(false);
+        await FakeOllamaEndpointMapper.WriteNdjsonAsync(context, new object[]
+        {
+            toolCallChunk,
+            doneChunk
+        }).ConfigureAwait(false);
     }
 
     private static IEnumerable<Message> ReadMessages(JsonElement root)

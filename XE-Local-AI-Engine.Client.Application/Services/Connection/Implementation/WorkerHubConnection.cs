@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Connection;
-
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Connections;

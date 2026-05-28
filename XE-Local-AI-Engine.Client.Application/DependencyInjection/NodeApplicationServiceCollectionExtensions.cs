@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
@@ -67,16 +66,16 @@ public static class NodeApplicationServiceCollectionExtensions
                .Bind(configuration.GetSection(WorkerNodeOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddOptions<ClientSecurityOptions>()
-                .Bind(configuration.GetSection(ClientSecurityOptions.SectionName))
-                .ValidateOnStart();
+               .Bind(configuration.GetSection(ClientSecurityOptions.SectionName))
+               .ValidateOnStart();
         builder.Services.AddOptions<NodeAuthOptions>()
-                .Bind(configuration.GetSection(NodeAuthOptions.SectionName))
-                .ValidateDataAnnotations()
-                .Validate(static options => !string.IsNullOrWhiteSpace(options.Jwt.Issuer), "NodeAuth:Jwt:Issuer is required.")
-                .Validate(static options => !string.IsNullOrWhiteSpace(options.Jwt.Audience), "NodeAuth:Jwt:Audience is required.")
-                .Validate(static options => options.Jwt.AccessTokenMinutes is >= 1 and <= 1440, "NodeAuth:Jwt:AccessTokenMinutes must be between 1 and 1440.")
-                .Validate(static options => options.RefreshTokenDays is >= 1 and <= 365, "NodeAuth:RefreshTokenDays must be between 1 and 365.")
-                .ValidateOnStart();
+               .Bind(configuration.GetSection(NodeAuthOptions.SectionName))
+               .ValidateDataAnnotations()
+               .Validate(static options => !string.IsNullOrWhiteSpace(options.Jwt.Issuer), "NodeAuth:Jwt:Issuer is required.")
+               .Validate(static options => !string.IsNullOrWhiteSpace(options.Jwt.Audience), "NodeAuth:Jwt:Audience is required.")
+               .Validate(static options => options.Jwt.AccessTokenMinutes is >= 1 and <= 1440, "NodeAuth:Jwt:AccessTokenMinutes must be between 1 and 1440.")
+               .Validate(static options => options.RefreshTokenDays is >= 1 and <= 365, "NodeAuth:RefreshTokenDays must be between 1 and 365.")
+               .ValidateOnStart();
         builder.Services.AddOptions<CloudProviderOptions>()
                .Bind(configuration.GetSection(CloudProviderOptions.SectionName))
                .ValidateOnStart();
@@ -203,8 +202,8 @@ public static class NodeApplicationServiceCollectionExtensions
 
             options.UseSqlite(connectionString)
                    .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                    .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
-                        serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
+                   .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                       serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
 
         builder.Services.AddDbContext<NodeIdentityDbContext>(options =>

@@ -39,15 +39,15 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var partial = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "Hello", "thinking", 14)).ConfigureAwait(false);
         var appended = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, " world", null, 15, false)).ConfigureAwait(false);
         var completed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                16,
-                appended.Content,
-                Model: "llama",
-                InputCount: 10,
-                OutputCount: 3,
-                TotalCount: 13,
-                ReasoningCount: 1))
-                                      .ConfigureAwait(false);
+                                         NodeChatMessageStatusValues.Completed,
+                                         16,
+                                         appended.Content,
+                                         Model: "llama",
+                                         InputCount: 10,
+                                         OutputCount: 3,
+                                         TotalCount: 13,
+                                         ReasoningCount: 1))
+                                     .ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, user.Status);
         AssertEx.Equal("hello", user.Content);
@@ -175,11 +175,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversationId = Guid.NewGuid();
 
         var ensured = await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId,
-                "Remote thread",
-                "node",
-                100,
-                NodeChatOriginValues.Remote))
-            .ConfigureAwait(false);
+                                       "Remote thread",
+                                       "node",
+                                       100,
+                                       NodeChatOriginValues.Remote))
+                                   .ConfigureAwait(false);
 
         AssertEx.Equal(conversationId, ensured.ConversationId);
         AssertEx.Equal("Remote thread", ensured.Title);
@@ -198,11 +198,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Original", "node", 200)).ConfigureAwait(false);
 
         var ensured = await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(created.ConversationId,
-                "Should be ignored",
-                "other",
-                999,
-                NodeChatOriginValues.Remote))
-            .ConfigureAwait(false);
+                                       "Should be ignored",
+                                       "other",
+                                       999,
+                                       NodeChatOriginValues.Remote))
+                                   .ConfigureAwait(false);
 
         // Existing rows are never overwritten: title/origin/timestamps from the original CreateConversationAsync persist.
         AssertEx.Equal("Original", ensured.Title);
@@ -219,7 +219,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var request = new NodeChatEnsureConversationRequest(conversationId, "Remote thread", "node", 300, NodeChatOriginValues.Remote);
 
         var first = await service.EnsureConversationAsync(request).ConfigureAwait(false);
-        var second = await service.EnsureConversationAsync(request with { Title = "Different", CreatedAtUtc = 400 }).ConfigureAwait(false);
+        var second = await service.EnsureConversationAsync(request with
+        {
+            Title = "Different",
+            CreatedAtUtc = 400
+        }).ConfigureAwait(false);
 
         AssertEx.Equal(first.ConversationId, second.ConversationId);
         AssertEx.Equal("Remote thread", second.Title);
@@ -245,7 +249,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var remoteConversationId = Guid.NewGuid();
         await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(remoteConversationId, "Remote chat", "node", 3, NodeChatOriginValues.Remote)).ConfigureAwait(false);
         var remoteMessageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(remoteConversationId, remoteMessageId, "remote question", 4, Origin: NodeChatOriginValues.Remote)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(remoteConversationId, remoteMessageId, "remote question", 4, Origin: NodeChatOriginValues.Remote))
+                     .ConfigureAwait(false);
 
         // Read both back and assert the persisted origin column for each conversation and message.
         var loadedLocal = AssertEx.NotNull(await service.GetConversationAsync(localConversation.ConversationId).ConfigureAwait(false));
@@ -388,15 +393,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(source.ConversationId, originalAssistantId, Guid.NewGuid(), 842)).ConfigureAwait(false);
 
         // Regenerate => a newer sibling variant (the 2nd revision) sharing the original's variant group.
-        var variant = AssertEx.NotNull(await service.CreateMessageVariantAsync(
-                new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, Guid.NewGuid(), Guid.NewGuid(), 843))
-            .ConfigureAwait(false));
+        var variant = AssertEx.NotNull(await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, Guid.NewGuid(), Guid.NewGuid(), 843))
+                                                    .ConfigureAwait(false));
 
         // Branch from the chosen (newer) revision: the branch must be a LINEAR thread carrying only that revision
         // as the assistant turn — the sibling original must NOT be copied (otherwise variant_group_id is dropped
         // on copy and the two revisions render as duplicate stacked assistant turns). RC variant-branch fix.
-        var branch = AssertEx.NotNull(await service.BranchConversationAsync(
-                new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, 850)).ConfigureAwait(false));
+        var branch = AssertEx.NotNull(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, 850)).ConfigureAwait(false));
         AssertEx.Equal(2, branch.CopiedMessageCount);
 
         var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
@@ -430,11 +433,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalAssistantId, Guid.NewGuid(), 902)).ConfigureAwait(false);
 
         var variant = AssertEx.NotNull(await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId,
-                originalAssistantId,
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                903))
-            .ConfigureAwait(false));
+                                                        originalAssistantId,
+                                                        Guid.NewGuid(),
+                                                        Guid.NewGuid(),
+                                                        903))
+                                                    .ConfigureAwait(false));
 
         AssertEx.Equal(originalAssistantId, variant.OriginalMessageId);
         AssertEx.Equal(NodeChatMessageStatusValues.Pending, variant.Variant.Status);
@@ -456,11 +459,11 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Variants", "node", 910)).ConfigureAwait(false);
 
         AssertEx.Null(await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversation.ConversationId,
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                911))
-            .ConfigureAwait(false));
+                                       Guid.NewGuid(),
+                                       Guid.NewGuid(),
+                                       Guid.NewGuid(),
+                                       911))
+                                   .ConfigureAwait(false));
     }
 
     [Test]
@@ -472,13 +475,15 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var messageId = Guid.NewGuid();
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, messageId, Guid.NewGuid(), 1001)).ConfigureAwait(false);
 
-        var created = await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Up, "  great  ", 1002)).ConfigureAwait(false);
+        var created = await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Up, "  great  ", 1002))
+                                   .ConfigureAwait(false);
         AssertEx.Equal(NodeChatFeedbackRatingValues.Up, created.Rating);
         AssertEx.Equal("great", created.Comment);
         AssertEx.Equal(1002L, created.CreatedAtUtc);
 
         // Re-submitting overwrites rating/comment but preserves the first-seen created_at_utc.
-        var updated = await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Down, null, 1003)).ConfigureAwait(false);
+        var updated = await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Down, null, 1003))
+                                   .ConfigureAwait(false);
         AssertEx.Equal(NodeChatFeedbackRatingValues.Down, updated.Rating);
         AssertEx.Null(updated.Comment);
         AssertEx.Equal(1002L, updated.CreatedAtUtc);
@@ -500,7 +505,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, ratedMessageId, Guid.NewGuid(), 1201)).ConfigureAwait(false);
         var unratedMessageId = Guid.NewGuid();
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, unratedMessageId, Guid.NewGuid(), 1202)).ConfigureAwait(false);
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, ratedMessageId, NodeChatFeedbackRatingValues.Up, "spot on", 1203)).ConfigureAwait(false);
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, ratedMessageId, NodeChatFeedbackRatingValues.Up, "spot on", 1203))
+                     .ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
 
@@ -531,7 +537,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Feedback", "node", 1100)).ConfigureAwait(false);
         var messageId = Guid.NewGuid();
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, messageId, Guid.NewGuid(), 1101)).ConfigureAwait(false);
-        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Up, "keep private", 1102)).ConfigureAwait(false);
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, NodeChatFeedbackRatingValues.Up, "keep private", 1102))
+                     .ConfigureAwait(false);
 
         // SQLite ON DELETE CASCADE is not enforced (no PRAGMA foreign_keys=ON), so the purge must delete the
         // feedback row explicitly or plaintext feedback orphans after the conversation is gone (privacy gap).

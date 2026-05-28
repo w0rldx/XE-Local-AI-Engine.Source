@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -357,7 +355,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                                                                               WHERE conversation_id = {2}
                                                                                 AND status IN ({3}, {4}, {5});
                                                                               """,
-                    [NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued, NodeChatMessageStatusValues.Streaming],
+                    [
+                        NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued,
+                        NodeChatMessageStatusValues.Streaming
+                    ],
                     token).ConfigureAwait(false);
 
                 if (request.PurgeImmediately)
@@ -415,8 +416,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
             async (dbContext, token) =>
             {
-                var updated = await dbContext.Database.ExecuteSqlRawAsync(
-                    "UPDATE conversations SET is_pinned = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
+                var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET is_pinned = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.IsPinned, request.UpdatedAtUtc, request.ConversationId],
                     token).ConfigureAwait(false);
 
@@ -432,8 +432,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
             async (dbContext, token) =>
             {
-                var updated = await dbContext.Database.ExecuteSqlRawAsync(
-                    "UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
+                var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.Archived, request.UpdatedAtUtc, request.ConversationId],
                     token).ConfigureAwait(false);
 
@@ -512,7 +511,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     AddParameter(messageCommand, "$sequence", message.Sequence);
                     AddParameter(messageCommand, "$role", message.Role);
                     AddParameter(messageCommand, "$content", Encode(message.Content));
-                    AddParameter(messageCommand, "$metadata_json", SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount));
+                    AddParameter(messageCommand, "$metadata_json",
+                        SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);
                     AddParameter(messageCommand, "$updated_at_utc", message.UpdatedAtUtc);
                     AddParameter(messageCommand, "$status", message.Status);
@@ -712,7 +712,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         var conversation = await ReadConversationRowAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false);
         return conversation is null
             ? null
-            : conversation with { Messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false) };
+            : conversation with
+            {
+                Messages = await ReadMessagesAsync(dbContext, conversationId, cancellationToken).ConfigureAwait(false)
+            };
     }
 
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
@@ -808,7 +811,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
 
                 await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token).ConfigureAwait(false);
 
-                return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson, Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId);
+                return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson,
+                    Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId);
             },
             cancellationToken).ConfigureAwait(false);
     }

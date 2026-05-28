@@ -47,16 +47,21 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
         await sendButton.ClickAsync();
 
         // Stream completion: button reverts to "Send", assistant bubble present.
-        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 15000 });
+        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        {
+            Timeout = 15000
+        });
         await Expect(Page.GetByText("Node reply").First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 3000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 3000
+            });
     }
 
     /// <summary>Current set of conversation ids rendered in the list.</summary>
     private async Task<HashSet<string>> ConversationIdsAsync()
     {
-        var testIds = await Page.Locator("[data-testid^='conversation-item-']").EvaluateAllAsync<string[]>(
-            "nodes => nodes.map(n => n.getAttribute('data-testid'))");
+        var testIds = await Page.Locator("[data-testid^='conversation-item-']").EvaluateAllAsync<string[]>("nodes => nodes.map(n => n.getAttribute('data-testid'))");
         return testIds.Select(id => id["conversation-item-".Length..]).ToHashSet();
     }
 
@@ -70,12 +75,18 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
     {
         var before = await ConversationIdsAsync();
 
-        var newButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = NewConversationButtonName });
+        var newButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = NewConversationButtonName
+        });
         await Expect(newButton).ToBeVisibleAsync();
         await newButton.ClickAsync();
 
         await Expect(Page.Locator("[data-testid^='conversation-item-']"))
-            .ToHaveCountAsync(before.Count + 1, new LocatorAssertionsToHaveCountOptions { Timeout = 5000 });
+            .ToHaveCountAsync(before.Count + 1, new LocatorAssertionsToHaveCountOptions
+            {
+                Timeout = 5000
+            });
 
         var after = await ConversationIdsAsync();
         return after.Except(before).Single();
@@ -92,13 +103,22 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
 
         // The assistant message renders an actions group once streaming finishes.
         await Expect(Page.Locator("[data-testid^='chat-message-actions-']").Last)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         // Copy + Regenerate are icon buttons identified by aria-label (en.json keys
         // pages.chat.actions.copy / .regenerate).
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Copy message" }).Last)
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = "Copy message"
+            }).Last)
             .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Regenerate response" }).Last)
+        await Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = "Regenerate response"
+            }).Last)
             .ToBeVisibleAsync();
     }
 
@@ -110,17 +130,29 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
         await SendMessageAndAwaitReplyAsync(chatInput, "Regenerate me");
 
         var sendButton = Page.GetByTestId(SendButtonTestId);
-        var regenerate = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Regenerate response" }).Last;
-        await Expect(regenerate).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        var regenerate = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Regenerate response"
+        }).Last;
+        await Expect(regenerate).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await regenerate.ClickAsync();
 
         // Regenerate mints a sibling variant and re-streams; wait for completion.
-        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 15000 });
+        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        {
+            Timeout = 15000
+        });
 
         // Revision nav renders only when total > 1 — proves a second variant exists. The count
         // element reads "{active+1}/{total}"; after one regenerate that is "2/2".
         var revisionCount = Page.Locator("[data-testid^='message-revision-count-']").Last;
-        await Expect(revisionCount).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(revisionCount).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await Expect(revisionCount).ToContainTextAsync("/2");
     }
 
@@ -133,12 +165,18 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
 
         // Feedback control (gated by conversationFeedback capability, on for the node).
         var thumbsUp = Page.Locator("[data-testid^='message-feedback-up-']").Last;
-        await Expect(thumbsUp).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(thumbsUp).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await thumbsUp.ClickAsync();
 
         // Selecting a rating reveals the comment box + submit; submit must not surface an error.
         var comment = Page.Locator("[data-testid^='message-feedback-comment-']").Last;
-        await Expect(comment).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(comment).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await comment.FillAsync("Helpful reply");
 
         var submit = Page.Locator("[data-testid^='message-feedback-submit-']").Last;
@@ -160,11 +198,17 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
         var beforeCount = await items.CountAsync();
 
         var branch = Page.Locator("[data-testid^='message-branch-']").Last;
-        await Expect(branch).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(branch).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await branch.ClickAsync();
 
         // Branch clones up to the message into a NEW conversation → list grows by one.
-        await Expect(items).ToHaveCountAsync(beforeCount + 1, new LocatorAssertionsToHaveCountOptions { Timeout = 10000 });
+        await Expect(items).ToHaveCountAsync(beforeCount + 1, new LocatorAssertionsToHaveCountOptions
+        {
+            Timeout = 10000
+        });
     }
 
     // ---- Conversation management --------------------------------------------
@@ -186,7 +230,10 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
 
         // The renamed title appears in the list.
         await Expect(Page.GetByText("Renamed thread").First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
     }
 
     [Test]
@@ -204,7 +251,10 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
         // Re-open the menu — the toggle must now read "Unpin".
         await Page.GetByTestId($"conversation-actions-{id}").ClickAsync();
         await Expect(Page.GetByTestId($"conversation-pin-{id}"))
-            .ToHaveTextAsync("Unpin", new LocatorAssertionsToHaveTextOptions { Timeout = 5000 });
+            .ToHaveTextAsync("Unpin", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 5000
+            });
     }
 
     [Test]
@@ -219,12 +269,18 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
 
         // Archived conversation drops out of the default (non-archived) list.
         await Expect(Page.GetByTestId($"conversation-item-{id}"))
-            .Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+              .Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+              {
+                  Timeout = 5000
+              });
 
         // Flipping "show archived" brings it back.
         await Page.GetByTestId("conversation-show-archived").ClickAsync();
         await Expect(Page.GetByTestId($"conversation-item-{id}"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
     }
 
     [Test]
@@ -253,7 +309,10 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
         await Page.GetByTestId("conversation-search").FillAsync("UniqueSearchTarget");
         await Expect(Page.GetByTestId($"conversation-item-{first}")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId($"conversation-item-{second}"))
-            .Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+              .Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+              {
+                  Timeout = 5000
+              });
     }
 
     [Test]
@@ -267,9 +326,15 @@ public sealed class ChatActionsE2ETests : XEE2ETestBase
 
         // Shift-click skips the confirm dialog (deleteShiftHint), deleting immediately.
         await Page.GetByTestId($"conversation-delete-{id}")
-            .ClickAsync(new LocatorClickOptions { Modifiers = [KeyboardModifier.Shift] });
+                  .ClickAsync(new LocatorClickOptions
+                  {
+                      Modifiers = [KeyboardModifier.Shift]
+                  });
 
         await Expect(Page.GetByTestId($"conversation-item-{id}"))
-            .Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+              .Not.ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+              {
+                  Timeout = 5000
+              });
     }
 }

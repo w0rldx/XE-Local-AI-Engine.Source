@@ -260,7 +260,7 @@ public sealed class NodeChatSelectedPathResponse
 }
 
 /// <summary>
-/// 409 Conflict body returned when a mutation targets a read-only (Origin=Remote) conversation (Phase 1.5).
+///     409 Conflict body returned when a mutation targets a read-only (Origin=Remote) conversation (Phase 1.5).
 /// </summary>
 public sealed class NodeChatConflictResponse
 {

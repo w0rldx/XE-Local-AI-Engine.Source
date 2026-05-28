@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.HostAgent;
-
 using System.Net;
 using System.Net.Sockets;
 using Google.Protobuf;

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
 using Microsoft.Playwright;
-using OllamaSharp.Models.Chat;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
@@ -60,7 +59,10 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
     private async Task EnableLocalToolsToggleAsync()
     {
         var toggle = Page.GetByTestId(LocalToolsToggleTestId);
-        await Expect(toggle).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(toggle).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
 
         var pressed = await toggle.GetAttributeAsync("aria-pressed");
         if (!string.Equals(pressed, "true", StringComparison.OrdinalIgnoreCase))
@@ -68,7 +70,10 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
             await toggle.ClickAsync();
             // Wait until aria-pressed flips to true.
             await Expect(toggle).ToHaveAttributeAsync("aria-pressed", "true",
-                new LocatorAssertionsToHaveAttributeOptions { Timeout = 3000 });
+                new LocatorAssertionsToHaveAttributeOptions
+                {
+                    Timeout = 3000
+                });
         }
     }
 
@@ -86,7 +91,10 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         await Expect(toggle).ToHaveAttributeAsync("aria-pressed", "false");
         await toggle.ClickAsync();
         await Expect(toggle).ToHaveAttributeAsync("aria-pressed", "true",
-            new LocatorAssertionsToHaveAttributeOptions { Timeout = 3000 });
+            new LocatorAssertionsToHaveAttributeOptions
+            {
+                Timeout = 3000
+            });
     }
 
     [Test]
@@ -101,13 +109,16 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         var toolCallEmitted = 0;
         Factory.FakeOllamaState.ToolCallScript = _ =>
         {
-            if (System.Threading.Interlocked.CompareExchange(ref toolCallEmitted, 1, 0) == 0)
+            if (Interlocked.CompareExchange(ref toolCallEmitted, 1, 0) == 0)
             {
                 // First call: emit the Calculate tool call.
                 return new FakeOllamaToolCall
                 {
                     Name = "Calculate",
-                    Arguments = new { expression = "12*9" }
+                    Arguments = new
+                    {
+                        expression = "12*9"
+                    }
                 };
             }
 
@@ -125,13 +136,19 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         var conversationItems = Page.Locator("[data-testid^='conversation-item-']");
         var beforeCount = await conversationItems.CountAsync();
 
-        var newButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "New plain chat" });
+        var newButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "New plain chat"
+        });
         await Expect(newButton).ToBeVisibleAsync();
         await newButton.ClickAsync();
 
         // Wait for the new conversation to appear in the list.
         await Expect(conversationItems)
-            .ToHaveCountAsync(beforeCount + 1, new LocatorAssertionsToHaveCountOptions { Timeout = 5000 });
+            .ToHaveCountAsync(beforeCount + 1, new LocatorAssertionsToHaveCountOptions
+            {
+                Timeout = 5000
+            });
 
         // Diagnose: confirm the host address and what VITE_API_URL the SPA bundle was compiled with.
         await Console.Out.WriteLineAsync($"[DIAG] ServerAddress={Factory.ServerAddress} Page.Url={Page.Url}").ConfigureAwait(false);
@@ -139,7 +156,7 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         await Console.Out.WriteLineAsync($"[DIAG] window.xeConfig.apiUrl={viteBundledUrl}").ConfigureAwait(false);
 
         // Capture browser console errors for diagnostics.
-        var consoleErrors = new System.Collections.Generic.List<string>();
+        var consoleErrors = new List<string>();
         Page.Console += (_, msg) =>
         {
             if (msg.Type == "error")
@@ -151,12 +168,12 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         // Log ALL requests recorded so far (before clearing) for diagnostics.
         var allBefore = Factory.FakeOllamaState.RecordedRequests;
         await Console.Out.WriteLineAsync(
-            $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}")
-            .ConfigureAwait(false);
+                         $"[DIAG-BEFORE] Total FakeOllama requests before clear: {allBefore.Count}, chat: {allBefore.Count(r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))}")
+                     .ConfigureAwait(false);
         foreach (var req in allBefore)
         {
             await Console.Out.WriteLineAsync($"  {req.Path} | model={req.ModelName} | msgs={req.MessageCount}")
-                .ConfigureAwait(false);
+                         .ConfigureAwait(false);
         }
 
         var sendButton = Page.GetByTestId(SendButtonTestId);
@@ -166,36 +183,47 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         // (isSending=true from a leftover stream), clicking it would cancel that stream, not send our
         // message. Wait for text "Send" first to confirm no active stream.
         await Expect(sendButton)
-            .ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 10000 });
+            .ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 10000
+            });
 
         // Clear recorded requests so we count only those from this test's send.
         Factory.FakeOllamaState.ClearRequests();
 
         // Fill first — send is disabled when the input is empty.
         await chatInput.FillAsync("what's 12*9?");
-        await Expect(sendButton).ToBeEnabledAsync(new LocatorAssertionsToBeEnabledOptions { Timeout = 3000 });
+        await Expect(sendButton).ToBeEnabledAsync(new LocatorAssertionsToBeEnabledOptions
+        {
+            Timeout = 3000
+        });
         await sendButton.ClickAsync();
 
         // Stream started: button switches to "Stop". Wait for it to confirm the send is in-flight.
         await Expect(sendButton)
-            .ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions { Timeout = 5000 });
+            .ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 5000
+            });
 
         // Stream must complete: send button reverts to "Send" text.
         await Expect(sendButton)
-            .ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 20000 });
+            .ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 20000
+            });
 
         // Diagnostic: log ALL Ollama requests after stream completes (total, not just post-clear).
         var allAfter = Factory.FakeOllamaState.RecordedRequests;
         var chatRequests = allAfter
-            .Where(static r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        await Console.Out.WriteLineAsync(
-            $"[DIAG] Total requests after send: {allAfter.Count}, /api/chat: {chatRequests.Count}, toolCallEmitted: {toolCallEmitted}")
-            .ConfigureAwait(false);
+                           .Where(static r => r.Path.Contains("/api/chat", StringComparison.OrdinalIgnoreCase))
+                           .ToList();
+        await Console.Out.WriteLineAsync($"[DIAG] Total requests after send: {allAfter.Count}, /api/chat: {chatRequests.Count}, toolCallEmitted: {toolCallEmitted}")
+                     .ConfigureAwait(false);
         foreach (var req in allAfter)
         {
             await Console.Out.WriteLineAsync($"  POST {req.Path} | model={req.ModelName} | msgs={req.MessageCount} @ {req.CapturedAtUtc:HH:mm:ss}")
-                .ConfigureAwait(false);
+                         .ConfigureAwait(false);
         }
 
         // Log any browser console errors.
@@ -211,10 +239,16 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         // After the stream completes, ChatActivityTimeline (not ToolCallDisplay) renders the persisted
         // tool-call entries. Assert the activity timeline and the Calculate entry are visible.
         await Expect(Page.GetByTestId("chat-activity-timeline"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         await Expect(Page.GetByTestId("chat-activity-entry-Calculate"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 3000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 3000
+            });
     }
 
     [Test]
@@ -227,7 +261,10 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         });
 
         await Expect(Page.GetByTestId("tools-page"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         await Expect(Page.GetByTestId("local-tools-overview"))
             .ToBeVisibleAsync();

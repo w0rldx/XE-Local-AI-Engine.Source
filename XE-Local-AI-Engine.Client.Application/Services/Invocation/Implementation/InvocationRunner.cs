@@ -83,12 +83,6 @@ public sealed class InvocationRunner : IInvocationRunner
 
     public int ActiveInvocationCount => _activeInvocationCompletions.Count;
 
-    public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
-    {
-        using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
-        await RunAsync(context, cancellationToken).ConfigureAwait(false);
-    }
-
     public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -455,6 +449,12 @@ public sealed class InvocationRunner : IInvocationRunner
         // Default to the approval-gated path; the per-tool overload below is what BuildInvocationTools wires in,
         // passing the tool's RequiresApproval flag so non-approval tools auto-execute.
         return ExecuteApiToolCallAsync(invocationId, toolName, parameters, true, cancellationToken);
+    }
+
+    public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+    {
+        using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
+        await RunAsync(context, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> ExecuteApiToolCallAsync(Guid invocationId,

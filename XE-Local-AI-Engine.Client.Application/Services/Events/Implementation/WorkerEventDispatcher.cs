@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 
@@ -28,8 +27,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
-    private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly SemaphoreSlim _remoteInvocationQueue = new(1, 1);
+    private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
     private readonly object _syncRoot = new();
     private bool _isAcceptingRemoteInvocations = true;
@@ -574,10 +573,10 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     }
 
     /// <summary>
-    /// Runs a platform-served invocation while persisting its chat content to node SQLite with Origin=Remote.
-    /// The dispatcher stays thin: it opens a persistence session (ensure-conversation + user/assistant rows),
-    /// fans this invocation's <see cref="InvocationStateChanged"/> deltas into the shared pump via the session,
-    /// then terminalizes. All persistence translation lives in the coordinator/pump, not here.
+    ///     Runs a platform-served invocation while persisting its chat content to node SQLite with Origin=Remote.
+    ///     The dispatcher stays thin: it opens a persistence session (ensure-conversation + user/assistant rows),
+    ///     fans this invocation's <see cref="InvocationStateChanged" /> deltas into the shared pump via the session,
+    ///     then terminalizes. All persistence translation lives in the coordinator/pump, not here.
     /// </summary>
     private async Task RunInvocationWithRemotePersistenceAsync(InvocationExecutionContext context, RuntimePackage runtimePackage)
     {
@@ -864,7 +863,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 
                 if (NodeChatInvocationPump.IsTerminal(dropped.Status))
                 {
-                    _logger.LogWarning("Dropped a terminal {Status} update for invocation {InvocationId} because the current invocation is {CurrentInvocationId}. The terminal will not be persisted via this slot.",
+                    _logger.LogWarning(
+                        "Dropped a terminal {Status} update for invocation {InvocationId} because the current invocation is {CurrentInvocationId}. The terminal will not be persisted via this slot.",
                         dropped.Status,
                         invocationId,
                         CurrentInvocation?.InvocationId);
@@ -891,8 +891,8 @@ public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
     }
 
     /// <summary>
-    /// Holds the shared invocation slot for the duration of a local run. Disposing it releases the slot so the
-    /// next queued invocation (local or remote) can proceed. Release is idempotent.
+    ///     Holds the shared invocation slot for the duration of a local run. Disposing it releases the slot so the
+    ///     next queued invocation (local or remote) can proceed. Release is idempotent.
     /// </summary>
     private sealed class LocalInvocationLease(SemaphoreSlim queue) : IAsyncDisposable
     {

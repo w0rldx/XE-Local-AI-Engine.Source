@@ -3,15 +3,15 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 using System.Globalization;
 
 /// <summary>
-/// Safe recursive-descent evaluator for basic arithmetic expressions (<c>+ - * / ( )</c>, unary minus, decimals).
-/// Deliberately NOT a general expression engine: there is no identifier, function-call, or code-execution path, so
-/// there is nothing for a model to abuse. Any character outside the arithmetic alphabet is rejected up front.
+///     Safe recursive-descent evaluator for basic arithmetic expressions (<c>+ - * / ( )</c>, unary minus, decimals).
+///     Deliberately NOT a general expression engine: there is no identifier, function-call, or code-execution path, so
+///     there is nothing for a model to abuse. Any character outside the arithmetic alphabet is rejected up front.
 /// </summary>
 internal static class ArithmeticExpressionEvaluator
 {
     /// <summary>
-    /// Attempts to evaluate <paramref name="expression"/>. Returns <see langword="false"/> for empty, non-arithmetic,
-    /// malformed, or non-finite (overflow / divide-by-zero) input rather than throwing.
+    ///     Attempts to evaluate <paramref name="expression" />. Returns <see langword="false" /> for empty, non-arithmetic,
+    ///     malformed, or non-finite (overflow / divide-by-zero) input rather than throwing.
     /// </summary>
     public static bool TryEvaluate(string? expression, out double result)
     {

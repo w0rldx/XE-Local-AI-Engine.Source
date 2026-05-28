@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Common.Extensions;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 public static class ProblemDetailsExtensions

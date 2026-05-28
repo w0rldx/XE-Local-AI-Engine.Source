@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Auth;
-
 using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -97,7 +95,7 @@ public sealed class NodeTokenService : INodeTokenService
 
         claims.AddRange(roles.Where(static role => !string.IsNullOrWhiteSpace(role))
                              .Distinct(StringComparer.Ordinal)
-                              .Select(static role => new Claim(NodeAuthorizationPolicies.RoleClaimType, role)));
+                             .Select(static role => new Claim(NodeAuthorizationPolicies.RoleClaimType, role)));
 
         return [.. claims];
     }

@@ -91,7 +91,7 @@ public static class ConfigureServices
                    options.ClaimsIdentity.UserIdClaimType = JwtRegisteredClaimNames.Sub;
                    options.ClaimsIdentity.UserNameClaimType = JwtRegisteredClaimNames.Name;
                    options.ClaimsIdentity.RoleClaimType = NodeAuthorizationPolicies.RoleClaimType;
-                })
+               })
                .AddRoles<IdentityRole>()
                .AddEntityFrameworkStores<NodeIdentityDbContext>()
                .AddSignInManager();

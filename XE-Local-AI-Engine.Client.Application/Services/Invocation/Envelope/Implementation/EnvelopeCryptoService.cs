@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
-
 using System.Security.Cryptography;
 using System.Text;
 using NSec.Cryptography;

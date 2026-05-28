@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using System.ComponentModel;
 using System.Globalization;
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
 {
@@ -40,8 +39,7 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
         return
         [
             .. tools.OfType<AIFunction>()
-                    .Select(static function => new LocalChatToolDescriptor(
-                        function.Name,
+                    .Select(static function => new LocalChatToolDescriptor(function.Name,
                         function.Description,
                         function.JsonSchema.GetRawText(),
                         CatalogRequiresApproval))
@@ -50,8 +48,7 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
 
     [Description("Returns the current UTC time, the local time, and today's date. Use it whenever the user asks what time or what day it is.")]
     private static string GetCurrentTime(
-        [Description("Optional IANA or Windows time-zone identifier (for example 'Europe/Berlin'). When omitted or unknown, the server's local time zone is used.")]
-        string? timezone = null)
+        [Description("Optional IANA or Windows time-zone identifier (for example 'Europe/Berlin'). When omitted or unknown, the server's local time zone is used.")] string? timezone = null)
     {
         var utcNow = DateTimeOffset.UtcNow;
         var (zone, zoneResolved) = ResolveTimeZone(timezone);
@@ -69,8 +66,7 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
 
     [Description("Evaluates a basic arithmetic expression using +, -, *, / and parentheses, then returns the numeric result. Use it for any calculation the user asks for.")]
     private static string Calculate(
-        [Description("The arithmetic expression to evaluate, for example '12 * 9' or '(3 + 4) / 2'. Only numbers and the operators + - * / ( ) are allowed.")]
-        string expression)
+        [Description("The arithmetic expression to evaluate, for example '12 * 9' or '(3 + 4) / 2'. Only numbers and the operators + - * / ( ) are allowed.")] string expression)
     {
         if (!ArithmeticExpressionEvaluator.TryEvaluate(expression, out var result))
         {

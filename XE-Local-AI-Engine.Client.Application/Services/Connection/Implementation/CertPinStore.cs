@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Connection;
-
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;

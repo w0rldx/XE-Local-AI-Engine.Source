@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -182,7 +183,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name;";
         command.Parameters.AddWithValue("$name", table);
         var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture) > 0;
+        return Convert.ToInt64(value, CultureInfo.InvariantCulture) > 0;
     }
 
     private string GetDatabasePath(string fileName)

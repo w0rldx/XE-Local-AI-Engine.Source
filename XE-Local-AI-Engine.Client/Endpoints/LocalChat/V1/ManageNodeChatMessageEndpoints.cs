@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-/// Branch (Phase 5.1): POST clones the conversation up to the target message into a new Origin=Local
-/// conversation. Guarded — branching FROM a remote mirror is rejected with 409 (the source is read-only;
-/// the branch would carry remote content the node can no longer re-drive).
+///     Branch (Phase 5.1): POST clones the conversation up to the target message into a new Origin=Local
+///     conversation. Guarded — branching FROM a remote mirror is rejected with 409 (the source is read-only;
+///     the branch would carry remote content the node can no longer re-drive).
 /// </summary>
 public sealed class BranchNodeChatConversationEndpoint(
     INodeChatPersistenceService chatPersistence,
@@ -52,8 +52,8 @@ public sealed class BranchNodeChatConversationEndpoint(
 }
 
 /// <summary>
-/// Revisions (Phase 5.2): POST records a regenerated assistant turn as a SIBLING VARIANT (never in-place)
-/// and returns the freshly minted placeholder; GET lists every variant of the turn. Both guarded.
+///     Revisions (Phase 5.2): POST records a regenerated assistant turn as a SIBLING VARIANT (never in-place)
+///     and returns the freshly minted placeholder; GET lists every variant of the turn. Both guarded.
 /// </summary>
 public sealed class CreateNodeChatMessageRevisionEndpoint(
     INodeChatPersistenceService chatPersistence,
@@ -111,8 +111,7 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
     }
 }
 
-public sealed class ListNodeChatMessageRevisionsEndpoint(
-    INodeChatPersistenceService chatPersistence) : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
+public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
 
@@ -137,8 +136,8 @@ public sealed class ListNodeChatMessageRevisionsEndpoint(
 }
 
 /// <summary>
-/// Feedback (Phase 5.3): node-local thumbs/comment storage. PUT upserts, GET reads. Guarded — feedback on a
-/// remote-mirror message is rejected (consistent with the view-only posture for Origin=Remote).
+///     Feedback (Phase 5.3): node-local thumbs/comment storage. PUT upserts, GET reads. Guarded — feedback on a
+///     remote-mirror message is rejected (consistent with the view-only posture for Origin=Remote).
 /// </summary>
 public sealed class SetNodeChatMessageFeedbackEndpoint(
     INodeChatPersistenceService chatPersistence,
@@ -180,10 +179,10 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
 }
 
 /// <summary>
-/// Selected path (conversation tree): PUT upserts the conversation's selected-path map
-/// {variantGroupId-&gt;selectedMessageId} WITHOUT sending a message, so navigating &lt; N/N &gt; variants survives a
-/// reload. An empty/absent map clears the stored selection. Guarded — persisting a selection on a
-/// remote-mirror (Origin=Remote) conversation is rejected with 409, consistent with the view-only posture.
+///     Selected path (conversation tree): PUT upserts the conversation's selected-path map
+///     {variantGroupId-&gt;selectedMessageId} WITHOUT sending a message, so navigating &lt; N/N &gt; variants survives a
+///     reload. An empty/absent map clears the stored selection. Guarded — persisting a selection on a
+///     remote-mirror (Origin=Remote) conversation is rejected with 409, consistent with the view-only posture.
 /// </summary>
 public sealed class SetNodeChatSelectedPathEndpoint(
     INodeChatPersistenceService chatPersistence,
@@ -226,8 +225,7 @@ public sealed class SetNodeChatSelectedPathEndpoint(
     }
 }
 
-public sealed class GetNodeChatMessageFeedbackEndpoint(
-    INodeChatPersistenceService chatPersistence) : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
+public sealed class GetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
 

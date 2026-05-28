@@ -45,9 +45,7 @@ public sealed class ListLocalModelsEndpoint(
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Local model list could not be loaded.");
-            await Send.OkAsync(
-                LocalModelsMapper.ToUnavailableListResponse(
-                    selectedModelName,
+            await Send.OkAsync(LocalModelsMapper.ToUnavailableListResponse(selectedModelName,
                     _localChatOptions.Value.DefaultModel,
                     "Local model provider is unavailable."),
                 ct).ConfigureAwait(false);

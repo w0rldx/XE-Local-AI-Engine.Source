@@ -128,7 +128,10 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
         // After creation the conversation list must contain at least one item.
         // conversation-item-{uuid} — prefix selector covers all runtime IDs.
         await Expect(Page.Locator("[data-testid^='conversation-item-']").First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         // The chat window title updates to the new conversation title.
         await Expect(Page.GetByTestId("chat-window-title")).ToBeVisibleAsync();
@@ -149,7 +152,10 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
         await sendButton.ClickAsync();
 
         // The input clears on submit — check the textarea value, not its text content.
-        await Expect(chatInput).ToHaveValueAsync("", new LocatorAssertionsToHaveValueOptions { Timeout = 3000 });
+        await Expect(chatInput).ToHaveValueAsync("", new LocatorAssertionsToHaveValueOptions
+        {
+            Timeout = 3000
+        });
 
         // During streaming the button label switches to "Stop".
         // We tolerate the case where FakeOllama is fast and the stream already finished
@@ -158,12 +164,18 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
 
         // Stream completion: button must revert to "Send" (no longer isSending).
         // FakeOllama streams a small deterministic chunk — allow up to 10 s.
-        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 10000 });
+        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        {
+            Timeout = 10000
+        });
 
         // At least one assistant message must be visible after streaming completes.
         // ChatMessage renders data-testid="chat-message-role-{id}" with "Node reply" text.
         await Expect(Page.GetByText("Node reply").First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 3000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 3000
+            });
 
         // The user message bubble must also be present.
         await Expect(Page.GetByText(userText).First).ToBeVisibleAsync();
@@ -190,7 +202,10 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
         var streamingStarted = false;
         try
         {
-            await Expect(sendButton).ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions { Timeout = 3000 });
+            await Expect(sendButton).ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions
+            {
+                Timeout = 3000
+            });
             streamingStarted = true;
         }
         catch (PlaywrightException)
@@ -208,7 +223,10 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
             // versions; catch Exception to be safe.
             try
             {
-                await sendButton.ClickAsync(new LocatorClickOptions { Timeout = 2000 });
+                await sendButton.ClickAsync(new LocatorClickOptions
+                {
+                    Timeout = 2000
+                });
             }
 #pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception)
@@ -220,7 +238,10 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
 
         // Regardless of whether we cancelled or the stream finished naturally, the button
         // must ultimately show "Send" (isSending = false), proving no active stream remains.
-        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions { Timeout = 10000 });
+        await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
+        {
+            Timeout = 10000
+        });
     }
 
     [Test]
@@ -238,7 +259,10 @@ public sealed class ChatPageE2ETests : XEE2ETestBase
 
         // Wait for at least one conversation item to appear.
         var firstItem = Page.Locator("[data-testid^='conversation-item-']").First;
-        await Expect(firstItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(firstItem).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
 
         // Click it.
         await firstItem.ClickAsync();

@@ -7,8 +7,8 @@ public readonly record struct NodeChatPumpCursor(string Content, string Reasonin
 }
 
 /// <summary>
-/// Outcome of <c>NodeChatInvocationPump.FlushDeltaAsync</c>. When <see cref="Persisted"/> is null no
-/// delta advanced and <see cref="Cursor"/> is unchanged.
+///     Outcome of <c>NodeChatInvocationPump.FlushDeltaAsync</c>. When <see cref="Persisted" /> is null no
+///     delta advanced and <see cref="Cursor" /> is unchanged.
 /// </summary>
 public sealed record NodeChatPumpFlushResult(
     NodeChatPumpCursor Cursor,

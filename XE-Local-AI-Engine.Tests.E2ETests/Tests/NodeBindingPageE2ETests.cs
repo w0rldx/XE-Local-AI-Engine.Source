@@ -90,10 +90,12 @@ public sealed class NodeBindingPageE2ETests : XEE2ETestBase
 
         // Clicking issues POST /api/local/v1/binding/start; assert the request fires.
         // Explicit timeout guards against CI contention — 10 s is ample for an in-process POST.
-        await Page.RunAndWaitForRequestAsync(
-            async () => await startButton.ClickAsync(),
+        await Page.RunAndWaitForRequestAsync(async () => await startButton.ClickAsync(),
             request => request.Url.Contains("binding/start", StringComparison.OrdinalIgnoreCase)
                        && string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForRequestOptions { Timeout = 10_000 });
+            new PageRunAndWaitForRequestOptions
+            {
+                Timeout = 10_000
+            });
     }
 }

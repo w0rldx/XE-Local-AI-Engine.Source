@@ -1,6 +1,7 @@
 # XE Local AI Engine Node Web Server
 
-`XE-Local-AI-Engine.Client` is the node-side web server for the local AI engine. It hosts the React management UI from `XE-Local-AI-Engine.Client.React`, exposes node-local FastEndpoints APIs under `/api/local/v1`, maps local SignalR hubs, persists node chat state in SQLite, and connects to the central platform through the existing `WorkerHub` channel.
+`XE-Local-AI-Engine.Client` is the node-side web server for the local AI engine. It hosts the React management UI from `XE-Local-AI-Engine.Client.React`, exposes node-local FastEndpoints APIs under
+`/api/local/v1`, maps local SignalR hubs, persists node chat state in SQLite, and connects to the central platform through the existing `WorkerHub` channel.
 
 ## Current UI shape
 

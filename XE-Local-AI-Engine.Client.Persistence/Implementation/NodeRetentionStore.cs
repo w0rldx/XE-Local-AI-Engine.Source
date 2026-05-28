@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence;
 
 public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeRetentionStore
 {

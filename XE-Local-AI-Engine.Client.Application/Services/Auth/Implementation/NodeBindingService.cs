@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Auth;
-
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

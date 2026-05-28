@@ -5,7 +5,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
-using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
@@ -77,10 +76,10 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    /// Intersects the offer list the definition carries with the executable catalog in <see cref="_toolRegistry"/>.
-    /// Offered names are sourced from <c>definition.Tools</c> (which the runner builds from the runtime package's
-    /// allowed-tool list); the executable bodies always come from the registry, matched by name. Offered names with
-    /// no registry match are skipped so a stale or unknown offer can never reach the agent.
+    ///     Intersects the offer list the definition carries with the executable catalog in <see cref="_toolRegistry" />.
+    ///     Offered names are sourced from <c>definition.Tools</c> (which the runner builds from the runtime package's
+    ///     allowed-tool list); the executable bodies always come from the registry, matched by name. Offered names with
+    ///     no registry match are skipped so a stale or unknown offer can never reach the agent.
     /// </summary>
     private IList<AITool> ResolveExecutableTools(InvocationAgentDefinition definition)
     {
@@ -94,8 +93,11 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                                      .Where(static name => !string.IsNullOrWhiteSpace(name))
                                      .ToHashSet(StringComparer.Ordinal);
 
-        List<AITool> resolved = [.. _toolRegistry.GetLocalChatTools()
-                                                 .Where(tool => offeredNames.Contains(tool.Name))];
+        List<AITool> resolved =
+        [
+            .. _toolRegistry.GetLocalChatTools()
+                            .Where(tool => offeredNames.Contains(tool.Name))
+        ];
 
         var skipped = offeredNames.Count - resolved.Count;
         if (skipped > 0)

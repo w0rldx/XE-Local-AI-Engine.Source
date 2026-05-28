@@ -41,12 +41,12 @@ public sealed class RuntimeManagerHubTests
                       .Returns(CreateLogStream("ollama"));
         await using var factory = CreateFactory(managerService);
         await using var connection = new HubConnectionBuilder()
-                                      .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
-                                      {
-                                          options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
-                                          options.Headers.Add("Origin", "http://localhost");
-                                      })
+                                     .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
                                      .Build();
 
         await connection.StartAsync().ConfigureAwait(false);
@@ -73,12 +73,12 @@ public sealed class RuntimeManagerHubTests
         var managerService = Substitute.For<IHostAgentManagerService>();
         await using var factory = CreateFactory(managerService);
         await using var connection = new HubConnectionBuilder()
-                                      .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
-                                      {
-                                          options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-                                          options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
-                                          options.Headers.Add("Origin", "http://localhost");
-                                      })
+                                     .WithUrl("http://localhost" + LocalApiRoutes.RuntimeManager.Hub, options =>
+                                     {
+                                         options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                                         options.AccessTokenProvider = () => Task.FromResult<string?>(factory.CreateNodeAccessToken());
+                                         options.Headers.Add("Origin", "http://localhost");
+                                     })
                                      .Build();
 
         await connection.StartAsync().ConfigureAwait(false);

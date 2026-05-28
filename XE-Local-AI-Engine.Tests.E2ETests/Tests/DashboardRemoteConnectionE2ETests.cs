@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
 using Microsoft.Playwright;
-using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
@@ -55,7 +54,10 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
         await NavigateToDashboardAsync();
 
         // Page heading and subtitle are always rendered.
-        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "Dashboard" }))
+        await Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions
+            {
+                Name = "Dashboard"
+            }))
             .ToBeVisibleAsync();
 
         await Expect(Page.GetByText("Monitor the local worker connection").First)
@@ -118,8 +120,16 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
 
         // Exact = true is required: without it "Connect" substring-matches Disconnect,
         // Enable auto-connect, and Disable auto-connect — strict mode violation.
-        var connectButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Connect", Exact = true });
-        var disconnectButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Disconnect", Exact = true });
+        var connectButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Connect",
+            Exact = true
+        });
+        var disconnectButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Disconnect",
+            Exact = true
+        });
 
         await Expect(connectButton).ToBeVisibleAsync();
         await Expect(disconnectButton).ToBeVisibleAsync();
@@ -142,18 +152,27 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
     {
         await NavigateToDashboardAsync();
 
-        var connectButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Connect", Exact = true });
+        var connectButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Connect",
+            Exact = true
+        });
         await Expect(connectButton).ToBeDisabledAsync();
 
         // A disabled button should not issue the POST — RunAndWaitForRequest must time out.
         var requestFired = false;
         try
         {
-            await Page.RunAndWaitForRequestAsync(
-                async () => await connectButton.ClickAsync(new LocatorClickOptions { Force = false }),
+            await Page.RunAndWaitForRequestAsync(async () => await connectButton.ClickAsync(new LocatorClickOptions
+                {
+                    Force = false
+                }),
                 request => request.Url.Contains("connection/connect", StringComparison.OrdinalIgnoreCase)
                            && string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-                new PageRunAndWaitForRequestOptions { Timeout = 1500 });
+                new PageRunAndWaitForRequestOptions
+                {
+                    Timeout = 1500
+                });
             requestFired = true;
         }
         catch (TimeoutException)
@@ -181,8 +200,16 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
         await NavigateToDashboardAsync();
 
         // Exact = true prevents "auto-connect" from matching both buttons.
-        var enableButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Enable auto-connect", Exact = true });
-        var disableButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Disable auto-connect", Exact = true });
+        var enableButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Enable auto-connect",
+            Exact = true
+        });
+        var disableButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Disable auto-connect",
+            Exact = true
+        });
 
         await Expect(enableButton).ToBeVisibleAsync();
         await Expect(disableButton).ToBeVisibleAsync();
@@ -223,13 +250,15 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
     {
         await NavigateToDashboardAsync();
 
-        var refreshButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Refresh" });
+        var refreshButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Refresh"
+        });
         await Expect(refreshButton).ToBeVisibleAsync();
         await Expect(refreshButton).ToBeEnabledAsync();
 
         // Clicking Refresh must re-issue GET /api/local/v1/connection.
-        await Page.RunAndWaitForRequestAsync(
-            async () => await refreshButton.ClickAsync(),
+        await Page.RunAndWaitForRequestAsync(async () => await refreshButton.ClickAsync(),
             request => request.Url.Contains("/api/local/v1/connection", StringComparison.OrdinalIgnoreCase)
                        && string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase));
     }
@@ -262,7 +291,11 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
         // Disconnected state, so we assert the disabled state as the known baseline.
         await NavigateToDashboardAsync();
 
-        var disableButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Disable auto-connect", Exact = true });
+        var disableButton = Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = "Disable auto-connect",
+            Exact = true
+        });
         await Expect(disableButton).ToBeVisibleAsync();
 
         // Baseline: Disconnected + autoConnectOnStart=false → CanDisableAutoConnect=false → disabled.

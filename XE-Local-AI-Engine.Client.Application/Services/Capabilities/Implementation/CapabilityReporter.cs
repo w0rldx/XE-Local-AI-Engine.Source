@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Capabilities;
-
 using System.ComponentModel;
 using System.Data.Common;
 using System.Diagnostics;

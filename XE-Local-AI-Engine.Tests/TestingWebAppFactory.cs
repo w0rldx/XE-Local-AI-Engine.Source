@@ -45,26 +45,6 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     public Action<IServiceCollection>? ConfigureAdditionalTestServices { get; init; }
 
-    public string CreateNodeAccessToken()
-    {
-        var tokenService = Services.GetRequiredService<INodeTokenService>();
-        var user = new NodeUser
-        {
-            Id = "node-admin-test",
-            UserName = "admin@example.test",
-            Email = "admin@example.test",
-            SetupCompleted = true
-        };
-
-        return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
-    }
-
-    public void AddNodeBearerToken(HttpRequestMessage request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNodeAccessToken());
-    }
-
     private static bool RunLocalIntegration =>
         string.Equals(Environment.GetEnvironmentVariable("RUN_LOCAL_INTEGRATION"),
             "true",
@@ -83,6 +63,26 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     public async Task InitializeAsync()
     {
+    }
+
+    public string CreateNodeAccessToken()
+    {
+        var tokenService = Services.GetRequiredService<INodeTokenService>();
+        var user = new NodeUser
+        {
+            Id = "node-admin-test",
+            UserName = "admin@example.test",
+            Email = "admin@example.test",
+            SetupCompleted = true
+        };
+
+        return tokenService.CreateAccessToken(user, [NodeAuthorizationPolicies.AdminRole]).AccessToken;
+    }
+
+    public void AddNodeBearerToken(HttpRequestMessage request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Headers.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, CreateNodeAccessToken());
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
