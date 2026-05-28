@@ -28,9 +28,10 @@ public sealed class LocalChatHub(INodeChatStreamService streamService,
         Guid originalMessageId,
         string? reasoningEffort,
         bool useLocalTools,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath,
         CancellationToken cancellationToken)
     {
-        return regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, cancellationToken);
+        return regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, cancellationToken);
     }
 
     /// <summary>

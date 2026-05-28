@@ -29,6 +29,7 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 		setMessageFeedback: vi.fn(),
 		createConversation: vi.fn(),
 		cancelMessage: vi.fn(),
+		persistSelectedPath: vi.fn(),
 	},
 }));
 

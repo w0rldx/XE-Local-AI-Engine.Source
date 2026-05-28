@@ -37,15 +37,17 @@ public sealed class NodeChatRegenerationService(
         Guid originalMessageId,
         string? reasoningEffort = null,
         bool useLocalTools = false,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         CancellationToken cancellationToken = default)
     {
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, cancellationToken);
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort,
         bool useLocalTools,
+        IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
@@ -55,6 +57,12 @@ public sealed class NodeChatRegenerationService(
 
         var conversation = await persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false)
                            ?? throw new InvalidOperationException("The node chat conversation was not found.");
+
+        // Same precedence as the send path: a request-supplied selection is persisted and used; otherwise the
+        // already-persisted conversation selection drives the pre-cutoff context.
+        var selectedPath = requestedSelectedPath is not null
+            ? await persistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversationId, requestedSelectedPath, NowUnixMilliseconds()), cancellationToken).ConfigureAwait(false)
+            : conversation.SelectedPath;
 
         var original = conversation.Messages.FirstOrDefault(message => message.MessageId == originalMessageId)
                        ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
@@ -135,7 +143,7 @@ public sealed class NodeChatRegenerationService(
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             conversationId,
             LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildRegenerationContext(conversation, original),
+            BuildRegenerationContext(conversation, original, selectedPath),
             original.Model ?? localChatOptions.Value.DefaultModel,
             AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
@@ -323,11 +331,18 @@ public sealed class NodeChatRegenerationService(
     /// When no preceding user turn exists, falls back to everything strictly before the earliest group member.
     /// </summary>
     private static IReadOnlyList<ConversationMessageDto> BuildRegenerationContext(NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto original)
+        NodeChatPersistedMessageDto original,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath)
     {
         var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original);
 
-        var messages = conversation.Messages
+        // A prior turn before the cutoff may itself have variants; collapse those to the selected path so the
+        // regenerate sees the same chosen branch the send path would. The group being regenerated already sorts
+        // at/after the cutoff (see ResolvePrecedingUserTurnCutoff), so it is excluded by the sequence filter
+        // regardless of which member the resolver would otherwise pick.
+        var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
+
+        var messages = selected
                                    .Where(message => message.Sequence <= cutoffSequence
                                                      && !string.IsNullOrWhiteSpace(message.Content)
                                                      && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))

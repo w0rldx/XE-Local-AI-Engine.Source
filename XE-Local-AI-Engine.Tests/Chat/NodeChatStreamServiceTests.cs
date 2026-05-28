@@ -427,6 +427,219 @@ public sealed class NodeChatStreamServiceTests
         };
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenOlderVariantSelected_SendsSelectedVariantNotNewest()
+    {
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+        var olderVariantId = Guid.NewGuid();
+        var newerVariantId = Guid.NewGuid();
+        // Explicitly select the OLDER variant; the resolver would otherwise default to the newest sibling.
+        var selectedPath = new Dictionary<Guid, Guid> { [variantGroupId] = olderVariantId };
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            olderVariantId,
+            newerVariantId,
+            persistedSelection: selectedPath,
+            requestSelection: null).ConfigureAwait(false);
+
+        var assistantContents = runner.CapturedContext
+                                      .Where(message => message.Role == MessageRole.Assistant)
+                                      .Select(message => message.Content)
+                                      .ToList();
+        AssertEx.Contains(assistantContents, "older answer");
+        AssertEx.False(assistantContents.Contains("newer answer"), "The newest variant must be excluded when an older variant is selected.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenNoSelection_FallsBackToNewestVariant()
+    {
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+        var olderVariantId = Guid.NewGuid();
+        var newerVariantId = Guid.NewGuid();
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            olderVariantId,
+            newerVariantId,
+            persistedSelection: null,
+            requestSelection: null).ConfigureAwait(false);
+
+        var assistantContents = runner.CapturedContext
+                                      .Where(message => message.Role == MessageRole.Assistant)
+                                      .Select(message => message.Content)
+                                      .ToList();
+        AssertEx.Contains(assistantContents, "newer answer");
+        AssertEx.False(assistantContents.Contains("older answer"), "With no selection the newest variant is the default.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenRequestCarriesSelection_PersistsAndUsesIt()
+    {
+        var conversationId = Guid.NewGuid();
+        var variantGroupId = Guid.NewGuid();
+        var olderVariantId = Guid.NewGuid();
+        var newerVariantId = Guid.NewGuid();
+        // No persisted selection; the request rides a selection for the OLDER variant. The service must persist it
+        // (SetSelectedPathAsync) and use it to build context.
+        var requestSelection = new Dictionary<Guid, Guid> { [variantGroupId] = olderVariantId };
+
+        var runner = await RunWithVariantConversationAsync(conversationId,
+            variantGroupId,
+            olderVariantId,
+            newerVariantId,
+            persistedSelection: null,
+            requestSelection: requestSelection).ConfigureAwait(false);
+
+        var assistantContents = runner.CapturedContext
+                                      .Where(message => message.Role == MessageRole.Assistant)
+                                      .Select(message => message.Content)
+                                      .ToList();
+        AssertEx.Contains(assistantContents, "older answer");
+        AssertEx.True(runner.SelectionPersisted, "A request-supplied selection must be persisted via SetSelectedPathAsync.");
+    }
+
+    private static async Task<ContextCapturingInvocationRunner> RunWithVariantConversationAsync(Guid conversationId,
+        Guid variantGroupId,
+        Guid olderVariantId,
+        Guid newerVariantId,
+        IReadOnlyDictionary<Guid, Guid>? persistedSelection,
+        IReadOnlyDictionary<Guid, Guid>? requestSelection)
+    {
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreateVariantPersistence(conversationId,
+            assistantMessageId,
+            requestId,
+            variantGroupId,
+            olderVariantId,
+            newerVariantId,
+            persistedSelection);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "follow up",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           SelectedPath: requestSelection)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the invocation runner to observe the runtime package.");
+        runner.SelectionPersisted = persistence.ReceivedCalls()
+                                               .Any(call => call.GetMethodInfo().Name == nameof(INodeChatPersistenceService.SetSelectedPathAsync));
+        return runner;
+    }
+
+    private static INodeChatPersistenceService CreateVariantPersistence(Guid conversationId,
+        Guid assistantMessageId,
+        Guid requestId,
+        Guid variantGroupId,
+        Guid olderVariantId,
+        Guid newerVariantId,
+        IReadOnlyDictionary<Guid, Guid>? persistedSelection)
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+
+        var userTurn = new NodeChatPersistedMessageDto(Guid.NewGuid(),
+            conversationId,
+            null,
+            0,
+            "user",
+            "original question",
+            null,
+            NodeChatMessageStatusValues.Completed,
+            1,
+            1,
+            null,
+            null,
+            null);
+        var olderVariant = new NodeChatPersistedMessageDto(olderVariantId,
+            conversationId,
+            Guid.NewGuid(),
+            1,
+            "assistant",
+            "older answer",
+            null,
+            NodeChatMessageStatusValues.Completed,
+            1,
+            1,
+            null,
+            null,
+            null,
+            VariantGroupId: variantGroupId);
+        var newerVariant = new NodeChatPersistedMessageDto(newerVariantId,
+            conversationId,
+            Guid.NewGuid(),
+            2,
+            "assistant",
+            "newer answer",
+            null,
+            NodeChatMessageStatusValues.Completed,
+            2,
+            2,
+            null,
+            null,
+            null,
+            VariantGroupId: variantGroupId);
+
+        var conversation = new NodeChatConversationDto(conversationId,
+            "variant chat",
+            null,
+            1,
+            1,
+            false,
+            [userTurn, olderVariant, newerVariant],
+            SelectedPath: persistedSelection);
+        var newUserMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
+            conversationId,
+            null,
+            3,
+            "user",
+            "follow up",
+            null,
+            NodeChatMessageStatusValues.Completed,
+            3,
+            3,
+            null,
+            null,
+            null);
+        var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, null);
+
+        persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo => callInfo.ArgAt<NodeChatSetSelectedPathRequest>(0).SelectedPath ?? new Dictionary<Guid, Guid>());
+        persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(newUserMessage);
+        persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>()).Returns(assistantPending);
+        persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                   .Returns(assistantPending with { Status = NodeChatMessageStatusValues.Queued });
+        persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                   .Returns(assistantPending with { Status = NodeChatMessageStatusValues.Streaming });
+        persistence.FlushAssistantPartialAsync(Arg.Any<NodeChatPartialFlushRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Streaming, callInfo.ArgAt<NodeChatPartialFlushRequest>(0).Content, null));
+        persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Status, callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Content ?? string.Empty, null));
+
+        return persistence;
+    }
+
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
         Guid assistantMessageId,
         Guid requestId,
@@ -579,6 +792,59 @@ public sealed class NodeChatStreamServiceTests
             // terminal. This reproduces a client disconnecting while the shared runner is still working.
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await release.ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    private sealed class ContextCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    {
+        public int ActiveInvocationCount => 0;
+
+        // The conversation context assembled onto the runtime package; the selected-path tests assert which
+        // variant the service included.
+        public IReadOnlyList<ConversationMessageDto> CapturedContext { get; private set; } = [];
+
+        public bool CaptureObserved { get; private set; }
+
+        // Set by RunWithVariantConversationAsync after the run, from a NSubstitute Received() check on the mock —
+        // exposed here so the test reads one object.
+        public bool SelectionPersisted { get; set; }
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            CapturedContext = context.Package.ConversationContext;
+            CaptureObserved = true;
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
         }
 

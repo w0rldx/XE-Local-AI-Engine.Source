@@ -23,7 +23,8 @@ public sealed record NodeChatStreamRequest(
     Guid? RequestId = null,
     string? Model = null,
     bool UseLocalTools = false,
-    string? ReasoningEffort = null);
+    string? ReasoningEffort = null,
+    IReadOnlyDictionary<Guid, Guid>? SelectedPath = null);
 
 public sealed record ChatStreamEvent(
     string Type,

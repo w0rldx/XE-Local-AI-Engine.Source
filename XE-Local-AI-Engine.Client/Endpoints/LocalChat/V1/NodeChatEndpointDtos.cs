@@ -95,6 +95,13 @@ public sealed class GetNodeChatMessageFeedbackRequest
     public Guid MessageId { get; init; }
 }
 
+public sealed class SetNodeChatSelectedPathRequest
+{
+    public Guid ConversationId { get; init; }
+
+    public IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
+}
+
 public sealed class NodeChatConversationSummaryResponse
 {
     public required Guid ConversationId { get; init; }
@@ -139,6 +146,8 @@ public sealed class NodeChatConversationResponse
     public required bool Archived { get; init; }
 
     public Guid? BranchOfConversationId { get; init; }
+
+    public IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
 
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
 }
@@ -243,6 +252,13 @@ public sealed class NodeChatMessageFeedbackResponse
     public required long UpdatedAtUtc { get; init; }
 }
 
+public sealed class NodeChatSelectedPathResponse
+{
+    public required Guid ConversationId { get; init; }
+
+    public required IReadOnlyDictionary<Guid, Guid> SelectedPath { get; init; }
+}
+
 /// <summary>
 /// 409 Conflict body returned when a mutation targets a read-only (Origin=Remote) conversation (Phase 1.5).
 /// </summary>
@@ -278,6 +294,7 @@ internal static class NodeChatEndpointDtoMapper
             IsPinned = conversation.IsPinned,
             Archived = conversation.Archived,
             BranchOfConversationId = conversation.BranchOfConversationId,
+            SelectedPath = conversation.SelectedPath,
             Messages = conversation.Messages.Select(static message => message.ToResponse()).ToArray()
         };
     }

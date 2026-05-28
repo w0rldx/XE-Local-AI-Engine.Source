@@ -178,6 +178,53 @@ public sealed class SetNodeChatMessageFeedbackEndpoint(
     }
 }
 
+/// <summary>
+/// Selected path (conversation tree): PUT upserts the conversation's selected-path map
+/// {variantGroupId-&gt;selectedMessageId} WITHOUT sending a message, so navigating &lt; N/N &gt; variants survives a
+/// reload. An empty/absent map clears the stored selection. Guarded — persisting a selection on a
+/// remote-mirror (Origin=Remote) conversation is rejected with 409, consistent with the view-only posture.
+/// </summary>
+public sealed class SetNodeChatSelectedPathEndpoint(
+    INodeChatPersistenceService chatPersistence,
+    INodeChatMutationGuard mutationGuard,
+    TimeProvider timeProvider) : Endpoint<SetNodeChatSelectedPathRequest, NodeChatSelectedPathResponse>
+{
+    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
+    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    public override void Configure()
+    {
+        Put(LocalApiRoutes.LocalChat.SelectedPath);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(SetNodeChatSelectedPathRequest req, CancellationToken ct)
+    {
+        try
+        {
+            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        }
+        catch (NodeChatReadOnlyConversationException)
+        {
+            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
+            return;
+        }
+
+        var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var persisted = await _chatPersistence.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(req.ConversationId,
+                req.SelectedPath,
+                updatedAtUtc),
+            ct).ConfigureAwait(false);
+
+        await Send.OkAsync(new NodeChatSelectedPathResponse
+        {
+            ConversationId = req.ConversationId,
+            SelectedPath = persisted
+        }, ct).ConfigureAwait(false);
+    }
+}
+
 public sealed class GetNodeChatMessageFeedbackEndpoint(
     INodeChatPersistenceService chatPersistence) : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
 {

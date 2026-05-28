@@ -538,6 +538,63 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Null(await service.GetMessageFeedbackAsync(conversation.ConversationId, messageId).ConfigureAwait(false));
     }
 
+    [Test]
+    public async Task SelectedPath_RoundTripsMapAndClearsOnEmpty()
+    {
+        await using var provider = await BuildProviderAsync("selected-path.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Selected path", "node", 1300)).ConfigureAwait(false);
+
+        // No selection persisted yet -> read returns null.
+        AssertEx.Null(await service.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
+
+        var groupA = Guid.NewGuid();
+        var groupB = Guid.NewGuid();
+        var chosenA = Guid.NewGuid();
+        var chosenB = Guid.NewGuid();
+        var map = new Dictionary<Guid, Guid>
+        {
+            [groupA] = chosenA,
+            [groupB] = chosenB
+        };
+
+        var persisted = await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversation.ConversationId, map, 1301)).ConfigureAwait(false);
+        AssertEx.Equal(2, persisted.Count);
+        AssertEx.Equal(chosenA, persisted[groupA]);
+        AssertEx.Equal(chosenB, persisted[groupB]);
+
+        // Read back via the dedicated getter.
+        var read = AssertEx.NotNull(await service.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(2, read.Count);
+        AssertEx.Equal(chosenA, read[groupA]);
+        AssertEx.Equal(chosenB, read[groupB]);
+
+        // Read back via the conversation DTO (GetConversationAsync surfaces the parsed map).
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var loadedPath = AssertEx.NotNull(loaded.SelectedPath);
+        AssertEx.Equal(chosenA, loadedPath[groupA]);
+
+        // An empty map clears the stored selection back to null.
+        var cleared = await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversation.ConversationId, new Dictionary<Guid, Guid>(), 1302)).ConfigureAwait(false);
+        AssertEx.Empty(cleared);
+        AssertEx.Null(await service.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Null(AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false)).SelectedPath);
+
+        // A null map is treated the same as empty (clears).
+        await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversation.ConversationId, map, 1303)).ConfigureAwait(false);
+        await service.SetSelectedPathAsync(new NodeChatSetSelectedPathRequest(conversation.ConversationId, null, 1304)).ConfigureAwait(false);
+        AssertEx.Null(await service.GetSelectedPathAsync(conversation.ConversationId).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task GetSelectedPathAsync_WhenConversationMissing_ReturnsNull()
+    {
+        await using var provider = await BuildProviderAsync("selected-path-missing.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        AssertEx.Null(await service.GetSelectedPathAsync(Guid.NewGuid()).ConfigureAwait(false));
+    }
+
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
     {
         var databasePath = GetDatabasePath(fileName);

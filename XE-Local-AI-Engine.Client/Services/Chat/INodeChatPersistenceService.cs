@@ -22,6 +22,18 @@ public interface INodeChatPersistenceService
     /// </summary>
     Task<string?> GetConversationOriginAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reads the conversation's selected-path map {variantGroupId-&gt;selectedMessageId}, or null when none has been
+    /// persisted or the conversation does not exist. Selection metadata only — node-agnostic and E2E-safe.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>?> GetSelectedPathAsync(Guid conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Upserts the conversation's selected-path map {variantGroupId-&gt;selectedMessageId}. An empty map clears the
+    /// stored selection (column set to null). Returns the persisted map.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default);
+
     Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default);
 
     Task<NodeChatPersistedMessageDto> CreateAssistantPlaceholderAsync(NodeChatCreateAssistantPlaceholderRequest request, CancellationToken cancellationToken = default);

@@ -76,6 +76,9 @@ export interface ChatConversationModel {
 	isArchived?: boolean;
 	origin?: ChatOrigin;
 	branchOfConversationId?: string;
+	// Persisted selected-path map {variantGroupId -> selectedMessageId} for the conversation tree. Seeds the
+	// operator's active-revision selection on load so navigating < N/N > variants survives a reload.
+	selectedPath?: Record<string, string>;
 	messages: ChatMessageModel[];
 }
 

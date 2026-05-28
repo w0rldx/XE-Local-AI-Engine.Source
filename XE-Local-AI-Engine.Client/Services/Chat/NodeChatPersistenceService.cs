@@ -14,6 +14,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
     private const string AssistantRole = "assistant";
 
     private static readonly JsonSerializerOptions MetadataJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SelectedPathJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
 
     public async Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default)
@@ -57,6 +58,47 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 var result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
                 return result as string;
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, Guid>?> GetSelectedPathAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+            async (dbContext, token) =>
+            {
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT selected_path_json FROM conversations WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$conversation_id", conversationId);
+
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                var result = await command.ExecuteScalarAsync(token).ConfigureAwait(false);
+                return DeserializeSelectedPath(result as string);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, Guid>> SetSelectedPathAsync(NodeChatSetSelectedPathRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var selectedPath = request.SelectedPath ?? new Dictionary<Guid, Guid>();
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+            async (dbContext, token) =>
+            {
+                // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared selection writes a NULL column, and EF's raw-SQL
+                // parameter builder has no store-type mapping for DBNull, so a typed DbParameter via AddParameter
+                // is required.
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "UPDATE conversations SET selected_path_json = $selected_path_json, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$selected_path_json", SerializeSelectedPath(selectedPath));
+                AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                return (IReadOnlyDictionary<Guid, Guid>)new Dictionary<Guid, Guid>(selectedPath);
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -125,7 +167,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.CommandText = """
-                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id
+                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json
                                                   FROM conversations
                                                   WHERE conversation_id = $conversation_id AND purged = 0;
                                                   """;
@@ -148,7 +190,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     conversationReader.GetString(6),
                     conversationReader.GetBoolean(7),
                     conversationReader.GetBoolean(8),
-                    await conversationReader.IsDBNullAsync(9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)));
+                    await conversationReader.IsDBNullAsync(9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)),
+                    DeserializeSelectedPath(await conversationReader.IsDBNullAsync(10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)));
 
                 return dto;
             },
@@ -347,10 +390,16 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
             async (dbContext, token) =>
             {
-                var updated = await dbContext.Database.ExecuteSqlRawAsync(
-                    "UPDATE conversations SET title = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
-                    [(object?)title ?? DBNull.Value, request.UpdatedAtUtc, request.ConversationId],
-                    token).ConfigureAwait(false);
+                // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared title writes a NULL column, and EF's raw-SQL
+                // parameter builder has no store-type mapping for DBNull, so a typed DbParameter via AddParameter
+                // is required.
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "UPDATE conversations SET title = $title, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
+                AddParameter(command, "$title", title);
+                AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
+                AddParameter(command, "$conversation_id", request.ConversationId);
+                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                var updated = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
                 return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
             },
@@ -1028,6 +1077,44 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         }
 
         return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens), MetadataJsonOptions));
+    }
+
+    private static string? SerializeSelectedPath(IReadOnlyDictionary<Guid, Guid> selectedPath)
+    {
+        if (selectedPath.Count == 0)
+        {
+            return null;
+        }
+
+        // String keys/values keep the JSON object portable: the same {variantGroupId->selectedMessageId} map can be
+        // parsed by any platform without depending on a Guid dictionary-key converter.
+        var serializable = selectedPath.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToString());
+        return JsonSerializer.Serialize(serializable, SelectedPathJsonOptions);
+    }
+
+    private static IReadOnlyDictionary<Guid, Guid>? DeserializeSelectedPath(string? selectedPathJson)
+    {
+        if (string.IsNullOrWhiteSpace(selectedPathJson))
+        {
+            return null;
+        }
+
+        var raw = JsonSerializer.Deserialize<Dictionary<string, string>>(selectedPathJson, SelectedPathJsonOptions);
+        if (raw is null || raw.Count == 0)
+        {
+            return null;
+        }
+
+        var parsed = new Dictionary<Guid, Guid>(raw.Count);
+        foreach (var pair in raw)
+        {
+            if (Guid.TryParse(pair.Key, out var variantGroupId) && Guid.TryParse(pair.Value, out var selectedMessageId))
+            {
+                parsed[variantGroupId] = selectedMessageId;
+            }
+        }
+
+        return parsed.Count == 0 ? null : parsed;
     }
 
     private static NodeChatMessageMetadata DeserializeMetadata(string? metadataJson)
