@@ -49,7 +49,10 @@ public static class Extensions
                    {
                        metrics.AddAspNetCoreInstrumentation()
                               .AddHttpClientInstrumentation()
-                              .AddRuntimeInstrumentation();
+                              .AddRuntimeInstrumentation()
+                              // Literal must match XE_Local_AI_Engine.Client.Common.Telemetry.NodeMetrics.MeterName
+                              // ("XE.Node"); ServiceDefaults cannot reference the Client project.
+                              .AddMeter("XE.Node");
                    })
                    .WithTracing(tracing =>
                    {

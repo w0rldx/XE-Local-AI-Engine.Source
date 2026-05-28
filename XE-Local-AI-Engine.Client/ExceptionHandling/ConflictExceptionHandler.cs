@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Common.Extensions;
+using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
+using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) : IExceptionHandler
@@ -30,11 +32,12 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
         httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
         httpContext.Response.ContentType = "application/problem+json";
 
-        await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
+        await httpContext.Response.WriteAsJsonAsync(new ConflictProblemDetails
         {
             Status = StatusCodes.Status409Conflict,
             Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8",
             Title = "Conflict",
+            ConflictType = NodeConflictProblemType.ReadOnlyConversation.ToString(),
             Detail = exception.Message ?? "Conflict"
         }.WithTraceId(httpContext), cancellationToken).ConfigureAwait(false);
 
