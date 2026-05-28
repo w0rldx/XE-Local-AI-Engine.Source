@@ -185,6 +185,9 @@ resharper_formatter_on_tag = @formatter:on
 resharper_formatter_tags_enabled = true
 
 # ReSharper inspection severities
+# Keep explicit argument names; disabling the inspection also stops Code Cleanup from stripping them.
+resharper_redundant_argument_name_highlighting = none
+resharper_redundant_argument_name_for_literal_expression_highlighting = none
 resharper_arrange_redundant_parentheses_highlighting = hint
 resharper_arrange_this_qualifier_highlighting = hint
 resharper_arrange_type_member_modifiers_highlighting = hint
