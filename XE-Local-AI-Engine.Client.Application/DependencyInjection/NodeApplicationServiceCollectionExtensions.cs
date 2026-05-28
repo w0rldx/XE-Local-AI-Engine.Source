@@ -50,7 +50,6 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
-using ILogger = ILogger;
 
 public static class NodeApplicationServiceCollectionExtensions
 {
@@ -263,11 +262,11 @@ public static class NodeApplicationServiceCollectionExtensions
 
         _ = dispatchTask.ContinueWith(static (task, state) =>
             {
-                var (continuationLogger, dispatchOperationName) = ((Serilog.ILogger Logger, string OperationName))state!;
+                var (continuationLogger, dispatchOperationName) = ((ILogger Logger, string OperationName))state!;
 
                 if (task.IsFaulted)
                 {
-                    continuationLogger.Error(task.Exception, "Unhandled worker hub event dispatch failure during {OperationName}.", dispatchOperationName);
+                    continuationLogger.LogError(task.Exception, "Unhandled worker hub event dispatch failure during {OperationName}.", dispatchOperationName);
                 }
             },
             (Logger: logger, OperationName: operationName),
