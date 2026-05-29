@@ -24,6 +24,19 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
 
+    // AgentHome MVP capability strings (Marker A). Advertised only when AgentHome:Enabled=true so a node
+    // never claims sandbox/workspace/patch/memory support it cannot serve. The normalizer trims/dedupes/
+    // sorts these, and the server stores SupportedCapabilities as a free-form JSON list (no schema bump).
+    private static readonly string[] AgentHomeCapabilities =
+    [
+        "agent-home",
+        "sandbox-local-container",
+        "runtime-dotnet-agent-home",
+        "workspace-copy",
+        "patch-export",
+        "memory-proposals"
+    ];
+
     private static readonly string[] ConfiguredModelKeys =
     [
         "Agent:LocalChat:DefaultModel",
@@ -33,6 +46,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     ];
 
     private static readonly string[] ModelConnectionStringNames = ["chat", "embeddings"];
+    private readonly bool _agentHomeEnabled;
     private readonly ICloudCredentialStore _cloudCredentialStore;
     private readonly IReadOnlyList<string> _configuredModelNames;
     private readonly string _defaultModel;
@@ -72,6 +86,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
                         ?? configuration.GetValue<string>("Ollama:ChatModel")
                         ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required for capability reporting.");
         _configuredModelNames = ResolveConfiguredModelNames(configuration);
+        _agentHomeEnabled = configuration.GetValue<bool>("AgentHome:Enabled");
     }
 
     public async Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
@@ -99,7 +114,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         var installedModelInventory = installedModelInventoryResult.Models;
         var installedModels = installedModelInventory.Select(model => model.Name).ToArray();
         var installedModelMetadata = await GetInstalledModelMetadataAsync(installedModelInventory, cancellationToken).ConfigureAwait(false);
-        var supportedCapabilities = DetermineSupportedCapabilities(installedModels);
+        var supportedCapabilities = DetermineSupportedCapabilities(installedModels, _agentHomeEnabled);
         var activeModel = await DetectActiveModelAsync(cancellationToken).ConfigureAwait(false);
         var ollamaReachable = ollamaStatus.Reachable && installedModelInventoryResult.OllamaQuerySucceeded;
         if (installedModels.Length == 0)
@@ -497,13 +512,18 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         }
     }
 
-    private static IReadOnlyList<string> DetermineSupportedCapabilities(IReadOnlyList<string> installedModels)
+    private static IReadOnlyList<string> DetermineSupportedCapabilities(IReadOnlyList<string> installedModels, bool agentHomeEnabled)
     {
         var capabilities = new HashSet<string>(BaseCapabilities, StringComparer.OrdinalIgnoreCase);
 
         if (installedModels.Any(HasVisionSupport))
         {
             capabilities.Add("vision");
+        }
+
+        if (agentHomeEnabled)
+        {
+            capabilities.UnionWith(AgentHomeCapabilities);
         }
 
         return capabilities.OrderBy(capability => capability, StringComparer.OrdinalIgnoreCase).ToArray();
