@@ -51,6 +51,8 @@ using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
@@ -160,6 +162,12 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
+        // Marker E selected-folder store plus the safe resolver. The store persists folders in node SQLite with the
+        // host path encrypted at rest by the node encryption interceptors. The resolver owns alias normalization, host
+        // path validation, and exposes only the opaque id and alias to the model. Registration stays reachable even
+        // when AgentHome is disabled; workspace copy (Marker F) and the tool (Marker I) consume it.
+        builder.Services.AddScoped<INodeSelectedFolderStore, NodeSelectedFolderStore>();
+        builder.Services.AddScoped<ISelectedFolderResolver, SelectedFolderResolver>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
