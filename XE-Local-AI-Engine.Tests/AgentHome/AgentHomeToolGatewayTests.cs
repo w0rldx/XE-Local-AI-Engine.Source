@@ -151,6 +151,7 @@ public sealed class AgentHomeToolGatewayTests
                     ManifestVersion = AgentHomeManifest.CurrentVersion
                 },
                 ResolvedFolders = [],
+                FolderSnapshots = [],
                 RuntimeProfile = "dotnet-agent-home"
             };
         }

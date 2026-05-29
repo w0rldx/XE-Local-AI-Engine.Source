@@ -20,6 +20,8 @@ public sealed class AgentHomeOptionsValidator : IValidateOptions<AgentHomeOption
                                    "AgentHome:PrepareTimeoutSeconds must be greater than zero.")
                                .AppendIf(options.CommandTimeoutSeconds <= 0,
                                    "AgentHome:CommandTimeoutSeconds must be greater than zero.")
+                               .AppendIf(options.MaxSelectedFolderBytes <= 0,
+                                   "AgentHome:MaxSelectedFolderBytes must be greater than zero.")
                                .ToArray();
 
         return errors.Length == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);

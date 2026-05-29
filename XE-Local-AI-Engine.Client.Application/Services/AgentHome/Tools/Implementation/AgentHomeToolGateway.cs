@@ -44,10 +44,11 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
                 cancellationToken).ConfigureAwait(false);
 
             // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
-            // worker content-root structure (AgentHome plan §11 spirit; the absolute path stays worker-internal).
+            // worker content-root structure (AgentHome plan §11 spirit; the absolute path stays worker-internal). The
+            // workspace summary carries aliases and counts only — never host paths (Marker F).
             return string.Create(
                 CultureInfo.InvariantCulture,
-                $"AgentHome run {run.RunId} {(run.Completed ? "completed" : "did not complete")} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.");
+                $"AgentHome run {run.RunId} {(run.Completed ? "completed" : "did not complete")} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(prepared.FolderSnapshots)}");
         }
         catch (SelectedFolderValidationException exception)
         {
@@ -57,5 +58,22 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         {
             return $"run_in_agent_home rejected: {exception.Message}";
         }
+    }
+
+    private static string BuildWorkspaceSummary(IReadOnlyList<SelectedFolderSnapshot> snapshots)
+    {
+        if (snapshots.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return " Workspace: " + string.Join("; ", snapshots.Select(DescribeFolder)) + ".";
+    }
+
+    private static string DescribeFolder(SelectedFolderSnapshot snapshot)
+    {
+        return snapshot.Status == SelectedFolderCopyStatus.BlockedQuota
+            ? string.Create(CultureInfo.InvariantCulture, $"{snapshot.Alias} blocked (over size budget)")
+            : string.Create(CultureInfo.InvariantCulture, $"{snapshot.Alias} copied {snapshot.CopiedFileCount} file(s), excluded {snapshot.ExcludedFileCount}");
     }
 }

@@ -26,12 +26,14 @@ internal sealed class AgentHomeService : IAgentHomeService
     private readonly ISandboxRuntimeProvider _provider;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly IAgentHomeWorkspaceService _workspaceService;
     private int _runCounter;
 
     public AgentHomeService(
         IAgentHomeManifestService manifestService,
         ISandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
+        IAgentHomeWorkspaceService workspaceService,
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,
         TimeProvider timeProvider,
@@ -40,6 +42,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         _manifestService = manifestService ?? throw new ArgumentNullException(nameof(manifestService));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
@@ -81,6 +84,11 @@ internal sealed class AgentHomeService : IAgentHomeService
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 
+        // Marker F: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape guard,
+        // per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command timeout.
+        var folderSnapshots = await _workspaceService
+            .PrepareSelectedFoldersAsync(handle, resolvedFolders, prepareToken).ConfigureAwait(false);
+
         _logger.LogInformation(
             "AgentHome prepared for node {NodeId}: sandbox {SandboxId}, {FolderCount} selected folder(s) resolved.",
             attachKey.NodeId,
@@ -92,6 +100,7 @@ internal sealed class AgentHomeService : IAgentHomeService
             Layout = layout,
             Handle = handle,
             ResolvedFolders = resolvedFolders,
+            FolderSnapshots = folderSnapshots,
             RuntimeProfile = effectiveProfile
         };
     }
