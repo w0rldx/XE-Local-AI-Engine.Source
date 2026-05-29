@@ -5,6 +5,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
 using System.ComponentModel;
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -129,6 +130,96 @@ public sealed class P0ApprovalSpikeTests
         // ToolApprovalAgent / agent.UseToolApproval(...) message-based flow are the next things to probe
         // (see memory 'agent-mode-foundation') — UseToolApproval may make threadless resume work.
         AssertEx.NotNull(winner, $"no threadless resume strategy executed the tool; see {ResultFile}");
+    }
+
+    private const string MarkerFile = "/tmp/p0_tool_ran.txt";
+
+    [Description("Performs the destructive cleanup. Side-effecting and irreversible.")]
+    private static string RunDestructiveCleanup([Description("Reason for the cleanup.")] string reason)
+    {
+        System.IO.File.WriteAllText(MarkerFile, "RAN:" + reason);
+        return "cleanup performed";
+    }
+
+    // Mechanism 2: higher-level ToolApprovalAgent (agent.UseToolApproval) — message-history based, the candidate
+    // that may make THREADLESS approval work (unlike raw ApprovalRequiredAIFunction + FunctionInvokingChatClient,
+    // which throws threadless). Uses a REAL side-effect (marker file) so execution is ground-truth, not inferred.
+    [Test]
+    public async Task LiveOllama_UseToolApproval_ThreadlessResume_RealSideEffect()
+    {
+        if (Environment.GetEnvironmentVariable("P0_RUN_LIVE") != "1")
+        {
+            Console.WriteLine("[P0b] skipped (set P0_RUN_LIVE=1).");
+            return;
+        }
+
+        var baseUrl = Environment.GetEnvironmentVariable("P0_OLLAMA_BASE_URL") ?? "http://localhost:11434";
+        var model = Environment.GetEnvironmentVariable("P0_OLLAMA_MODEL") ?? "qwen3.5:9b";
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(4));
+        var ct = cts.Token;
+
+        if (System.IO.File.Exists(MarkerFile))
+        {
+            System.IO.File.Delete(MarkerFile);
+        }
+
+        IChatClient ollama = new OllamaApiClient(new Uri(baseUrl), model);
+        IChatClient chatClient = ollama.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+        var sp = new ServiceCollection().BuildServiceProvider();
+
+        var baseAgent = new ChatClientAgent(chatClient,
+            "p0b-tool-approval",
+            "You are an assistant. To perform the destructive cleanup you MUST call the RunDestructiveCleanup tool with a reason.",
+            "P0b UseToolApproval spike.",
+            new List<AITool> { AIFunctionFactory.Create(RunDestructiveCleanup) },
+            NullLoggerFactory.Instance,
+            sp);
+        var agent = new AIAgentBuilder(baseAgent).UseToolApproval(JsonSerializerOptions.Default).Build(sp);
+
+        var runOptions = new ChatClientAgentRunOptions
+        {
+            ChatOptions = new ChatOptions
+            {
+                ModelId = model,
+                AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = false }
+            }
+        };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.System, "You are an assistant. To perform the destructive cleanup you MUST call the RunDestructiveCleanup tool with a reason."),
+            new(ChatRole.User, "Please perform the destructive cleanup now.")
+        };
+
+        var results = new List<string>();
+        try
+        {
+            var first = await agent.RunAsync(seed, null, runOptions, ct);
+            var reqs = first.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().ToList();
+            results.Add($"[P0b] run#1 toolApprovalRequests={reqs.Count} ranBeforeApproval={System.IO.File.Exists(MarkerFile)} text={Truncate(first.Text)}");
+
+            if (reqs.Count > 0)
+            {
+                var resume = new List<ChatMessage>(seed);
+                resume.AddRange(first.Messages);
+                resume.Add(new ChatMessage(ChatRole.User, reqs.Select(r => (AIContent)r.CreateResponse(true)).ToList()));
+                var final = await agent.RunAsync(resume, null, runOptions, ct);
+                results.Add($"[P0b] run#2 threadless resume: toolExecuted(file)={System.IO.File.Exists(MarkerFile)} text={Truncate(final.Text)}");
+            }
+            else
+            {
+                results.Add($"[P0b] no approval gate fired (executed directly? file={System.IO.File.Exists(MarkerFile)}) — UseToolApproval may need explicit rules.");
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add($"[P0b] EXC {ex.GetType().Name}:'{ex.Message}' inner={ex.InnerException?.GetType().Name}:'{ex.InnerException?.Message}'");
+        }
+
+        await File.WriteAllTextAsync("/tmp/p0b_result.txt", string.Join("\n", results), ct);
+        foreach (var line in results)
+        {
+            Console.WriteLine(line);
+        }
     }
 
     private static (ChatClientAgent Agent, ChatClientAgentRunOptions RunOptions) BuildAgent(IChatClient chatClient, string model)
