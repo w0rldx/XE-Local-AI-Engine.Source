@@ -147,7 +147,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task PrepareSelectedFoldersAsync_AfterCopy_IssuesGitBaselineInWorkspace()
+    public async Task PrepareSelectedFoldersAsync_AfterCopy_IssuesHardenedGitBaselineInWorkspace()
     {
         var source = NewTempDir();
         await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
@@ -158,15 +158,62 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
         await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
 
-        var commands = provider.ExecutedCommands;
+        var gitCommands = provider.ExecutedCommands.Where(command => command.Executable == "git").ToArray();
+
+        // Every baseline command runs in the selected workspace with the §9.1 byte-stabilizing -c flags so a copied
+        // .gitattributes cannot perturb the baseline (and thus the later diff) bytes.
+        AssertEx.True(gitCommands.Length > 0, "the baseline must issue git commands");
         AssertEx.True(
-            commands.Any(command => command.Executable == "git"
-                                    && command.Arguments.Contains("init")
-                                    && command.WorkingDirectory == "/agent-home/workspace/selected"),
-            "git init must run in the selected workspace");
+            gitCommands.All(command => command.WorkingDirectory == "/agent-home/workspace/selected"),
+            "every baseline command runs in the selected workspace");
         AssertEx.True(
-            commands.Any(command => command.Executable == "git" && command.Arguments.Contains("commit")),
-            "git commit must be issued for the baseline");
+            gitCommands.All(command => HasHardenedFlags(command.Arguments)),
+            "every baseline command carries -c core.hooksPath=/dev/null and -c core.attributesfile=/dev/null");
+
+        AssertEx.True(IssuesArgument(gitCommands, "init"), "git init must run");
+        AssertEx.True(
+            gitCommands.Any(command => command.Arguments.Contains("config")
+                                       && command.Arguments.Contains("core.autocrlf")
+                                       && command.Arguments.Contains("false")),
+            "core.autocrlf must be disabled");
+        AssertEx.True(
+            gitCommands.Any(command => command.Arguments.Contains("config")
+                                       && command.Arguments.Contains("core.filemode")
+                                       && command.Arguments.Contains("false")),
+            "core.filemode must be disabled");
+        AssertEx.True(IssuesArgument(gitCommands, "add"), "git add -A must run");
+        AssertEx.True(IssuesArgument(gitCommands, "commit"), "git commit must run for the baseline");
+    }
+
+    [Test]
+    public async Task PrepareSelectedFoldersAsync_WhenBaselineCommandFails_Throws()
+    {
+        var source = NewTempDir();
+        await File.WriteAllTextAsync(Path.Combine(source, "App.cs"), "x");
+
+        var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest());
+        // git init returns a non-zero exit code; the baseline must fail the prepare rather than continue.
+        provider.RegisterCommand(BaselineCommandKey("init"), 1, string.Empty, "fatal: cannot init");
+        var service = CreateService(provider);
+
+        await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>
+            service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]));
+    }
+
+    private static string BaselineCommandKey(params string[] tail)
+    {
+        return AgentHomeGit.Executable + " " + string.Join(" ", AgentHomeGit.Arguments(tail));
+    }
+
+    private static bool HasHardenedFlags(IReadOnlyList<string> arguments)
+    {
+        return arguments.Contains("core.hooksPath=/dev/null") && arguments.Contains("core.attributesfile=/dev/null");
+    }
+
+    private static bool IssuesArgument(IReadOnlyList<SandboxCommandRequest> commands, string argument)
+    {
+        return commands.Any(command => command.Arguments.Contains(argument));
     }
 
     [Test]

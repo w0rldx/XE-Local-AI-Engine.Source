@@ -27,4 +27,16 @@ public sealed class AgentHomeOptionsValidatorTests
         AssertEx.NotEmpty(result.Failures);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxSelectedFolderBytes", StringComparison.Ordinal));
     }
+
+    [Test]
+    public void Validate_WhenMaxPatchBytesNotPositive_ReturnsFailure()
+    {
+        var options = new AgentHomeOptions { MaxPatchBytes = 0 };
+
+        var result = _validator.Validate(null, options);
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.NotEmpty(result.Failures);
+        AssertEx.Contains(result.Failures, failure => failure.Contains("MaxPatchBytes", StringComparison.Ordinal));
+    }
 }

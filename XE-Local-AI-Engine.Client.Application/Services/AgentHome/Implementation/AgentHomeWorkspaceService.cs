@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 /// </summary>
 internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 {
-    private const string SandboxWorkspaceSelectedRoot = "/agent-home/workspace/selected";
     private const string BaselineUserEmail = "agent-home@localhost";
     private const string BaselineUserName = "AgentHome";
 
@@ -111,7 +110,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             };
         }
 
-        var sandboxDestinationRoot = $"{SandboxWorkspaceSelectedRoot}/{folder.Alias}";
+        var sandboxDestinationRoot = $"{AgentHomeGit.WorkspaceSelectedRoot}/{folder.Alias}";
         foreach (var file in plan.Files)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -232,16 +231,20 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     private async Task CreateGitBaselineAsync(SandboxHandle handle, CancellationToken cancellationToken)
     {
         // The baseline must be captured after copy and before any agent edit, so it lives in preparation (Marker F),
-        // not in the run-time patch export (Marker G), which runs after the agent has changed files. On the fake
-        // provider these are scripted no-ops; the real git state arrives with the local-container provider (J-local).
+        // not in the run-time patch export (Marker G), which runs after the agent has changed files. The §9.1
+        // byte-stabilizing flags (hooks/attributes disabled, autocrlf/filemode off) make the later diff reproducible
+        // even if a copied .gitattributes would otherwise perturb the bytes; the baseline must use the same flags the
+        // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
+        // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; real git
+        // state arrives with the local-container provider (J-local).
         var timeout = TimeSpan.FromSeconds(_options.PrepareTimeoutSeconds);
         var commands = new[]
         {
-            BaselineCommand("agent-home-baseline-init", timeout, "init"),
-            BaselineCommand("agent-home-baseline-add", timeout, "add", "-A"),
-            BaselineCommand(
-                "agent-home-baseline-commit",
-                timeout,
+            BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.Arguments("init")),
+            BaselineCommand("agent-home-baseline-autocrlf", timeout, AgentHomeGit.Arguments("config", "core.autocrlf", "false")),
+            BaselineCommand("agent-home-baseline-filemode", timeout, AgentHomeGit.Arguments("config", "core.filemode", "false")),
+            BaselineCommand("agent-home-baseline-add", timeout, AgentHomeGit.Arguments("add", "-A")),
+            BaselineCommand("agent-home-baseline-commit", timeout, AgentHomeGit.Arguments(
                 "-c",
                 $"user.email={BaselineUserEmail}",
                 "-c",
@@ -249,26 +252,35 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 "commit",
                 "-m",
                 "agent-home baseline",
-                "--allow-empty")
+                "--allow-empty"))
         };
 
         foreach (var command in commands)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _provider.ExecuteAsync(handle, command, cancellationToken).ConfigureAwait(false);
+            var result = await _provider.ExecuteAsync(handle, command, cancellationToken).ConfigureAwait(false);
+            if (!result.Completed || result.ExitCode != 0)
+            {
+                // A failed baseline command leaves no reproducible HEAD for the Marker G diff to compare against, so
+                // fail the prepare loudly rather than letting a later export silently report zero changes. The message
+                // carries only the command's execution id and exit code — never a host path. (Real non-zero git exits
+                // arrive with the local-container provider in Marker J-local.)
+                throw new AgentHomeRequestRejectedException(
+                    $"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
+            }
         }
 
         _logger.LogInformation("Created the in-sandbox git baseline for the selected workspace.");
     }
 
-    private static SandboxCommandRequest BaselineCommand(string executionId, TimeSpan timeout, params string[] arguments)
+    private static SandboxCommandRequest BaselineCommand(string executionId, TimeSpan timeout, IReadOnlyList<string> arguments)
     {
         return new SandboxCommandRequest
         {
             ExecutionId = executionId,
-            Executable = "git",
+            Executable = AgentHomeGit.Executable,
             Arguments = arguments,
-            WorkingDirectory = SandboxWorkspaceSelectedRoot,
+            WorkingDirectory = AgentHomeGit.WorkspaceSelectedRoot,
             Timeout = timeout
         };
     }

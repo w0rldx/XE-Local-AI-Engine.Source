@@ -30,7 +30,15 @@ public sealed class AgentHomeToolGatewayTests
                 RunId = "run-123",
                 Completed = true,
                 ExitCode = 0,
-                LogPath = "/tmp/agent-home/runs/run-123/logs"
+                LogPath = "/tmp/agent-home/runs/run-123/logs",
+                Patch = new AgentHomePatchExport
+                {
+                    ChangedFileCount = 2,
+                    Blocked = false,
+                    PatchBytes = 1024,
+                    PatchRelativePath = "runs/run-123/patches/changes.patch",
+                    ChangedFilesRelativePath = "runs/run-123/patches/changed-files.json"
+                }
             }));
 
         var result = await gateway.ExecuteAsync(ValidRequest);
@@ -38,7 +46,63 @@ public sealed class AgentHomeToolGatewayTests
         AssertEx.Contains(result, "run-123");
         AssertEx.Contains(result, "completed", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(result, "runs/run-123");
+        AssertEx.Contains(result, "2 file(s) changed");
+        AssertEx.Contains(result, "runs/run-123/patches/changes.patch");
         AssertEx.False(result.Contains("/tmp/agent-home", StringComparison.Ordinal), "the model must not see the absolute worker-host path");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenPatchBlocked_RendersBudgetNoticeWithoutPatchPath()
+    {
+        var gateway = new AgentHomeToolGateway(
+            new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-789",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-789/logs",
+                Patch = new AgentHomePatchExport
+                {
+                    ChangedFileCount = 5,
+                    Blocked = true,
+                    PatchBytes = 99999999,
+                    PatchRelativePath = null,
+                    ChangedFilesRelativePath = "runs/run-789/patches/changed-files.json"
+                }
+            }));
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "5 file(s) changed");
+        AssertEx.Contains(result, "size budget", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Contains(result, "runs/run-789/patches/changed-files.json");
+        AssertEx.False(result.Contains("changes.patch", StringComparison.Ordinal), "a blocked patch is not written, so its path must not render");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenPatchExportFailed_RendersFailureNotice()
+    {
+        var gateway = new AgentHomeToolGateway(
+            new StubAgentHomeService(new AgentHomeRunResult
+            {
+                RunId = "run-f",
+                Completed = true,
+                ExitCode = 0,
+                LogPath = "/tmp/agent-home/runs/run-f/logs",
+                Patch = new AgentHomePatchExport
+                {
+                    ChangedFileCount = 0,
+                    Blocked = false,
+                    Failed = true,
+                    PatchBytes = 0,
+                    PatchRelativePath = null,
+                    ChangedFilesRelativePath = null
+                }
+            }));
+
+        var result = await gateway.ExecuteAsync(ValidRequest);
+
+        AssertEx.Contains(result, "export failed", StringComparison.OrdinalIgnoreCase);
     }
 
     [Test]
@@ -72,7 +136,15 @@ public sealed class AgentHomeToolGatewayTests
             RunId = "run-1",
             Completed = true,
             ExitCode = 0,
-            LogPath = "/tmp/logs"
+            LogPath = "/tmp/logs",
+            Patch = new AgentHomePatchExport
+            {
+                ChangedFileCount = 0,
+                Blocked = false,
+                PatchBytes = 0,
+                PatchRelativePath = null,
+                ChangedFilesRelativePath = null
+            }
         }));
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();

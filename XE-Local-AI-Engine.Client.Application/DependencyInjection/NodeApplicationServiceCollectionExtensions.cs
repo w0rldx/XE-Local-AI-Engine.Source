@@ -183,6 +183,9 @@ public static class NodeApplicationServiceCollectionExtensions
         // Marker F workspace copy: PrepareAsync delegates the selected-folder copy (exclusions, symlink-escape guard,
         // byte budget, git baseline) to this stateless service.
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
+        // Marker G patch export: RunAsync delegates the post-run diff of the Marker F baseline (changes.patch +
+        // changed-files.json, MaxPatchBytes budget) to this stateless service.
+        builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
