@@ -23,6 +23,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<NodeMessageFeedback> MessageFeedback => Set<NodeMessageFeedback>();
 
+    internal DbSet<NodeSelectedFolder> SelectedFolders => Set<NodeSelectedFolder>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -34,6 +36,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigureToolEvent(modelBuilder.Entity<NodeToolEvent>());
         ConfigurePurgedTombstone(modelBuilder.Entity<NodePurgedTombstone>());
         ConfigureMessageFeedback(modelBuilder.Entity<NodeMessageFeedback>());
+        ConfigureSelectedFolder(modelBuilder.Entity<NodeSelectedFolder>());
     }
 
     private static void ConfigureConversation(EntityTypeBuilder<NodeConversation> builder)
@@ -213,5 +216,30 @@ public sealed class NodeChatDbContext : DbContext
                .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(entity => entity.ConversationId);
+    }
+
+    private static void ConfigureSelectedFolder(EntityTypeBuilder<NodeSelectedFolder> builder)
+    {
+        builder.ToTable("selected_folders");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.Alias)
+               .HasColumnName("alias");
+
+        builder.Property(entity => entity.HostPath)
+               .HasColumnName("host_path");
+
+        builder.Property(entity => entity.Mode)
+               .HasColumnName("mode")
+               .HasDefaultValue(SelectedFolderMode.Copy);
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.HasIndex(entity => entity.Alias)
+               .IsUnique();
     }
 }

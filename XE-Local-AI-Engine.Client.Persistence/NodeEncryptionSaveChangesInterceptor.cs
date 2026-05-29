@@ -74,6 +74,13 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.PlaintextResult), entry.Entity.ConversationId, entry.Entity.ToolCallId, "plaintext_result", trackedProperties);
         }
 
+        // Selected folders are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
+        // folder's own id plus the column name. See NodePayloadProtector for the associated-data layout.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<NodeSelectedFolder>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.HostPath), Guid.Empty, entry.Entity.Id, "host_path", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;
