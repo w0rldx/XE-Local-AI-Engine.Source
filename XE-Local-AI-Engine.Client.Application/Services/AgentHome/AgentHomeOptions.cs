@@ -52,4 +52,11 @@ public sealed class AgentHomeOptions
     ///     than copied (AgentHome plan §8.2 / §13). Defaults to 536870912 (512 MiB).
     /// </summary>
     public long MaxSelectedFolderBytes { get; set; } = 536870912;
+
+    /// <summary>
+    ///     Hard byte budget for an exported patch. The patch export (Marker G) measures the captured
+    ///     <c>changes.patch</c>; a patch over budget is reported as blocked and not written, while the
+    ///     <c>changed-files.json</c> metadata is still kept (AgentHome plan §9.1 / §13). Defaults to 52428800 (50 MiB).
+    /// </summary>
+    public long MaxPatchBytes { get; set; } = 52428800;
 }

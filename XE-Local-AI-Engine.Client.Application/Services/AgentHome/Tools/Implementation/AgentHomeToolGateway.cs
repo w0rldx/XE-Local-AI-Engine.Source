@@ -48,7 +48,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             // workspace summary carries aliases and counts only — never host paths (Marker F).
             return string.Create(
                 CultureInfo.InvariantCulture,
-                $"AgentHome run {run.RunId} {(run.Completed ? "completed" : "did not complete")} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(prepared.FolderSnapshots)}");
+                $"AgentHome run {run.RunId} {(run.Completed ? "completed" : "did not complete")} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(prepared.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
         }
         catch (SelectedFolderValidationException exception)
         {
@@ -75,5 +75,29 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         return snapshot.Status == SelectedFolderCopyStatus.BlockedQuota
             ? string.Create(CultureInfo.InvariantCulture, $"{snapshot.Alias} blocked (over size budget)")
             : string.Create(CultureInfo.InvariantCulture, $"{snapshot.Alias} copied {snapshot.CopiedFileCount} file(s), excluded {snapshot.ExcludedFileCount}");
+    }
+
+    private static string BuildPatchSummary(AgentHomePatchExport patch)
+    {
+        if (patch.Failed)
+        {
+            return " Patch: export failed.";
+        }
+
+        if (patch.Blocked)
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $" Patch: {patch.ChangedFileCount} file(s) changed; patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
+        }
+
+        if (patch.ChangedFileCount == 0)
+        {
+            return " Patch: no file changes.";
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $" Patch: {patch.ChangedFileCount} file(s) changed -> {patch.PatchRelativePath}.");
     }
 }

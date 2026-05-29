@@ -62,6 +62,45 @@ internal sealed record AgentHomeRunResult
 
     /// <summary>The worker-local path to the run's log directory.</summary>
     public required string LogPath { get; init; }
+
+    /// <summary>
+    ///     The patch-export outcome (Marker G): changed-file count, blocked flag, and run-relative artifact paths. When
+    ///     no selected folder was copied (no git baseline) or nothing changed, the export is empty (zero changed files,
+    ///     null paths).
+    /// </summary>
+    public required AgentHomePatchExport Patch { get; init; }
+}
+
+/// <summary>
+///     Model-safe outcome of the Marker G patch export. Paths are run-relative (<c>runs/&lt;run-id&gt;/patches/…</c>),
+///     never the worker-host root (AgentHome plan §9.1 / §11).
+/// </summary>
+internal sealed record AgentHomePatchExport
+{
+    /// <summary>The number of changed files detected against the workspace git baseline.</summary>
+    public required int ChangedFileCount { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when the patch exceeded <see cref="AgentHomeOptions.MaxPatchBytes" />; the
+    ///     <c>changed-files.json</c> metadata is still written but <c>changes.patch</c> is not.
+    /// </summary>
+    public required bool Blocked { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when a diff command did not complete or returned a non-zero exit code, so no patch
+    ///     could be produced. Distinguishes a genuine export failure from a clean zero-change run; no artifacts are
+    ///     written in this case.
+    /// </summary>
+    public bool Failed { get; init; }
+
+    /// <summary>The size in bytes of the captured patch (the would-be <c>changes.patch</c> content).</summary>
+    public required long PatchBytes { get; init; }
+
+    /// <summary>Run-relative path to <c>changes.patch</c>, or <see langword="null" /> when blocked or empty.</summary>
+    public string? PatchRelativePath { get; init; }
+
+    /// <summary>Run-relative path to <c>changed-files.json</c>, or <see langword="null" /> when there were no changes.</summary>
+    public string? ChangedFilesRelativePath { get; init; }
 }
 
 /// <summary>

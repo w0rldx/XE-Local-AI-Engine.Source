@@ -114,6 +114,80 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RunAsync_WhenWorkspaceHasChanges_ExportsPatchUnderRunPatchesDirectory()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        // The fake has no real git, so script the two diff commands: one changed file and a small patch body.
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, "M\tselected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
+
+        using var harness = CreateHarness(clock, provider, resolver);
+
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
+        var run = await harness.Service.RunAsync(new AgentHomeRunRequest
+        {
+            Prepared = prepared,
+            Goal = "g",
+            AllowedActions = ["read_workspace"]
+        });
+
+        AssertEx.Equal(1, run.Patch.ChangedFileCount);
+        AssertEx.False(run.Patch.Blocked, "the small scripted patch is under budget");
+        AssertEx.Equal($"runs/{run.RunId}/patches/changes.patch", run.Patch.PatchRelativePath);
+
+        var patchFile = Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches", "changes.patch");
+        var changedFilesFile = Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches", "changed-files.json");
+        AssertEx.True(File.Exists(patchFile), "changes.patch must be written host-side under the run dir");
+        AssertEx.True(File.Exists(changedFilesFile), "changed-files.json must be written host-side under the run dir");
+
+        var changedJson = await File.ReadAllTextAsync(changedFilesFile);
+        AssertEx.Contains(changedJson, folderId.ToString());
+        AssertEx.Contains(changedJson, "README.md");
+        AssertEx.False(
+            changedJson.Contains(prepared.Layout.RootPath, StringComparison.Ordinal),
+            "changed-files.json must not leak a host path");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNoFolderCopied_SkipsPatchExport()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+
+        using var harness = CreateHarness(clock, provider, resolver);
+
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = []
+        });
+        var run = await harness.Service.RunAsync(new AgentHomeRunRequest
+        {
+            Prepared = prepared,
+            Goal = "g",
+            AllowedActions = ["read_workspace"]
+        });
+
+        AssertEx.Equal(0, run.Patch.ChangedFileCount);
+        AssertEx.True(run.Patch.PatchRelativePath is null, "no baseline means no patch path");
+        AssertEx.True(run.Patch.ChangedFilesRelativePath is null, "no baseline means no changed-files path");
+        AssertEx.True(
+            provider.ExecutedCommands.All(command => !(command.Executable == "git" && command.Arguments.Contains("diff"))),
+            "no git diff is issued when there is no baseline");
+        AssertEx.False(
+            Directory.Exists(Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches")),
+            "no patches directory is created when nothing was exported");
+    }
+
+    [Test]
     public async Task PrepareAsync_WhenFolderIdUnknown_ThrowsBeforeAnyProviderCall()
     {
         var clock = new FixedClock(FixedNow);
@@ -248,11 +322,17 @@ public sealed class AgentHomeServiceTests : IDisposable
             options,
             NullLogger<AgentHomeWorkspaceService>.Instance);
 
+        var patchService = new AgentHomePatchService(
+            provider,
+            options,
+            NullLogger<AgentHomePatchService>.Instance);
+
         var service = new AgentHomeService(
             manifestService,
             provider,
             identity ?? new MutableIdentityProvider("owner-a", "node-1"),
             workspaceService,
+            patchService,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             clock,

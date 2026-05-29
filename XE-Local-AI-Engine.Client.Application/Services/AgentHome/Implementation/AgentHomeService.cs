@@ -19,10 +19,20 @@ internal sealed class AgentHomeService : IAgentHomeService
     private const string ProbeExecutable = "dotnet";
     private static readonly string[] ProbeArguments = ["--version"];
 
+    private static readonly AgentHomePatchExport EmptyPatchExport = new()
+    {
+        ChangedFileCount = 0,
+        Blocked = false,
+        PatchBytes = 0,
+        PatchRelativePath = null,
+        ChangedFilesRelativePath = null
+    };
+
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILogger<AgentHomeService> _logger;
     private readonly IAgentHomeManifestService _manifestService;
     private readonly AgentHomeOptions _options;
+    private readonly IAgentHomePatchService _patchService;
     private readonly ISandboxRuntimeProvider _provider;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
@@ -34,6 +44,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         ISandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         IAgentHomeWorkspaceService workspaceService,
+        IAgentHomePatchService patchService,
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,
         TimeProvider timeProvider,
@@ -43,6 +54,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
+        _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
@@ -118,7 +130,8 @@ internal sealed class AgentHomeService : IAgentHomeService
 
         // Re-check cancellation before touching the host filesystem so an early cancel leaves no orphaned run dir.
         commandCts.Token.ThrowIfCancellationRequested();
-        var logDirectory = Path.Combine(request.Prepared.Layout.RootPath, "runs", runId, "logs");
+        var runDirectory = Path.Combine(request.Prepared.Layout.RootPath, "runs", runId);
+        var logDirectory = Path.Combine(runDirectory, "logs");
         Directory.CreateDirectory(logDirectory);
 
         var commandRequest = new SandboxCommandRequest
@@ -134,19 +147,52 @@ internal sealed class AgentHomeService : IAgentHomeService
 
         var result = await _provider.ExecuteAsync(request.Prepared.Handle, commandRequest, commandCts.Token).ConfigureAwait(false);
 
+        // Marker G: after the command runs (the agent has edited files in later markers), export the diff against the
+        // Marker F git baseline. The artifacts are written host-side under runs/<run-id>/patches/.
+        var patch = await ExportPatchAsync(request, runId, runDirectory, commandCts.Token).ConfigureAwait(false);
+
         _logger.LogInformation(
-            "AgentHome run {RunId} finished: completed={Completed}, exitCode={ExitCode}.",
+            "AgentHome run {RunId} finished: completed={Completed}, exitCode={ExitCode}, changedFiles={ChangedFiles}.",
             runId,
             result.Completed,
-            result.ExitCode);
+            result.ExitCode,
+            patch.ChangedFileCount);
 
         return new AgentHomeRunResult
         {
             RunId = runId,
             Completed = result.Completed,
             ExitCode = result.ExitCode,
-            LogPath = logDirectory
+            LogPath = logDirectory,
+            Patch = patch
         };
+    }
+
+    private async Task<AgentHomePatchExport> ExportPatchAsync(
+        AgentHomeRunRequest request,
+        string runId,
+        string runDirectory,
+        CancellationToken cancellationToken)
+    {
+        // Marker F creates the git baseline only when at least one folder copied at least one file. Recompute that
+        // signal from the prepare result so an export is attempted only against an existing baseline (no diff against
+        // a non-repository). The empty export carries zero changed files and null paths.
+        var hasBaseline = request.Prepared.FolderSnapshots
+            .Any(snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 });
+        if (!hasBaseline)
+        {
+            return EmptyPatchExport;
+        }
+
+        return await _patchService.ExportPatchAsync(
+            request.Prepared.Handle,
+            new AgentHomePatchExportRequest
+            {
+                RunId = runId,
+                HostRunDirectory = runDirectory,
+                ResolvedFolders = request.Prepared.ResolvedFolders
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     private string ResolveRuntimeProfile(string? requestedProfile)
