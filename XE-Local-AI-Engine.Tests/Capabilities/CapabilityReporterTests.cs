@@ -45,6 +45,41 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
+    public async Task DetectCapabilitiesAsync_WhenAgentHomeEnabled_AdvertisesAgentHomeCapabilities()
+    {
+        await using var context = await CreateContextAsync(configurationOverrides: new Dictionary<string, string?>
+        {
+            ["AgentHome:Enabled"] = "true"
+        });
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.SupportedCapabilities, "text");
+        AssertEx.Contains(result.SupportedCapabilities, "agent-home");
+        AssertEx.Contains(result.SupportedCapabilities, "sandbox-local-container");
+        AssertEx.Contains(result.SupportedCapabilities, "runtime-dotnet-agent-home");
+        AssertEx.Contains(result.SupportedCapabilities, "workspace-copy");
+        AssertEx.Contains(result.SupportedCapabilities, "patch-export");
+        AssertEx.Contains(result.SupportedCapabilities, "memory-proposals");
+    }
+
+    [Test]
+    public async Task DetectCapabilitiesAsync_WhenAgentHomeDisabledByDefault_OmitsAgentHomeCapabilities()
+    {
+        await using var context = await CreateContextAsync();
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        var result = await context.Reporter.DetectCapabilitiesAsync();
+
+        AssertEx.Contains(result.SupportedCapabilities, "text");
+        AssertEx.False(result.SupportedCapabilities.Contains("agent-home"),
+            "AgentHome capabilities must not be advertised when AgentHome:Enabled is false.");
+        AssertEx.False(result.SupportedCapabilities.Contains("sandbox-local-container"));
+        AssertEx.False(result.SupportedCapabilities.Contains("memory-proposals"));
+    }
+
+    [Test]
     public async Task DetectCapabilitiesAsync_WhenShowReportsContextLength_PopulatesModelMetadata()
     {
         await using var context = await CreateContextAsync();
