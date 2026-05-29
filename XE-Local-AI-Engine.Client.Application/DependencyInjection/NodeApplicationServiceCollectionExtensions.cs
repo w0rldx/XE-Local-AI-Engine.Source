@@ -173,9 +173,13 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
-        // Option B ClientLocal tool run_in_agent_home. Marker B wires the handler plus a pending gateway
-        // placeholder. The tool stays off the wire (server seed inactive, AgentHome flag disabled) until Marker I.
-        builder.Services.AddSingleton<IAgentHomeToolGateway, PendingAgentHomeToolGateway>();
+        // Option B ClientLocal tool run_in_agent_home. Marker I-pre replaces the pending placeholder with the real
+        // fake-backed gateway: the handler still flag-gates and §7-validates, then delegates through the gateway to
+        // IAgentHomeService, which drives the manifest initializer, the sandbox provider (the fake by default), and
+        // the selected-folder resolver. The tool stays off the distributed wire (server seed inactive) until Marker I.
+        builder.Services.AddSingleton<IAgentHomeIdentityProvider, AgentHomeIdentityProvider>();
+        builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
+        builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
         // Marker C sandbox provider abstraction. Selection is configuration-bound and restart-required (resolved once
         // as a singleton). The MVP default is the deterministic fake; Marker J-local adds "local-container".

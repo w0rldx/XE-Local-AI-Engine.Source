@@ -27,4 +27,22 @@ public sealed class AgentHomeOptions
     ///     prepare and reinitializes (AgentHome plan §6.6 rule 4). Defaults to 1800 seconds.
     /// </summary>
     public int PrepareStaleAfterSeconds { get; set; } = 1800;
+
+    /// <summary>
+    ///     The runtime profile the worker enables for AgentHome runs (AgentHome plan §12). The model may only request
+    ///     the closed-enum profile from the §7 schema; the worker rejects a requested profile that is not this one.
+    /// </summary>
+    public string DefaultRuntimeProfile { get; set; } = "dotnet-agent-home";
+
+    /// <summary>
+    ///     Timeout for the preparation phase (sandbox attach/create, layout recovery, future workspace copy), applied
+    ///     separately from the command timeout (AgentHome plan §6.1). Defaults to 900 seconds.
+    /// </summary>
+    public int PrepareTimeoutSeconds { get; set; } = 900;
+
+    /// <summary>
+    ///     Timeout for a single in-sandbox command, applied separately from the preparation timeout (AgentHome plan
+    ///     §6.1). Defaults to 300 seconds.
+    /// </summary>
+    public int CommandTimeoutSeconds { get; set; } = 300;
 }
