@@ -12,6 +12,8 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -172,6 +174,14 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddOptions<SandboxOptions>()
                .Bind(configuration.GetSection(SandboxOptions.SectionName));
         builder.Services.AddSingleton<ISandboxRuntimeProvider>(SandboxProviderSelector.Resolve);
+        // Marker D AgentHome layout initializer. Materializes the worker-local /agent-home tree (idempotent,
+        // self-healing, owner-mismatch-recovering). Wired but unreached in production until Marker I-pre swaps the
+        // pending gateway for a fake-backed one; the layout itself can initialize while AgentHome:Enabled=false.
+        builder.Services.AddOptions<AgentHomeOptions>()
+               .Bind(configuration.GetSection(AgentHomeOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<AgentHomeOptions>, AgentHomeOptionsValidator>();
+        builder.Services.AddSingleton<IAgentHomeManifestService, AgentHomeManifestService>();
         builder.Services.AddSingleton<NodeChatPersistenceWriter>();
         builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
         builder.Services.AddSingleton<INodeChatInvocationPump, NodeChatInvocationPump>();
