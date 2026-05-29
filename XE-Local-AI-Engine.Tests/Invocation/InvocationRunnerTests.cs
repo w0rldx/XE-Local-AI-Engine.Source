@@ -599,6 +599,31 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenToolApprovalRequested_SendsApprovalThenResumesAfterDecision()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ApprovalRequestUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        var requestId = sender.SentApprovals.Single().RequestId;
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, true));
+        await runTask;
+
+        AssertEx.Equal(2, segment, "the runner must re-invoke the agent threadlessly after the approval decision");
+        await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
+    }
+
+    [Test]
     public async Task ExecuteApiToolCallAsync_WhenResultResolved_ReturnsResult()
     {
         var sender = new MockHubMessageSender();
@@ -989,6 +1014,16 @@ public sealed class InvocationRunnerTests
             yield return new AgentResponseUpdate(ChatRole.Assistant, chunk);
             await Task.Yield();
         }
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ApprovalRequestUpdates()
+    {
+        // Stands in for FunctionInvokingChatClient surfacing an approval request for an ApprovalRequiredAIFunction:
+        // the runner must detect this, run the approval round-trip, and resume threadlessly.
+        var toolCall = new ToolCallContent("call-run-in-agent-home");
+        var approvalRequest = new ToolApprovalRequestContent("approval-run-in-agent-home", toolCall);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent> { approvalRequest });
+        await Task.Yield();
     }
 
     private static async IAsyncEnumerable<AgentResponseUpdate> CreateMixedUpdates(params (string? Text, string? Thinking)[] chunks)

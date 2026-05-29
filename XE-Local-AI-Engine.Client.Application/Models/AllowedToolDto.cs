@@ -10,6 +10,12 @@ public sealed record AllowedToolDto
 
     public required ToolLocation Location { get; init; }
 
+    /// <summary>
+    ///     Human/model-facing tool description carried from the server <c>ToolDefinition.Description</c>. Attached to
+    ///     the bridged <c>AIFunction</c> so the model sees it alongside <see cref="ParameterSchema" />.
+    /// </summary>
+    public string? Description { get; init; }
+
     public string? ParameterSchema { get; init; }
 
     /// <summary>

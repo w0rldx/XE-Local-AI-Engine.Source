@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 {
     private readonly IChatClient _chatClient;
+    private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<InvocationAgentFactory> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly InvocationAgentOptions _options;
@@ -21,7 +22,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         ILogger<InvocationAgentFactory> logger,
         ILoggerFactory loggerFactory,
         IServiceProvider serviceProvider,
-        IAgentToolRegistry toolRegistry)
+        IAgentToolRegistry toolRegistry,
+        IClientLocalToolRegistry clientLocalToolRegistry)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
@@ -30,6 +32,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         _options = options.Value;
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
+        _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
     }
 
     public Task<InvocationAgentContext> CreateAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken = default)
@@ -76,10 +79,12 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Intersects the offer list the definition carries with the executable catalog in <see cref="_toolRegistry" />.
-    ///     Offered names are sourced from <c>definition.Tools</c> (which the runner builds from the runtime package's
-    ///     allowed-tool list); the executable bodies always come from the registry, matched by name. Offered names with
-    ///     no registry match are skipped so a stale or unknown offer can never reach the agent.
+    ///     Intersects the offer list the definition carries with the executable catalogs, matched by name. Offered
+    ///     names are sourced from <c>definition.Tools</c> (which the runner builds from the runtime package's
+    ///     allowed-tool list). Built-in catalog tools resolve from <see cref="_toolRegistry" /> (Option A); offered
+    ///     names it does not satisfy are then tried against <see cref="_clientLocalToolRegistry" /> (Option B —
+    ///     server-driven <c>ClientLocal</c> tools such as <c>run_in_agent_home</c>). Names matched by neither are
+    ///     skipped so a stale or unhandled offer can never reach the agent.
     /// </summary>
     private IList<AITool> ResolveExecutableTools(InvocationAgentDefinition definition)
     {
@@ -93,19 +98,31 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                                      .Where(static name => !string.IsNullOrWhiteSpace(name))
                                      .ToHashSet(StringComparer.Ordinal);
 
-        List<AITool> resolved =
-        [
-            .. _toolRegistry.GetLocalChatTools()
-                            .Where(tool => offeredNames.Contains(tool.Name))
-        ];
+        var resolved = _toolRegistry.GetLocalChatTools()
+                                    .Where(tool => offeredNames.Contains(tool.Name))
+                                    .ToList();
+
+        var catalogNames = resolved.Select(static tool => tool.Name).ToHashSet(StringComparer.Ordinal);
+
+        resolved.AddRange(offeredNames.Where(name => !catalogNames.Contains(name))
+                                      .Select(ResolveClientLocalTool)
+                                      .OfType<AITool>());
 
         var skipped = offeredNames.Count - resolved.Count;
         if (skipped > 0)
         {
-            _logger.LogDebug("Skipped {SkippedCount} offered tool(s) with no registered executable.", skipped);
+            // An offered tool with no in-process catalog match and no client-local handler is a misconfiguration
+            // (the server advertised a tool this node cannot execute). Warn so it is observable; the offer is then
+            // dropped rather than reaching the agent.
+            _logger.LogWarning("Skipped {SkippedCount} offered tool(s) with no registered executable (no catalog or client-local handler match).", skipped);
         }
 
         return resolved;
+
+        AITool? ResolveClientLocalTool(string name)
+        {
+            return _clientLocalToolRegistry.TryResolve(name, out var tool) ? tool : null;
+        }
     }
 
     private static object ResolveThinkOption(string? reasoningEffort)
