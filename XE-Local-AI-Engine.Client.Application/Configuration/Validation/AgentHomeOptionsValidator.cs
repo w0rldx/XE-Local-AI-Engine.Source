@@ -14,6 +14,12 @@ public sealed class AgentHomeOptionsValidator : IValidateOptions<AgentHomeOption
                                    "AgentHome:PrepareStaleAfterSeconds must be greater than zero.")
                                .AppendIf(options.RootPath is not null && string.IsNullOrWhiteSpace(options.RootPath),
                                    "AgentHome:RootPath must not be blank when specified.")
+                               .AppendIf(string.IsNullOrWhiteSpace(options.DefaultRuntimeProfile),
+                                   "AgentHome:DefaultRuntimeProfile must not be blank.")
+                               .AppendIf(options.PrepareTimeoutSeconds <= 0,
+                                   "AgentHome:PrepareTimeoutSeconds must be greater than zero.")
+                               .AppendIf(options.CommandTimeoutSeconds <= 0,
+                                   "AgentHome:CommandTimeoutSeconds must be greater than zero.")
                                .ToArray();
 
         return errors.Length == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
