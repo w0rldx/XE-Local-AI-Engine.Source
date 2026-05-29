@@ -44,11 +44,11 @@
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.8"/>
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8"/>
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0"/>
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.6.2"/>
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.6.2"/>
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.6.2-preview.260521.1"/>
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.6.2-alpha.260521.1"/>
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.6.2-preview.260521.1"/>
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.8.0"/>
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.8.0"/>
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.8.0-preview.260528.1"/>
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.8.0-alpha.260528.1"/>
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.8.0-preview.260528.1"/>
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.6.0"/>
     <PackageVersion Include="NSubstitute" Version="5.3.0"/>
     <PackageVersion Include="NJsonSchema" Version="11.6.1"/>
