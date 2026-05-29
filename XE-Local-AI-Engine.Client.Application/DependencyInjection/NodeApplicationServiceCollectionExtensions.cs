@@ -44,6 +44,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
@@ -166,6 +167,11 @@ public static class NodeApplicationServiceCollectionExtensions
         // placeholder. The tool stays off the wire (server seed inactive, AgentHome flag disabled) until Marker I.
         builder.Services.AddSingleton<IAgentHomeToolGateway, PendingAgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
+        // Marker C sandbox provider abstraction. Selection is configuration-bound and restart-required (resolved once
+        // as a singleton). The MVP default is the deterministic fake; Marker J-local adds "local-container".
+        builder.Services.AddOptions<SandboxOptions>()
+               .Bind(configuration.GetSection(SandboxOptions.SectionName));
+        builder.Services.AddSingleton<ISandboxRuntimeProvider>(SandboxProviderSelector.Resolve);
         builder.Services.AddSingleton<NodeChatPersistenceWriter>();
         builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
         builder.Services.AddSingleton<INodeChatInvocationPump, NodeChatInvocationPump>();
