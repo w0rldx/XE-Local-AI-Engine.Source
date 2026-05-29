@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -49,7 +50,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
-        resolver.Add(folderId, "selected-project", "/home/user/project");
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -74,6 +75,42 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.Equal(0, run.ExitCode);
         AssertEx.True(Directory.Exists(run.LogPath), "the run-scoped log directory must exist");
         AssertEx.Contains(run.LogPath, Path.Combine("runs", run.RunId, "logs"));
+    }
+
+    [Test]
+    public async Task PrepareAsync_WhenFolderHasMixedTree_CopiesSurvivorsExcludesSecretsAndOutputs()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+
+        var source = Path.Combine(Path.GetTempPath(), "agenthome-src-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(source, "src"));
+        Directory.CreateDirectory(Path.Combine(source, "bin"));
+        await File.WriteAllTextAsync(Path.Combine(source, "src", "Program.cs"), "class P { }");
+        await File.WriteAllTextAsync(Path.Combine(source, ".env"), "SECRET=1");
+        await File.WriteAllTextAsync(Path.Combine(source, "bin", "app.dll"), "binary");
+        _tempRoots.Add(source);
+        resolver.Add(folderId, "selected-project", source);
+
+        using var harness = CreateHarness(clock, provider, resolver);
+
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
+
+        AssertEx.Equal(1, prepared.FolderSnapshots.Count);
+        var snapshot = prepared.FolderSnapshots[0];
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshot.Status);
+        AssertEx.Equal(1, snapshot.CopiedFileCount);
+        AssertEx.Equal("workspace/selected/selected-project", snapshot.WorkspacePath);
+
+        var copied = provider.SnapshotSandboxPaths(prepared.Handle);
+        AssertEx.Contains(copied, path => path.EndsWith("/src/Program.cs", StringComparison.Ordinal));
+        AssertEx.True(copied.All(path => !path.EndsWith("/.env", StringComparison.Ordinal)), ".env must be excluded");
+        AssertEx.True(copied.All(path => !path.Contains("/bin/", StringComparison.Ordinal)), "bin/ must be pruned");
     }
 
     [Test]
@@ -103,7 +140,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
-        resolver.Add(folderId, "selected-project", "/home/user/project");
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -126,7 +163,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         provider.RegisterBlockingCommand("dotnet --version");
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
-        resolver.Add(folderId, "selected-project", "/home/user/project");
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -152,7 +189,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(clock);
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
-        resolver.Add(folderId, "selected-project", "/home/user/project");
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         var identity = new MutableIdentityProvider("owner-a", "node-1");
         using var harness = CreateHarness(clock, provider, resolver, identity);
@@ -178,6 +215,15 @@ public sealed class AgentHomeServiceTests : IDisposable
         };
     }
 
+    private string CreateSourceFolder()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "agenthome-src-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "README.md"), "# project");
+        _tempRoots.Add(directory);
+        return directory;
+    }
+
     private ServiceHarness CreateHarness(
         TimeProvider clock,
         FakeSandboxRuntimeProvider provider,
@@ -196,10 +242,17 @@ public sealed class AgentHomeServiceTests : IDisposable
             .AddScoped(_ => resolver)
             .BuildServiceProvider();
 
+        var workspaceService = new AgentHomeWorkspaceService(
+            provider,
+            new SensitiveFileExclusionService(),
+            options,
+            NullLogger<AgentHomeWorkspaceService>.Instance);
+
         var service = new AgentHomeService(
             manifestService,
             provider,
             identity ?? new MutableIdentityProvider("owner-a", "node-1"),
+            workspaceService,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             clock,

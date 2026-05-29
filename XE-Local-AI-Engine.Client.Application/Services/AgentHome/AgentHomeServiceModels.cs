@@ -25,6 +25,12 @@ internal sealed record AgentHomePrepareResult
     /// <summary>The resolved selected folders (trusted host paths; copy is Marker F, not Marker I-pre).</summary>
     public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
 
+    /// <summary>
+    ///     The model-safe per-folder copy outcome (alias + counts + sandbox-relative path) produced by the workspace
+    ///     copy (Marker F). Empty when there are no selected folders.
+    /// </summary>
+    public required IReadOnlyList<SelectedFolderSnapshot> FolderSnapshots { get; init; }
+
     /// <summary>The effective runtime profile the sandbox was created with (after worker-policy resolution).</summary>
     public required string RuntimeProfile { get; init; }
 }

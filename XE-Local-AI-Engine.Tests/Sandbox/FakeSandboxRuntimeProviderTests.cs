@@ -97,6 +97,65 @@ public sealed class FakeSandboxRuntimeProviderTests
     }
 
     [Test]
+    public async Task CopyIntoAsync_WhenSourceNotSeeded_FallsBackToRealDisk()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var hostFile = Path.Combine(Path.GetTempPath(), "fake-src-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllTextAsync(hostFile, "on disk");
+
+        try
+        {
+            await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+            {
+                SourcePath = hostFile,
+                DestinationPath = "/agent-home/workspace/x.txt"
+            });
+
+            AssertEx.Equal("on disk", await provider.ReadFileAsync(handle, "/agent-home/workspace/x.txt"));
+        }
+        finally
+        {
+            File.Delete(hostFile);
+        }
+    }
+
+    [Test]
+    public async Task SnapshotSandboxPaths_ReturnsCopiedDestinationsSorted()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        provider.WriteHostFile("/host/b", "b");
+        provider.WriteHostFile("/host/a", "a");
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/b", DestinationPath = "/agent-home/b" });
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/a", DestinationPath = "/agent-home/a" });
+
+        var paths = provider.SnapshotSandboxPaths(handle);
+
+        AssertEx.Equal(2, paths.Count);
+        AssertEx.Equal("/agent-home/a", paths[0]);
+        AssertEx.Equal("/agent-home/b", paths[1]);
+    }
+
+    [Test]
+    public async Task ExecutedCommands_RecordsEachExecutedCommandInOrder()
+    {
+        var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        await provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "c1", Executable = "git", Arguments = ["init"] });
+        await provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "c2", Executable = "git", Arguments = ["status"] });
+
+        var commands = provider.ExecutedCommands;
+
+        AssertEx.Equal(2, commands.Count);
+        AssertEx.Equal("git", commands[0].Executable);
+        AssertEx.Contains(commands[0].Arguments, "init");
+        AssertEx.Equal("c2", commands[1].ExecutionId);
+    }
+
+    [Test]
     public async Task CancelCommandAsync_CancelsInFlightCommandBestEffort()
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));

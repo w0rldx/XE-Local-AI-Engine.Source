@@ -45,4 +45,11 @@ public sealed class AgentHomeOptions
     ///     §6.1). Defaults to 300 seconds.
     /// </summary>
     public int CommandTimeoutSeconds { get; set; } = 300;
+
+    /// <summary>
+    ///     Hard per-folder byte budget for a selected folder. The workspace copy (Marker F) sums the surviving
+    ///     (post-exclusion) file sizes before copying; a folder over budget is reported as blocked and skipped rather
+    ///     than copied (AgentHome plan §8.2 / §13). Defaults to 536870912 (512 MiB).
+    /// </summary>
+    public long MaxSelectedFolderBytes { get; set; } = 536870912;
 }

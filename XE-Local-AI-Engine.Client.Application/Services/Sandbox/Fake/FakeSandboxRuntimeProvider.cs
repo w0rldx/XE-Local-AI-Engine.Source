@@ -14,6 +14,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
     /// <summary>The provider name this fake registers under for configuration-bound selection.</summary>
     public const string Name = "fake";
 
+    private readonly List<SandboxCommandRequest> _executed = [];
     private readonly Dictionary<string, string> _hostFiles = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SandboxState> _sandboxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ScriptedCommand> _scripts = new(StringComparer.Ordinal);
@@ -84,6 +85,36 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         }
     }
 
+    /// <summary>
+    ///     The in-sandbox destination paths that currently hold copied content, sorted ordinally. Lets a workspace-copy
+    ///     test (Marker F) assert exactly which files survived the exclusion rules.
+    /// </summary>
+    public IReadOnlyList<string> SnapshotSandboxPaths(SandboxHandle handle)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+
+        lock (_sync)
+        {
+            var state = GetAliveState(handle);
+            return state.SandboxFiles.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
+        }
+    }
+
+    /// <summary>
+    ///     Every command passed to <see cref="ExecuteAsync" />, in order. Lets a test assert that the workspace git
+    ///     baseline (Marker F) and later patch export (Marker G) issued the expected command sequence.
+    /// </summary>
+    public IReadOnlyList<SandboxCommandRequest> ExecutedCommands
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _executed.ToArray();
+            }
+        }
+    }
+
     // ---- ISandboxRuntimeProvider ----
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
@@ -141,6 +172,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         lock (_sync)
         {
             var state = GetAliveState(handle);
+            _executed.Add(request);
             scripted = ResolveScript(request);
             if (scripted.Blocks)
             {
@@ -185,15 +217,27 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         lock (_sync)
         {
             var state = GetAliveState(handle);
-            if (!_hostFiles.TryGetValue(request.SourcePath, out var content))
-            {
-                throw new FileNotFoundException($"Host source path '{request.SourcePath}' has no seeded content to copy into the sandbox.", request.SourcePath);
-            }
-
-            state.SandboxFiles[request.DestinationPath] = content;
+            state.SandboxFiles[request.DestinationPath] = ResolveCopyContent(request.SourcePath);
         }
 
         return Task.CompletedTask;
+    }
+
+    private string ResolveCopyContent(string sourcePath)
+    {
+        // Prefer explicitly seeded content (unit tests). Otherwise fall back to the real file on disk so a workspace
+        // copy test (Marker F) can walk a real temp source tree without pre-seeding every surviving file.
+        if (_hostFiles.TryGetValue(sourcePath, out var seeded))
+        {
+            return seeded;
+        }
+
+        if (File.Exists(sourcePath))
+        {
+            return File.ReadAllText(sourcePath);
+        }
+
+        throw new FileNotFoundException($"Host source path '{sourcePath}' has no seeded content and does not exist on disk.", sourcePath);
     }
 
     public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)

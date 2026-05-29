@@ -168,6 +168,8 @@ public static class NodeApplicationServiceCollectionExtensions
         // when AgentHome is disabled; workspace copy (Marker F) and the tool (Marker I) consume it.
         builder.Services.AddScoped<INodeSelectedFolderStore, NodeSelectedFolderStore>();
         builder.Services.AddScoped<ISelectedFolderResolver, SelectedFolderResolver>();
+        // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
+        builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
@@ -178,6 +180,9 @@ public static class NodeApplicationServiceCollectionExtensions
         // IAgentHomeService, which drives the manifest initializer, the sandbox provider (the fake by default), and
         // the selected-folder resolver. The tool stays off the distributed wire (server seed inactive) until Marker I.
         builder.Services.AddSingleton<IAgentHomeIdentityProvider, AgentHomeIdentityProvider>();
+        // Marker F workspace copy: PrepareAsync delegates the selected-folder copy (exclusions, symlink-escape guard,
+        // byte budget, git baseline) to this stateless service.
+        builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
