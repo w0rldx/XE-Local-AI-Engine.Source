@@ -210,6 +210,7 @@ public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAss
             Id = Guid.Empty,
             Name = tool.Name,
             Location = ToolLocation.ApiSide,
+            Description = tool.Description,
             ParameterSchema = tool.Schema
         };
     }

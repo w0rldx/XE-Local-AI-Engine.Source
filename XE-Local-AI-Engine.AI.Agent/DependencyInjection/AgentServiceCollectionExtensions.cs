@@ -40,6 +40,9 @@ public static class AgentServiceCollectionExtensions
 
         _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
         _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();
+        // Option B: server-driven ClientLocal tools (e.g. run_in_agent_home) resolve through their registered
+        // IClientLocalToolHandler implementations. The worker application layer registers the handlers.
+        _ = services.AddSingleton<IClientLocalToolRegistry, ClientLocalToolRegistry>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
         return services;
     }

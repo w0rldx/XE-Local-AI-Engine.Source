@@ -7,10 +7,13 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -159,6 +162,10 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
+        // Option B ClientLocal tool run_in_agent_home. Marker B wires the handler plus a pending gateway
+        // placeholder. The tool stays off the wire (server seed inactive, AgentHome flag disabled) until Marker I.
+        builder.Services.AddSingleton<IAgentHomeToolGateway, PendingAgentHomeToolGateway>();
+        builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
         builder.Services.AddSingleton<NodeChatPersistenceWriter>();
         builder.Services.AddSingleton<INodeChatPersistenceService, NodeChatPersistenceService>();
         builder.Services.AddSingleton<INodeChatInvocationPump, NodeChatInvocationPump>();
