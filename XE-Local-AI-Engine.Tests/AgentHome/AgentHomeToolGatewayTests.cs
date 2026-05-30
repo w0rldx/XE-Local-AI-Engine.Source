@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
@@ -21,6 +22,9 @@ public sealed class AgentHomeToolGatewayTests
         AllowedActions = ["read_workspace"]
     };
 
+    private static readonly IOptions<AgentHomeOptions> GatewayOptions =
+        Microsoft.Extensions.Options.Options.Create(new AgentHomeOptions { CommandTimeoutSeconds = 300 });
+
     [Test]
     public async Task ExecuteAsync_WhenRunSucceeds_RendersCompactResult()
     {
@@ -39,7 +43,8 @@ public sealed class AgentHomeToolGatewayTests
                     PatchRelativePath = "runs/run-123/patches/changes.patch",
                     ChangedFilesRelativePath = "runs/run-123/patches/changed-files.json"
                 }
-            }));
+            }),
+            GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
 
@@ -69,7 +74,8 @@ public sealed class AgentHomeToolGatewayTests
                     PatchRelativePath = null,
                     ChangedFilesRelativePath = "runs/run-789/patches/changed-files.json"
                 }
-            }));
+            }),
+            GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
 
@@ -98,7 +104,8 @@ public sealed class AgentHomeToolGatewayTests
                     PatchRelativePath = null,
                     ChangedFilesRelativePath = null
                 }
-            }));
+            }),
+            GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
 
@@ -109,7 +116,8 @@ public sealed class AgentHomeToolGatewayTests
     public async Task ExecuteAsync_WhenFolderIdUnknown_RendersRejection()
     {
         var gateway = new AgentHomeToolGateway(
-            StubAgentHomeService.ThatThrows(new SelectedFolderValidationException("Unknown selected folder id.")));
+            StubAgentHomeService.ThatThrows(new SelectedFolderValidationException("Unknown selected folder id.")),
+            GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
 
@@ -121,7 +129,8 @@ public sealed class AgentHomeToolGatewayTests
     public async Task ExecuteAsync_WhenRuntimeProfileRejected_RendersRejection()
     {
         var gateway = new AgentHomeToolGateway(
-            StubAgentHomeService.ThatThrows(new AgentHomeRequestRejectedException("runtime profile 'x' is not enabled on this node.")));
+            StubAgentHomeService.ThatThrows(new AgentHomeRequestRejectedException("runtime profile 'x' is not enabled on this node.")),
+            GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
 
@@ -145,7 +154,7 @@ public sealed class AgentHomeToolGatewayTests
                 PatchRelativePath = null,
                 ChangedFilesRelativePath = null
             }
-        }));
+        }), GatewayOptions);
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
@@ -186,6 +195,21 @@ public sealed class AgentHomeToolGatewayTests
         public Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_runResult!);
+        }
+
+        public async Task<AgentHomeRunResult> RunLifecycleAsync(AgentHomeRunLifecycleRequest request, CancellationToken cancellationToken = default)
+        {
+            // Mirror the real lifecycle: a Prepare error (policy rejection) surfaces here, otherwise the stub run result
+            // is returned. Routing through PrepareAsync keeps the ThatThrows(...) cases exercising the same path.
+            _ = await PrepareAsync(
+                new AgentHomePrepareRequest
+                {
+                    SelectedFolderIds = request.SelectedFolderIds,
+                    RuntimeProfile = request.RuntimeProfile
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            return _runResult!;
         }
 
         private static AgentHomePrepareResult BuildPrepareResult()

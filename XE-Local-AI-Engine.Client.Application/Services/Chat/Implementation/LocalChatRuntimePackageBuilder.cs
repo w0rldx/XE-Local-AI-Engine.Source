@@ -72,7 +72,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             {
                 Name = tool.Name,
                 Description = null,
-                Schema = tool.ParameterSchema
+                Schema = tool.ParameterSchema,
+                Location = tool.Location,
+                RequiresApproval = tool.RequiresApproval
             })
         ];
     }

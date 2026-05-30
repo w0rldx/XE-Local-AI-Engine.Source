@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class InvocationAgentFactoryTests
@@ -114,6 +115,33 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    public async Task CreateAsync_WithApprovalRequiredClientLocalTool_ResolvesApprovalWrappedHandler()
+    {
+        // End-to-end (Marker I Test C): a ClientLocal tool offered via the envelope path (an offer placeholder) is
+        // resolved against the REAL ClientLocalToolRegistry, which wraps a RequiresApproval=true handler in an
+        // ApprovalRequiredAIFunction. Prove the wrapped handler flows through the offer→resolve path without being
+        // dropped, so the agent builds with tools enabled.
+        var registry = new ClientLocalToolRegistry(
+            [new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", """{"type":"object"}""")]);
+        var resolved = registry.TryResolve("run_in_agent_home", out var wrapped);
+        AssertEx.True(resolved);
+        AssertEx.True(wrapped is ApprovalRequiredAIFunction, "the high-risk handler must resolve approval-wrapped");
+
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
+            []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient, clientLocalToolRegistry: registry);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        AssertEx.NotNull(context.Agent);
+        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+    }
+
+    [Test]
     public async Task CreateAsync_WithOfferedNameInNeitherRegistry_DisablesTools()
     {
         var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
@@ -201,6 +229,23 @@ public sealed class InvocationAgentFactoryTests
         public bool TryResolve(string toolName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
         {
             return _tools.TryGetValue(toolName, out tool);
+        }
+    }
+
+    private sealed class ApprovalRequiredFakeHandler(string toolName, string description, string parameterSchema)
+        : IClientLocalToolHandler
+    {
+        public string ToolName => toolName;
+
+        public string Description => description;
+
+        public string ParameterSchema => parameterSchema;
+
+        public bool RequiresApproval => true;
+
+        public Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult("ok");
         }
     }
 

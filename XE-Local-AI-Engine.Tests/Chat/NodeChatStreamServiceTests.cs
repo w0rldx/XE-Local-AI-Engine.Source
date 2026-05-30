@@ -416,7 +416,7 @@ public sealed class NodeChatStreamServiceTests
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
-        provider.GetOfferedTools().Returns(tools);
+        provider.GetOfferedTools(Arg.Any<string?>()).Returns(tools);
         return provider;
     }
 

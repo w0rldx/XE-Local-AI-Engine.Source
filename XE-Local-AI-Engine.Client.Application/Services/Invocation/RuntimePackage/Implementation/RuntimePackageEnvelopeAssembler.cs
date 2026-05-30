@@ -209,9 +209,10 @@ public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAss
         {
             Id = Guid.Empty,
             Name = tool.Name,
-            Location = ToolLocation.ApiSide,
+            Location = tool.Location,
             Description = tool.Description,
-            ParameterSchema = tool.Schema
+            ParameterSchema = tool.Schema,
+            RequiresApproval = tool.RequiresApproval
         };
     }
 

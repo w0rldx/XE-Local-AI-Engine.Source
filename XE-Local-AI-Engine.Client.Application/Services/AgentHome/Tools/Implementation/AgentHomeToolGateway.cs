@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
 using System.Globalization;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
@@ -12,11 +13,14 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </summary>
 internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 {
+    private readonly int _commandTimeoutSeconds;
     private readonly IAgentHomeService _service;
 
-    public AgentHomeToolGateway(IAgentHomeService service)
+    public AgentHomeToolGateway(IAgentHomeService service, IOptions<AgentHomeOptions> options)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
+        ArgumentNullException.ThrowIfNull(options);
+        _commandTimeoutSeconds = options.Value.CommandTimeoutSeconds;
     }
 
     public async Task<string> ExecuteAsync(AgentHomeRunToolRequest request, CancellationToken cancellationToken = default)
@@ -26,18 +30,13 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 
         try
         {
-            var prepared = await _service.PrepareAsync(
-                new AgentHomePrepareRequest
+            // Single lifecycle entry (Marker I): the service resolves identity once, acquires the run-level single-flight
+            // guard, then runs Prepare + Run under it. The gateway no longer calls Prepare and Run separately.
+            var run = await _service.RunLifecycleAsync(
+                new AgentHomeRunLifecycleRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds ?? [],
-                    RuntimeProfile = request.RuntimeProfile
-                },
-                cancellationToken).ConfigureAwait(false);
-
-            var run = await _service.RunAsync(
-                new AgentHomeRunRequest
-                {
-                    Prepared = prepared,
+                    RuntimeProfile = request.RuntimeProfile,
                     Goal = request.Goal ?? string.Empty,
                     AllowedActions = request.AllowedActions ?? []
                 },
@@ -48,7 +47,11 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             // workspace summary carries aliases and counts only — never host paths (Marker F).
             return string.Create(
                 CultureInfo.InvariantCulture,
-                $"AgentHome run {run.RunId} {(run.Completed ? "completed" : "did not complete")} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(prepared.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
+                $"AgentHome run {run.RunId} {DescribeOutcome(run)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
+        }
+        catch (AgentHomeBusyException)
+        {
+            return "run_in_agent_home rejected: an AgentHome run is already in progress for this node.";
         }
         catch (SelectedFolderValidationException exception)
         {
@@ -58,6 +61,16 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         {
             return $"run_in_agent_home rejected: {exception.Message}";
         }
+    }
+
+    private string DescribeOutcome(AgentHomeRunResult run)
+    {
+        if (run.TimedOut)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"did not complete (timed out after {_commandTimeoutSeconds}s)");
+        }
+
+        return run.Completed ? "completed" : "did not complete";
     }
 
     private static string BuildWorkspaceSummary(IReadOnlyList<SelectedFolderSnapshot> snapshots)

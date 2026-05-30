@@ -68,7 +68,9 @@ public static class RuntimePackageConfigHash
                 {
                     Name = tool.Name,
                     Description = tool.Description,
-                    Schema = tool.Schema
+                    Schema = tool.Schema,
+                    Location = tool.Location,
+                    RequiresApproval = tool.RequiresApproval
                 })
             ],
             ModelProfile = modelProfile,

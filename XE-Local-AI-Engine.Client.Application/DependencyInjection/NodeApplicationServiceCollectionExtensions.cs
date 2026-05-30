@@ -186,6 +186,12 @@ public static class NodeApplicationServiceCollectionExtensions
         // Marker G patch export: RunAsync delegates the post-run diff of the Marker F baseline (changes.patch +
         // changed-files.json, MaxPatchBytes budget) to this stateless service.
         builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
+        // Marker H memory proposal export: RunAsync delegates the gated collect of the agent-written JSONL proposals
+        // (schema validation + secret scan) to this stateless service.
+        builder.Services.AddSingleton<IAgentHomeMemoryProposalService, AgentHomeMemoryProposalService>();
+        // Marker K run-scoped JSONL logger. Lane 4 (Marker I) constructs one per run via the factory; base
+        // JSONL logging + redaction contract is the MVP scope. OTel meters and list-runs endpoint are deferred.
+        builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();

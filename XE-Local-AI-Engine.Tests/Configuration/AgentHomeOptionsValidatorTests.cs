@@ -39,4 +39,36 @@ public sealed class AgentHomeOptionsValidatorTests
         AssertEx.NotEmpty(result.Failures);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxPatchBytes", StringComparison.Ordinal));
     }
+
+    [Test]
+    public void Validate_WhenEnabledAndToolCapableModelsEmpty_ReturnsFailure()
+    {
+        var options = new AgentHomeOptions { Enabled = true, ToolCapableModels = [] };
+
+        var result = _validator.Validate(null, options);
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Contains(result.Failures, failure => failure.Contains("ToolCapableModels", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void Validate_WhenDisabledAndToolCapableModelsEmpty_ReturnsSuccess()
+    {
+        // The capability allow-list is only required when AgentHome is enabled.
+        var options = new AgentHomeOptions { Enabled = false, ToolCapableModels = [] };
+
+        var result = _validator.Validate(null, options);
+
+        AssertEx.False(result.Failed);
+    }
+
+    [Test]
+    public void Validate_WhenEnabledAndToolCapableModelsPopulated_ReturnsSuccess()
+    {
+        var options = new AgentHomeOptions { Enabled = true, ToolCapableModels = ["qwen3:8b"] };
+
+        var result = _validator.Validate(null, options);
+
+        AssertEx.False(result.Failed);
+    }
 }

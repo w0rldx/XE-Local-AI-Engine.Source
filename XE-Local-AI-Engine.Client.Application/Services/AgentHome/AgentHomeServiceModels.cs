@@ -48,6 +48,26 @@ internal sealed record AgentHomeRunRequest
     public required IReadOnlyList<string> AllowedActions { get; init; }
 }
 
+/// <summary>
+///     Inputs for <see cref="IAgentHomeService.RunLifecycleAsync" /> — the single gateway entry that wraps Prepare+Run
+///     under the run-level busy guard. Carries everything the two phases need so the gateway no longer calls Prepare and
+///     Run separately (which could let two prepares race before the first run acquired the guard).
+/// </summary>
+internal sealed record AgentHomeRunLifecycleRequest
+{
+    /// <summary>The selected-folder ids to resolve and copy into the workspace.</summary>
+    public required IReadOnlyList<string> SelectedFolderIds { get; init; }
+
+    /// <summary>The model-requested runtime profile, or <see langword="null" /> to use the worker default.</summary>
+    public string? RuntimeProfile { get; init; }
+
+    /// <summary>The model-supplied goal carried into the run for logging.</summary>
+    public required string Goal { get; init; }
+
+    /// <summary>The validated <c>allowedActions</c> the run is permitted (gates optional G/H steps).</summary>
+    public required IReadOnlyList<string> AllowedActions { get; init; }
+}
+
 /// <summary>Compact result of <see cref="IAgentHomeService.RunAsync" /> returned to the model.</summary>
 internal sealed record AgentHomeRunResult
 {
@@ -57,11 +77,25 @@ internal sealed record AgentHomeRunResult
     /// <summary>Whether the command ran to completion (false when cancelled/killed mid-flight).</summary>
     public required bool Completed { get; init; }
 
+    /// <summary>
+    ///     <see langword="true" /> when the run hit the command timeout (<see cref="AgentHomeOptions.CommandTimeoutSeconds" />)
+    ///     rather than completing or being cancelled by the caller. A timeout is surfaced as a non-throwing result so the
+    ///     conversation continues; a caller/connection cancel propagates <see cref="OperationCanceledException" /> instead.
+    /// </summary>
+    public bool TimedOut { get; init; }
+
     /// <summary>The command's exit code.</summary>
     public required int ExitCode { get; init; }
 
     /// <summary>The worker-local path to the run's log directory.</summary>
     public required string LogPath { get; init; }
+
+    /// <summary>
+    ///     The model-safe per-folder copy outcome (alias + counts) from preparation (Marker F), carried onto the result
+    ///     so <see cref="IAgentHomeService.RunLifecycleAsync" /> callers can render the workspace summary without a
+    ///     separate prepare handle. Empty when there were no selected folders.
+    /// </summary>
+    public IReadOnlyList<SelectedFolderSnapshot> FolderSnapshots { get; init; } = [];
 
     /// <summary>
     ///     The patch-export outcome (Marker G): changed-file count, blocked flag, and run-relative artifact paths. When
@@ -119,6 +153,28 @@ internal sealed class AgentHomeRequestRejectedException : InvalidOperationExcept
     }
 
     public AgentHomeRequestRejectedException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
+/// <summary>
+///     Thrown when a second AgentHome run is requested for the same owner-node while one is already in flight (AgentHome
+///     plan §6.6 rule 5). The run-level single-flight guard rejects rather than queues; the gateway maps it to a compact
+///     model-facing "already in progress" rejection.
+/// </summary>
+internal sealed class AgentHomeBusyException : InvalidOperationException
+{
+    public AgentHomeBusyException(string message)
+        : base(message)
+    {
+    }
+
+    public AgentHomeBusyException()
+    {
+    }
+
+    public AgentHomeBusyException(string message, Exception innerException)
         : base(message, innerException)
     {
     }

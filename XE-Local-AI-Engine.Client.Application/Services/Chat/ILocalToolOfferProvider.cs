@@ -11,8 +11,12 @@ using XE_Local_AI_Engine.Client.Models;
 public interface ILocalToolOfferProvider
 {
     /// <summary>
-    ///     The catalog tools as offer-list DTOs. The executables themselves are resolved by the invocation factory from
-    ///     the registry by name; this list only travels in the runtime package for the config hash and client display.
+    ///     The catalog tools as offer-list DTOs for the given active model. The executables themselves are resolved by
+    ///     the invocation factory from the registry by name; this list only travels in the runtime package for the
+    ///     config hash and client display. High-risk catalog tools that require a tool-capable model (currently
+    ///     <c>run_in_agent_home</c>) are omitted when <paramref name="activeModelId" /> is not in the worker's
+    ///     tool-capable allow-list, so an incapable loopback model is never offered the tool (AgentHome locked decision
+    ///     10). The encrypted path stays server-gated and does not call this seam.
     /// </summary>
-    IReadOnlyList<AllowedToolDto> GetOfferedTools();
+    IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId);
 }
