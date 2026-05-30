@@ -192,6 +192,9 @@ public static class NodeApplicationServiceCollectionExtensions
         // Marker K run-scoped JSONL logger. Lane 4 (Marker I) constructs one per run via the factory; base
         // JSONL logging + redaction contract is the MVP scope. OTel meters and list-runs endpoint are deferred.
         builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
+        // Marker L host patch apply: a user-driven, approval-gated action that lands Marker G's exported changes.patch
+        // onto the host selected folders. Scoped because it depends on the Scoped ISelectedFolderResolver.
+        builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();

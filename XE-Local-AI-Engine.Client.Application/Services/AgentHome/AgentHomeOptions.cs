@@ -66,4 +66,17 @@ public sealed class AgentHomeOptions
     ///     path stays server-gated by <c>AiModel.SupportsToolCalling</c>. Defaults to <c>["qwen3:8b"]</c>.
     /// </summary>
     public IReadOnlyList<string> ToolCapableModels { get; set; } = ["qwen3:8b"];
+
+    /// <summary>
+    ///     Whether the host patch apply (Marker L, AgentHome plan §9.2) may apply a binary change. When
+    ///     <see langword="false" /> (the default), a patch containing a binary block is rejected outright — binary
+    ///     content never touches the host. When flipped on, binary changes apply via git's <c>--binary</c> literal form.
+    /// </summary>
+    public bool AllowBinaryPatchApply { get; set; }
+
+    /// <summary>
+    ///     Timeout for a single host <c>git apply</c> invocation during the patch apply (Marker L, AgentHome plan §9.2),
+    ///     applied separately from the in-sandbox command timeout. Defaults to 120 seconds.
+    /// </summary>
+    public int PatchApplyTimeoutSeconds { get; set; } = 120;
 }

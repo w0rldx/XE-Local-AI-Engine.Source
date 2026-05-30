@@ -24,6 +24,8 @@ public sealed class AgentHomeOptionsValidator : IValidateOptions<AgentHomeOption
                                    "AgentHome:MaxSelectedFolderBytes must be greater than zero.")
                                .AppendIf(options.MaxPatchBytes <= 0,
                                    "AgentHome:MaxPatchBytes must be greater than zero.")
+                               .AppendIf(options.PatchApplyTimeoutSeconds <= 0,
+                                   "AgentHome:PatchApplyTimeoutSeconds must be greater than zero.")
                                .AppendIf(options.Enabled && (options.ToolCapableModels is null || options.ToolCapableModels.Count == 0),
                                    "AgentHome:ToolCapableModels must contain at least one model id when AgentHome is enabled.")
                                .ToArray();
