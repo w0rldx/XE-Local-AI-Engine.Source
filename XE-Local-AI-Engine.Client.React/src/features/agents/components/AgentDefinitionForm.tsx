@@ -4,13 +4,16 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentToolSelector } from "@/features/agents/components/AgentToolSelector";
+import { OrchestrationTopologyEditor } from "@/features/agents/components/OrchestrationTopologyEditor";
 import {
+	type AgentDefinition,
 	agentDefinitionFormSchema,
 	type AgentDefinitionFormValues,
 	type AgentDefinitionKind,
 	agentDefinitionKinds,
 	agentReasoningEfforts,
 } from "@/features/agents/models/AgentDefinitionModels";
+import type { OrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
@@ -23,6 +26,11 @@ interface AgentDefinitionFormProps {
 	initialValues: AgentDefinitionFormValues;
 	modelOptions: readonly AgentModelOption[];
 	toolCapableModels: readonly string[];
+	// All agent definitions (for the orchestration participant picker). The editing definition is excluded from the
+	// specialist list by the editor itself via selfId.
+	allDefinitions: readonly AgentDefinition[];
+	// The editing definition's id (self / triage). Empty string when creating a new definition.
+	selfId: string;
 	isSubmitting: boolean;
 	submitError?: string;
 	onSubmit: (values: AgentDefinitionFormValues) => void;
@@ -38,6 +46,8 @@ export function AgentDefinitionForm({
 	initialValues,
 	modelOptions,
 	toolCapableModels,
+	allDefinitions,
+	selfId,
 	isSubmitting,
 	submitError,
 	onSubmit,
@@ -46,6 +56,8 @@ export function AgentDefinitionForm({
 	const { t } = useTranslation();
 	const [values, setValues] = useState<AgentDefinitionFormValues>(initialValues);
 	const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AgentDefinitionFormValues, string>>>({});
+	// Error specific to the orchestration participants field, derived from the Zod result on submit.
+	const [participantsError, setParticipantsError] = useState<string | undefined>(undefined);
 
 	const toolCapable = useMemo(
 		() => isModelToolCapable(values.modelProfile, toolCapableModels),
@@ -120,21 +132,32 @@ export function AgentDefinitionForm({
 		}));
 	}, []);
 
+	const handleOrchestrationChange = useCallback((orchestration: OrchestrationTopology) => {
+		setValues((current) => ({ ...current, orchestration }));
+	}, []);
+
 	const handleSubmit = useCallback(() => {
 		const result = agentDefinitionFormSchema.safeParse(values);
 		if (!result.success) {
 			const nextErrors: Partial<Record<keyof AgentDefinitionFormValues, string>> = {};
+			let nextParticipantsError: string | undefined;
 			for (const issue of result.error.issues) {
 				const key = issue.path[0];
 				if (typeof key === "string") {
 					nextErrors[key as keyof AgentDefinitionFormValues] = issue.message;
 				}
+				// Surface the orchestration participants error inline on the participant multi-select.
+				if (key === "orchestration" && issue.path[1] === "participantAgentDefinitionIds") {
+					nextParticipantsError = issue.message;
+				}
 			}
 			setFieldErrors(nextErrors);
+			setParticipantsError(nextParticipantsError);
 			return;
 		}
 
 		setFieldErrors({});
+		setParticipantsError(undefined);
 		// When the model is not tool-capable, never persist tools — strip them defensively so a stale selection
 		// from before the model was changed cannot leak through.
 		const sanitized: AgentDefinitionFormValues = toolCapable
@@ -209,12 +232,16 @@ export function AgentDefinitionForm({
 				/>
 			</Group>
 			{values.kind === "Orchestrator" ? (
-				<Alert color="blue" data-testid="agent-form-orchestrator-notice">
-					{t(
-						"pages.agents.form.kind.orchestratorNotice",
-						"Orchestrator topology is configured but not yet executed — this agent runs as a single agent for now.",
-					)}
-				</Alert>
+				<OrchestrationTopologyEditor
+					topology={values.orchestration}
+					candidateDefinitions={allDefinitions}
+					selfId={selfId}
+					triageName={values.name}
+					orchestratorModelProfile={values.modelProfile}
+					toolCapableModels={toolCapableModels}
+					participantsError={participantsError}
+					onChange={handleOrchestrationChange}
+				/>
 			) : null}
 			<AgentToolSelector
 				selectedToolNames={values.allowedToolNames}

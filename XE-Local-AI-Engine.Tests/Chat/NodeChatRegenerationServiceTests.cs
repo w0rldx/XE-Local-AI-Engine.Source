@@ -59,6 +59,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -135,6 +137,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
             resolver,
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -151,6 +155,63 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal("high", runner.LastReasoningEffort);
         AssertEx.Equal(1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
+        AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent regenerate must carry no orchestration spec.");
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenBoundToOrchestrator_CarriesOrchestrationSpecOnPackage()
+    {
+        // Loop P5 hydration symmetry: a regenerated turn on a conversation bound to a Kind=Orchestrator definition must
+        // carry the SAME orchestration spec a fresh send would — a missed hydration here would make reruns diverge.
+        await using var provider = await BuildProviderAsync("regeneration-orchestrator.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(
+            new NodeChatCreateConversationRequest("Orchestrated regen", "node", 10, AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        var spec = CreateSampleSpec();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", null, 4));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            store,
+            orchestrationResolver,
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.NotNull(runner.LastOrchestrationSpec);
+        AssertEx.Equal(spec.TriageParticipantKey, runner.LastOrchestrationSpec!.TriageParticipantKey);
+        AssertEx.Equal(2, runner.LastOrchestrationSpec.Participants.Count);
     }
 
     [Test]
@@ -187,6 +248,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -230,6 +293,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -291,6 +356,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -343,6 +410,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -386,6 +455,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -447,6 +518,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -487,6 +560,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -521,6 +596,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -568,6 +645,55 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
+    }
+
+    // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
+    // orchestration resolver — the package carries no spec and the single-agent regeneration path is byte-identical.
+    private static IAgentDefinitionStore CreateAgentDefinitionStore()
+    {
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
+        return store;
+    }
+
+    private static IOrchestrationResolver CreateOrchestrationResolver()
+    {
+        var resolver = Substitute.For<IOrchestrationResolver>();
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        return resolver;
+    }
+
+    private static AgentDefinitionRecord CreateOrchestratorRecord(Guid id)
+    {
+        return new AgentDefinitionRecord(id,
+            "Orchestrator",
+            null,
+            "Orchestrator prompt.",
+            "qwen3:8b",
+            null,
+            AgentDefinitionKind.Orchestrator,
+            [],
+            new Dictionary<string, bool>(),
+            null,
+            4,
+            10,
+            10);
+    }
+
+    private static OrchestrationSpec CreateSampleSpec()
+    {
+        return new OrchestrationSpec
+        {
+            TriageParticipantKey = "a",
+            MaxTurnsPerAgent = 6,
+            ReturnToPrevious = false,
+            Participants =
+            [
+                new OrchestrationSpecParticipant { Key = "a", Name = "Triage", Instructions = "Triage.", ModelId = "qwen3:8b", Tools = [] },
+                new OrchestrationSpecParticipant { Key = "b", Name = "Specialist", Instructions = "Specialist.", ModelId = "qwen3:8b", Tools = [] }
+            ],
+            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b" }]
+        };
     }
 
     private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
@@ -641,6 +767,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // bound definition's persona + version reach the regenerate path (a missed hydration site = divergent reruns).
         public string? LastSystemPrompt { get; private set; }
         public int LastAgentDefinitionVersion { get; private set; }
+        public OrchestrationSpec? LastOrchestrationSpec { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
@@ -650,6 +777,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             LastAllowedTools = context.Package.AllowedTools;
             LastSystemPrompt = context.Package.ResolvedSystemPrompt;
             LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
+            LastOrchestrationSpec = context.Package.OrchestrationSpec;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }

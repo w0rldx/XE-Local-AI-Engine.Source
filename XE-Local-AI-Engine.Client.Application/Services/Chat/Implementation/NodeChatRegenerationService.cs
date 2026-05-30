@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -28,6 +29,8 @@ public sealed class NodeChatRegenerationService(
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
     IAgentDefinitionResolver agentDefinitionResolver,
+    IAgentDefinitionStore agentDefinitionStore,
+    IOrchestrationResolver orchestrationResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -142,6 +145,12 @@ public sealed class NodeChatRegenerationService(
         // hydration here would make reruns diverge from sends. A null result keeps the default persona.
         var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
 
+        // Symmetric with the send path (NodeChatStreamService): when the bound definition is a tool-capable
+        // orchestrator, resolve a compiled orchestration spec so a regenerated turn reruns through the SAME handoff
+        // workflow a fresh send would — a missed hydration here would make reruns diverge from sends. A null result
+        // keeps the single-agent path.
+        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+
         // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
         // client asked AND the node has the tool engine enabled. When offered, the catalog's local tools travel in
         // the runtime package as the offer list; the invocation factory resolves the matching executables from the
@@ -160,7 +169,8 @@ public sealed class NodeChatRegenerationService(
             LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort));
+            ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
+            OrchestrationSpec: orchestration?.Spec));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
@@ -408,6 +418,29 @@ public sealed class NodeChatRegenerationService(
                            ?? throw new InvalidOperationException($"Embedded instructions resource '{options.InstructionsResource}' was not found.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    ///     Mirrors <c>NodeChatStreamService.ResolveOrchestrationAsync</c>: resolves a compiled orchestration spec for a
+    ///     bound orchestrator definition (loop P5), or <c>null</c> to rerun single-agent. Only a bound conversation
+    ///     triggers the extra record fetch, so the single-agent path stays byte-identical.
+    /// </summary>
+    private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
+        string? activeModel,
+        CancellationToken cancellationToken)
+    {
+        if (agentDefinitionId is not { } definitionId)
+        {
+            return null;
+        }
+
+        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
+        {
+            return null;
+        }
+
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, cancellationToken).ConfigureAwait(false);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

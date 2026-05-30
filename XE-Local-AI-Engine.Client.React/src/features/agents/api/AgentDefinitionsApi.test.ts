@@ -57,7 +57,10 @@ const sampleRequest: SaveAgentDefinitionRequestDto = {
 	kind: "Single",
 	allowedToolNames: ["GetCurrentTime"],
 	toolApprovals: { GetCurrentTime: true },
+	orchestrationTopologyJson: null,
 };
+
+const emptyTopology = { participantAgentDefinitionIds: [], handoffs: [], maxTurnsPerAgent: 8, returnToPrevious: false };
 
 describe("agent definitions API", () => {
 	it("lists agent definitions, mapping DTOs and forwarding the abort signal", async () => {
@@ -127,11 +130,65 @@ describe("agent definitions API", () => {
 			kind: "Single",
 			allowedToolNames: ["GetCurrentTime"],
 			toolApprovals: { GetCurrentTime: false, Calculate: true },
+			orchestration: emptyTopology,
 		});
 
 		expect(request.name).toBe("Trimmed");
 		expect(request.description).toBeNull();
 		expect(request.instructions).toBe("Do things");
 		expect(request.toolApprovals).toEqual({ GetCurrentTime: false });
+	});
+
+	it("sends a null topology for a Single definition even when an orchestration is present", () => {
+		const request = toSaveAgentDefinitionRequest(
+			{
+				name: "Helper",
+				description: "",
+				instructions: "Help",
+				modelProfile: null,
+				reasoningEffort: null,
+				kind: "Single",
+				allowedToolNames: [],
+				toolApprovals: {},
+				orchestration: { ...emptyTopology, participantAgentDefinitionIds: ["spec-1"] },
+			},
+			"self-1",
+		);
+
+		expect(request.orchestrationTopologyJson).toBeNull();
+	});
+
+	it("serializes the topology for an Orchestrator definition into the request, pinning the triage to selfId", () => {
+		const request = toSaveAgentDefinitionRequest(
+			{
+				name: "Coordinator",
+				description: "",
+				instructions: "Route",
+				modelProfile: null,
+				reasoningEffort: null,
+				kind: "Orchestrator",
+				allowedToolNames: [],
+				toolApprovals: {},
+				orchestration: {
+					participantAgentDefinitionIds: ["spec-1", "spec-2"],
+					handoffs: [{ fromAgentDefinitionId: "self-1", toAgentDefinitionId: "spec-1", reason: "  research  " }],
+					maxTurnsPerAgent: 6,
+					returnToPrevious: true,
+				},
+			},
+			"self-1",
+		);
+
+		expect(request.orchestrationTopologyJson).not.toBeNull();
+		const wire = JSON.parse(request.orchestrationTopologyJson as string);
+		expect(wire.version).toBe(1);
+		expect(wire.triageAgentDefinitionId).toBe("self-1");
+		// The triage (self) is folded into participants at the head, deduped.
+		expect(wire.participantAgentDefinitionIds).toEqual(["self-1", "spec-1", "spec-2"]);
+		expect(wire.handoffs).toEqual([
+			{ fromAgentDefinitionId: "self-1", toAgentDefinitionId: "spec-1", reason: "research" },
+		]);
+		expect(wire.maxTurnsPerAgent).toBe(6);
+		expect(wire.returnToPrevious).toBe(true);
 	});
 });

@@ -9,6 +9,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
@@ -27,6 +28,7 @@ public sealed class InvocationRunner : IInvocationRunner
     private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
     private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
     private const string ProviderUnavailableMessage = "Provider unreachable.";
+    private const string OrchestrationFailureMessage = "Orchestration run failed.";
 
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant);
@@ -40,6 +42,7 @@ public sealed class InvocationRunner : IInvocationRunner
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
+    private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
@@ -56,6 +59,7 @@ public sealed class InvocationRunner : IInvocationRunner
     public InvocationRunner(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
+        IOrchestrationAgentFactory orchestrationAgentFactory,
         IEnvelopeCryptoService envelopeCryptoService,
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
@@ -67,6 +71,7 @@ public sealed class InvocationRunner : IInvocationRunner
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
+        _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));
         _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
@@ -109,197 +114,30 @@ public sealed class InvocationRunner : IInvocationRunner
         {
             var invocationToken = GetInvocationCancellationToken();
             var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
-            var responseBuilder = new StringBuilder();
-            var reasoningBuilder = new StringBuilder();
-            var streamedChunkCount = 0;
-            var streamedReasoningChunkCount = 0;
-            UsageSnapshot? usageSnapshot = null;
-            long sequence = 0;
-            long reasoningSequence = 0;
-            var totalResponseBytes = 0;
-            var totalReasoningBytes = 0;
+
+            // Shared streaming state for both the single-agent and orchestration paths: the response/reasoning
+            // accumulators, the byte caps, the monotonic sequence counters, and the terminal usage snapshot. Both
+            // branches feed this through the same Emit* helpers so the transport, size cap, dispatcher reporting, and
+            // ordering stay byte-for-byte identical.
+            var stream = new StreamState();
 
             if (shouldSendHubMessages)
             {
                 await sender.SendInvocationAcceptedAsync(package.InvocationId, invocationToken).ConfigureAwait(false);
             }
 
-            var definition = BuildInvocationDefinition(package, resolvedModel);
-            await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
+            var transport = new StreamTransport(this, sender, dispatcher, context, package, sendEncrypted, sendPlain);
 
-            // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
-            // from the earlier FunctionCallContent with the matching CallId.
-            var pendingLocalToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
-
-            // The conversation grows across approval-gated segments. A high-risk ClientLocal tool wrapped in
-            // ApprovalRequiredAIFunction makes FunctionInvokingChatClient surface a ToolApprovalRequestContent and
-            // end the segment WITHOUT executing the tool. We carry the decision over the existing approval transport
-            // and resume threadlessly (session: null) by replaying the folded segment messages plus the approval
-            // response (the proven P0 gate shape). A segment that surfaces no approval request completes the run.
-            var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
-            ToolApprovalRequestContent? pendingApproval;
-
-            do
+            // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
+            // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
+            if (package.OrchestrationSpec is { } orchestrationSpec)
             {
-                pendingApproval = null;
-                var segmentUpdates = new List<AgentResponseUpdate>();
-
-                await foreach (var update in agentContext.Agent.RunStreamingAsync(currentMessages, null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
-                {
-                    segmentUpdates.Add(update);
-                    var textChunk = update.Text;
-                    var thinkingChunk = string.Concat(update.Contents?.OfType<TextReasoningContent>()
-                                                            .Select(t => t.Text) ?? Enumerable.Empty<string>());
-                    var usage = update.Contents?.OfType<UsageContent>().LastOrDefault()?.Details;
-                    if (usage is not null)
-                    {
-                        usageSnapshot = UsageSnapshot.From(usage);
-                        _logger.LogDebug("Received terminal usage for invocation {InvocationId}: input={InputTokens}, output={OutputTokens}, reasoning={ReasoningTokens}, total={TotalTokens}.",
-                            package.InvocationId,
-                            usageSnapshot.InputTokens,
-                            usageSnapshot.OutputTokens,
-                            usageSnapshot.ReasoningTokens,
-                            usageSnapshot.TotalTokens);
-                    }
-
-                    // Local (ClientSide) tools execute via FunctionInvokingChatClient and never reach
-                    // ExecuteApiToolCallAsync, so their lifecycle events would otherwise be lost.
-                    // Detect FunctionCallContent / FunctionResultContent in streaming updates and
-                    // fire the matching lifecycle phases so the SSE stream carries tool-call events.
-                    if (update.Contents is { Count: > 0 })
-                    {
-                        foreach (var content in update.Contents)
-                        {
-                            if (content is FunctionCallContent functionCall)
-                            {
-                                var callId = functionCall.CallId ?? functionCall.Name;
-                                pendingLocalToolCallNames[callId] = functionCall.Name;
-
-                                await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
-                                {
-                                    InvocationId = package.InvocationId,
-                                    ToolCallId = callId,
-                                    ToolName = functionCall.Name,
-                                    Phase = ToolCallLifecyclePhase.Requested,
-                                    Arguments = functionCall.Arguments is not null
-                                        ? JsonSerializer.Serialize(functionCall.Arguments)
-                                        : null,
-                                    RequiresApproval = false
-                                }).ConfigureAwait(false);
-                            }
-                            else if (content is FunctionResultContent functionResult)
-                            {
-                                var resultCallId = functionResult.CallId ?? string.Empty;
-                                var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
-                                    ? name
-                                    : resultCallId;
-
-                                await dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
-                                {
-                                    InvocationId = package.InvocationId,
-                                    ToolCallId = resultCallId,
-                                    ToolName = toolName,
-                                    Phase = ToolCallLifecyclePhase.Completed,
-                                    Result = functionResult.Result?.ToString(),
-                                    IsError = functionResult.Exception is not null
-                                }).ConfigureAwait(false);
-                            }
-                            else if (content is ToolApprovalRequestContent approvalRequest)
-                            {
-                                // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of
-                                // executing the tool. Capture it; the segment ends and the outer loop runs the approval
-                                // round-trip, then resumes threadlessly with the decision.
-                                pendingApproval = approvalRequest;
-                            }
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(thinkingChunk))
-                    {
-                        totalReasoningBytes += Encoding.UTF8.GetByteCount(thinkingChunk);
-                        if (totalReasoningBytes > _maxResponseSizeBytes)
-                        {
-                            throw new InvalidOperationException($"Reasoning size exceeded maximum of {_maxResponseSizeBytes / (1024 * 1024)}MB");
-                        }
-
-                        streamedReasoningChunkCount++;
-                        reasoningSequence++;
-                        reasoningBuilder.Append(thinkingChunk);
-
-                        await dispatcher.ReportInvocationThinkingChunkAsync(package.InvocationId, thinkingChunk).ConfigureAwait(false);
-
-                        if (sendEncrypted)
-                        {
-                            await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
-                                    context.MessageId,
-                                    context.EpochVersion,
-                                    context.EpochKey.Span,
-                                    Encoding.UTF8.GetBytes(thinkingChunk),
-                                    reasoningSequence,
-                                    EncryptedChunkEnvelopeV1.ReasoningKind),
-                                invocationToken).ConfigureAwait(false);
-                        }
-                        else if (sendPlain)
-                        {
-                            await sender.SendReasoningStreamChunkAsync(package.InvocationId,
-                                thinkingChunk,
-                                false,
-                                reasoningSequence,
-                                invocationToken).ConfigureAwait(false);
-                        }
-                    }
-
-                    if (string.IsNullOrEmpty(textChunk))
-                    {
-                        continue;
-                    }
-
-                    streamedChunkCount++;
-                    sequence++;
-                    totalResponseBytes += Encoding.UTF8.GetByteCount(textChunk);
-
-                    if (totalResponseBytes > _maxResponseSizeBytes)
-                    {
-                        throw new InvalidOperationException($"Response size exceeded maximum of {_maxResponseSizeBytes / (1024 * 1024)}MB");
-                    }
-
-                    responseBuilder.Append(textChunk);
-
-                    await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, textChunk).ConfigureAwait(false);
-
-                    if (sendEncrypted)
-                    {
-                        await sender.SendEncryptedChunkAsync(_envelopeCryptoService.EncryptChunk(package.ConversationId,
-                                context.MessageId,
-                                context.EpochVersion,
-                                context.EpochKey.Span,
-                                Encoding.UTF8.GetBytes(textChunk),
-                                sequence),
-                            invocationToken).ConfigureAwait(false);
-                    }
-                    else if (sendPlain)
-                    {
-                        await sender.SendTokenStreamChunkAsync(package.InvocationId,
-                            textChunk,
-                            false,
-                            sequence,
-                            invocationToken).ConfigureAwait(false);
-                    }
-                }
-
-                if (pendingApproval is not null)
-                {
-                    // Fold the streamed segment into messages (carries the assistant tool-call + approval request),
-                    // run the approval round-trip over the existing transport, then replay history + the approval
-                    // response so FunctionInvokingChatClient reconstructs and executes (or rejects) the tool call.
-                    var foldedMessages = segmentUpdates.ToAgentResponse().Messages;
-                    var approved = await RequestToolApprovalAsync(package, pendingApproval, invocationToken).ConfigureAwait(false);
-                    currentMessages.AddRange(foldedMessages);
-                    currentMessages.Add(new ChatMessage(ChatRole.User,
-                        [pendingApproval.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user.")]));
-                }
+                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, invocationToken).ConfigureAwait(false);
             }
-            while (pendingApproval is not null);
+            else
+            {
+                await RunSingleAgentAsync(package, resolvedModel, transport, stream, invocationToken).ConfigureAwait(false);
+            }
 
             if (sendEncrypted)
             {
@@ -307,15 +145,15 @@ public sealed class InvocationRunner : IInvocationRunner
                         context.MessageId,
                         context.EpochVersion,
                         context.EpochKey.Span,
-                        Encoding.UTF8.GetBytes(responseBuilder.ToString()),
-                        sequence,
-                        usageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(),
-                        reasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(reasoningBuilder.ToString()) : null),
+                        Encoding.UTF8.GetBytes(stream.ResponseBuilder.ToString()),
+                        stream.Sequence,
+                        stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(),
+                        stream.ReasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(stream.ReasoningBuilder.ToString()) : null),
                     invocationToken).ConfigureAwait(false);
             }
             else if (sendPlain)
             {
-                if (usageSnapshot is null)
+                if (stream.UsageSnapshot is null)
                 {
                     _logger.LogWarning("Terminal model usage was not reported for invocation {InvocationId} using model {ModelName}. Token fields will remain unknown.",
                         package.InvocationId,
@@ -325,31 +163,31 @@ public sealed class InvocationRunner : IInvocationRunner
                 await sender.SendReasoningStreamChunkAsync(package.InvocationId,
                     string.Empty,
                     true,
-                    reasoningSequence + 1,
+                    stream.ReasoningSequence + 1,
                     invocationToken).ConfigureAwait(false);
                 await sender.SendTokenStreamChunkAsync(package.InvocationId,
                     string.Empty,
                     true,
-                    sequence + 1,
+                    stream.Sequence + 1,
                     invocationToken).ConfigureAwait(false);
                 await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
                 {
                     InvocationId = package.InvocationId,
-                    FinalContent = responseBuilder.ToString(),
+                    FinalContent = stream.ResponseBuilder.ToString(),
                     ModelUsed = resolvedModel,
-                    InputTokens = usageSnapshot?.InputTokens,
-                    OutputTokens = usageSnapshot?.OutputTokens,
-                    TokensUsed = usageSnapshot?.TotalTokens,
-                    FinalReasoning = reasoningBuilder.ToString(),
-                    ReasoningTokens = usageSnapshot?.ReasoningTokens
+                    InputTokens = stream.UsageSnapshot?.InputTokens,
+                    OutputTokens = stream.UsageSnapshot?.OutputTokens,
+                    TokensUsed = stream.UsageSnapshot?.TotalTokens,
+                    FinalReasoning = stream.ReasoningBuilder.ToString(),
+                    ReasoningTokens = stream.UsageSnapshot?.ReasoningTokens
                 }, invocationToken).ConfigureAwait(false);
             }
 
             await dispatcher.ReportInvocationCompletedAsync(package.InvocationId,
-                usageSnapshot?.InputTokens,
-                usageSnapshot?.OutputTokens,
-                usageSnapshot?.TotalTokens,
-                usageSnapshot?.ReasoningTokens).ConfigureAwait(false);
+                stream.UsageSnapshot?.InputTokens,
+                stream.UsageSnapshot?.OutputTokens,
+                stream.UsageSnapshot?.TotalTokens,
+                stream.UsageSnapshot?.ReasoningTokens).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
@@ -378,6 +216,276 @@ public sealed class InvocationRunner : IInvocationRunner
             CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
             await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
         }
+    }
+
+    // The unchanged single-agent path, extracted verbatim from the former RunAsync body. Drives one ChatClientAgent
+    // over an approval-gated do/while loop, accumulating into `stream` through the shared transport so the streaming
+    // behavior is identical to before P5.
+    private async Task RunSingleAgentAsync(RuntimePackage package,
+        string resolvedModel,
+        StreamTransport transport,
+        StreamState stream,
+        CancellationToken invocationToken)
+    {
+        var definition = BuildInvocationDefinition(package, resolvedModel);
+        await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
+
+        // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
+        // from the earlier FunctionCallContent with the matching CallId.
+        var pendingLocalToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // The conversation grows across approval-gated segments. A high-risk ClientLocal tool wrapped in
+        // ApprovalRequiredAIFunction makes FunctionInvokingChatClient surface a ToolApprovalRequestContent and
+        // end the segment WITHOUT executing the tool. We carry the decision over the existing approval transport
+        // and resume threadlessly (session: null) by replaying the folded segment messages plus the approval
+        // response (the proven P0 gate shape). A segment that surfaces no approval request completes the run.
+        var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
+        ToolApprovalRequestContent? pendingApproval;
+
+        do
+        {
+            pendingApproval = null;
+            var segmentUpdates = new List<AgentResponseUpdate>();
+
+            await foreach (var update in agentContext.Agent.RunStreamingAsync(currentMessages, null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
+            {
+                segmentUpdates.Add(update);
+                var textChunk = update.Text;
+                var thinkingChunk = string.Concat(update.Contents?.OfType<TextReasoningContent>()
+                                                        .Select(t => t.Text) ?? Enumerable.Empty<string>());
+                var usage = update.Contents?.OfType<UsageContent>().LastOrDefault()?.Details;
+                if (usage is not null)
+                {
+                    stream.UsageSnapshot = UsageSnapshot.From(usage);
+                    _logger.LogDebug("Received terminal usage for invocation {InvocationId}: input={InputTokens}, output={OutputTokens}, reasoning={ReasoningTokens}, total={TotalTokens}.",
+                        package.InvocationId,
+                        stream.UsageSnapshot.InputTokens,
+                        stream.UsageSnapshot.OutputTokens,
+                        stream.UsageSnapshot.ReasoningTokens,
+                        stream.UsageSnapshot.TotalTokens);
+                }
+
+                // Local (ClientSide) tools execute via FunctionInvokingChatClient and never reach
+                // ExecuteApiToolCallAsync, so their lifecycle events would otherwise be lost.
+                // Detect FunctionCallContent / FunctionResultContent in streaming updates and
+                // fire the matching lifecycle phases so the SSE stream carries tool-call events.
+                if (update.Contents is { Count: > 0 })
+                {
+                    foreach (var content in update.Contents)
+                    {
+                        if (content is FunctionCallContent functionCall)
+                        {
+                            var callId = functionCall.CallId ?? functionCall.Name;
+                            pendingLocalToolCallNames[callId] = functionCall.Name;
+
+                            await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                            {
+                                InvocationId = package.InvocationId,
+                                ToolCallId = callId,
+                                ToolName = functionCall.Name,
+                                Phase = ToolCallLifecyclePhase.Requested,
+                                Arguments = functionCall.Arguments is not null
+                                    ? JsonSerializer.Serialize(functionCall.Arguments)
+                                    : null,
+                                RequiresApproval = false
+                            }).ConfigureAwait(false);
+                        }
+                        else if (content is FunctionResultContent functionResult)
+                        {
+                            var resultCallId = functionResult.CallId ?? string.Empty;
+                            var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
+                                ? name
+                                : resultCallId;
+
+                            await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                            {
+                                InvocationId = package.InvocationId,
+                                ToolCallId = resultCallId,
+                                ToolName = toolName,
+                                Phase = ToolCallLifecyclePhase.Completed,
+                                Result = functionResult.Result?.ToString(),
+                                IsError = functionResult.Exception is not null
+                            }).ConfigureAwait(false);
+                        }
+                        else if (content is ToolApprovalRequestContent approvalRequest)
+                        {
+                            // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of
+                            // executing the tool. Capture it; the segment ends and the outer loop runs the approval
+                            // round-trip, then resumes threadlessly with the decision.
+                            pendingApproval = approvalRequest;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(thinkingChunk))
+                {
+                    await transport.EmitReasoningAsync(stream, thinkingChunk, invocationToken).ConfigureAwait(false);
+                }
+
+                if (string.IsNullOrEmpty(textChunk))
+                {
+                    continue;
+                }
+
+                await transport.EmitTextAsync(stream, textChunk, invocationToken).ConfigureAwait(false);
+            }
+
+            if (pendingApproval is not null)
+            {
+                // Fold the streamed segment into messages (carries the assistant tool-call + approval request),
+                // run the approval round-trip over the existing transport, then replay history + the approval
+                // response so FunctionInvokingChatClient reconstructs and executes (or rejects) the tool call.
+                var foldedMessages = segmentUpdates.ToAgentResponse().Messages;
+                var approved = await RequestToolApprovalAsync(package, pendingApproval, invocationToken).ConfigureAwait(false);
+                currentMessages.AddRange(foldedMessages);
+                currentMessages.Add(new ChatMessage(ChatRole.User,
+                    [pendingApproval.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user.")]));
+            }
+        }
+        while (pendingApproval is not null);
+    }
+
+    // The loop-P5 orchestration path. Compiles the package's OrchestrationSpec into the MAF-agnostic
+    // OrchestrationAgentDefinition (bridging each participant's offer list with the SAME InvocationToolBridge switch the
+    // single-agent path uses), drives the handoff workflow via IOrchestrationAgentFactory, and maps the normalized
+    // OrchestrationUpdate stream onto the SAME transport/cap/sequence/approval plumbing as the single-agent loop. The
+    // workflow itself owns multi-hop tool invocation; this loop only fans deltas out and round-trips approvals.
+    private async Task RunOrchestrationAsync(RuntimePackage package,
+        OrchestrationSpec spec,
+        string resolvedModel,
+        StreamTransport transport,
+        StreamState stream,
+        CancellationToken invocationToken)
+    {
+        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, invocationToken).ConfigureAwait(false);
+        var seed = BuildChatMessages(package);
+
+        await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
+
+        // Drain to the natural end of WatchAsync rather than breaking on the first TerminalOutput: the factory's
+        // session drives the workflow as the stream is pulled and ends the stream right after the terminal output, so
+        // a full drain is the documented terminator (an early break would risk truncating a later-superstep delta in
+        // autonomous/multi-turn shapes). The terminal output carries no further deltas, so this adds no idle latency.
+        await foreach (var update in session.WatchAsync(invocationToken).ConfigureAwait(false))
+        {
+            switch (update.Kind)
+            {
+                case OrchestrationUpdateKind.ReasoningDelta when !string.IsNullOrEmpty(update.Text):
+                    await transport.EmitReasoningAsync(stream, update.Text, invocationToken).ConfigureAwait(false);
+                    break;
+
+                case OrchestrationUpdateKind.TextDelta when !string.IsNullOrEmpty(update.Text):
+                    await transport.EmitTextAsync(stream, update.Text, invocationToken).ConfigureAwait(false);
+                    break;
+
+                case OrchestrationUpdateKind.ApprovalRequest when update.RequestId is { } requestId:
+                    // Surface the approval over the existing transport (the same hub round-trip the single-agent path
+                    // uses), then answer it on the HELD run and keep draining — the tool executes in a later superstep.
+                    // Name the tool in the approval description so the card matches the single-agent UX (not the opaque id).
+                    var pendingApproval = ToApprovalRequest(update);
+                    var approvalDescription = $"Tool '{ApprovalToolName(update)}' requires approval before it runs.";
+                    var approved = await RequestToolApprovalAsync(package, pendingApproval, invocationToken, approvalDescription).ConfigureAwait(false);
+                    await session.RespondToApprovalAsync(requestId,
+                        approved,
+                        approved ? "Approved by user." : "Rejected by user.",
+                        invocationToken).ConfigureAwait(false);
+                    break;
+
+                case OrchestrationUpdateKind.Failure:
+                    // Map a workflow failure onto the existing agent-runtime failure path. The raw MAF executor detail
+                    // is logged server-side only; the client gets a CONSTANT safe message (MapFailure does not redact a
+                    // plain InvalidOperationException), so framework internals never leak to the caller.
+                    _logger.LogWarning("Orchestration run failed for invocation {InvocationId}: {Detail}", package.InvocationId, update.Text);
+                    throw new InvalidOperationException(OrchestrationFailureMessage);
+
+                case OrchestrationUpdateKind.TerminalOutput:
+                    // The workflow has produced its final output; no further deltas follow. Keep draining so the stream
+                    // ends naturally (the factory's documented terminator) rather than breaking the enumeration early.
+                    break;
+
+                default:
+                    // ApprovalRequest with no RequestId, or empty text deltas: nothing to forward.
+                    break;
+            }
+        }
+    }
+
+    // Compiles the loopback OrchestrationSpec into the .AI.Agent OrchestrationAgentDefinition: each participant's
+    // model is resolved to a concrete installed model (its pinned profile, else the turn's resolved model), and its
+    // projected offer list is bridged into AITools with the SAME switch BuildInvocationTools uses (ApiSide → real
+    // bridge over ExecuteApiToolCallAsync; ClientLocal → name-only placeholder the factory swaps for the registry
+    // executable). The seed history rides on the workflow input, not per participant.
+    private async Task<OrchestrationAgentDefinition> BuildOrchestrationDefinitionAsync(RuntimePackage package,
+        OrchestrationSpec spec,
+        string resolvedModel,
+        CancellationToken invocationToken)
+    {
+        var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
+        foreach (var participant in spec.Participants)
+        {
+            var participantModel = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken).ConfigureAwait(false);
+            participants.Add(new OrchestrationParticipant
+            {
+                Key = participant.Key,
+                Name = participant.Name,
+                Description = participant.Description,
+                Instructions = participant.Instructions,
+                ModelId = participantModel,
+                ReasoningEffort = participant.ReasoningEffort,
+                Tools = BuildParticipantTools(package, participant.Tools)
+            });
+        }
+
+        var triage = participants.FirstOrDefault(p => string.Equals(p.Key, spec.TriageParticipantKey, StringComparison.Ordinal))
+                     ?? throw new InvalidOperationException("Orchestration spec triage participant is not present in the participant set.");
+
+        var edges = spec.Edges
+                        .Select(static edge => new OrchestrationEdge
+                        {
+                            FromKey = edge.FromKey,
+                            ToKey = edge.ToKey,
+                            Reason = edge.Reason
+                        })
+                        .ToArray();
+
+        return new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = participants,
+            Edges = edges,
+            EmitStreamingUpdates = true,
+            MaxTurnsPerAgent = spec.MaxTurnsPerAgent,
+            ReturnToPrevious = spec.ReturnToPrevious
+        };
+    }
+
+    private IReadOnlyList<AITool> BuildParticipantTools(RuntimePackage package, IReadOnlyList<AllowedToolDto> tools)
+    {
+        return
+        [
+            .. tools.Select(tool => tool.Location switch
+            {
+                ToolLocation.ApiSide => InvocationToolBridge.Create(tool.Name,
+                    tool.Description,
+                    tool.ParameterSchema,
+                    (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
+                ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name),
+                _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
+            })
+        ];
+    }
+
+    private static ToolApprovalRequestContent ToApprovalRequest(OrchestrationUpdate update)
+    {
+        // The orchestration session correlates the decision by its own RequestId; the bridged transport only needs a
+        // human-readable description, so synthesize a minimal request carrying the tool name awaiting approval.
+        var callId = update.RequestId ?? Guid.NewGuid().ToString("N");
+        return new ToolApprovalRequestContent(callId, new FunctionCallContent(callId, ApprovalToolName(update)));
+    }
+
+    private static string ApprovalToolName(OrchestrationUpdate update)
+    {
+        return string.IsNullOrWhiteSpace(update.ToolName) ? "tool" : update.ToolName;
     }
 
     public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -616,7 +724,8 @@ public sealed class InvocationRunner : IInvocationRunner
     /// </summary>
     private async Task<bool> RequestToolApprovalAsync(RuntimePackage package,
         ToolApprovalRequestContent approvalRequest,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? descriptionOverride = null)
     {
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -636,7 +745,8 @@ public sealed class InvocationRunner : IInvocationRunner
             {
                 InvocationId = package.InvocationId,
                 RequestId = requestId,
-                Description = $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs."
+                Description = descriptionOverride
+                              ?? $"A tool call ({approvalRequest.ToolCall.CallId}) requires approval before it runs."
             };
 
             await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
@@ -998,6 +1108,128 @@ public sealed class InvocationRunner : IInvocationRunner
         }
 
         invocationCancellationTokenSource?.Dispose();
+    }
+
+    // The mutable streaming accumulator shared by the single-agent and orchestration paths: the response/reasoning
+    // builders, the byte totals (against _maxResponseSizeBytes), the monotonic sequence counters the transport sends,
+    // and the terminal usage snapshot. Carried by reference into the branch methods so the post-stream completion
+    // block in RunAsync reads the final state.
+    private sealed class StreamState
+    {
+        public StringBuilder ResponseBuilder { get; } = new();
+
+        public StringBuilder ReasoningBuilder { get; } = new();
+
+        public UsageSnapshot? UsageSnapshot { get; set; }
+
+        public long Sequence { get; set; }
+
+        public long ReasoningSequence { get; set; }
+
+        public int TotalResponseBytes { get; set; }
+
+        public int TotalReasoningBytes { get; set; }
+    }
+
+    // The single emit path both branches use: it appends to the accumulator, enforces the response/reasoning byte
+    // caps, advances the sequence counter, reports the chunk to the dispatcher, and sends it over the encrypted or
+    // plain hub transport. Keeping this one place guarantees the orchestration path streams byte-for-byte like the
+    // single-agent path.
+    private sealed class StreamTransport
+    {
+        private readonly InvocationRunner _runner;
+        private readonly IHubMessageSender _sender;
+        private readonly InvocationExecutionContext _context;
+        private readonly RuntimePackage _package;
+        private readonly bool _sendEncrypted;
+        private readonly bool _sendPlain;
+
+        public StreamTransport(InvocationRunner runner,
+            IHubMessageSender sender,
+            IWorkerEventDispatcher dispatcher,
+            InvocationExecutionContext context,
+            RuntimePackage package,
+            bool sendEncrypted,
+            bool sendPlain)
+        {
+            _runner = runner;
+            _sender = sender;
+            Dispatcher = dispatcher;
+            _context = context;
+            _package = package;
+            _sendEncrypted = sendEncrypted;
+            _sendPlain = sendPlain;
+        }
+
+        public IWorkerEventDispatcher Dispatcher { get; }
+
+        public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)
+        {
+            stream.TotalReasoningBytes += Encoding.UTF8.GetByteCount(thinkingChunk);
+            if (stream.TotalReasoningBytes > _runner._maxResponseSizeBytes)
+            {
+                throw new InvalidOperationException($"Reasoning size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
+            }
+
+            stream.ReasoningSequence++;
+            stream.ReasoningBuilder.Append(thinkingChunk);
+
+            await Dispatcher.ReportInvocationThinkingChunkAsync(_package.InvocationId, thinkingChunk).ConfigureAwait(false);
+
+            if (_sendEncrypted)
+            {
+                await _sender.SendEncryptedChunkAsync(_runner._envelopeCryptoService.EncryptChunk(_package.ConversationId,
+                        _context.MessageId,
+                        _context.EpochVersion,
+                        _context.EpochKey.Span,
+                        Encoding.UTF8.GetBytes(thinkingChunk),
+                        stream.ReasoningSequence,
+                        EncryptedChunkEnvelopeV1.ReasoningKind),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else if (_sendPlain)
+            {
+                await _sender.SendReasoningStreamChunkAsync(_package.InvocationId,
+                    thinkingChunk,
+                    false,
+                    stream.ReasoningSequence,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public async Task EmitTextAsync(StreamState stream, string textChunk, CancellationToken cancellationToken)
+        {
+            stream.Sequence++;
+            stream.TotalResponseBytes += Encoding.UTF8.GetByteCount(textChunk);
+
+            if (stream.TotalResponseBytes > _runner._maxResponseSizeBytes)
+            {
+                throw new InvalidOperationException($"Response size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
+            }
+
+            stream.ResponseBuilder.Append(textChunk);
+
+            await Dispatcher.ReportInvocationStreamChunkAsync(_package.InvocationId, textChunk).ConfigureAwait(false);
+
+            if (_sendEncrypted)
+            {
+                await _sender.SendEncryptedChunkAsync(_runner._envelopeCryptoService.EncryptChunk(_package.ConversationId,
+                        _context.MessageId,
+                        _context.EpochVersion,
+                        _context.EpochKey.Span,
+                        Encoding.UTF8.GetBytes(textChunk),
+                        stream.Sequence),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else if (_sendPlain)
+            {
+                await _sender.SendTokenStreamChunkAsync(_package.InvocationId,
+                    textChunk,
+                    false,
+                    stream.Sequence,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     private sealed record UsageSnapshot(int? InputTokens, int? OutputTokens, int? ReasoningTokens, int? TotalTokens)

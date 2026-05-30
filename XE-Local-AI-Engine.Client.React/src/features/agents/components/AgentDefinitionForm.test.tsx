@@ -30,8 +30,27 @@ vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 }));
 
 import { AgentDefinitionForm } from "@/features/agents/components/AgentDefinitionForm";
-import type { AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
+import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+
+function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefinition {
+	return {
+		id: "11111111-1111-1111-1111-111111111111",
+		name: "Specialist",
+		description: "",
+		instructions: "Be a specialist",
+		modelProfile: null,
+		reasoningEffort: null,
+		kind: "Single",
+		allowedToolNames: [],
+		toolApprovals: {},
+		orchestrationTopologyJson: null,
+		version: 1,
+		createdAtUtc: 0,
+		updatedAtUtc: 0,
+		...overrides,
+	};
+}
 
 const catalogTools: ToolCatalogEntry[] = [
 	{
@@ -89,11 +108,14 @@ const baseValues: AgentDefinitionFormValues = {
 	kind: "Single",
 	allowedToolNames: [],
 	toolApprovals: {},
+	orchestration: { participantAgentDefinitionIds: [], handoffs: [], maxTurnsPerAgent: 8, returnToPrevious: false },
 };
 
 function renderForm(overrides: {
 	initialValues?: Partial<AgentDefinitionFormValues>;
 	toolCapableModels?: string[];
+	allDefinitions?: AgentDefinition[];
+	selfId?: string;
 	onSubmit?: (values: AgentDefinitionFormValues) => void;
 }) {
 	const onSubmit = overrides.onSubmit ?? vi.fn();
@@ -105,6 +127,8 @@ function renderForm(overrides: {
 				{ value: "llama3:8b", label: "llama3:8b" },
 			]}
 			toolCapableModels={overrides.toolCapableModels ?? []}
+			allDefinitions={overrides.allDefinitions ?? []}
+			selfId={overrides.selfId ?? ""}
 			isSubmitting={false}
 			onSubmit={onSubmit}
 			onCancel={vi.fn()}
@@ -194,5 +218,131 @@ describe("AgentDefinitionForm", () => {
 		expect(onSubmit).toHaveBeenCalledWith(
 			expect.objectContaining({ allowedToolNames: [], toolApprovals: {} }),
 		);
+	});
+
+	it("hides the orchestration section for a Single definition", () => {
+		renderForm({ initialValues: { kind: "Single" } });
+
+		expect(screen.queryByTestId("orchestration-topology-editor")).toBeNull();
+	});
+
+	it("shows the orchestration section only for an Orchestrator definition", () => {
+		renderForm({ initialValues: { kind: "Orchestrator" } });
+
+		expect(screen.getByTestId("orchestration-topology-editor")).toBeTruthy();
+		// With no edges drawn the mesh-default hint is shown.
+		expect(screen.getByTestId("orchestration-mesh-hint")).toBeTruthy();
+	});
+
+	it("blocks submit on an orchestrator with no specialists and surfaces the participants error", () => {
+		const { onSubmit } = renderForm({
+			initialValues: { name: "Coordinator", instructions: "Route work", kind: "Orchestrator" },
+		});
+
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(screen.getByText("An orchestrator needs at least one specialist participant.")).toBeTruthy();
+	});
+
+	it("submits a valid orchestrator carrying the selected participants", () => {
+		const specialist = makeDefinition({ id: "22222222-2222-2222-2222-222222222222", name: "Researcher" });
+		const { onSubmit } = renderForm({
+			initialValues: {
+				name: "Coordinator",
+				instructions: "Route work",
+				kind: "Orchestrator",
+				orchestration: {
+					participantAgentDefinitionIds: [specialist.id],
+					handoffs: [],
+					maxTurnsPerAgent: 8,
+					returnToPrevious: false,
+				},
+			},
+			allDefinitions: [specialist],
+			selfId: "33333333-3333-3333-3333-333333333333",
+		});
+
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				kind: "Orchestrator",
+				orchestration: expect.objectContaining({ participantAgentDefinitionIds: [specialist.id] }),
+			}),
+		);
+	});
+
+	it("warns that orchestration degrades when a participant model is not tool-capable", () => {
+		const specialist = makeDefinition({
+			id: "22222222-2222-2222-2222-222222222222",
+			name: "Researcher",
+			modelProfile: "llama3:8b",
+		});
+		renderForm({
+			initialValues: {
+				name: "Coordinator",
+				instructions: "Route work",
+				kind: "Orchestrator",
+				modelProfile: "qwen3:8b",
+				orchestration: {
+					participantAgentDefinitionIds: [specialist.id],
+					handoffs: [],
+					maxTurnsPerAgent: 8,
+					returnToPrevious: false,
+				},
+			},
+			allDefinitions: [specialist],
+			selfId: "33333333-3333-3333-3333-333333333333",
+			toolCapableModels: ["qwen3:8b"],
+		});
+
+		expect(screen.getByTestId("orchestration-capability-warning")).toBeTruthy();
+	});
+
+	it("nudges toward an explicit route for a 2-agent mesh (triage + 1 specialist, no edges)", () => {
+		const specialist = makeDefinition({ id: "22222222-2222-2222-2222-222222222222", name: "Researcher" });
+		renderForm({
+			initialValues: {
+				name: "Coordinator",
+				instructions: "Route work",
+				kind: "Orchestrator",
+				orchestration: {
+					participantAgentDefinitionIds: [specialist.id],
+					handoffs: [],
+					maxTurnsPerAgent: 8,
+					returnToPrevious: false,
+				},
+			},
+			allDefinitions: [specialist],
+			selfId: "33333333-3333-3333-3333-333333333333",
+		});
+
+		expect(screen.getByTestId("orchestration-two-agent-hint")).toBeTruthy();
+	});
+
+	it("does not show the 2-agent hint once there are two specialists (3+ agents)", () => {
+		const specialistA = makeDefinition({ id: "22222222-2222-2222-2222-222222222222", name: "Researcher" });
+		const specialistB = makeDefinition({ id: "44444444-4444-4444-4444-444444444444", name: "Writer" });
+		renderForm({
+			initialValues: {
+				name: "Coordinator",
+				instructions: "Route work",
+				kind: "Orchestrator",
+				orchestration: {
+					participantAgentDefinitionIds: [specialistA.id, specialistB.id],
+					handoffs: [],
+					maxTurnsPerAgent: 8,
+					returnToPrevious: false,
+				},
+			},
+			allDefinitions: [specialistA, specialistB],
+			selfId: "33333333-3333-3333-3333-333333333333",
+		});
+
+		// Mesh hint still shows (no edges), but the 2-agent nudge is gone.
+		expect(screen.getByTestId("orchestration-mesh-hint")).toBeTruthy();
+		expect(screen.queryByTestId("orchestration-two-agent-hint")).toBeNull();
 	});
 });

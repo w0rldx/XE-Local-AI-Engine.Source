@@ -17,6 +17,10 @@ import {
 } from "@/features/agents/queries/useAgentDefinitions";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
 import { toSaveAgentDefinitionRequest } from "@/features/agents/api/AgentDefinitionsApi";
+import {
+	deserializeOrchestrationTopology,
+	emptyOrchestrationTopology,
+} from "@/features/agents/models/OrchestrationTopologyModels";
 import { listLocalModels } from "@/features/models/api/LocalModelsApi";
 import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
@@ -33,6 +37,7 @@ const emptyFormValues: AgentDefinitionFormValues = {
 	kind: "Single",
 	allowedToolNames: [],
 	toolApprovals: {},
+	orchestration: emptyOrchestrationTopology(),
 };
 
 function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
@@ -45,6 +50,8 @@ function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
 		kind: definition.kind,
 		allowedToolNames: [...definition.allowedToolNames],
 		toolApprovals: { ...definition.toolApprovals },
+		// Round-trip the persisted topology back into the editor (strips the triage from the specialist list).
+		orchestration: deserializeOrchestrationTopology(definition.orchestrationTopologyJson).topology,
 	};
 }
 
@@ -94,9 +101,9 @@ export function AgentsPage() {
 
 	const handleSubmit = useCallback(
 		(values: AgentDefinitionFormValues) => {
-			const request = toSaveAgentDefinitionRequest(values);
-
 			if (editorTarget?.mode === "edit") {
+				// On edit the triage (this orchestrator) is the definition's own id, pinning the topology to it.
+				const request = toSaveAgentDefinitionRequest(values, editorTarget.id);
 				updateMutation.mutate(
 					{ id: editorTarget.id, request },
 					{ onSuccess: () => closeEditor() },
@@ -104,6 +111,8 @@ export function AgentsPage() {
 				return;
 			}
 
+			// On create the id is unknown; the triage is assigned by the backend and re-pinned on the next edit.
+			const request = toSaveAgentDefinitionRequest(values);
 			createMutation.mutate(request, { onSuccess: () => closeEditor() });
 		},
 		[closeEditor, createMutation, editorTarget, updateMutation],
@@ -179,6 +188,8 @@ export function AgentsPage() {
 								initialValues={formInitialValues}
 								modelOptions={modelOptions}
 								toolCapableModels={toolCapableModels}
+								allDefinitions={definitions}
+								selfId={editorTarget?.mode === "edit" ? editorTarget.id : ""}
 								isSubmitting={createMutation.isPending || updateMutation.isPending}
 								submitError={submitError}
 								onSubmit={handleSubmit}

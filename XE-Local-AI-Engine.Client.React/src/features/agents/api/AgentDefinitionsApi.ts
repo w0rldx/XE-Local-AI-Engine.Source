@@ -7,6 +7,7 @@ import type {
 	AgentDefinitionFormValues,
 	AgentDefinitionKind,
 } from "@/features/agents/models/AgentDefinitionModels";
+import { serializeOrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 // Wire DTOs (camelCase, matching LocalModelsApi.ts). Kept as a thin contract layer so the page works against
@@ -40,6 +41,9 @@ export interface SaveAgentDefinitionRequestDto {
 	kind: AgentDefinitionKind;
 	allowedToolNames: string[];
 	toolApprovals: Record<string, boolean>;
+	// Raw orchestration topology JSON (loop P5). null for Single definitions; for Orchestrator definitions it is the
+	// serialized handoff topology (see OrchestrationTopologyModels). The backend persists and validates it.
+	orchestrationTopologyJson: string | null;
 }
 
 const AGENTS_ROUTE = "agents";
@@ -70,7 +74,14 @@ export function toAgentDefinition(dto: AgentDefinitionDto): AgentDefinition {
 	};
 }
 
-export function toSaveAgentDefinitionRequest(form: AgentDefinitionFormValues): SaveAgentDefinitionRequestDto {
+// Build the save request from the form. `triageAgentDefinitionId` is the orchestrator definition's own id — known
+// on edit, empty on create (the backend assigns identity and the triage is re-pinned on the next edit). The
+// orchestration topology is serialized ONLY for Orchestrator definitions; a Single definition sends null so a
+// stale topology never leaks into a non-orchestrator.
+export function toSaveAgentDefinitionRequest(
+	form: AgentDefinitionFormValues,
+	triageAgentDefinitionId = "",
+): SaveAgentDefinitionRequestDto {
 	const trimmedDescription = form.description.trim();
 
 	return {
@@ -85,6 +96,10 @@ export function toSaveAgentDefinitionRequest(form: AgentDefinitionFormValues): S
 		toolApprovals: Object.fromEntries(
 			Object.entries(form.toolApprovals).filter(([toolName]) => form.allowedToolNames.includes(toolName)),
 		),
+		orchestrationTopologyJson:
+			form.kind === "Orchestrator"
+				? serializeOrchestrationTopology(form.orchestration, triageAgentDefinitionId)
+				: null,
 	};
 }
 

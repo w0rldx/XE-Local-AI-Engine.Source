@@ -12,6 +12,8 @@ using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Instructions.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
@@ -32,8 +34,14 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
+        _ = services.AddOptions<OrchestrationAgentOptions>()
+                    .Bind(configuration.GetSection(OrchestrationAgentOptions.Section))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
         _ = services.AddSingleton<IValidateOptions<LocalChatAgentOptions>, LocalChatAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
+        _ = services.AddSingleton<IValidateOptions<OrchestrationAgentOptions>, OrchestrationAgentOptionsValidator>();
 
         // Requires a prior IChatClient registration in the host composition root.
         services.DecorateChatClientPipeline();
@@ -47,6 +55,9 @@ public static class AgentServiceCollectionExtensions
         // connection manager owns the MCP client lifecycle and pushes an immutable snapshot into it as servers connect.
         _ = services.AddSingleton<IMcpToolRegistry, McpToolRegistry>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
+        // Multi-agent handoff orchestration (loop P5). Reuses the same IChatClient + tool registries as the
+        // single-agent factory; confines all Microsoft.Agents.AI.Workflows types behind IOrchestrationRunSession.
+        _ = services.AddSingleton<IOrchestrationAgentFactory, OrchestrationAgentFactory>();
         return services;
     }
 

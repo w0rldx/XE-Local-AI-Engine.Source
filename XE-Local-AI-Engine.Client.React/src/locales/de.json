@@ -777,8 +777,7 @@
 					"options": {
 						"Single": "Einzeln",
 						"Orchestrator": "Orchestrator"
-					},
-					"orchestratorNotice": "Die Orchestrator-Topologie ist konfiguriert, wird aber noch nicht ausgeführt — dieser Agent läuft vorerst als Einzelagent."
+					}
 				},
 				"modelProfile": {
 					"label": "Modellprofil",
@@ -802,6 +801,36 @@
 					"loading": "Tools werden geladen…",
 					"loadError": "Der Tool-Katalog konnte nicht geladen werden.",
 					"empty": "Keine Tools verfügbar."
+				},
+				"orchestration": {
+					"label": "Orchestrierung",
+					"description": "Dieser Agent fungiert als Triage. Wähle die Spezialisten, an die er übergeben kann, und beschränke optional die Übergabewege.",
+					"thisAgent": "Dieser Agent",
+					"triageOptionLabel": "{{name}} (Triage)",
+					"degradeWarning": "Eines oder mehrere Modelle in dieser Orchestrierung sind nicht tool-fähig ({{models}}). Die Orchestrierungs-Weiterleitung erfordert Tool-Aufrufe, daher läuft diese Definition stattdessen als Einzelagent.",
+					"participants": {
+						"label": "Spezialist-Teilnehmer",
+						"placeholder": "Agenten zum Übergeben auswählen",
+						"empty": "Keine weiteren Agenten verfügbar. Erstelle weitere Agenten, um sie als Teilnehmer zu verwenden."
+					},
+					"handoffs": {
+						"label": "Übergabewege",
+						"add": "Übergabe hinzufügen",
+						"remove": "Übergabe entfernen",
+						"from": "Von",
+						"to": "An",
+						"reason": "Grund (optional)",
+						"meshHint": "Mesh (automatisch): Ohne explizite Wege kann jeder Agent an jeden anderen übergeben.",
+						"twoAgentHint": "Mesh-Routing ist erst ab 3 Agenten sinnvoll; füge bei 2 Agenten einen expliziten Übergabeweg hinzu."
+					},
+					"maxTurns": {
+						"label": "Max. Züge pro Agent",
+						"description": "Begrenzt, wie oft ein Agent erneut aufgerufen wird, bevor die Weiterleitung weitergehen muss."
+					},
+					"returnToPrevious": {
+						"label": "Zum vorherigen Spezialisten zurückkehren",
+						"description": "Leitet den nächsten Nutzer-Zug zurück an den Spezialisten, der den letzten Zug bearbeitet hat, statt über die Triage."
+					}
 				}
 			},
 			"delete": {

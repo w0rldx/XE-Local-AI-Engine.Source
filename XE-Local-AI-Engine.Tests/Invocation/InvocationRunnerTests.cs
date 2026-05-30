@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
@@ -624,6 +625,94 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenPackageHasOrchestrationSpec_DrivesOrchestrationAndStreamsDeltas()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var singleAgentFactory = CreateFactory(CreateUpdates("single-agent-should-not-run"));
+        var orchestrationFactory = CreateOrchestrationFactory(OrchestrationTextUpdates("Hello", " world"), out var sessionRef);
+        var runner = CreateRunner(sender, singleAgentFactory, eventDispatcher: dispatcher, orchestrationAgentFactory: orchestrationFactory);
+        var package = RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build();
+
+        await RunPlainAsync(runner, package);
+
+        await orchestrationFactory.Received(1).CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>>(), Arg.Any<CancellationToken>());
+        await singleAgentFactory.DidNotReceive().CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
+        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
+        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
+        AssertEx.True(sessionRef.Value!.Disposed, "The orchestration session must be disposed after the run.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNoOrchestrationSpec_TakesSingleAgentPath()
+    {
+        // The single-agent regression guard: a package without a spec must NOT touch the orchestration factory.
+        var sender = new MockHubMessageSender();
+        var singleAgentFactory = CreateFactory(CreateUpdates("Hello", " world"));
+        var orchestrationFactory = Substitute.For<IOrchestrationAgentFactory>();
+        var runner = CreateRunner(sender, singleAgentFactory, orchestrationAgentFactory: orchestrationFactory);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        await orchestrationFactory.DidNotReceive().CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>>(), Arg.Any<CancellationToken>());
+        await singleAgentFactory.Received(1).CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenOrchestrationSurfacesApproval_RoundTripsAndResumesOnSession()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        // The gated session blocks its post-approval text/terminal on ApprovalGate, which only RespondToApprovalAsync
+        // completes — so "done" + completion are reached ONLY if the runner actually resumes the held session by key.
+#pragma warning disable CA2000 // The runner owns disposal of the session via its `await using`; the test asserts Disposed.
+        var gatedSession = new FakeOrchestrationRunSession(session => OrchestrationGatedApprovalThenText(session, "call-1", "run_in_agent_home", "done"));
+#pragma warning restore CA2000
+        var orchestrationFactory = CreateOrchestrationFactory(gatedSession, out var sessionRef);
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, orchestrationAgentFactory: orchestrationFactory);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithOrchestrationSpec(SampleSpec()).Build());
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+
+        var requestId = sender.SentApprovals.Single().RequestId;
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, true));
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
+        // The approval card must name the tool, not the opaque correlation id (single-agent UX parity).
+        AssertEx.Contains(sender.SentApprovals.Single().Description, "run_in_agent_home");
+        AssertEx.Equal(1, sessionRef.Value!.ApprovalResponses.Count);
+        AssertEx.True(sessionRef.Value.ApprovalResponses[0].Approved, "An approved decision must be forwarded to the session as approved=true.");
+        AssertEx.Equal("call-1", sessionRef.Value.ApprovalResponses[0].RequestId);
+        // Reaching this asserts the gated post-approval portion streamed — i.e. the resume drove the held session.
+        AssertEx.Equal("done", sender.SentCompletions.Single().FinalContent);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenOrchestrationFails_SendsInvocationFailedWithoutLeakingRawDetail()
+    {
+        var sender = new MockHubMessageSender();
+        // The raw MAF executor detail must NOT reach the client (logged server-side only); the client sees a constant.
+        var orchestrationFactory = CreateOrchestrationFactory(OrchestrationFailure("workflow boom /secret/internal/path"), out _);
+        var runner = CreateRunner(sender, orchestrationAgentFactory: orchestrationFactory);
+        var package = RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Equal(0, sender.SentCompletions.Count);
+        AssertEx.Equal(1, sender.SentFailures.Count);
+        AssertEx.Equal(package.InvocationId, sender.SentFailures[0].InvocationId);
+        AssertEx.False(sender.SentFailures[0].Error.Contains("secret", StringComparison.Ordinal),
+            "The raw orchestration failure detail must not be forwarded to the client.");
+        AssertEx.Contains(sender.SentFailures[0].Error, "Orchestration run failed");
+    }
+
+    [Test]
     public async Task ExecuteApiToolCallAsync_WhenResultResolved_ReturnsResult()
     {
         var sender = new MockHubMessageSender();
@@ -905,9 +994,11 @@ public sealed class InvocationRunnerTests
         ICapabilityReporter? capabilityReporter = null,
         WorkerNodeOptions? workerOptions = null,
         IWorkerEventDispatcher? eventDispatcher = null,
-        IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null)
+        IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null,
+        IOrchestrationAgentFactory? orchestrationAgentFactory = null)
     {
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
+        var resolvedOrchestrationFactory = orchestrationAgentFactory ?? Substitute.For<IOrchestrationAgentFactory>();
 
         var resolvedValidator = validator ?? Substitute.For<IRuntimePackageValidator>();
         if (validator is null)
@@ -929,6 +1020,7 @@ public sealed class InvocationRunnerTests
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
             new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
+            resolvedOrchestrationFactory,
             new EnvelopeCryptoService(),
             resolvedValidator,
             resolvedCapabilityReporter,
@@ -1088,6 +1180,140 @@ public sealed class InvocationRunnerTests
 #pragma warning disable CS0162
         yield return new AgentResponseUpdate(ChatRole.Assistant, "unreachable");
 #pragma warning restore CS0162
+    }
+
+    private static IOrchestrationAgentFactory CreateOrchestrationFactory(IAsyncEnumerable<OrchestrationUpdate> updates, out Ref<FakeOrchestrationRunSession> sessionRef)
+    {
+#pragma warning disable CA2000 // The runner owns disposal of the session via its `await using`; the test asserts Disposed.
+        return CreateOrchestrationFactory(new FakeOrchestrationRunSession(updates), out sessionRef);
+#pragma warning restore CA2000
+    }
+
+    private static IOrchestrationAgentFactory CreateOrchestrationFactory(FakeOrchestrationRunSession session, out Ref<FakeOrchestrationRunSession> sessionRef)
+    {
+        var capturedRef = new Ref<FakeOrchestrationRunSession> { Value = session };
+        sessionRef = capturedRef;
+
+        var factory = Substitute.For<IOrchestrationAgentFactory>();
+        factory.CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromResult<IOrchestrationRunSession>(capturedRef.Value!));
+
+        return factory;
+    }
+
+    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationTextUpdates(params string[] chunks)
+    {
+        foreach (var chunk in chunks)
+        {
+            yield return OrchestrationUpdate.TextFragment(chunk, "a", "Triage");
+            await Task.Yield();
+        }
+
+        yield return OrchestrationUpdate.Terminal();
+    }
+
+    // The gated approval stream: yields the approval request, then BLOCKS on the session's ApprovalGate before the
+    // post-approval text/terminal. The gate is only completed by RespondToApprovalAsync, so if the runner drops or
+    // mis-keys the resume the enumeration hangs and the test times out — proving the resume actually fired.
+    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationGatedApprovalThenText(FakeOrchestrationRunSession session,
+        string requestId,
+        string toolName,
+        string finalText)
+    {
+        yield return OrchestrationUpdate.Approval(requestId, toolName, "a", "Triage");
+        await session.ApprovalGate;
+        yield return OrchestrationUpdate.TextFragment(finalText, "a", "Triage");
+        yield return OrchestrationUpdate.Terminal();
+    }
+
+    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationFailure(string message)
+    {
+        await Task.Yield();
+        yield return OrchestrationUpdate.Failed(message, "a", "Triage");
+    }
+
+    private static OrchestrationSpec SampleSpec()
+    {
+        return new OrchestrationSpec
+        {
+            TriageParticipantKey = "a",
+            MaxTurnsPerAgent = 6,
+            ReturnToPrevious = false,
+            Participants =
+            [
+                new OrchestrationSpecParticipant
+                {
+                    Key = "a",
+                    Name = "Triage",
+                    Description = "Routes work",
+                    Instructions = "You are the triage agent.",
+                    ModelId = "qwen3:8b",
+                    Tools = []
+                },
+                new OrchestrationSpecParticipant
+                {
+                    Key = "b",
+                    Name = "Specialist",
+                    Description = "Does the work",
+                    Instructions = "You are the specialist.",
+                    ModelId = "qwen3:8b",
+                    Tools = []
+                }
+            ],
+            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b", Reason = "specialist work" }]
+        };
+    }
+
+    private sealed class Ref<T>
+    {
+        public T? Value { get; set; }
+    }
+
+    private sealed class FakeOrchestrationRunSession : IOrchestrationRunSession
+    {
+        // Completed by RespondToApprovalAsync. A gated update stream awaits this before yielding its post-approval
+        // portion, so the approval test only reaches its terminal if the runner actually resumes the held session —
+        // a dropped or mis-keyed RespondToApprovalAsync leaves the gate uncompleted and the test times out (fails).
+        private readonly TaskCompletionSource<(bool Approved, string? Reason)> _approvalGate =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly Func<FakeOrchestrationRunSession, IAsyncEnumerable<OrchestrationUpdate>> _updatesFactory;
+
+        public FakeOrchestrationRunSession(IAsyncEnumerable<OrchestrationUpdate> updates)
+        {
+            _updatesFactory = _ => updates;
+        }
+
+        public FakeOrchestrationRunSession(Func<FakeOrchestrationRunSession, IAsyncEnumerable<OrchestrationUpdate>> updatesFactory)
+        {
+            _updatesFactory = updatesFactory;
+        }
+
+        public bool Disposed { get; private set; }
+
+        public List<(string RequestId, bool Approved, string? Reason)> ApprovalResponses { get; } = [];
+
+        // The gated update stream awaits this; it only resolves once RespondToApprovalAsync is called for the matching
+        // RequestId, proving the runner's resume actually drove the held session.
+        public Task<(bool Approved, string? Reason)> ApprovalGate => _approvalGate.Task;
+
+        public IAsyncEnumerable<OrchestrationUpdate> WatchAsync(CancellationToken cancellationToken = default)
+        {
+            return _updatesFactory(this);
+        }
+
+        public Task RespondToApprovalAsync(string requestId, bool approved, string? reason, CancellationToken cancellationToken = default)
+        {
+            ApprovalResponses.Add((requestId, approved, reason));
+            _approvalGate.TrySetResult((approved, reason));
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class FakeAIAgent : AIAgent
