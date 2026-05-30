@@ -121,3 +121,120 @@ enum ContainerHealth {
   CONTAINER_HEALTH_UNHEALTHY = 3;
   CONTAINER_HEALTH_STOPPED = 4;
 }
+
+// AgentHome sandbox lifecycle + IO (Marker J-local). A separate service from HostAgentControl
+// (lifecycle vs sandbox), served by the same HostAgent.Linux gRPC server, so the global HMAC
+// interceptor authenticates every call. ALL rpcs are UNARY by design: the interceptor only
+// overrides the unary and server-streaming handlers, so a client-/bidi-streaming rpc would
+// silently bypass HMAC. The messages map 1:1 onto the ISandboxRuntimeProvider SPI DTOs so the
+// LocalContainerSandboxProvider stays a thin translator.
+service SandboxControl {
+  rpc CreateOrAttachSandbox (CreateSandboxRequest) returns (SandboxHandleReply);
+  rpc ConnectSandbox        (ConnectSandboxRequest) returns (SandboxHandleReply);
+  rpc ExecuteCommand        (ExecuteCommandRequest) returns (ExecuteCommandReply);
+  rpc CopyInto              (CopyIntoRequest)        returns (google.protobuf.Empty);
+  rpc ReadFile              (ReadFileRequest)        returns (ReadFileReply);
+  rpc CopyOut               (CopyOutRequest)         returns (ReadFileReply);
+  rpc CancelCommand         (CancelCommandRequest)   returns (google.protobuf.Empty);
+  rpc KillSandbox           (KillSandboxRequest)     returns (google.protobuf.Empty);
+}
+
+// Mirrors SandboxAttachKey. Owner/node-scoped identity validated against container labels on attach.
+message SandboxAttachKeyMessage {
+  string owner_user_id = 1;
+  string node_id = 2;
+  string provider_name = 3;
+  string runtime_profile = 4;
+  int32 manifest_version = 5;
+}
+
+// Provider-neutral network posture; mirrors SandboxNetworkPolicy.
+enum SandboxNetworkMode {
+  SANDBOX_NETWORK_MODE_NONE = 0;
+  SANDBOX_NETWORK_MODE_RESTRICTED = 1;
+}
+
+// Mirrors SandboxResourceLimits. Every field is optional in the SPI; zero means "not specified".
+message ResourceLimitsMessage {
+  double cpu_count = 1;
+  int32 memory_mb = 2;
+  int32 pids_limit = 3;
+}
+
+// Mirrors SandboxCreateRequest. HostAgent finds-or-creates by deterministic name and validates labels.
+message CreateSandboxRequest {
+  SandboxAttachKeyMessage attach_key = 1;
+  string runtime_profile = 2;
+  string default_image = 3;
+  ResourceLimitsMessage limits = 4;
+  SandboxNetworkMode network = 5;
+  map<string, string> labels = 6;
+}
+
+message ConnectSandboxRequest {
+  SandboxAttachKeyMessage attach_key = 1;
+}
+
+// Mirrors SandboxHandle. provider_name is filled client-side by the local provider.
+message SandboxHandleReply {
+  string sandbox_id = 1;
+  SandboxAttachKeyMessage attach_key = 2;
+  google.protobuf.Timestamp created_at = 3;
+  int32 manifest_version = 4;
+}
+
+// Mirrors SandboxCommandRequest. timeout_seconds <= 0 means no per-command timeout.
+message ExecuteCommandRequest {
+  string sandbox_id = 1;
+  string execution_id = 2;
+  string executable = 3;
+  repeated string arguments = 4;
+  string working_directory = 5;
+  map<string, string> environment = 6;
+  int32 timeout_seconds = 7;
+  bytes standard_input = 8;
+}
+
+// Mirrors SandboxCommandResult. stdout/stderr are strings to match the SPI; the --binary git
+// patch is base85 ASCII, so capturing the diff as a string is lossless.
+message ExecuteCommandReply {
+  string execution_id = 1;
+  int32 exit_code = 2;
+  string standard_output = 3;
+  string standard_error = 4;
+  bool completed = 5;
+  int64 duration_ms = 6;
+}
+
+// Copy-into carries BYTES, not host paths: the worker reads the host file and HostAgent only does
+// container-internal IO (the F no-follow open stays in the trusted worker resolver). Whole-file.
+message CopyIntoRequest {
+  string sandbox_id = 1;
+  string destination_path = 2;
+  bytes content = 3;
+  uint32 file_mode = 4;
+}
+
+message ReadFileRequest {
+  string sandbox_id = 1;
+  string sandbox_path = 2;
+}
+
+message CopyOutRequest {
+  string sandbox_id = 1;
+  string source_path = 2;
+}
+
+// BYTES so the provider decodes UTF-8 for ReadFileAsync and writes raw for CopyOutAsync (no lossage).
+message ReadFileReply {
+  bytes content = 1;
+}
+
+message CancelCommandRequest {
+  string sandbox_id = 1;
+  string execution_id = 2;
+}
+
+message KillSandboxRequest {
+  string sandbox_id = 1;
+}

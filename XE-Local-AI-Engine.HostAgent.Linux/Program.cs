@@ -69,6 +69,7 @@ public static class Program
         builder.Services.AddSingleton<CapabilityDetector>();
         builder.Services.Configure<HostAgentHmacOptions>(options =>
             HostAgentHmacOptions.Bind(options, builder.Configuration));
+        builder.Services.AddSingleton<SandboxRuntimeService>();
         builder.Services.AddGrpc(options => options.Interceptors.Add<HmacAuthenticationInterceptor>());
 
         builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -91,6 +92,7 @@ public static class Program
         ValidateHmacSecret(app.Services.GetRequiredService<IOptions<HostAgentHmacOptions>>().Value);
 
         app.MapGrpcService<HostAgentControlService>();
+        app.MapGrpcService<SandboxRuntimeService>();
         app.UseLocalAdminRequestGuards();
         app.MapLocalAdminEndpoints();
         app.Run();

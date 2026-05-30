@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker.Implementation;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 
@@ -8,6 +9,9 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
 {
     private const string RuntimeNetwork = "xe-engine-net";
     private readonly ConcurrentDictionary<string, DockerContainerStatus> _containers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, FakeSandbox> _sandboxes = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ScriptedExec> _scriptedExecs = new(StringComparer.Ordinal);
+    private int _sandboxCounter;
     private readonly TimeProvider _timeProvider;
 
     public FakeDockerRuntimeClient(TimeProvider timeProvider)
@@ -16,6 +20,26 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
 
         SeedContainer("ollama", "ollama/ollama:dev@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         SeedContainer("xe-node-web-server", "ghcr.io/c0re/xe-local-ai-engine:dev@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    }
+
+    /// <summary>Test seam: the spec recorded for a created sandbox container (asserts limits/network/labels mapping).</summary>
+    public SandboxContainerSpec? TryGetRecordedSpec(string containerId)
+    {
+        return _sandboxes.TryGetValue(containerId, out var sandbox) ? sandbox.Spec : null;
+    }
+
+    /// <summary>Test seam: scripts an exec result for the given executable+args join (default behavior is an empty echo).</summary>
+    public void ScriptExec(string commandLine, int exitCode, string standardOutput = "", string standardError = "")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        _scriptedExecs[commandLine] = new ScriptedExec(exitCode, standardOutput, standardError, false);
+    }
+
+    /// <summary>Test seam: makes an exec block until its cancellation token fires, so cancel/timeout paths are testable.</summary>
+    public void ScriptBlockingExec(string commandLine)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        _scriptedExecs[commandLine] = new ScriptedExec(0, string.Empty, string.Empty, true);
     }
 
     public Task EnsureNetworkAsync(string networkName, CancellationToken cancellationToken)
@@ -95,6 +119,135 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         }
     }
 
+    public Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentException.ThrowIfNullOrWhiteSpace(spec.Name);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existing = _sandboxes.Values.FirstOrDefault(sandbox => string.Equals(sandbox.Name, spec.Name, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            return Task.FromResult(existing.ContainerId);
+        }
+
+        var id = $"fake-sandbox-{Interlocked.Increment(ref _sandboxCounter).ToString(CultureInfo.InvariantCulture)}";
+        _sandboxes[id] = new FakeSandbox(id, spec.Name, spec);
+        return Task.FromResult(id);
+    }
+
+    public Task<string?> FindSandboxContainerAsync(string containerName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerName);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var match = _sandboxes.Values.FirstOrDefault(sandbox => string.Equals(sandbox.Name, containerName, StringComparison.Ordinal));
+        return Task.FromResult(match?.ContainerId);
+    }
+
+    public Task<IReadOnlyDictionary<string, string>?> GetSandboxContainerLabelsAsync(string containerId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_sandboxes.TryGetValue(containerId, out var sandbox))
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, string>?>(null);
+        }
+
+        var labels = new Dictionary<string, string>(sandbox.Spec.Labels, StringComparer.Ordinal);
+        return Task.FromResult<IReadOnlyDictionary<string, string>?>(labels);
+    }
+
+    public async Task<DockerExecResult> ExecInContainerAsync(string containerId, DockerExecRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Validate the sandbox is alive before running (mirrors the real client's container-not-found behavior).
+        _ = GetAliveSandbox(containerId);
+        var commandLine = string.Join(' ', new[] { request.Executable }.Concat(request.Arguments));
+        var scripted = _scriptedExecs.TryGetValue(commandLine, out var match)
+            ? match
+            : new ScriptedExec(0, string.Empty, string.Empty, false);
+
+        if (scripted.Blocks)
+        {
+            using var timeoutCts = request.Timeout is { } timeout && timeout > TimeSpan.Zero
+                ? new CancellationTokenSource(timeout)
+                : new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return new DockerExecResult
+                {
+                    ExecutionId = request.ExecutionId,
+                    ExitCode = -1,
+                    Completed = false
+                };
+            }
+        }
+
+        return new DockerExecResult
+        {
+            ExecutionId = request.ExecutionId,
+            ExitCode = scripted.ExitCode,
+            StandardOutput = scripted.StandardOutput,
+            StandardError = scripted.StandardError,
+            Completed = true
+        };
+    }
+
+    public Task CopyIntoContainerAsync(string containerId,
+        string destinationPath,
+        ReadOnlyMemory<byte> content,
+        int fileMode,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var sandbox = GetAliveSandbox(containerId);
+        sandbox.Files[destinationPath] = content.ToArray();
+        return Task.CompletedTask;
+    }
+
+    public Task<byte[]> ReadFromContainerAsync(string containerId, string sourcePath, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var sandbox = GetAliveSandbox(containerId);
+        if (!sandbox.Files.TryGetValue(sourcePath, out var content))
+        {
+            throw new FileNotFoundException($"Sandbox path '{sourcePath}' was not found.", sourcePath);
+        }
+
+        return Task.FromResult(content);
+    }
+
+    public Task RemoveSandboxContainerAsync(string containerId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        _sandboxes.TryRemove(containerId, out _);
+        return Task.CompletedTask;
+    }
+
+    private FakeSandbox GetAliveSandbox(string containerId)
+    {
+        return _sandboxes.TryGetValue(containerId, out var sandbox)
+            ? sandbox
+            : throw new InvalidOperationException($"Sandbox container '{containerId}' was not found (it may have been removed).");
+    }
+
     private void SeedContainer(string name, string imageReference)
     {
         _containers[name] = CreateContainer(name, imageReference, true);
@@ -136,4 +289,24 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
             ObservedAt = _timeProvider.GetUtcNow()
         };
     }
+
+    private sealed class FakeSandbox
+    {
+        public FakeSandbox(string containerId, string name, SandboxContainerSpec spec)
+        {
+            ContainerId = containerId;
+            Name = name;
+            Spec = spec;
+        }
+
+        public string ContainerId { get; }
+
+        public string Name { get; }
+
+        public SandboxContainerSpec Spec { get; }
+
+        public ConcurrentDictionary<string, byte[]> Files { get; } = new(StringComparer.Ordinal);
+    }
+
+    private sealed record ScriptedExec(int ExitCode, string StandardOutput, string StandardError, bool Blocks);
 }

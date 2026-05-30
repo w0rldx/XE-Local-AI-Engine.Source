@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+#
+# AgentHome runtime image (Marker J-local / Marker 0a-0b).
+#
+# The local-container sandbox provider (XE-Local-AI-Engine.Client.Application LocalContainerSandboxProvider)
+# asks HostAgent.Linux to create a container from THIS image, copies the Marker F workspace into
+# /agent-home/workspace/selected, runs a bounded profile command (real git for the Marker G patch export),
+# then tears it down.
+#
+# Security posture (enforced by HostAgent.Linux DockerRuntimeClient.CreateSandboxContainerAsync, NOT here):
+#   - default network = none (no egress); SecurityOpt=no-new-privileges; CapDrop=ALL; non-root user;
+#     bounded Memory / NanoCPUs / PidsLimit. The image only provides the toolchain + a writable /agent-home.
+#
+# Build (local only — NO registry push for the MVP):
+#   docker build -f Apps/XE-Local-AI-Engine/docker/Dockerfile.agent-home-dotnet \
+#     -t dotnet-agent-home:2026-05-agenthome-mvp Apps/XE-Local-AI-Engine/docker
+#
+# Tag of record (matches LocalContainerOptions.DefaultImage): dotnet-agent-home:2026-05-agenthome-mvp
+# Python/Node are intentionally omitted for the MVP.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+# git: the Marker G patch export runs real git inside the sandbox.
+# ripgrep: fast in-workspace search for the agent.
+# hadolint ignore=DL3008 — the base image pins the distro; unpinned apt versions track its security updates.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+        git \
+        ripgrep \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Non-root sandbox user. HostAgent also sets the container User, but baking the user in keeps the image
+# self-sufficient and lets /agent-home be owned correctly at build time. The uid/gid are system-assigned
+# (not pinned to 1000) because the .NET SDK base image already ships a non-root user at uid 1000.
+RUN groupadd agent \
+    && useradd --gid agent --create-home --shell /bin/bash agent \
+    && mkdir -p /agent-home \
+    && chown -R agent:agent /agent-home
+
+USER agent
+
+# A long-lived idle process: HostAgent execs commands into the running container (it is not a one-shot run).
+CMD ["sleep", "infinity"]

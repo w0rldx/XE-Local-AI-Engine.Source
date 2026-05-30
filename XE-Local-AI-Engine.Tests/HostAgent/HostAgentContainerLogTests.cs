@@ -105,5 +105,41 @@ public sealed class HostAgentContainerLogTests
 
             await Task.CompletedTask;
         }
+
+        // Sandbox operations (Marker J-local) are not exercised by these container-log tests.
+        public Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<string?> FindSandboxContainerAsync(string containerName, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyDictionary<string, string>?> GetSandboxContainerLabelsAsync(string containerId, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<DockerExecResult> ExecInContainerAsync(string containerId, DockerExecRequest request, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task CopyIntoContainerAsync(string containerId, string destinationPath, ReadOnlyMemory<byte> content, int fileMode, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<byte[]> ReadFromContainerAsync(string containerId, string sourcePath, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task RemoveSandboxContainerAsync(string containerId, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
