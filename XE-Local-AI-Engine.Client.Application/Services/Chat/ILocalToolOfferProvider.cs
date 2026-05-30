@@ -19,4 +19,13 @@ public interface ILocalToolOfferProvider
     ///     10). The encrypted path stays server-gated and does not call this seam.
     /// </summary>
     IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId);
+
+    /// <summary>
+    ///     The names of every catalog tool, independent of model capability gating. This is the canonical set of tool
+    ///     names that exist on the node; the agent-definition CRUD validation uses it to warn (not fail) when a
+    ///     definition references a name that is not in the catalog, and the agent-management UI reuses it as the tool
+    ///     picker's source. Capability gating (which of these a given model is actually offered) stays in
+    ///     <see cref="GetOfferedTools" />.
+    /// </summary>
+    IReadOnlyList<string> GetKnownToolNames();
 }

@@ -43,6 +43,7 @@
 		"cloudSettings": "Cloud-Einstellungen",
 		"models": "Modelle",
 		"tools": "Tools",
+		"agents": "Agenten",
 		"manager": "Manager",
 		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
@@ -728,6 +729,85 @@
 			"placeholder": {
 				"title": "Aufrufe",
 				"description": "Aktuelle und historische Aufrufüberwachung wird hier portiert."
+			}
+		},
+		"agents": {
+			"eyebrow": "Worker-Node",
+			"title": "Agent-Definitionen",
+			"subtitle": "Lokale Agent-Personas erstellen: Anweisungen, Modell, Reasoning-Aufwand und die nutzbaren Tools.",
+			"createButton": "Neuer Agent",
+			"list": {
+				"loading": "Agent-Definitionen werden geladen…",
+				"empty": "Noch keine Agent-Definitionen. Erstelle eine, um zu beginnen.",
+				"nodeDefault": "Node-Standard",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"kind": "Typ",
+					"model": "Modell",
+					"tools": "Tools",
+					"version": "Version",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Neuer Agent",
+				"editTitle": "Agent bearbeiten"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Recherche-Assistent",
+					"required": "Name ist erforderlich"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"instructions": {
+					"label": "Anweisungen",
+					"description": "System-Prompt, der das Verhalten dieses Agenten definiert.",
+					"placeholder": "Du bist ein hilfreicher Assistent, der…",
+					"required": "Anweisungen sind erforderlich"
+				},
+				"kind": {
+					"label": "Typ",
+					"options": {
+						"Single": "Einzeln",
+						"Orchestrator": "Orchestrator"
+					},
+					"orchestratorNotice": "Die Orchestrator-Topologie ist konfiguriert, wird aber noch nicht ausgeführt — dieser Agent läuft vorerst als Einzelagent."
+				},
+				"modelProfile": {
+					"label": "Modellprofil",
+					"nodeDefault": "Node-Standard"
+				},
+				"reasoningEffort": {
+					"label": "Reasoning-Aufwand",
+					"nodeDefault": "Node-Standard",
+					"options": {
+						"none": "Keiner",
+						"low": "Niedrig",
+						"medium": "Mittel",
+						"high": "Hoch"
+					}
+				},
+				"tools": {
+					"label": "Tools",
+					"requiresApproval": "Freigabe erforderlich",
+					"autoExecute": "automatisch",
+					"notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wähle ein tool-fähiges Modell, um Tools zu aktivieren."
+				}
+			},
+			"delete": {
+				"title": "Agent löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Agent-Definitionen konnten nicht geladen werden.",
+				"save": "Die Agent-Definition konnte nicht gespeichert werden.",
+				"delete": "Der Agent konnte nicht gelöscht werden."
 			}
 		},
 		"schedule": {

@@ -43,6 +43,7 @@
 		"cloudSettings": "Cloud Settings",
 		"models": "Models",
 		"tools": "Tools",
+		"agents": "Agents",
 		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
@@ -728,6 +729,85 @@
 			"placeholder": {
 				"title": "Invocations",
 				"description": "Current and historical invocation monitoring will be ported here."
+			}
+		},
+		"agents": {
+			"eyebrow": "Worker Node",
+			"title": "Agent definitions",
+			"subtitle": "Author local agent personas: instructions, model, reasoning effort, and the tools they may use.",
+			"createButton": "New agent",
+			"list": {
+				"loading": "Loading agent definitions…",
+				"empty": "No agent definitions yet. Create one to get started.",
+				"nodeDefault": "Node default",
+				"editAria": "Edit {{name}}",
+				"deleteAria": "Delete {{name}}",
+				"columns": {
+					"name": "Name",
+					"kind": "Kind",
+					"model": "Model",
+					"tools": "Tools",
+					"version": "Version",
+					"actions": "Actions"
+				}
+			},
+			"editor": {
+				"createTitle": "New agent",
+				"editTitle": "Edit agent"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Research assistant",
+					"required": "Name is required"
+				},
+				"description": {
+					"label": "Description",
+					"placeholder": "Optional short summary"
+				},
+				"instructions": {
+					"label": "Instructions",
+					"description": "System prompt that defines how this agent behaves.",
+					"placeholder": "You are a helpful assistant that…",
+					"required": "Instructions are required"
+				},
+				"kind": {
+					"label": "Kind",
+					"options": {
+						"Single": "Single",
+						"Orchestrator": "Orchestrator"
+					},
+					"orchestratorNotice": "Orchestrator topology is configured but not yet executed — this agent runs as a single agent for now."
+				},
+				"modelProfile": {
+					"label": "Model profile",
+					"nodeDefault": "Node default"
+				},
+				"reasoningEffort": {
+					"label": "Reasoning effort",
+					"nodeDefault": "Node default",
+					"options": {
+						"none": "None",
+						"low": "Low",
+						"medium": "Medium",
+						"high": "High"
+					}
+				},
+				"tools": {
+					"label": "Tools",
+					"requiresApproval": "requires approval",
+					"autoExecute": "auto-execute",
+					"notCapableWarning": "The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools."
+				}
+			},
+			"delete": {
+				"title": "Delete agent",
+				"description": "Delete '{{name}}'? This cannot be undone."
+			},
+			"errors": {
+				"load": "Could not load agent definitions.",
+				"save": "Could not save the agent definition.",
+				"delete": "Could not delete the agent."
 			}
 		},
 		"schedule": {

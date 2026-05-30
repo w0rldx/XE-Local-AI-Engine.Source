@@ -54,6 +54,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return capable ? _allTools : _toolsWithoutAgentHome;
     }
 
+    public IReadOnlyList<string> GetKnownToolNames()
+    {
+        // The full catalog (capable variant) is the canonical name set: it includes the capability-gated tools, so a
+        // definition that references a high-risk tool is recognised as known even though an incapable model would not
+        // be offered it at runtime.
+        return [.. _allTools.Select(static tool => tool.Name)];
+    }
+
     private static Guid DeriveDeterministicId(string name)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"local-tool:{name}"));

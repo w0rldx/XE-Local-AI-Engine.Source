@@ -7,6 +7,12 @@ public sealed class CreateNodeChatConversationRequest
     public string? Title { get; init; }
 
     public string? UserId { get; init; }
+
+    /// <summary>
+    ///     Optional binding to a node-local agent definition. When set, the new conversation runs the bound
+    ///     definition's persona/tools/model; null (the default) keeps the implicit default chat persona.
+    /// </summary>
+    public Guid? AgentDefinitionId { get; init; }
 }
 
 public sealed class ListNodeChatConversationsRequest

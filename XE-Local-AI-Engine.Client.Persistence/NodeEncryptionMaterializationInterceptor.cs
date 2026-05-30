@@ -26,6 +26,10 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case NodeSelectedFolder selectedFolder:
                 selectedFolder.HostPath = NodePayloadProtector.Decrypt(selectedFolder.HostPath, context.NodeEncryptionKey.Span, Guid.Empty, selectedFolder.Id, "host_path");
                 break;
+            case AgentDefinition definition:
+                definition.Instructions = NodePayloadProtector.Decrypt(definition.Instructions, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "instructions");
+                definition.Description = DecryptIfPresent(definition.Description, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "description");
+                break;
         }
 
         return entity;

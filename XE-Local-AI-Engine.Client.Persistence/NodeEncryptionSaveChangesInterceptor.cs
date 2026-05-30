@@ -81,6 +81,14 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.HostPath), Guid.Empty, entry.Entity.Id, "host_path", trackedProperties);
         }
 
+        // Agent definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to
+        // the definition's own id plus the column name — same layout as selected folders.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentDefinition>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Instructions), Guid.Empty, entry.Entity.Id, "instructions", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

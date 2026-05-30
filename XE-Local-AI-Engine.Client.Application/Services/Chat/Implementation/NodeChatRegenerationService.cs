@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
@@ -26,6 +27,7 @@ public sealed class NodeChatRegenerationService(
     IOptions<LocalChatAgentOptions> localChatOptions,
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
+    IAgentDefinitionResolver agentDefinitionResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -133,23 +135,32 @@ public sealed class NodeChatRegenerationService(
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
+        var activeModel = original.Model ?? localChatOptions.Value.DefaultModel;
+
+        // Mirror the send path exactly (NodeChatStreamService): resolve the conversation's bound definition so a
+        // regenerated turn reruns with the SAME persona, tools, model, and version a fresh send would — a missed
+        // hydration here would make reruns diverge from sends. A null result keeps the default persona.
+        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+
         // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
         // client asked AND the node has the tool engine enabled. When offered, the catalog's local tools travel in
         // the runtime package as the offer list; the invocation factory resolves the matching executables from the
-        // registry by name.
+        // registry by name. A bound definition narrows that offer to its allowed set.
         var offerTools = useLocalTools && localChatOptions.Value.EnableTools;
-        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools(original.Model ?? localChatOptions.Value.DefaultModel) : null;
+        var allowedTools = offerTools
+            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
+            : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             conversationId,
-            LoadResolvedSystemPrompt(localChatOptions.Value),
+            resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
             BuildRegenerationContext(conversation, original, selectedPath),
-            original.Model ?? localChatOptions.Value.DefaultModel,
-            AgentDefinitionVersion,
+            resolved?.ModelProfile ?? activeModel,
+            resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            ReasoningEffort: reasoningEffort));
+            ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,

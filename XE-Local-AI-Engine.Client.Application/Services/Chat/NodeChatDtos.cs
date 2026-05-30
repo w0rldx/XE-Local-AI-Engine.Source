@@ -38,7 +38,8 @@ public sealed record NodeChatCreateConversationRequest(
     string? Title,
     string? UserId,
     long CreatedAtUtc,
-    string Origin = NodeChatOriginValues.Local);
+    string Origin = NodeChatOriginValues.Local,
+    Guid? AgentDefinitionId = null);
 
 public sealed record NodeChatEnsureConversationRequest(
     Guid ConversationId,
@@ -75,7 +76,8 @@ public sealed record NodeChatConversationDto(
     bool IsPinned = false,
     bool Archived = false,
     Guid? BranchOfConversationId = null,
-    IReadOnlyDictionary<Guid, Guid>? SelectedPath = null);
+    IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
+    Guid? AgentDefinitionId = null);
 
 public sealed record NodeChatPersistUserMessageRequest(
     Guid ConversationId,

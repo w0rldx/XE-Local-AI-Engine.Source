@@ -16,6 +16,8 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -168,6 +170,15 @@ public static class NodeApplicationServiceCollectionExtensions
         // when AgentHome is disabled; workspace copy (Marker F) and the tool (Marker I) consume it.
         builder.Services.AddScoped<INodeSelectedFolderStore, NodeSelectedFolderStore>();
         builder.Services.AddScoped<ISelectedFolderResolver, SelectedFolderResolver>();
+        // Loop P3 agent-definition store. Persists node-local agent definitions with Instructions/Description
+        // encrypted at rest by the node encryption interceptors; the application-layer resolver/service (Lane 2/3)
+        // consumes it to project a bound definition into the existing runtime package envelope.
+        builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();
+        // Loop P3 application layer over the store: the resolver projects a conversation's bound definition into the
+        // loopback runtime-package inputs (consumed by the stream/regeneration paths), and the service validates +
+        // orchestrates CRUD for the management endpoints. Both are scoped to match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IAgentDefinitionResolver, AgentDefinitionResolver>();
+        builder.Services.AddScoped<IAgentDefinitionService, AgentDefinitionService>();
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();

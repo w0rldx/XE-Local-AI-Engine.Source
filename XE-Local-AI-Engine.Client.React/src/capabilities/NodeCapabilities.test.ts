@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 describe("nodeCapabilities", () => {
+	it("enables agent management by default", () => {
+		expect(nodeCapabilities.agentManagement).toBe(true);
+	});
+
 	it("keeps node chat local-first and approval-gated for initial parity", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
@@ -30,6 +34,7 @@ describe("nodeCapabilities", () => {
 			manager: "/manager",
 			invocations: "/invocations",
 			tools: "/tools",
+			agents: "/agents",
 		});
 	});
 });

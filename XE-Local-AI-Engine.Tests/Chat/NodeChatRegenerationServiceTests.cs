@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -57,6 +58,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -92,6 +94,115 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenConversationBound_HydratesDefinitionPromptToolsAndVersion()
+    {
+        // End-to-end read-side proof: a conversation created WITH an agent_definition_id is read back through the real
+        // persistence (GetConversationAsync selects the column), the resolver is consulted with that id, and the bound
+        // projection reaches the regenerate runtime package. This guards the second hydration site against divergence.
+        await using var provider = await BuildProviderAsync("regeneration-bound.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(
+            new NodeChatCreateConversationRequest("Bound regen", "node", 10, AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false);
+        AssertEx.Equal(agentDefinitionId, conversation.AgentDefinitionId!.Value);
+
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", 9));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
+            resolver,
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        AssertEx.Equal("Bound persona prompt.", runner.LastSystemPrompt);
+        AssertEx.Equal(9, runner.LastAgentDefinitionVersion);
+        AssertEx.Equal("high", runner.LastReasoningEffort);
+        AssertEx.Equal(1, runner.LastAllowedTools.Count);
+        AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenConversationUnbound_RegeneratesWithDefaultPromptAndVersion()
+    {
+        // Parity with the stream-side unbound test (NodeChatStreamServiceTests): an unbound conversation must
+        // regenerate with today's literals — the embedded LoadResolvedSystemPrompt and AgentDefinitionVersion 1 — and
+        // the resolver must be consulted with a NULL binding (the default-persona contract).
+        await using var provider = await BuildProviderAsync("regeneration-unbound.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound regen", "node", 10)).ConfigureAwait(false);
+        AssertEx.True(conversation.AgentDefinitionId is null, "The seeded conversation must be unbound.");
+
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var resolver = CreateAgentDefinitionResolver();
+
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
+        AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenToolLifecycleReported_StreamsToolCallEvents()
     {
         await using var provider = await BuildProviderAsync("regeneration-tool-lifecycle.sqlite").ConfigureAwait(false);
@@ -118,6 +229,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -178,6 +290,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -229,6 +342,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -271,6 +385,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -331,6 +446,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -370,6 +486,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -403,6 +520,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -441,6 +559,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>()).Returns(tools);
         return provider;
+    }
+
+    // The default (unbound) resolver: ResolveAsync returns null, so the regeneration path keeps today's literals —
+    // these tests exercise the default chat persona. P3 binding behaviour is covered by the dedicated bound tests.
+    private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
+    {
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        return resolver;
     }
 
     private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
@@ -509,6 +636,11 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // The offer list carried on the runtime package; the test asserts the local tool catalog reaches the
         // runtime package on regenerate only when the client opted in.
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
+
+        // The system prompt and agent-definition version carried on the runtime package; the binding test asserts a
+        // bound definition's persona + version reach the regenerate path (a missed hydration site = divergent reruns).
+        public string? LastSystemPrompt { get; private set; }
+        public int LastAgentDefinitionVersion { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
@@ -516,6 +648,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             LastContext = context.Package.ConversationContext;
             LastReasoningEffort = context.Package.ReasoningEffort;
             LastAllowedTools = context.Package.AllowedTools;
+            LastSystemPrompt = context.Package.ResolvedSystemPrompt;
+            LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 5, 2, 7, 0).ConfigureAwait(false);
         }

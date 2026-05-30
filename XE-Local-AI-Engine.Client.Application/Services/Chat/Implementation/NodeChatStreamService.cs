@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
@@ -19,6 +20,7 @@ public sealed class NodeChatStreamService(
     IOptions<LocalChatAgentOptions> localChatOptions,
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
+    IAgentDefinitionResolver agentDefinitionResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -124,22 +126,34 @@ public sealed class NodeChatStreamService(
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
+        var activeModel = request.Model ?? localChatOptions.Value.DefaultModel;
+
+        // Resolve the conversation's bound agent definition (if any). A null result — no binding, or a binding whose
+        // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
+        // offer, and agent version 1. When bound, the definition supplies the system prompt, the intersected tool
+        // offer (already approval-overridden), the pinned model profile, the reasoning effort, and the version that
+        // feeds the config hash. The builder and config-hash plumbing are unchanged either way.
+        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
         // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
-        // list; the invocation factory resolves the matching executables from the registry by name.
+        // list; the invocation factory resolves the matching executables from the registry by name. A bound
+        // definition narrows that offer to its allowed set; an unbound conversation uses the full offer.
         var offerTools = request.UseLocalTools && localChatOptions.Value.EnableTools;
-        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools(request.Model ?? localChatOptions.Value.DefaultModel) : null;
+        var allowedTools = offerTools
+            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
+            : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
-            LoadResolvedSystemPrompt(localChatOptions.Value),
+            resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
             BuildConversationContext(conversation, userMessage, selectedPath),
-            request.Model ?? localChatOptions.Value.DefaultModel,
-            AgentDefinitionVersion,
+            resolved?.ModelProfile ?? activeModel,
+            resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            ReasoningEffort: request.ReasoningEffort));
+            ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,

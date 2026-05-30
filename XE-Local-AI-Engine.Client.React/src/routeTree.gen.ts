@@ -22,6 +22,7 @@ import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocati
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
+import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
 
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
@@ -87,11 +88,17 @@ const LayoutChatRoute = LayoutChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutAgentsRoute = LayoutAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/agents': typeof LayoutAgentsRoute
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/agents': typeof LayoutAgentsRoute
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/_layout': typeof LayoutRouteWithChildren
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/_layout/agents': typeof LayoutAgentsRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/setup'
+    | '/agents'
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/setup'
+    | '/agents'
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/_layout'
     | '/login'
     | '/setup'
+    | '/_layout/agents'
     | '/_layout/chat'
     | '/_layout/cloud-settings'
     | '/_layout/dashboard'
@@ -277,10 +289,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutChatRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/agents': {
+      id: '/_layout/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof LayoutAgentsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
+  LayoutAgentsRoute: typeof LayoutAgentsRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
@@ -294,6 +314,7 @@ interface LayoutRouteChildren {
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
+  LayoutAgentsRoute: LayoutAgentsRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
