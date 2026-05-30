@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -21,6 +22,8 @@ public sealed class NodeChatStreamService(
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
     IAgentDefinitionResolver agentDefinitionResolver,
+    IAgentDefinitionStore agentDefinitionStore,
+    IOrchestrationResolver orchestrationResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -135,6 +138,12 @@ public sealed class NodeChatStreamService(
         // feeds the config hash. The builder and config-hash plumbing are unchanged either way.
         var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
 
+        // Loop P5: when the bound definition is a tool-capable orchestrator, resolve a compiled orchestration spec to
+        // carry on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
+        // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent
+        // (the orchestrator-as-lone-agent fallback), keeping the unbound/single-agent path byte-identical.
+        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
         // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
         // list; the invocation factory resolves the matching executables from the registry by name. A bound
@@ -153,7 +162,8 @@ public sealed class NodeChatStreamService(
             LocalChatLoopbackDefaults.ClientNodeId,
             AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort));
+            ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
+            OrchestrationSpec: orchestration?.Spec));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
@@ -383,6 +393,29 @@ public sealed class NodeChatStreamService(
                            ?? throw new InvalidOperationException($"Embedded instructions resource '{options.InstructionsResource}' was not found.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    ///     Resolves a compiled orchestration spec for a bound orchestrator definition (loop P5), or <c>null</c> to run
+    ///     the turn single-agent. Only a bound conversation triggers the extra record fetch; an unbound conversation or
+    ///     a non-orchestrator definition returns <c>null</c> without resolving, so the single-agent path is byte-identical.
+    /// </summary>
+    private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
+        string? activeModel,
+        CancellationToken cancellationToken)
+    {
+        if (agentDefinitionId is not { } definitionId)
+        {
+            return null;
+        }
+
+        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
+        if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
+        {
+            return null;
+        }
+
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, cancellationToken).ConfigureAwait(false);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

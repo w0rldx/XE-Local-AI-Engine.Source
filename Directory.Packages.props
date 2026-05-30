@@ -46,6 +46,7 @@
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0"/>
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.8.0"/>
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.8.0"/>
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.8.0"/>
     <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.8.0-preview.260528.1"/>
     <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.8.0-alpha.260528.1"/>
     <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.8.0-preview.260528.1"/>

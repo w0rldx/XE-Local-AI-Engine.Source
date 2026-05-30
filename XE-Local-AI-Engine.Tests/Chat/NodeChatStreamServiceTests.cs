@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -37,6 +38,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -77,6 +80,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -120,6 +125,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -171,6 +178,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -207,6 +216,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -248,6 +259,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -296,6 +309,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -334,6 +349,8 @@ public sealed class NodeChatStreamServiceTests
             cancellationRegistry,
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -384,6 +401,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -452,6 +471,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
             resolver,
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -471,6 +492,57 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal("high", runner.LastReasoningEffort);
         AssertEx.Equal(1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
+        AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent binding must carry no orchestration spec.");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenBoundToOrchestrator_CarriesOrchestrationSpecOnPackage()
+    {
+        // Loop P5 hydration: a conversation bound to a Kind=Orchestrator definition whose orchestration resolver
+        // returns a spec must carry that spec on the runtime package so the runner branches to the handoff workflow.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        var spec = CreateSampleSpec();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", null, 4));
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            store,
+            orchestrationResolver,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.NotNull(runner.LastOrchestrationSpec);
+        AssertEx.Equal(spec.TriageParticipantKey, runner.LastOrchestrationSpec!.TriageParticipantKey);
+        AssertEx.Equal(2, runner.LastOrchestrationSpec.Participants.Count);
     }
 
     [Test]
@@ -496,6 +568,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -528,6 +602,55 @@ public sealed class NodeChatStreamServiceTests
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
+    }
+
+    // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
+    // orchestration resolver — the package carries no spec and the single-agent path is byte-identical (loop P5).
+    private static IAgentDefinitionStore CreateAgentDefinitionStore()
+    {
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
+        return store;
+    }
+
+    private static IOrchestrationResolver CreateOrchestrationResolver()
+    {
+        var resolver = Substitute.For<IOrchestrationResolver>();
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        return resolver;
+    }
+
+    private static AgentDefinitionRecord CreateOrchestratorRecord(Guid id)
+    {
+        return new AgentDefinitionRecord(id,
+            "Orchestrator",
+            null,
+            "Orchestrator prompt.",
+            "qwen3:8b",
+            null,
+            AgentDefinitionKind.Orchestrator,
+            [],
+            new Dictionary<string, bool>(),
+            null,
+            4,
+            10,
+            10);
+    }
+
+    private static OrchestrationSpec CreateSampleSpec()
+    {
+        return new OrchestrationSpec
+        {
+            TriageParticipantKey = "a",
+            MaxTurnsPerAgent = 6,
+            ReturnToPrevious = false,
+            Participants =
+            [
+                new OrchestrationSpecParticipant { Key = "a", Name = "Triage", Instructions = "Triage.", ModelId = "qwen3:8b", Tools = [] },
+                new OrchestrationSpecParticipant { Key = "b", Name = "Specialist", Instructions = "Specialist.", ModelId = "qwen3:8b", Tools = [] }
+            ],
+            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b" }]
+        };
     }
 
     private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
@@ -650,6 +773,8 @@ public sealed class NodeChatStreamServiceTests
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1060,6 +1185,7 @@ public sealed class NodeChatStreamServiceTests
         public int LastAgentDefinitionVersion { get; private set; }
         public string? LastReasoningEffort { get; private set; }
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
+        public OrchestrationSpec? LastOrchestrationSpec { get; private set; }
         public int ActiveInvocationCount => 0;
 
         public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
@@ -1068,6 +1194,7 @@ public sealed class NodeChatStreamServiceTests
             LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
             LastReasoningEffort = context.Package.ReasoningEffort;
             LastAllowedTools = context.Package.AllowedTools;
+            LastOrchestrationSpec = context.Package.OrchestrationSpec;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
         }

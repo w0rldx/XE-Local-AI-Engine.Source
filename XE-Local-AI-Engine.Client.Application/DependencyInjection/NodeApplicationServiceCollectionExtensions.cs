@@ -185,6 +185,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // loopback runtime-package inputs (consumed by the stream/regeneration paths), and the service validates +
         // orchestrates CRUD for the management endpoints. Both are scoped to match the scoped, DbContext-backed store.
         builder.Services.AddScoped<IAgentDefinitionResolver, AgentDefinitionResolver>();
+        // Loop P5 orchestration resolver: a sibling of IAgentDefinitionResolver that compiles a Kind=Orchestrator
+        // definition + its topology into the loopback orchestration spec (consumed by the stream/regeneration paths).
+        // Scoped to match the scoped, DbContext-backed store it reads participants from.
+        builder.Services.AddScoped<IOrchestrationResolver, OrchestrationResolver>();
         builder.Services.AddScoped<IAgentDefinitionService, AgentDefinitionService>();
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();

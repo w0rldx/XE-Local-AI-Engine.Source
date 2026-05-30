@@ -777,8 +777,7 @@
 					"options": {
 						"Single": "Single",
 						"Orchestrator": "Orchestrator"
-					},
-					"orchestratorNotice": "Orchestrator topology is configured but not yet executed — this agent runs as a single agent for now."
+					}
 				},
 				"modelProfile": {
 					"label": "Model profile",
@@ -802,6 +801,36 @@
 					"loading": "Loading tools…",
 					"loadError": "Could not load the tool catalog.",
 					"empty": "No tools available."
+				},
+				"orchestration": {
+					"label": "Orchestration",
+					"description": "This agent acts as the triage. Pick the specialists it can hand off to and (optionally) constrain the handoff routes.",
+					"thisAgent": "This agent",
+					"triageOptionLabel": "{{name}} (triage)",
+					"degradeWarning": "One or more models in this orchestration are not tool-capable ({{models}}). Orchestration routing requires tool calling, so this definition will run as a single agent instead.",
+					"participants": {
+						"label": "Specialist participants",
+						"placeholder": "Pick agents to hand off to",
+						"empty": "No other agents available. Create more agents to use as participants."
+					},
+					"handoffs": {
+						"label": "Handoff routes",
+						"add": "Add handoff",
+						"remove": "Remove handoff",
+						"from": "From",
+						"to": "To",
+						"reason": "Reason (optional)",
+						"meshHint": "Mesh (auto): with no explicit routes, every agent can hand off to every other.",
+						"twoAgentHint": "Mesh routing is meaningful with 3+ agents; with 2 agents add an explicit handoff route."
+					},
+					"maxTurns": {
+						"label": "Max turns per agent",
+						"description": "Caps how many times one agent is re-invoked before routing must move on."
+					},
+					"returnToPrevious": {
+						"label": "Return to previous specialist",
+						"description": "Route the next user turn back to the specialist that handled the last turn, instead of through triage."
+					}
 				}
 			},
 			"delete": {

@@ -16,6 +16,7 @@ public sealed class RuntimePackageBuilder
 
     private Guid _invocationId = Guid.NewGuid();
     private string? _modelProfile = "qwen3.5:0.8b";
+    private OrchestrationSpec? _orchestrationSpec;
     private string _resolvedSystemPrompt = "You are helpful.";
     private TimeoutSettings _timeouts = new();
 
@@ -161,6 +162,13 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    public RuntimePackageBuilder WithOrchestrationSpec(OrchestrationSpec orchestrationSpec)
+    {
+        ArgumentNullException.ThrowIfNull(orchestrationSpec);
+        _orchestrationSpec = orchestrationSpec;
+        return this;
+    }
+
     public RuntimePackage Build()
     {
         return new RuntimePackage
@@ -176,6 +184,7 @@ public sealed class RuntimePackageBuilder
             ModelProfile = _modelProfile,
             RequestedCapabilities = _requestedCapabilities.Count == 0 ? null : [.. _requestedCapabilities],
             Timeouts = _timeouts,
+            OrchestrationSpec = _orchestrationSpec,
             ConfigHash = _configHash
         };
     }

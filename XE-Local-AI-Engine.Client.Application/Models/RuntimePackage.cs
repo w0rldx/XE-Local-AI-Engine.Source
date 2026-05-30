@@ -26,5 +26,13 @@ public sealed record RuntimePackage
 
     public required TimeoutSettings Timeouts { get; init; }
 
+    /// <summary>
+    ///     OPTIONAL compiled orchestration spec (loop P5). Non-null only on the loopback path when the bound definition
+    ///     is a tool-capable orchestrator; the invocation runner branches to the workflow drive when this is set. Null
+    ///     on the single-agent loopback path and on the encrypted/server path, where the config hash is byte-identical
+    ///     to the pre-P5 payload.
+    /// </summary>
+    public OrchestrationSpec? OrchestrationSpec { get; init; }
+
     public required string ConfigHash { get; init; }
 }

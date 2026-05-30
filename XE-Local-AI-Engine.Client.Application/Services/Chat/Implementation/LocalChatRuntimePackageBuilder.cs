@@ -29,12 +29,14 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             ReasoningEffort = NormalizeReasoningEffort(request.ReasoningEffort),
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
+            OrchestrationSpec = request.OrchestrationSpec,
             ConfigHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
                 request.ResolvedSystemPrompt,
                 MapAllowedTools(allowedTools),
                 request.ModelProfile,
                 timeouts,
-                request.ReasoningEffort)
+                request.ReasoningEffort,
+                request.OrchestrationSpec)
         };
     }
 
