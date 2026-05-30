@@ -41,6 +41,18 @@ public sealed class AgentHomeOptionsValidatorTests
     }
 
     [Test]
+    public void Validate_WhenPatchApplyTimeoutSecondsNotPositive_ReturnsFailure()
+    {
+        var options = new AgentHomeOptions { PatchApplyTimeoutSeconds = 0 };
+
+        var result = _validator.Validate(null, options);
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.NotEmpty(result.Failures);
+        AssertEx.Contains(result.Failures, failure => failure.Contains("PatchApplyTimeoutSeconds", StringComparison.Ordinal));
+    }
+
+    [Test]
     public void Validate_WhenEnabledAndToolCapableModelsEmpty_ReturnsFailure()
     {
         var options = new AgentHomeOptions { Enabled = true, ToolCapableModels = [] };
