@@ -91,4 +91,16 @@ public static class LocalApiRoutes
         // {agentDefinitionId} route param so this never collides with DefinitionById.
         public const string ToolCapableModels = "agents/tool-capable-models";
     }
+
+    public static class Mcp
+    {
+        public const string Servers = "mcp/servers";
+        public const string ServerById = "mcp/servers/{mcpServerId}";
+        public const string ServerEnabled = "mcp/servers/{mcpServerId}/enabled";
+        public const string ServerTools = "mcp/servers/{mcpServerId}/tools";
+
+        // The full dynamic tool catalog (built-ins + enabled MCP tools). A distinct top-level literal so it never
+        // collides with the {mcpServerId} route param under the servers surface.
+        public const string ToolCatalog = "tool-catalog";
+    }
 }

@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
+    <PackageReference Include="ModelContextProtocol"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Serilog"/>

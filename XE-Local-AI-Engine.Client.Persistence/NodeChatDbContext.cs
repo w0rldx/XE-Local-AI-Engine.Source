@@ -27,6 +27,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<AgentDefinition> AgentDefinitions => Set<AgentDefinition>();
 
+    internal DbSet<McpServerRegistration> McpServers => Set<McpServerRegistration>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -40,6 +42,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigureMessageFeedback(modelBuilder.Entity<NodeMessageFeedback>());
         ConfigureSelectedFolder(modelBuilder.Entity<NodeSelectedFolder>());
         ConfigureAgentDefinition(modelBuilder.Entity<AgentDefinition>());
+        ConfigureMcpServer(modelBuilder.Entity<McpServerRegistration>());
     }
 
     private static void ConfigureConversation(EntityTypeBuilder<NodeConversation> builder)
@@ -296,5 +299,57 @@ public sealed class NodeChatDbContext : DbContext
 
         // Name is a human label, not a key: index it for list/search but do not enforce uniqueness.
         builder.HasIndex(entity => entity.Name);
+    }
+
+    private static void ConfigureMcpServer(EntityTypeBuilder<McpServerRegistration> builder)
+    {
+        builder.ToTable("mcp_servers");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.Name)
+               .HasColumnName("name")
+               // Case-insensitive collation so the unique index treats names differing only in case as duplicates,
+               // matching the application-layer service's case-insensitive name handling.
+               .UseCollation("NOCASE");
+
+        builder.Property(entity => entity.Description)
+               .HasColumnName("description");
+
+        builder.Property(entity => entity.TransportKind)
+               .HasColumnName("transport_kind");
+
+        builder.Property(entity => entity.Command)
+               .HasColumnName("command");
+
+        builder.Property(entity => entity.ArgumentsJson)
+               .HasColumnName("arguments");
+
+        builder.Property(entity => entity.WorkingDirectory)
+               .HasColumnName("working_directory");
+
+        builder.Property(entity => entity.EnvJson)
+               .HasColumnName("env");
+
+        builder.Property(entity => entity.Url)
+               .HasColumnName("url");
+
+        builder.Property(entity => entity.Enabled)
+               .HasColumnName("enabled");
+
+        builder.Property(entity => entity.Version)
+               .HasColumnName("version");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        // The server Name is the source of the qualified tool-name slug, so uniqueness keeps tool names collision-free.
+        builder.HasIndex(entity => entity.Name)
+               .IsUnique();
     }
 }

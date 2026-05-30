@@ -21,6 +21,7 @@ export interface NodeCapabilityConfig {
 	readonly runtimeManager: boolean;
 	readonly invocationMonitor: boolean;
 	readonly agentManagement: boolean;
+	readonly mcpServers: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -47,6 +48,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	invocationMonitor: true,
 	// Agent definition authoring surface (loop P3). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,
+	// MCP server registration surface (loop P4). On by default; node-local SQLite-backed CRUD. Registered
+	// servers are disabled until explicitly enabled, and every discovered MCP tool defaults to approval-on.
+	mcpServers: true,
 };
 
 export const nodeRoutePaths = {
@@ -63,6 +67,8 @@ export const nodeRoutePaths = {
 	tools: "/tools",
 	// agent definition management page (loop P3) — gated on nodeCapabilities.agentManagement
 	agents: "/agents",
+	// MCP server management page (loop P4) — gated on nodeCapabilities.mcpServers
+	mcp: "/mcp",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;

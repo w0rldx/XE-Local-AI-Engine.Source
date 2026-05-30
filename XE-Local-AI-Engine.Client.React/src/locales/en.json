@@ -44,6 +44,7 @@
 		"models": "Models",
 		"tools": "Tools",
 		"agents": "Agents",
+		"mcp": "MCP",
 		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
@@ -797,7 +798,10 @@
 					"label": "Tools",
 					"requiresApproval": "requires approval",
 					"autoExecute": "auto-execute",
-					"notCapableWarning": "The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools."
+					"notCapableWarning": "The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools.",
+					"loading": "Loading tools…",
+					"loadError": "Could not load the tool catalog.",
+					"empty": "No tools available."
 				}
 			},
 			"delete": {
@@ -808,6 +812,101 @@
 				"load": "Could not load agent definitions.",
 				"save": "Could not save the agent definition.",
 				"delete": "Could not delete the agent."
+			}
+		},
+		"mcp": {
+			"eyebrow": "Worker Node",
+			"title": "MCP servers",
+			"subtitle": "Register local MCP servers to extend the node tool catalog. Servers are disabled until you enable them, and every discovered tool requires approval by default.",
+			"createButton": "Register server",
+			"list": {
+				"loading": "Loading MCP servers…",
+				"empty": "No MCP servers registered yet. Register one to get started.",
+				"editAria": "Edit {{name}}",
+				"deleteAria": "Delete {{name}}",
+				"enabledAria": "Toggle {{name}}",
+				"columns": {
+					"name": "Name",
+					"transport": "Transport",
+					"target": "Target",
+					"enabled": "Enabled",
+					"version": "Version",
+					"actions": "Actions"
+				}
+			},
+			"editor": {
+				"createTitle": "Register MCP server",
+				"editTitle": "Edit MCP server"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Filesystem tools",
+					"required": "Name is required"
+				},
+				"description": {
+					"label": "Description",
+					"placeholder": "Optional short summary"
+				},
+				"transport": {
+					"label": "Transport",
+					"description": "Stdio launches a local process; HTTP connects to a running loopback server.",
+					"options": {
+						"Stdio": "Stdio",
+						"Http": "HTTP"
+					}
+				},
+				"command": {
+					"label": "Command",
+					"placeholder": "/usr/bin/my-mcp-server"
+				},
+				"arguments": {
+					"label": "Arguments",
+					"description": "One argument per line.",
+					"placeholder": "--stdio"
+				},
+				"workingDirectory": {
+					"label": "Working directory",
+					"placeholder": "/optional/cwd"
+				},
+				"env": {
+					"label": "Environment variables",
+					"add": "Add variable",
+					"empty": "No environment variables.",
+					"keyPlaceholder": "KEY",
+					"valuePlaceholder": "value",
+					"remove": "Remove variable"
+				},
+				"url": {
+					"label": "URL",
+					"description": "Loopback only (127.0.0.1 / localhost / ::1).",
+					"placeholder": "http://127.0.0.1:3001/sse"
+				}
+			},
+			"tools": {
+				"title": "Discovered tools",
+				"inspectLabel": "Inspect discovered tools",
+				"loading": "Loading discovered tools…",
+				"loadError": "Could not load discovered tools.",
+				"empty": "No tools discovered. Enable the server to connect and list its tools.",
+				"requiresApproval": "requires approval",
+				"autoExecute": "auto-execute",
+				"status": {
+					"connected": "connected",
+					"disabled": "disabled",
+					"error": "error",
+					"connecting": "connecting…"
+				}
+			},
+			"delete": {
+				"title": "Delete MCP server",
+				"description": "Delete '{{name}}'? This cannot be undone."
+			},
+			"errors": {
+				"load": "Could not load MCP servers.",
+				"save": "Could not save the MCP server.",
+				"delete": "Could not delete the MCP server.",
+				"enable": "Could not change the server state."
 			}
 		},
 		"schedule": {
@@ -1130,6 +1229,11 @@
 		},
 		"languageMenu": {
 			"tooltip": "Change language"
+		},
+		"toolSourceBadge": {
+			"builtin": "built-in",
+			"mcp": "MCP",
+			"mcpServer": "MCP · {{server}}"
 		}
 	},
 	"errorMessages": {

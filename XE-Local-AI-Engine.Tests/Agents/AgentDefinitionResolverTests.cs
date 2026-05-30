@@ -102,6 +102,31 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_ProjectsOfferedMcpTool_AndAppliesAutoExecuteOverride()
+    {
+        // P3 <-> P4 integration: once an MCP tool is in the offer (approval-ON by default), a definition can name it in
+        // AllowedToolNames and override it to auto-execute via ToolApprovals — no resolver change, the qualified name is
+        // treated like any other offered tool.
+        const string mcpTool = "mcp__weather__get_forecast";
+        var resolver = CreateResolver(out var store,
+            OfferTool(mcpTool, requiresApproval: true),
+            OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: [mcpTool, "GetCurrentTime"],
+            modelProfile: ToolCapableModel,
+            toolApprovals: new Dictionary<string, bool>
+            {
+                [mcpTool] = false
+            });
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var projected = resolved!.AllowedTools.Single(tool => tool.Name == mcpTool);
+        AssertEx.Equal(false, projected.RequiresApproval);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenPinnedModelNotToolCapable_DropsCapabilityGatedTool()
     {
         // The definition pins a NON-tool-capable model and names the capability-gated tool. The resolver gates the

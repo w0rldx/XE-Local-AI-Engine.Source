@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 
 import { LocalToolsOverview } from "@/features/chat/components/LocalToolsOverview";
 
-// Extension seam: in a future release MCP tools will populate the same list below
-// LocalToolsOverview. For now only the in-process catalog (GetCurrentTime, Calculate) is shown.
-// To extend: add a <McpToolsOverview /> section here once the MCP tool provider ships.
+// The catalog rendered by LocalToolsOverview is now dynamic (loop P4): it fetches built-in tools plus the
+// tools discovered from enabled MCP servers via useToolCatalog. MCP server registration is managed on the
+// dedicated /mcp page; this page is the read-only catalog view.
 
 export function ToolsPage() {
 	const { t } = useTranslation();
@@ -16,7 +16,10 @@ export function ToolsPage() {
 				<div>
 					<Title order={3}>{t("pages.tools.title", "Local tools")}</Title>
 					<Text size="sm" c="dimmed">
-						{t("pages.tools.subtitle", "In-process tools available to the local node agent. All tools run on this device — no external access.")}
+						{t(
+							"pages.tools.subtitle",
+							"Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers.",
+						)}
 					</Text>
 				</div>
 				<LocalToolsOverview />

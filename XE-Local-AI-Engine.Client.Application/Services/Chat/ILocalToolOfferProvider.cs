@@ -28,4 +28,14 @@ public interface ILocalToolOfferProvider
     ///     <see cref="GetOfferedTools" />.
     /// </summary>
     IReadOnlyList<string> GetKnownToolNames();
+
+    /// <summary>
+    ///     The full tool catalog as rich entries (name + description + approval flag + source), independent of model
+    ///     capability gating. This is the single source the tool-catalog endpoint and the React tool pickers consume:
+    ///     it lists every built-in tool plus every tool discovered from an enabled MCP server, so the agent form can
+    ///     show all tools regardless of the active model. <see cref="LocalToolCatalogEntry.Source" /> is
+    ///     <c>"builtin"</c> or <c>"mcp:{serverSlug}"</c>. Capability gating stays in <see cref="GetOfferedTools" />;
+    ///     <see cref="GetKnownToolNames" /> remains the names-only view used by CRUD validation.
+    /// </summary>
+    IReadOnlyList<LocalToolCatalogEntry> GetKnownTools();
 }

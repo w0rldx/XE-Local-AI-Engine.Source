@@ -7,6 +7,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.agentManagement).toBe(true);
 	});
 
+	it("enables MCP server management by default", () => {
+		expect(nodeCapabilities.mcpServers).toBe(true);
+	});
+
 	it("keeps node chat local-first and approval-gated for initial parity", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
@@ -35,6 +39,7 @@ describe("nodeCapabilities", () => {
 			invocations: "/invocations",
 			tools: "/tools",
 			agents: "/agents",
+			mcp: "/mcp",
 		});
 	});
 });

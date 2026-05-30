@@ -13,6 +13,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<InvocationAgentFactory> _logger;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IMcpToolRegistry _mcpToolRegistry;
     private readonly InvocationAgentOptions _options;
     private readonly IServiceProvider _serviceProvider;
     private readonly IAgentToolRegistry _toolRegistry;
@@ -23,7 +24,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         ILoggerFactory loggerFactory,
         IServiceProvider serviceProvider,
         IAgentToolRegistry toolRegistry,
-        IClientLocalToolRegistry clientLocalToolRegistry)
+        IClientLocalToolRegistry clientLocalToolRegistry,
+        IMcpToolRegistry mcpToolRegistry)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
@@ -33,6 +35,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
+        _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
     }
 
     public Task<InvocationAgentContext> CreateAsync(InvocationAgentDefinition definition, CancellationToken cancellationToken = default)
@@ -83,7 +86,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     names are sourced from <c>definition.Tools</c> (which the runner builds from the runtime package's
     ///     allowed-tool list). Built-in catalog tools resolve from <see cref="_toolRegistry" /> (Option A); offered
     ///     names it does not satisfy are then tried against <see cref="_clientLocalToolRegistry" /> (Option B —
-    ///     server-driven <c>ClientLocal</c> tools such as <c>run_in_agent_home</c>). Names matched by neither are
+    ///     server-driven <c>ClientLocal</c> tools such as <c>run_in_agent_home</c>) and finally against
+    ///     <see cref="_mcpToolRegistry" /> (Option C: node-local MCP tools). Names matched by none are
     ///     skipped so a stale or unhandled offer can never reach the agent.
     /// </summary>
     private IList<AITool> ResolveExecutableTools(InvocationAgentDefinition definition)
@@ -105,23 +109,30 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         var catalogNames = resolved.Select(static tool => tool.Name).ToHashSet(StringComparer.Ordinal);
 
         resolved.AddRange(offeredNames.Where(name => !catalogNames.Contains(name))
-                                      .Select(ResolveClientLocalTool)
+                                      .Select(ResolveDynamicTool)
                                       .OfType<AITool>());
 
         var skipped = offeredNames.Count - resolved.Count;
         if (skipped > 0)
         {
-            // An offered tool with no in-process catalog match and no client-local handler is a misconfiguration
-            // (the server advertised a tool this node cannot execute). Warn so it is observable; the offer is then
-            // dropped rather than reaching the agent.
-            _logger.LogWarning("Skipped {SkippedCount} offered tool(s) with no registered executable (no catalog or client-local handler match).", skipped);
+            // An offered tool with no in-process catalog match and no client-local or MCP handler is a
+            // misconfiguration: the server or node advertised a tool this node cannot execute. Warn so it is
+            // observable, then drop the offer rather than letting it reach the agent.
+            _logger.LogWarning("Skipped {SkippedCount} offered tool(s) with no registered executable (no catalog, client-local, or MCP match).", skipped);
         }
 
         return resolved;
 
-        AITool? ResolveClientLocalTool(string name)
+        // Try Option B (server-driven ClientLocal) first, then Option C (node-local MCP). Both registries key on the
+        // offered name and a name cannot legitimately exist in both, so the first match wins.
+        AITool? ResolveDynamicTool(string name)
         {
-            return _clientLocalToolRegistry.TryResolve(name, out var tool) ? tool : null;
+            if (_clientLocalToolRegistry.TryResolve(name, out var clientLocalTool))
+            {
+                return clientLocalTool;
+            }
+
+            return _mcpToolRegistry.TryResolve(name, out var mcpTool) ? mcpTool : null;
         }
     }
 

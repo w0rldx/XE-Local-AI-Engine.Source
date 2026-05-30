@@ -40,6 +40,11 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 vi.mock("@/features/models/api/LocalModelsApi", () => ({
 	listLocalModels: vi.fn().mockResolvedValue({ items: [] }),
 }));
+// The agent form's tool selector fetches the catalog via useToolCatalog (loop P4). Mock it so opening the
+// editor never issues a real request and renders deterministically.
+vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+	useToolCatalog: () => ({ data: [], isLoading: false, error: null }),
+}));
 
 import { AgentsPage } from "@/features/agents/pages/AgentsPage";
 

@@ -1,8 +1,11 @@
-import { Alert, Badge, Checkbox, Group, Paper, Stack, Switch, Text } from "@mantine/core";
+import { Alert, Badge, Checkbox, Group, Loader, Paper, Stack, Switch, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { localToolCatalog } from "@/features/chat/models/LocalToolCatalog";
+import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
+import { type ToolCatalogEntry, toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
+import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
 
 interface AgentToolSelectorProps {
 	// Selected tool names and the per-tool approval overrides. Both are owned by the parent form.
@@ -14,9 +17,21 @@ interface AgentToolSelectorProps {
 	onToggleApproval: (toolName: string, requiresApproval: boolean) => void;
 }
 
-// Tool multi-select with a per-tool approval toggle. The tool catalog is the SAME static source the chat
-// surface renders (LocalToolCatalog / LocalToolsOverview) — no second catalog. When the selected model is
-// not tool-capable the selector is disabled and a warning is surfaced (no silent no-op).
+// Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
+// catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
+// deselect it; it defaults to requiresApproval=true (the strict default) and an unknown source.
+function unknownToolEntry(name: string): ToolCatalogEntry {
+	return {
+		name,
+		description: "",
+		requiresApproval: true,
+		source: { kind: "builtin", serverSlug: null },
+	};
+}
+
+// Tool multi-select with a per-tool approval toggle. The tool catalog is fetched live (useToolCatalog) — the
+// SAME source the chat surface renders — so it includes built-ins and tools from enabled MCP servers. When the
+// selected model is not tool-capable the selector is disabled and a warning is surfaced (no silent no-op).
 export function AgentToolSelector({
 	selectedToolNames,
 	toolApprovals,
@@ -25,6 +40,18 @@ export function AgentToolSelector({
 	onToggleApproval,
 }: AgentToolSelectorProps) {
 	const { t } = useTranslation();
+	const catalogQuery = useToolCatalog();
+
+	// Render the live catalog plus any already-selected tools that are no longer in it (so they remain
+	// deselectable). Selected-but-absent tools are appended after the catalog, in selection order.
+	const rows = useMemo<ToolCatalogEntry[]>(() => {
+		const catalog = catalogQuery.data ?? [];
+		const catalogNames = new Set(catalog.map((tool) => tool.name));
+		const orphanSelected = selectedToolNames
+			.filter((name) => !catalogNames.has(name))
+			.map((name) => unknownToolEntry(name));
+		return [...catalog, ...orphanSelected];
+	}, [catalogQuery.data, selectedToolNames]);
 
 	return (
 		<Stack gap="xs" data-testid="agent-tool-selector">
@@ -32,18 +59,36 @@ export function AgentToolSelector({
 				{t("pages.agents.form.tools.label", "Tools")}
 			</Text>
 			{!toolCapable ? (
-				<Alert
-					color="yellow"
-					icon={<IconAlertTriangle size={16} />}
-					data-testid="agent-tool-capability-warning"
-				>
+				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="agent-tool-capability-warning">
 					{t(
 						"pages.agents.form.tools.notCapableWarning",
 						"The selected model is not tool-capable. Tool selection is disabled. Pick a tool-capable model to enable tools.",
 					)}
 				</Alert>
 			) : null}
-			{localToolCatalog.map((tool) => {
+
+			{catalogQuery.isLoading ? (
+				<Group gap="sm" data-testid="agent-tool-catalog-loading">
+					<Loader size="sm" />
+					<Text c="dimmed" size="sm">
+						{t("pages.agents.form.tools.loading", "Loading tools…")}
+					</Text>
+				</Group>
+			) : null}
+
+			{catalogQuery.error ? (
+				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-tool-catalog-error">
+					{t("pages.agents.form.tools.loadError", "Could not load the tool catalog.")}
+				</Alert>
+			) : null}
+
+			{!catalogQuery.isLoading && !catalogQuery.error && rows.length === 0 ? (
+				<Text size="xs" c="dimmed" data-testid="agent-tool-catalog-empty">
+					{t("pages.agents.form.tools.empty", "No tools available.")}
+				</Text>
+			) : null}
+
+			{rows.map((tool) => {
 				const isSelected = selectedToolNames.includes(tool.name);
 				const requiresApproval = toolApprovals[tool.name] ?? tool.requiresApproval;
 
@@ -55,9 +100,12 @@ export function AgentToolSelector({
 									checked={isSelected}
 									disabled={!toolCapable}
 									label={
-										<Text size="sm" fw={600} ff="monospace">
-											{tool.name}
-										</Text>
+										<Group gap="xs" wrap="nowrap" align="center">
+											<Text size="sm" fw={600} ff="monospace">
+												{toToolDisplayName(tool.name)}
+											</Text>
+											<ToolSourceBadge source={tool.source} />
+										</Group>
 									}
 									onChange={(event) => onToggleTool(tool.name, event.currentTarget.checked)}
 									data-testid={`agent-tool-checkbox-${tool.name}`}
@@ -77,9 +125,11 @@ export function AgentToolSelector({
 									data-testid={`agent-tool-approval-${tool.name}`}
 								/>
 							</Group>
-							<Text size="xs" c="dimmed">
-								{tool.description}
-							</Text>
+							{tool.description ? (
+								<Text size="xs" c="dimmed">
+									{tool.description}
+								</Text>
+							) : null}
 						</Stack>
 					</Paper>
 				);

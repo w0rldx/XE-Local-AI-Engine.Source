@@ -30,6 +30,11 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 definition.Instructions = NodePayloadProtector.Decrypt(definition.Instructions, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "instructions");
                 definition.Description = DecryptIfPresent(definition.Description, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "description");
                 break;
+            case McpServerRegistration registration:
+                registration.ArgumentsJson = DecryptIfPresent(registration.ArgumentsJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "arguments");
+                registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");
+                registration.Description = DecryptIfPresent(registration.Description, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "description");
+                break;
         }
 
         return entity;

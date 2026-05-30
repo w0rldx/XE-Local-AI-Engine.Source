@@ -5,8 +5,31 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { localToolCatalog } from "@/features/chat/models/LocalToolCatalog";
+import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 import { ToolsPage } from "@/features/tools/pages/ToolsPage";
+
+const { useToolCatalogMock } = vi.hoisted(() => ({
+	useToolCatalogMock: vi.fn(),
+}));
+
+vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+	useToolCatalog: useToolCatalogMock,
+}));
+
+const catalogTools: ToolCatalogEntry[] = [
+	{
+		name: "GetCurrentTime",
+		description: "Returns the current time.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+	},
+	{
+		name: "Calculate",
+		description: "Evaluates arithmetic.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+	},
+];
 
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
@@ -43,10 +66,12 @@ function installJsdomEnvironmentMocks(): void {
 describe("ToolsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
+		useToolCatalogMock.mockReturnValue({ data: catalogTools, isLoading: false, error: null });
 	});
 
 	afterEach(() => {
 		cleanup();
+		vi.clearAllMocks();
 	});
 
 	it("renders the tools page container", () => {
@@ -61,18 +86,18 @@ describe("ToolsPage", () => {
 		expect(screen.getByTestId("local-tools-overview")).toBeTruthy();
 	});
 
-	it("lists both catalog tools on the page", () => {
+	it("lists the fetched catalog tools on the page", () => {
 		renderWithProviders(<ToolsPage />);
 
-		for (const tool of localToolCatalog) {
+		for (const tool of catalogTools) {
 			expect(screen.getByTestId(`local-tool-row-${tool.name}`)).toBeTruthy();
 		}
 	});
 
-	it("shows auto-execute badges for all tools", () => {
+	it("shows auto-execute badges for all built-in tools", () => {
 		renderWithProviders(<ToolsPage />);
 
-		for (const tool of localToolCatalog) {
+		for (const tool of catalogTools) {
 			const badge = screen.getByTestId(`local-tool-approval-badge-${tool.name}`);
 			expect(badge.textContent).toBe("auto-execute");
 		}
