@@ -44,6 +44,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage.Implementation;
 using XE_Local_AI_Engine.Client.Services.Manager;
 using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
+using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
@@ -174,6 +176,11 @@ public static class NodeApplicationServiceCollectionExtensions
         // encrypted at rest by the node encryption interceptors; the application-layer resolver/service (Lane 2/3)
         // consumes it to project a bound definition into the existing runtime package envelope.
         builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();
+        // Loop P4 MCP server registration store. Persists node-local MCP server registrations with the secret-bearing
+        // args/env/description columns encrypted at rest by the node encryption interceptors; the connection manager
+        // (Lane 2) reads only enabled rows, and the CRUD service (Lane 3) orchestrates registration. Scoped to match
+        // the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
         // Loop P3 application layer over the store: the resolver projects a conversation's bound definition into the
         // loopback runtime-package inputs (consumed by the stream/regeneration paths), and the service validates +
         // orchestrates CRUD for the management endpoints. Both are scoped to match the scoped, DbContext-backed store.
@@ -186,6 +193,22 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
+        // Loop P4 MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the
+        // dynamic tool snapshot into the MCP tool registry that the offer provider reads, where that registry is wired
+        // in AddLocalAiAgentRuntime. The startup connector triggers an initial refresh off the hot path. Both are
+        // singletons because the manager holds long-lived connections, and the CRUD service refreshes after any
+        // change to the enabled set.
+        builder.Services.AddOptions<McpOptions>()
+               .Bind(configuration.GetSection(McpOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<McpOptions>, McpOptionsValidator>();
+        builder.Services.AddSingleton<IMcpClientFactory, McpClientFactory>();
+        builder.Services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
+        builder.Services.AddHostedService<McpServerStartupConnector>();
+        // Lane 3 application layer over the store: validates registrations (transport-specific fields, loopback URL,
+        // unique Name) and re-publishes the live tool snapshot via the connection manager after any change to the
+        // enabled set. Scoped to match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IMcpServerService, McpServerService>();
         // Option B ClientLocal tool run_in_agent_home. Marker I-pre replaces the pending placeholder with the real
         // fake-backed gateway: the handler still flag-gates and §7-validates, then delegates through the gateway to
         // IAgentHomeService, which drives the manifest initializer, the sandbox provider (the fake by default), and

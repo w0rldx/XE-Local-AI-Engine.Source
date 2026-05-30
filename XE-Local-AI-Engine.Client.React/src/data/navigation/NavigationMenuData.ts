@@ -6,6 +6,7 @@ import {
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
+	IconPlug,
 	IconPlugConnected,
 	IconRobot,
 	IconServerCog,
@@ -98,11 +99,25 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.agents",
 		to: nodeRoutePaths.agents,
 	},
+	// MCP server management link is gated on the static mcpServers capability (loop P4). Filtered out of
+	// the rendered menu below when the capability is off, mirroring the agents entry.
+	{
+		id: "mcp",
+		icon: IconPlug,
+		translationKey: "navigation.mcp",
+		to: nodeRoutePaths.mcp,
+	},
 ];
 
-// Capability-gated navigation links: identity for everything except the agents entry, which is hidden
-// when nodeCapabilities.agentManagement is off. The nav bars render this filtered list so they never
-// need to reason about capabilities themselves.
-export const navigationLinks: INavigationLink[] = allNavigationLinks.filter(
-	(link) => link.id !== "agents" || nodeCapabilities.agentManagement,
-);
+// Capability-gated navigation links: identity for everything except the agents/mcp entries, which are hidden
+// when their respective node capability (agentManagement / mcpServers) is off. The nav bars render this
+// filtered list so they never need to reason about capabilities themselves.
+export const navigationLinks: INavigationLink[] = allNavigationLinks.filter((link) => {
+	if (link.id === "agents") {
+		return nodeCapabilities.agentManagement;
+	}
+	if (link.id === "mcp") {
+		return nodeCapabilities.mcpServers;
+	}
+	return true;
+});

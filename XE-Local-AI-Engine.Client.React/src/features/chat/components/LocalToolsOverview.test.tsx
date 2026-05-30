@@ -5,8 +5,53 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+
+const { useToolCatalogMock } = vi.hoisted(() => ({
+	useToolCatalogMock: vi.fn(),
+}));
+
+vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+	useToolCatalog: useToolCatalogMock,
+}));
+
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({
+		t: (_key: string, defaultValue?: string, options?: Record<string, unknown>) => {
+			let text = defaultValue ?? _key;
+			if (options) {
+				for (const [name, value] of Object.entries(options)) {
+					text = text.replace(`{{${name}}}`, String(value));
+				}
+			}
+			return text;
+		},
+	}),
+}));
+
 import { LocalToolsOverview } from "@/features/chat/components/LocalToolsOverview";
-import { localToolCatalog } from "@/features/chat/models/LocalToolCatalog";
+
+const builtinTools: ToolCatalogEntry[] = [
+	{
+		name: "GetCurrentTime",
+		description: "Returns the current time.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+	},
+	{
+		name: "Calculate",
+		description: "Evaluates arithmetic.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+	},
+];
+
+const mcpTool: ToolCatalogEntry = {
+	name: "mcp__filesystem-tools__read",
+	description: "Reads a file via MCP.",
+	requiresApproval: true,
+	source: { kind: "mcp", serverSlug: "filesystem-tools" },
+};
 
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
@@ -43,10 +88,12 @@ function installJsdomEnvironmentMocks(): void {
 describe("LocalToolsOverview", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
+		useToolCatalogMock.mockReturnValue({ data: builtinTools, isLoading: false, error: null });
 	});
 
 	afterEach(() => {
 		cleanup();
+		vi.clearAllMocks();
 	});
 
 	it("renders the overview panel", () => {
@@ -55,36 +102,59 @@ describe("LocalToolsOverview", () => {
 		expect(screen.getByTestId("local-tools-overview")).toBeTruthy();
 	});
 
-	it("lists both catalog tools", () => {
+	it("lists the built-in catalog tools from the fetched catalog", () => {
 		renderWithProviders(<LocalToolsOverview />);
 
 		expect(screen.getByTestId("local-tool-row-GetCurrentTime")).toBeTruthy();
 		expect(screen.getByTestId("local-tool-row-Calculate")).toBeTruthy();
 	});
 
-	it("shows auto-execute badge for all tools (RequiresApproval=false)", () => {
+	it("shows auto-execute badges for built-in tools", () => {
 		renderWithProviders(<LocalToolsOverview />);
 
-		for (const tool of localToolCatalog) {
+		for (const tool of builtinTools) {
 			const badge = screen.getByTestId(`local-tool-approval-badge-${tool.name}`);
 			expect(badge.textContent).toBe("auto-execute");
 		}
 	});
 
-	it("catalog contains exactly GetCurrentTime and Calculate", () => {
-		expect(localToolCatalog).toHaveLength(2);
-		expect(localToolCatalog.map((t) => t.name)).toEqual(["GetCurrentTime", "Calculate"]);
+	it("renders MCP tools with a server source badge and requires-approval badge", () => {
+		useToolCatalogMock.mockReturnValue({
+			data: [...builtinTools, mcpTool],
+			isLoading: false,
+			error: null,
+		});
+
+		renderWithProviders(<LocalToolsOverview />);
+
+		expect(screen.getByTestId(`local-tool-row-${mcpTool.name}`)).toBeTruthy();
+		const approvalBadge = screen.getByTestId(`local-tool-approval-badge-${mcpTool.name}`);
+		expect(approvalBadge.textContent).toBe("requires approval");
+		// The MCP tool carries an MCP source badge labelled with its server slug.
+		expect(screen.getByText("MCP · filesystem-tools")).toBeTruthy();
 	});
 
-	it("all catalog tools have requiresApproval=false", () => {
-		for (const tool of localToolCatalog) {
-			expect(tool.requiresApproval).toBe(false);
-		}
+	it("shows a loading state while the catalog is fetching", () => {
+		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
+
+		renderWithProviders(<LocalToolsOverview />);
+
+		expect(screen.getByTestId("local-tools-loading")).toBeTruthy();
 	});
 
-	it("catalog tools carry non-empty descriptions", () => {
-		for (const tool of localToolCatalog) {
-			expect(tool.description.length).toBeGreaterThan(0);
-		}
+	it("shows an empty state when the catalog has no tools", () => {
+		useToolCatalogMock.mockReturnValue({ data: [], isLoading: false, error: null });
+
+		renderWithProviders(<LocalToolsOverview />);
+
+		expect(screen.getByTestId("local-tools-empty")).toBeTruthy();
+	});
+
+	it("shows an error state when the catalog fails to load", () => {
+		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: false, error: new Error("boom") });
+
+		renderWithProviders(<LocalToolsOverview />);
+
+		expect(screen.getByTestId("local-tools-error")).toBeTruthy();
 	});
 });

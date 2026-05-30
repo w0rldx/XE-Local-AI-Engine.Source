@@ -1,9 +1,10 @@
-import { Badge, Group, Paper, Stack, Text } from "@mantine/core";
+import { Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { IconCalculator, IconClock } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
-import type { LocalToolDescriptor } from "@/features/chat/models/LocalToolCatalog";
-import { localToolCatalog } from "@/features/chat/models/LocalToolCatalog";
+import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
+import { type ToolCatalogEntry, toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
+import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
 
 function toolIcon(name: string): ReactNode {
 	if (name === "GetCurrentTime") {
@@ -16,7 +17,7 @@ function toolIcon(name: string): ReactNode {
 }
 
 interface LocalToolRowProps {
-	tool: LocalToolDescriptor;
+	tool: ToolCatalogEntry;
 }
 
 function LocalToolRow({ tool }: LocalToolRowProps) {
@@ -26,8 +27,9 @@ function LocalToolRow({ tool }: LocalToolRowProps) {
 				<Group gap="xs" wrap="nowrap" align="center">
 					{toolIcon(tool.name)}
 					<Text size="sm" fw={600} ff="monospace" style={{ flex: 1 }}>
-						{tool.name}
+						{toToolDisplayName(tool.name)}
 					</Text>
+					<ToolSourceBadge source={tool.source} />
 					<Badge
 						size="xs"
 						variant="light"
@@ -45,7 +47,14 @@ function LocalToolRow({ tool }: LocalToolRowProps) {
 	);
 }
 
+// Read-only overview of the node tool catalog (loop P4): built-in in-process tools plus tools discovered from
+// enabled MCP servers. The catalog is fetched live (useToolCatalog) — it replaces the former static
+// localToolCatalog const, so MCP tools appear/disappear with server enable/disable and each row shows its
+// originating source (built-in vs a specific MCP server).
 export function LocalToolsOverview() {
+	const catalogQuery = useToolCatalog();
+	const tools = catalogQuery.data ?? [];
+
 	return (
 		<Paper withBorder={true} p="sm" data-testid="local-tools-overview">
 			<Stack gap="xs">
@@ -53,15 +62,40 @@ export function LocalToolsOverview() {
 					<Text size="sm" fw={600}>
 						Local tools
 					</Text>
-					<Badge size="xs" variant="dot" color="teal">
-						{localToolCatalog.length} available
-					</Badge>
+					{catalogQuery.data ? (
+						<Badge size="xs" variant="dot" color="teal">
+							{tools.length} available
+						</Badge>
+					) : null}
 				</Group>
-				{localToolCatalog.map((tool) => (
+
+				{catalogQuery.isLoading ? (
+					<Group gap="sm" data-testid="local-tools-loading">
+						<Loader size="sm" />
+						<Text c="dimmed" size="sm">
+							Loading tools…
+						</Text>
+					</Group>
+				) : null}
+
+				{catalogQuery.error ? (
+					<Text size="sm" c="red" data-testid="local-tools-error">
+						Could not load the tool catalog.
+					</Text>
+				) : null}
+
+				{!catalogQuery.isLoading && !catalogQuery.error && tools.length === 0 ? (
+					<Text size="xs" c="dimmed" data-testid="local-tools-empty">
+						No tools available.
+					</Text>
+				) : null}
+
+				{tools.map((tool) => (
 					<LocalToolRow key={tool.name} tool={tool} />
 				))}
+
 				<Text size="xs" c="dimmed">
-					Tools run in-process on this node. No external access.
+					Built-in tools run in-process on this node. MCP tools run from their registered servers.
 				</Text>
 			</Stack>
 		</Paper>

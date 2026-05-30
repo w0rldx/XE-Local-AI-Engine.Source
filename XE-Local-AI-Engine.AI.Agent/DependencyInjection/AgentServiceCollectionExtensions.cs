@@ -43,6 +43,9 @@ public static class AgentServiceCollectionExtensions
         // Option B: server-driven ClientLocal tools (e.g. run_in_agent_home) resolve through their registered
         // IClientLocalToolHandler implementations. The worker application layer registers the handlers.
         _ = services.AddSingleton<IClientLocalToolRegistry, ClientLocalToolRegistry>();
+        // Option C: node-local MCP tools. This registry is MCP-agnostic (holds only AITool); the application layer's
+        // connection manager owns the MCP client lifecycle and pushes an immutable snapshot into it as servers connect.
+        _ = services.AddSingleton<IMcpToolRegistry, McpToolRegistry>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
         return services;
     }

@@ -85,6 +85,71 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.ToTable("agent_definitions", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpServerRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("ArgumentsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("arguments");
+
+                    b.Property<string>("Command")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("command");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("Description")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled");
+
+                    b.Property<byte[]>("EnvJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("env");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("TransportKind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("transport_kind");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("url");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.Property<string>("WorkingDirectory")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("working_directory");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("mcp_servers", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", b =>
                 {
                     b.Property<Guid>("ConversationId")

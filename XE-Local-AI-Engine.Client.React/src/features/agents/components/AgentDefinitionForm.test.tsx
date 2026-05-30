@@ -19,8 +19,34 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
+// The tool selector now fetches the catalog via useToolCatalog (loop P4 dynamic catalog). Mock it so the form
+// renders the built-in tool rows deterministically without a QueryClient or a real request.
+const { useToolCatalogMock } = vi.hoisted(() => ({
+	useToolCatalogMock: vi.fn(),
+}));
+
+vi.mock("@/features/tools/queries/useToolCatalog", () => ({
+	useToolCatalog: useToolCatalogMock,
+}));
+
 import { AgentDefinitionForm } from "@/features/agents/components/AgentDefinitionForm";
 import type { AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
+import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
+
+const catalogTools: ToolCatalogEntry[] = [
+	{
+		name: "GetCurrentTime",
+		description: "Returns the current time.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+	},
+	{
+		name: "Calculate",
+		description: "Evaluates arithmetic.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+	},
+];
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -90,6 +116,7 @@ function renderForm(overrides: {
 describe("AgentDefinitionForm", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
+		useToolCatalogMock.mockReturnValue({ data: catalogTools, isLoading: false, error: null });
 	});
 
 	afterEach(() => {

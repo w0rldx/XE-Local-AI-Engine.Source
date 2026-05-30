@@ -17,6 +17,7 @@ import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
 import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
+import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
 import { Route as LayoutManagerRouteImport } from './routes/_layout/manager'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
@@ -63,6 +64,11 @@ const LayoutModelsRoute = LayoutModelsRouteImport.update({
   path: '/models',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutMcpRoute = LayoutMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutManagerRoute = LayoutManagerRouteImport.update({
   id: '/manager',
   path: '/manager',
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof LayoutDashboardRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/manager': typeof LayoutManagerRoute
+  '/mcp': typeof LayoutMcpRoute
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof LayoutDashboardRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/manager': typeof LayoutManagerRoute
+  '/mcp': typeof LayoutMcpRoute
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/manager': typeof LayoutManagerRoute
+  '/_layout/mcp': typeof LayoutMcpRoute
   '/_layout/models': typeof LayoutModelsRoute
   '/_layout/node-binding': typeof LayoutNodeBindingRoute
   '/_layout/node-settings': typeof LayoutNodeSettingsRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invocations'
     | '/manager'
+    | '/mcp'
     | '/models'
     | '/node-binding'
     | '/node-settings'
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invocations'
     | '/manager'
+    | '/mcp'
     | '/models'
     | '/node-binding'
     | '/node-settings'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/_layout/dashboard'
     | '/_layout/invocations'
     | '/_layout/manager'
+    | '/_layout/mcp'
     | '/_layout/models'
     | '/_layout/node-binding'
     | '/_layout/node-settings'
@@ -254,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutModelsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/mcp': {
+      id: '/_layout/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof LayoutMcpRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/manager': {
       id: '/_layout/manager'
       path: '/manager'
@@ -306,6 +325,7 @@ interface LayoutRouteChildren {
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutManagerRoute: typeof LayoutManagerRoute
+  LayoutMcpRoute: typeof LayoutMcpRoute
   LayoutModelsRoute: typeof LayoutModelsRoute
   LayoutNodeBindingRoute: typeof LayoutNodeBindingRoute
   LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
@@ -320,6 +340,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutManagerRoute: LayoutManagerRoute,
+  LayoutMcpRoute: LayoutMcpRoute,
   LayoutModelsRoute: LayoutModelsRoute,
   LayoutNodeBindingRoute: LayoutNodeBindingRoute,
   LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,

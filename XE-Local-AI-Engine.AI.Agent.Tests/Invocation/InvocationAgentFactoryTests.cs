@@ -158,6 +158,61 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    public async Task CreateAsync_WithOfferedMcpName_ResolvesFromMcpRegistry()
+    {
+        // Option C: an offered MCP-qualified name that matches neither the built-in nor the ClientLocal registry
+        // resolves against the MCP tool registry's cached executable.
+        var mcpRegistry = new FakeMcpToolRegistry(
+            AIFunctionFactory.Create((string input) => input, "mcp__weather__get_forecast"));
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [InvocationToolBridge.CreateOfferPlaceholder("mcp__weather__get_forecast")],
+            []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient, mcpToolRegistry: mcpRegistry);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        AssertEx.NotNull(context.Agent);
+        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithApprovalWrappedMcpTool_ResolvesWrappedExecutable()
+    {
+        // An MCP tool is registered approval-wrapped (the catalog default). The factory must resolve the wrapped
+        // executable through Option C so the approval gate survives the offer -> resolve path.
+        var wrapped = new ApprovalRequiredAIFunction(
+            AIFunctionFactory.Create((string input) => input, "mcp__files__write_file"));
+        var snapshot = new[]
+        {
+            new McpRegisteredTool("mcp__files__write_file",
+                wrapped,
+                new LocalChatToolDescriptor("mcp__files__write_file", "Writes a file.", """{"type":"object"}""", true))
+        };
+        var mcpRegistry = new FakeMcpToolRegistry();
+        mcpRegistry.ReplaceSnapshot(snapshot);
+
+        var resolved = mcpRegistry.TryResolve("mcp__files__write_file", out var executable);
+        AssertEx.True(resolved);
+        AssertEx.True(executable is ApprovalRequiredAIFunction, "the MCP tool must resolve approval-wrapped");
+
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [InvocationToolBridge.CreateOfferPlaceholder("mcp__files__write_file")],
+            []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient, mcpToolRegistry: mcpRegistry);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        AssertEx.NotNull(context.Agent);
+        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+    }
+
+    [Test]
     public async Task CreateAsync_OrdersConversationContext_WhenBuildingSeedMessages()
     {
         var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
@@ -179,7 +234,8 @@ public sealed class InvocationAgentFactoryTests
 
     private static InvocationAgentFactory CreateSut(FakeChatClient chatClient,
         IAgentToolRegistry? toolRegistry = null,
-        IClientLocalToolRegistry? clientLocalToolRegistry = null)
+        IClientLocalToolRegistry? clientLocalToolRegistry = null,
+        IMcpToolRegistry? mcpToolRegistry = null)
     {
         return new InvocationAgentFactory(chatClient,
             Options.Create(new InvocationAgentOptions()),
@@ -187,7 +243,8 @@ public sealed class InvocationAgentFactoryTests
             NullLoggerFactory.Instance,
             FakeServiceProvider.Instance,
             toolRegistry ?? new FakeToolRegistry(),
-            clientLocalToolRegistry ?? new FakeClientLocalToolRegistry());
+            clientLocalToolRegistry ?? new FakeClientLocalToolRegistry(),
+            mcpToolRegistry ?? new FakeMcpToolRegistry());
     }
 
     private sealed class FakeToolRegistry : IAgentToolRegistry
@@ -229,6 +286,42 @@ public sealed class InvocationAgentFactoryTests
         public bool TryResolve(string toolName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
         {
             return _tools.TryGetValue(toolName, out tool);
+        }
+    }
+
+    private sealed class FakeMcpToolRegistry : IMcpToolRegistry
+    {
+        private readonly Dictionary<string, AITool> _tools = new(StringComparer.Ordinal);
+
+        public FakeMcpToolRegistry(params AITool[] tools)
+        {
+            foreach (var function in tools.OfType<AIFunction>())
+            {
+                _tools[function.Name] = function;
+            }
+        }
+
+        public bool TryResolve(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        {
+            return _tools.TryGetValue(name, out tool);
+        }
+
+        public IReadOnlyList<LocalChatToolDescriptor> GetDescriptors()
+        {
+            return
+            [
+                .. _tools.Values.OfType<AIFunction>()
+                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), true))
+            ];
+        }
+
+        public void ReplaceSnapshot(IReadOnlyList<McpRegisteredTool> tools)
+        {
+            _tools.Clear();
+            foreach (var tool in tools)
+            {
+                _tools[tool.Name] = tool.Executable;
+            }
         }
     }
 
