@@ -3,15 +3,17 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
 ///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" /> (AgentHome plan §6.2,
-///     restart-required for v1). Registered once as a singleton so a provider change requires a restart. The
-///     <c>"local-container"</c> slot is reserved for Marker J-local and throws until that provider ships.
+///     restart-required for v1). Registered once as a singleton so a provider change requires a restart. The MVP
+///     default is the deterministic fake; Marker J-local fills the <c>"local-container"</c> slot with the
+///     HostAgent-backed <see cref="LocalContainerSandboxProvider" />.
 /// </summary>
 internal static class SandboxProviderSelector
 {
-    public const string LocalContainerProvider = "local-container";
+    public const string LocalContainerProvider = LocalContainerSandboxProvider.Name;
 
     public static ISandboxRuntimeProvider Resolve(IServiceProvider services)
     {
@@ -21,8 +23,7 @@ internal static class SandboxProviderSelector
         return providerName switch
         {
             FakeSandboxRuntimeProvider.Name => ActivatorUtilities.CreateInstance<FakeSandboxRuntimeProvider>(services),
-            LocalContainerProvider => throw new InvalidOperationException(
-                "Sandbox provider 'local-container' is not available until Marker J-local."),
+            LocalContainerProvider => ActivatorUtilities.CreateInstance<LocalContainerSandboxProvider>(services),
             _ => throw new InvalidOperationException($"Unknown sandbox provider '{providerName}'.")
         };
     }

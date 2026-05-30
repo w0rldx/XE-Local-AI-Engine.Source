@@ -2,8 +2,11 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class SandboxProviderSelectionTests
@@ -30,18 +33,14 @@ public sealed class SandboxProviderSelectionTests
     }
 
     [Test]
-    public async Task Resolve_WhenProviderIsLocalContainer_ThrowsNotAvailable()
+    public void Resolve_WhenProviderIsLocalContainer_ReturnsLocalContainerProvider()
     {
         using var services = BuildServices("local-container");
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-        {
-            SandboxProviderSelector.Resolve(services);
-            return Task.CompletedTask;
-        });
+        var provider = SandboxProviderSelector.Resolve(services);
 
-        AssertEx.Contains(exception.Message, "local-container");
-        AssertEx.Contains(exception.Message, "Marker J-local");
+        AssertEx.Equal(LocalContainerSandboxProvider.Name, provider.ProviderName);
+        AssertEx.True(provider is LocalContainerSandboxProvider);
     }
 
     [Test]
@@ -72,7 +71,12 @@ public sealed class SandboxProviderSelectionTests
 
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
+        services.AddLogging();
         services.AddOptions<SandboxOptions>().Bind(configuration.GetSection(SandboxOptions.SectionName));
+        // The local-container provider is a thin gRPC client; constructing it (no connection happens at construction)
+        // needs HostAgentClientOptions plus the bound LocalContainerOptions.
+        services.AddSingleton(new HostAgentClientOptions { SocketPath = "/run/host-agent/host-agent.sock", Secret = "selection-test-secret" });
+        services.AddOptions<LocalContainerOptions>().Bind(configuration.GetSection(LocalContainerOptions.SectionName));
         return services.BuildServiceProvider();
     }
 }

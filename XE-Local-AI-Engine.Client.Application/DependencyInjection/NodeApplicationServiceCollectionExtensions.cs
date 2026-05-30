@@ -199,6 +199,13 @@ public static class NodeApplicationServiceCollectionExtensions
         // as a singleton). The MVP default is the deterministic fake; Marker J-local adds "local-container".
         builder.Services.AddOptions<SandboxOptions>()
                .Bind(configuration.GetSection(SandboxOptions.SectionName));
+        // Marker J-local local-container provider options. Bound + validated unconditionally; the validator is
+        // fail-closed, but the running default stays the fake (D8), so invalid LocalContainer config only matters once
+        // the "local-container" provider is selected. The provider is a thin gRPC client and reuses HostAgentClientOptions.
+        builder.Services.AddOptions<LocalContainerOptions>()
+               .Bind(configuration.GetSection(LocalContainerOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
         builder.Services.AddSingleton<ISandboxRuntimeProvider>(SandboxProviderSelector.Resolve);
         // Marker D AgentHome layout initializer. Materializes the worker-local /agent-home tree (idempotent,
         // self-healing, owner-mismatch-recovering). Wired but unreached in production until Marker I-pre swaps the
