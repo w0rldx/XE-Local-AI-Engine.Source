@@ -25,6 +25,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<NodeSelectedFolder> SelectedFolders => Set<NodeSelectedFolder>();
 
+    internal DbSet<AgentDefinition> AgentDefinitions => Set<AgentDefinition>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -37,6 +39,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigurePurgedTombstone(modelBuilder.Entity<NodePurgedTombstone>());
         ConfigureMessageFeedback(modelBuilder.Entity<NodeMessageFeedback>());
         ConfigureSelectedFolder(modelBuilder.Entity<NodeSelectedFolder>());
+        ConfigureAgentDefinition(modelBuilder.Entity<AgentDefinition>());
     }
 
     private static void ConfigureConversation(EntityTypeBuilder<NodeConversation> builder)
@@ -79,6 +82,9 @@ public sealed class NodeChatDbContext : DbContext
 
         builder.Property(entity => entity.SelectedPathJson)
                .HasColumnName("selected_path_json");
+
+        builder.Property(entity => entity.AgentDefinitionId)
+               .HasColumnName("agent_definition_id");
 
         builder.HasMany(entity => entity.Messages)
                .WithOne(entity => entity.Conversation)
@@ -241,5 +247,54 @@ public sealed class NodeChatDbContext : DbContext
 
         builder.HasIndex(entity => entity.Alias)
                .IsUnique();
+    }
+
+    private static void ConfigureAgentDefinition(EntityTypeBuilder<AgentDefinition> builder)
+    {
+        builder.ToTable("agent_definitions");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.Name)
+               .HasColumnName("name");
+
+        builder.Property(entity => entity.Description)
+               .HasColumnName("description");
+
+        builder.Property(entity => entity.Instructions)
+               .HasColumnName("instructions");
+
+        builder.Property(entity => entity.ModelProfile)
+               .HasColumnName("model_profile");
+
+        builder.Property(entity => entity.ReasoningEffort)
+               .HasColumnName("reasoning_effort");
+
+        builder.Property(entity => entity.Kind)
+               .HasColumnName("kind")
+               .HasDefaultValue((int)AgentDefinitionKind.Single);
+
+        builder.Property(entity => entity.AllowedToolNamesJson)
+               .HasColumnName("allowed_tool_names_json");
+
+        builder.Property(entity => entity.ToolApprovalsJson)
+               .HasColumnName("tool_approvals_json");
+
+        builder.Property(entity => entity.OrchestrationTopologyJson)
+               .HasColumnName("orchestration_topology_json");
+
+        builder.Property(entity => entity.Version)
+               .HasColumnName("version");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        // Name is a human label, not a key: index it for list/search but do not enforce uniqueness.
+        builder.HasIndex(entity => entity.Name);
     }
 }

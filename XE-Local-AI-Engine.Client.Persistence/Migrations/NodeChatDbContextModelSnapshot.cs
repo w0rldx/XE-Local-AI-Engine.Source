@@ -17,12 +17,84 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AllowedToolNamesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("allowed_tool_names_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("Description")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("description");
+
+                    b.Property<byte[]>("Instructions")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("instructions");
+
+                    b.Property<int>("Kind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("kind");
+
+                    b.Property<string>("ModelProfile")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_profile");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OrchestrationTopologyJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("orchestration_topology_json");
+
+                    b.Property<string>("ReasoningEffort")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reasoning_effort");
+
+                    b.Property<string>("ToolApprovalsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tool_approvals_json");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("agent_definitions", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", b =>
                 {
                     b.Property<Guid>("ConversationId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("conversation_id");
+
+                    b.Property<Guid?>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
 
                     b.Property<bool>("Archived")
                         .ValueGeneratedOnAdd()

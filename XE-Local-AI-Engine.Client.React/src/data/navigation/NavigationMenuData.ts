@@ -7,13 +7,14 @@ import {
 	IconListDetails,
 	IconMessageCircle,
 	IconPlugConnected,
+	IconRobot,
 	IconServerCog,
 	IconSettings,
 	IconTools,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
-import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -31,7 +32,9 @@ export interface INavigationLink {
 	onClick?: () => void;
 }
 
-export const navigationLinks: INavigationLink[] = [
+// Full link set including the capability-gated agents entry. The exported navigationLinks below is this
+// list filtered by the active node capabilities — see the filter at the bottom of this file.
+const allNavigationLinks: INavigationLink[] = [
 	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home },
 	{
 		id: "dashboard",
@@ -87,4 +90,19 @@ export const navigationLinks: INavigationLink[] = [
 		translationKey: "navigation.tools",
 		to: nodeRoutePaths.tools,
 	},
+	// Agent management link is gated on the static agentManagement capability (loop P3). Filtered out of
+	// the rendered menu below when the capability is off, so the nav bars stay capability-unaware.
+	{
+		id: "agents",
+		icon: IconRobot,
+		translationKey: "navigation.agents",
+		to: nodeRoutePaths.agents,
+	},
 ];
+
+// Capability-gated navigation links: identity for everything except the agents entry, which is hidden
+// when nodeCapabilities.agentManagement is off. The nav bars render this filtered list so they never
+// need to reason about capabilities themselves.
+export const navigationLinks: INavigationLink[] = allNavigationLinks.filter(
+	(link) => link.id !== "agents" || nodeCapabilities.agentManagement,
+);

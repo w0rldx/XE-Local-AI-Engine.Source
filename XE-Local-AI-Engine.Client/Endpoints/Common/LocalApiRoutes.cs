@@ -81,4 +81,14 @@ public static class LocalApiRoutes
     {
         public const string Monitor = "invocations";
     }
+
+    public static class Agents
+    {
+        public const string Definitions = "agents";
+        public const string DefinitionById = "agents/{agentDefinitionId}";
+
+        // A distinct literal segment under the agents surface; FastEndpoints prioritises the literal over the
+        // {agentDefinitionId} route param so this never collides with DefinitionById.
+        public const string ToolCapableModels = "agents/tool-capable-models";
+    }
 }

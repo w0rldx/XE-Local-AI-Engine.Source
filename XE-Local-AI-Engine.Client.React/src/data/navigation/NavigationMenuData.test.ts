@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { navigationLinks } from "@/data/navigation/NavigationMenuData";
 
 describe("navigationLinks", () => {
-	it("lists the node shell routes", () => {
+	afterEach(() => {
+		vi.resetModules();
+		vi.doUnmock("@/capabilities/NodeCapabilities");
+	});
+
+	it("lists the node shell routes including the agents link when agentManagement is on", () => {
 		expect(navigationLinks.map((link) => [link.id, link.to])).toEqual([
 			["home", nodeRoutePaths.home],
 			["dashboard", nodeRoutePaths.dashboard],
@@ -16,6 +21,23 @@ describe("navigationLinks", () => {
 			["manager", nodeRoutePaths.manager],
 			["invocations", nodeRoutePaths.invocations],
 			["tools", nodeRoutePaths.tools],
+			["agents", nodeRoutePaths.agents],
 		]);
+	});
+
+	it("hides the agents link when agentManagement is off", async () => {
+		vi.resetModules();
+		vi.doMock("@/capabilities/NodeCapabilities", async () => {
+			const actual = await vi.importActual<typeof import("@/capabilities/NodeCapabilities")>(
+				"@/capabilities/NodeCapabilities",
+			);
+			return {
+				...actual,
+				nodeCapabilities: { ...actual.nodeCapabilities, agentManagement: false },
+			};
+		});
+
+		const { navigationLinks: gatedLinks } = await import("@/data/navigation/NavigationMenuData");
+		expect(gatedLinks.some((link) => link.id === "agents")).toBe(false);
 	});
 });

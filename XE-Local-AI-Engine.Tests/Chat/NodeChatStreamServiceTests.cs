@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -35,6 +36,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -74,6 +76,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -116,6 +119,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -166,6 +170,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -201,6 +206,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -241,6 +247,7 @@ public sealed class NodeChatStreamServiceTests
             }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -288,6 +295,7 @@ public sealed class NodeChatStreamServiceTests
             }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -325,6 +333,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             cancellationRegistry,
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -374,6 +383,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -413,11 +423,111 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(terminalRequest.Status != NodeChatMessageStatusValues.Interrupted, "Client disconnect must not force interrupted.");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenConversationBound_StreamsWithDefinitionPromptToolsAndVersion()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+
+        var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", 9));
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
+            resolver,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal("Bound persona prompt.", runner.LastSystemPrompt);
+        AssertEx.Equal(9, runner.LastAgentDefinitionVersion);
+        AssertEx.Equal("high", runner.LastReasoningEffort);
+        AssertEx.Equal(1, runner.LastAllowedTools.Count);
+        AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenConversationUnbound_StreamsWithDefaultPromptAndVersion()
+    {
+        // Regression guard: an unbound conversation must use today's literals — the embedded prompt and version 1 —
+        // and the resolver must be consulted with a null binding (the default-persona contract).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var resolver = CreateAgentDefinitionResolver();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
+        AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
+        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>()).Returns(tools);
         return provider;
+    }
+
+    // The default (unbound) resolver: ResolveAsync returns null, so the service keeps today's literals — these tests
+    // exercise the default chat persona. P3 binding behaviour is covered by the dedicated bound-conversation tests.
+    private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
+    {
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        return resolver;
     }
 
     private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
@@ -539,6 +649,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new LocalChatAgentOptions()),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -662,7 +773,8 @@ public sealed class NodeChatStreamServiceTests
     private static INodeChatPersistenceService CreatePersistence(Guid conversationId,
         Guid assistantMessageId,
         Guid requestId,
-        Action<NodeChatTerminalizeMessageRequest> terminalized)
+        Action<NodeChatTerminalizeMessageRequest> terminalized,
+        Guid? agentDefinitionId = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
         var conversation = new NodeChatConversationDto(conversationId,
@@ -671,7 +783,8 @@ public sealed class NodeChatStreamServiceTests
             1,
             1,
             false,
-            []);
+            [],
+            AgentDefinitionId: agentDefinitionId);
         var userMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
             null,
@@ -905,6 +1018,57 @@ public sealed class NodeChatStreamServiceTests
         {
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    private sealed class PackageCapturingInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
+    {
+        // Captures the runtime-package fields the binding hydration drives: the system prompt, the agent-definition
+        // version, the reasoning effort, and the offered tool list. The bound/unbound tests assert on these.
+        public string? LastSystemPrompt { get; private set; }
+        public int LastAgentDefinitionVersion { get; private set; }
+        public string? LastReasoningEffort { get; private set; }
+        public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
+        public int ActiveInvocationCount => 0;
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            LastSystemPrompt = context.Package.ResolvedSystemPrompt;
+            LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
+            LastReasoningEffort = context.Package.ReasoningEffort;
+            LastAllowedTools = context.Package.AllowedTools;
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
         }
 

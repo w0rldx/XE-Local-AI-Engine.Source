@@ -34,6 +34,13 @@ internal sealed record class NodeConversation
     /// </summary>
     public string? SelectedPathJson { get; set; }
 
+    /// <summary>
+    ///     The node-local agent definition this conversation is bound to, or null for the implicit default persona.
+    ///     A loose nullable Guid with no enforced FK (mirrors <see cref="BranchOfConversationId" />): a binding that
+    ///     points at a deleted definition is treated as null by the resolver rather than failing the read.
+    /// </summary>
+    public Guid? AgentDefinitionId { get; set; }
+
     public List<NodeMessage> Messages { get; } = [];
 
     public List<NodeToolEvent> ToolEvents { get; } = [];
