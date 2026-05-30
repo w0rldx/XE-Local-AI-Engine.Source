@@ -138,7 +138,7 @@ public sealed class NodeChatRegenerationService(
         // the runtime package as the offer list; the invocation factory resolves the matching executables from the
         // registry by name.
         var offerTools = useLocalTools && localChatOptions.Value.EnableTools;
-        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools() : null;
+        var allowedTools = offerTools ? localToolOfferProvider.GetOfferedTools(original.Model ?? localChatOptions.Value.DefaultModel) : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             conversationId,

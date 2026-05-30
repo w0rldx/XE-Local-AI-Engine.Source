@@ -59,4 +59,11 @@ public sealed class AgentHomeOptions
     ///     <c>changed-files.json</c> metadata is still kept (AgentHome plan §9.1 / §13). Defaults to 52428800 (50 MiB).
     /// </summary>
     public long MaxPatchBytes { get; set; } = 52428800;
+
+    /// <summary>
+    ///     The model ids the worker considers tool-capable for AgentHome (AgentHome plan locked decision 10). The
+    ///     loopback offer list omits <c>run_in_agent_home</c> when the active model id is not in this list; the encrypted
+    ///     path stays server-gated by <c>AiModel.SupportsToolCalling</c>. Defaults to <c>["qwen3:8b"]</c>.
+    /// </summary>
+    public IReadOnlyList<string> ToolCapableModels { get; set; } = ["qwen3:8b"];
 }

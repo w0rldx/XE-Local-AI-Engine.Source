@@ -9,6 +9,7 @@ using NSec.Cryptography;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
@@ -60,6 +61,42 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         AssertEx.Equal(1, context.Package.ConversationContext.Count);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[0].Role);
         validator.Received(1).Validate(Arg.Any<RuntimePackage>());
+    }
+
+    [Test]
+    public void Assemble_WhenWireToolIsClientLocal_CarriesLocationAndApprovalIntoRuntimePackage()
+    {
+        using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
+        var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
+        nodeKeyRegistry.ResolveGraceEligible().Returns([
+            new NodeKeyResolution
+            {
+                RequestedKeyId = "active-key",
+                Status = NodeKeyLookupStatus.Active,
+                KeyIdUsed = "active-key",
+                PrivateKey = nodePrivateKey,
+                PublicKey = nodePrivateKey.PublicKey
+            }
+        ]);
+
+        var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
+        envelopeCryptoService.DecryptRuntimePackage(Arg.Any<EncryptedRuntimePackageDto>(), nodePrivateKey)
+                             .Returns(_ => new EnvelopeDecryptionResult("hello"u8.ToArray(), new byte[32]));
+
+        var validator = Substitute.For<IRuntimePackageValidator>();
+        validator.Validate(Arg.Any<RuntimePackage>()).Returns(RuntimePackageValidationResult.Success);
+
+        var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
+        using var context = assembler.Assemble(CreateClientLocalPackage());
+
+        // The wire DTO must drive routing: a ClientLocal/approval-required tool that round-trips the encrypted envelope
+        // arrives as ClientLocal (not the previously hardcoded ApiSide), so BuildInvocationTools emits a
+        // CreateOfferPlaceholder instead of an API-side bridge or the "Unsupported tool location" throw.
+        var tool = context.Package.AllowedTools[0];
+        AssertEx.Equal("run_in_agent_home", tool.Name);
+        AssertEx.Equal(ToolLocation.ClientLocal, tool.Location);
+        AssertEx.True(tool.RequiresApproval, "Wire RequiresApproval must survive the assembler mapping.");
+        AssertEx.Equal(Guid.Empty, tool.Id);
     }
 
     [Test]
@@ -378,6 +415,72 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
             ConversationContextHash = includeValidHistoryHash
                 ? RuntimePackageHistoryHash.Compute(package.ConversationContext)
                 : "invalid-history-hash"
+        };
+    }
+
+    private static EncryptedRuntimePackageDto CreateClientLocalPackage()
+    {
+        var package = new EncryptedRuntimePackageDto
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            ClientNodeId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            EpochVersion = 7,
+            AgentDefinitionVersion = 7,
+            ResolvedSystemPrompt = "You are a helpful local AI assistant.",
+            AllowedTools =
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = "run_in_agent_home",
+                    Description = "Run a task in the agent home workspace",
+                    Schema = "{\"type\":\"object\"}",
+                    Location = ToolLocation.ClientLocal,
+                    RequiresApproval = true
+                }
+            ],
+            ModelProfile = null,
+            Timeouts = new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30
+            },
+            ConfigHash = string.Empty,
+            ConversationContext = [],
+            ConversationContextHash = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            NodeWrappedEpochKey = new byte[]
+            {
+                1,
+                2,
+                3
+            },
+            ClientEphemeralPublicKey = new byte[]
+            {
+                4,
+                5,
+                6
+            },
+            Ciphertext = new byte[]
+            {
+                7,
+                8,
+                9
+            },
+            ContentIv = new byte[]
+            {
+                10,
+                11,
+                12
+            },
+            Aad = "message|aad-placeholder"
+        };
+
+        return package with
+        {
+            ConfigHash = RuntimePackageConfigHash.Compute(package),
+            ConversationContextHash = RuntimePackageHistoryHash.Compute(package.ConversationContext)
         };
     }
 

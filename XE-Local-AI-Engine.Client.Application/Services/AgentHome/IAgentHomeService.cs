@@ -22,4 +22,13 @@ internal interface IAgentHomeService
     ///     under the command timeout, and returns the run id, completion status, and log path.
     /// </summary>
     Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The single lifecycle entry the gateway calls (Marker I): resolves owner/node identity once, acquires the
+    ///     run-level single-flight guard keyed by that owner-node (a second concurrent run for the same owner-node is
+    ///     rejected with <see cref="AgentHomeBusyException" />, not queued — §6.6 rule 5/1), then runs Prepare followed
+    ///     by Run and releases the guard in a finally. <see cref="PrepareAsync" />/<see cref="RunAsync" /> remain public
+    ///     so the phases stay individually testable, but the guard wraps both at this one lock site.
+    /// </summary>
+    Task<AgentHomeRunResult> RunLifecycleAsync(AgentHomeRunLifecycleRequest request, CancellationToken cancellationToken = default);
 }
