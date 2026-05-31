@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
 ///     Request to create a new AgentHome sandbox or attach to the existing one for the same
-///     <see cref="SandboxAttachKey" /> (AgentHome plan §6.2). Provider-neutral: resource and network preferences are
+///     <see cref="SandboxAttachKey" />. Provider-neutral: resource and network preferences are
 ///     expressed as neutral values that a provider applies only when it advertises the matching capability.
 /// </summary>
 public sealed record SandboxCreateRequest

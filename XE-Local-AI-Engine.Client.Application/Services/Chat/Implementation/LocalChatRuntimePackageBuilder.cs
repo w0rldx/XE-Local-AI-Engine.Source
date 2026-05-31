@@ -4,6 +4,9 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 
+/// <summary>
+///     Represents local chat runtime package builder.
+/// </summary>
 public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBuilder
 {
     public RuntimePackage Build(LocalChatRuntimePackageRequest request)

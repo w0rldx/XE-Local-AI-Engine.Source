@@ -9,6 +9,9 @@ using Grpc.Net.Client;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 
+/// <summary>
+///     Client boundary for grpc host agent readiness operations.
+/// </summary>
 public sealed class GrpcHostAgentReadinessClient : IHostAgentReadinessClient, IDisposable
 {
     private const string GetStatusMethodName = "/xe.hostagent.v1.HostAgentControl/GetStatus";

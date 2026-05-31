@@ -43,7 +43,7 @@ export interface SaveAgentDefinitionRequestDto {
 	kind: AgentDefinitionKind;
 	allowedToolNames: string[];
 	toolApprovals: Record<string, boolean>;
-	// Raw orchestration topology JSON (loop P5). null for Single definitions; for Orchestrator definitions it is the
+	// Raw orchestration topology JSON (orchestration). null for Single definitions; for Orchestrator definitions it is the
 	// serialized handoff topology (see OrchestrationTopologyModels). The backend persists and validates it.
 	orchestrationTopologyJson: string | null;
 	// Playbook P1: toggles whether the agent's enabled playbook actions are injected at resolve time.

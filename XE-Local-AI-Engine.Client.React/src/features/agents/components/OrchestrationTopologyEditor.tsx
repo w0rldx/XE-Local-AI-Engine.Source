@@ -28,7 +28,7 @@ interface OrchestrationTopologyEditorProps {
 
 const TRIAGE_OPTION_VALUE = "__triage__";
 
-// Topology authoring section shown when kind=Orchestrator (loop P5 §5). The orchestrator definition itself is the
+// Topology authoring section shown when kind=Orchestrator (orchestration). The orchestrator definition itself is the
 // triage; the user picks specialist participants, optionally draws handoff edges between them (empty = mesh auto),
 // and sets the turn cap / return-to-previous knob. A prominent warning surfaces if the orchestrator or any selected
 // participant is pinned to a model that is not tool-capable — orchestration degrades to a single agent in that case.

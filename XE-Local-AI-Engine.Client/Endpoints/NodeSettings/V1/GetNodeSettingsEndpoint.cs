@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+/// <summary>
+///     FastEndpoints handler for the get node settings local API operation.
+/// </summary>
 public sealed class GetNodeSettingsEndpoint(INodeSettingsStore nodeSettingsStore) : EndpointWithoutRequest<NodeSettingsResponse>
 {
     private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));

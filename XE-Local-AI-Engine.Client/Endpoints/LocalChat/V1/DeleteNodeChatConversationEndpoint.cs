@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
+/// <summary>
+///     FastEndpoints handler for the delete node chat conversation local API operation.
+/// </summary>
 public sealed class DeleteNodeChatConversationEndpoint(
     INodeChatPersistenceService chatPersistence,
     TimeProvider timeProvider) : Endpoint<DeleteNodeChatConversationRequest, NodeChatDeleteConversationResponse>

@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 
 using NSec.Cryptography;
 
+/// <summary>
+///     Represents node key registry.
+/// </summary>
 public sealed class NodeKeyRegistry : INodeKeyRegistry
 {
     private static readonly TimeSpan RetiredKeyGraceWindow = TimeSpan.FromMinutes(5);

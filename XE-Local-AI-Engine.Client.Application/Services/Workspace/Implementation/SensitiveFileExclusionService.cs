@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using System.Collections.Frozen;
 
 /// <summary>
-///     Name-based <see cref="ISensitiveFileExclusionService" /> (AgentHome plan §8.3). The excluded set covers secrets,
+///     Name-based <see cref="ISensitiveFileExclusionService" />. The excluded set covers secrets,
 ///     the host <c>.git</c> baseline (a fresh in-sandbox baseline is created after copy), and generated/heavy output
 ///     directories. Pattern rules add <c>.env.*</c> and <c>*credentials.enc</c>. The sets are frozen once so lookups
 ///     are allocation-free.

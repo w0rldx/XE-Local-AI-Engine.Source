@@ -4,8 +4,16 @@ using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
 
+/// <summary>
+///     Azure Foundry chat-client factory backed by the Azure OpenAI .NET client.
+/// </summary>
+/// <remarks>
+///     The rest of the node runtime consumes the returned <see cref="IChatClient" /> abstraction, which lets local
+///     Ollama and cloud-backed deployments share the same agent pipeline.
+/// </remarks>
 public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFactory
 {
+    /// <inheritdoc />
     public IChatClient Create(StoredCloudCredentials credentials)
     {
         ArgumentNullException.ThrowIfNull(credentials);

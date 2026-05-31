@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     The <c>manifest.json</c> contents for a worker-local AgentHome (AgentHome plan §4, §6.6). Carries the schema
+///     The <c>manifest.json</c> contents for a worker-local AgentHome. Carries the schema
 ///     version, lifecycle status, the owner/node it belongs to, and creation/update timestamps (sourced from the
 ///     injected <see cref="TimeProvider" />). A change of <see cref="OwnerUserId" /> forbids reuse of the layout.
 /// </summary>

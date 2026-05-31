@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Provider-neutral resource ceiling for a sandbox (AgentHome plan §6.2.1). Every member is optional; a provider
+///     Provider-neutral resource ceiling for a sandbox. Every member is optional; a provider
 ///     applies only the limits it advertises via <see cref="SandboxProviderCapabilities.SupportsResourceLimits" />
 ///     and ignores the rest. No provider SDK type appears here.
 /// </summary>

@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 /// <summary>
-///     Marker H <see cref="IAgentHomeMemoryProposalService" />. Reads the agent-written JSONL files from
+///     memory-proposal export <see cref="IAgentHomeMemoryProposalService" />. Reads the agent-written JSONL files from
 ///     <c>runs/&lt;run-id&gt;/memory/proposals/</c>, validates each line against the §10 MVP schema, applies the
 ///     <see cref="MemoryProposalSecretScanner" /> per record, and returns surviving proposals together with a rejection
 ///     log. Never mutates real node/platform memory — caller is responsible for later user/platform review.

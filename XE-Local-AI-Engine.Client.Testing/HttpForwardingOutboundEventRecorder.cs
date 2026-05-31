@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Testing;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Configuration;
 
+/// <summary>
+///     Represents http forwarding outbound event recorder.
+/// </summary>
 public sealed class HttpForwardingOutboundEventRecorder : IOutboundEventRecorder, IDisposable
 {
     private const string SinkTokenHeader = "X-Test-Sink-Token";

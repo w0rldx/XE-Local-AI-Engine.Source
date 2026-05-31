@@ -5,6 +5,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Persistence boundary for agent definition data.
+/// </summary>
 public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentDefinitionStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

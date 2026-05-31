@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Value object carrying token stream chunk payload data.
+/// </summary>
 public sealed record TokenStreamChunkPayload
 {
     public required Guid InvocationId { get; init; }

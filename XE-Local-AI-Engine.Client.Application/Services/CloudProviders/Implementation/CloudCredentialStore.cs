@@ -8,6 +8,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Configuration;
 
+/// <summary>
+///     Persistence boundary for cloud credential data.
+/// </summary>
 public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 {
     private const string CredentialsFileName = "cloud-credentials.enc";

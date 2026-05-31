@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     A copy between host and sandbox (AgentHome plan §6.2). One shape serves both directions:
+///     A copy between host and sandbox. One shape serves both directions:
 ///     <see cref="ISandboxRuntimeProvider.CopyIntoAsync" /> reads <see cref="SourcePath" /> on the host and writes
 ///     <see cref="DestinationPath" /> in the sandbox; <see cref="ISandboxRuntimeProvider.CopyOutAsync" /> reverses
-///     it. Selected-folder exclusion rules are applied by the workspace service (AgentHome plan §8.3, Marker F), not
+///     it. Selected-folder exclusion rules are applied by the workspace service, not
 ///     here.
 /// </summary>
 public sealed record SandboxCopyRequest

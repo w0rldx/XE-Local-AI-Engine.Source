@@ -8,6 +8,9 @@ using XE_Local_AI_Engine.Client.Endpoints.RuntimeManager.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Manager;
 
+/// <summary>
+///     Represents runtime manager hub.
+/// </summary>
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class RuntimeManagerHub(IHostAgentManagerService managerService) : Hub
 {

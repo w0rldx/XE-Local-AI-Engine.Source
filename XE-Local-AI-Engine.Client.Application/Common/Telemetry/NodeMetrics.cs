@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 
 using System.Diagnostics.Metrics;
 
+/// <summary>
+///     Represents node metrics.
+/// </summary>
 public static class NodeMetrics
 {
     public const string MeterName = "XE.Node";

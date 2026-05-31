@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Services;
 
+/// <summary>
+///     Configuration options for host agent admin behavior.
+/// </summary>
 public sealed class HostAgentAdminOptions
 {
     public int Port { get; init; }

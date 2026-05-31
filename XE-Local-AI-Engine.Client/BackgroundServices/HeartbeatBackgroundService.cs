@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Application service for heartbeat background behavior.
+/// </summary>
 public sealed class HeartbeatBackgroundService : BackgroundService
 {
     private static readonly TimeSpan DefaultCapabilityRefreshInterval = TimeSpan.FromMinutes(15);

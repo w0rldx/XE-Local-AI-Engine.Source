@@ -5,6 +5,9 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 
+/// <summary>
+///     Client boundary for fake docker runtime operations.
+/// </summary>
 public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
 {
     private const string RuntimeNetwork = "xe-engine-net";

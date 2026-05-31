@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { LocalToolsOverview } from "@/features/chat/components/LocalToolsOverview";
 
-// The catalog rendered by LocalToolsOverview is now dynamic (loop P4): it fetches built-in tools plus the
+// The catalog rendered by LocalToolsOverview is now dynamic (dynamic tool-catalog): it fetches built-in tools plus the
 // tools discovered from enabled MCP servers via useToolCatalog. MCP server registration is managed on the
 // dedicated /mcp page; this page is the read-only catalog view.
 

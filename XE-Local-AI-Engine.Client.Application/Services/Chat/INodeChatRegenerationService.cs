@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Regenerates an assistant turn (Phase 5.2) as a SIBLING VARIANT, driving the run through the SAME shared
+///     Regenerates an assistant turn as a SIBLING VARIANT, driving the run through the SAME shared
 ///     runner/pump as a normal local turn. Symmetric with <see cref="INodeChatStreamService" />: one call mints the
 ///     linked variant placeholder (reusing <see cref="INodeChatPersistenceService.CreateMessageVariantAsync" />),
 ///     then drives + streams it — assistant-queued/streaming/delta/completed — over the local hub.

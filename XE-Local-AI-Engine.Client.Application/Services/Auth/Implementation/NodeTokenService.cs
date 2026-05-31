@@ -10,6 +10,9 @@ using Microsoft.IdentityModel.Tokens;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Application service for node token behavior.
+/// </summary>
 public sealed class NodeTokenService : INodeTokenService
 {
     private const int RefreshTokenBytes = 64;

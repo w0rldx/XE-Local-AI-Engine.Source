@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Invocations.V1;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
+/// <summary>
+///     Response DTO for invocation monitor operations.
+/// </summary>
 public sealed class InvocationMonitorResponse
 {
     public required InvocationCurrentResponse? Current { get; init; }
@@ -12,6 +15,9 @@ public sealed class InvocationMonitorResponse
     public required int HistoryCapacity { get; init; }
 }
 
+/// <summary>
+///     Response DTO for invocation current operations.
+/// </summary>
 public sealed class InvocationCurrentResponse
 {
     public required Guid InvocationId { get; init; }
@@ -41,6 +47,9 @@ public sealed class InvocationCurrentResponse
     public required bool HasPendingApproval { get; init; }
 }
 
+/// <summary>
+///     Response DTO for invocation history operations.
+/// </summary>
 public sealed class InvocationHistoryResponse
 {
     public required Guid InvocationId { get; init; }

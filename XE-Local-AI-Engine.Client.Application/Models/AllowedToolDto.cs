@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Models;
 
 using XE_Local_AI_Engine.Client.Models.Enums;
 
+/// <summary>
+///     Transport DTO for allowed tool data.
+/// </summary>
 public sealed record AllowedToolDto
 {
     public required Guid Id { get; init; }

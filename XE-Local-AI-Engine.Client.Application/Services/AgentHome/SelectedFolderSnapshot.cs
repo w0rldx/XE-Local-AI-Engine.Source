@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Outcome of copying one selected folder into the sandbox workspace (AgentHome plan §6.3, Marker F). Model-safe:
+///     Outcome of copying one selected folder into the sandbox workspace. Model-safe:
 ///     it carries the alias, copy counts, and the sandbox-relative workspace path only — never the trusted host path
-///     (AgentHome plan §11). The gateway renders these for the model; <see cref="IAgentHomeService.PrepareAsync" />
+///    . The gateway renders these for the model; <see cref="IAgentHomeService.PrepareAsync" />
 ///     attaches them to <see cref="AgentHomePrepareResult.FolderSnapshots" />.
 /// </summary>
 internal sealed record SelectedFolderSnapshot
@@ -33,7 +33,7 @@ internal sealed record SelectedFolderSnapshot
     public required string WorkspacePath { get; init; }
 }
 
-/// <summary>The result of attempting to copy one selected folder into the sandbox workspace (Marker F).</summary>
+/// <summary>The result of attempting to copy one selected folder into the sandbox workspace (workspace copy).</summary>
 internal enum SelectedFolderCopyStatus
 {
     /// <summary>The folder's surviving files were copied into the sandbox workspace.</summary>

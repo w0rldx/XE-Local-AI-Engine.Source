@@ -5,7 +5,7 @@
 
 ## Current UI shape
 
-- The React Web UI owns the web root after the Phase 7 cutover.
+- The React Web UI owns the web root.
 - Legacy Razor component dependencies have been removed from this host.
 - The SPA shell is served as a static `index.html`; browser requests authenticate with the node JWT flow.
 - Cloud-provider credentials and platform worker credentials stay server-side; they are never returned to the React client or written to logs.

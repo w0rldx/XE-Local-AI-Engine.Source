@@ -4,6 +4,9 @@ using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
+/// <summary>
+///     Represents windows host agent acl.
+/// </summary>
 public sealed class WindowsHostAgentAcl
 {
     private readonly IWindowsIdentityProvider _identityProvider;

@@ -5,6 +5,9 @@ using OllamaSharp;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Represents worker health check.
+/// </summary>
 public sealed class WorkerHealthCheck : IHealthCheck
 {
     private readonly IOllamaApiClient _ollamaClient;

@@ -15,7 +15,7 @@ interface MessageFeedbackControlProps {
 }
 
 /**
- * Node-local feedback affordance (Phase 5.3): thumbs up/down with an optional comment captured in a popover.
+ * Node-local feedback affordance: thumbs up/down with an optional comment captured in a popover.
  * Clicking a thumb opens the comment popover pre-seeded with that rating; submitting upserts via PUT .../feedback.
  */
 export function MessageFeedbackControl({ messageId, feedback, pending = false, onSubmit }: MessageFeedbackControlProps) {

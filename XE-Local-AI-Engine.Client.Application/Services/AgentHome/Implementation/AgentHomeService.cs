@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Marker I <see cref="IAgentHomeService" />. Drives the real orchestration end-to-end against the configured
+///     AgentHome gateway <see cref="IAgentHomeService" />. Drives the real orchestration end-to-end against the configured
 ///     provider (the deterministic fake by default): <see cref="RunLifecycleAsync" /> resolves owner/node identity once,
 ///     acquires a run-level single-flight guard keyed by that owner-node, then runs Prepare + Run under it. Prepare
 ///     builds the attach key, recovers the worker-local layout, attaches/creates the sandbox, resolves and copies (F)
@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     copied workspace as its working directory so the post-run patch (G) diffs the real CWD — classifies
 ///     timeout-vs-cancel, and feeds the gated patch (G) and memory (H) exports plus run-scoped logging (K).
 ///     <para>
-///         Deferred to Marker J-local (the real local-container provider): a real nested MAF agent loop, real
+///         Deferred to local-container sandbox (the real local-container provider): a real nested MAF agent loop, real
 ///         <c>dotnet build/test</c> and real git, multi-command sequences, and a per-command enforcement matrix. Marker
 ///         I proves the worker-side orchestration + busy/cancel/owner hardening on the fake; the single MVP command is
 ///         the profile's liveness/work probe, and <c>allowedActions</c> gates the optional G/H steps (a real per-command
@@ -138,7 +138,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         var prepareToken = prepareCts.Token;
 
         // Policy gates first: a disallowed runtime profile or an unknown/invalid selected-folder id is rejected before
-        // any manifest or provider call (AgentHome plan §7 / §11 validation matrix).
+        // any manifest or provider call.
         var effectiveProfile = ResolveRuntimeProfile(request.RuntimeProfile);
         var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken).ConfigureAwait(false);
 
@@ -162,7 +162,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 
-        // Marker F: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape guard,
+        // workspace copy: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape guard,
         // per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command timeout.
         var folderSnapshots = await _workspaceService
             .PrepareSelectedFoldersAsync(handle, resolvedFolders, prepareToken).ConfigureAwait(false);
@@ -200,7 +200,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         var logDirectory = Path.Combine(runDirectory, "logs");
         Directory.CreateDirectory(logDirectory);
 
-        // Marker K: a fresh per-run logger (the logger is per-run stateful and AgentHomeService is a singleton, so a
+        // run logger: a fresh per-run logger (the logger is per-run stateful and AgentHomeService is a singleton, so a
         // new instance is resolved per run from a short-lived scope). Logging is best-effort and never fails the run.
         using var loggerScope = _scopeFactory.CreateScope();
         var runLogger = loggerScope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
@@ -274,11 +274,11 @@ internal sealed class AgentHomeService : IAgentHomeService
         await AppendCommandSafelyAsync(runLogger, runId, descriptor, result.Completed, result.ExitCode, commandStartedAt,
             errorClass: null, cancellationToken).ConfigureAwait(false);
 
-        // Marker G: after the command runs (the agent has edited files in later markers), export the diff against the
-        // Marker F git baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).
+        // patch export: after the command runs (the agent has edited files in later markers), export the diff against the
+        // workspace copy git baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).
         var patch = await ExportPatchAsync(request, runId, runDirectory, commandCts.Token).ConfigureAwait(false);
 
-        // Marker H: collect the agent-written memory proposals — gated on propose_memory ∈ AllowedActions.
+        // memory-proposal export: collect the agent-written memory proposals — gated on propose_memory ∈ AllowedActions.
         await CollectMemoryProposalsAsync(request, runId, runDirectory, runLogger, commandCts.Token).ConfigureAwait(false);
 
         await AppendEventSafelyAsync(runLogger, "run_completed",
@@ -309,7 +309,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         string runDirectory,
         CancellationToken cancellationToken)
     {
-        // Gate 1 (Marker I): the model must have granted export_patch. Gate 2 (Marker F/G): a git baseline only exists
+        // Gate 1 (AgentHome gateway): the model must have granted export_patch. Gate 2 (workspace copy/G): a git baseline only exists
         // when at least one folder copied at least one file. Both must hold before a diff is attempted.
         if (!request.AllowedActions.Contains("export_patch", StringComparer.Ordinal))
         {
@@ -489,7 +489,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         CancellationToken cancellationToken)
     {
         // The resolver is scoped (it owns a NodeChatDbContext); this service is a singleton, so resolve all ids within
-        // a single short-lived scope. The DbContext is not thread-safe, so resolve sequentially. Marker F copies the
+        // a single short-lived scope. The DbContext is not thread-safe, so resolve sequentially. workspace copy copies the
         // resolved folders into the sandbox.
         using var scope = _scopeFactory.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>();

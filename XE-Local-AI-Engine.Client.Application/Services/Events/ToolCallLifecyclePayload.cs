@@ -25,6 +25,9 @@ public sealed record ToolCallLifecyclePayload
     public bool IsError { get; init; }
 }
 
+/// <summary>
+///     Enumerates supported tool call lifecycle phase values.
+/// </summary>
 public enum ToolCallLifecyclePhase
 {
     Requested = 0,

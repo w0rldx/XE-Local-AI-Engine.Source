@@ -71,7 +71,7 @@ export function ChatMessageList({
 				.toSorted(bySortOrder),
 		[conversation?.messages, messages],
 	);
-	// Collapse sibling assistant variants (shared variant_group_id) to one entry with prev/next nav (Phase 5.2).
+	// Collapse sibling assistant variants (shared variant_group_id) to one entry with prev/next nav (assistant revision flow).
 	const revisionGroups = useMemo(
 		() => groupMessageRevisions(normalizedMessages, activeRevisionByGroup ?? {}),
 		[activeRevisionByGroup, normalizedMessages],

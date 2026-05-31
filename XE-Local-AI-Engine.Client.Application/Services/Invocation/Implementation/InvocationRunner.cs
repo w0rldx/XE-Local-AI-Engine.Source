@@ -23,6 +23,9 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
+/// <summary>
+///     Represents invocation runner.
+/// </summary>
 public sealed class InvocationRunner : IInvocationRunner
 {
     private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
@@ -1282,6 +1285,9 @@ public sealed class InvocationRunner : IInvocationRunner
         TaskCompletionSource<bool> ApprovalCompletion,
         TaskCompletionSource<ToolCallResultEvent> ResultCompletion);
 
+    /// <summary>
+    ///     Exception raised for worker tool call failures.
+    /// </summary>
     public sealed class WorkerToolCallException : Exception
     {
         public WorkerToolCallException(string toolName, string message, Exception? innerException = null)

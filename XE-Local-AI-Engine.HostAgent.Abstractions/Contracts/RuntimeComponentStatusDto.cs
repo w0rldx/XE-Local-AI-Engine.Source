@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 
+/// <summary>
+///     Transport DTO for runtime component status data.
+/// </summary>
 public sealed record RuntimeComponentStatusDto
 {
     [JsonRequired]

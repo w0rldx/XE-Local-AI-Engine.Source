@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Mirrors the backend McpTransportKind enum (Stdio=0, Http=1). The wire contract carries the string form.
 // Stdio launches a local process by command/args/env/cwd; Http connects to an already-running loopback-only
-// server by URL (see loop P4 plan §2.1 / §0.1).
+// server by URL (see dynamic tool-catalog plan §2.1 / §0.1).
 export type McpTransportKind = "Stdio" | "Http";
 
 export const mcpTransportKinds: readonly McpTransportKind[] = ["Stdio", "Http"];

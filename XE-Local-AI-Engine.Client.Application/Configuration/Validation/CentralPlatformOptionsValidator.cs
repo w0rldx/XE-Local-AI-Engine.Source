@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 
 using Microsoft.Extensions.Options;
 
+/// <summary>
+///     Startup/options validator for central platform options settings.
+/// </summary>
 public sealed class CentralPlatformOptionsValidator : IValidateOptions<CentralPlatformOptions>
 {
     public ValidateOptionsResult Validate(string? name, CentralPlatformOptions options)

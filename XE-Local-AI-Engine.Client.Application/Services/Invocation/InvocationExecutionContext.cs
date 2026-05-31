@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
 using System.Security.Cryptography;
 
+/// <summary>
+///     Represents invocation execution context.
+/// </summary>
 public sealed class InvocationExecutionContext : IDisposable
 {
     private byte[]? _ownedEpochKey;

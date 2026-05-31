@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Represents node identity db context.
+/// </summary>
 public sealed class NodeIdentityDbContext : IdentityDbContext<NodeUser>
 {
     public const string IdentityMigrationsHistoryTable = "__EFMigrationsHistory_Identity";

@@ -427,7 +427,7 @@ public sealed class NodeChatRegenerationService(
 
     /// <summary>
     ///     Mirrors <c>NodeChatStreamService.ResolveOrchestrationAsync</c>: resolves a compiled orchestration spec for a
-    ///     bound orchestrator definition (loop P5), or <c>null</c> to rerun single-agent. Only a bound conversation
+    ///     bound orchestrator definition (orchestration), or <c>null</c> to rerun single-agent. Only a bound conversation
     ///     triggers the extra record fetch, so the single-agent path stays byte-identical.
     /// </summary>
     private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,

@@ -1,4 +1,4 @@
-// Dynamic tool-catalog entry returned by the node GetToolCatalog endpoint (loop P4). The catalog is the
+// Dynamic tool-catalog entry returned by the node GetToolCatalog endpoint (dynamic tool-catalog). The catalog is the
 // single source the tool pickers consume — built-in node tools plus the tools discovered from enabled MCP
 // servers. It replaces the static localToolCatalog const that the chat/agent surfaces previously rendered.
 

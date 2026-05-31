@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     MVP regex-based secret scanner for memory proposal records (AgentHome plan §10). Applies per-match dispositions:
+///     MVP regex-based secret scanner for memory proposal records. Applies per-match dispositions:
 ///     <list type="bullet">
 ///         <item>
 ///             <description>

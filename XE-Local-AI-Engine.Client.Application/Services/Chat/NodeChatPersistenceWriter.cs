@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence;
 
+/// <summary>
+///     Represents node chat persistence writer.
+/// </summary>
 public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
 {
     private readonly ConcurrentDictionary<NodeChatPersistenceWriteKey, SemaphoreSlim> _locks = new();
@@ -45,6 +48,9 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
     }
 }
 
+/// <summary>
+///     Value object carrying struct data.
+/// </summary>
 public readonly record struct NodeChatPersistenceWriteKey(Guid ConversationId, Guid? MessageId)
 {
     public static NodeChatPersistenceWriteKey ForConversation(Guid conversationId)

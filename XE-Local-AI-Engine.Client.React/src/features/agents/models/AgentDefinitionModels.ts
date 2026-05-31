@@ -8,7 +8,7 @@ import {
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 // Mirrors the backend AgentDefinitionKind enum (Single=0, Orchestrator=1). The wire contract carries the
-// string form. Orchestrator is persisted-but-ignored in P3 (runs as a single agent) — see loop P3 plan §0.4.
+// string form. Orchestrator is persisted-but-ignored in P3 (runs as a single agent) — see agent-management plan §0.4.
 export type AgentDefinitionKind = "Single" | "Orchestrator";
 
 export const agentDefinitionKinds: readonly AgentDefinitionKind[] = ["Single", "Orchestrator"];
@@ -39,7 +39,7 @@ export interface AgentDefinition {
 }
 
 // Form values are intentionally narrower than the persisted entity: identity/version/timestamps are managed by
-// the backend, not edited here. The structured `orchestration` topology (loop P5) is authored when
+// the backend, not edited here. The structured `orchestration` topology (orchestration) is authored when
 // kind=Orchestrator and serialized to orchestrationTopologyJson at the API boundary; it is always present so the
 // editor can round-trip it, but it is only persisted (and validated) for orchestrator definitions.
 export interface AgentDefinitionFormValues {

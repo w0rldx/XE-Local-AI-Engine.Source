@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 
+/// <summary>
+///     Value object carrying pull progress data.
+/// </summary>
 public sealed record PullProgress
 {
     [JsonRequired]

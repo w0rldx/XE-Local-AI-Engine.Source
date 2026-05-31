@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
+/// <summary>
+///     Provider implementation for node operator secret behavior.
+/// </summary>
 public sealed class NodeOperatorSecretProvider : INodeOperatorSecretProvider
 {
     public const int ExpectedSecretLength = 32;

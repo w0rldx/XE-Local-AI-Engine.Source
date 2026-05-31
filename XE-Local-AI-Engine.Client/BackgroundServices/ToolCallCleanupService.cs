@@ -4,6 +4,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
+/// <summary>
+///     Application service for tool call cleanup behavior.
+/// </summary>
 public sealed class ToolCallCleanupService : BackgroundService
 {
     private readonly IInvocationRunner _invocationRunner;

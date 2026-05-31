@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
 ///     Compiles a <c>Kind=Orchestrator</c> agent definition + its <c>OrchestrationTopologyJson</c> into the loopback
-///     orchestration spec carried on the runtime package (loop P5). A sibling of <see cref="IAgentDefinitionResolver" />
+///     orchestration spec carried on the runtime package (orchestration). A sibling of <see cref="IAgentDefinitionResolver" />
 ///     so the single-agent resolver stays untouched (regression-safe). Returns <c>null</c> — signalling the caller to
 ///     degrade to the single-agent path (the orchestrator runs as a lone agent on its own prompt + tools) — when:
 ///     the definition is not an orchestrator; the topology is empty/invalid; the effective model is not tool-capable;

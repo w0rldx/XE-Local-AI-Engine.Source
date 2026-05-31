@@ -46,9 +46,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	modelManagement: true,
 	runtimeManager: true,
 	invocationMonitor: true,
-	// Agent definition authoring surface (loop P3). On by default; node-local SQLite-backed CRUD.
+	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,
-	// MCP server registration surface (loop P4). On by default; node-local SQLite-backed CRUD. Registered
+	// MCP server registration surface (dynamic tool-catalog). On by default; node-local SQLite-backed CRUD. Registered
 	// servers are disabled until explicitly enabled, and every discovered MCP tool defaults to approval-on.
 	mcpServers: true,
 };
@@ -65,9 +65,9 @@ export const nodeRoutePaths = {
 	invocations: "/invocations",
 	// local tools catalog page — extension seam: MCP tools will populate the same list later
 	tools: "/tools",
-	// agent definition management page (loop P3) — gated on nodeCapabilities.agentManagement
+	// agent definition management page (agent-management) — gated on nodeCapabilities.agentManagement
 	agents: "/agents",
-	// MCP server management page (loop P4) — gated on nodeCapabilities.mcpServers
+	// MCP server management page (dynamic tool-catalog) — gated on nodeCapabilities.mcpServers
 	mcp: "/mcp",
 } as const;
 

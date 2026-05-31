@@ -91,7 +91,7 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.tools",
 		to: nodeRoutePaths.tools,
 	},
-	// Agent management link is gated on the static agentManagement capability (loop P3). Filtered out of
+	// Agent management link is gated on the static agentManagement capability (agent-management). Filtered out of
 	// the rendered menu below when the capability is off, so the nav bars stay capability-unaware.
 	{
 		id: "agents",
@@ -99,7 +99,7 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.agents",
 		to: nodeRoutePaths.agents,
 	},
-	// MCP server management link is gated on the static mcpServers capability (loop P4). Filtered out of
+	// MCP server management link is gated on the static mcpServers capability (dynamic tool-catalog). Filtered out of
 	// the rendered menu below when the capability is off, mirroring the agents entry.
 	{
 		id: "mcp",

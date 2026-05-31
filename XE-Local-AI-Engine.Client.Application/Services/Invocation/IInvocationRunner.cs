@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
 using XE_Local_AI_Engine.Client.Models.Events;
 
+/// <summary>
+///     Abstraction for invocation runner behavior.
+/// </summary>
 public interface IInvocationRunner
 {
     int ActiveInvocationCount { get; }

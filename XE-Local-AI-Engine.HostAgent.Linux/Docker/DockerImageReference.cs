@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 using System.Text.RegularExpressions;
 
+/// <summary>
+///     Value object carrying docker image reference data.
+/// </summary>
 public sealed partial record DockerImageReference
 {
     private DockerImageReference(string repository, string tag, string digest)

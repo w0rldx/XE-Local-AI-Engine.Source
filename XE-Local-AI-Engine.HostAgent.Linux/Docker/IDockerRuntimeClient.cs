@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 
+/// <summary>
+///     Client boundary for i docker runtime operations.
+/// </summary>
 public interface IDockerRuntimeClient
 {
     Task EnsureNetworkAsync(string networkName, CancellationToken cancellationToken);
@@ -25,7 +28,7 @@ public interface IDockerRuntimeClient
         bool follow,
         CancellationToken cancellationToken);
 
-    // --- AgentHome sandbox operations (Marker J-local, plan §4.1) ---
+    // --- AgentHome sandbox operations (local-container sandbox, plan §4.1) ---
 
     /// <summary>Creates and starts a dedicated, hardened sandbox container (D5) and returns its container id.</summary>
     Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken);
@@ -36,7 +39,7 @@ public interface IDockerRuntimeClient
     /// <summary>
     ///     Reads the Docker labels stamped on a sandbox container, or <see langword="null" /> when the container no
     ///     longer exists. Used to validate the attach key (owner/node/profile/manifest) against the labels the
-    ///     container was created with (plan §6.2.1 rule 15).
+    ///     container was created with.
     /// </summary>
     Task<IReadOnlyDictionary<string, string>?> GetSandboxContainerLabelsAsync(string containerId, CancellationToken cancellationToken);
 

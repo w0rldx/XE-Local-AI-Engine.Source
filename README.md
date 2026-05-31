@@ -30,6 +30,7 @@ See [HostAgent architecture](docs/host-agent/architecture.md) for the full compo
 Start with the HostAgent documentation index:
 
 - [HostAgent docs](docs/host-agent/README.md)
+- [AI runtime developer notes](docs/ai-runtime.md)
 - [Release and operations](docs/host-agent/release-and-operations.md)
 - [Aspire development modes](docs/host-agent/aspire-dev.md)
 - [Windows installation](docs/host-agent/install-windows.md)

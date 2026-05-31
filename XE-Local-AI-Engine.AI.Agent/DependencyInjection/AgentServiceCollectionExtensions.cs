@@ -19,8 +19,19 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
+/// <summary>
+///     Composition-root extensions for the local AI agent runtime.
+/// </summary>
 public static class AgentServiceCollectionExtensions
 {
+    /// <summary>
+    ///     Registers option validation, prompt/tool registries, single-agent invocation, and handoff orchestration.
+    /// </summary>
+    /// <remarks>
+    ///     The host must register the base <see cref="IChatClient" /> before calling this method. This method then
+    ///     decorates that client with tool-observability and automatic function invocation so local chat, platform
+    ///     invocations, ClientLocal tools, and MCP tools all share the same execution pipeline.
+    /// </remarks>
     public static IServiceCollection AddLocalAiAgentRuntime(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -50,15 +61,15 @@ public static class AgentServiceCollectionExtensions
 
         _ = services.AddSingleton<IAgentInstructionProvider, AgentInstructionProvider>();
         _ = services.AddSingleton<IAgentToolRegistry, LocalAgentToolRegistry>();
-        // Option B: server-driven ClientLocal tools (e.g. run_in_agent_home) resolve through their registered
+        // Server-driven ClientLocal tools (for example run_in_agent_home) resolve through registered
         // IClientLocalToolHandler implementations. The worker application layer registers the handlers.
         _ = services.AddSingleton<IClientLocalToolRegistry, ClientLocalToolRegistry>();
-        // Option C: node-local MCP tools. This registry is MCP-agnostic (holds only AITool); the application layer's
+        // Node-local MCP tools. This registry is MCP-agnostic (holds only AITool); the application layer's
         // connection manager owns the MCP client lifecycle and pushes an immutable snapshot into it as servers connect.
         _ = services.AddSingleton<IMcpToolRegistry, McpToolRegistry>();
         _ = services.AddSingleton<IInvocationAgentFactory, InvocationAgentFactory>();
-        // Multi-agent handoff orchestration (loop P5). Reuses the same IChatClient + tool registries as the
-        // single-agent factory; confines all Microsoft.Agents.AI.Workflows types behind IOrchestrationRunSession.
+        // Multi-agent handoff orchestration. Reuses the same IChatClient + tool registries as the single-agent
+        // factory; confines all Microsoft.Agents.AI.Workflows types behind IOrchestrationRunSession.
         _ = services.AddSingleton<IOrchestrationAgentFactory, OrchestrationAgentFactory>();
         // Playbook P4 eval gate (golden-conversation runner). Stateless: builds a per-call agent over the
         // caller-supplied node-local IChatClient with an empty tool set and runs it threadless.

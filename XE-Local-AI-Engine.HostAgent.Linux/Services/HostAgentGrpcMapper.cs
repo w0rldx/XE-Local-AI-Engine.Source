@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using Contracts = XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using GrpcContracts = XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 
+/// <summary>
+///     Maps host agent grpc mapper values between domain and transport shapes.
+/// </summary>
 public static class HostAgentGrpcMapper
 {
     public static GrpcContracts.ListContainersReply ToListContainersReply(IReadOnlyList<Contracts.RuntimeComponentStatusDto> containers)

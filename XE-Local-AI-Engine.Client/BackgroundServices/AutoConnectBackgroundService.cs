@@ -7,6 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 
+/// <summary>
+///     Application service for auto connect background behavior.
+/// </summary>
 public sealed class AutoConnectBackgroundService : BackgroundService
 {
     private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(2);

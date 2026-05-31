@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models.Enums;
 
+/// <summary>
+///     Enumerates supported failure category values.
+/// </summary>
 public enum FailureCategory
 {
     Cancelled = 0,

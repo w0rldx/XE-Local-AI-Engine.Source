@@ -4,6 +4,9 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 
+/// <summary>
+///     Startup/options validator for model name settings.
+/// </summary>
 public sealed class ModelNameValidator
 {
     private readonly Regex _allowedPattern;

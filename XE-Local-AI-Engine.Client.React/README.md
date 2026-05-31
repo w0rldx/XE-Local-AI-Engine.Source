@@ -1,6 +1,6 @@
 # XE Node React Client
 
-This is the standalone React management UI served by `XE-Local-AI-Engine.Client` at the web root after the Phase 7 cutover. It talks only to the node-local FastEndpoints API under `/api/local/v1` and uses the per-launch local-operator token injected by the host shell.
+This is the standalone React management UI served by `XE-Local-AI-Engine.Client` at the web root. It talks only to the node-local FastEndpoints API under `/api/local/v1` and uses the per-launch local-operator token injected by the host shell.
 
 ## OpenAPI client generation
 

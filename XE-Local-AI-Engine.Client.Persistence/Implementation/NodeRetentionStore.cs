@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>
+///     Persistence boundary for node retention data.
+/// </summary>
 public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeRetentionStore
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

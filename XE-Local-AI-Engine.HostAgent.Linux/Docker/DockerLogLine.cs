@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
+/// <summary>
+///     Value object carrying docker log line data.
+/// </summary>
 public sealed record DockerLogLine
 {
     public required string ContainerName { get; init; }

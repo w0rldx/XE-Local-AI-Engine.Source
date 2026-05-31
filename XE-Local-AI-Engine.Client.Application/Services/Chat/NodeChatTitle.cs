@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Shared conversation-title derivation. The platform path (Phase 1.2) synthesizes a title from the first user
+///     Shared conversation-title derivation. The platform path synthesizes a title from the first user
 ///     turn in the runtime package's conversation context; this keeps that rule identical to the local
 ///     last-message preview truncation (see <c>NodeChatPersistenceService.Preview</c>). See
 ///     Plans/schema-contract-sheet.md §3.

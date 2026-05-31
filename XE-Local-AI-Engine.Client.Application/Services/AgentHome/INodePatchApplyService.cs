@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Worker-side, approval-gated host patch apply (AgentHome plan §9.2, Marker L). Lands Marker G's exported
+///     Worker-side, approval-gated host patch apply. Lands exported
 ///     <c>changes.patch</c> onto the real host selected folders, mapping each sandbox-relative <c>a/&lt;alias&gt;/…</c>
 ///     / <c>b/&lt;alias&gt;/…</c> prefix back to its trusted host root via <see cref="Workspace.ISelectedFolderResolver" />
 ///     and applying only under that root (traversal-rejected, binary-rejected by default).

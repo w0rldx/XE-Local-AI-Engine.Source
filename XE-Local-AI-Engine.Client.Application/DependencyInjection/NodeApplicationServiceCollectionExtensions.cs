@@ -70,6 +70,9 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
+/// <summary>
+///     Represents node application service collection extensions.
+/// </summary>
 public static class NodeApplicationServiceCollectionExtensions
 {
     private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
@@ -174,10 +177,10 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
-        // Marker E selected-folder store plus the safe resolver. The store persists folders in node SQLite with the
+        // selected-folder selected-folder store plus the safe resolver. The store persists folders in node SQLite with the
         // host path encrypted at rest by the node encryption interceptors. The resolver owns alias normalization, host
         // path validation, and exposes only the opaque id and alias to the model. Registration stays reachable even
-        // when AgentHome is disabled; workspace copy (Marker F) and the tool (Marker I) consume it.
+        // when AgentHome is disabled; workspace copy (workspace copy) and the tool (AgentHome gateway) consume it.
         builder.Services.AddScoped<INodeSelectedFolderStore, NodeSelectedFolderStore>();
         builder.Services.AddScoped<ISelectedFolderResolver, SelectedFolderResolver>();
         // Loop P3 agent-definition store. Persists node-local agent definitions with Instructions/Description
@@ -320,7 +323,7 @@ public static class NodeApplicationServiceCollectionExtensions
                        monitorOptions.MinSampleSize = 1;
                    }
                });
-        // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
+        // workspace copy sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
@@ -343,34 +346,34 @@ public static class NodeApplicationServiceCollectionExtensions
         // unique Name) and re-publishes the live tool snapshot via the connection manager after any change to the
         // enabled set. Scoped to match the scoped, DbContext-backed store.
         builder.Services.AddScoped<IMcpServerService, McpServerService>();
-        // Option B ClientLocal tool run_in_agent_home. Marker I-pre replaces the pending placeholder with the real
+        // ClientLocal tool run_in_agent_home. AgentHome gateway replaces the pending placeholder with the real
         // fake-backed gateway: the handler still flag-gates and §7-validates, then delegates through the gateway to
         // IAgentHomeService, which drives the manifest initializer, the sandbox provider (the fake by default), and
-        // the selected-folder resolver. The tool stays off the distributed wire (server seed inactive) until Marker I.
+        // the selected-folder resolver. The tool stays off the distributed wire (server seed inactive) until the AgentHome gateway is enabled.
         builder.Services.AddSingleton<IAgentHomeIdentityProvider, AgentHomeIdentityProvider>();
-        // Marker F workspace copy: PrepareAsync delegates the selected-folder copy (exclusions, symlink-escape guard,
+        // workspace copy workspace copy: PrepareAsync delegates the selected-folder copy (exclusions, symlink-escape guard,
         // byte budget, git baseline) to this stateless service.
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
-        // Marker G patch export: RunAsync delegates the post-run diff of the Marker F baseline (changes.patch +
+        // patch export patch export: RunAsync delegates the post-run diff of the workspace copy baseline (changes.patch +
         // changed-files.json, MaxPatchBytes budget) to this stateless service.
         builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
-        // Marker H memory proposal export: RunAsync delegates the gated collect of the agent-written JSONL proposals
+        // memory-proposal export memory proposal export: RunAsync delegates the gated collect of the agent-written JSONL proposals
         // (schema validation + secret scan) to this stateless service.
         builder.Services.AddSingleton<IAgentHomeMemoryProposalService, AgentHomeMemoryProposalService>();
-        // Marker K run-scoped JSONL logger. Lane 4 (Marker I) constructs one per run via the factory; base
+        // run logger run-scoped JSONL logger. the run gateway (AgentHome gateway) constructs one per run via the factory; base
         // JSONL logging + redaction contract is the MVP scope. OTel meters and list-runs endpoint are deferred.
         builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
-        // Marker L host patch apply: a user-driven, approval-gated action that lands Marker G's exported changes.patch
+        // host patch apply host patch apply: a user-driven, approval-gated action that lands exported changes.patch
         // onto the host selected folders. Scoped because it depends on the Scoped ISelectedFolderResolver.
         builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
-        // Marker C sandbox provider abstraction. Selection is configuration-bound and restart-required (resolved once
-        // as a singleton). The MVP default is the deterministic fake; Marker J-local adds "local-container".
+        // sandbox provider abstraction sandbox provider abstraction. Selection is configuration-bound and restart-required (resolved once
+        // as a singleton). The MVP default is the deterministic fake; local-container sandbox adds "local-container".
         builder.Services.AddOptions<SandboxOptions>()
                .Bind(configuration.GetSection(SandboxOptions.SectionName));
-        // Marker J-local local-container provider options. Bound + validated unconditionally; the validator is
+        // local-container sandbox local-container provider options. Bound + validated unconditionally; the validator is
         // fail-closed, but the running default stays the fake (D8), so invalid LocalContainer config only matters once
         // the "local-container" provider is selected. The provider is a thin gRPC client and reuses HostAgentClientOptions.
         builder.Services.AddOptions<LocalContainerOptions>()
@@ -378,8 +381,8 @@ public static class NodeApplicationServiceCollectionExtensions
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
         builder.Services.AddSingleton<ISandboxRuntimeProvider>(SandboxProviderSelector.Resolve);
-        // Marker D AgentHome layout initializer. Materializes the worker-local /agent-home tree (idempotent,
-        // self-healing, owner-mismatch-recovering). Wired but unreached in production until Marker I-pre swaps the
+        // layout initializer AgentHome layout initializer. Materializes the worker-local /agent-home tree (idempotent,
+        // self-healing, owner-mismatch-recovering). Wired but unreached in production until AgentHome gateway swaps the
         // pending gateway for a fake-backed one; the layout itself can initialize while AgentHome:Enabled=false.
         builder.Services.AddOptions<AgentHomeOptions>()
                .Bind(configuration.GetSection(AgentHomeOptions.SectionName))

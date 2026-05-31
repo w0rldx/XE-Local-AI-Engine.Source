@@ -6,25 +6,38 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
+/// <summary>
+///     Ollama implementation of the provider-neutral local-model management and chat-client boundary.
+/// </summary>
+/// <remarks>
+///     This adapter keeps OllamaSharp types inside the provider project. It normalizes health, model inventory, pull
+///     progress, context-length probing, and chat-client creation into DTOs consumed by HostAgent, React, and the
+///     application-layer agent runtime.
+/// </remarks>
 public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
 {
+    /// <summary>Provider key used across persisted selections and capability payloads.</summary>
     public const string OllamaProviderName = "ollama";
 
     private readonly IOllamaApiClient _ollamaClient;
     private readonly SemaphoreSlim _pullSemaphore = new(1, 1);
 
+    /// <summary>Creates a provider wrapper around the configured Ollama API client.</summary>
     public OllamaLocalModelProvider(IOllamaApiClient ollamaClient)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
     }
 
+    /// <summary>Releases the pull gate semaphore held by this provider instance.</summary>
     public void Dispose()
     {
         _pullSemaphore.Dispose();
     }
 
+    /// <inheritdoc />
     public string ProviderName => OllamaProviderName;
 
+    /// <inheritdoc />
     public async Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct)
     {
         try
@@ -56,6 +69,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
     {
         var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
@@ -83,6 +97,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         return descriptors;
     }
 
+    /// <inheritdoc />
     public async Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -112,24 +127,28 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         }
     }
 
+    /// <inheritdoc />
     public Task DeleteModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         return _ollamaClient.DeleteModelAsync(modelName, ct);
     }
 
+    /// <inheritdoc />
     public Task WarmModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         return _ollamaClient.ShowModelAsync(modelName, ct);
     }
 
+    /// <inheritdoc />
     public Task UnloadModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         return _ollamaClient.RequestModelUnloadAsync(modelName, ct);
     }
 
+    /// <inheritdoc />
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);

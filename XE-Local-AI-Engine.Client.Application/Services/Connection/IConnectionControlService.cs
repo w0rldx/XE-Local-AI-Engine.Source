@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Application service for i connection control behavior.
+/// </summary>
 public interface IConnectionControlService
 {
     Task<ConnectionControlStatus> GetStatusAsync(CancellationToken cancellationToken = default);
@@ -11,6 +14,9 @@ public interface IConnectionControlService
     Task<ConnectionControlStatus> SetAutoConnectAsync(bool enabled, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+///     Value object carrying connection control status data.
+/// </summary>
 public sealed record ConnectionControlStatus
 {
     public required string State { get; init; }

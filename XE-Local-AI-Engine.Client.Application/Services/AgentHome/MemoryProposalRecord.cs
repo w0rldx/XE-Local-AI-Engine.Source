@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     One validated memory proposal from the agent's JSONL output (AgentHome plan §10 MVP schema). All string values
+///     One validated memory proposal from the agent's JSONL output. All string values
 ///     are already secret-scanned; content may contain <c>[REDACTED:&lt;class&gt;]</c> placeholders where the scanner
 ///     replaced a secret match (the record is still useful). Records rejected outright are captured as
 ///     <see cref="MemoryProposalRejection" /> on the collect result instead.

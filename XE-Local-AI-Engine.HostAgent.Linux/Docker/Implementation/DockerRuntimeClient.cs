@@ -9,6 +9,9 @@ using global::Docker.DotNet.Models;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 
+/// <summary>
+///     Client boundary for docker runtime operations.
+/// </summary>
 public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
 {
     private const string RunningState = "running";
@@ -238,7 +241,7 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
     }
 
     /// <summary>
-    ///     Builds the hardened <see cref="HostConfig" /> for a sandbox container (plan §4.1, D5): a locked-down
+    ///     Builds the hardened <see cref="HostConfig" /> for a sandbox container: a locked-down
     ///     no-network default, no-new-privileges, all capabilities dropped, plus the spec's resource ceilings. Exposed
     ///     so the resource/network mapping can be asserted without a Docker daemon. NEVER mounts the Docker socket and
     ///     never adds writable host binds.
@@ -252,7 +255,7 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         var hostConfig = new HostConfig
         {
             // MVP: both None and the (reserved) Restricted posture map to the no-network default; a real restricted
-            // egress policy is post-MVP (plan §0). None is the secure default.
+            // egress policy is post-MVP. None is the secure default.
             NetworkMode = "none",
             SecurityOpt = ["no-new-privileges"],
             CapDrop = ["ALL"],

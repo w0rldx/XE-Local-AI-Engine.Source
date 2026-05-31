@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
+/// <summary>
+///     Abstraction for hub message sender behavior.
+/// </summary>
 public interface IHubMessageSender
 {
     Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default);

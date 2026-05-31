@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Security;
 
+/// <summary>
+///     Configuration options for host agent hmac behavior.
+/// </summary>
 public sealed class HostAgentHmacOptions
 {
     public const int DefaultBucketSeconds = 15;

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     A single command to execute inside a sandbox (AgentHome plan §6.2). The caller supplies
+///     A single command to execute inside a sandbox. The caller supplies
 ///     <see cref="ExecutionId" /> so an in-flight command can be targeted by
 ///     <see cref="ISandboxRuntimeProvider.CancelCommandAsync" />; the result echoes it back. Provider-neutral — no
 ///     shell string is implied; the provider composes the actual invocation from the executable and arguments.

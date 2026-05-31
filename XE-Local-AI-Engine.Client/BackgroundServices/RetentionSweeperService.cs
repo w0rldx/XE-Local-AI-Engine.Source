@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.BackgroundServices;
 
 using XE_Local_AI_Engine.Client.Persistence;
 
+/// <summary>
+///     Application service for retention sweeper behavior.
+/// </summary>
 public sealed class RetentionSweeperService : BackgroundService
 {
     private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);

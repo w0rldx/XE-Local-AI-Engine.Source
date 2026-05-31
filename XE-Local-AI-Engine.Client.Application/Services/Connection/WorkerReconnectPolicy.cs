@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Connection;
 using Microsoft.AspNetCore.SignalR.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 
+/// <summary>
+///     Represents worker reconnect policy.
+/// </summary>
 public sealed class WorkerReconnectPolicy : IRetryPolicy
 {
     private readonly int _baseDelayMs;

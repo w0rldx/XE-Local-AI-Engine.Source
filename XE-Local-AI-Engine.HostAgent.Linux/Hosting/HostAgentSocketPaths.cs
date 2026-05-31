@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Hosting;
 
+/// <summary>
+///     Represents host agent socket paths.
+/// </summary>
 public static class HostAgentSocketPaths
 {
     private const string RuntimeDirectoryName = "xe-host-agent";

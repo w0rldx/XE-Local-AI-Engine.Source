@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
-/// <summary>Lifecycle state recorded in <c>manifest.json</c> (AgentHome plan §6.6).</summary>
+/// <summary>Lifecycle state recorded in <c>manifest.json</c>.</summary>
 internal enum AgentHomeStatus
 {
     /// <summary>Layout creation is in progress; the layout may be partial.</summary>

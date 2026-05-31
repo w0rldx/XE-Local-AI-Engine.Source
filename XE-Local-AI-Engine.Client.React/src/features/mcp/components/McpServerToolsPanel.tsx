@@ -28,7 +28,7 @@ function statusColor(status: McpConnectionStatus): string {
 	return "gray";
 }
 
-// Live discovered-tools + connection-status view for one MCP server (loop P4 GetServerTools). Fetches on demand
+// Live discovered-tools + connection-status view for one MCP server (dynamic tool-catalog GetServerTools). Fetches on demand
 // when a server row is expanded. A disabled server reports "disabled" with no tools; a failed connection reports
 // "error" with a redacted message.
 export function McpServerToolsPanel({ serverId }: McpServerToolsPanelProps) {

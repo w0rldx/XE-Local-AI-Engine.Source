@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using OllamaSharp.Models;
 
+/// <summary>
+///     Application service for i ollama model behavior.
+/// </summary>
 public interface IOllamaModelService
 {
     Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default);

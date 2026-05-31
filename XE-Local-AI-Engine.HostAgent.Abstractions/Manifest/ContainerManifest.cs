@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 
 using System.Text.Json.Serialization;
 
+/// <summary>
+///     Value object carrying container manifest data.
+/// </summary>
 public sealed record ContainerManifest
 {
     [JsonRequired]

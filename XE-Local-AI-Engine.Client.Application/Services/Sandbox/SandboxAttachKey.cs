@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Owner/node-scoped identity of an AgentHome sandbox (AgentHome plan §6.2, §1.1.4). Two attach keys are equal
+///     Owner/node-scoped identity of an AgentHome sandbox. Two attach keys are equal
 ///     when every field matches, so a provider can validate an attach request by value. The key intentionally
 ///     excludes conversation id and prompt text — it identifies the durable node-scoped sandbox, not a single run. A
 ///     change of <see cref="OwnerUserId" /> forbids reuse: the provider must kill and reinitialize.

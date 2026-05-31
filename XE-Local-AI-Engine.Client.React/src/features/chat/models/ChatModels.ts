@@ -42,7 +42,7 @@ export interface ChatMessageModel {
 	reasoningTokens?: number;
 	parentMessageId?: string;
 	variantGroupId?: string;
-	// Node-local feedback on this assistant turn, carried on the message read DTO (Phase 5.3). Undefined when
+	// Node-local feedback on this assistant turn, carried on the message read DTO (feedback flow). Undefined when
 	// no feedback has been recorded; presence drives the feedback control's active state.
 	feedbackRating?: ChatFeedbackRating;
 	feedbackComment?: string;

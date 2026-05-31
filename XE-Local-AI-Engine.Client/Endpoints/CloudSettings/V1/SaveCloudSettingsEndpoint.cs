@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+/// <summary>
+///     FastEndpoints handler for the save cloud settings local API operation.
+/// </summary>
 public sealed class SaveCloudSettingsEndpoint(
     ICloudCredentialStore cloudCredentialStore,
     ICapabilityReporter capabilityReporter,

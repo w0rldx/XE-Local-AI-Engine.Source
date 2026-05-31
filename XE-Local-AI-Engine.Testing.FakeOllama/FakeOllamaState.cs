@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Testing.FakeOllama;
 using System.Collections.Concurrent;
 using OllamaSharp.Models.Chat;
 
+/// <summary>
+///     Represents fake ollama state.
+/// </summary>
 public sealed class FakeOllamaState
 {
     private readonly ConcurrentQueue<FakeOllamaFailure> _failures = new();
@@ -78,5 +81,8 @@ public sealed class FakeOllamaState
         }
     }
 
+    /// <summary>
+    ///     Value object carrying fake ollama running model data.
+    /// </summary>
     public sealed record FakeOllamaRunningModel(string Name, DateTimeOffset? ExpiresAt);
 }

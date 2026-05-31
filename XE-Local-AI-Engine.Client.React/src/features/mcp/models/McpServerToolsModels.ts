@@ -1,4 +1,4 @@
-// View-model for the per-server discovered-tools + connection-status panel (loop P4 §6.1 GetServerTools). The
+// View-model for the per-server discovered-tools + connection-status panel (dynamic tool-catalog). The
 // connection manager surfaces, per registered server, whether it is currently connected and which tools it
 // exposed on the last refresh. A disabled server contributes no tools and reports a "disabled" status; an
 // enabled server still mid-connect reports "connecting"; a server that failed to connect reports "error" with

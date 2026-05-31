@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
+/// <summary>
+///     FastEndpoints handler for the delete playbook action local API operation.
+/// </summary>
 public sealed class DeletePlaybookActionEndpoint(IPlaybookActionService playbookActionService)
     : Endpoint<DeletePlaybookActionRequest>
 {

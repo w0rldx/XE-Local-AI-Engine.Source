@@ -2,7 +2,7 @@ import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 
 /**
  * A displayed message together with its sibling revisions. Assistant turns regenerated via the shared runner
- * are stored as sibling variants sharing a `variantGroupId` (never in-place overwrite — Phase 5.2). The chat
+ * are stored as sibling variants sharing a `variantGroupId` (never in-place overwrite — assistant revision flow). The chat
  * surface collapses each variant group to ONE visible message and lets the operator page across the siblings.
  */
 export interface MessageRevisionGroup {

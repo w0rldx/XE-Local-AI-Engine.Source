@@ -4,6 +4,9 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Persistence boundary for golden conversation data.
+/// </summary>
 public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IGoldenConversationStore
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Marker G patch export (AgentHome plan §6.4 / §9.1). After the run, diff the in-sandbox git baseline that the
-///     workspace copy (Marker F) created and write <c>changes.patch</c> + <c>changed-files.json</c> under the host-side
+///     patch export patch export. After the run, diff the in-sandbox git baseline that the
+///     workspace copy (workspace copy) created and write <c>changes.patch</c> + <c>changed-files.json</c> under the host-side
 ///     <c>runs/&lt;run-id&gt;/patches/</c> directory. The result carries run-relative paths and counts only — never a
 ///     host path.
 /// </summary>

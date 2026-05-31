@@ -8,9 +8,9 @@ using Microsoft.Extensions.Logging;
 ///     <see cref="Invocation.Implementation.InvocationAgentFactory" /> and the multi-agent orchestration factory.
 ///     Intersects the offered tools a definition carries with the executable catalogs, matched by name: built-in
 ///     catalog tools resolve from <see cref="IAgentToolRegistry" /> (Option A); offered names it does not satisfy
-///     are then tried against <see cref="IClientLocalToolRegistry" /> (Option B — server-driven <c>ClientLocal</c>
+///     are then tried against <see cref="IClientLocalToolRegistry" /> (ClientLocal — server-driven <c>ClientLocal</c>
 ///     tools, returned already approval-wrapped when the handler opts in) and finally against
-///     <see cref="IMcpToolRegistry" /> (Option C — node-local MCP tools). Names matched by none are skipped so a
+///     <see cref="IMcpToolRegistry" /> (MCP — node-local MCP tools). Names matched by none are skipped so a
 ///     stale or unhandled offer can never reach the agent.
 /// </summary>
 internal static class InvocationToolResolver
@@ -58,7 +58,7 @@ internal static class InvocationToolResolver
 
         return resolved;
 
-        // Try Option B (server-driven ClientLocal) first, then Option C (node-local MCP). Both registries key on the
+        // Try ClientLocal (server-driven ClientLocal) first, then MCP (node-local MCP). Both registries key on the
         // offered name and a name cannot legitimately exist in both, so the first match wins.
         AITool? ResolveDynamicTool(string name)
         {

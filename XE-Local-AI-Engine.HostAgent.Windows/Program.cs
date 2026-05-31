@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 using XE_Local_AI_Engine.HostAgent.Windows.Wsl;
 using XE_Local_AI_Engine.HostAgent.Windows.Wsl.Implementation;
 
+/// <summary>
+///     Application entry point for this executable.
+/// </summary>
 public static class Program
 {
     public static void Main(string[] args)

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     An opaque reference to a live AgentHome sandbox (AgentHome plan §6.2). Carries the provider name, the
+///     An opaque reference to a live AgentHome sandbox. Carries the provider name, the
 ///     provider's sandbox/container id, the <see cref="SandboxAttachKey" /> it was created/attached under, its
 ///     creation time, and the manifest version in force. Immutable: liveness is owned by the provider, so an
 ///     operation against a killed sandbox throws <see cref="SandboxHandleInvalidException" /> rather than reading a

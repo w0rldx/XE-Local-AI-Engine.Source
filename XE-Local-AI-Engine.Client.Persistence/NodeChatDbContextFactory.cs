@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+/// <summary>
+///     Factory for creating node chat db context runtime objects.
+/// </summary>
 public sealed class NodeChatDbContextFactory : IDesignTimeDbContextFactory<NodeChatDbContext>
 {
     private const string DefaultConnectionString = "Data Source=node-chat.design.db";

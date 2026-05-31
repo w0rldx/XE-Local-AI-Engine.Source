@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Marker I <see cref="IAgentHomeIdentityProvider" />. The node id comes from <see cref="ITokenStore" /> (falling
+///     AgentHome gateway <see cref="IAgentHomeIdentityProvider" />. The node id comes from <see cref="ITokenStore" /> (falling
 ///     back to the deterministic local-loopback node id when the worker is not yet paired). The owner id is the user
 ///     subject decoded from the worker's stored access token — the server mints it with the user id in both the
 ///     <c>sub</c> and <see cref="ClaimTypes.NameIdentifier" /> claims (distinct from the <c>nodeId</c> claim), so the

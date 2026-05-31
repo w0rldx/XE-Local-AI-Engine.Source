@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Describes a dedicated AgentHome sandbox container to create (Marker J-local plan §4.1, D5). This is a
+///     Describes a dedicated AgentHome sandbox container to create (local-container sandbox plan §4.1, D5). This is a
 ///     hardened create path distinct from <see cref="IDockerRuntimeClient.EnsureContainerAsync" /> (the managed
 ///     runtime path): it carries resource ceilings, the network posture, the non-root user, and attach-validation
 ///     labels (owner/node/profile/manifest) applied to the container's <c>HostConfig</c> and labels.

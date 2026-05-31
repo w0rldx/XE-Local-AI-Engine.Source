@@ -5,11 +5,11 @@ using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
-///     <see cref="IClientLocalToolHandler" /> for <c>run_in_agent_home</c> (Option B). The bridge is JSON-in /
+///     <see cref="IClientLocalToolHandler" /> for <c>run_in_agent_home</c> (ClientLocal). The bridge is JSON-in /
 ///     JSON-out, so this handler deserializes the model arguments, validates them against the AgentHome plan §7
-///     constraints, honors cancellation, and delegates to <see cref="IAgentHomeToolGateway" />. In Marker B the
+///     constraints, honors cancellation, and delegates to <see cref="IAgentHomeToolGateway" />. In tool gateway placeholder the
 ///     gateway is a pending placeholder; the tool stays off the wire (server seed <c>IsActive=false</c> +
-///     <c>AgentHome:Enabled=false</c>) until Marker I.
+///     <c>AgentHome:Enabled=false</c>) until the AgentHome gateway is enabled.
 /// </summary>
 internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
 {

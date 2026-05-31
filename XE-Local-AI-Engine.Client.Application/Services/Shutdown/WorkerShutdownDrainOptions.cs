@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Shutdown;
 
+/// <summary>
+///     Configuration options for worker shutdown drain behavior.
+/// </summary>
 public sealed class WorkerShutdownDrainOptions
 {
     public static readonly TimeSpan DefaultDrainTimeout = TimeSpan.FromSeconds(30);

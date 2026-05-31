@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Configuration;
 
+/// <summary>
+///     Configuration options for cloud provider behavior.
+/// </summary>
 public sealed class CloudProviderOptions
 {
     public const string SectionName = "CloudProvider";

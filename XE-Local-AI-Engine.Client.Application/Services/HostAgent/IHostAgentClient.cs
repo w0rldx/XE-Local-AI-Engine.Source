@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.HostAgent;
 
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
+/// <summary>
+///     Client boundary for i host agent operations.
+/// </summary>
 public interface IHostAgentClient
 {
     Task<HostAgentStatusDto> GetStatusAsync(CancellationToken cancellationToken);

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// <summary>Inputs for <see cref="IAgentHomeService.PrepareAsync" /> (already §7-validated by the tool handler).</summary>
 internal sealed record AgentHomePrepareRequest
 {
-    /// <summary>The selected-folder ids the model referenced; each is resolved (existence-checked), not copied, in Marker I-pre.</summary>
+    /// <summary>The selected-folder ids the model referenced; each is resolved (existence-checked), not copied, in AgentHome gateway.</summary>
     public required IReadOnlyList<string> SelectedFolderIds { get; init; }
 
     /// <summary>The model-requested runtime profile, or <see langword="null" /> to use the worker default.</summary>
@@ -22,12 +22,12 @@ internal sealed record AgentHomePrepareResult
     /// <summary>The live sandbox handle to run commands against.</summary>
     public required SandboxHandle Handle { get; init; }
 
-    /// <summary>The resolved selected folders (trusted host paths; copy is Marker F, not Marker I-pre).</summary>
+    /// <summary>The resolved selected folders (trusted host paths; copy is workspace copy, not AgentHome gateway).</summary>
     public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
 
     /// <summary>
     ///     The model-safe per-folder copy outcome (alias + counts + sandbox-relative path) produced by the workspace
-    ///     copy (Marker F). Empty when there are no selected folders.
+    ///     copy (workspace copy). Empty when there are no selected folders.
     /// </summary>
     public required IReadOnlyList<SelectedFolderSnapshot> FolderSnapshots { get; init; }
 
@@ -44,7 +44,7 @@ internal sealed record AgentHomeRunRequest
     /// <summary>The model-supplied goal (carried for logging/agent execution in later markers).</summary>
     public required string Goal { get; init; }
 
-    /// <summary>The validated <c>allowedActions</c> the run is permitted (enforced fully in Marker I).</summary>
+    /// <summary>The validated <c>allowedActions</c> the run is permitted (enforced fully in AgentHome gateway).</summary>
     public required IReadOnlyList<string> AllowedActions { get; init; }
 }
 
@@ -91,14 +91,14 @@ internal sealed record AgentHomeRunResult
     public required string LogPath { get; init; }
 
     /// <summary>
-    ///     The model-safe per-folder copy outcome (alias + counts) from preparation (Marker F), carried onto the result
+    ///     The model-safe per-folder copy outcome (alias + counts) from preparation (workspace copy), carried onto the result
     ///     so <see cref="IAgentHomeService.RunLifecycleAsync" /> callers can render the workspace summary without a
     ///     separate prepare handle. Empty when there were no selected folders.
     /// </summary>
     public IReadOnlyList<SelectedFolderSnapshot> FolderSnapshots { get; init; } = [];
 
     /// <summary>
-    ///     The patch-export outcome (Marker G): changed-file count, blocked flag, and run-relative artifact paths. When
+    ///     The patch-export outcome (patch export): changed-file count, blocked flag, and run-relative artifact paths. When
     ///     no selected folder was copied (no git baseline) or nothing changed, the export is empty (zero changed files,
     ///     null paths).
     /// </summary>
@@ -106,8 +106,8 @@ internal sealed record AgentHomeRunResult
 }
 
 /// <summary>
-///     Model-safe outcome of the Marker G patch export. Paths are run-relative (<c>runs/&lt;run-id&gt;/patches/…</c>),
-///     never the worker-host root (AgentHome plan §9.1 / §11).
+///     Model-safe outcome of the patch export patch export. Paths are run-relative (<c>runs/&lt;run-id&gt;/patches/…</c>),
+///     never the worker-host root.
 /// </summary>
 internal sealed record AgentHomePatchExport
 {

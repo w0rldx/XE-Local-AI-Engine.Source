@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Testing.FakeOllama.Endpoints;
 
+/// <summary>
+///     Represents fake ollama server.
+/// </summary>
 public sealed class FakeOllamaServer : IAsyncDisposable
 {
     [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded", Justification = "The fake test server must bind to loopback on a dynamic port.")]

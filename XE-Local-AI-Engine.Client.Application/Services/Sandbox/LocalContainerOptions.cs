@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Configuration for the Marker J-local <c>local-container</c> sandbox provider (AgentHome plan §5.1, §13). Bound
+///     Configuration for the local-container sandbox <c>local-container</c> sandbox provider. Bound
 ///     from the <c>LocalContainer</c> section. These values shape the sandbox-container the provider asks HostAgent to
 ///     create (image, resource ceiling, network posture) and bound the whole-file copy-into transfer
 ///     (<see cref="MaxCopyFileBytes" />, AgentHome plan §5.2 / D4). The provider itself is Docker-free — it is a thin
@@ -41,6 +41,6 @@ public sealed record LocalContainerOptions
     /// <summary>Maximum number of processes/threads inside the sandbox.</summary>
     public int PidsLimit { get; init; } = 512;
 
-    /// <summary>The per-file copy-into ceiling in bytes (AgentHome plan §5.2 / D4). Defaults to 64 MiB.</summary>
+    /// <summary>The per-file copy-into ceiling in bytes. Defaults to 64 MiB.</summary>
     public long MaxCopyFileBytes { get; init; } = DefaultMaxCopyFileBytes;
 }

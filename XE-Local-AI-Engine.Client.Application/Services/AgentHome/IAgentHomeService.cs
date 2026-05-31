@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Orchestrates a node-scoped AgentHome run (AgentHome plan §6.1). The phase split is deliberate: preparation
+///     Orchestrates a node-scoped AgentHome run. The phase split is deliberate: preparation
 ///     (attach/create the sandbox, recover the layout, validate selected folders) is timed separately from command
-///     execution. Marker I-pre ships a minimal body — it resolves selected folders without copying them (Marker F),
+///     execution. AgentHome gateway ships a minimal body — it resolves selected folders without copying them (workspace copy),
 ///     runs one liveness-probe command on the configured provider (the fake by default), and returns run-scoped
 ///     metadata. Markers F/G/H/I/K extend these two method bodies (workspace copy, patch export, memory proposals,
 ///     run-scoped log content) rather than re-plumbing the gateway.
@@ -12,7 +12,7 @@ internal interface IAgentHomeService
 {
     /// <summary>
     ///     Resolves owner/node identity, recovers the worker-local layout, attaches/creates the sandbox, and validates
-    ///     the requested selected-folder ids (resolve-only; no copy in Marker I-pre). Applies the preparation timeout
+    ///     the requested selected-folder ids (resolve-only; no copy in AgentHome gateway). Applies the preparation timeout
     ///     separately from the command timeout (§6.1).
     /// </summary>
     Task<AgentHomePrepareResult> PrepareAsync(AgentHomePrepareRequest request, CancellationToken cancellationToken = default);
@@ -24,7 +24,7 @@ internal interface IAgentHomeService
     Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The single lifecycle entry the gateway calls (Marker I): resolves owner/node identity once, acquires the
+    ///     The single lifecycle entry the gateway calls (AgentHome gateway): resolves owner/node identity once, acquires the
     ///     run-level single-flight guard keyed by that owner-node (a second concurrent run for the same owner-node is
     ///     rejected with <see cref="AgentHomeBusyException" />, not queued — §6.6 rule 5/1), then runs Prepare followed
     ///     by Run and releases the guard in a finally. <see cref="PrepareAsync" />/<see cref="RunAsync" /> remain public

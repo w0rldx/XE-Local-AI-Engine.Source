@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     The <c>policy.json</c> contents (AgentHome plan §4, §11). Minimal MVP shape: network posture and mount rules.
+///     The <c>policy.json</c> contents. Minimal MVP shape: network posture and mount rules.
 ///     Writable host mounts are never permitted; read-only mounts are gated by later markers (F/J).
 /// </summary>
 internal sealed record AgentHomePolicy

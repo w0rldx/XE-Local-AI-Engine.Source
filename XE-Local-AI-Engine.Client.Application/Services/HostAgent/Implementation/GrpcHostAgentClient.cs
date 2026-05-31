@@ -21,6 +21,9 @@ using ContainerDesiredStateReply = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.C
 using ContainerHealthDto = XE_Local_AI_Engine.HostAgent.Abstractions.Contracts.ContainerHealth;
 using ContainerHealthReply = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.ContainerHealth;
 
+/// <summary>
+///     Client boundary for grpc host agent operations.
+/// </summary>
 public sealed class GrpcHostAgentClient : IHostAgentClient, IDisposable
 {
     private const string GetStatusMethodName = "/xe.hostagent.v1.HostAgentControl/GetStatus";

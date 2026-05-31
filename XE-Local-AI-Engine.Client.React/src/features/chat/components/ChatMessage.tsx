@@ -29,7 +29,7 @@ import type {
 
 const EMPTY_ENTRIES: ChatTimelineEntry[] = [];
 
-/** Prev/next navigation across the sibling revisions (variant group) of an assistant turn (Phase 5.2). */
+/** Prev/next navigation across the sibling revisions (variant group) of an assistant turn. */
 export interface ChatMessageRevisionNav {
 	activeIndex: number;
 	total: number;

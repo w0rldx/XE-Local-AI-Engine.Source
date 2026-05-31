@@ -3,7 +3,7 @@ import { isAxiosError, type AxiosRequestConfig } from "axios";
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 
-/** Conflict code the node returns when a mutation targets a read-only (Origin=Remote) conversation (Phase 1.5). */
+/** Conflict code the node returns when a mutation targets a read-only (Origin=Remote) conversation. */
 export const nodeChatReadOnlyConflictCode = "conversation-read-only";
 
 interface NodeChatConflictResponseDto {
@@ -85,7 +85,7 @@ export interface NodeChatMessageResponseDto {
 	reasoningTokens?: number | null;
 	parentMessageId?: string | null;
 	variantGroupId?: string | null;
-	// Node-local feedback carried on the message (Phase 5.3): rating "up"|"down" (null = no feedback recorded)
+	// Node-local feedback carried on the message: rating "up"|"down" (null = no feedback recorded)
 	// plus an optional free-text comment. Presence is derived from feedbackRating != null (no hasFeedback flag).
 	feedbackRating?: string | null;
 	feedbackComment?: string | null;

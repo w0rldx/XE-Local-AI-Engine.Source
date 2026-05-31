@@ -15,6 +15,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 
+/// <summary>
+///     Represents worker hub connection.
+/// </summary>
 public sealed class WorkerHubConnection : IWorkerHubConnection
 {
     private static readonly TimeSpan AccessTokenRefreshSkew = TimeSpan.FromMinutes(5);
