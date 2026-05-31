@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
@@ -23,6 +24,8 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             TriggerCondition = EncodeOptional(input.TriggerCondition),
             Behavior = Encoding.UTF8.GetBytes(input.Behavior),
             Scope = input.Scope,
+            SourceFeedbackIds = EncodeFeedbackIds(input.SourceFeedbackIds),
+            Confidence = input.Confidence,
             Priority = input.Priority,
             Version = 1,
             CreatedAtUtc = now,
@@ -65,6 +68,10 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         entity.TriggerCondition = EncodeOptional(input.TriggerCondition);
         entity.Behavior = Encoding.UTF8.GetBytes(input.Behavior);
         entity.Scope = input.Scope;
+        // Provenance/confidence are not injected into the prompt, so updating them never bumps Version (mirrors
+        // Scope/TriggerCondition). The P3 review paths (promote/reject/edit) carry the existing values through.
+        entity.SourceFeedbackIds = EncodeFeedbackIds(input.SourceFeedbackIds);
+        entity.Confidence = input.Confidence;
         entity.Priority = input.Priority;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -146,7 +153,9 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             entity.Priority,
             entity.Version,
             entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+            entity.UpdatedAtUtc,
+            DecodeFeedbackIds(entity.SourceFeedbackIds),
+            entity.Confidence);
     }
 
     private static byte[]? EncodeOptional(string? value)
@@ -157,5 +166,17 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
     private static string Decode(byte[] value)
     {
         return Encoding.UTF8.GetString(value);
+    }
+
+    private static string? EncodeFeedbackIds(IReadOnlyList<Guid>? feedbackIds)
+    {
+        // Provenance ids are stored as a JSON array (plaintext — ids only, not sensitive). Null stays null so a
+        // manual action carries no provenance column.
+        return feedbackIds is null ? null : JsonSerializer.Serialize(feedbackIds);
+    }
+
+    private static IReadOnlyList<Guid>? DecodeFeedbackIds(string? json)
+    {
+        return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<Guid[]>(json);
     }
 }

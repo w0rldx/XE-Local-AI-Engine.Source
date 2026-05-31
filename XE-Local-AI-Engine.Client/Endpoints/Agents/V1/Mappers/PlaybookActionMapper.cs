@@ -20,7 +20,9 @@ internal static class PlaybookActionMapper
             Priority = record.Priority,
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
-            UpdatedAtUtc = record.UpdatedAtUtc
+            UpdatedAtUtc = record.UpdatedAtUtc,
+            SourceFeedbackIds = record.SourceFeedbackIds,
+            Confidence = record.Confidence
         };
     }
 

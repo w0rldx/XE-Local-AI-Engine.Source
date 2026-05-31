@@ -841,6 +841,15 @@
 				"title": "Operating playbook",
 				"subtitle": "Manual playbook actions appended to {{name}}'s instructions when its playbook is enabled.",
 				"addButton": "Add action",
+				"analyzeButton": "Analyze feedback",
+				"noSuggestions": "No new suggestions from the latest analysis.",
+				"suggestedHeading": "Suggested by analysis",
+				"confidenceLabel": "Confidence {{value}}",
+				"evidenceSummary": "Based on {{count}} feedback items",
+				"evidenceEmpty": "No cited feedback items.",
+				"evidenceHint": "Review these items in the Feedback insights panel below.",
+				"approveButton": "Approve",
+				"rejectButton": "Reject",
 				"loading": "Loading playbook…",
 				"empty": "No playbook actions yet.",
 				"priorityLabel": "Priority {{priority}}",
@@ -885,10 +894,17 @@
 					"title": "Delete playbook action",
 					"description": "Delete this playbook action? This cannot be undone."
 				},
+				"reject": {
+					"title": "Reject suggestion",
+					"description": "Reject this suggested action? It will be archived and not injected.",
+					"confirm": "Reject"
+				},
 				"errors": {
 					"load": "Could not load the playbook.",
 					"save": "Could not save the playbook action.",
-					"delete": "Could not delete the playbook action."
+					"delete": "Could not delete the playbook action.",
+					"analyze": "Could not analyze feedback.",
+					"review": "Could not update the suggestion."
 				}
 			},
 			"insights": 			{

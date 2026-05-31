@@ -3,6 +3,7 @@ import {
 	Alert,
 	Badge,
 	Button,
+	Collapse,
 	Group,
 	Loader,
 	NumberInput,
@@ -14,7 +15,19 @@ import {
 	Textarea,
 	TextInput,
 } from "@mantine/core";
-import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconPencil, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
+import {
+	IconAlertTriangle,
+	IconArrowDown,
+	IconArrowUp,
+	IconCheck,
+	IconChevronDown,
+	IconChevronUp,
+	IconPencil,
+	IconPlus,
+	IconSparkles,
+	IconTrash,
+	IconX,
+} from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -27,12 +40,17 @@ import {
 	playbookActionFormSchema,
 	toPlaybookActionFormValues,
 	toSavePlaybookActionRequest,
+	toSaveSuggestedActionRequest,
 } from "@/features/agents/models/PlaybookActionModels";
 import {
+	useAnalyzePlaybook,
 	useCreatePlaybookAction,
 	useDeletePlaybookAction,
 	usePlaybookActions,
+	usePromoteSuggestedAction,
+	useRejectSuggestedAction,
 	useUpdatePlaybookAction,
+	useUpdateSuggestedAction,
 } from "@/features/agents/queries/usePlaybookActions";
 
 interface PlaybookPanelProps {
@@ -64,10 +82,23 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const actionsQuery = usePlaybookActions(enabled ? agentDefinitionId : null);
 	const createMutation = useCreatePlaybookAction(agentDefinitionId);
 	const updateMutation = useUpdatePlaybookAction(agentDefinitionId);
+	const updateSuggestedMutation = useUpdateSuggestedAction(agentDefinitionId);
 	const deleteMutation = useDeletePlaybookAction(agentDefinitionId);
+	const analyzeMutation = useAnalyzePlaybook(agentDefinitionId);
+	const promoteMutation = usePromoteSuggestedAction(agentDefinitionId);
+	const rejectMutation = useRejectSuggestedAction(agentDefinitionId);
 
+	// Manual governance: the existing Enabled/Disabled actions (and any unknown state that degraded to Disabled).
+	// Suggested actions are the analysis-proposed proposals awaiting human review and render in their own section.
 	const orderedActions = useMemo(
-		() => [...(actionsQuery.data ?? [])].sort(comparePlaybookActions),
+		() =>
+			[...(actionsQuery.data ?? [])].filter((action) => action.state !== "Suggested").sort(comparePlaybookActions),
+		[actionsQuery.data],
+	);
+
+	const suggestedActions = useMemo(
+		() =>
+			[...(actionsQuery.data ?? [])].filter((action) => action.state === "Suggested").sort(comparePlaybookActions),
 		[actionsQuery.data],
 	);
 
@@ -75,8 +106,12 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		if (editorTarget?.mode !== "edit") {
 			return undefined;
 		}
-		return orderedActions.find((action) => action.id === editorTarget.id);
-	}, [editorTarget, orderedActions]);
+		// Edit can target a manual action or a Suggested proposal (operators may tweak a proposal before approving).
+		return (
+			orderedActions.find((action) => action.id === editorTarget.id) ??
+			suggestedActions.find((action) => action.id === editorTarget.id)
+		);
+	}, [editorTarget, orderedActions, suggestedActions]);
 
 	// Next priority for a brand-new action: one past the current max so it sorts at the end of the list.
 	const nextPriority = useMemo(
@@ -84,20 +119,38 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		[orderedActions],
 	);
 
-	const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+	const isMutating =
+		createMutation.isPending ||
+		updateMutation.isPending ||
+		updateSuggestedMutation.isPending ||
+		deleteMutation.isPending ||
+		analyzeMutation.isPending ||
+		promoteMutation.isPending ||
+		rejectMutation.isPending;
 
 	const closeEditor = useCallback(() => setEditorTarget(null), []);
 
 	const handleSubmit = useCallback(
 		(values: PlaybookActionFormValues) => {
-			const request = toSavePlaybookActionRequest(values);
 			if (editorTarget?.mode === "edit") {
-				updateMutation.mutate({ actionId: editorTarget.id, request }, { onSuccess: closeEditor });
+				// A Suggested (Analysis-provenance) action must edit via the dedicated `/suggested` route — the manual
+				// PUT 404s on it. The body omits `state`; the action stays Suggested until Approve.
+				if (editingAction?.state === "Suggested") {
+					updateSuggestedMutation.mutate(
+						{ actionId: editorTarget.id, request: toSaveSuggestedActionRequest(values) },
+						{ onSuccess: closeEditor },
+					);
+					return;
+				}
+				updateMutation.mutate(
+					{ actionId: editorTarget.id, request: toSavePlaybookActionRequest(values) },
+					{ onSuccess: closeEditor },
+				);
 				return;
 			}
-			createMutation.mutate(request, { onSuccess: closeEditor });
+			createMutation.mutate(toSavePlaybookActionRequest(values), { onSuccess: closeEditor });
 		},
-		[closeEditor, createMutation, editorTarget, updateMutation],
+		[closeEditor, createMutation, editingAction, editorTarget, updateMutation, updateSuggestedMutation],
 	);
 
 	// Toggle a single action's enable state in place without opening the editor. Reuses the action's existing
@@ -155,6 +208,38 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		[confirm, deleteMutation, t],
 	);
 
+	// Run the analysis agent. The mutation result + invalidation refresh the Suggested section; the empty-result
+	// notice is derived from analyzeMutation below.
+	const handleAnalyze = useCallback(() => {
+		analyzeMutation.mutate();
+	}, [analyzeMutation]);
+
+	const handlePromote = useCallback(
+		(action: PlaybookAction) => {
+			promoteMutation.mutate(action.id);
+		},
+		[promoteMutation],
+	);
+
+	const handleReject = useCallback(
+		async (action: PlaybookAction) => {
+			const confirmed = await confirm({
+				title: t("pages.agents.playbook.reject.title", "Reject suggestion"),
+				description: t(
+					"pages.agents.playbook.reject.description",
+					"Reject this suggested action? It will be archived and not injected.",
+				),
+				confirmationText: t("pages.agents.playbook.reject.confirm", "Reject"),
+				cancellationText: t("common.cancel", "Cancel"),
+			});
+
+			if (confirmed) {
+				rejectMutation.mutate(action.id);
+			}
+		},
+		[confirm, rejectMutation, t],
+	);
+
 	if (!enabled) {
 		return null;
 	}
@@ -163,11 +248,21 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const formInitialValues = editingAction
 		? toPlaybookActionFormValues(editingAction)
 		: emptyPlaybookActionForm(nextPriority);
-	const submitError =
-		createMutation.error || updateMutation.error
+	const isEditingSuggested = editingAction?.state === "Suggested";
+	const saveError = createMutation.error ?? updateMutation.error ?? updateSuggestedMutation.error;
+	const submitError = saveError
+		? errorMessage(saveError, t("pages.agents.playbook.errors.save", "Could not save the playbook action."))
+		: undefined;
+
+	// "No new suggestions" notice: shown only after a completed analyze run that returned zero proposals and when
+	// there are no Suggested actions outstanding to review.
+	const showNoSuggestionsNotice =
+		analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
+	const promoteRejectError =
+		promoteMutation.error || rejectMutation.error
 			? errorMessage(
-					createMutation.error ?? updateMutation.error,
-					t("pages.agents.playbook.errors.save", "Could not save the playbook action."),
+					promoteMutation.error ?? rejectMutation.error,
+					t("pages.agents.playbook.errors.review", "Could not update the suggestion."),
 				)
 			: undefined;
 
@@ -186,18 +281,70 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 						</Text>
 					</Stack>
 					{!isEditorOpen ? (
-						<Button
-							size="xs"
-							variant="light"
-							leftSection={<IconPlus size={14} />}
-							onClick={() => setEditorTarget({ mode: "create" })}
-							disabled={isMutating}
-							data-testid="playbook-add-button"
-						>
-							{t("pages.agents.playbook.addButton", "Add action")}
-						</Button>
+						<Group gap="xs" wrap="nowrap">
+							<Button
+								size="xs"
+								variant="default"
+								leftSection={<IconSparkles size={14} />}
+								onClick={handleAnalyze}
+								loading={analyzeMutation.isPending}
+								disabled={isMutating}
+								data-testid="playbook-analyze-button"
+							>
+								{t("pages.agents.playbook.analyzeButton", "Analyze feedback")}
+							</Button>
+							<Button
+								size="xs"
+								variant="light"
+								leftSection={<IconPlus size={14} />}
+								onClick={() => setEditorTarget({ mode: "create" })}
+								disabled={isMutating}
+								data-testid="playbook-add-button"
+							>
+								{t("pages.agents.playbook.addButton", "Add action")}
+							</Button>
+						</Group>
 					) : null}
 				</Group>
+
+				{analyzeMutation.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-analyze-error">
+						{errorMessage(
+							analyzeMutation.error,
+							t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."),
+						)}
+					</Alert>
+				) : null}
+
+				{promoteRejectError ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-review-error">
+						{promoteRejectError}
+					</Alert>
+				) : null}
+
+				{showNoSuggestionsNotice ? (
+					<Text size="sm" c="dimmed" data-testid="playbook-no-suggestions">
+						{t("pages.agents.playbook.noSuggestions", "No new suggestions from the latest analysis.")}
+					</Text>
+				) : null}
+
+				{suggestedActions.length > 0 ? (
+					<Stack gap={6} data-testid="playbook-suggested-section">
+						<Text size="xs" fw={600} c="dimmed">
+							{t("pages.agents.playbook.suggestedHeading", "Suggested by analysis")}
+						</Text>
+						{suggestedActions.map((action) => (
+							<SuggestedActionRow
+								key={action.id}
+								action={action}
+								disabled={isMutating}
+								onApprove={() => handlePromote(action)}
+								onEdit={() => setEditorTarget({ mode: "edit", id: action.id })}
+								onReject={() => handleReject(action)}
+							/>
+						))}
+					</Stack>
+				) : null}
 
 				{deleteMutation.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-delete-error">
@@ -212,7 +359,10 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 					<PlaybookActionForm
 						key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
 						initialValues={formInitialValues}
-						isSubmitting={createMutation.isPending || updateMutation.isPending}
+						hideStateField={isEditingSuggested}
+						isSubmitting={
+							createMutation.isPending || updateMutation.isPending || updateSuggestedMutation.isPending
+						}
 						submitError={submitError}
 						onSubmit={handleSubmit}
 						onCancel={closeEditor}
@@ -338,8 +488,146 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	);
 }
 
+// Render an analysis confidence fraction (0..1) as a whole-percent string for display.
+function toConfidencePercent(confidence: number): string {
+	return `${Math.round(confidence * 100)}%`;
+}
+
+interface SuggestedActionRowProps {
+	action: PlaybookAction;
+	disabled: boolean;
+	onApprove: () => void;
+	onEdit: () => void;
+	onReject: () => void;
+}
+
+// One analysis-proposed (Suggested) action awaiting human review (Playbook P3). Surfaces the provenance
+// ("Analysis"), the analysis confidence as a percent, the proposed behavior, and an evidence affordance: a
+// "Based on N feedback items" summary that expands to the cited ids and points the operator to the feedback
+// insights panel mounted on the same page. Carries Approve (→ promote), Edit (→ existing edit form/PUT), and
+// Reject (→ archive) controls.
+function SuggestedActionRow({ action, disabled, onApprove, onEdit, onReject }: SuggestedActionRowProps) {
+	const { t } = useTranslation();
+	const [evidenceOpen, setEvidenceOpen] = useState(false);
+
+	const feedbackIds = action.sourceFeedbackIds ?? [];
+	const evidenceCount = feedbackIds.length;
+
+	return (
+		<Paper withBorder={true} p="xs" key={action.id} data-testid={`playbook-suggested-${action.id}`}>
+			<Stack gap={6}>
+				<Group justify="space-between" align="flex-start" wrap="nowrap">
+					<Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+						<Group gap="xs" align="center" wrap="wrap">
+							<Badge size="xs" variant="light" color="grape" data-testid={`playbook-suggested-source-${action.id}`}>
+								{t("pages.agents.playbook.source.Analysis", "Analysis")}
+							</Badge>
+							{action.confidence !== null ? (
+								<Badge
+									size="xs"
+									variant="outline"
+									color="blue"
+									data-testid={`playbook-suggested-confidence-${action.id}`}
+								>
+									{t("pages.agents.playbook.confidenceLabel", "Confidence {{value}}", {
+										value: toConfidencePercent(action.confidence),
+									})}
+								</Badge>
+							) : null}
+						</Group>
+						<Text size="sm">{action.behavior}</Text>
+						{action.triggerCondition ? (
+							<Text size="xs" c="dimmed">
+								{t("pages.agents.playbook.triggerLabel", "When: {{trigger}}", {
+									trigger: action.triggerCondition,
+								})}
+							</Text>
+						) : null}
+						<Stack gap={2}>
+							{evidenceCount > 0 ? (
+								<Button
+									size="compact-xs"
+									variant="subtle"
+									color="gray"
+									leftSection={evidenceOpen ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
+									onClick={() => setEvidenceOpen((open) => !open)}
+									data-testid={`playbook-suggested-evidence-toggle-${action.id}`}
+								>
+									{t("pages.agents.playbook.evidenceSummary", "Based on {{count}} feedback items", {
+										count: evidenceCount,
+									})}
+								</Button>
+							) : (
+								<Text size="xs" c="dimmed" data-testid={`playbook-suggested-evidence-empty-${action.id}`}>
+									{t("pages.agents.playbook.evidenceEmpty", "No cited feedback items.")}
+								</Text>
+							)}
+							{evidenceCount > 0 ? (
+								<Collapse expanded={evidenceOpen}>
+									<Stack gap={2} data-testid={`playbook-suggested-evidence-${action.id}`}>
+										<Text size="xs" c="dimmed">
+											{t(
+												"pages.agents.playbook.evidenceHint",
+												"Review these items in the Feedback insights panel below.",
+											)}
+										</Text>
+										{feedbackIds.map((feedbackId) => (
+											<Text key={feedbackId} size="xs" c="dimmed" style={{ wordBreak: "break-all" }}>
+												{feedbackId}
+											</Text>
+										))}
+									</Stack>
+								</Collapse>
+							) : null}
+						</Stack>
+					</Stack>
+					<Group gap={4} wrap="nowrap">
+						<ActionIcon
+							aria-label={t("pages.agents.playbook.editAria", "Edit action")}
+							variant="subtle"
+							size="sm"
+							disabled={disabled}
+							onClick={onEdit}
+							data-testid={`playbook-suggested-edit-${action.id}`}
+						>
+							<IconPencil size={14} />
+						</ActionIcon>
+					</Group>
+				</Group>
+				<Group gap="xs">
+					<Button
+						size="xs"
+						variant="light"
+						color="teal"
+						leftSection={<IconCheck size={14} />}
+						disabled={disabled}
+						onClick={onApprove}
+						data-testid={`playbook-suggested-approve-${action.id}`}
+					>
+						{t("pages.agents.playbook.approveButton", "Approve")}
+					</Button>
+					<Button
+						size="xs"
+						variant="subtle"
+						color="red"
+						leftSection={<IconX size={14} />}
+						disabled={disabled}
+						onClick={onReject}
+						data-testid={`playbook-suggested-reject-${action.id}`}
+					>
+						{t("pages.agents.playbook.rejectButton", "Reject")}
+					</Button>
+				</Group>
+			</Stack>
+		</Paper>
+	);
+}
+
 interface PlaybookActionFormProps {
 	initialValues: PlaybookActionFormValues;
+	// Hide the Enabled/Disabled state Select when editing a Suggested action — it stays Suggested until Approve, so
+	// the operator never sets its state from this form.
+	hideStateField?: boolean;
 	isSubmitting: boolean;
 	submitError?: string;
 	onSubmit: (values: PlaybookActionFormValues) => void;
@@ -348,7 +636,14 @@ interface PlaybookActionFormProps {
 
 // Inline add/edit form for a single playbook action. Controlled Mantine inputs validated with the shared Zod
 // schema on submit; mirrors AgentDefinitionForm's local-state + on-submit-validate pattern.
-function PlaybookActionForm({ initialValues, isSubmitting, submitError, onSubmit, onCancel }: PlaybookActionFormProps) {
+function PlaybookActionForm({
+	initialValues,
+	hideStateField = false,
+	isSubmitting,
+	submitError,
+	onSubmit,
+	onCancel,
+}: PlaybookActionFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<PlaybookActionFormValues>(initialValues);
 	const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof PlaybookActionFormValues, string>>>({});
@@ -414,19 +709,21 @@ function PlaybookActionForm({ initialValues, isSubmitting, submitError, onSubmit
 						}
 						data-testid="playbook-form-priority"
 					/>
-					<Select
-						label={t("pages.agents.playbook.form.state.label", "State")}
-						data={[
-							{ value: "Enabled", label: t("pages.agents.playbook.state.enabled", "enabled") },
-							{ value: "Disabled", label: t("pages.agents.playbook.state.disabled", "disabled") },
-						]}
-						value={values.state}
-						allowDeselect={false}
-						onChange={(value) =>
-							setValues((current) => ({ ...current, state: value === "Disabled" ? "Disabled" : "Enabled" }))
-						}
-						data-testid="playbook-form-state"
-					/>
+					{hideStateField ? null : (
+						<Select
+							label={t("pages.agents.playbook.form.state.label", "State")}
+							data={[
+								{ value: "Enabled", label: t("pages.agents.playbook.state.enabled", "enabled") },
+								{ value: "Disabled", label: t("pages.agents.playbook.state.disabled", "disabled") },
+							]}
+							value={values.state}
+							allowDeselect={false}
+							onChange={(value) =>
+								setValues((current) => ({ ...current, state: value === "Disabled" ? "Disabled" : "Enabled" }))
+							}
+							data-testid="playbook-form-state"
+						/>
+					)}
 				</Group>
 				<Textarea
 					label={t("pages.agents.playbook.form.triggerCondition.label", "Trigger condition")}

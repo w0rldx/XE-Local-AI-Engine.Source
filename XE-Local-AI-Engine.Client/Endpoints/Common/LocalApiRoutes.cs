@@ -96,6 +96,14 @@ public static class LocalApiRoutes
         public const string Playbook = "agents/{agentDefinitionId}/playbook";
         public const string PlaybookActionById = "agents/{agentDefinitionId}/playbook/{actionId}";
 
+        // Playbook P3: analysis-agent staging. "analyze" is a literal segment after "playbook", so FastEndpoints
+        // prioritises it over PlaybookActionById's {actionId} param (same literal-vs-param rule as ToolCapableModels).
+        // promote/reject/suggested are literal segments after {actionId}, so they never collide with PlaybookActionById.
+        public const string PlaybookAnalyze = "agents/{agentDefinitionId}/playbook/analyze";
+        public const string PlaybookActionPromote = "agents/{agentDefinitionId}/playbook/{actionId}/promote";
+        public const string PlaybookActionReject = "agents/{agentDefinitionId}/playbook/{actionId}/reject";
+        public const string PlaybookActionSuggested = "agents/{agentDefinitionId}/playbook/{actionId}/suggested";
+
         // Playbook P2: read-only per-agent feedback insights (aggregate over message_feedback). The literal
         // "feedback-insights" segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
         public const string FeedbackInsights = "agents/{agentDefinitionId}/feedback-insights";

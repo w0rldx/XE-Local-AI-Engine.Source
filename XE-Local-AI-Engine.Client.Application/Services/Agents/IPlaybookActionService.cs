@@ -34,7 +34,57 @@ public interface IPlaybookActionService
 
     /// <summary>Returns every action for <paramref name="agentDefinitionId" />, ordered by Priority then CreatedAtUtc.</summary>
     Task<IReadOnlyList<PlaybookActionRecord>> ListByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Playbook P3 analysis write path (separate from the manual <see cref="CreateAsync" /> so the manual route stays
+    ///     pinned to <c>Manual</c>/<c>Enabled</c>/<c>Disabled</c>). Persists a new action in state <c>Suggested</c> /
+    ///     source <c>Analysis</c> with its evidence (<c>SourceFeedbackIds</c>) and <c>Confidence</c>. Validates a
+    ///     non-blank Behavior, an existing owning agent, non-empty evidence, and a confidence in [0,1]. A
+    ///     <c>Suggested</c> action is inert by construction — the resolver injects only <c>Enabled</c> actions.
+    /// </summary>
+    Task<PlaybookActionRecord> CreateAnalysisSuggestionAsync(PlaybookAnalysisSuggestionInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Promotes a <c>Suggested</c>/<c>Analysis</c> action owned by <paramref name="agentDefinitionId" /> to
+    ///     <c>Enabled</c> (human review — staging ≠ active). Returns the updated record, or <c>null</c> when the action is
+    ///     missing, belongs to another agent, or is not a pending <c>Suggested</c>/<c>Analysis</c> action. (Playbook P4
+    ///     will insert the eval gate here.)
+    /// </summary>
+    Task<PlaybookActionRecord?> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Rejects a <c>Suggested</c>/<c>Analysis</c> action owned by <paramref name="agentDefinitionId" /> by moving it
+    ///     to <c>Archived</c> (provenance is preserved rather than hard-deleted). Same ownership/state guard and
+    ///     <c>null</c> contract as <see cref="PromoteSuggestedAsync" />.
+    /// </summary>
+    Task<PlaybookActionRecord?> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Edits the fields of a pending <c>Suggested</c>/<c>Analysis</c> action before review (it stays
+    ///     <c>Suggested</c>/<c>Analysis</c> and keeps its evidence/confidence). Same ownership/state guard and <c>null</c>
+    ///     contract as <see cref="PromoteSuggestedAsync" />.
+    /// </summary>
+    Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Input for the P3 analysis write path — provenance + confidence are required; state/source are pinned by the service.</summary>
+public sealed record PlaybookAnalysisSuggestionInput(
+    Guid AgentDefinitionId,
+    string Behavior,
+    string? TriggerCondition,
+    string? Scope,
+    int Priority,
+    IReadOnlyList<Guid> SourceFeedbackIds,
+    double Confidence);
+
+/// <summary>Operator edits applied to a pending Suggested action; the action stays Suggested/Analysis and keeps its evidence.</summary>
+public sealed record SuggestedActionEditInput(
+    Guid AgentDefinitionId,
+    Guid ActionId,
+    string Behavior,
+    string? TriggerCondition,
+    string? Scope,
+    int Priority);
 
 /// <summary>Thrown when a playbook-action create/update fails validation. The message is safe to surface to callers.</summary>
 public sealed class PlaybookActionValidationException : Exception

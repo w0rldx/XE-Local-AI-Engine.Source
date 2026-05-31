@@ -21,6 +21,10 @@ export const editablePlaybookActionStates: readonly Extract<PlaybookActionState,
 ];
 
 // Domain view-model for a playbook action. Timestamps are epoch milliseconds (long on the wire).
+//
+// Playbook P3 adds analysis provenance: an analysis-proposed action (source "Analysis", state "Suggested") carries
+// the feedback ids that drove it (sourceFeedbackIds) and the analysis-agent confidence in [0,1] (confidence).
+// Manual actions leave both null.
 export interface PlaybookAction {
 	readonly id: string;
 	readonly agentDefinitionId: string;
@@ -33,6 +37,10 @@ export interface PlaybookAction {
 	readonly version: number;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
+	// Feedback message/conversation id GUIDs that drove an analysis-proposed action (null for manual actions).
+	readonly sourceFeedbackIds: readonly string[] | null;
+	// Analysis-agent confidence in [0,1] (null for manual actions).
+	readonly confidence: number | null;
 }
 
 // Form values authored in the panel: identity/version/timestamps/source/agentDefinitionId are managed by the
@@ -88,8 +96,9 @@ export function toPlaybookActionFormValues(action: PlaybookAction): PlaybookActi
 	};
 }
 
-// Wire DTO (camelCase, matching the agents surface). The backend forces source=Manual in P1; the field is
-// carried for display + forward-compat.
+// Wire DTO (camelCase, matching the agents surface). Manual actions carry source=Manual with both analysis
+// fields null; an analysis-proposed action (Playbook P3) carries source=Analysis with sourceFeedbackIds +
+// confidence populated. Both new fields are typed optional/nullable so an older backend (omitting them) parses.
 export interface PlaybookActionDto {
 	id: string;
 	agentDefinitionId: string;
@@ -102,6 +111,8 @@ export interface PlaybookActionDto {
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
+	sourceFeedbackIds?: string[] | null;
+	confidence?: number | null;
 }
 
 // Request body for create/update. Source is omitted — the backend pins it to Manual in P1.
@@ -109,6 +120,16 @@ export interface SavePlaybookActionRequestDto {
 	state: string;
 	triggerCondition: string | null;
 	behavior: string;
+	scope: string | null;
+	priority: number;
+}
+
+// Request body for editing a pending Suggested (analysis-provenance) action via the dedicated `/suggested` route.
+// Carries NO `state` field — the backend pins state/source/evidence; the action stays Suggested until Approve. The
+// manual PUT route now 404s on an Analysis-provenance action, so a Suggested edit must use this body + route.
+export interface SaveSuggestedActionRequestDto {
+	behavior: string;
+	triggerCondition: string | null;
 	scope: string | null;
 	priority: number;
 }
@@ -125,6 +146,26 @@ function normalizeSource(value: string): PlaybookActionSource {
 	return sourceSchema.safeParse(value).success ? (value as PlaybookActionSource) : "Manual";
 }
 
+// Boundary schemas for the Playbook P3 analysis fields. Both are nullable/optional: a manual action (or an older
+// backend that predates P3) omits them. Defensive — an unexpected/garbage value degrades to null rather than
+// throwing the whole list parse, so one malformed action can't blank the panel.
+const sourceFeedbackIdsSchema = z.array(z.string()).nullish();
+const confidenceSchema = z.number().min(0).max(1).nullish();
+
+// Normalize the cited feedback ids to a string[] or null. An absent/null/invalid value (wrong type, non-string
+// members) degrades to null so the row simply renders without an evidence count.
+function normalizeSourceFeedbackIds(value: unknown): readonly string[] | null {
+	const result = sourceFeedbackIdsSchema.safeParse(value);
+	return result.success && result.data != null ? result.data : null;
+}
+
+// Normalize the analysis confidence to a [0,1] number or null. An absent/null/out-of-range/non-number value
+// degrades to null so the row omits the confidence badge rather than rendering a nonsense percentage.
+function normalizeConfidence(value: unknown): number | null {
+	const result = confidenceSchema.safeParse(value);
+	return result.success && result.data != null ? result.data : null;
+}
+
 export function toPlaybookAction(dto: PlaybookActionDto): PlaybookAction {
 	return {
 		id: dto.id,
@@ -138,6 +179,8 @@ export function toPlaybookAction(dto: PlaybookActionDto): PlaybookAction {
 		version: dto.version,
 		createdAtUtc: dto.createdAtUtc,
 		updatedAtUtc: dto.updatedAtUtc,
+		sourceFeedbackIds: normalizeSourceFeedbackIds(dto.sourceFeedbackIds),
+		confidence: normalizeConfidence(dto.confidence),
 	};
 }
 
@@ -151,6 +194,20 @@ export function toSavePlaybookActionRequest(form: PlaybookActionFormValues): Sav
 		state: form.state,
 		triggerCondition: trimmedTrigger.length > 0 ? trimmedTrigger : null,
 		behavior: form.behavior.trim(),
+		scope: trimmedScope.length > 0 ? trimmedScope : null,
+		priority: form.priority,
+	};
+}
+
+// Build a Suggested-edit request from form values (the dedicated `/suggested` route). Same field handling as
+// toSavePlaybookActionRequest but WITHOUT `state` — the backend keeps the action Suggested until it is approved.
+export function toSaveSuggestedActionRequest(form: PlaybookActionFormValues): SaveSuggestedActionRequestDto {
+	const trimmedTrigger = form.triggerCondition.trim();
+	const trimmedScope = form.scope.trim();
+
+	return {
+		behavior: form.behavior.trim(),
+		triggerCondition: trimmedTrigger.length > 0 ? trimmedTrigger : null,
 		scope: trimmedScope.length > 0 ? trimmedScope : null,
 		priority: form.priority,
 	};

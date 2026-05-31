@@ -55,7 +55,9 @@ public sealed record PlaybookActionRecord(
     int Priority,
     int Version,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    IReadOnlyList<Guid>? SourceFeedbackIds = null,
+    double? Confidence = null);
 
 /// <summary>
 ///     Mutable fields of a playbook action supplied on create/update. Free text is passed as plaintext strings; the
@@ -69,4 +71,6 @@ public sealed record PlaybookActionInput(
     string? TriggerCondition,
     string Behavior,
     string? Scope,
-    int Priority);
+    int Priority,
+    IReadOnlyList<Guid>? SourceFeedbackIds = null,
+    double? Confidence = null);
