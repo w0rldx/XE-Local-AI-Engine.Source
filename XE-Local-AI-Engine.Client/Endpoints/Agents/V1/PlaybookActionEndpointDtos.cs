@@ -88,7 +88,46 @@ public sealed class PlaybookActionResponse
 
     /// <summary>Playbook P3: analysis-agent confidence in [0,1]. Null for manual actions.</summary>
     public double? Confidence { get; init; }
+
+    /// <summary>
+    ///     Playbook P4: the latest eval-gate outcome (pass/fail + counts + per-case results). Null until an eval has run
+    ///     and after the action is edited (a stale pass is cleared). The promote gate enables the action only when this
+    ///     is present, passed and current.
+    /// </summary>
+    public PlaybookEvalResultResponse? EvalResult { get; init; }
 }
+
+/// <summary>
+///     Wire projection of <c>PlaybookAction.EvalResult</c> (Playbook P4): ids + pass/fail flags + counts only (no
+///     transcripts). Field names match the persisted camelCase JSON so the React Zod schema parses the same shape.
+/// </summary>
+public sealed record PlaybookEvalResultResponse(
+    bool Passed,
+    long EvaluatedAtUtc,
+    int ActionVersionAtEval,
+    string ModelName,
+    int GoldenCaseCount,
+    int GoldenCaseTotal,
+    int BaselinePassCount,
+    int CandidatePassCount,
+    int RegressedCaseCount,
+    int ImprovedCaseCount,
+    IReadOnlyList<PlaybookEvalCaseResultResponse> Cases);
+
+/// <summary>Per-case outcome inside a <see cref="PlaybookEvalResultResponse" /> (Playbook P4).</summary>
+public sealed record PlaybookEvalCaseResultResponse(
+    Guid GoldenCaseId,
+    string ScoredBy,
+    bool BaselinePass,
+    bool CandidatePass,
+    bool Regressed);
+
+/// <summary>
+///     409 body when the eval gate blocks a promote (Playbook P4): <see cref="Status" /> is the
+///     <c>PlaybookPromotionStatus</c> enum name (<c>EvalRequired</c> / <c>EvalRegressed</c> / <c>EvalStale</c>),
+///     <see cref="Reason" /> is a short human message the panel renders.
+/// </summary>
+public sealed record PlaybookPromotionConflictResponse(string Status, string Reason);
 
 public sealed class ListPlaybookActionsResponse
 {

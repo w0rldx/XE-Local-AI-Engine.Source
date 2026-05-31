@@ -46,26 +46,63 @@ public interface IPlaybookActionService
 
     /// <summary>
     ///     Promotes a <c>Suggested</c>/<c>Analysis</c> action owned by <paramref name="agentDefinitionId" /> to
-    ///     <c>Enabled</c> (human review — staging ≠ active). Returns the updated record, or <c>null</c> when the action is
-    ///     missing, belongs to another agent, or is not a pending <c>Suggested</c>/<c>Analysis</c> action. (Playbook P4
-    ///     will insert the eval gate here.)
+    ///     <c>Enabled</c> (human review — staging ≠ active), gated by the Playbook P4 eval result. Returns a
+    ///     <see cref="PlaybookPromotionResult" /> whose <see cref="PlaybookPromotionResult.Status" /> is
+    ///     <c>NotFound</c> when the action is missing/cross-agent/not a pending suggestion, <c>EvalRequired</c> when no
+    ///     eval has run since authoring/edit, <c>EvalStale</c> when the recorded eval is for an older content snapshot,
+    ///     <c>EvalRegressed</c> when the latest eval failed, and <c>Promoted</c> (with the updated record) only when the
+    ///     latest eval passed and is current.
     /// </summary>
-    Task<PlaybookActionRecord?> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+    Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records the Playbook P4 eval result JSON on the pending <c>Suggested</c>/<c>Analysis</c> action owned by
+    ///     <paramref name="agentDefinitionId" />. The action stays <c>Suggested</c>/<c>Analysis</c> with all injected
+    ///     fields (Behavior/Priority/State) unchanged, so recording an eval never bumps <c>Version</c> (the store
+    ///     excludes <c>EvalResult</c> from its config-affecting rule). Same ownership/state guard and <c>null</c>
+    ///     contract as <see cref="PromoteSuggestedAsync" />.
+    /// </summary>
+    Task<PlaybookActionRecord?> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Loads the pending suggestion owned by <paramref name="agentDefinitionId" /> after the same ownership +
+    ///     <c>Suggested</c> + <c>Analysis</c> guard the review paths apply, or <c>null</c> when no such pending
+    ///     suggestion exists. Exposed so the eval gate can load the candidate snapshot without re-implementing the guard.
+    /// </summary>
+    Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Rejects a <c>Suggested</c>/<c>Analysis</c> action owned by <paramref name="agentDefinitionId" /> by moving it
     ///     to <c>Archived</c> (provenance is preserved rather than hard-deleted). Same ownership/state guard and
-    ///     <c>null</c> contract as <see cref="PromoteSuggestedAsync" />.
+    ///     <c>null</c> contract as <see cref="RecordEvalResultAsync" />.
     /// </summary>
     Task<PlaybookActionRecord?> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Edits the fields of a pending <c>Suggested</c>/<c>Analysis</c> action before review (it stays
-    ///     <c>Suggested</c>/<c>Analysis</c> and keeps its evidence/confidence). Same ownership/state guard and <c>null</c>
-    ///     contract as <see cref="PromoteSuggestedAsync" />.
+    ///     <c>Suggested</c>/<c>Analysis</c> and keeps its evidence/confidence). Editing clears any recorded
+    ///     <c>EvalResult</c> so a stale pass cannot promote an edited action. Same ownership/state guard and <c>null</c>
+    ///     contract as <see cref="RecordEvalResultAsync" />.
     /// </summary>
     Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Outcome of a gated promote: distinguishes a 404 (NotFound) from each eval-gate block, and a success.</summary>
+public enum PlaybookPromotionStatus
+{
+    Promoted,
+    NotFound,
+    EvalRequired,
+    EvalRegressed,
+    EvalStale
+}
+
+/// <summary>
+///     Result of <see cref="IPlaybookActionService.PromoteSuggestedAsync" />: <see cref="Status" /> tells the endpoint
+///     whether to return 200 (<c>Promoted</c>), 404 (<c>NotFound</c>) or 409 (any <c>Eval*</c> block); <see cref="Record" />
+///     carries the enabled record only when <see cref="Status" /> is <c>Promoted</c>.
+/// </summary>
+public sealed record PlaybookPromotionResult(PlaybookPromotionStatus Status, PlaybookActionRecord? Record);
 
 /// <summary>Input for the P3 analysis write path — provenance + confidence are required; state/source are pinned by the service.</summary>
 public sealed record PlaybookAnalysisSuggestionInput(

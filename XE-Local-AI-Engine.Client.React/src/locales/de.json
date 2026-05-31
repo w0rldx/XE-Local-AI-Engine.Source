@@ -905,6 +905,82 @@
 					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden.",
 					"analyze": "Feedback konnte nicht analysiert werden.",
 					"review": "Der Vorschlag konnte nicht aktualisiert werden."
+				},
+				"eval": {
+					"runButton": "Eval ausführen",
+					"passed": "Eval bestanden",
+					"failed": "Eval fehlgeschlagen",
+					"counts": "{{regressed}} verschlechtert / {{golden}} Golden-Fälle",
+					"truncated": "{{evaluated}} von {{total}} Golden-Fällen ausgewertet.",
+					"regressedToggle": "{{count}} verschlechterte Fälle anzeigen",
+					"regressedCase": "{{id}} (bewertet durch {{scoredBy}})",
+					"scoredBy": {
+						"assertion": "Assertion",
+						"judge": "Judge"
+					},
+					"gate": {
+						"needsEval": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
+						"stale": "Dieser Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus, bevor du genehmigst.",
+						"regressed": "Die Eval hat einen zuvor guten Fall verschlechtert. Behebe die Verschlechterung, bevor du genehmigst."
+					},
+					"conflict": {
+						"EvalRequired": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
+						"EvalRegressed": "Genehmigung blockiert: Die Eval hat einen zuvor guten Fall verschlechtert.",
+						"EvalStale": "Genehmigung blockiert: Der Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus."
+					}
+				}
+			},
+			"golden": {
+				"title": "Golden-Konversationen",
+				"subtitle": "Erstelle Golden-Fälle, die die Beförderung absichern: Eine Kandidatenaktion darf sie nicht verschlechtern, bevor {{name}} sie aktivieren kann.",
+				"addButton": "Golden-Fall hinzufügen",
+				"loading": "Golden-Fälle werden geladen…",
+				"empty": "Noch keine Golden-Fälle. Füge einen hinzu, damit die Beförderung Eval-abgesichert werden kann.",
+				"turnCount": "{{count}} Eingabe-Turns",
+				"hasAssertion": "Assertion",
+				"hasRubric": "Rubric",
+				"disabledBadge": "deaktiviert",
+				"deleteAria": "Golden-Fall löschen",
+				"delete": {
+					"title": "Golden-Fall löschen",
+					"description": "'{{title}}' löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"form": {
+					"titleRequired": "Titel ist erforderlich.",
+					"turnsRequired": "Mindestens ein Eingabe-Turn ist erforderlich.",
+					"signalRequired": "Füge mindestens eine erforderliche/verbotene Phrase oder eine Rubric hinzu.",
+						"tooLong": {
+							"title": "Der Titel ist zu lang (max. {{max}} Zeichen).",
+							"inputTurns": "Die Eingabe-Turns sind zu lang (max. {{max}} Zeichen).",
+							"assertion": "Die erforderlichen/verbotenen Phrasen sind zu lang (max. {{max}} Zeichen).",
+							"rubric": "Die Rubric ist zu lang (max. {{max}} Zeichen)."
+						},
+					"title": {
+						"label": "Titel",
+						"placeholder": "Kurzes Bedienerlabel"
+					},
+					"turns": {
+						"label": "Eingabe-Turns",
+						"description": "Ein Turn pro Zeile als 'Rolle: Text'. Eine Zeile ohne Doppelpunkt wird als Nutzer-Turn behandelt.",
+						"placeholder": "user: Fasse das Dokument zusammen…"
+					},
+					"required": {
+						"label": "Erforderliche Phrasen",
+						"description": "Eine pro Zeile. Alle müssen vorhanden sein."
+					},
+					"forbidden": {
+						"label": "Verbotene Phrasen",
+						"description": "Eine pro Zeile. Keine darf vorhanden sein."
+					},
+					"rubric": {
+						"label": "Rubric",
+						"description": "Optionale Judge-Rubric (verwendet, wenn keine Assertion zutrifft)."
+					}
+				},
+				"errors": {
+					"load": "Golden-Fälle konnten nicht geladen werden.",
+					"save": "Der Golden-Fall konnte nicht gespeichert werden.",
+					"delete": "Der Golden-Fall konnte nicht gelöscht werden."
 				}
 			},
 			"insights": 			{

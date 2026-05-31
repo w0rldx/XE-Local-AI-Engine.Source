@@ -29,6 +29,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<PlaybookAction> PlaybookActions => Set<PlaybookAction>();
 
+    internal DbSet<GoldenConversation> GoldenConversations => Set<GoldenConversation>();
+
     internal DbSet<McpServerRegistration> McpServers => Set<McpServerRegistration>();
 
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
@@ -45,6 +47,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigureSelectedFolder(modelBuilder.Entity<NodeSelectedFolder>());
         ConfigureAgentDefinition(modelBuilder.Entity<AgentDefinition>());
         ConfigurePlaybookAction(modelBuilder.Entity<PlaybookAction>());
+        ConfigureGoldenConversation(modelBuilder.Entity<GoldenConversation>());
         ConfigureMcpServer(modelBuilder.Entity<McpServerRegistration>());
     }
 
@@ -341,6 +344,10 @@ public sealed class NodeChatDbContext : DbContext
         builder.Property(entity => entity.Confidence)
                .HasColumnName("confidence");
 
+        // P4 eval-gate outcome — additive nullable column. Plaintext (ids + flags + counts only), not encrypted.
+        builder.Property(entity => entity.EvalResult)
+               .HasColumnName("eval_result");
+
         builder.Property(entity => entity.Priority)
                .HasColumnName("priority");
 
@@ -358,6 +365,48 @@ public sealed class NodeChatDbContext : DbContext
         // A playbook action is meaningless without its owning agent, so the FK cascades: deleting an agent removes its
         // actions. (Contrast conversation->definition, which is intentionally no-FK because a conversation outlives its
         // definition.)
+        builder.HasOne<AgentDefinition>()
+               .WithMany()
+               .HasForeignKey(entity => entity.AgentDefinitionId)
+               .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureGoldenConversation(EntityTypeBuilder<GoldenConversation> builder)
+    {
+        builder.ToTable("golden_conversations");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.AgentDefinitionId)
+               .HasColumnName("agent_definition_id");
+
+        builder.Property(entity => entity.Title)
+               .HasColumnName("title");
+
+        builder.Property(entity => entity.InputTurns)
+               .HasColumnName("input_turns");
+
+        builder.Property(entity => entity.Assertion)
+               .HasColumnName("assertion");
+
+        builder.Property(entity => entity.Rubric)
+               .HasColumnName("rubric");
+
+        builder.Property(entity => entity.Enabled)
+               .HasColumnName("enabled");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        builder.HasIndex(entity => entity.AgentDefinitionId);
+
+        // A golden conversation belongs to its agent's evaluation set, so the FK cascades: deleting an agent removes its
+        // golden cases — same layout as playbook_actions.
         builder.HasOne<AgentDefinition>()
                .WithMany()
                .HasForeignKey(entity => entity.AgentDefinitionId)

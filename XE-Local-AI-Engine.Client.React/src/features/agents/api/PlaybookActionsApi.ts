@@ -1,7 +1,12 @@
 import type { AxiosRequestConfig } from "axios";
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
+import {
+	parsePromoteConflictBody,
+	type PromoteConflictStatus,
+} from "@/features/agents/models/GoldenConversationModels";
 import {
 	type PlaybookAction,
 	type PlaybookActionDto,
@@ -34,6 +39,24 @@ const ANALYZE_SEGMENT = "analyze";
 const PROMOTE_SEGMENT = "promote";
 const REJECT_SEGMENT = "reject";
 const SUGGESTED_SEGMENT = "suggested";
+const EVAL_SEGMENT = "eval";
+
+// HTTP 409 — a blocked promote (the eval gate). The route base's problem-details interceptor wraps a non-2xx into
+// an ApiError; we recover the typed {status, reason} body so the panel can explain WHY promotion is blocked.
+const HTTP_CONFLICT = 409;
+
+// Thrown by promoteSuggested when the eval gate blocks a promote (HTTP 409). Carries the machine status + the
+// human-readable reason from the conflict body so the panel renders the precise reason (needs eval / regressed /
+// stale) rather than a generic "could not update" message.
+export class PromoteConflictError extends Error {
+	constructor(
+		readonly status: PromoteConflictStatus,
+		reason: string,
+	) {
+		super(reason);
+		this.name = "PromoteConflictError";
+	}
+}
 
 function playbookRoute(agentDefinitionId: string): string {
 	return `${AGENTS_ROUTE}/${encodeURIComponent(agentDefinitionId)}/${PLAYBOOK_SEGMENT}`;
@@ -124,18 +147,36 @@ export async function analyzePlaybook(
 }
 
 // Promote a Suggested analysis action to Enabled (operator approves the proposal). Returns the updated action.
+// Playbook P4 — the promote is eval-gated: when the eval has not passed the backend returns 409 with a typed
+// { status, reason } body, which we surface as a PromoteConflictError so the panel can show the precise reason.
 export async function promoteSuggested(
 	agentDefinitionId: string,
 	actionId: string,
 	config?: AxiosRequestConfig,
 ): Promise<PlaybookAction> {
-	// Empty JSON object body (not undefined) — FastEndpoints 415s a bodyless POST; ids ride the route.
-	const { data } = await axiosInstance.post<PlaybookActionDto>(
-		buildLocalApiUrl(`${playbookActionRoute(agentDefinitionId, actionId)}/${PROMOTE_SEGMENT}`),
-		{},
-		config,
-	);
-	return toPlaybookAction(data);
+	try {
+		// Empty JSON object body (not undefined) — FastEndpoints 415s a bodyless POST; ids ride the route.
+		const { data } = await axiosInstance.post<PlaybookActionDto>(
+			buildLocalApiUrl(`${playbookActionRoute(agentDefinitionId, actionId)}/${PROMOTE_SEGMENT}`),
+			{},
+			config,
+		);
+		return toPlaybookAction(data);
+	} catch (error) {
+		throw toPromoteError(error);
+	}
+}
+
+// Translate a 409 eval-gate rejection into a typed PromoteConflictError; any other error passes through unchanged.
+// The route base's interceptor wraps a non-2xx into an ApiError carrying the raw conflict body in apiProblemDetails.
+function toPromoteError(error: unknown): unknown {
+	if (error instanceof ApiError && error.statusCode === HTTP_CONFLICT) {
+		const conflict = parsePromoteConflictBody(error.apiProblemDetails);
+		if (conflict) {
+			return new PromoteConflictError(conflict.status, conflict.reason);
+		}
+	}
+	return error;
 }
 
 // Reject a Suggested analysis action (Suggested → Archived). Returns the updated action.
@@ -147,6 +188,22 @@ export async function rejectSuggested(
 	// Empty JSON object body (not undefined) — FastEndpoints 415s a bodyless POST; ids ride the route.
 	const { data } = await axiosInstance.post<PlaybookActionDto>(
 		buildLocalApiUrl(`${playbookActionRoute(agentDefinitionId, actionId)}/${REJECT_SEGMENT}`),
+		{},
+		config,
+	);
+	return toPlaybookAction(data);
+}
+
+// Playbook P4 — run the eval gate for a Suggested action against the agent's golden conversation set. Records and
+// returns the updated action (now carrying evalResult). 404 when the action is unknown/cross-agent/not-pending.
+export async function runEval(
+	agentDefinitionId: string,
+	actionId: string,
+	config?: AxiosRequestConfig,
+): Promise<PlaybookAction> {
+	// Empty JSON object body (not undefined) — FastEndpoints 415s a bodyless POST; ids ride the route.
+	const { data } = await axiosInstance.post<PlaybookActionDto>(
+		buildLocalApiUrl(`${playbookActionRoute(agentDefinitionId, actionId)}/${EVAL_SEGMENT}`),
 		{},
 		config,
 	);

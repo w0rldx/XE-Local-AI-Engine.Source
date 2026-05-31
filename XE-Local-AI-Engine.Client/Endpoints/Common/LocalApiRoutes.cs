@@ -104,6 +104,15 @@ public static class LocalApiRoutes
         public const string PlaybookActionReject = "agents/{agentDefinitionId}/playbook/{actionId}/reject";
         public const string PlaybookActionSuggested = "agents/{agentDefinitionId}/playbook/{actionId}/suggested";
 
+        // Playbook P4: eval gate. "eval" is a literal segment after {actionId}, so it never collides with
+        // PlaybookActionById (same literal-vs-param rule as promote/reject above).
+        public const string PlaybookActionEval = "agents/{agentDefinitionId}/playbook/{actionId}/eval";
+
+        // Playbook P4: per-agent golden conversation set (manual authoring). The literal "golden-conversations"
+        // segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
+        public const string GoldenConversations = "agents/{agentDefinitionId}/golden-conversations";
+        public const string GoldenConversation = "agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}";
+
         // Playbook P2: read-only per-agent feedback insights (aggregate over message_feedback). The literal
         // "feedback-insights" segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
         public const string FeedbackInsights = "agents/{agentDefinitionId}/feedback-insights";

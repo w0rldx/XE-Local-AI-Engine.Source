@@ -14,6 +14,7 @@ import {
 	Text,
 	Textarea,
 	TextInput,
+	Tooltip,
 } from "@mantine/core";
 import {
 	IconAlertTriangle,
@@ -22,6 +23,7 @@ import {
 	IconCheck,
 	IconChevronDown,
 	IconChevronUp,
+	IconFlask,
 	IconPencil,
 	IconPlus,
 	IconSparkles,
@@ -32,9 +34,11 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { PromoteConflictError } from "@/features/agents/api/PlaybookActionsApi";
 import {
 	comparePlaybookActions,
 	emptyPlaybookActionForm,
+	type EvalResult,
 	type PlaybookAction,
 	type PlaybookActionFormValues,
 	playbookActionFormSchema,
@@ -49,6 +53,7 @@ import {
 	usePlaybookActions,
 	usePromoteSuggestedAction,
 	useRejectSuggestedAction,
+	useRunEval,
 	useUpdatePlaybookAction,
 	useUpdateSuggestedAction,
 } from "@/features/agents/queries/usePlaybookActions";
@@ -87,6 +92,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const analyzeMutation = useAnalyzePlaybook(agentDefinitionId);
 	const promoteMutation = usePromoteSuggestedAction(agentDefinitionId);
 	const rejectMutation = useRejectSuggestedAction(agentDefinitionId);
+	const runEvalMutation = useRunEval(agentDefinitionId);
 
 	// Manual governance: the existing Enabled/Disabled actions (and any unknown state that degraded to Disabled).
 	// Suggested actions are the analysis-proposed proposals awaiting human review and render in their own section.
@@ -126,7 +132,8 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		deleteMutation.isPending ||
 		analyzeMutation.isPending ||
 		promoteMutation.isPending ||
-		rejectMutation.isPending;
+		rejectMutation.isPending ||
+		runEvalMutation.isPending;
 
 	const closeEditor = useCallback(() => setEditorTarget(null), []);
 
@@ -221,6 +228,15 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		[promoteMutation],
 	);
 
+	// Playbook P4 — run the eval gate for a single Suggested action against the agent's golden set. The mutation
+	// invalidation refreshes the row's eval badge + the Approve gate (Approve stays disabled until passed).
+	const handleRunEval = useCallback(
+		(action: PlaybookAction) => {
+			runEvalMutation.mutate(action.id);
+		},
+		[runEvalMutation],
+	);
+
 	const handleReject = useCallback(
 		async (action: PlaybookAction) => {
 			const confirmed = await confirm({
@@ -258,13 +274,19 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	// there are no Suggested actions outstanding to review.
 	const showNoSuggestionsNotice =
 		analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
+	// A blocked promote (the eval gate, HTTP 409) surfaces as a typed PromoteConflictError carrying the precise
+	// reason (needs eval / regressed / stale). Prefer a localized message keyed by its status; fall back to the
+	// generic review error for any other promote/reject failure.
+	const reviewError = promoteMutation.error ?? rejectMutation.error ?? runEvalMutation.error;
 	const promoteRejectError =
-		promoteMutation.error || rejectMutation.error
-			? errorMessage(
-					promoteMutation.error ?? rejectMutation.error,
-					t("pages.agents.playbook.errors.review", "Could not update the suggestion."),
+		promoteMutation.error instanceof PromoteConflictError
+			? t(
+					`pages.agents.playbook.eval.conflict.${promoteMutation.error.status}`,
+					promoteMutation.error.message,
 				)
-			: undefined;
+			: reviewError
+				? errorMessage(reviewError, t("pages.agents.playbook.errors.review", "Could not update the suggestion."))
+				: undefined;
 
 	return (
 		<Paper withBorder={true} radius="md" p="md" data-testid={`playbook-panel-${agentDefinitionId}`}>
@@ -338,9 +360,11 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 								key={action.id}
 								action={action}
 								disabled={isMutating}
+								isEvaluating={runEvalMutation.isPending && runEvalMutation.variables === action.id}
 								onApprove={() => handlePromote(action)}
 								onEdit={() => setEditorTarget({ mode: "edit", id: action.id })}
 								onReject={() => handleReject(action)}
+								onRunEval={() => handleRunEval(action)}
 							/>
 						))}
 					</Stack>
@@ -496,9 +520,41 @@ function toConfidencePercent(confidence: number): string {
 interface SuggestedActionRowProps {
 	action: PlaybookAction;
 	disabled: boolean;
+	// True while THIS row's eval is in flight (drives the Run-eval button's loading spinner).
+	isEvaluating: boolean;
 	onApprove: () => void;
 	onEdit: () => void;
 	onReject: () => void;
+	onRunEval: () => void;
+}
+
+// Playbook P4 — why the Approve/Promote control is gated, derived from the row's evalResult. Drives both the
+// disabled state and the tooltip copy: no eval has run, the eval is stale (ran against an older version), the
+// candidate regressed a prior-good case, or the gate is satisfied (passed).
+type PromoteGateReason = "needsEval" | "stale" | "regressed" | "passed";
+
+function promoteGateReason(action: PlaybookAction): PromoteGateReason {
+	const result = action.evalResult;
+	if (result === null) {
+		return "needsEval";
+	}
+	if (result.actionVersionAtEval !== action.version) {
+		return "stale";
+	}
+	return result.passed ? "passed" : "regressed";
+}
+
+// English fallback copy for the gated-Approve tooltip (the i18n key carries the localized text). Keyed by gate
+// reason; "passed" maps to empty since the tooltip is suppressed when the gate is satisfied.
+const gateReasonFallbacks: Record<PromoteGateReason, string> = {
+	needsEval: "Run the eval before approving this suggestion.",
+	stale: "This suggestion changed since the last eval. Re-run the eval before approving.",
+	regressed: "The eval regressed a prior-good case. Resolve the regression before approving.",
+	passed: "",
+};
+
+function gateReasonFallback(reason: PromoteGateReason): string {
+	return gateReasonFallbacks[reason];
 }
 
 // One analysis-proposed (Suggested) action awaiting human review (Playbook P3). Surfaces the provenance
@@ -506,12 +562,28 @@ interface SuggestedActionRowProps {
 // "Based on N feedback items" summary that expands to the cited ids and points the operator to the feedback
 // insights panel mounted on the same page. Carries Approve (→ promote), Edit (→ existing edit form/PUT), and
 // Reject (→ archive) controls.
-function SuggestedActionRow({ action, disabled, onApprove, onEdit, onReject }: SuggestedActionRowProps) {
+function SuggestedActionRow({
+	action,
+	disabled,
+	isEvaluating,
+	onApprove,
+	onEdit,
+	onReject,
+	onRunEval,
+}: SuggestedActionRowProps) {
 	const { t } = useTranslation();
 	const [evidenceOpen, setEvidenceOpen] = useState(false);
 
 	const feedbackIds = action.sourceFeedbackIds ?? [];
 	const evidenceCount = feedbackIds.length;
+
+	// Playbook P4 — the eval gate. Approve is disabled until the latest eval passed against the action's current
+	// version; the tooltip explains why (no eval yet / regressed / stale).
+	const gateReason = promoteGateReason(action);
+	const canPromote = gateReason === "passed";
+	const promoteTooltip = canPromote
+		? null
+		: t(`pages.agents.playbook.eval.gate.${gateReason}`, gateReasonFallback(gateReason));
 
 	return (
 		<Paper withBorder={true} p="xs" key={action.id} data-testid={`playbook-suggested-${action.id}`}>
@@ -579,6 +651,7 @@ function SuggestedActionRow({ action, disabled, onApprove, onEdit, onReject }: S
 									</Stack>
 								</Collapse>
 							) : null}
+							<EvalResultSummary actionId={action.id} evalResult={action.evalResult} />
 						</Stack>
 					</Stack>
 					<Group gap={4} wrap="nowrap">
@@ -597,15 +670,36 @@ function SuggestedActionRow({ action, disabled, onApprove, onEdit, onReject }: S
 				<Group gap="xs">
 					<Button
 						size="xs"
-						variant="light"
-						color="teal"
-						leftSection={<IconCheck size={14} />}
+						variant="default"
+						leftSection={<IconFlask size={14} />}
+						loading={isEvaluating}
 						disabled={disabled}
-						onClick={onApprove}
-						data-testid={`playbook-suggested-approve-${action.id}`}
+						onClick={onRunEval}
+						data-testid={`playbook-suggested-run-eval-${action.id}`}
 					>
-						{t("pages.agents.playbook.approveButton", "Approve")}
+						{t("pages.agents.playbook.eval.runButton", "Run eval")}
 					</Button>
+					{/* The Approve/Promote control is eval-gated: disabled until the latest eval passed for the action's
+					    current version. A Tooltip explains why when the gate blocks. Wrap the button so the tooltip still
+					    shows for a disabled control. */}
+					<Tooltip
+						label={promoteTooltip ?? ""}
+						disabled={canPromote}
+						withArrow={true}
+						data-testid={`playbook-suggested-approve-tooltip-${action.id}`}
+					>
+						<Button
+							size="xs"
+							variant="light"
+							color="teal"
+							leftSection={<IconCheck size={14} />}
+							disabled={disabled || !canPromote}
+							onClick={onApprove}
+							data-testid={`playbook-suggested-approve-${action.id}`}
+						>
+							{t("pages.agents.playbook.approveButton", "Approve")}
+						</Button>
+					</Tooltip>
 					<Button
 						size="xs"
 						variant="subtle"
@@ -620,6 +714,89 @@ function SuggestedActionRow({ action, disabled, onApprove, onEdit, onReject }: S
 				</Group>
 			</Stack>
 		</Paper>
+	);
+}
+
+interface EvalResultSummaryProps {
+	actionId: string;
+	evalResult: EvalResult | null;
+}
+
+// Playbook P4 — render the eval-gate outcome for a Suggested action: a pass/fail badge with the
+// regressed/golden case counts and an expandable list of the regressed cases (goldenCaseId + how it was scored).
+// Renders nothing until an eval has run (evalResult null) — the gated Approve tooltip already explains "run eval".
+function EvalResultSummary({ actionId, evalResult }: EvalResultSummaryProps) {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+
+	if (evalResult === null) {
+		return null;
+	}
+
+	const regressedCases = evalResult.cases.filter((evalCase) => evalCase.regressed);
+
+	return (
+		<Stack gap={2} data-testid={`playbook-suggested-eval-${actionId}`}>
+			<Group gap="xs" align="center" wrap="wrap">
+				<Badge
+					size="xs"
+					variant="light"
+					color={evalResult.passed ? "teal" : "red"}
+					data-testid={`playbook-suggested-eval-status-${actionId}`}
+				>
+					{evalResult.passed
+						? t("pages.agents.playbook.eval.passed", "Eval passed")
+						: t("pages.agents.playbook.eval.failed", "Eval failed")}
+				</Badge>
+				<Text size="xs" c="dimmed" data-testid={`playbook-suggested-eval-counts-${actionId}`}>
+					{t("pages.agents.playbook.eval.counts", "{{regressed}} regressed / {{golden}} golden cases", {
+						regressed: evalResult.regressedCaseCount,
+						golden: evalResult.goldenCaseCount,
+					})}
+				</Text>
+			</Group>
+			{evalResult.goldenCaseTotal > evalResult.goldenCaseCount ? (
+				<Text size="xs" c="dimmed" data-testid={`playbook-suggested-eval-truncated-${actionId}`}>
+					{t("pages.agents.playbook.eval.truncated", "Evaluated {{evaluated}} of {{total}} golden cases.", {
+						evaluated: evalResult.goldenCaseCount,
+						total: evalResult.goldenCaseTotal,
+					})}
+				</Text>
+			) : null}
+			{regressedCases.length > 0 ? (
+				<Stack gap={2}>
+					<Button
+						size="compact-xs"
+						variant="subtle"
+						color="gray"
+						leftSection={open ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
+						onClick={() => setOpen((current) => !current)}
+						data-testid={`playbook-suggested-eval-toggle-${actionId}`}
+					>
+						{t("pages.agents.playbook.eval.regressedToggle", "Show {{count}} regressed cases", {
+							count: regressedCases.length,
+						})}
+					</Button>
+					<Collapse expanded={open}>
+						<Stack gap={2} data-testid={`playbook-suggested-eval-regressed-${actionId}`}>
+							{regressedCases.map((evalCase) => (
+								<Text
+									key={evalCase.goldenCaseId}
+									size="xs"
+									c="dimmed"
+									style={{ wordBreak: "break-all" }}
+								>
+									{t("pages.agents.playbook.eval.regressedCase", "{{id}} (scored by {{scoredBy}})", {
+										id: evalCase.goldenCaseId,
+										scoredBy: t(`pages.agents.playbook.eval.scoredBy.${evalCase.scoredBy}`, evalCase.scoredBy),
+									})}
+								</Text>
+							))}
+						</Stack>
+					</Collapse>
+				</Stack>
+			) : null}
+		</Stack>
 	);
 }
 

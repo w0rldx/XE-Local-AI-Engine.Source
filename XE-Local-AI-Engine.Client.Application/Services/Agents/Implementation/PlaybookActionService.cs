@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Eval;
 
 internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDefinitionStore agentDefinitionStore) : IPlaybookActionService
 {
@@ -106,17 +108,88 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
         return await _store.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<PlaybookActionRecord?> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
+    public async Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
-        // Human-approved staging → active. Version bumps because State changes (the store treats State as
-        // config-affecting). Playbook P4 will gate this transition behind the eval set.
-        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Enabled, cancellationToken);
+        // Human-approved staging → active, gated by the Playbook P4 eval result. The ownership/state guard runs first
+        // (NotFound → 404), then the eval gate (Eval* → 409), and only an eval that passed and is current flips Enabled.
+        var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
+        if (pending is null)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, null);
+        }
+
+        // No eval since authoring/edit → promotion is not yet provable. (UpdateSuggestedAsync clears EvalResult on edit.)
+        if (string.IsNullOrWhiteSpace(pending.EvalResult))
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, null);
+        }
+
+        PlaybookEvalResult? evalResult;
+        try
+        {
+            evalResult = JsonSerializer.Deserialize<PlaybookEvalResult>(pending.EvalResult, PlaybookEvalResult.SerializerOptions);
+        }
+        catch (JsonException)
+        {
+            // A result we cannot read cannot prove no-regression; require a fresh eval rather than promote blindly.
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, null);
+        }
+
+        if (evalResult is null)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, null);
+        }
+
+        // Staleness backstop behind clear-on-edit: the recorded pass must be for the action's current content snapshot.
+        if (evalResult.ActionVersionAtEval != pending.Version)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, null);
+        }
+
+        if (!evalResult.Passed)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, null);
+        }
+
+        // Version bumps because State changes; carry the EvalResult through the transition for audit.
+        var promoted = await TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Enabled, pending.EvalResult, cancellationToken).ConfigureAwait(false);
+        return promoted is null
+            ? new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, null)
+            : new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, promoted);
+    }
+
+    public async Task<PlaybookActionRecord?> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(evalResultJson);
+
+        var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
+        if (pending is null)
+        {
+            return null;
+        }
+
+        // Record the eval JSON only — the action stays Suggested/Analysis with every injected field (Behavior, Priority,
+        // State) unchanged, so the store leaves Version alone (EvalResult is excluded from its config-affecting rule).
+        var storeInput = new PlaybookActionInput(
+            pending.AgentDefinitionId,
+            PlaybookActionState.Suggested,
+            PlaybookActionSource.Analysis,
+            pending.TriggerCondition,
+            pending.Behavior,
+            pending.Scope,
+            pending.Priority,
+            pending.SourceFeedbackIds,
+            pending.Confidence,
+            evalResultJson);
+
+        return await _store.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<PlaybookActionRecord?> RejectSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
-        // Reject → Archived (provenance preserved rather than hard-deleted).
-        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, cancellationToken);
+        // Reject moves the action to Archived (provenance preserved rather than hard-deleted). A recorded eval result
+        // is irrelevant once archived, so clear it rather than let a stale pass linger on the rejected record.
+        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, evalResult: null, cancellationToken);
     }
 
     public async Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default)
@@ -135,7 +208,8 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
         }
 
         // The action stays Suggested/Analysis and keeps its evidence + confidence; only the operator-editable fields
-        // change. Promotion remains a separate, explicit step.
+        // change. Editing clears any recorded EvalResult (the trailing argument is left null) so a stale pass cannot
+        // promote an edited action — the operator must re-run the eval. Promotion remains a separate, explicit step.
         var storeInput = new PlaybookActionInput(
             pending.AgentDefinitionId,
             PlaybookActionState.Suggested,
@@ -145,12 +219,13 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
             input.Scope,
             input.Priority,
             pending.SourceFeedbackIds,
-            pending.Confidence);
+            pending.Confidence,
+            EvalResult: null);
 
         return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<PlaybookActionRecord?> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, CancellationToken cancellationToken)
+    private async Task<PlaybookActionRecord?> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, string? evalResult, CancellationToken cancellationToken)
     {
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
         if (pending is null)
@@ -167,12 +242,13 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
             pending.Scope,
             pending.Priority,
             pending.SourceFeedbackIds,
-            pending.Confidence);
+            pending.Confidence,
+            evalResult);
 
         return await _store.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken)
+    public async Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // A review action applies only to a pending suggestion owned by the route agent: enforce ownership (IDOR),
         // the Suggested state, and the Analysis provenance. Anything else (missing, wrong agent, already enabled,

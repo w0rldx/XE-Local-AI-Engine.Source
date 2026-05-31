@@ -10,6 +10,7 @@ import { toSaveAgentDefinitionRequest } from "@/features/agents/api/AgentDefinit
 import { AgentDefinitionForm, type AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
+import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import {
@@ -206,6 +207,16 @@ export function AgentsPage() {
 							    agent (has an id). Capability-gated under agentManagement; analytics-only, no mutations. */}
 							{editingDefinition ? (
 								<FeedbackInsightsPanel
+									agentDefinitionId={editingDefinition.id}
+									agentName={editingDefinition.name}
+									enabled={nodeCapabilities.agentManagement}
+								/>
+							) : null}
+							{/* Per-agent golden conversation set (Playbook P4). The eval gate replays these cases against a
+							    candidate action before promotion. Only meaningful for a persisted agent (has an id).
+							    Capability-gated under agentManagement. */}
+							{editingDefinition ? (
+								<GoldenConversationPanel
 									agentDefinitionId={editingDefinition.id}
 									agentName={editingDefinition.name}
 									enabled={nodeCapabilities.agentManagement}

@@ -40,6 +40,7 @@ const { hooksMock, playbookHooksMock, confirmMock } = vi.hoisted(() => ({
 		useAnalyzePlaybook: vi.fn(),
 		usePromoteSuggestedAction: vi.fn(),
 		useRejectSuggestedAction: vi.fn(),
+		useRunEval: vi.fn(),
 	},
 	confirmMock: vi.fn(),
 }));
@@ -139,6 +140,7 @@ describe("AgentsPage", () => {
 		playbookHooksMock.useAnalyzePlaybook.mockReturnValue(makeMutation());
 		playbookHooksMock.usePromoteSuggestedAction.mockReturnValue(makeMutation());
 		playbookHooksMock.useRejectSuggestedAction.mockReturnValue(makeMutation());
+		playbookHooksMock.useRunEval.mockReturnValue(makeMutation());
 	});
 
 	afterEach(() => {

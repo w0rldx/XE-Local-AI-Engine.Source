@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Configuration.Validation;
+using XE_Local_AI_Engine.AI.Agent.Eval;
+using XE_Local_AI_Engine.AI.Agent.Eval.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Instructions.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -58,6 +60,9 @@ public static class AgentServiceCollectionExtensions
         // Multi-agent handoff orchestration (loop P5). Reuses the same IChatClient + tool registries as the
         // single-agent factory; confines all Microsoft.Agents.AI.Workflows types behind IOrchestrationRunSession.
         _ = services.AddSingleton<IOrchestrationAgentFactory, OrchestrationAgentFactory>();
+        // Playbook P4 eval gate (golden-conversation runner). Stateless: builds a per-call agent over the
+        // caller-supplied node-local IChatClient with an empty tool set and runs it threadless.
+        _ = services.AddSingleton<IPlaybookEvalAgentRunner, MafPlaybookEvalAgentRunner>();
         return services;
     }
 

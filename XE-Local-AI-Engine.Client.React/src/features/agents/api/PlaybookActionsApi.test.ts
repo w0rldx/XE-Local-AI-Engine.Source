@@ -18,13 +18,16 @@ vi.mock("@/core/api/utils/LocalApiUrl", () => ({
 	buildLocalApiUrl: buildLocalApiUrlMock,
 }));
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import {
 	analyzePlaybook,
 	createPlaybookAction,
 	deletePlaybookAction,
 	listPlaybookActions,
 	promoteSuggested,
+	PromoteConflictError,
 	rejectSuggested,
+	runEval,
 	updatePlaybookAction,
 	updateSuggested,
 } from "@/features/agents/api/PlaybookActionsApi";
@@ -49,6 +52,7 @@ function makeDto(overrides: Partial<PlaybookActionDto> = {}): PlaybookActionDto 
 		updatedAtUtc: 2000,
 		sourceFeedbackIds: null,
 		confidence: null,
+		evalResult: null,
 		...overrides,
 	};
 }
@@ -239,5 +243,72 @@ describe("playbook actions API", () => {
 		expect(axiosInstanceMock.post).toHaveBeenCalledWith("/local/agents/ag%2F1/playbook/s%2F1/reject", {}, undefined);
 		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(1)).toEqual({});
 		expect(result.state).toBe("Archived");
+	});
+
+	it("runs the eval gate through POST .../eval with an empty body and maps the returned evalResult", async () => {
+		const evalResult = {
+			passed: true,
+			evaluatedAtUtc: 1748600000000,
+			actionVersionAtEval: 1,
+			modelName: "qwen3.5:9b",
+			goldenCaseCount: 3,
+			baselinePassCount: 3,
+			candidatePassCount: 3,
+			regressedCaseCount: 0,
+			improvedCaseCount: 0,
+			cases: [{ goldenCaseId: "g-1", scoredBy: "assertion", baselinePass: true, candidatePass: true, regressed: false }],
+		};
+		axiosInstanceMock.post.mockResolvedValue({
+			data: makeDto({ id: "s/1", state: "Suggested", source: "Analysis", evalResult }),
+		});
+
+		const result = await runEval("ag/1", "s/1");
+
+		// Empty JSON object body (not undefined) — FastEndpoints 415s a bodyless POST; ids ride the route.
+		expect(axiosInstanceMock.post).toHaveBeenCalledWith("/local/agents/ag%2F1/playbook/s%2F1/eval", {}, undefined);
+		// The shared post mock accumulates calls across tests — assert the LAST call's body.
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(1)).toEqual({});
+		expect(result.evalResult?.passed).toBe(true);
+		expect(result.evalResult?.regressedCaseCount).toBe(0);
+		expect(result.evalResult?.cases[0]?.goldenCaseId).toBe("g-1");
+		expect(result.evalResult?.cases[0]?.scoredBy).toBe("assertion");
+	});
+
+	it("degrades an unknown/missing evalResult to null without throwing", async () => {
+		axiosInstanceMock.get.mockResolvedValue({
+			data: {
+				items: [
+					// Field omitted entirely (older backend) and a garbage non-object evalResult.
+					makeDto({ evalResult: undefined }),
+					makeDto({ id: "bad-1", evalResult: "not-an-object" as unknown }),
+				],
+			},
+		});
+
+		const result = await listPlaybookActions("agent-1");
+
+		expect(result[0]?.evalResult).toBeNull();
+		expect(result[1]?.evalResult).toBeNull();
+		expect(result[1]?.behavior).toBe("Always include tests");
+	});
+
+	it("surfaces a 409 promote as a typed PromoteConflictError carrying { status, reason }", async () => {
+		// The route base's interceptor wraps a 409 into an ApiError; the pinned P4 conflict body { status, reason }
+		// rides apiProblemDetails (cast through unknown for the boundary test — the raw body is an opaque object).
+		const conflictBody = { status: "EvalRegressed", reason: "Candidate regressed golden case g-1." } as unknown;
+		axiosInstanceMock.post.mockRejectedValue(new ApiError(409, conflictBody as never));
+
+		await expect(promoteSuggested("ag/1", "s/1")).rejects.toBeInstanceOf(PromoteConflictError);
+		await expect(promoteSuggested("ag/1", "s/1")).rejects.toMatchObject({
+			status: "EvalRegressed",
+			message: "Candidate regressed golden case g-1.",
+		});
+	});
+
+	it("passes a non-409 promote error through unchanged (not a PromoteConflictError)", async () => {
+		const original = new ApiError(404, { type: "about:blank", title: "Not Found", status: 404, detail: "gone" });
+		axiosInstanceMock.post.mockRejectedValue(original);
+
+		await expect(promoteSuggested("ag/1", "s/1")).rejects.toBe(original);
 	});
 });

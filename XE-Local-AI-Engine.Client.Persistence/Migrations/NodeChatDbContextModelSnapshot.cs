@@ -91,6 +91,54 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.ToTable("agent_definitions", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GoldenConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<byte[]>("Assertion")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("assertion");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled");
+
+                    b.Property<byte[]>("InputTurns")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("input_turns");
+
+                    b.Property<byte[]>("Rubric")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("rubric");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentDefinitionId");
+
+                    b.ToTable("golden_conversations", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpServerRegistration", b =>
                 {
                     b.Property<Guid>("Id")
@@ -452,6 +500,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<string>("EvalResult")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("eval_result");
+
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER")
                         .HasColumnName("priority");
@@ -489,6 +541,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasIndex("AgentDefinitionId");
 
                     b.ToTable("playbook_actions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GoldenConversation", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("AgentDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeMessage", b =>

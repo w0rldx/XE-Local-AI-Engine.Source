@@ -98,6 +98,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.TriggerCondition), Guid.Empty, entry.Entity.Id, "trigger_condition", trackedProperties);
         }
 
+        // Golden conversations are node-scoped (no conversation/message), so the AAD binds the empty conversation id to
+        // the case's own id plus the column name — same layout as playbook actions. InputTurns is required; the optional
+        // assertion/rubric only encrypt when present.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<GoldenConversation>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.InputTurns), Guid.Empty, entry.Entity.Id, "input_turns", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Assertion), Guid.Empty, entry.Entity.Id, "assertion", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Rubric), Guid.Empty, entry.Entity.Id, "rubric", trackedProperties);
+        }
+
         // MCP server registrations are node-scoped, so the AAD binds the empty conversation id to the registration's
         // own id plus the column name. The secret-bearing columns (args, env, description) are all optional.
         foreach (var entry in nodeContext.ChangeTracker.Entries<McpServerRegistration>())

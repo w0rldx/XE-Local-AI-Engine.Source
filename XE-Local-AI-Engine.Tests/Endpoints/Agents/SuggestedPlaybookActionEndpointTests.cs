@@ -123,7 +123,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     }
 
     [Test]
-    public async Task Promote_WhenOwnedPendingSuggestion_ReturnsOkWithEnabledState()
+    public async Task Promote_WhenOwnedPendingSuggestionWithoutEval_ReturnsConflictEvalRequired()
     {
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
@@ -138,15 +138,16 @@ public sealed class SuggestedPlaybookActionEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Playbook P4: the eval gate blocks a promote until the latest eval has passed. A freshly-authored suggestion
+        // has no eval, so the gate returns 409 EvalRequired and the action stays Suggested (still inert). A successful
+        // 200/Enabled promote requires a passing eval (model-dependent — covered by the Wave-2 service unit tests).
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
-        // Promotion moves staging → active; provenance (Analysis) is preserved through the transition.
-        AssertEx.Equal("Enabled", root.GetProperty("state").GetString());
-        AssertEx.Equal("Analysis", root.GetProperty("source").GetString());
+        AssertEx.Equal("EvalRequired", root.GetProperty("status").GetString());
     }
 
     [Test]
