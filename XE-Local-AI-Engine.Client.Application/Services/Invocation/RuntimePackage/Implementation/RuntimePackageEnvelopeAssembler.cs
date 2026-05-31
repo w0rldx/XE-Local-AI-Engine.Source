@@ -10,6 +10,9 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
+/// <summary>
+///     Represents runtime package envelope assembler.
+/// </summary>
 public sealed class RuntimePackageEnvelopeAssembler : IRuntimePackageEnvelopeAssembler
 {
     private readonly IEnvelopeCryptoService _envelopeCryptoService;

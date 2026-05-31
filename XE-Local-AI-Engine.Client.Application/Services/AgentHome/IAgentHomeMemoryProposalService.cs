@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Marker H memory proposal export (AgentHome plan §6.5 / §10). Collects the agent-written JSONL proposal files from
+///     memory-proposal export memory proposal export. Collects the agent-written JSONL proposal files from
 ///     a run's <c>/agent-home/runs/&lt;run-id&gt;/memory/proposals/</c> directory, validates each record against the §10
 ///     MVP schema, and applies a regex-based secret scan before returning. The service never mutates real node/platform
 ///     memory — proposals are durable run artifacts returned to the caller for later user/platform review.

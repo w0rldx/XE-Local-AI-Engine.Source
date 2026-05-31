@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+/// <summary>
+///     Represents chat stream event types.
+/// </summary>
 public static class ChatStreamEventTypes
 {
     public const string UserMessagePersisted = "user-message-persisted";
@@ -15,6 +18,9 @@ public static class ChatStreamEventTypes
     public const string ToolCallCompleted = "tool-call-completed";
 }
 
+/// <summary>
+///     Request DTO for node chat stream operations.
+/// </summary>
 public sealed record NodeChatStreamRequest(
     Guid ConversationId,
     string Content,
@@ -26,6 +32,9 @@ public sealed record NodeChatStreamRequest(
     string? ReasoningEffort = null,
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null);
 
+/// <summary>
+///     Value object carrying chat stream event data.
+/// </summary>
 public sealed record ChatStreamEvent(
     string Type,
     Guid ConversationId,

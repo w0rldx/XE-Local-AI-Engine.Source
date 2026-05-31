@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using System.Text.Json;
 
+/// <summary>
+///     Persistence boundary for node settings data.
+/// </summary>
 public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
 {
     private const string SettingsFileName = "node-settings.json";

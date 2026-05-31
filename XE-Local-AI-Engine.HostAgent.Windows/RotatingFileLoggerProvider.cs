@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 using System.Collections.Concurrent;
 using System.Globalization;
 
+/// <summary>
+///     Provider implementation for rotating file logger behavior.
+/// </summary>
 public sealed class RotatingFileLoggerProvider : ILoggerProvider
 {
     private const long MaxLogFileBytes = 10 * 1024 * 1024;

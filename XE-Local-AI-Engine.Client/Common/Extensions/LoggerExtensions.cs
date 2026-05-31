@@ -5,6 +5,9 @@ using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
 using ILogger = Serilog.ILogger;
 
+/// <summary>
+///     Represents logger extensions.
+/// </summary>
 public static class LoggerExtensions
 {
     public static ILogger CreateStartupLogger(this IHostEnvironment environment)

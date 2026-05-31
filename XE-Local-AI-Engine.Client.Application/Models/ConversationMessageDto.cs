@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Transport DTO for conversation message data.
+/// </summary>
 public sealed record ConversationMessageDto
 {
     public required Guid Id { get; init; }

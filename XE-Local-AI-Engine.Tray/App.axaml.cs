@@ -13,6 +13,9 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 
+/// <summary>
+///     Represents app.
+/// </summary>
 public sealed class App : Application, IDisposable
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);

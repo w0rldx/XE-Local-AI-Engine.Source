@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 
+/// <summary>
+///     Local API contract type for node auth cookie.
+/// </summary>
 public static class NodeAuthCookie
 {
     public const string RefreshCookieName = "node_rt";

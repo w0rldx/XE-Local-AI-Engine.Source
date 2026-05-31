@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
 ///     Writes and recovers the worker-local <c>agent-home</c> layout on the deterministic host root (AgentHome plan
-///     Marker D, §4, §6.6, §13). The Marker C sandbox SPI cannot author a directory tree (copy-into needs a host
+///     layout initializer, §4, §6.6, §13). The sandbox provider abstraction sandbox SPI cannot author a directory tree (copy-into needs a host
 ///     source, there is no mkdir, exec is scripted), and the layout must exist while Agent Mode is disabled, so the
 ///     layout is materialized on the host root via <see cref="System.IO" />; later markers copy the prepared tree
 ///     into the sandbox. The provider is consumed only to kill prior runtime state on an owner change.

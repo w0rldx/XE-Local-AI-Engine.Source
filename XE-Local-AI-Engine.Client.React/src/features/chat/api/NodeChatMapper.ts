@@ -69,7 +69,7 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		reasoningTokens: dto.reasoningTokens ?? undefined,
 		parentMessageId: dto.parentMessageId ?? undefined,
 		variantGroupId: dto.variantGroupId ?? undefined,
-		// Feedback travels on the message (Phase 5.3): map rating only when present (null = no feedback), so the
+		// Feedback travels on the message (feedback flow): map rating only when present (null = no feedback), so the
 		// control stays neutral instead of defaulting to a thumbs-up. Comment is dropped when there is no rating.
 		feedbackRating: dto.feedbackRating != null ? toRating(dto.feedbackRating) : undefined,
 		feedbackComment: dto.feedbackRating != null ? (dto.feedbackComment ?? undefined) : undefined,

@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 
+/// <summary>
+///     Abstraction for worker event dispatcher behavior.
+/// </summary>
 public interface IWorkerEventDispatcher
 {
     InvocationState? CurrentInvocation { get; }

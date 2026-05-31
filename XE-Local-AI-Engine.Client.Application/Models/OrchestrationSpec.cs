@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
 ///     The compiled, MAF-agnostic orchestration spec carried on the loopback <see cref="RuntimePackage" /> when a
-///     conversation is bound to a <c>Kind=Orchestrator</c> definition whose effective model is tool-capable (loop P5).
+///     conversation is bound to a <c>Kind=Orchestrator</c> definition whose effective model is tool-capable (orchestration).
 ///     It is OPTIONAL: <c>null</c> on the single-agent loopback path and on the encrypted/server path, where the
 ///     config hash stays byte-identical to today. The orchestration resolver produces it from a topology + the
 ///     per-participant P3 tool projection; the invocation factory compiles it 1:1 into the workflow participants, and

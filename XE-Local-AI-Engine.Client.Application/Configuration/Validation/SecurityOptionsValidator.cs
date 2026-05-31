@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
+/// <summary>
+///     Startup/options validator for security options settings.
+/// </summary>
 public sealed class SecurityOptionsValidator : IValidateOptions<SecurityOptions>
 {
     public ValidateOptionsResult Validate(string? name, SecurityOptions options)

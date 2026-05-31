@@ -5,6 +5,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Persistence boundary for file dead letter data.
+/// </summary>
 public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
 {
     private const long MaxQueueSizeBytes = 100L * 1024 * 1024;

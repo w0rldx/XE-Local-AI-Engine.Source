@@ -4,7 +4,7 @@ import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilitie
 import { McpServersPage } from "@/features/mcp/pages/McpServersPage";
 
 export const Route = createFileRoute("/_layout/mcp")({
-	// Capability gate (loop P4): when mcpServers is off the route is hidden — navigating to it redirects
+	// Capability gate (dynamic tool-catalog): when mcpServers is off the route is hidden — navigating to it redirects
 	// home, matching the nav link being filtered out of NavigationMenuData.
 	beforeLoad: () => {
 		if (!nodeCapabilities.mcpServers) {

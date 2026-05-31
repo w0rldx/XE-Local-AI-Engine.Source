@@ -4,6 +4,9 @@ using System.ComponentModel;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
+/// <summary>
+///     Represents capability detector.
+/// </summary>
 public sealed class CapabilityDetector
 {
     private const string AmdUnsupported = "unsupported";

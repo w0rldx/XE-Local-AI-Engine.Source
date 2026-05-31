@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 
+/// <summary>
+///     Application service for node identity initialization behavior.
+/// </summary>
 public sealed class NodeIdentityInitializationService
 {
     public const string AdminRoleName = "Admin";

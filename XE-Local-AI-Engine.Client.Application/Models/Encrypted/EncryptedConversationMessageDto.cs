@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 
 using System.Text.Json.Serialization;
 
+/// <summary>
+///     Transport DTO for encrypted conversation message data.
+/// </summary>
 public sealed record EncryptedConversationMessageDto
 {
     [JsonPropertyOrder(1)]

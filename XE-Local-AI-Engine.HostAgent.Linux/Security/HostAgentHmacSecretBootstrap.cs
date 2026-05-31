@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Security;
 
 using System.Security.Cryptography;
 
+/// <summary>
+///     Represents host agent hmac secret bootstrap.
+/// </summary>
 public static class HostAgentHmacSecretBootstrap
 {
     public static void EnsureNativeSecret(IConfiguration configuration)

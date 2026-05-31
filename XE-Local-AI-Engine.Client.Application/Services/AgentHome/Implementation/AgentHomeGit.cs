@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
-///     Shared constants and argument helpers for the in-sandbox git commands used by the workspace baseline (Marker F)
-///     and the patch export (Marker G). Centralizing the executable, the workspace root, and the byte-stabilizing
-///     <c>-c</c> flags keeps the baseline and the diff consistent (AgentHome plan §9.1) — the baseline must be created
+///     Shared constants and argument helpers for the in-sandbox git commands used by the workspace baseline (workspace copy)
+///     and the patch export (patch export). Centralizing the executable, the workspace root, and the byte-stabilizing
+///     <c>-c</c> flags keeps the baseline and the diff consistent — the baseline must be created
 ///     with the same hardened configuration the diff is later taken under, or the diff bytes drift under copied
 ///     <c>.gitattributes</c>.
 /// </summary>
@@ -26,7 +26,7 @@ internal static class AgentHomeGit
     ];
 
     /// <summary>
-    ///     Builds a git argument list prefixed with the byte-stabilizing <c>-c</c> flags (AgentHome plan §9.1): hooks
+    ///     Builds a git argument list prefixed with the byte-stabilizing <c>-c</c> flags: hooks
     ///     and the global attributes file are disabled so neither host hooks nor a copied <c>.gitattributes</c> can
     ///     alter the baseline or diff bytes, and <c>core.quotePath=false</c> emits non-ASCII path bytes literally so the
     ///     <c>--name-status</c> parser maps a copied folder's <c>&lt;alias&gt;/…</c> path correctly instead of seeing a

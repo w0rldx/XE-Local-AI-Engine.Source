@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Capabilities.Implementation;
 
 using System.Diagnostics;
 
+/// <summary>
+///     Represents process runner.
+/// </summary>
 public sealed class ProcessRunner : IProcessRunner
 {
     public async Task<ProcessResult> RunAsync(string fileName,

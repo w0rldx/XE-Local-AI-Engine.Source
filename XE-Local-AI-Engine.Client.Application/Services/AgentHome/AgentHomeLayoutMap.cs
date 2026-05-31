@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     The canonical worker-local AgentHome directory layout (AgentHome plan §4). This set is the single source of
+///     The canonical worker-local AgentHome directory layout. This set is the single source of
 ///     truth for both creation and partial-layout self-heal. Baseline file contents are produced by
 ///     <c>AgentHomeManifestService</c>. Per-run <c>/runs/&lt;run-id&gt;</c> directories are created by the run path
 ///     in a later marker, so only the empty <c>runs</c> root is listed here.

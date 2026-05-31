@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using ProtoNetworkMode = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.SandboxNetworkMode;
 
 /// <summary>
-///     Serves the <c>SandboxControl</c> gRPC contract (Marker J-local plan §4.2) by translating proto requests into
+///     Serves the <c>SandboxControl</c> gRPC contract (local-container sandbox plan §4.2) by translating proto requests into
 ///     <see cref="IDockerRuntimeClient" /> sandbox operations and back. The global HMAC interceptor authenticates
 ///     every call (the rpcs are unary by design — plan §2 D2), so this service does no auth wiring. It validates the
 ///     attach key against container labels on attach, redacts host paths from error detail, and surfaces failures as
@@ -173,7 +173,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Best-effort cancel (plan §6, D9): there is no durable server-side exec registry in the unary model, so the
+        // Best-effort cancel: there is no durable server-side exec registry in the unary model, so the
         // cancellation token threaded into ExecuteCommand is the cancellation channel. A standalone CancelCommand is a
         // no-op (the fake provider is also a no-op here) — never throws on a missing execution id.
         return Task.FromResult(new Empty());
@@ -274,7 +274,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
             throw Invalid("A sandbox image is required.");
         }
 
-        // FIX 4 (observability): the create path folds a Restricted request to the no-network default for MVP. Log it
+        // observability guard (observability): the create path folds a Restricted request to the no-network default for MVP. Log it
         // once so the degradation is observable rather than silent; the enum is retained for future enforcement.
         if (request.Network == ProtoNetworkMode.Restricted)
         {
@@ -316,7 +316,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
 
     private static string BuildContainerName(SandboxAttachKeyMessage attachKey)
     {
-        // Deterministic, filesystem-safe name (plan §5.2): prefix + node + a short owner hash. The raw owner is kept
+        // Deterministic, filesystem-safe name: prefix + node + a short owner hash. The raw owner is kept
         // on the container labels for attach validation; the name only needs to be stable and collision-resistant.
         var ownerHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(attachKey.OwnerUserId)))[..12];
         var node = Sanitize(attachKey.NodeId);

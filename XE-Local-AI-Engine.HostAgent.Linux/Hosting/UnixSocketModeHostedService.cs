@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Hosting;
 
+/// <summary>
+///     Application service for unix socket mode hosted behavior.
+/// </summary>
 public sealed class UnixSocketModeHostedService : IHostedService
 {
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);

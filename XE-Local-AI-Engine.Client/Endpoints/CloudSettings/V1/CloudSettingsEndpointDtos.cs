@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+/// <summary>
+///     Response DTO for cloud settings operations.
+/// </summary>
 public sealed record CloudSettingsResponse
 {
     public static CloudSettingsResponse Empty { get; } = new()
@@ -22,6 +25,9 @@ public sealed record CloudSettingsResponse
     public bool HasStoredApiKey { get; init; }
 }
 
+/// <summary>
+///     Request DTO for save cloud settings operations.
+/// </summary>
 public sealed record SaveCloudSettingsRequest
 {
     public string ProviderName { get; init; } = CloudProviderOptions.ProviderAzureFoundry;

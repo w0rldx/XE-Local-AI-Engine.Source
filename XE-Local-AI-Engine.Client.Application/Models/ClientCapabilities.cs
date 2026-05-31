@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Value object carrying client capabilities data.
+/// </summary>
 public sealed record ClientCapabilities
 {
     public int SchemaVersion { get; init; } = 2;
@@ -43,6 +46,9 @@ public sealed record ClientCapabilities
     public int MaxMessageRequestTimeoutSeconds { get; init; } = 300;
 }
 
+/// <summary>
+///     Value object carrying client model metadata data.
+/// </summary>
 public sealed record ClientModelMetadata
 {
     public required string Name { get; init; }

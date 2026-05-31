@@ -200,7 +200,7 @@ static void ActivateInvocationResumeRegistry(IServiceProvider services)
     ArgumentNullException.ThrowIfNull(services);
 
     // Eagerly resolve the registry so it subscribes to the dispatcher before any invocation can start,
-    // ensuring it observes every live invocation from the first one (Phase 2.2 resume support).
+    // ensuring it observes every live invocation from the first one for reconnect/resume support.
     _ = services.GetRequiredService<IInvocationResumeRegistry>();
 }
 
@@ -232,6 +232,9 @@ static void RegisterWorkerShutdownDrain(WebApplication app)
 
 namespace XE_Local_AI_Engine.Client
 {
+    /// <summary>
+    ///     Application entry point for this executable.
+    /// </summary>
     public class Program
     {
         protected Program()

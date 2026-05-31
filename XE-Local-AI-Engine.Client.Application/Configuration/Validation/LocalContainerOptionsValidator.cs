@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Fail-closed validation for <see cref="LocalContainerOptions" /> (AgentHome plan §5.1). The provider applies a
+///     Fail-closed validation for <see cref="LocalContainerOptions" />. The provider applies a
 ///     resource ceiling and a network posture to a privileged sandbox container, so every limit must be positive and
 ///     the network mode must be one of the two provider-neutral postures (<c>none</c>/<c>restricted</c>); a blank image
 ///     or name prefix would produce an unnamed/imageless create. Validation runs only when the <c>local-container</c>

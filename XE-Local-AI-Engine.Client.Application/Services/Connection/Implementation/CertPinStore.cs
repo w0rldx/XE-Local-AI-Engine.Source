@@ -6,6 +6,9 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 
+/// <summary>
+///     Persistence boundary for cert pin data.
+/// </summary>
 public sealed class CertPinStore : ICertPinStore, IDisposable
 {
     private const char Delimiter = '|';

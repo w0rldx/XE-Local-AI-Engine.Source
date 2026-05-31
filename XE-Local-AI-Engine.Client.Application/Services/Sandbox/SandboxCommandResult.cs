@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Outcome of a <see cref="ISandboxRuntimeProvider.ExecuteAsync" /> call (AgentHome plan §6.2).
+///     Outcome of a <see cref="ISandboxRuntimeProvider.ExecuteAsync" /> call.
 ///     <see cref="Completed" /> is <see langword="false" /> when the command was cancelled or the sandbox was killed
 ///     before it finished. The real provider must redact host paths from <see cref="StandardError" /> at Information
-///     level (AgentHome plan §6.2.1) — that is a logging rule for the provider, not part of this DTO.
+///     level — that is a logging rule for the provider, not part of this DTO.
 /// </summary>
 public sealed record SandboxCommandResult
 {

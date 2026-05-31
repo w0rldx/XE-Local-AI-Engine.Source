@@ -4,6 +4,9 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Persistence boundary for node selected folder data.
+/// </summary>
 public sealed class NodeSelectedFolderStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : INodeSelectedFolderStore
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

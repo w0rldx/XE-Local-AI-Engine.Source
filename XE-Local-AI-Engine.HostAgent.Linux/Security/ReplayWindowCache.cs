@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Security;
 
+/// <summary>
+///     Represents replay window cache.
+/// </summary>
 public sealed class ReplayWindowCache
 {
     private readonly Dictionary<long, BucketEntries> _buckets = [];

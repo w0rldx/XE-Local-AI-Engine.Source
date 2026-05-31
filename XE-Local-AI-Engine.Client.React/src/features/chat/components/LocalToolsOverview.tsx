@@ -47,7 +47,7 @@ function LocalToolRow({ tool }: LocalToolRowProps) {
 	);
 }
 
-// Read-only overview of the node tool catalog (loop P4): built-in in-process tools plus tools discovered from
+// Read-only overview of the node tool catalog (dynamic tool-catalog): built-in in-process tools plus tools discovered from
 // enabled MCP servers. The catalog is fetched live (useToolCatalog) — it replaces the former static
 // localToolCatalog const, so MCP tools appear/disappear with server enable/disable and each row shows its
 // originating source (built-in vs a specific MCP server).

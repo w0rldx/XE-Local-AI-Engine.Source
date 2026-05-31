@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 using FastEndpoints;
 using FluentValidation;
 
+/// <summary>
+///     Startup/options validator for create node chat conversation request settings.
+/// </summary>
 public sealed class CreateNodeChatConversationRequestValidator : Validator<CreateNodeChatConversationRequest>
 {
     public CreateNodeChatConversationRequestValidator()
@@ -15,6 +18,9 @@ public sealed class CreateNodeChatConversationRequestValidator : Validator<Creat
     }
 }
 
+/// <summary>
+///     Startup/options validator for list node chat conversations request settings.
+/// </summary>
 public sealed class ListNodeChatConversationsRequestValidator : Validator<ListNodeChatConversationsRequest>
 {
     public ListNodeChatConversationsRequestValidator()
@@ -25,6 +31,9 @@ public sealed class ListNodeChatConversationsRequestValidator : Validator<ListNo
     }
 }
 
+/// <summary>
+///     Startup/options validator for get node chat conversation request settings.
+/// </summary>
 public sealed class GetNodeChatConversationRequestValidator : Validator<GetNodeChatConversationRequest>
 {
     public GetNodeChatConversationRequestValidator()
@@ -34,6 +43,9 @@ public sealed class GetNodeChatConversationRequestValidator : Validator<GetNodeC
     }
 }
 
+/// <summary>
+///     Startup/options validator for delete node chat conversation request settings.
+/// </summary>
 public sealed class DeleteNodeChatConversationRequestValidator : Validator<DeleteNodeChatConversationRequest>
 {
     public DeleteNodeChatConversationRequestValidator()
@@ -43,6 +55,9 @@ public sealed class DeleteNodeChatConversationRequestValidator : Validator<Delet
     }
 }
 
+/// <summary>
+///     Startup/options validator for set node chat selected path request settings.
+/// </summary>
 public sealed class SetNodeChatSelectedPathRequestValidator : Validator<SetNodeChatSelectedPathRequest>
 {
     public SetNodeChatSelectedPathRequestValidator()
@@ -52,6 +67,9 @@ public sealed class SetNodeChatSelectedPathRequestValidator : Validator<SetNodeC
     }
 }
 
+/// <summary>
+///     Startup/options validator for cancel node chat message request settings.
+/// </summary>
 public sealed class CancelNodeChatMessageRequestValidator : Validator<CancelNodeChatMessageRequest>
 {
     public CancelNodeChatMessageRequestValidator()

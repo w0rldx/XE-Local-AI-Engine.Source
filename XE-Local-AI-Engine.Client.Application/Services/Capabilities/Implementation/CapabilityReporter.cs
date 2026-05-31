@@ -12,6 +12,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+/// <summary>
+///     Represents capability reporter.
+/// </summary>
 public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 {
     private const int CapabilitySchemaVersion = 2;
@@ -24,7 +27,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     private static readonly string[] VisionModelMarkers = ["llava", "bakllava", "vision", "moondream", "minicpm-v"];
     private static readonly string[] BaseCapabilities = ["text"];
 
-    // AgentHome MVP capability strings (Marker A). Advertised only when AgentHome:Enabled=true so a node
+    // AgentHome MVP capability strings (capability flag). Advertised only when AgentHome:Enabled=true so a node
     // never claims sandbox/workspace/patch/memory support it cannot serve. The normalizer trims/dedupes/
     // sorts these, and the server stores SupportedCapabilities as a free-form JSON list (no schema bump).
     private static readonly string[] AgentHomeCapabilities =

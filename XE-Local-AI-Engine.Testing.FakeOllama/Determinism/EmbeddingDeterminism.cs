@@ -4,6 +4,9 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 
+/// <summary>
+///     Represents embedding determinism.
+/// </summary>
 public static class EmbeddingDeterminism
 {
     public static IReadOnlyList<double> EmbedDeterministic(string input, int dimensions)

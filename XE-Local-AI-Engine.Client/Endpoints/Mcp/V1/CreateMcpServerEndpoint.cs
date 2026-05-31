@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
+/// <summary>
+///     FastEndpoints handler for the create mcp server local API operation.
+/// </summary>
 public sealed class CreateMcpServerEndpoint(IMcpServerService mcpServerService)
     : Endpoint<CreateMcpServerRequest, McpServerResponse>
 {

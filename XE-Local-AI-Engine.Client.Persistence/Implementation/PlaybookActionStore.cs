@@ -5,6 +5,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Persistence boundary for playbook action data.
+/// </summary>
 public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IPlaybookActionStore
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

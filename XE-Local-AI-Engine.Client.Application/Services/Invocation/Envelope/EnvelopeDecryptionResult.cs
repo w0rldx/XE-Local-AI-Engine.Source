@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
 using System.Security.Cryptography;
 
+/// <summary>
+///     Represents envelope decryption result.
+/// </summary>
 public sealed class EnvelopeDecryptionResult : IDisposable
 {
     private byte[]? _epochKey;

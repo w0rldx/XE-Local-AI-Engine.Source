@@ -8,6 +8,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 
+/// <summary>
+///     Application service for node chat persistence behavior.
+/// </summary>
 public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer) : INodeChatPersistenceService
 {
     private const string UserRole = "user";

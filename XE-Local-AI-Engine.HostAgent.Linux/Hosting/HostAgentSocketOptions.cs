@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Hosting;
 
 using System.Text;
 
+/// <summary>
+///     Configuration options for host agent socket behavior.
+/// </summary>
 public sealed record HostAgentSocketOptions
 {
     public const UnixFileMode DefaultSocketFileMode = UnixFileMode.UserRead

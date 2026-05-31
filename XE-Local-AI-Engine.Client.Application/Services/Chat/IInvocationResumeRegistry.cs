@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 ///     NEW SignalR connection id can re-attach to a still-running invocation and resume the stream.
 /// </summary>
 /// <remarks>
-///     This is the resume target from Phase 2.2. It is NOT <c>NodeChatMigrationRecoveryService</c> (which only
+///     This is the live-stream resume target. It is NOT <c>NodeChatMigrationRecoveryService</c> (which only
 ///     clears the <c>__EFMigrationsLock</c>) and NOT <c>NodeChatRestartRecoveryService</c> (which terminalizes
 ///     dangling interrupted rows after a process restart). A registry entry exists only while the invocation is
 ///     in a non-terminal state (<see cref="InvocationStatus.Assigned" />/<see cref="InvocationStatus.Running" />);

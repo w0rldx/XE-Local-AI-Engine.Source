@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     Shared per-invocation persistence pump (Phase 0.2). It consumes the <see cref="InvocationState" /> deltas a
+///     Shared per-invocation persistence pump. It consumes the <see cref="InvocationState" /> deltas a
 ///     single agent run produces and persists them to node SQLite through <see cref="INodeChatPersistenceService" />
 ///     — flushing streamed partials and terminalizing the assistant message — for BOTH front doors:
 ///     <list type="bullet">

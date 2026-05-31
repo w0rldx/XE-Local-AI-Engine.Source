@@ -7,6 +7,9 @@ using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
+/// <summary>
+///     Represents conflict exception handler.
+/// </summary>
 public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)

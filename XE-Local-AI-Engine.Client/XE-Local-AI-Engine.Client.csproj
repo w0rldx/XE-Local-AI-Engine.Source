@@ -18,7 +18,7 @@
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
     <NodeReactClientDir>$(MSBuildProjectDirectory)\..\XE-Local-AI-Engine.Client.React\</NodeReactClientDir>
     <NodeReactBuildDir>$(NodeReactClientDir)dist\</NodeReactBuildDir>
-    <!-- Cutover (Plan Phase 7.2): the React build is copied to the wwwroot root (Vite base "/"),
+    <!-- The React build is copied to the wwwroot root (Vite base "/"),
          not the transition wwwroot\app\ sub-directory. -->
     <NodeReactWebRootDir>$(MSBuildProjectDirectory)\wwwroot\</NodeReactWebRootDir>
   </PropertyGroup>

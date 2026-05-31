@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using XE_Local_AI_Engine.HostAgent.Linux.Hosting;
 
+/// <summary>
+///     Application service for host agent runtime metadata hosted behavior.
+/// </summary>
 public sealed class HostAgentRuntimeMetadataHostedService : IHostedService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)

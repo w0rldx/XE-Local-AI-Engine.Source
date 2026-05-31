@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Value object carrying tool call request payload data.
+/// </summary>
 public sealed record ToolCallRequestPayload
 {
     public required Guid InvocationId { get; init; }

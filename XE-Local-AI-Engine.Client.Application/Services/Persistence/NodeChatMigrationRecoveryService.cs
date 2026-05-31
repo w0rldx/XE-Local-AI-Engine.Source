@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 
+/// <summary>
+///     Application service for node chat migration recovery behavior.
+/// </summary>
 public sealed class NodeChatMigrationRecoveryService
 {
     private const string ConnectionStringName = "node-sqlite";

@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Represents node refresh token.
+/// </summary>
 public sealed class NodeRefreshToken
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();

@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
+/// <summary>
+///     Transport DTO for mixed envelope allowed tool data.
+/// </summary>
 public sealed record MixedEnvelopeAllowedToolDto
 {
     [JsonPropertyOrder(1)]

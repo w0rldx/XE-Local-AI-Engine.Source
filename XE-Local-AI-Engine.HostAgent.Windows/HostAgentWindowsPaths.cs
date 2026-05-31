@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Windows;
 
+/// <summary>
+///     Value object carrying host agent windows paths data.
+/// </summary>
 public sealed record HostAgentWindowsPaths(
     string RootDirectory,
     string LogDirectory,

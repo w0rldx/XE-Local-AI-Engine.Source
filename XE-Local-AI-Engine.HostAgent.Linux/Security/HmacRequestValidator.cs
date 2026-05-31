@@ -8,6 +8,9 @@ using Google.Protobuf;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 
+/// <summary>
+///     Startup/options validator for hmac request settings.
+/// </summary>
 public sealed class HmacRequestValidator
 {
     public const string RequestIdHeader = HostAgentHmacMetadata.RequestIdHeader;

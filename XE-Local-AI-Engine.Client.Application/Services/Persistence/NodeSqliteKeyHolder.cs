@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 
+/// <summary>
+///     Represents node sqlite key holder.
+/// </summary>
 public sealed class NodeSqliteKeyHolder : INodeSqliteKeyHolder
 {
     private const int ExpectedKeyLength = 32;

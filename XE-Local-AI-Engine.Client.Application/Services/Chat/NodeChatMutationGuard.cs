@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Reusable, authoritative server-side guard (Phase 1.5) that rejects mutations targeting an
+///     Reusable, authoritative server-side guard that rejects mutations targeting an
 ///     <c>Origin=Remote</c> conversation. Remote-origin rows are node-local mirrors of platform-served chats and
 ///     are view-only on the node: they must never sync back, and the node retains no epoch key to re-drive them.
 ///     Applied to ALL content/state mutation entry points (send, rename, pin, archive, branch, revision, feedback,
@@ -18,6 +18,9 @@ public interface INodeChatMutationGuard
     Task EnsureMutableAsync(Guid conversationId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+///     Represents node chat mutation guard.
+/// </summary>
 public sealed class NodeChatMutationGuard(INodeChatPersistenceService persistence) : INodeChatMutationGuard
 {
     private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));

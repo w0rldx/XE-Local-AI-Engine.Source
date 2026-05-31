@@ -18,6 +18,9 @@ using XE_Local_AI_Engine.HostAgent.Linux.Reconciliation;
 using XE_Local_AI_Engine.HostAgent.Linux.Security;
 using XE_Local_AI_Engine.HostAgent.Linux.Services;
 
+/// <summary>
+///     Application entry point for this executable.
+/// </summary>
 public static class Program
 {
     public static void Main(string[] args)

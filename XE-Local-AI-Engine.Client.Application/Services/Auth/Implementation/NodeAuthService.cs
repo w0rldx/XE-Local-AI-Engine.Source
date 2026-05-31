@@ -9,6 +9,9 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Application service for node auth behavior.
+/// </summary>
 public sealed class NodeAuthService : INodeAuthService
 {
     private static readonly SemaphoreSlim SetupLock = new(1, 1);

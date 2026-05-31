@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models.NodeBinding;
 
+/// <summary>
+///     Value object carrying node binding session data.
+/// </summary>
 public sealed record NodeBindingSession
 {
     public required string DeviceCode { get; init; }

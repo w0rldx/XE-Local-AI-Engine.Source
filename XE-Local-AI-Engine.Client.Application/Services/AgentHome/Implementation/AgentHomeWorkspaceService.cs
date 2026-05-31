@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 /// <summary>
-///     Marker F <see cref="IAgentHomeWorkspaceService" />. For each trusted selected folder it walks the real host
+///     workspace copy <see cref="IAgentHomeWorkspaceService" />. For each trusted selected folder it walks the real host
 ///     tree once to plan the copy (applying the sensitive-file exclusions, resolving symlinks/reparse points against
 ///     the canonical root, and summing surviving bytes), blocks a folder that exceeds the byte budget, then copies the
 ///     survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox provider. After at least
-///     one folder copies it creates a temporary in-sandbox git baseline that Marker G's patch export diffs against. The
-///     model-facing result carries aliases and counts only — never host paths (AgentHome plan §8.2/§8.3/§11).
+///     one folder copies it creates a temporary in-sandbox git baseline that patch export's patch export diffs against. The
+///     model-facing result carries aliases and counts only — never host paths.
 /// </summary>
 internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 {
@@ -81,7 +81,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
         if (folder.Mode == SelectedFolderMode.ReadOnlyMount)
         {
-            // No MVP provider supports read-only mounts; copy instead (AgentHome plan §8.4 fallback).
+            // No MVP provider supports read-only mounts; copy instead.
             _logger.LogInformation(
                 "Selected folder {Alias} requested a read-only mount; copying instead (no provider mount support).",
                 folder.Alias);
@@ -213,7 +213,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     private static void HandleReparseEntry(FileSystemInfo info, string root, string alias)
     {
         // A reparse point that cannot be resolved, or whose target escapes the trusted root, is an attack signal:
-        // fail closed for the whole prepare (AgentHome plan §8.2). A within-root link is skipped — its real target is
+        // fail closed for the whole prepare. A within-root link is skipped — its real target is
         // already covered by the direct walk, and skipping avoids cycles and duplicate copies.
         if (!HostPathSafety.TryResolveReparseWithinRoot(info, root, out var withinRoot))
         {
@@ -230,8 +230,8 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
     private async Task CreateGitBaselineAsync(SandboxHandle handle, CancellationToken cancellationToken)
     {
-        // The baseline must be captured after copy and before any agent edit, so it lives in preparation (Marker F),
-        // not in the run-time patch export (Marker G), which runs after the agent has changed files. The §9.1
+        // The baseline must be captured after copy and before any agent edit, so it lives in preparation (workspace copy),
+        // not in the run-time patch export (patch export), which runs after the agent has changed files. The §9.1
         // byte-stabilizing flags (hooks/attributes disabled, autocrlf/filemode off) make the later diff reproducible
         // even if a copied .gitattributes would otherwise perturb the bytes; the baseline must use the same flags the
         // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
@@ -261,10 +261,10 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             var result = await _provider.ExecuteAsync(handle, command, cancellationToken).ConfigureAwait(false);
             if (!result.Completed || result.ExitCode != 0)
             {
-                // A failed baseline command leaves no reproducible HEAD for the Marker G diff to compare against, so
+                // A failed baseline command leaves no reproducible HEAD for the patch export diff to compare against, so
                 // fail the prepare loudly rather than letting a later export silently report zero changes. The message
                 // carries only the command's execution id and exit code — never a host path. (Real non-zero git exits
-                // arrive with the local-container provider in Marker J-local.)
+                // arrive with the local-container provider in local-container sandbox.)
                 throw new AgentHomeRequestRejectedException(
                     $"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
             }

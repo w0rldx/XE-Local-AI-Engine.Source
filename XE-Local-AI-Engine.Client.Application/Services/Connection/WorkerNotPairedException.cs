@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Exception raised for worker not paired failures.
+/// </summary>
 public class WorkerNotPairedException : InvalidOperationException
 {
     public WorkerNotPairedException()

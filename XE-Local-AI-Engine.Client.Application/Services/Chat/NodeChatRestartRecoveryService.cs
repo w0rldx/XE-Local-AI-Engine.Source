@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>
+///     Application service for node chat restart recovery behavior.
+/// </summary>
 public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer)
 {
     public const string RestartInterruptedError = "Interrupted by application restart before terminal status.";

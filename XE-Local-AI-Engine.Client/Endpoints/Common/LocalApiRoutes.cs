@@ -1,14 +1,23 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 
+/// <summary>
+///     Local API contract type for local api routes.
+/// </summary>
 public static class LocalApiRoutes
 {
     public const string Prefix = "api/local/v1";
 
+    /// <summary>
+    ///     Local API contract type for api foundation.
+    /// </summary>
     public static class ApiFoundation
     {
         public const string ValidationProblemProbe = "diagnostics/validation-probe";
     }
 
+    /// <summary>
+    ///     Local API contract type for auth.
+    /// </summary>
     public static class Auth
     {
         public const string Status = "auth/status";
@@ -20,6 +29,9 @@ public static class LocalApiRoutes
         public const string Me = "auth/me";
     }
 
+    /// <summary>
+    ///     Local API contract type for local chat.
+    /// </summary>
     public static class LocalChat
     {
         public const string Hub = "/api/local/v1/chat/hub";
@@ -35,6 +47,9 @@ public static class LocalApiRoutes
         public const string Cancel = "chat/cancel";
     }
 
+    /// <summary>
+    ///     Local API contract type for node binding.
+    /// </summary>
     public static class NodeBinding
     {
         public const string Start = "binding/start";
@@ -42,6 +57,9 @@ public static class LocalApiRoutes
         public const string Cancel = "binding/cancel";
     }
 
+    /// <summary>
+    ///     Local API contract type for connection.
+    /// </summary>
     public static class Connection
     {
         public const string Status = "connection";
@@ -51,16 +69,25 @@ public static class LocalApiRoutes
         public const string DisableAutoConnect = "connection/auto-connect/disable";
     }
 
+    /// <summary>
+    ///     Local API contract type for node settings.
+    /// </summary>
     public static class NodeSettings
     {
         public const string Settings = "node-settings";
     }
 
+    /// <summary>
+    ///     Local API contract type for cloud settings.
+    /// </summary>
     public static class CloudSettings
     {
         public const string Settings = "cloud-settings";
     }
 
+    /// <summary>
+    ///     Local API contract type for local models.
+    /// </summary>
     public static class LocalModels
     {
         public const string Models = "models";
@@ -70,6 +97,9 @@ public static class LocalApiRoutes
         public const string Pull = "models/pull";
     }
 
+    /// <summary>
+    ///     Local API contract type for runtime manager.
+    /// </summary>
     public static class RuntimeManager
     {
         public const string Hub = "/api/local/v1/runtime/hub";
@@ -77,11 +107,17 @@ public static class LocalApiRoutes
         public const string ContainerAction = "runtime/containers/action";
     }
 
+    /// <summary>
+    ///     Local API contract type for invocations.
+    /// </summary>
     public static class Invocations
     {
         public const string Monitor = "invocations";
     }
 
+    /// <summary>
+    ///     Local API contract type for agents.
+    /// </summary>
     public static class Agents
     {
         public const string Definitions = "agents";
@@ -123,6 +159,9 @@ public static class LocalApiRoutes
         public const string PlaybookMonitor = "agents/{agentDefinitionId}/playbook/monitor";
     }
 
+    /// <summary>
+    ///     Local API contract type for mcp.
+    /// </summary>
     public static class Mcp
     {
         public const string Servers = "mcp/servers";

@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Collections.Concurrent;
 
+/// <summary>
+///     Represents node chat stream cancellation registry.
+/// </summary>
 public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancellationRegistry
 {
     private readonly ConcurrentDictionary<NodeChatMessageCorrelation, Action> _activeStreams = [];

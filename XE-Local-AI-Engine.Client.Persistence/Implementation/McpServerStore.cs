@@ -5,6 +5,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
+/// <summary>
+///     Persistence boundary for mcp server data.
+/// </summary>
 public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IMcpServerStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

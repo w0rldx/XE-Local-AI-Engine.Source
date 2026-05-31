@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Windows.Wsl;
 
+/// <summary>
+///     Application service for host agent admin behavior.
+/// </summary>
 public sealed class HostAgentAdminService : IDisposable
 {
     private static readonly TimeSpan DefaultDrainTimeout = TimeSpan.FromSeconds(30);
@@ -188,6 +191,12 @@ public sealed class HostAgentAdminService : IDisposable
     }
 }
 
+/// <summary>
+///     Value object carrying host agent admin action result data.
+/// </summary>
 public sealed record HostAgentAdminActionResult(string DesiredState, IReadOnlyList<string> Diagnostics);
 
+/// <summary>
+///     Value object carrying host agent log tail data.
+/// </summary>
 public sealed record HostAgentLogTail(IReadOnlyList<string> Lines);

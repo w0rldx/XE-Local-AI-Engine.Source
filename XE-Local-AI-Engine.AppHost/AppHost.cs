@@ -31,7 +31,7 @@ var hostAgentDataDirectoryName = enableHostAgentRuntimeFidelity
     ? "host-agent-runtime-fidelity"
     : "host-agent-dev";
 // Unix domain socket paths are capped at 108 chars (sun_path). The AppHost project dir
-// is too deep (>108), so on Unix root the dev socket under the temp dir to stay under the limit.
+// is too deep (>108), so on Unix root the dev socket under a short temporary directory to stay under the limit.
 var hostAgentSocketPath = OperatingSystem.IsWindows()
     ? Path.Combine(builder.AppHostDirectory, ".data", hostAgentDataDirectoryName, "host-agent.sock")
     : Path.Combine(Path.GetTempPath(), "xe-ha", hostAgentDataDirectoryName, "host-agent.sock");

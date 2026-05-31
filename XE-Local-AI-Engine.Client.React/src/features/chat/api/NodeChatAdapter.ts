@@ -145,7 +145,7 @@ interface StreamOpening {
  * turn, we wait for the connection to reconnect with a new id and re-attach via the hub's `ResumeMessage`
  * (keyed by the invocation/request id). Resumed events carry the invocation id as their message id, so they
  * are remapped back to the assistant message id the caller is rendering. Used for both local sends and
- * server-driven regenerations (Phase 5.2) — the regenerate latches its server-minted ids from the first event.
+ * server-driven regenerations (assistant revision flow) — the regenerate latches its server-minted ids from the first event.
  */
 function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterable<NodeChatStreamEventDto> {
 	return {
@@ -336,7 +336,7 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		);
 	},
 	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, signal) {
-		// Server mints the sibling variant + drives the run (Phase 5.2); the variant messageId + requestId arrive
+		// Server mints the sibling variant + drives the run (assistant revision flow); the variant messageId + requestId arrive
 		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
 		// current reasoning + local-tools selection plus the active conversation-tree path via the hub args
 		// (RegenerateMessage(conversationId, messageId, effort, useLocalTools, selectedPath)).

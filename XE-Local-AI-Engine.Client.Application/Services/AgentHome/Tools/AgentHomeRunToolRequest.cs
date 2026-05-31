@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     Typed projection of the <c>run_in_agent_home</c> JSON arguments (AgentHome plan §7). The
+///     Typed projection of the <c>run_in_agent_home</c> JSON arguments. The
 ///     <see cref="MetadataToolFunction" /> bridge stays JSON-in / JSON-out, so the handler deserializes into this
 ///     record and validates it against the §7 constraints before any execution — the schema advertised to the
 ///     model is advisory; this validation is authoritative.

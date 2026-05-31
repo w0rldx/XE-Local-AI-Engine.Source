@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Common.Extensions;
 
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+///     Represents problem details extensions.
+/// </summary>
 public static class ProblemDetailsExtensions
 {
     public static TProblemDetails WithTraceId<TProblemDetails>(this TProblemDetails problemDetails, HttpContext httpContext)

@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Application service for pairing behavior.
+/// </summary>
 public sealed class PairingService : IPairingService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

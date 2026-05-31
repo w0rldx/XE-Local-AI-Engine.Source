@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Windows;
 
+/// <summary>
+///     Application service for admin token initialization hosted behavior.
+/// </summary>
 public sealed class AdminTokenInitializationHostedService : IHostedService
 {
     private readonly ILogger<AdminTokenInitializationHostedService> _logger;

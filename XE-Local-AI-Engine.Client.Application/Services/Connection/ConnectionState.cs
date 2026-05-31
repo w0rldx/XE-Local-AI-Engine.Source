@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Enumerates supported worker connection state values.
+/// </summary>
 public enum WorkerConnectionState
 {
     Disconnected = 0,
@@ -11,6 +14,9 @@ public enum WorkerConnectionState
     PreparingModel = 6
 }
 
+/// <summary>
+///     Represents connection state.
+/// </summary>
 public sealed class ConnectionState
 {
     public WorkerConnectionState Current { get; private set; } = WorkerConnectionState.Disconnected;

@@ -48,6 +48,9 @@ public sealed class UpdatePlaybookActionRequest
     public int Priority { get; init; }
 }
 
+/// <summary>
+///     Request DTO for delete playbook action operations.
+/// </summary>
 public sealed class DeletePlaybookActionRequest
 {
     public Guid AgentDefinitionId { get; init; }
@@ -129,6 +132,9 @@ public sealed record PlaybookEvalCaseResultResponse(
 /// </summary>
 public sealed record PlaybookPromotionConflictResponse(string Status, string Reason);
 
+/// <summary>
+///     Response DTO for list playbook actions operations.
+/// </summary>
 public sealed class ListPlaybookActionsResponse
 {
     public required IReadOnlyList<PlaybookActionResponse> Items { get; init; }

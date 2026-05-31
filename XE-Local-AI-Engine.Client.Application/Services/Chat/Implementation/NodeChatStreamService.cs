@@ -11,6 +11,9 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
+/// <summary>
+///     Application service for node chat stream behavior.
+/// </summary>
 public sealed class NodeChatStreamService(
     INodeChatPersistenceService persistence,
     INodeChatInvocationPump invocationPump,
@@ -400,7 +403,7 @@ public sealed class NodeChatStreamService(
     }
 
     /// <summary>
-    ///     Resolves a compiled orchestration spec for a bound orchestrator definition (loop P5), or <c>null</c> to run
+    ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or <c>null</c> to run
     ///     the turn single-agent. Only a bound conversation triggers the extra record fetch; an unbound conversation or
     ///     a non-orchestrator definition returns <c>null</c> without resolving, so the single-agent path is byte-identical.
     /// </summary>

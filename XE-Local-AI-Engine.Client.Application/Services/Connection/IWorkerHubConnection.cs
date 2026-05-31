@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Connection;
 
 using XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Abstraction for worker hub connection behavior.
+/// </summary>
 public interface IWorkerHubConnection : IHubMessageSender, IAsyncDisposable
 {
     WorkerConnectionState State { get; }

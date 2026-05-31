@@ -4,6 +4,9 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.HostAgent.Linux.Lifecycle;
 using XE_Local_AI_Engine.HostAgent.Linux.Models;
 
+/// <summary>
+///     Application service for host agent linux admin behavior.
+/// </summary>
 public sealed class HostAgentLinuxAdminService
 {
     private static readonly TimeSpan DefaultDrainTimeout = TimeSpan.FromSeconds(30);
@@ -88,6 +91,9 @@ public sealed class HostAgentLinuxAdminService
     }
 }
 
+/// <summary>
+///     Value object carrying host agent linux admin status data.
+/// </summary>
 public sealed record HostAgentLinuxAdminStatus(
     string State,
     string DesiredState,
@@ -98,4 +104,7 @@ public sealed record HostAgentLinuxAdminStatus(
     bool BootstrapModelReady,
     IReadOnlyList<string> Diagnostics);
 
+/// <summary>
+///     Value object carrying host agent linux admin action result data.
+/// </summary>
 public sealed record HostAgentLinuxAdminActionResult(string DesiredState, IReadOnlyList<string> Diagnostics);

@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl;
 
+/// <summary>
+///     Configuration options for host agent wsl behavior.
+/// </summary>
 public sealed class HostAgentWslOptions
 {
     public const string SectionName = "HostAgent:Wsl";

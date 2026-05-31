@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+/// <summary>
+///     Represents local chat loopback defaults.
+/// </summary>
 public static class LocalChatLoopbackDefaults
 {
     public const string RequestedCapability = "local-chat-loopback";

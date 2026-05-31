@@ -48,6 +48,9 @@ internal static class WindowsDetachedProcessLauncher
 
     private static class NativeMethods
     {
+        /// <summary>
+        ///     Configuration options for process creation behavior.
+        /// </summary>
         [Flags]
         public enum ProcessCreationOptions : uint
         {
@@ -79,6 +82,9 @@ internal static class WindowsDetachedProcessLauncher
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool CloseHandle(IntPtr handle);
 
+        /// <summary>
+        ///     Value object carrying startup info data.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct StartupInfo
         {
@@ -102,6 +108,9 @@ internal static class WindowsDetachedProcessLauncher
             public IntPtr StandardError;
         }
 
+        /// <summary>
+        ///     Value object carrying startup info ex data.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct StartupInfoEx
         {
@@ -109,6 +118,9 @@ internal static class WindowsDetachedProcessLauncher
             public IntPtr AttributeList;
         }
 
+        /// <summary>
+        ///     Value object carrying process information data.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct ProcessInformation
         {

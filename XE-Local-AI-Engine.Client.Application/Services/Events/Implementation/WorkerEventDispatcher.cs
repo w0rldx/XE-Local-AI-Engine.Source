@@ -17,6 +17,9 @@ using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 [SuppressMessage("Design",
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "Registered for the application lifetime; disposing the service provider owns singleton cleanup.")]
+/// <summary>
+///     Represents worker event dispatcher.
+/// </summary>
 public sealed class WorkerEventDispatcher : IWorkerEventDispatcher
 {
     private const string AadMismatchReason = "aad-mismatch";

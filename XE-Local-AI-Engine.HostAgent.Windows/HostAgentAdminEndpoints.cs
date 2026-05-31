@@ -4,6 +4,9 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
+/// <summary>
+///     Represents host agent admin endpoints.
+/// </summary>
 public static class HostAgentAdminEndpoints
 {
     public static void UseLocalAdminRequestGuards(this WebApplication app)

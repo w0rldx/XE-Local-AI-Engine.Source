@@ -8,6 +8,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Persistence boundary for token data.
+/// </summary>
 public sealed class TokenStore : ITokenStore, IDisposable
 {
     private const string CredentialsFileName = "worker-credentials.enc";

@@ -8,14 +8,14 @@ using Microsoft.Extensions.AI;
 ///     <see cref="AITool" />s keyed by their offered name plus the matching offer-list descriptors, so the MCP SDK
 ///     dependency stays out of this assembly. The application-layer connection manager owns the MCP client lifecycle,
 ///     renames each discovered tool to a collision-free qualified name, and pushes an immutable snapshot here via
-///     <see cref="ReplaceSnapshot" />; the invocation factory (Option C) and the loopback offer provider read the live
+///     <see cref="ReplaceSnapshot" />; the invocation factory (MCP) and the loopback offer provider read the live
 ///     snapshot. Reads are lock-free; the snapshot is swapped atomically so a refresh never tears a concurrent read.
 /// </summary>
 internal interface IMcpToolRegistry
 {
     /// <summary>
     ///     Resolves the executable <see cref="AITool" /> for an offered MCP tool name. The invocation factory consults
-    ///     this after the built-in (Option A) and ClientLocal (Option B) registries; a match returns the cached,
+    ///     this after the built-in (Option A) and ClientLocal (ClientLocal) registries; a match returns the cached,
     ///     approval-wrapped executable so a server-driven offer is substituted for its name-only placeholder before the
     ///     agent runs. A name in none of the three registries is dropped (skipped + warned).
     /// </summary>

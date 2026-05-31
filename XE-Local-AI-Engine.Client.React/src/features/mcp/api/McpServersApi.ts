@@ -60,7 +60,7 @@ export interface McpServerToolsResponseDto {
 }
 
 // MCP CRUD route base. Single source so a route mismatch from Lane 3 is a one-line change. Enable/disable are
-// modeled as PATCH sub-routes (plan §6.1 "Enable/Disable (or PATCH)"); reconcile verb/path with Lane 3.
+// modeled as PATCH sub-routes"); reconcile verb/path with Lane 3.
 const MCP_ROUTE = "mcp/servers";
 
 function envMapToEntries(env: Record<string, string> | null): McpEnvEntry[] {

@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     Canonical v1 shape of an orchestrator definition's <c>OrchestrationTopologyJson</c> column (loop P5). It
+///     Canonical v1 shape of an orchestrator definition's <c>OrchestrationTopologyJson</c> column (orchestration). It
 ///     references existing node-local <c>AgentDefinition</c> ids — the orchestrator definition is the triage by
 ///     default, and <see cref="ParticipantAgentDefinitionIds" /> are the specialist agents it can hand off to. The
 ///     resolver compiles this into the MAF-agnostic orchestration spec; the management UI round-trips it verbatim.

@@ -4,7 +4,7 @@ using System.Globalization;
 
 /// <summary>
 ///     Deterministic, in-memory <see cref="ISandboxRuntimeProvider" /> used as the CI-mandatory provider and as the
-///     default until a real provider ships (AgentHome plan §6.2 rules, Marker C). It needs no Docker and no network:
+///     default until a real provider ships. It needs no Docker and no network:
 ///     a virtual filesystem backs copy/read, command results are scripted, and a "blocking" command lets
 ///     cancellation and kill be exercised honestly. All timestamps come from the injected <see cref="TimeProvider" />
 ///     so behavior is reproducible. Mirrors the production-resident, config-selected <c>FakeDockerRuntimeClient</c>.
@@ -87,7 +87,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
     /// <summary>
     ///     The in-sandbox destination paths that currently hold copied content, sorted ordinally. Lets a workspace-copy
-    ///     test (Marker F) assert exactly which files survived the exclusion rules.
+    ///     test (workspace copy) assert exactly which files survived the exclusion rules.
     /// </summary>
     public IReadOnlyList<string> SnapshotSandboxPaths(SandboxHandle handle)
     {
@@ -102,7 +102,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
     /// <summary>
     ///     Every command passed to <see cref="ExecuteAsync" />, in order. Lets a test assert that the workspace git
-    ///     baseline (Marker F) and later patch export (Marker G) issued the expected command sequence.
+    ///     baseline (workspace copy) and later patch export (patch export) issued the expected command sequence.
     /// </summary>
     public IReadOnlyList<SandboxCommandRequest> ExecutedCommands
     {
@@ -226,7 +226,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
     private string ResolveCopyContent(string sourcePath)
     {
         // Prefer explicitly seeded content (unit tests). Otherwise fall back to the real file on disk so a workspace
-        // copy test (Marker F) can walk a real temp source tree without pre-seeding every surviving file.
+        // copy test (workspace copy) can walk a real temp source tree without pre-seeding every surviving file.
         if (_hostFiles.TryGetValue(sourcePath, out var seeded))
         {
             return seeded;

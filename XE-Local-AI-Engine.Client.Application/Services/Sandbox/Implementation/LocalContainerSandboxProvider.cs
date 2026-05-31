@@ -18,12 +18,12 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 
 /// <summary>
-///     The Marker J-local <see cref="ISandboxRuntimeProvider" />: a thin gRPC client to HostAgent's
+///     The local-container sandbox <see cref="ISandboxRuntimeProvider" />: a thin gRPC client to HostAgent's
 ///     <c>SandboxControl</c> service over the same Unix socket and HMAC scheme the lifecycle client uses (AgentHome
 ///     plan §5.2). It owns no Docker — the privileged container work runs in HostAgent.Linux. The provider only
 ///     translates the provider-neutral SPI DTOs to/from the proto messages, attaches per-call HMAC metadata, and (in
 ///     <see cref="CopyIntoAsync" />) reads the host file under the no-follow / byte-recheck guards that the fake could
-///     not model (AgentHome plan §7.1). Copy carries bytes, never host paths (D3), so HostAgent never touches a
+///     not model. Copy carries bytes, never host paths (D3), so HostAgent never touches a
 ///     selected folder.
 /// </summary>
 public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDisposable
@@ -194,7 +194,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentNullException.ThrowIfNull(request);
 
-        // The TOCTOU guard (AgentHome plan §7.1): the pass-1 workspace walk already resolved and size-checked this
+        // The TOCTOU guard: the pass-1 workspace walk already resolved and size-checked this
         // host path, but a host-side swap between the walk and this read could point it at a symlink that escapes the
         // selected folder, or grow the file past the per-file cap. Re-open under no-follow and re-check bytes here —
         // never trust the pass-1 path string.
@@ -307,7 +307,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     }
 
     /// <summary>
-    ///     Reads the host file under the no-follow / byte-recheck guards (AgentHome plan §7.1). Returns the bytes, or
+    ///     Reads the host file under the no-follow / byte-recheck guards. Returns the bytes, or
     ///     <see langword="null" /> when the file exceeds the per-file cap on this re-read (so the caller blocks the
     ///     copy). Throws <see cref="AgentHomeRequestRejectedException" /> when the final path component is a symlink or
     ///     the open cannot be performed safely — a swap-after-walk attack signal.

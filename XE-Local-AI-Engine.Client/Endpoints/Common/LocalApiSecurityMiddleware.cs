@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 
+/// <summary>
+///     Local API contract type for local api security middleware.
+/// </summary>
 public sealed class LocalApiSecurityMiddleware
 {
     private static readonly HashSet<string> AllowedHosts = new(StringComparer.OrdinalIgnoreCase)

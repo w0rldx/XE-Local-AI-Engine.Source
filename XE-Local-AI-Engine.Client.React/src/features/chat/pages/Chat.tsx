@@ -283,7 +283,7 @@ export function Chat() {
 		setActiveRevisionByGroup(loadedConversation.selectedPath ?? {});
 	}, [loadedConversation, selectedConversationId]);
 
-	// Node-local feedback now travels ON each message in the loaded conversation (Phase 5.3, platform parity):
+	// Node-local feedback travels on each message in the loaded conversation:
 	// derive the by-message map from the conversation read instead of firing a GET per assistant turn (which
 	// 404'd and triggered a react-query retry storm before any feedback existed).
 	const feedbackByMessageId = useMemo<Record<string, ChatMessageFeedback>>(() => {
@@ -491,7 +491,7 @@ export function Chat() {
 			}
 
 			setStreamError(undefined);
-			// Regenerate via the shared runner over the hub (Phase 5.2): the server mints a sibling variant and
+			// Regenerate via the shared runner over the hub: the server mints a sibling variant and
 			// drives + streams the run exactly like a send. The variant messageId + requestId arrive on the
 			// events, so there is no client-known id up front; applyNodeChatStreamEvent appends the new variant.
 			// The group id used to collapse the streaming variant onto the original in place (the server's real

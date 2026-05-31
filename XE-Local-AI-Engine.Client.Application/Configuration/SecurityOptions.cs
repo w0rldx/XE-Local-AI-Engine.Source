@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Configuration;
 
 using System.ComponentModel.DataAnnotations;
 
+/// <summary>
+///     Configuration options for security behavior.
+/// </summary>
 public sealed class SecurityOptions
 {
     public const string SectionName = "Security";

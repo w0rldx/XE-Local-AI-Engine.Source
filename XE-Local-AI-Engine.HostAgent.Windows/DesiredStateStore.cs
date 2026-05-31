@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 
 using System.Text.Json;
 
+/// <summary>
+///     Persistence boundary for desired state data.
+/// </summary>
 public sealed class DesiredStateStore : IDisposable
 {
     public const string Running = "running";

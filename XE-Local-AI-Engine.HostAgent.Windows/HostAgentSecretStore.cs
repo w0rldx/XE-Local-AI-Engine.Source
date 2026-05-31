@@ -4,6 +4,9 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 
+/// <summary>
+///     Persistence boundary for host agent secret data.
+/// </summary>
 public sealed class HostAgentSecretStore : IDisposable
 {
     private readonly WindowsHostAgentAcl _acl;

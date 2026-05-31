@@ -8,6 +8,9 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
+/// <summary>
+///     Represents runtime package config hash.
+/// </summary>
 public static class RuntimePackageConfigHash
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()

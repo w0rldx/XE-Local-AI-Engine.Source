@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Persistence boundary for i token data.
+/// </summary>
 public interface ITokenStore
 {
     bool IsPaired { get; }
@@ -35,6 +38,9 @@ public interface ITokenStore
     event EventHandler? TokensChanged;
 }
 
+/// <summary>
+///     Value object carrying token store metadata data.
+/// </summary>
 public sealed record TokenStoreMetadata
 {
     public string? BindingMethod { get; init; }

@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
+/// <summary>
+///     Represents ollama model info parser.
+/// </summary>
 public static partial class OllamaModelInfoParser
 {
     public static bool TryGetContextLength(IDictionary<string, JsonElement> modelInfo, out int contextLength)

@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
-///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" /> (AgentHome plan §6.2,
-///     restart-required for v1). Registered once as a singleton so a provider change requires a restart. The MVP
-///     default is the deterministic fake; Marker J-local fills the <c>"local-container"</c> slot with the
+///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" />. Registered once as a singleton so a provider change requires a restart. The MVP
+///     default is the deterministic fake; local-container sandbox fills the <c>"local-container"</c> slot with the
 ///     HostAgent-backed <see cref="LocalContainerSandboxProvider" />.
 /// </summary>
 internal static class SandboxProviderSelector

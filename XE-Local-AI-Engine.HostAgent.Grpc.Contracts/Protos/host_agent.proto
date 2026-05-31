@@ -122,7 +122,7 @@ enum ContainerHealth {
   CONTAINER_HEALTH_STOPPED = 4;
 }
 
-// AgentHome sandbox lifecycle + IO (Marker J-local). A separate service from HostAgentControl
+// AgentHome sandbox lifecycle + IO (local-container sandbox). A separate service from HostAgentControl
 // (lifecycle vs sandbox), served by the same HostAgent.Linux gRPC server, so the global HMAC
 // interceptor authenticates every call. ALL rpcs are UNARY by design: the interceptor only
 // overrides the unary and server-streaming handlers, so a client-/bidi-streaming rpc would

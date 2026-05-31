@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Configuration;
 
 using System.ComponentModel.DataAnnotations;
 
+/// <summary>
+///     Configuration options for worker node behavior.
+/// </summary>
 public sealed class WorkerNodeOptions
 {
     public const string SectionName = "WorkerNode";

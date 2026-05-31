@@ -6,7 +6,7 @@ using System.Threading.Channels;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
-///     Live-invocation tracker backing reconnect/resume (Phase 2.2). It mirrors the dispatcher's
+///     Live-invocation tracker backing reconnect/resume. It mirrors the dispatcher's
 ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> stream into a per-invocation snapshot + state
 ///     fan-out so a reconnecting client can re-attach with a fresh consumer. It owns no agent logic — it only
 ///     translates <see cref="InvocationState" /> snapshots into <see cref="ChatStreamEvent" />s the same way the

@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 using Microsoft.AspNetCore.Identity;
 
+/// <summary>
+///     Represents node user.
+/// </summary>
 public sealed class NodeUser : IdentityUser
 {
     public bool SetupCompleted { get; set; }

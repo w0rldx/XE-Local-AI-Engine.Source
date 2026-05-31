@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Events;
 
 using XE_Local_AI_Engine.Client.Models.Enums;
 
+/// <summary>
+///     Represents invocation state.
+/// </summary>
 public sealed class InvocationState
 {
     public Guid InvocationId { get; init; }

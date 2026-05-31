@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
+/// <summary>
+///     Represents access token query redactor.
+/// </summary>
 public static class AccessTokenQueryRedactor
 {
     private const string AccessTokenParameter = "access_token";

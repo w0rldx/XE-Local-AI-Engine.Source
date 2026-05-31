@@ -7,13 +7,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Marker G <see cref="IAgentHomePatchService" />. Runs two in-sandbox <c>git diff</c> commands against the Marker F
+///     patch export <see cref="IAgentHomePatchService" />. Runs two in-sandbox <c>git diff</c> commands against the workspace copy
 ///     baseline (a full <c>--binary</c> patch and a <c>--name-status</c> summary) with the §9.1 byte-stabilizing flags,
 ///     captures their standard output (the sandbox SPI is shell-neutral, so the worker — not a shell redirection — owns
 ///     the file write), then writes <c>changes.patch</c> and <c>changed-files.json</c> under the host-side
 ///     <c>runs/&lt;run-id&gt;/patches/</c> directory. A patch over <see cref="AgentHomeOptions.MaxPatchBytes" /> is
 ///     blocked: the metadata file is still written, the oversized patch is not. All model-facing paths are run-relative
-///     — never a host path (AgentHome plan §9.1 / §11 / §13).
+///     — never a host path.
 /// </summary>
 internal sealed class AgentHomePatchService : IAgentHomePatchService
 {
@@ -69,7 +69,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         {
             // A non-zero exit or an incomplete command means no patch could be produced. Surface that distinctly so it
             // is not reported as a clean zero-change run; write no artifacts. (Real non-zero git exits are exercised by
-            // the local-container provider in Marker J-local — the fake's git is scripted.)
+            // the local-container provider in local-container sandbox — the fake's git is scripted.)
             _logger.LogWarning(
                 "Patch export for run {RunId} aborted: patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
                 request.RunId,

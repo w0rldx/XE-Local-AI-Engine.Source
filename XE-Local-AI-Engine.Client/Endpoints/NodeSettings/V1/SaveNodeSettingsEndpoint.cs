@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+/// <summary>
+///     FastEndpoints handler for the save node settings local API operation.
+/// </summary>
 public sealed class SaveNodeSettingsEndpoint(
     INodeSettingsStore nodeSettingsStore,
     ICapabilityReporter capabilityReporter,

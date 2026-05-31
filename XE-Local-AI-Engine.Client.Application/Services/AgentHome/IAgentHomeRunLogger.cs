@@ -1,16 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Marker K run-scoped logger. Appends structured JSONL records to the host-side
+///     run logger run-scoped logger. Appends structured JSONL records to the host-side
 ///     <c>runs/&lt;run-id&gt;/logs/</c> directory (the host-side root, NOT the in-sandbox
 ///     <c>/agent-home</c> — see AgentHome plan two-roots split). Every record is correlated with the
 ///     run-id, NodeId, and OwnerUserId. Raw host paths and secrets are NEVER written; argument summaries
 ///     are caller-supplied model-safe objects (run-relative paths only, §11).
 /// </summary>
 /// <remarks>
-///     OTel meters/counters and the list-runs endpoint are explicitly deferred (see Marker K item 6/8).
-///     Tool-correlation hooks (item 3/4) are wired by Lane 4 (Marker I); this service owns only the
-///     file-write primitives and the redaction contract so Lane 4 can inject it without modifying this type.
+///     OTel meters/counters and the list-runs endpoint are explicitly deferred (see run logger item 6/8).
+///     Tool-correlation hooks (item 3/4) are wired by the run gateway (AgentHome gateway); this service owns only the
+///     file-write primitives and the redaction contract so the run gateway can inject it without modifying this type.
 /// </remarks>
 internal interface IAgentHomeRunLogger
 {
@@ -94,7 +94,7 @@ internal sealed record AgentHomeCommandLogRecord
 
 /// <summary>
 ///     Record appended to <c>tool-calls.jsonl</c> for each tool-call lifecycle event.
-///     Shape matches the draft in AgentHome plan § Marker K.
+///     Shape matches the draft in AgentHome plan § run logger.
 /// </summary>
 internal sealed record AgentHomeToolCallLogRecord
 {

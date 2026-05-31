@@ -4,6 +4,9 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
+/// <summary>
+///     FastEndpoints handler for the cancel node binding local API operation.
+/// </summary>
 public sealed class CancelNodeBindingEndpoint(INodeBindingService nodeBindingService) : EndpointWithoutRequest<CancelNodeBindingResponse>
 {
     private readonly INodeBindingService _nodeBindingService = nodeBindingService ?? throw new ArgumentNullException(nameof(nodeBindingService));

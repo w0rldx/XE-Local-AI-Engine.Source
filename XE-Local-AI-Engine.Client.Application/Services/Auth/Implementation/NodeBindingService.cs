@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models.NodeBinding;
 
+/// <summary>
+///     Application service for node binding behavior.
+/// </summary>
 public sealed class NodeBindingService : INodeBindingService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

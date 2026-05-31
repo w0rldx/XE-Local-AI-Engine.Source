@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Options for the Playbook P5 relevance-retrieval path (plan §4.2). When an agent has more than
+///     Options for the Playbook P5 relevance-retrieval path. When an agent has more than
 ///     <see cref="RetrievalThreshold" /> Enabled actions and the incoming send carries a non-blank query, the resolver
 ///     injects only the top <see cref="TopK" /> most relevant actions instead of the full static prepend; at or below the
 ///     threshold (or with a blank query) the pre-P5 static-prepend behaviour is preserved byte-for-byte.

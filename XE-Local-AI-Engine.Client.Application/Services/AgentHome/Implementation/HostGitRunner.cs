@@ -9,7 +9,7 @@ using System.Diagnostics;
 internal sealed record HostGitResult(int ExitCode, string StandardOutput, string StandardError);
 
 /// <summary>
-///     Runs host-side <c>git</c> commands for the Marker L patch apply (AgentHome plan §9.2). Mirrors the only existing
+///     Runs host-side <c>git</c> commands for the host patch apply patch apply. Mirrors the only existing
 ///     <see cref="Process" /> use in this assembly (<c>CapabilityReporter</c>): a CA2000-clean <c>using var</c> process
 ///     with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> (never a joined string, so paths with
 ///     spaces are safe), and a <see cref="System.Threading.Tasks.Task" />-based read + wait. The hardened <c>-c</c> flags

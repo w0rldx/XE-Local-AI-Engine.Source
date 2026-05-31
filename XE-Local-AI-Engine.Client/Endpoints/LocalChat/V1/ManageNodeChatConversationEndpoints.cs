@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
+/// <summary>
+///     FastEndpoints handler for the rename node chat conversation local API operation.
+/// </summary>
 public sealed class RenameNodeChatConversationEndpoint(
     INodeChatPersistenceService chatPersistence,
     INodeChatMutationGuard mutationGuard,
@@ -46,6 +49,9 @@ public sealed class RenameNodeChatConversationEndpoint(
     }
 }
 
+/// <summary>
+///     FastEndpoints handler for the pin node chat conversation local API operation.
+/// </summary>
 public sealed class PinNodeChatConversationEndpoint(
     INodeChatPersistenceService chatPersistence,
     INodeChatMutationGuard mutationGuard,
@@ -86,6 +92,9 @@ public sealed class PinNodeChatConversationEndpoint(
     }
 }
 
+/// <summary>
+///     FastEndpoints handler for the archive node chat conversation local API operation.
+/// </summary>
 public sealed class ArchiveNodeChatConversationEndpoint(
     INodeChatPersistenceService chatPersistence,
     INodeChatMutationGuard mutationGuard,

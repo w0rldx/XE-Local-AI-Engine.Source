@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
+/// <summary>
+///     Application service for host agent manager behavior.
+/// </summary>
 public sealed class HostAgentManagerService : IHostAgentManagerService
 {
     private const string HostAgentRuntimeSectionName = "HostAgent:Runtime";

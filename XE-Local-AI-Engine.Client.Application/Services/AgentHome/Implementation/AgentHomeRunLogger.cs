@@ -4,10 +4,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     Marker K <see cref="IAgentHomeRunLogger" />. Appends structured JSONL records to the four
+///     run logger <see cref="IAgentHomeRunLogger" />. Appends structured JSONL records to the four
 ///     host-side log files under <c>runs/&lt;run-id&gt;/logs/</c>. All writes are sequential within a
 ///     single run (one append per call); concurrent callers for different runs each hold independent
-///     instances (Lane 4 constructs one per run). Raw host paths and secrets are never written — the
+///     instances (the run gateway constructs one per run). Raw host paths and secrets are never written — the
 ///     caller is responsible for supplying model-safe values (§11 / AgentHome plan two-roots split).
 /// </summary>
 internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger

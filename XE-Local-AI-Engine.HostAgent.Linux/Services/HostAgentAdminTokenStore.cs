@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Services;
 
 using System.Security.Cryptography;
 
+/// <summary>
+///     Persistence boundary for host agent admin token data.
+/// </summary>
 public sealed class HostAgentAdminTokenStore
 {
     private string? _cachedToken;

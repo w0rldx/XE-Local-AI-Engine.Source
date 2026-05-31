@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Orchestration topology (loop P5). A Kind=Orchestrator agent definition carries its handoff topology as a raw
+// Orchestration topology (orchestration). A Kind=Orchestrator agent definition carries its handoff topology as a raw
 // JSON string (orchestrationTopologyJson on the wire). This module owns the typed view-model + Zod schema that the
 // form section serializes to/from that string. The shape mirrors the backend contract (Lane B/C, plan §4.1, camelCase):
 //   { version, triageAgentDefinitionId, participantAgentDefinitionIds[], handoffs[{from,to,reason?}],
@@ -9,7 +9,7 @@ import { z } from "zod";
 
 export const ORCHESTRATION_TOPOLOGY_VERSION = 1;
 
-// Conservative default turn cap (plan §6: maxTurnsPerAgent ≈ 6–8). Keeps a routing loop from spinning.
+// Conservative default turn cap. Keeps a routing loop from spinning.
 export const DEFAULT_MAX_TURNS_PER_AGENT = 8;
 
 export interface OrchestrationHandoff {
@@ -46,7 +46,7 @@ const handoffSchema = z.object({
 });
 
 // Validates the structured topology before submit so the user sees errors inline. Mirrors the server rules
-// (plan §4.2 / Lane C): ≥ 2 participants total (triage + ≥ 1 specialist), maxTurnsPerAgent is a positive int,
+//: ≥ 2 participants total (triage + ≥ 1 specialist), maxTurnsPerAgent is a positive int,
 // returnToPrevious is bool, and a handoff never connects an agent to itself. The triage id is NOT part of this
 // view-model (it is the definition's own id, added at serialize time), so the "≥ 2 participants" rule reads as
 // "≥ 1 specialist selected" here. The "every endpoint ∈ participants" rule is enforced structurally by the form

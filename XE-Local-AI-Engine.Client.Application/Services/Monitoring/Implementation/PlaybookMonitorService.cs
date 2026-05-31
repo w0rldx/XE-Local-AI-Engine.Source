@@ -56,7 +56,7 @@ public sealed class PlaybookMonitorService(
         var status = ClassifyStatus(beforeDownRate, afterDownRate, afterSampleSize);
 
         // InsufficientData is never flagged; Improved is a good outcome. Only a meaningfully-sampled Flat/Regressed
-        // verdict raises the human-review flag (plan §3.2).
+        // verdict raises the human-review flag.
         var flagged = afterSampleSize >= _options.MinSampleSize && status is PlaybookMonitorStatus.Flat or PlaybookMonitorStatus.Regressed;
 
         return new PlaybookActionMonitorView(actionId,

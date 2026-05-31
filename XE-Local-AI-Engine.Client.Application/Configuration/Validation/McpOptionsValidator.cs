@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
+/// <summary>
+///     Startup/options validator for mcp options settings.
+/// </summary>
 public sealed class McpOptionsValidator : IValidateOptions<McpOptions>
 {
     public ValidateOptionsResult Validate(string? name, McpOptions options)

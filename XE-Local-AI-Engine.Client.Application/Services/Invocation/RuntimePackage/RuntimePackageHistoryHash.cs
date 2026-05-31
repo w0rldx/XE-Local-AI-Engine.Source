@@ -6,6 +6,9 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
+/// <summary>
+///     Represents runtime package history hash.
+/// </summary>
 public static class RuntimePackageHistoryHash
 {
     public static string Compute(IReadOnlyList<EncryptedConversationMessageDto> conversationContext)

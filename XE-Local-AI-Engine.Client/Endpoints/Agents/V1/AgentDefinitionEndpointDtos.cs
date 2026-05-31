@@ -52,11 +52,17 @@ public sealed class UpdateAgentDefinitionRequest
     public bool PlaybookEnabled { get; init; }
 }
 
+/// <summary>
+///     Request DTO for get agent definition operations.
+/// </summary>
 public sealed class GetAgentDefinitionRequest
 {
     public Guid AgentDefinitionId { get; init; }
 }
 
+/// <summary>
+///     Request DTO for delete agent definition operations.
+/// </summary>
 public sealed class DeleteAgentDefinitionRequest
 {
     public Guid AgentDefinitionId { get; init; }
@@ -97,6 +103,9 @@ public sealed class AgentDefinitionResponse
     public required long UpdatedAtUtc { get; init; }
 }
 
+/// <summary>
+///     Response DTO for list agent definitions operations.
+/// </summary>
 public sealed class ListAgentDefinitionsResponse
 {
     public required IReadOnlyList<AgentDefinitionResponse> Items { get; init; }

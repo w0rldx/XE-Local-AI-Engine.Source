@@ -72,7 +72,7 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
     }
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
-        Justification = "Selected-folder aliases are lowercase kebab-case by specification (AgentHome plan §8.1) and are restricted to ASCII [a-z0-9-].")]
+        Justification = "Selected-folder aliases are lowercase kebab-case by specification and are restricted to ASCII [a-z0-9-].")]
     private static string NormalizeAlias(string alias)
     {
         if (string.IsNullOrWhiteSpace(alias))
@@ -98,7 +98,7 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
         }
 
         // Registration-time guard against relative/traversal segments. Deep canonicalization (symlink/reparse-point
-        // resolution against the copy root) is Marker F's responsibility.
+        // resolution against the copy root) is workspace copy's responsibility.
         var segments = hostPath.Replace('\\', '/').Split('/');
         return !segments.Any(segment => segment is "." or "..");
     }

@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Models;
 
+/// <summary>
+///     Application service for bootstrap model readiness hosted behavior.
+/// </summary>
 public sealed class BootstrapModelReadinessHostedService : BackgroundService
 {
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);

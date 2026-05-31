@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.Client.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
+/// <summary>
+///     Factory for creating node identity db context runtime objects.
+/// </summary>
 public sealed class NodeIdentityDbContextFactory : IDesignTimeDbContextFactory<NodeIdentityDbContext>
 {
     private const string DefaultConnectionString = "Data Source=node-identity.design.db";

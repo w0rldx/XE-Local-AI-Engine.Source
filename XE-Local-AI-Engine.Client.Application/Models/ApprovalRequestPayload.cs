@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+/// <summary>
+///     Value object carrying approval request payload data.
+/// </summary>
 public sealed record ApprovalRequestPayload
 {
     public required Guid InvocationId { get; init; }

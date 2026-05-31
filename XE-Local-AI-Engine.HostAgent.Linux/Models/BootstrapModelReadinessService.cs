@@ -6,6 +6,9 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.HostAgent.Linux.Lifecycle;
 
+/// <summary>
+///     Application service for bootstrap model readiness behavior.
+/// </summary>
 public sealed class BootstrapModelReadinessService : IDisposable
 {
     public const string DefaultBootstrapModel = "qwen3:0.6b";
@@ -139,6 +142,9 @@ public sealed class BootstrapModelReadinessService : IDisposable
     }
 }
 
+/// <summary>
+///     Value object carrying bootstrap model readiness snapshot data.
+/// </summary>
 public sealed record BootstrapModelReadinessSnapshot(
     bool IsReady,
     string ModelName,

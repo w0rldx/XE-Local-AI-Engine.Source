@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Logs;
 using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
+/// <summary>
+///     Application service for container log behavior.
+/// </summary>
 public sealed class ContainerLogService
 {
     private readonly IDockerRuntimeClient _dockerRuntimeClient;

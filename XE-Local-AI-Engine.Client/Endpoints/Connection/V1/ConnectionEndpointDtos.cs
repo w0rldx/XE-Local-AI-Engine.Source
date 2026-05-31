@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Connection.V1;
 
+/// <summary>
+///     Response DTO for connection status operations.
+/// </summary>
 public sealed record ConnectionStatusResponse
 {
     public required string State { get; init; }

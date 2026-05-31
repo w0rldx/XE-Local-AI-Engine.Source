@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 
+/// <summary>
+///     Transport DTO for encrypted runtime package data.
+/// </summary>
 public sealed record EncryptedRuntimePackageDto
 {
     public required Guid InvocationId { get; init; }

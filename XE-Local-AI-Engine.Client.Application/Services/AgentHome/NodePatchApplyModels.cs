@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 /// <summary>
 ///     Request for <see cref="INodePatchApplyService" />. Identifies the run whose exported
 ///     <c>runs/&lt;RunId&gt;/patches/changes.patch</c> is to be previewed/applied. <see cref="RunId" /> is untrusted
-///     and shape-validated before any path is composed (AgentHome plan §9.2 / Marker L D2).
+///     and shape-validated before any path is composed.
 /// </summary>
 public sealed record NodePatchApplyRequest
 {

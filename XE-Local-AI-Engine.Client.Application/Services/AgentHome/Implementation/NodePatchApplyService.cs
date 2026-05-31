@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 /// <summary>
-///     Marker L host patch apply (AgentHome plan §9.2). Applies Marker G's exported <c>changes.patch</c> onto the real
+///     host patch apply host patch apply. Applies exported <c>changes.patch</c> onto the real
 ///     host selected folders, mapping each sandbox-relative <c>a/&lt;alias&gt;/…</c> / <c>b/&lt;alias&gt;/…</c> prefix
 ///     back to its trusted host root via <see cref="ISelectedFolderResolver" /> and applying only under that root.
 ///     Traversal-rejected, cross-alias-rejected, binary-rejected by default, preview-before-apply, every applied file
@@ -146,7 +146,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         {
             // Residual TOCTOU note: the --check above passed for this alias; the write below runs immediately after.
             // A symlink-swap in an intermediate directory between these two calls is bounded: git rejects "beyond a
-            // symbolic link" on modern versions, and the host folder is user-trusted (plan §281).
+            // symbolic link" on modern versions, and the host folder is user-trusted.
             var apply = await ApplySubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
             if (apply is null || apply.ExitCode != 0)
             {
@@ -399,7 +399,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
 
         // D3 step 4: every target relative path (extracted from the BODY lines that git actually acts on) must resolve
-        // under the alias root. This is our own authoritative guard — we never rely on git's path validation (plan §181).
+        // under the alias root. This is our own authoritative guard — we never rely on git's path validation.
         // A symlinked intermediate dir that escapes the root is also rejected (EscapesViaReparsePoint).
         foreach (var block in blocks)
         {
@@ -537,7 +537,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         {
             // A mode-only block (e.g. old mode 100644 / new mode 100755) has no unified-diff body lines. Git acts
             // on the path derived from the header, so we must validate that header path through the same guards as
-            // body paths (ContainsTraversal + SplitAlias) rather than leaving git as the only backstop (plan §181).
+            // body paths (ContainsTraversal + SplitAlias) rather than leaving git as the only backstop.
             var headerPath = TryParseHeaderAPath(lines[0]);
             if (headerPath is null)
             {
@@ -660,7 +660,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
 
         // The header is "diff --git a/<rest> b/<rest>". We only need the alias from the a/ side, which is the first
-        // path component after "a/". A mis-split here is safe because this is advisory only — FIX 2 guards.
+        // path component after "a/". A mis-split here is safe because this is advisory only — advisory-path guard guards.
         var afterPrefix = header[DiffHeaderPrefix.Length..];
         if (!afterPrefix.StartsWith("a/", StringComparison.Ordinal))
         {
@@ -675,7 +675,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     /// <summary>
     ///     Parses the <c>a/…</c> path from a <c>diff --git a/… b/…</c> header into <c>(alias, relative)</c> using
     ///     <see cref="SplitAlias" />. Used for mode-only blocks that carry no <c>---</c>/<c>+++</c> body lines; the
-    ///     result is fed through the same traversal and within-root guards as all other target paths (plan §181).
+    ///     result is fed through the same traversal and within-root guards as all other target paths.
     ///     Returns <see langword="null" /> when the header cannot be parsed.
     /// </summary>
     private static (string Alias, string Relative)? TryParseHeaderAPath(string header)
@@ -771,7 +771,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return "git rejected the patch.";
         }
 
-        // FIX 3: redact the temp-dir prefix first (handles spaces in Path.GetTempPath()), then the resolved root,
+        // Redact the temporary-directory prefix first (handles spaces in Path.GetTempPath()), then the resolved root,
         // then collapse the residual agenthome-apply filename.
         var redacted = text.Replace(Path.GetTempPath(), "<tmp>/", StringComparison.Ordinal);
         redacted = redacted.Replace(resolvedRoot, "<folder>", StringComparison.Ordinal);
@@ -811,7 +811,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     private async Task AppendEventSafelyAsync(string runId, string eventName, string? detail, CancellationToken cancellationToken)
     {
-        // FIX 4: Best-effort logging — broadened to catch ANY exception from identity/logger so a failed log can
+        // observability guard: Best-effort logging — broadened to catch ANY exception from identity/logger so a failed log can
         // never surface after a successful host mutation. OperationCanceledException from the caller's token is NOT
         // caught here; it will propagate only from the caller's own await, not from this helper.
         try
@@ -853,7 +853,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]*$")]
     private static partial Regex RunIdRegex();
 
-    // FIX 3: matches only the residual filename after the temp-dir prefix has already been replaced.
+    // Matches only the residual filename after the temporary-directory prefix has already been replaced.
     [GeneratedRegex(@"agenthome-apply-[0-9a-fA-F]{32}\.patch")]
     private static partial Regex TempPatchFilenameRegex();
 

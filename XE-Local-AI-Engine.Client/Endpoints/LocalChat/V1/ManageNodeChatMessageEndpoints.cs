@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Branch (Phase 5.1): POST clones the conversation up to the target message into a new Origin=Local
+///     Branch endpoint: POST clones the conversation up to the target message into a new Origin=Local
 ///     conversation. Guarded — branching FROM a remote mirror is rejected with 409 (the source is read-only;
 ///     the branch would carry remote content the node can no longer re-drive).
 /// </summary>
@@ -52,7 +52,7 @@ public sealed class BranchNodeChatConversationEndpoint(
 }
 
 /// <summary>
-///     Revisions (Phase 5.2): POST records a regenerated assistant turn as a SIBLING VARIANT (never in-place)
+///     Revision endpoint: POST records a regenerated assistant turn as a SIBLING VARIANT (never in-place)
 ///     and returns the freshly minted placeholder; GET lists every variant of the turn. Both guarded.
 /// </summary>
 public sealed class CreateNodeChatMessageRevisionEndpoint(
@@ -111,6 +111,9 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
     }
 }
 
+/// <summary>
+///     FastEndpoints handler for the list node chat message revisions local API operation.
+/// </summary>
 public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
@@ -136,7 +139,7 @@ public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceSer
 }
 
 /// <summary>
-///     Feedback (Phase 5.3): node-local thumbs/comment storage. PUT upserts, GET reads. Guarded — feedback on a
+///     Feedback endpoint: node-local thumbs/comment storage. PUT upserts, GET reads. Guarded — feedback on a
 ///     remote-mirror message is rejected (consistent with the view-only posture for Origin=Remote).
 /// </summary>
 public sealed class SetNodeChatMessageFeedbackEndpoint(
@@ -225,6 +228,9 @@ public sealed class SetNodeChatSelectedPathEndpoint(
     }
 }
 
+/// <summary>
+///     FastEndpoints handler for the get node chat message feedback local API operation.
+/// </summary>
 public sealed class GetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));

@@ -9,6 +9,9 @@ using System.Diagnostics.CodeAnalysis;
 /// </summary>
 [SuppressMessage("Naming", "CA1720:Identifier contains type name",
     Justification = "Single is the domain term for a non-orchestrated agent; the overlap with System.Single is incidental.")]
+/// <summary>
+///     Enumerates supported agent definition kind values.
+/// </summary>
 public enum AgentDefinitionKind
 {
     Single = 0,

@@ -19,7 +19,7 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-// The tool selector now fetches the catalog via useToolCatalog (loop P4 dynamic catalog). Mock it so the form
+// The tool selector now fetches the catalog via useToolCatalog (dynamic tool-catalog dynamic catalog). Mock it so the form
 // renders the built-in tool rows deterministically without a QueryClient or a real request.
 const { useToolCatalogMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),

@@ -5,6 +5,9 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
+/// <summary>
+///     Represents manifest reconciler.
+/// </summary>
 public sealed class ManifestReconciler
 {
     private readonly Dictionary<ReconcileRequestKey, Task<ManifestReconcileResult>> _activeReconciles = [];

@@ -3,6 +3,9 @@ namespace XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 
+/// <summary>
+///     Provider implementation for windows identity behavior.
+/// </summary>
 public sealed class WindowsIdentityProvider : IWindowsIdentityProvider
 {
     [SupportedOSPlatform("windows")]

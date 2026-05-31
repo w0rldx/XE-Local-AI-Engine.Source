@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection;
 
+/// <summary>
+///     Event payload for worker connection state changed notifications.
+/// </summary>
 public sealed class WorkerConnectionStateChangedEventArgs : EventArgs
 {
     public WorkerConnectionStateChangedEventArgs(WorkerConnectionState previousState,
