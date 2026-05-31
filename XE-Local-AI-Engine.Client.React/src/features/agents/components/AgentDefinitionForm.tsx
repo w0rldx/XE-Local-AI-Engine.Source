@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -231,6 +231,18 @@ export function AgentDefinitionForm({
 					data-testid="agent-form-reasoning-effort"
 				/>
 			</Group>
+			<Switch
+				label={t("pages.agents.form.playbookEnabled.label", "Enable operating playbook")}
+				description={t(
+					"pages.agents.form.playbookEnabled.description",
+					"Append this agent's enabled playbook actions to its instructions at run time.",
+				)}
+				checked={values.playbookEnabled}
+				onChange={(event) =>
+					setValues((current) => ({ ...current, playbookEnabled: event.currentTarget.checked }))
+				}
+				data-testid="agent-form-playbook-enabled"
+			/>
 			{values.kind === "Orchestrator" ? (
 				<OrchestrationTopologyEditor
 					topology={values.orchestration}

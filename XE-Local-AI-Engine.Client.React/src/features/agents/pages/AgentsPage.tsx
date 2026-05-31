@@ -4,9 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { AgentDefinitionForm, type AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
+import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import {
 	useAgentDefinitions,
@@ -38,6 +40,7 @@ const emptyFormValues: AgentDefinitionFormValues = {
 	allowedToolNames: [],
 	toolApprovals: {},
 	orchestration: emptyOrchestrationTopology(),
+	playbookEnabled: false,
 };
 
 function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
@@ -52,6 +55,7 @@ function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
 		toolApprovals: { ...definition.toolApprovals },
 		// Round-trip the persisted topology back into the editor (strips the triage from the specialist list).
 		orchestration: deserializeOrchestrationTopology(definition.orchestrationTopologyJson).topology,
+		playbookEnabled: definition.playbookEnabled,
 	};
 }
 
@@ -195,6 +199,15 @@ export function AgentsPage() {
 								onSubmit={handleSubmit}
 								onCancel={closeEditor}
 							/>
+							{/* Per-agent playbook governance (Playbook P1). Only meaningful for a persisted agent (has an id);
+							    a brand-new agent must be saved first. Capability-gated under agentManagement. */}
+							{editingDefinition ? (
+								<PlaybookPanel
+									agentDefinitionId={editingDefinition.id}
+									agentName={editingDefinition.name}
+									enabled={nodeCapabilities.agentManagement}
+								/>
+							) : null}
 						</Stack>
 					</Card>
 				) : (

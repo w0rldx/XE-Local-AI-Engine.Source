@@ -20,22 +20,32 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private const int DefaultMaxTurnsPerAgent = 8;
 
     private readonly IAgentDefinitionStore _store;
+    private readonly IPlaybookActionStore _playbookActionStore;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly HashSet<string> _toolCapableModels;
     private readonly ILogger<OrchestrationResolver> _logger;
 
     public OrchestrationResolver(IAgentDefinitionStore store,
+        IPlaybookActionStore playbookActionStore,
         ILocalToolOfferProvider localToolOfferProvider,
         IOptions<AgentHomeOptions> agentHomeOptions,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
         _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
         ArgumentNullException.ThrowIfNull(agentHomeOptions);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _toolCapableModels = new HashSet<string>(agentHomeOptions.Value.ToolCapableModels ?? [], StringComparer.Ordinal);
     }
+
+    /// <summary>
+    ///     A capable participant paired with the system prompt to emit for it: its base Instructions, or its
+    ///     playbook-composed prompt when its own playbook is enabled. The composition is resolved during the async
+    ///     participant load so the synchronous <see cref="ToSpecParticipant" /> can stay query-free.
+    /// </summary>
+    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions);
 
     public async Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator,
         string? activeModelId,
@@ -89,7 +99,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         var spec = new OrchestrationSpec
         {
-            TriageParticipantKey = ToKey(triage.Id),
+            TriageParticipantKey = ToKey(triage.Definition.Id),
             Participants =
             [
                 .. participants.Values
@@ -113,12 +123,12 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     tool-capable, and projects each survivor's tools with the P3 projection logic. Returns the survivors keyed
     ///     by id, deduplicated (a participant id listed twice resolves once).
     /// </summary>
-    private async Task<Dictionary<Guid, AgentDefinitionRecord>> LoadCapableParticipantsAsync(AgentDefinitionRecord orchestrator,
+    private async Task<Dictionary<Guid, ResolvedParticipant>> LoadCapableParticipantsAsync(AgentDefinitionRecord orchestrator,
         OrchestrationTopology topology,
         string? activeModelId,
         CancellationToken cancellationToken)
     {
-        var capable = new Dictionary<Guid, AgentDefinitionRecord>();
+        var capable = new Dictionary<Guid, ResolvedParticipant>();
 
         foreach (var participantId in topology.ParticipantAgentDefinitionIds.Distinct())
         {
@@ -142,10 +152,24 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                 continue;
             }
 
-            capable[participant.Id] = participant;
+            // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
+            // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
+            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, cancellationToken).ConfigureAwait(false);
+            capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions);
         }
 
         return capable;
+    }
+
+    private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, CancellationToken cancellationToken)
+    {
+        if (!participant.PlaybookEnabled)
+        {
+            return participant.Instructions;
+        }
+
+        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken).ConfigureAwait(false);
+        return PlaybookPromptComposer.Compose(participant.Instructions, enabled);
     }
 
     /// <summary>
@@ -155,7 +179,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     /// </summary>
     private IReadOnlyList<OrchestrationSpecEdge> BuildEdges(AgentDefinitionRecord orchestrator,
         OrchestrationTopology topology,
-        IReadOnlyDictionary<Guid, AgentDefinitionRecord> participants)
+        IReadOnlyDictionary<Guid, ResolvedParticipant> participants)
     {
         var edges = new List<OrchestrationSpecEdge>();
 
@@ -181,14 +205,17 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         return edges;
     }
 
-    private OrchestrationSpecParticipant ToSpecParticipant(AgentDefinitionRecord definition, string? activeModelId)
+    private OrchestrationSpecParticipant ToSpecParticipant(ResolvedParticipant participant, string? activeModelId)
     {
+        var definition = participant.Definition;
         return new OrchestrationSpecParticipant
         {
             Key = ToKey(definition.Id),
             Name = definition.Name,
             Description = definition.Description,
-            Instructions = definition.Instructions,
+            // The playbook-composed prompt resolved during the async participant load; byte-identical to Instructions
+            // when this participant's playbook is disabled.
+            Instructions = participant.ResolvedInstructions,
             ModelId = definition.ModelProfile,
             ReasoningEffort = definition.ReasoningEffort,
             Tools = ProjectAllowedTools(definition, activeModelId)

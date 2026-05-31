@@ -260,6 +260,80 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.True(baseHash != toolsHash, "Changing the tool set must change the config hash.");
     }
 
+    [Test]
+    public async Task ResolveAsync_WhenPlaybookDisabled_KeepsInstructionsByteIdenticalAndSkipsQuery()
+    {
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: false);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
+        // The default-path regression guard: a disabled playbook must not even query the store.
+        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenPlaybookEnabledButNoActions_KeepsInstructionsByteIdentical()
+    {
+        // PlaybookEnabled=true but the store returns no enabled actions: the composer is a no-op, so the prompt is still
+        // byte-identical to Instructions and the config hash is unchanged.
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenPlaybookEnabledWithActions_AppendsBehaviorsInStoreOrder()
+    {
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        // The store fast-path returns enabled actions already ordered by Priority; the resolver must not re-sort, so the
+        // composed prompt preserves this exact order.
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
+                     [
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
+        AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public async Task ResolveAsync_EnablingPlaybook_ChangesConfigHashVersusDisabled()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+
+        var disabled = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 1, playbookEnabled: false);
+        var enabled = disabled with { PlaybookEnabled = true };
+        playbookStore.ListEnabledByAgentAsync(enabled.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
+                     [
+                         EnabledAction(enabled.Id, "Run the tests first.", priority: 1)
+                     ]));
+
+        var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled).ConfigureAwait(false);
+        var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabled).ConfigureAwait(false);
+
+        AssertEx.True(disabledHash != enabledHash, "Enabling a playbook with an action must change the config hash.");
+    }
+
     private static async Task<string> ResolveAndHashAsync(IAgentDefinitionResolver resolver,
         IAgentDefinitionStore store,
         LocalChatRuntimePackageBuilder builder,
@@ -289,7 +363,33 @@ public sealed class AgentDefinitionResolverTests
         Action<string?>? onGetOffered = null,
         params AllowedToolDto[] offeredTools)
     {
+        return BuildResolver(out store, out _, onGetOffered, offeredTools);
+    }
+
+    private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
+    {
+        return BuildResolver(out store, out _, onGetOffered: null, offeredTools);
+    }
+
+    // Exposes the playbook store so the playbook-injection tests can stub ListEnabledByAgentAsync / assert it is not
+    // queried on the disabled path. A distinct name avoids overload collision with the params-only CreateResolver.
+    private static AgentDefinitionResolver CreateResolverWithPlaybook(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        params AllowedToolDto[] offeredTools)
+    {
+        return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools);
+    }
+
+    private static AgentDefinitionResolver BuildResolver(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        Action<string?>? onGetOffered,
+        AllowedToolDto[] offeredTools)
+    {
         store = Substitute.For<IAgentDefinitionStore>();
+        playbookStore = Substitute.For<IPlaybookActionStore>();
+        // Default: no enabled playbook actions, so the composer is a no-op and the resolved prompt stays byte-identical.
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
         {
@@ -301,12 +401,7 @@ public sealed class AgentDefinitionResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
-        return new AgentDefinitionResolver(store, offerProvider, NullLogger<AgentDefinitionResolver>.Instance);
-    }
-
-    private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
-    {
-        return CreateResolver(out store, onGetOffered: null, offeredTools);
+        return new AgentDefinitionResolver(store, playbookStore, offerProvider, NullLogger<AgentDefinitionResolver>.Instance);
     }
 
     private static AgentDefinitionRecord CreateDefinition(string name = "Agent",
@@ -315,7 +410,8 @@ public sealed class AgentDefinitionResolverTests
         IReadOnlyDictionary<string, bool>? toolApprovals = null,
         int version = 1,
         string? modelProfile = "qwen3:8b",
-        string? reasoningEffort = null)
+        string? reasoningEffort = null,
+        bool playbookEnabled = false)
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             name,
@@ -329,7 +425,23 @@ public sealed class AgentDefinitionResolverTests
             null,
             version,
             10,
-            10);
+            10,
+            playbookEnabled);
+    }
+
+    private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)
+    {
+        return new PlaybookActionRecord(Guid.NewGuid(),
+            agentDefinitionId,
+            PlaybookActionState.Enabled,
+            PlaybookActionSource.Manual,
+            TriggerCondition: null,
+            behavior,
+            Scope: null,
+            priority,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)

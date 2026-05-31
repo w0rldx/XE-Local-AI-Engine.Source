@@ -831,6 +831,64 @@
 						"label": "Return to previous specialist",
 						"description": "Route the next user turn back to the specialist that handled the last turn, instead of through triage."
 					}
+				},
+				"playbookEnabled": {
+					"label": "Enable operating playbook",
+					"description": "Append this agent's enabled playbook actions to its instructions at run time."
+				}
+			},
+			"playbook": {
+				"title": "Operating playbook",
+				"subtitle": "Manual playbook actions appended to {{name}}'s instructions when its playbook is enabled.",
+				"addButton": "Add action",
+				"loading": "Loading playbook…",
+				"empty": "No playbook actions yet.",
+				"priorityLabel": "Priority {{priority}}",
+				"triggerLabel": "When: {{trigger}}",
+				"moveUpAria": "Move up",
+				"moveDownAria": "Move down",
+				"editAria": "Edit action",
+				"deleteAria": "Delete action",
+				"source": {
+					"Manual": "Manual",
+					"Analysis": "Analysis"
+				},
+				"state": {
+					"enabled": "enabled",
+					"disabled": "disabled"
+				},
+				"form": {
+					"behavior": {
+						"label": "Behavior",
+						"description": "Instruction text appended to the agent's system prompt.",
+						"placeholder": "Always cite your sources…",
+						"required": "Behavior is required"
+					},
+					"scope": {
+						"label": "Scope",
+						"placeholder": "Optional topic/tool tag"
+					},
+					"priority": {
+						"label": "Priority",
+						"description": "Lower numbers are injected first."
+					},
+					"state": {
+						"label": "State"
+					},
+					"triggerCondition": {
+						"label": "Trigger condition",
+						"description": "Optional advisory note describing when this applies (display-only in this phase).",
+						"placeholder": "When the user asks for…"
+					}
+				},
+				"delete": {
+					"title": "Delete playbook action",
+					"description": "Delete this playbook action? This cannot be undone."
+				},
+				"errors": {
+					"load": "Could not load the playbook.",
+					"save": "Could not save the playbook action.",
+					"delete": "Could not delete the playbook action."
 				}
 			},
 			"delete": {

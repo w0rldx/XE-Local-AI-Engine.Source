@@ -3,11 +3,18 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class RuntimePackageConfigHashTests
 {
+    // Frozen golden: the digest of the no-playbook / empty-playbook config (version 7, prompt "You are the bound
+    // persona.", no tools, default timeouts). Pinned as a literal so any canonical-serialization drift fails loudly.
+    private const string EmptyPlaybookDigest = "0727fbe875f076fbdb61c855b1f6ec2d11c06a692f82155b44a9a0b02e9a7df9";
+
+
     [Test]
     public void Compute_WhenUsingSharedVector_ReturnsExpectedDigest()
     {
@@ -258,5 +265,90 @@ public sealed class RuntimePackageConfigHashTests
             new TimeoutSettings());
 
         AssertEx.NotEqual(firstDigest, secondDigest);
+    }
+
+    // Playbook P1: the playbook reaches the config hash ONLY through resolvedSystemPrompt (the composed prompt). The
+    // following tests pin that the composer's output flows into the digest as expected. The byte-identical guard — an
+    // empty playbook leaving resolvedSystemPrompt unchanged — is the central regression invariant.
+
+    [Test]
+    public void Compute_WhenPlaybookEmpty_MatchesBasePromptDigest()
+    {
+        const string basePrompt = "You are the bound persona.";
+        var composedEmpty = PlaybookPromptComposer.Compose(basePrompt, []);
+
+        var baseDigest = RuntimePackageConfigHash.Compute(7, basePrompt, [], null, new TimeoutSettings());
+        var composedDigest = RuntimePackageConfigHash.Compute(7, composedEmpty, [], null, new TimeoutSettings());
+
+        AssertEx.Equal(baseDigest, composedDigest);
+
+        // Pin the no-playbook digest as a frozen literal (mirrors the a532bda9.../58ed36f8... goldens above). The
+        // base==composed assertion alone recomputes through the same code and would drift silently if the canonical
+        // serialization ever changed; pinning the literal makes any such drift fail loudly. The empty-playbook prompt
+        // is byte-identical to the base prompt, so both equal this digest.
+        AssertEx.Equal(EmptyPlaybookDigest, composedDigest);
+    }
+
+    [Test]
+    public void Compute_WhenPlaybookActionAppended_ChangesDigest()
+    {
+        const string basePrompt = "You are the bound persona.";
+        var composed = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", priority: 1)]);
+
+        var baseDigest = RuntimePackageConfigHash.Compute(7, basePrompt, [], null, new TimeoutSettings());
+        var composedDigest = RuntimePackageConfigHash.Compute(7, composed, [], null, new TimeoutSettings());
+
+        AssertEx.NotEqual(baseDigest, composedDigest);
+    }
+
+    [Test]
+    public void Compute_WhenPlaybookBehaviorEdited_ChangesDigest()
+    {
+        const string basePrompt = "You are the bound persona.";
+        var first = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", priority: 1)]);
+        var edited = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the FULL test suite first.", priority: 1)]);
+
+        var firstDigest = RuntimePackageConfigHash.Compute(7, first, [], null, new TimeoutSettings());
+        var editedDigest = RuntimePackageConfigHash.Compute(7, edited, [], null, new TimeoutSettings());
+
+        AssertEx.NotEqual(firstDigest, editedDigest);
+    }
+
+    [Test]
+    public void Compute_WhenPlaybookPriorityReordered_ChangesDigest()
+    {
+        // The store orders by Priority; a reorder swaps the bullet order in the composed prompt, which must change the
+        // digest. (The composer emits in the order received, so the test supplies the two priority orderings directly.)
+        const string basePrompt = "You are the bound persona.";
+        var order1 = PlaybookPromptComposer.Compose(basePrompt,
+        [
+            EnabledAction("Run the tests first.", priority: 1),
+            EnabledAction("Prefer small commits.", priority: 5)
+        ]);
+        var order2 = PlaybookPromptComposer.Compose(basePrompt,
+        [
+            EnabledAction("Prefer small commits.", priority: 1),
+            EnabledAction("Run the tests first.", priority: 5)
+        ]);
+
+        var order1Digest = RuntimePackageConfigHash.Compute(7, order1, [], null, new TimeoutSettings());
+        var order2Digest = RuntimePackageConfigHash.Compute(7, order2, [], null, new TimeoutSettings());
+
+        AssertEx.NotEqual(order1Digest, order2Digest);
+    }
+
+    private static PlaybookActionRecord EnabledAction(string behavior, int priority)
+    {
+        return new PlaybookActionRecord(Guid.NewGuid(),
+            Guid.NewGuid(),
+            PlaybookActionState.Enabled,
+            PlaybookActionSource.Manual,
+            TriggerCondition: null,
+            behavior,
+            Scope: null,
+            priority,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

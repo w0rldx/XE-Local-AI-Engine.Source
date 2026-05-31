@@ -89,6 +89,15 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 
+        // Playbook actions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
+        // action's own id plus the column name — same layout as agent definitions. Behavior is required; the optional
+        // trigger condition only encrypts when present.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<PlaybookAction>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Behavior), Guid.Empty, entry.Entity.Id, "behavior", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.TriggerCondition), Guid.Empty, entry.Entity.Id, "trigger_condition", trackedProperties);
+        }
+
         // MCP server registrations are node-scoped, so the AAD binds the empty conversation id to the registration's
         // own id plus the column name. The secret-bearing columns (args, env, description) are all optional.
         foreach (var entry in nodeContext.ChangeTracker.Entries<McpServerRegistration>())

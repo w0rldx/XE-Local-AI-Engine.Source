@@ -22,7 +22,7 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { hooksMock, confirmMock } = vi.hoisted(() => ({
+const { hooksMock, playbookHooksMock, confirmMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useAgentDefinitions: vi.fn(),
 		useToolCapableModels: vi.fn(),
@@ -30,10 +30,18 @@ const { hooksMock, confirmMock } = vi.hoisted(() => ({
 		useUpdateAgentDefinition: vi.fn(),
 		useDeleteAgentDefinition: vi.fn(),
 	},
+	// The edit editor mounts PlaybookPanel; mock its query hooks so opening the editor never fires a real request.
+	playbookHooksMock: {
+		usePlaybookActions: vi.fn(),
+		useCreatePlaybookAction: vi.fn(),
+		useUpdatePlaybookAction: vi.fn(),
+		useDeletePlaybookAction: vi.fn(),
+	},
 	confirmMock: vi.fn(),
 }));
 
 vi.mock("@/features/agents/queries/useAgentDefinitions", () => hooksMock);
+vi.mock("@/features/agents/queries/usePlaybookActions", () => playbookHooksMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
@@ -59,6 +67,7 @@ const sampleDefinition: AgentDefinition = {
 	allowedToolNames: ["GetCurrentTime"],
 	toolApprovals: { GetCurrentTime: true },
 	orchestrationTopologyJson: null,
+	playbookEnabled: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,
@@ -118,6 +127,10 @@ describe("AgentsPage", () => {
 		hooksMock.useCreateAgentDefinition.mockReturnValue(makeMutation());
 		hooksMock.useUpdateAgentDefinition.mockReturnValue(makeMutation());
 		hooksMock.useDeleteAgentDefinition.mockReturnValue(makeMutation());
+		playbookHooksMock.usePlaybookActions.mockReturnValue({ data: [], isLoading: false, error: null });
+		playbookHooksMock.useCreatePlaybookAction.mockReturnValue(makeMutation());
+		playbookHooksMock.useUpdatePlaybookAction.mockReturnValue(makeMutation());
+		playbookHooksMock.useDeletePlaybookAction.mockReturnValue(makeMutation());
 	});
 
 	afterEach(() => {
