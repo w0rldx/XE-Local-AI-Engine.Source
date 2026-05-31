@@ -891,6 +891,31 @@
 					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden."
 				}
 			},
+			"insights": 			{
+				"title": "Feedback-Einblicke",
+				"subtitle": "Schreibgeschützte Zusammenfassung des Daumen-hoch/runter-Feedbacks und der Kommentare für {{name}}.",
+				"loading": "Feedback-Einblicke werden geladen…",
+				"empty": "Für diesen Agenten wurde noch kein Feedback gesammelt.",
+				"up": "Positiv {{count}}",
+				"down": "Negativ {{count}}",
+				"downRate": "Negativ-Rate {{rate}}",
+				"perTool": "Nach Tool",
+				"toolsEmpty": "Noch kein tool-bezogenes Feedback.",
+				"toolHeader": "Tool",
+				"upHeader": "Positiv",
+				"downHeader": "Negativ",
+				"countHeader": "Gesamt",
+				"downRateHeader": "Negativ-Rate",
+				"exemplars": "Letzte Kommentare",
+				"exemplarsEmpty": "Noch keine Kommentare vorhanden.",
+				"ratingUp": "positiv",
+				"ratingDown": "negativ",
+				"notEnoughSignal": "nicht genug Signal (n < {{threshold}})",
+				"attributionFootnote": "Tool-Zählungen sind eine Zuordnung auf Konversationsebene: Feedback zu Nachrichten in Konversationen, in denen das Tool verwendet wurde, nicht zur konkreten Nachricht, die es aufgerufen hat.",
+				"errors": {
+					"load": "Feedback-Einblicke konnten nicht geladen werden."
+				}
+			},
 			"delete": {
 				"title": "Agent löschen",
 				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
