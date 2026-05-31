@@ -36,6 +36,8 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
+using XE_Local_AI_Engine.Client.Services.Insights;
+using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
@@ -186,6 +188,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // (Lane 2) reads only enabled rows, and the CRUD service (Lane 3) orchestrates registration. Scoped to match
         // the scoped, DbContext-backed store.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
+        // Playbook P2 feedback-insights read store. Read-only aggregate over the node-local message_feedback rows
+        // (joined to conversations.agent_definition_id + tool_events) — pure analytics, touches only plaintext
+        // columns, writes nothing. Scoped to match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IFeedbackInsightsStore, FeedbackInsightsStore>();
         // Loop P3 application layer over the store: the resolver projects a conversation's bound definition into the
         // loopback runtime-package inputs (consumed by the stream/regeneration paths), and the service validates +
         // orchestrates CRUD for the management endpoints. Both are scoped to match the scoped, DbContext-backed store.
@@ -199,6 +205,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // exist, P1-only Enabled/Disabled + Manual) and delegates persistence/versioning to the store. Scoped to match
         // the scoped, DbContext-backed stores it composes. The resolver below folds the enabled actions into the prompt.
         builder.Services.AddScoped<IPlaybookActionService, PlaybookActionService>();
+        // Playbook P2 feedback-insights application service: shapes the raw store aggregate into the operator read
+        // model (derived down-rate, the never-act-on-n=1 threshold flag, privacy-capped/truncated exemplars).
+        // Read-only analytics; scoped to match the scoped, DbContext-backed store it reads.
+        builder.Services.AddScoped<IFeedbackInsightsService, FeedbackInsightsService>();
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();

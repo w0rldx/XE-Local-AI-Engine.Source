@@ -6,10 +6,16 @@ import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { toSaveAgentDefinitionRequest } from "@/features/agents/api/AgentDefinitionsApi";
 import { AgentDefinitionForm, type AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
+import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
+import {
+	deserializeOrchestrationTopology,
+	emptyOrchestrationTopology,
+} from "@/features/agents/models/OrchestrationTopologyModels";
 import {
 	useAgentDefinitions,
 	useCreateAgentDefinition,
@@ -18,11 +24,6 @@ import {
 	useUpdateAgentDefinition,
 } from "@/features/agents/queries/useAgentDefinitions";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
-import { toSaveAgentDefinitionRequest } from "@/features/agents/api/AgentDefinitionsApi";
-import {
-	deserializeOrchestrationTopology,
-	emptyOrchestrationTopology,
-} from "@/features/agents/models/OrchestrationTopologyModels";
 import { listLocalModels } from "@/features/models/api/LocalModelsApi";
 import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
@@ -108,10 +109,7 @@ export function AgentsPage() {
 			if (editorTarget?.mode === "edit") {
 				// On edit the triage (this orchestrator) is the definition's own id, pinning the topology to it.
 				const request = toSaveAgentDefinitionRequest(values, editorTarget.id);
-				updateMutation.mutate(
-					{ id: editorTarget.id, request },
-					{ onSuccess: () => closeEditor() },
-				);
+				updateMutation.mutate({ id: editorTarget.id, request }, { onSuccess: () => closeEditor() });
 				return;
 			}
 
@@ -163,11 +161,7 @@ export function AgentsPage() {
 						</Text>
 					</Stack>
 					{!isEditorOpen ? (
-						<Button
-							leftSection={<IconPlus size={16} />}
-							onClick={openCreate}
-							data-testid="agent-create-button"
-						>
+						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="agent-create-button">
 							{t("pages.agents.createButton", "New agent")}
 						</Button>
 					) : null}
@@ -208,6 +202,15 @@ export function AgentsPage() {
 									enabled={nodeCapabilities.agentManagement}
 								/>
 							) : null}
+							{/* Per-agent read-only feedback insights (Playbook P2). Only meaningful for a persisted
+							    agent (has an id). Capability-gated under agentManagement; analytics-only, no mutations. */}
+							{editingDefinition ? (
+								<FeedbackInsightsPanel
+									agentDefinitionId={editingDefinition.id}
+									agentName={editingDefinition.name}
+									enabled={nodeCapabilities.agentManagement}
+								/>
+							) : null}
 						</Stack>
 					</Card>
 				) : (
@@ -221,10 +224,7 @@ export function AgentsPage() {
 							) : null}
 							{definitionsQuery.error ? (
 								<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-list-error">
-									{errorMessage(
-										definitionsQuery.error,
-										t("pages.agents.errors.load", "Could not load agent definitions."),
-									)}
+									{errorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
 								</Alert>
 							) : null}
 							{!definitionsQuery.isLoading && !definitionsQuery.error ? (

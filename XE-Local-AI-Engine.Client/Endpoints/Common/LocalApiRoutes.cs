@@ -95,6 +95,10 @@ public static class LocalApiRoutes
         // {agentDefinitionId} param, so it never collides with DefinitionById (which has no trailing segment).
         public const string Playbook = "agents/{agentDefinitionId}/playbook";
         public const string PlaybookActionById = "agents/{agentDefinitionId}/playbook/{actionId}";
+
+        // Playbook P2: read-only per-agent feedback insights (aggregate over message_feedback). The literal
+        // "feedback-insights" segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
+        public const string FeedbackInsights = "agents/{agentDefinitionId}/feedback-insights";
     }
 
     public static class Mcp

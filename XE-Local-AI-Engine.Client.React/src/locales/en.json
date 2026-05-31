@@ -891,6 +891,31 @@
 					"delete": "Could not delete the playbook action."
 				}
 			},
+			"insights": 			{
+				"title": "Feedback insights",
+				"subtitle": "Read-only summary of the up/down feedback and comments collected for {{name}}.",
+				"loading": "Loading feedback insights…",
+				"empty": "No feedback collected for this agent yet.",
+				"up": "Up {{count}}",
+				"down": "Down {{count}}",
+				"downRate": "Down rate {{rate}}",
+				"perTool": "By tool",
+				"toolsEmpty": "No tool-attributed feedback yet.",
+				"toolHeader": "Tool",
+				"upHeader": "Up",
+				"downHeader": "Down",
+				"countHeader": "Total",
+				"downRateHeader": "Down rate",
+				"exemplars": "Recent comments",
+				"exemplarsEmpty": "No comments left yet.",
+				"ratingUp": "up",
+				"ratingDown": "down",
+				"notEnoughSignal": "not enough signal (n < {{threshold}})",
+				"attributionFootnote": "Per-tool counts are conversation-level attribution: feedback on messages in conversations where the tool was used, not on the specific message that called it.",
+				"errors": {
+					"load": "Could not load feedback insights."
+				}
+			},
 			"delete": {
 				"title": "Delete agent",
 				"description": "Delete '{{name}}'? This cannot be undone."
