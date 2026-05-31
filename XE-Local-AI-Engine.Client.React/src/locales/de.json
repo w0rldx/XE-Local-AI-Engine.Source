@@ -841,6 +841,15 @@
 				"title": "Operating-Playbook",
 				"subtitle": "Manuelle Playbook-Aktionen, die an die Anweisungen von {{name}} angehängt werden, wenn dessen Playbook aktiviert ist.",
 				"addButton": "Aktion hinzufügen",
+				"analyzeButton": "Feedback analysieren",
+				"noSuggestions": "Keine neuen Vorschläge aus der letzten Analyse.",
+				"suggestedHeading": "Von der Analyse vorgeschlagen",
+				"confidenceLabel": "Konfidenz {{value}}",
+				"evidenceSummary": "Basierend auf {{count}} Feedback-Elementen",
+				"evidenceEmpty": "Keine zitierten Feedback-Elemente.",
+				"evidenceHint": "Prüfe diese Elemente im Feedback-Einblicke-Panel weiter unten.",
+				"approveButton": "Genehmigen",
+				"rejectButton": "Ablehnen",
 				"loading": "Playbook wird geladen…",
 				"empty": "Noch keine Playbook-Aktionen.",
 				"priorityLabel": "Priorität {{priority}}",
@@ -885,10 +894,17 @@
 					"title": "Playbook-Aktion löschen",
 					"description": "Diese Playbook-Aktion löschen? Dies kann nicht rückgängig gemacht werden."
 				},
+				"reject": {
+					"title": "Vorschlag ablehnen",
+					"description": "Diese vorgeschlagene Aktion ablehnen? Sie wird archiviert und nicht eingefügt.",
+					"confirm": "Ablehnen"
+				},
 				"errors": {
 					"load": "Das Playbook konnte nicht geladen werden.",
 					"save": "Die Playbook-Aktion konnte nicht gespeichert werden.",
-					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden."
+					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden.",
+					"analyze": "Feedback konnte nicht analysiert werden.",
+					"review": "Der Vorschlag konnte nicht aktualisiert werden."
 				}
 			},
 			"insights": 			{

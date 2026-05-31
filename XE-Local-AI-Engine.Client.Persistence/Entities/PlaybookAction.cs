@@ -31,6 +31,16 @@ internal sealed record class PlaybookAction
     /// <summary>Optional topic/tool/intent tag (structural, filterable). Plaintext.</summary>
     public string? Scope { get; set; }
 
+    /// <summary>
+    ///     Provenance for an analysis-proposed action (Playbook P3): a JSON array of feedback message/conversation ids
+    ///     that drove this action. Null for manually-authored actions. Plaintext — these are ids only (no comment
+    ///     text), so they are not sensitive and are NOT encrypted.
+    /// </summary>
+    public string? SourceFeedbackIds { get; set; }
+
+    /// <summary>Analysis-agent confidence in [0,1] for a P3-proposed action; null for manual actions. Plaintext (structural).</summary>
+    public double? Confidence { get; set; }
+
     /// <summary>Injection order; enabled actions inject ascending by this value. Plaintext (structural).</summary>
     public int Priority { get; set; }
 

@@ -24,7 +24,11 @@ const { hooksMock, confirmMock } = vi.hoisted(() => ({
 		usePlaybookActions: vi.fn(),
 		useCreatePlaybookAction: vi.fn(),
 		useUpdatePlaybookAction: vi.fn(),
+		useUpdateSuggestedAction: vi.fn(),
 		useDeletePlaybookAction: vi.fn(),
+		useAnalyzePlaybook: vi.fn(),
+		usePromoteSuggestedAction: vi.fn(),
+		useRejectSuggestedAction: vi.fn(),
 	},
 	confirmMock: vi.fn(),
 }));
@@ -50,12 +54,32 @@ function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 		version: 1,
 		createdAtUtc: 1000,
 		updatedAtUtc: 2000,
+		sourceFeedbackIds: null,
+		confidence: null,
 		...overrides,
 	};
 }
 
+// A Suggested analysis proposal: source "Analysis", state "Suggested", with cited feedback ids + confidence.
+function makeSuggestedAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
+	return makeAction({
+		id: "suggested-1",
+		state: "Suggested",
+		source: "Analysis",
+		behavior: "Summarize before answering",
+		sourceFeedbackIds: ["fb-1", "fb-2"],
+		confidence: 0.82,
+		...overrides,
+	});
+}
+
 function makeMutation() {
 	return { mutate: vi.fn(), isPending: false, error: null };
+}
+
+// Analyze mutation also exposes isSuccess/data (the empty-result notice reads them).
+function makeAnalyzeMutation(overrides: Record<string, unknown> = {}) {
+	return { mutate: vi.fn(), isPending: false, isSuccess: false, error: null, data: undefined, ...overrides };
 }
 
 function installJsdomEnvironmentMocks(): void {
@@ -96,7 +120,11 @@ describe("PlaybookPanel", () => {
 		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeAction()], isLoading: false, error: null });
 		hooksMock.useCreatePlaybookAction.mockReturnValue(makeMutation());
 		hooksMock.useUpdatePlaybookAction.mockReturnValue(makeMutation());
+		hooksMock.useUpdateSuggestedAction.mockReturnValue(makeMutation());
 		hooksMock.useDeletePlaybookAction.mockReturnValue(makeMutation());
+		hooksMock.useAnalyzePlaybook.mockReturnValue(makeAnalyzeMutation());
+		hooksMock.usePromoteSuggestedAction.mockReturnValue(makeMutation());
+		hooksMock.useRejectSuggestedAction.mockReturnValue(makeMutation());
 	});
 
 	afterEach(() => {
@@ -183,5 +211,154 @@ describe("PlaybookPanel", () => {
 		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
 
 		expect(screen.getByTestId("playbook-list-error")).toBeTruthy();
+	});
+
+	it("renders a Suggested action with the Analysis badge, confidence, evidence affordance and review controls", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeAction(), makeSuggestedAction()],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// Suggested proposal renders in its own section, separate from the manual action.
+		expect(screen.getByTestId("playbook-suggested-section")).toBeTruthy();
+		expect(screen.getByTestId("playbook-suggested-suggested-1")).toBeTruthy();
+		expect(screen.getByTestId("playbook-suggested-source-suggested-1").textContent).toBe("Analysis");
+		// Confidence 0.82 → 82%.
+		expect(screen.getByTestId("playbook-suggested-confidence-suggested-1").textContent).toContain("82%");
+		expect(screen.getByText("Summarize before answering")).toBeTruthy();
+		// Evidence affordance summarizes the two cited feedback ids.
+		expect(screen.getByTestId("playbook-suggested-evidence-toggle-suggested-1").textContent).toContain("2");
+		// Approve / Edit / Reject controls are present.
+		expect(screen.getByTestId("playbook-suggested-approve-suggested-1")).toBeTruthy();
+		expect(screen.getByTestId("playbook-suggested-edit-suggested-1")).toBeTruthy();
+		expect(screen.getByTestId("playbook-suggested-reject-suggested-1")).toBeTruthy();
+
+		// The manual action stays out of the Suggested section (rendered as a normal action row).
+		expect(screen.getByTestId("playbook-action-action-1")).toBeTruthy();
+	});
+
+	it("expands the evidence affordance to reveal the cited feedback ids", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction()],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-suggested-evidence-toggle-suggested-1"));
+
+		const evidence = screen.getByTestId("playbook-suggested-evidence-suggested-1");
+		expect(evidence.textContent).toContain("fb-1");
+		expect(evidence.textContent).toContain("fb-2");
+	});
+
+	it("triggers the analyze call when the Analyze feedback button is clicked", () => {
+		const analyzeMutation = makeAnalyzeMutation();
+		hooksMock.useAnalyzePlaybook.mockReturnValue(analyzeMutation);
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-analyze-button"));
+
+		expect(analyzeMutation.mutate).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows the no-new-suggestions notice after an empty analyze run", () => {
+		hooksMock.useAnalyzePlaybook.mockReturnValue(makeAnalyzeMutation({ isSuccess: true, data: [] }));
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-no-suggestions")).toBeTruthy();
+	});
+
+	it("promotes a Suggested action through the promote mutation when Approve is clicked", () => {
+		const promoteMutation = makeMutation();
+		hooksMock.usePromoteSuggestedAction.mockReturnValue(promoteMutation);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-suggested-approve-suggested-1"));
+
+		expect(promoteMutation.mutate).toHaveBeenCalledWith("suggested-1");
+	});
+
+	it("rejects a Suggested action through the reject mutation after confirmation", async () => {
+		confirmMock.mockResolvedValue(true);
+		const rejectMutation = makeMutation();
+		hooksMock.useRejectSuggestedAction.mockReturnValue(rejectMutation);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-suggested-reject-suggested-1"));
+		// The reject handler awaits the confirm dialog before firing the mutation.
+		await Promise.resolve();
+
+		expect(confirmMock).toHaveBeenCalled();
+		expect(rejectMutation.mutate).toHaveBeenCalledWith("suggested-1");
+	});
+
+	it("opens the edit form for a Suggested action without the Enabled/Disabled state field (edit-before-approve)", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-suggested-edit-suggested-1"));
+
+		// The inline form opens, pre-filled with the proposal's behavior.
+		const behavior = screen.getByTestId("playbook-form-behavior") as HTMLTextAreaElement;
+		expect(behavior.value).toBe("Summarize before answering");
+		// The state Select is hidden for a Suggested edit — it stays Suggested until Approve.
+		expect(screen.queryByTestId("playbook-form-state")).toBeNull();
+	});
+
+	it("saves a Suggested edit via the dedicated /suggested mutation (state-less body), not the manual PUT", () => {
+		const updateSuggestedMutation = makeMutation();
+		const updateMutation = makeMutation();
+		hooksMock.useUpdateSuggestedAction.mockReturnValue(updateSuggestedMutation);
+		hooksMock.useUpdatePlaybookAction.mockReturnValue(updateMutation);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-suggested-edit-suggested-1"));
+		const behavior = screen.getByTestId("playbook-form-behavior") as HTMLTextAreaElement;
+		fireEvent.change(behavior, { target: { value: "Always summarize first" } });
+		fireEvent.click(screen.getByTestId("playbook-form-submit"));
+
+		// The dedicated Suggested-edit mutation fires with the state-less body; the manual PUT is never used.
+		expect(updateSuggestedMutation.mutate).toHaveBeenCalledTimes(1);
+		expect(updateSuggestedMutation.mutate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				actionId: "suggested-1",
+				request: expect.objectContaining({ behavior: "Always summarize first", priority: 0 }),
+			}),
+			expect.anything(),
+		);
+		// The body carries no `state` field (the action stays Suggested).
+		const variables = updateSuggestedMutation.mutate.mock.calls.at(0)?.at(0) as { request: Record<string, unknown> };
+		expect(variables.request).not.toHaveProperty("state");
+		expect(updateMutation.mutate).not.toHaveBeenCalled();
+	});
+
+	it("saves a manual edit via the manual update mutation, not the /suggested route", () => {
+		const updateSuggestedMutation = makeMutation();
+		const updateMutation = makeMutation();
+		hooksMock.useUpdateSuggestedAction.mockReturnValue(updateSuggestedMutation);
+		hooksMock.useUpdatePlaybookAction.mockReturnValue(updateMutation);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("playbook-edit-action-1"));
+		fireEvent.click(screen.getByTestId("playbook-form-submit"));
+
+		expect(updateMutation.mutate).toHaveBeenCalledTimes(1);
+		expect(updateSuggestedMutation.mutate).not.toHaveBeenCalled();
 	});
 });

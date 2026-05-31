@@ -35,7 +35,11 @@ const { hooksMock, playbookHooksMock, confirmMock } = vi.hoisted(() => ({
 		usePlaybookActions: vi.fn(),
 		useCreatePlaybookAction: vi.fn(),
 		useUpdatePlaybookAction: vi.fn(),
+		useUpdateSuggestedAction: vi.fn(),
 		useDeletePlaybookAction: vi.fn(),
+		useAnalyzePlaybook: vi.fn(),
+		usePromoteSuggestedAction: vi.fn(),
+		useRejectSuggestedAction: vi.fn(),
 	},
 	confirmMock: vi.fn(),
 }));
@@ -130,7 +134,11 @@ describe("AgentsPage", () => {
 		playbookHooksMock.usePlaybookActions.mockReturnValue({ data: [], isLoading: false, error: null });
 		playbookHooksMock.useCreatePlaybookAction.mockReturnValue(makeMutation());
 		playbookHooksMock.useUpdatePlaybookAction.mockReturnValue(makeMutation());
+		playbookHooksMock.useUpdateSuggestedAction.mockReturnValue(makeMutation());
 		playbookHooksMock.useDeletePlaybookAction.mockReturnValue(makeMutation());
+		playbookHooksMock.useAnalyzePlaybook.mockReturnValue(makeMutation());
+		playbookHooksMock.usePromoteSuggestedAction.mockReturnValue(makeMutation());
+		playbookHooksMock.useRejectSuggestedAction.mockReturnValue(makeMutation());
 	});
 
 	afterEach(() => {

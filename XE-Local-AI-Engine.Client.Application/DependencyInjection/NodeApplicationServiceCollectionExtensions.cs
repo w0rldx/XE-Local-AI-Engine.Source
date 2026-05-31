@@ -36,6 +36,8 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
+using XE_Local_AI_Engine.Client.Services.Analysis;
+using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -209,6 +211,27 @@ public static class NodeApplicationServiceCollectionExtensions
         // model (derived down-rate, the never-act-on-n=1 threshold flag, privacy-capped/truncated exemplars).
         // Read-only analytics; scoped to match the scoped, DbContext-backed store it reads.
         builder.Services.AddScoped<IFeedbackInsightsService, FeedbackInsightsService>();
+        // Playbook P3 analysis options: the node-local model used to read feedback comments. Defaults to the node's
+        // configured chat model when unset, so analysis never silently picks the cloud chat client (the comments stay
+        // on-node — §7 privacy).
+        builder.Services.AddOptions<PlaybookAnalysisOptions>()
+               .Bind(builder.Configuration.GetSection(PlaybookAnalysisOptions.Section))
+               .PostConfigure(analysisOptions =>
+               {
+                   if (string.IsNullOrWhiteSpace(analysisOptions.ModelName))
+                   {
+                       analysisOptions.ModelName = builder.Configuration.GetValue<string>("Ollama:ChatModel")
+                                                   ?? builder.Configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
+                                                   ?? string.Empty;
+                   }
+               });
+        // Playbook P3 analysis agent (the AI surface): proposes Suggested actions from the P2 aggregate using a
+        // node-local model only. Singleton — it holds no scoped state and resolves a fresh per-run chat client.
+        builder.Services.AddSingleton<IPlaybookAnalysisAgent, OllamaPlaybookAnalysisAgent>();
+        // Playbook P3 analysis orchestration: reads the P2 aggregate, gates on the occurrence threshold, validates
+        // each proposal's evidence, dedupes, and writes Suggested actions for human review. Scoped to match the
+        // scoped services it composes.
+        builder.Services.AddScoped<IPlaybookAnalysisService, PlaybookAnalysisService>();
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();

@@ -334,6 +334,13 @@ public sealed class NodeChatDbContext : DbContext
         builder.Property(entity => entity.Scope)
                .HasColumnName("scope");
 
+        // P3 analysis provenance/confidence — additive nullable columns. Plaintext (ids only / a scalar), not encrypted.
+        builder.Property(entity => entity.SourceFeedbackIds)
+               .HasColumnName("source_feedback_ids");
+
+        builder.Property(entity => entity.Confidence)
+               .HasColumnName("confidence");
+
         builder.Property(entity => entity.Priority)
                .HasColumnName("priority");
 

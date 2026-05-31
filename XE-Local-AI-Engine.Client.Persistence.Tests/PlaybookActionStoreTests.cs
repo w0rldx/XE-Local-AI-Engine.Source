@@ -303,6 +303,114 @@ public sealed class PlaybookActionStoreTests : IDisposable
             "Tampered behavior ciphertext should fail authenticated decryption.");
     }
 
+    [Test]
+    public async Task AddAsync_WithSourceFeedbackIdsAndConfidence_RoundTripsThroughJson()
+    {
+        var databasePath = GetDatabasePath("provenance-roundtrip.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var feedbackIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        const double Confidence = 0.875d;
+
+        Guid actionId;
+        Guid agentId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            agentId = await SeedAgentAsync(context);
+            var store = new PlaybookActionStore(context, TimeProvider.System);
+            var added = await store.AddAsync(CreateInput(agentId) with
+            {
+                State = PlaybookActionState.Suggested,
+                Source = PlaybookActionSource.Analysis,
+                SourceFeedbackIds = feedbackIds,
+                Confidence = Confidence
+            });
+            actionId = added.Id;
+
+            AssertEx.NotNull(added.SourceFeedbackIds, "AddAsync should return the persisted provenance ids.");
+            AssertEx.Equal(2, added.SourceFeedbackIds!.Count);
+            AssertEx.Equal(Confidence, added.Confidence);
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var readStore = new PlaybookActionStore(readContext, TimeProvider.System);
+
+        var byId = AssertEx.NotNull(await readStore.GetByIdAsync(actionId), "Action should be found by id.");
+        AssertEx.NotNull(byId.SourceFeedbackIds, "Provenance ids should round-trip through JSON.");
+        AssertEx.Equal(2, byId.SourceFeedbackIds!.Count);
+        AssertEx.Equal(feedbackIds[0], byId.SourceFeedbackIds[0]);
+        AssertEx.Equal(feedbackIds[1], byId.SourceFeedbackIds[1]);
+        AssertEx.Equal(Confidence, byId.Confidence);
+        AssertEx.Equal(PlaybookActionState.Suggested, byId.State);
+        AssertEx.Equal(PlaybookActionSource.Analysis, byId.Source);
+
+        var list = await readStore.ListByAgentAsync(agentId);
+        AssertEx.Equal(1, list.Count);
+        AssertEx.NotNull(list[0].SourceFeedbackIds, "ListByAgentAsync should also surface the provenance ids.");
+        AssertEx.Equal(2, list[0].SourceFeedbackIds!.Count);
+        AssertEx.Equal(Confidence, list[0].Confidence);
+    }
+
+    [Test]
+    public async Task AddAsync_ManualAction_ReadsBackNullProvenanceAndConfidence()
+    {
+        var databasePath = GetDatabasePath("manual-null-provenance.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        Guid actionId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var agentId = await SeedAgentAsync(context);
+            var store = new PlaybookActionStore(context, TimeProvider.System);
+            // CreateInput leaves SourceFeedbackIds/Confidence at their null defaults (a manual action carries no provenance).
+            var added = await store.AddAsync(CreateInput(agentId));
+            actionId = added.Id;
+
+            AssertEx.Null(added.SourceFeedbackIds, "A manual action should carry no provenance ids.");
+            AssertEx.Null(added.Confidence, "A manual action should carry no confidence.");
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var readStore = new PlaybookActionStore(readContext, TimeProvider.System);
+
+        var byId = AssertEx.NotNull(await readStore.GetByIdAsync(actionId), "Action should be found by id.");
+        AssertEx.Null(byId.SourceFeedbackIds, "A manual action's provenance should read back as null.");
+        AssertEx.Null(byId.Confidence, "A manual action's confidence should read back as null.");
+    }
+
+    [Test]
+    public async Task ListEnabledByAgentAsync_ExcludesSuggestedAction()
+    {
+        var databasePath = GetDatabasePath("enabled-excludes-suggested.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, TimeProvider.System);
+
+        var enabledAction = await store.AddAsync(CreateInput(agentId) with { Behavior = "enabled" });
+        // A Suggested/Analysis action is inert by construction: the resolver fast-path must never surface it.
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Behavior = "suggested",
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            Confidence = 0.9d
+        });
+
+        var enabled = await store.ListEnabledByAgentAsync(agentId);
+
+        AssertEx.Equal(1, enabled.Count);
+        AssertEx.Equal("enabled", enabled[0].Behavior);
+        AssertEx.Equal(enabledAction.Id, enabled[0].Id);
+    }
+
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
