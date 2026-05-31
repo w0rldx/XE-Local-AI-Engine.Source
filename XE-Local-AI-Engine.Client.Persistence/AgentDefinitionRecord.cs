@@ -19,4 +19,5 @@ public sealed record AgentDefinitionRecord(
     string? OrchestrationTopologyJson,
     int Version,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    bool PlaybookEnabled = false);

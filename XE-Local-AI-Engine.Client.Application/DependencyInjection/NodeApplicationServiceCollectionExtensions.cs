@@ -176,6 +176,11 @@ public static class NodeApplicationServiceCollectionExtensions
         // encrypted at rest by the node encryption interceptors; the application-layer resolver/service (Lane 2/3)
         // consumes it to project a bound definition into the existing runtime package envelope.
         builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();
+        // Playbook P1 action store. Persists node-local playbook actions bound to an agent definition with the injected
+        // Behavior + the advisory TriggerCondition encrypted at rest by the node encryption interceptors; the resolver
+        // (Lane 2) folds enabled actions into the agent's system prompt, and the CRUD service (Lane 3) orchestrates
+        // authoring. Scoped to match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
         // Loop P4 MCP server registration store. Persists node-local MCP server registrations with the secret-bearing
         // args/env/description columns encrypted at rest by the node encryption interceptors; the connection manager
         // (Lane 2) reads only enabled rows, and the CRUD service (Lane 3) orchestrates registration. Scoped to match
@@ -190,6 +195,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // Scoped to match the scoped, DbContext-backed store it reads participants from.
         builder.Services.AddScoped<IOrchestrationResolver, OrchestrationResolver>();
         builder.Services.AddScoped<IAgentDefinitionService, AgentDefinitionService>();
+        // Playbook P1 application service: validates manual playbook authoring (Behavior required, owning agent must
+        // exist, P1-only Enabled/Disabled + Manual) and delegates persistence/versioning to the store. Scoped to match
+        // the scoped, DbContext-backed stores it composes. The resolver below folds the enabled actions into the prompt.
+        builder.Services.AddScoped<IPlaybookActionService, PlaybookActionService>();
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();

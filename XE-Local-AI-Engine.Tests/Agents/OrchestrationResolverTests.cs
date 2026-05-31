@@ -147,6 +147,48 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenParticipantPlaybookEnabled_FoldsActionsIntoItsInstructions()
+    {
+        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolver(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+        playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
+                     [
+                         EnabledAction(specialist.Id, "Stay terse.", priority: 1)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.Equal("Instructions for Specialist\n\n## Operating Playbook\n- Stay terse.", specialistSpec.Instructions);
+        // The triage participant has no enabled playbook, so its instructions stay byte-identical.
+        var triageSpec = resolved.Spec.Participants.Single(participant => participant.Key == triage.Id.ToString("D"));
+        AssertEx.Equal("Instructions for Triage", triageSpec.Instructions);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantPlaybookDisabled_KeepsInstructionsByteIdentical()
+    {
+        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: false);
+        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: false);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolver(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.Equal("Instructions for Specialist", specialistSpec.Instructions);
+        // A disabled participant playbook must not query the store at all.
+        await playbookStore.DidNotReceive().ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task ResolveAsync_DropsEdgesReferencingDroppedParticipant()
     {
         var triage = CreateDefinition(modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
@@ -199,7 +241,18 @@ public sealed class OrchestrationResolverTests
 
     private static OrchestrationResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
     {
+        return CreateResolver(out store, out _, offeredTools);
+    }
+
+    private static OrchestrationResolver CreateResolver(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        params AllowedToolDto[] offeredTools)
+    {
         store = Substitute.For<IAgentDefinitionStore>();
+        playbookStore = Substitute.For<IPlaybookActionStore>();
+        // Default: no enabled playbook actions, so each participant's composed prompt stays byte-identical.
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
         {
@@ -211,7 +264,7 @@ public sealed class OrchestrationResolverTests
         });
 
         var options = Options.Create(new AgentHomeOptions { ToolCapableModels = [ToolCapableModel] });
-        return new OrchestrationResolver(store, offerProvider, options, NullLogger<OrchestrationResolver>.Instance);
+        return new OrchestrationResolver(store, playbookStore, offerProvider, options, NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)
@@ -242,7 +295,8 @@ public sealed class OrchestrationResolverTests
         int version = 1,
         string? modelProfile = ToolCapableModel,
         string? reasoningEffort = null,
-        string? topologyJson = null)
+        string? topologyJson = null,
+        bool playbookEnabled = false)
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             name,
@@ -256,7 +310,23 @@ public sealed class OrchestrationResolverTests
             topologyJson,
             version,
             10,
-            10);
+            10,
+            playbookEnabled);
+    }
+
+    private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)
+    {
+        return new PlaybookActionRecord(Guid.NewGuid(),
+            agentDefinitionId,
+            PlaybookActionState.Enabled,
+            PlaybookActionSource.Manual,
+            TriggerCondition: null,
+            behavior,
+            Scope: null,
+            priority,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)

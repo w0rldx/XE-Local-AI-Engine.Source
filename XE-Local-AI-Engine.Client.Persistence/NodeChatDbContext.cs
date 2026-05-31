@@ -27,6 +27,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<AgentDefinition> AgentDefinitions => Set<AgentDefinition>();
 
+    internal DbSet<PlaybookAction> PlaybookActions => Set<PlaybookAction>();
+
     internal DbSet<McpServerRegistration> McpServers => Set<McpServerRegistration>();
 
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
@@ -42,6 +44,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigureMessageFeedback(modelBuilder.Entity<NodeMessageFeedback>());
         ConfigureSelectedFolder(modelBuilder.Entity<NodeSelectedFolder>());
         ConfigureAgentDefinition(modelBuilder.Entity<AgentDefinition>());
+        ConfigurePlaybookAction(modelBuilder.Entity<PlaybookAction>());
         ConfigureMcpServer(modelBuilder.Entity<McpServerRegistration>());
     }
 
@@ -288,6 +291,10 @@ public sealed class NodeChatDbContext : DbContext
         builder.Property(entity => entity.OrchestrationTopologyJson)
                .HasColumnName("orchestration_topology_json");
 
+        builder.Property(entity => entity.PlaybookEnabled)
+               .HasColumnName("playbook_enabled")
+               .HasDefaultValue(false);
+
         builder.Property(entity => entity.Version)
                .HasColumnName("version");
 
@@ -299,6 +306,55 @@ public sealed class NodeChatDbContext : DbContext
 
         // Name is a human label, not a key: index it for list/search but do not enforce uniqueness.
         builder.HasIndex(entity => entity.Name);
+    }
+
+    private static void ConfigurePlaybookAction(EntityTypeBuilder<PlaybookAction> builder)
+    {
+        builder.ToTable("playbook_actions");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.AgentDefinitionId)
+               .HasColumnName("agent_definition_id");
+
+        builder.Property(entity => entity.State)
+               .HasColumnName("state");
+
+        builder.Property(entity => entity.Source)
+               .HasColumnName("source");
+
+        builder.Property(entity => entity.TriggerCondition)
+               .HasColumnName("trigger_condition");
+
+        builder.Property(entity => entity.Behavior)
+               .HasColumnName("behavior");
+
+        builder.Property(entity => entity.Scope)
+               .HasColumnName("scope");
+
+        builder.Property(entity => entity.Priority)
+               .HasColumnName("priority");
+
+        builder.Property(entity => entity.Version)
+               .HasColumnName("version");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        builder.HasIndex(entity => entity.AgentDefinitionId);
+
+        // A playbook action is meaningless without its owning agent, so the FK cascades: deleting an agent removes its
+        // actions. (Contrast conversation->definition, which is intentionally no-FK because a conversation outlives its
+        // definition.)
+        builder.HasOne<AgentDefinition>()
+               .WithMany()
+               .HasForeignKey(entity => entity.AgentDefinitionId)
+               .OnDelete(DeleteBehavior.Cascade);
     }
 
     private static void ConfigureMcpServer(EntityTypeBuilder<McpServerRegistration> builder)

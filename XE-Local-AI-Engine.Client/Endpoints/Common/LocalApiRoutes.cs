@@ -90,6 +90,11 @@ public static class LocalApiRoutes
         // A distinct literal segment under the agents surface; FastEndpoints prioritises the literal over the
         // {agentDefinitionId} route param so this never collides with DefinitionById.
         public const string ToolCapableModels = "agents/tool-capable-models";
+
+        // Playbook P1: per-agent playbook actions nested under the agent. The literal "playbook" segment follows the
+        // {agentDefinitionId} param, so it never collides with DefinitionById (which has no trailing segment).
+        public const string Playbook = "agents/{agentDefinitionId}/playbook";
+        public const string PlaybookActionById = "agents/{agentDefinitionId}/playbook/{actionId}";
     }
 
     public static class Mcp

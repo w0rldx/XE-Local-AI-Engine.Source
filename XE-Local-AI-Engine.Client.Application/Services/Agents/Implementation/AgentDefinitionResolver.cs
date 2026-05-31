@@ -7,10 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal sealed class AgentDefinitionResolver(
     IAgentDefinitionStore store,
+    IPlaybookActionStore playbookActionStore,
     ILocalToolOfferProvider localToolOfferProvider,
     ILogger<AgentDefinitionResolver> logger) : IAgentDefinitionResolver
 {
     private readonly IAgentDefinitionStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
     private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
     private readonly ILogger<AgentDefinitionResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -36,12 +38,29 @@ internal sealed class AgentDefinitionResolver(
         // When the definition pins no profile the turn keeps the caller's active model.
         var effectiveModel = definition.ModelProfile ?? activeModelId;
         var allowedTools = ProjectAllowedTools(definition, effectiveModel);
+        var resolvedPrompt = await ComposePromptAsync(definition, cancellationToken).ConfigureAwait(false);
 
-        return new ResolvedAgentRuntime(definition.Instructions,
+        return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
             definition.ModelProfile,
             definition.ReasoningEffort,
             definition.Version);
+    }
+
+    /// <summary>
+    ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled. When it is
+    ///     disabled the query is skipped entirely and the base Instructions flow through unchanged — keeping the
+    ///     resolved prompt (and thus the runtime config hash) byte-identical to the no-playbook path.
+    /// </summary>
+    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, CancellationToken cancellationToken)
+    {
+        if (!definition.PlaybookEnabled)
+        {
+            return definition.Instructions;
+        }
+
+        var enabled = await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken).ConfigureAwait(false);
+        return PlaybookPromptComposer.Compose(definition.Instructions, enabled);
     }
 
     private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId)

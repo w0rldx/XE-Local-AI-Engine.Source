@@ -41,6 +41,7 @@ function makeDto(overrides: Partial<AgentDefinitionDto> = {}): AgentDefinitionDt
 		allowedToolNames: ["GetCurrentTime"],
 		toolApprovals: { GetCurrentTime: true },
 		orchestrationTopologyJson: null,
+		playbookEnabled: false,
 		version: 2,
 		createdAtUtc: 1000,
 		updatedAtUtc: 2000,
@@ -58,6 +59,7 @@ const sampleRequest: SaveAgentDefinitionRequestDto = {
 	allowedToolNames: ["GetCurrentTime"],
 	toolApprovals: { GetCurrentTime: true },
 	orchestrationTopologyJson: null,
+	playbookEnabled: false,
 };
 
 const emptyTopology = { participantAgentDefinitionIds: [], handoffs: [], maxTurnsPerAgent: 8, returnToPrevious: false };
@@ -131,12 +133,14 @@ describe("agent definitions API", () => {
 			allowedToolNames: ["GetCurrentTime"],
 			toolApprovals: { GetCurrentTime: false, Calculate: true },
 			orchestration: emptyTopology,
+			playbookEnabled: true,
 		});
 
 		expect(request.name).toBe("Trimmed");
 		expect(request.description).toBeNull();
 		expect(request.instructions).toBe("Do things");
 		expect(request.toolApprovals).toEqual({ GetCurrentTime: false });
+		expect(request.playbookEnabled).toBe(true);
 	});
 
 	it("sends a null topology for a Single definition even when an orchestration is present", () => {
@@ -151,6 +155,7 @@ describe("agent definitions API", () => {
 				allowedToolNames: [],
 				toolApprovals: {},
 				orchestration: { ...emptyTopology, participantAgentDefinitionIds: ["spec-1"] },
+				playbookEnabled: false,
 			},
 			"self-1",
 		);
@@ -175,6 +180,7 @@ describe("agent definitions API", () => {
 					maxTurnsPerAgent: 6,
 					returnToPrevious: true,
 				},
+				playbookEnabled: false,
 			},
 			"self-1",
 		);

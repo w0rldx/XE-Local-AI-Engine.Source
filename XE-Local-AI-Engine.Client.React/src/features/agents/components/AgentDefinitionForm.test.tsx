@@ -45,6 +45,7 @@ function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefiniti
 		allowedToolNames: [],
 		toolApprovals: {},
 		orchestrationTopologyJson: null,
+		playbookEnabled: false,
 		version: 1,
 		createdAtUtc: 0,
 		updatedAtUtc: 0,
@@ -109,6 +110,7 @@ const baseValues: AgentDefinitionFormValues = {
 	allowedToolNames: [],
 	toolApprovals: {},
 	orchestration: { participantAgentDefinitionIds: [], handoffs: [], maxTurnsPerAgent: 8, returnToPrevious: false },
+	playbookEnabled: false,
 };
 
 function renderForm(overrides: {
@@ -218,6 +220,19 @@ describe("AgentDefinitionForm", () => {
 		expect(onSubmit).toHaveBeenCalledWith(
 			expect.objectContaining({ allowedToolNames: [], toolApprovals: {} }),
 		);
+	});
+
+	it("submits playbookEnabled true when the playbook toggle is switched on", () => {
+		const { onSubmit } = renderForm({
+			initialValues: { name: "Helper", instructions: "Be helpful" },
+		});
+
+		const toggle = screen.getByTestId("agent-form-playbook-enabled") as HTMLInputElement;
+		expect(toggle.checked).toBe(false);
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ playbookEnabled: true }));
 	});
 
 	it("hides the orchestration section for a Single definition", () => {

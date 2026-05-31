@@ -46,4 +46,5 @@ public sealed record AgentDefinitionInput(
     AgentDefinitionKind Kind,
     IReadOnlyList<string> AllowedToolNames,
     IReadOnlyDictionary<string, bool> ToolApprovals,
-    string? OrchestrationTopologyJson);
+    string? OrchestrationTopologyJson,
+    bool PlaybookEnabled = false);

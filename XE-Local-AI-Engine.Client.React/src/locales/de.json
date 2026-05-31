@@ -831,6 +831,64 @@
 						"label": "Zum vorherigen Spezialisten zurückkehren",
 						"description": "Leitet den nächsten Nutzer-Zug zurück an den Spezialisten, der den letzten Zug bearbeitet hat, statt über die Triage."
 					}
+				},
+				"playbookEnabled": {
+					"label": "Operating-Playbook aktivieren",
+					"description": "Hängt die aktivierten Playbook-Aktionen dieses Agenten zur Laufzeit an seine Anweisungen an."
+				}
+			},
+			"playbook": {
+				"title": "Operating-Playbook",
+				"subtitle": "Manuelle Playbook-Aktionen, die an die Anweisungen von {{name}} angehängt werden, wenn dessen Playbook aktiviert ist.",
+				"addButton": "Aktion hinzufügen",
+				"loading": "Playbook wird geladen…",
+				"empty": "Noch keine Playbook-Aktionen.",
+				"priorityLabel": "Priorität {{priority}}",
+				"triggerLabel": "Wenn: {{trigger}}",
+				"moveUpAria": "Nach oben",
+				"moveDownAria": "Nach unten",
+				"editAria": "Aktion bearbeiten",
+				"deleteAria": "Aktion löschen",
+				"source": {
+					"Manual": "Manuell",
+					"Analysis": "Analyse"
+				},
+				"state": {
+					"enabled": "aktiviert",
+					"disabled": "deaktiviert"
+				},
+				"form": {
+					"behavior": {
+						"label": "Verhalten",
+						"description": "Anweisungstext, der an den System-Prompt des Agenten angehängt wird.",
+						"placeholder": "Gib immer deine Quellen an…",
+						"required": "Verhalten ist erforderlich"
+					},
+					"scope": {
+						"label": "Geltungsbereich",
+						"placeholder": "Optionales Thema/Tool-Tag"
+					},
+					"priority": {
+						"label": "Priorität",
+						"description": "Niedrigere Zahlen werden zuerst eingefügt."
+					},
+					"state": {
+						"label": "Status"
+					},
+					"triggerCondition": {
+						"label": "Auslösebedingung",
+						"description": "Optionaler Hinweis, wann dies gilt (in dieser Phase nur zur Anzeige).",
+						"placeholder": "Wenn der Nutzer nach… fragt"
+					}
+				},
+				"delete": {
+					"title": "Playbook-Aktion löschen",
+					"description": "Diese Playbook-Aktion löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"errors": {
+					"load": "Das Playbook konnte nicht geladen werden.",
+					"save": "Die Playbook-Aktion konnte nicht gespeichert werden.",
+					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden."
 				}
 			},
 			"delete": {

@@ -22,6 +22,8 @@ public sealed class CreateAgentDefinitionRequest
     public IReadOnlyDictionary<string, bool>? ToolApprovals { get; init; }
 
     public string? OrchestrationTopologyJson { get; init; }
+
+    public bool PlaybookEnabled { get; init; }
 }
 
 /// <summary>Update request for an agent definition. The id travels in the route; the body carries the new field values.</summary>
@@ -46,6 +48,8 @@ public sealed class UpdateAgentDefinitionRequest
     public IReadOnlyDictionary<string, bool>? ToolApprovals { get; init; }
 
     public string? OrchestrationTopologyJson { get; init; }
+
+    public bool PlaybookEnabled { get; init; }
 }
 
 public sealed class GetAgentDefinitionRequest
@@ -83,6 +87,8 @@ public sealed class AgentDefinitionResponse
     public required IReadOnlyDictionary<string, bool> ToolApprovals { get; init; }
 
     public string? OrchestrationTopologyJson { get; init; }
+
+    public required bool PlaybookEnabled { get; init; }
 
     public required int Version { get; init; }
 

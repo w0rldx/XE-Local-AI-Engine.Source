@@ -20,6 +20,7 @@ internal static class AgentDefinitionMapper
             AllowedToolNames = record.AllowedToolNames,
             ToolApprovals = record.ToolApprovals,
             OrchestrationTopologyJson = record.OrchestrationTopologyJson,
+            PlaybookEnabled = record.PlaybookEnabled,
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
             UpdatedAtUtc = record.UpdatedAtUtc
@@ -38,7 +39,8 @@ internal static class AgentDefinitionMapper
             request.Kind,
             request.AllowedToolNames ?? [],
             request.ToolApprovals ?? new Dictionary<string, bool>(),
-            request.OrchestrationTopologyJson);
+            request.OrchestrationTopologyJson,
+            request.PlaybookEnabled);
     }
 
     public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request)
@@ -53,6 +55,7 @@ internal static class AgentDefinitionMapper
             request.Kind,
             request.AllowedToolNames ?? [],
             request.ToolApprovals ?? new Dictionary<string, bool>(),
-            request.OrchestrationTopologyJson);
+            request.OrchestrationTopologyJson,
+            request.PlaybookEnabled);
     }
 }

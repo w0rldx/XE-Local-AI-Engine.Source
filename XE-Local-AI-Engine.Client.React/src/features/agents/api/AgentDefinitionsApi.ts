@@ -23,6 +23,8 @@ export interface AgentDefinitionDto {
 	allowedToolNames: string[];
 	toolApprovals: Record<string, boolean>;
 	orchestrationTopologyJson: string | null;
+	// Playbook P1: rides the existing agent DTOs (like orchestrationTopologyJson) — no new agent endpoint.
+	playbookEnabled: boolean;
 	version: number;
 	createdAtUtc: number;
 	updatedAtUtc: number;
@@ -44,6 +46,8 @@ export interface SaveAgentDefinitionRequestDto {
 	// Raw orchestration topology JSON (loop P5). null for Single definitions; for Orchestrator definitions it is the
 	// serialized handoff topology (see OrchestrationTopologyModels). The backend persists and validates it.
 	orchestrationTopologyJson: string | null;
+	// Playbook P1: toggles whether the agent's enabled playbook actions are injected at resolve time.
+	playbookEnabled: boolean;
 }
 
 const AGENTS_ROUTE = "agents";
@@ -68,6 +72,7 @@ export function toAgentDefinition(dto: AgentDefinitionDto): AgentDefinition {
 		allowedToolNames: dto.allowedToolNames ?? [],
 		toolApprovals: dto.toolApprovals ?? {},
 		orchestrationTopologyJson: dto.orchestrationTopologyJson,
+		playbookEnabled: dto.playbookEnabled ?? false,
 		version: dto.version,
 		createdAtUtc: dto.createdAtUtc,
 		updatedAtUtc: dto.updatedAtUtc,
@@ -100,6 +105,7 @@ export function toSaveAgentDefinitionRequest(
 			form.kind === "Orchestrator"
 				? serializeOrchestrationTopology(form.orchestration, triageAgentDefinitionId)
 				: null,
+		playbookEnabled: form.playbookEnabled,
 	};
 }
 

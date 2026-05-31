@@ -40,6 +40,13 @@ internal sealed record class AgentDefinition
     public string? OrchestrationTopologyJson { get; set; }
 
     /// <summary>
+    ///     Whether this agent's enabled playbook actions are folded into its resolved system prompt. Plaintext
+    ///     (structural). Gates injection only — it is NOT a config-affecting field for the agent's own version bump,
+    ///     because the injected playbook content drives the runtime package config hash directly.
+    /// </summary>
+    public bool PlaybookEnabled { get; set; }
+
+    /// <summary>
     ///     Bumped on each config-affecting update; feeds the runtime package version and config hash so a definition
     ///     edit invalidates resume the same way a server-side version bump does.
     /// </summary>

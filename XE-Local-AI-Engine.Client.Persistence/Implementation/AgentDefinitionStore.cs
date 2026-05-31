@@ -29,6 +29,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             AllowedToolNamesJson = SerializeToolNames(input.AllowedToolNames),
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
+            PlaybookEnabled = input.PlaybookEnabled,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -83,6 +84,9 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         entity.AllowedToolNamesJson = allowedToolNamesJson;
         entity.ToolApprovalsJson = toolApprovalsJson;
         entity.OrchestrationTopologyJson = input.OrchestrationTopologyJson;
+        // PlaybookEnabled only gates injection; the injected playbook content drives the config hash directly, so it is
+        // deliberately excluded from the configChanged comparison above and never bumps the agent's own Version.
+        entity.PlaybookEnabled = input.PlaybookEnabled;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (configChanged)
@@ -148,7 +152,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.OrchestrationTopologyJson,
             entity.Version,
             entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+            entity.UpdatedAtUtc,
+            entity.PlaybookEnabled);
     }
 
     private static byte[]? EncodeOptional(string? value)

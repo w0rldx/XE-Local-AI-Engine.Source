@@ -1,0 +1,161 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
+
+using System.Text;
+using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+
+public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IPlaybookActionStore
+{
+    private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    public async Task<PlaybookActionRecord> AddAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var entity = new PlaybookAction
+        {
+            Id = Guid.NewGuid(),
+            AgentDefinitionId = input.AgentDefinitionId,
+            State = (int)input.State,
+            Source = (int)input.Source,
+            TriggerCondition = EncodeOptional(input.TriggerCondition),
+            Behavior = Encoding.UTF8.GetBytes(input.Behavior),
+            Scope = input.Scope,
+            Priority = input.Priority,
+            Version = 1,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        };
+
+        _ = _dbContext.PlaybookActions.Add(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToRecord(entity);
+    }
+
+    public async Task<PlaybookActionRecord?> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        // Load tracked (not AsNoTracking) so SaveChanges re-encrypts; the materialization interceptor has already
+        // decrypted Behavior/TriggerCondition on load, so the comparison below is plaintext-vs-plaintext.
+        var entity = await _dbContext.PlaybookActions
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
+                                     .ConfigureAwait(false);
+
+        if (entity is null)
+        {
+            return null;
+        }
+
+        // Only Behavior (injected text), Priority (injection order) and State (injection membership) change what the
+        // resolver folds into the prompt; Scope/TriggerCondition/Source are not injected in P1, so editing them alone
+        // must not bump Version.
+        var configChanged = !string.Equals(Decode(entity.Behavior), input.Behavior, StringComparison.Ordinal)
+                            || entity.Priority != input.Priority
+                            || entity.State != (int)input.State;
+
+        // AgentDefinitionId is deliberately NOT reassigned: an action never moves agents. The application service
+        // already rejects a cross-agent update, and leaving the FK column untouched is defense-in-depth even if a
+        // future caller bypasses that guard.
+        entity.State = (int)input.State;
+        entity.Source = (int)input.Source;
+        entity.TriggerCondition = EncodeOptional(input.TriggerCondition);
+        entity.Behavior = Encoding.UTF8.GetBytes(input.Behavior);
+        entity.Scope = input.Scope;
+        entity.Priority = input.Priority;
+        entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        if (configChanged)
+        {
+            entity.Version++;
+        }
+
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToRecord(entity);
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _dbContext.PlaybookActions
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
+                                     .ConfigureAwait(false);
+
+        if (entity is null)
+        {
+            return false;
+        }
+
+        _ = _dbContext.PlaybookActions.Remove(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return true;
+    }
+
+    public async Task<PlaybookActionRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _dbContext.PlaybookActions
+                                     .AsNoTracking()
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
+                                     .ConfigureAwait(false);
+
+        return entity is null ? null : ToRecord(entity);
+    }
+
+    public async Task<IReadOnlyList<PlaybookActionRecord>> ListByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
+    {
+        var entities = await _dbContext.PlaybookActions
+                                       .AsNoTracking()
+                                       .Where(action => action.AgentDefinitionId == agentDefinitionId)
+                                       .OrderBy(action => action.Priority)
+                                       .ThenBy(action => action.CreatedAtUtc)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+
+        return entities.Select(ToRecord).ToArray();
+    }
+
+    public async Task<IReadOnlyList<PlaybookActionRecord>> ListEnabledByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
+    {
+        var enabled = (int)PlaybookActionState.Enabled;
+
+        var entities = await _dbContext.PlaybookActions
+                                       .AsNoTracking()
+                                       .Where(action => action.AgentDefinitionId == agentDefinitionId && action.State == enabled)
+                                       .OrderBy(action => action.Priority)
+                                       .ThenBy(action => action.CreatedAtUtc)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+
+        return entities.Select(ToRecord).ToArray();
+    }
+
+    private static PlaybookActionRecord ToRecord(PlaybookAction entity)
+    {
+        return new PlaybookActionRecord(
+            entity.Id,
+            entity.AgentDefinitionId,
+            (PlaybookActionState)entity.State,
+            (PlaybookActionSource)entity.Source,
+            entity.TriggerCondition is null ? null : Decode(entity.TriggerCondition),
+            Decode(entity.Behavior),
+            entity.Scope,
+            entity.Priority,
+            entity.Version,
+            entity.CreatedAtUtc,
+            entity.UpdatedAtUtc);
+    }
+
+    private static byte[]? EncodeOptional(string? value)
+    {
+        return value is null ? null : Encoding.UTF8.GetBytes(value);
+    }
+
+    private static string Decode(byte[] value)
+    {
+        return Encoding.UTF8.GetString(value);
+    }
+}
