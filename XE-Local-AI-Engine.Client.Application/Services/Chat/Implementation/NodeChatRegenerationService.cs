@@ -143,13 +143,18 @@ public sealed class NodeChatRegenerationService(
         // Mirror the send path exactly (NodeChatStreamService): resolve the conversation's bound definition so a
         // regenerated turn reruns with the SAME persona, tools, model, and version a fresh send would — a missed
         // hydration here would make reruns diverge from sends. A null result keeps the default persona.
-        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+        // Playbook P5: a regenerate answers the SAME question as the original, so the relevance-retrieval query is the
+        // user turn that precedes the turn being regenerated (the same cutoff the regeneration context anchors on). When
+        // that user turn cannot be found the query is null and the resolver falls back to the full static prepend.
+        var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
+
+        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
 
         // Symmetric with the send path (NodeChatStreamService): when the bound definition is a tool-capable
         // orchestrator, resolve a compiled orchestration spec so a regenerated turn reruns through the SAME handoff
         // workflow a fresh send would — a missed hydration here would make reruns diverge from sends. A null result
-        // keeps the single-agent path.
-        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+        // keeps the single-agent path. The same preceding user turn drives per-participant playbook retrieval.
+        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
 
         // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
         // client asked AND the node has the tool engine enabled. When offered, the catalog's local tools travel in
@@ -427,6 +432,7 @@ public sealed class NodeChatRegenerationService(
     /// </summary>
     private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
         string? activeModel,
+        string? retrievalQuery,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
@@ -440,7 +446,31 @@ public sealed class NodeChatRegenerationService(
             return null;
         }
 
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, cancellationToken).ConfigureAwait(false);
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The content of the latest USER turn strictly before the original's variant group — the question the
+    ///     regenerate re-answers, used as the Playbook P5 relevance-retrieval query. Mirrors the cutoff anchor used by
+    ///     <see cref="ResolvePrecedingUserTurnCutoff" />; returns <c>null</c> when no such user turn exists, so the
+    ///     resolver falls back to the full static prepend.
+    /// </summary>
+    private static string? ResolvePrecedingUserTurnContent(NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto original)
+    {
+        var earliestGroupSequence = original.VariantGroupId is { } groupId
+            ? conversation.Messages.Where(message => message.VariantGroupId == groupId)
+                          .Select(message => message.Sequence)
+                          .DefaultIfEmpty(original.Sequence)
+                          .Min()
+            : original.Sequence;
+
+        return conversation.Messages
+                           .Where(message => message.Sequence < earliestGroupSequence
+                                             && string.Equals(message.Role, UserRole, StringComparison.OrdinalIgnoreCase))
+                           .OrderByDescending(message => message.Sequence)
+                           .Select(message => message.Content)
+                           .FirstOrDefault();
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

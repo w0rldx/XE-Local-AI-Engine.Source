@@ -1,19 +1,32 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
-internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDefinitionStore agentDefinitionStore) : IPlaybookActionService
+internal sealed class PlaybookActionService(
+    IPlaybookActionStore store,
+    IAgentDefinitionStore agentDefinitionStore,
+    IOptions<PlaybookActionOptions> actionOptions) : IPlaybookActionService
 {
     private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly PlaybookActionOptions _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
 
     public async Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         await ValidateAsync(input, cancellationToken).ConfigureAwait(false);
+
+        // Manual create-as-Enabled is the second path into Enabled (alongside promote); enforce the same hard cap so it
+        // cannot be bypassed via direct CRUD. A create-as-Disabled never touches the cap.
+        if (input.State == PlaybookActionState.Enabled)
+        {
+            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, excludedActionId: null, cancellationToken).ConfigureAwait(false);
+        }
+
         return await _store.AddAsync(input, cancellationToken).ConfigureAwait(false);
     }
 
@@ -38,6 +51,13 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
         if (existing.Source != PlaybookActionSource.Manual)
         {
             return null;
+        }
+
+        // Manual Disabled->Enabled is a transition INTO Enabled; enforce the hard cap (excluding this action from the
+        // count). Editing an action that is already Enabled (stays Enabled) is not a transition and is never blocked.
+        if (existing.State != PlaybookActionState.Enabled && input.State == PlaybookActionState.Enabled)
+        {
+            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, excludedActionId: id, cancellationToken).ConfigureAwait(false);
         }
 
         return await _store.UpdateAsync(id, input, cancellationToken).ConfigureAwait(false);
@@ -149,6 +169,15 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
         if (!evalResult.Passed)
         {
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, null);
+        }
+
+        // Hard cap (Playbook P5, plan §5): the eval may pass, but if the agent is already at MaxEnabledActions the
+        // promote is blocked with no store write — the operator archives/disables an Enabled action first. The pending
+        // suggestion is not yet Enabled, so the count needs no exclusion here.
+        var enabledCount = await CountEnabledAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        if (enabledCount >= _actionOptions.MaxEnabledActions)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, null);
         }
 
         // Version bumps because State changes; carry the EvalResult through the transition for audit.
@@ -263,6 +292,28 @@ internal sealed class PlaybookActionService(IPlaybookActionStore store, IAgentDe
         }
 
         return existing;
+    }
+
+    private async Task EnsureBelowEnabledCapAsync(Guid agentDefinitionId, Guid? excludedActionId, CancellationToken cancellationToken)
+    {
+        var enabled = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        // When re-enabling an existing action, exclude it from the count so an edit that keeps it Enabled is never
+        // double-counted against itself.
+        var enabledCount = excludedActionId is { } excludedId
+            ? enabled.Count(action => action.Id != excludedId)
+            : enabled.Count;
+
+        if (enabledCount >= _actionOptions.MaxEnabledActions)
+        {
+            throw new PlaybookActionValidationException(
+                $"This agent already has the maximum of {_actionOptions.MaxEnabledActions} enabled playbook actions; archive or disable one before enabling another.");
+        }
+    }
+
+    private async Task<int> CountEnabledAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
+    {
+        var enabled = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        return enabled.Count;
     }
 
     private async Task ValidateAsync(PlaybookActionInput input, CancellationToken cancellationToken)

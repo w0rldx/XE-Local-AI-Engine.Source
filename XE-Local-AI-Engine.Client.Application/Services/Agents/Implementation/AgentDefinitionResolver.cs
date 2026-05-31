@@ -1,22 +1,37 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-internal sealed class AgentDefinitionResolver(
-    IAgentDefinitionStore store,
-    IPlaybookActionStore playbookActionStore,
-    ILocalToolOfferProvider localToolOfferProvider,
-    ILogger<AgentDefinitionResolver> logger) : IAgentDefinitionResolver
+internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
-    private readonly IAgentDefinitionStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
-    private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
-    private readonly ILogger<AgentDefinitionResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IAgentDefinitionStore _store;
+    private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly ILocalToolOfferProvider _localToolOfferProvider;
+    private readonly IPlaybookRetrievalRanker _retrievalRanker;
+    private readonly PlaybookRetrievalOptions _retrievalOptions;
+    private readonly ILogger<AgentDefinitionResolver> _logger;
 
-    public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, CancellationToken cancellationToken = default)
+    public AgentDefinitionResolver(IAgentDefinitionStore store,
+        IPlaybookActionStore playbookActionStore,
+        ILocalToolOfferProvider localToolOfferProvider,
+        IPlaybookRetrievalRanker retrievalRanker,
+        IOptions<PlaybookRetrievalOptions> retrievalOptions,
+        ILogger<AgentDefinitionResolver> logger)
+    {
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
+        _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
+        _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
+        ArgumentNullException.ThrowIfNull(retrievalOptions);
+        _retrievalOptions = retrievalOptions.Value;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, CancellationToken cancellationToken = default)
     {
         if (agentDefinitionId is not { } definitionId)
         {
@@ -38,7 +53,7 @@ internal sealed class AgentDefinitionResolver(
         // When the definition pins no profile the turn keeps the caller's active model.
         var effectiveModel = definition.ModelProfile ?? activeModelId;
         var allowedTools = ProjectAllowedTools(definition, effectiveModel);
-        var resolvedPrompt = await ComposePromptAsync(definition, cancellationToken).ConfigureAwait(false);
+        var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
@@ -50,9 +65,12 @@ internal sealed class AgentDefinitionResolver(
     /// <summary>
     ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled. When it is
     ///     disabled the query is skipped entirely and the base Instructions flow through unchanged — keeping the
-    ///     resolved prompt (and thus the runtime config hash) byte-identical to the no-playbook path.
+    ///     resolved prompt (and thus the runtime config hash) byte-identical to the no-playbook path. When the enabled set
+    ///     exceeds the retrieval threshold and a non-blank <paramref name="retrievalQuery" /> is supplied, only the
+    ///     top-k most relevant actions are injected (Playbook P5, plan §4.2); at or below the threshold — or with a blank
+    ///     query — the full static prepend is used, so the resolved prompt stays byte-identical to the pre-P5 path.
     /// </summary>
-    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, CancellationToken cancellationToken)
+    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
     {
         if (!definition.PlaybookEnabled)
         {
@@ -60,7 +78,12 @@ internal sealed class AgentDefinitionResolver(
         }
 
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken).ConfigureAwait(false);
-        return PlaybookPromptComposer.Compose(definition.Instructions, enabled);
+        var selected = PlaybookRetrievalSelector.Select(_retrievalRanker,
+            retrievalQuery,
+            enabled,
+            _retrievalOptions.RetrievalThreshold,
+            _retrievalOptions.TopK);
+        return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
     private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId)

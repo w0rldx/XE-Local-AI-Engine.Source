@@ -6,12 +6,14 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Playbook P4: the promote endpoint's eval gate. A Suggested action with no recorded eval cannot be promoted — the
-///     gate returns 409 with a typed conflict body (<c>{ status: "EvalRequired", reason }</c>) and the action stays
-///     Suggested (still inert).
+///     Playbook P4/P5: the promote endpoint's eval gate and enabled-action cap. A Suggested action with no recorded eval
+///     cannot be promoted — the gate returns 409 with a typed conflict body (<c>{ status: "EvalRequired", reason }</c>)
+///     and the action stays Suggested (still inert). When the agent is already at the cap, a promote whose eval passed is
+///     blocked with 409 (<c>{ status: "CapReached", reason }</c>).
 /// </summary>
 public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
 {
@@ -68,6 +70,46 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         AssertEx.Equal(PlaybookActionState.Suggested, stored.State);
     }
 
+    [Test]
+    public async Task Promote_WhenAgentAtEnabledCap_ReturnsConflictCapReached()
+    {
+        // Cap of 1 (the floor the PostConfigure clamps to) with one already-Enabled action puts the agent at the cap, so a
+        // promote whose eval passed and is current is blocked by the P5 hard cap rather than the eval gate.
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = static services =>
+                services.Configure<PlaybookActionOptions>(static options => options.MaxEnabledActions = 1)
+        };
+        using var client = factory.CreateClient();
+
+        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        await SeedEnabledActionAsync(factory, agentId).ConfigureAwait(false);
+        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+        await RecordPassingEvalAsync(factory, agentId, actionId).ConfigureAwait(false);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
+        {
+            Content = JsonContent.Create(new { })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var document = JsonDocument.Parse(payload);
+        var root = document.RootElement;
+
+        AssertEx.Equal("CapReached", root.GetProperty("status").GetString());
+        AssertEx.False(string.IsNullOrWhiteSpace(root.GetProperty("reason").GetString()), "The conflict carries a human reason for the panel.");
+
+        // The blocked promote leaves the action Suggested (still inert).
+        using var verifyScope = factory.Services.CreateScope();
+        var service = verifyScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
+        var stored = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+        AssertEx.Equal(PlaybookActionState.Suggested, stored.State);
+    }
+
     private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
     {
         using var scope = factory.Services.CreateScope();
@@ -98,5 +140,42 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
             SourceFeedbackIds: [Guid.NewGuid()],
             Confidence: 0.8d)).ConfigureAwait(false);
         return created.Id;
+    }
+
+    private static async Task SeedEnabledActionAsync(TestingWebAppFactory factory, Guid agentDefinitionId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
+        _ = await service.CreateAsync(new PlaybookActionInput(
+            agentDefinitionId,
+            PlaybookActionState.Enabled,
+            PlaybookActionSource.Manual,
+            TriggerCondition: null,
+            "Always cite the tool you used.",
+            Scope: null,
+            Priority: 50)).ConfigureAwait(false);
+    }
+
+    private static async Task RecordPassingEvalAsync(TestingWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
+        var current = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+
+        // A passing eval pinned to the action's current Version so the eval gate lets the promote through to the cap check.
+        var eval = new PlaybookEvalResult(
+            Passed: true,
+            EvaluatedAtUtc: 1_000,
+            ActionVersionAtEval: current.Version,
+            ModelName: "test-model",
+            GoldenCaseCount: 1,
+            GoldenCaseTotal: 1,
+            BaselinePassCount: 1,
+            CandidatePassCount: 1,
+            RegressedCaseCount: 0,
+            ImprovedCaseCount: 0,
+            Cases: []);
+        var json = JsonSerializer.Serialize(eval, PlaybookEvalResult.SerializerOptions);
+        _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json).ConfigureAwait(false));
     }
 }

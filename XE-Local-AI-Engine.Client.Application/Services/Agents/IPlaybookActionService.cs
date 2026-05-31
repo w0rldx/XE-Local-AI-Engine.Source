@@ -50,8 +50,9 @@ public interface IPlaybookActionService
     ///     <see cref="PlaybookPromotionResult" /> whose <see cref="PlaybookPromotionResult.Status" /> is
     ///     <c>NotFound</c> when the action is missing/cross-agent/not a pending suggestion, <c>EvalRequired</c> when no
     ///     eval has run since authoring/edit, <c>EvalStale</c> when the recorded eval is for an older content snapshot,
-    ///     <c>EvalRegressed</c> when the latest eval failed, and <c>Promoted</c> (with the updated record) only when the
-    ///     latest eval passed and is current.
+    ///     <c>EvalRegressed</c> when the latest eval failed, <c>CapReached</c> when the agent is already at the Enabled-action
+    ///     cap (Playbook P5, plan §5 — checked after the eval gate, no store write), and <c>Promoted</c> (with the updated
+    ///     record) only when the latest eval passed, is current, and the cap is not reached.
     /// </summary>
     Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
@@ -87,20 +88,26 @@ public interface IPlaybookActionService
     Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Outcome of a gated promote: distinguishes a 404 (NotFound) from each eval-gate block, and a success.</summary>
+/// <summary>Outcome of a gated promote: distinguishes a 404 (NotFound) from each eval-gate block, the cap block, and a success.</summary>
 public enum PlaybookPromotionStatus
 {
     Promoted,
     NotFound,
     EvalRequired,
     EvalRegressed,
-    EvalStale
+    EvalStale,
+
+    /// <summary>
+    ///     The agent is already at <c>MaxEnabledActions</c> (Playbook P5 hard cap, plan §5). The promote is blocked with no
+    ///     store write; the operator must archive/disable an Enabled action before promoting another. Maps to 409.
+    /// </summary>
+    CapReached
 }
 
 /// <summary>
 ///     Result of <see cref="IPlaybookActionService.PromoteSuggestedAsync" />: <see cref="Status" /> tells the endpoint
-///     whether to return 200 (<c>Promoted</c>), 404 (<c>NotFound</c>) or 409 (any <c>Eval*</c> block); <see cref="Record" />
-///     carries the enabled record only when <see cref="Status" /> is <c>Promoted</c>.
+///     whether to return 200 (<c>Promoted</c>), 404 (<c>NotFound</c>) or 409 (any <c>Eval*</c> block, or <c>CapReached</c>);
+///     <see cref="Record" /> carries the enabled record only when <see cref="Status" /> is <c>Promoted</c>.
 /// </summary>
 public sealed record PlaybookPromotionResult(PlaybookPromotionStatus Status, PlaybookActionRecord? Record);
 

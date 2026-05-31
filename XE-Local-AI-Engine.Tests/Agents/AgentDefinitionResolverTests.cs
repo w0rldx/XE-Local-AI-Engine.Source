@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -334,6 +335,98 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.True(disabledHash != enabledHash, "Enabling a playbook with an action must change the config hash.");
     }
 
+    [Test]
+    public async Task ResolveAsync_WhenEnabledAtOrBelowThreshold_UsesStaticPrependAndDoesNotConsultRanker()
+    {
+        // Two enabled actions, threshold 8: below the threshold the ranker is never consulted and the prompt is the full
+        // static prepend — byte-identical to Compose(base, enabled).
+        var ranker = new RecordingRanker();
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 8, topK: 8, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
+                     [
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
+        AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
+        AssertEx.Equal(0, ranker.CallCount);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAboveThresholdWithBlankQuery_UsesStaticPrependAndDoesNotConsultRanker()
+    {
+        // Three enabled actions, threshold 2 (above it): but a blank query must NOT engage retrieval — the full static
+        // prepend is kept and the ranker is never consulted.
+        var ranker = new RecordingRanker();
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
+                     [
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5),
+                         EnabledAction(definition.Id, "Write a changelog.", priority: 9)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "   ").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.\n- Write a changelog.";
+        AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
+        AssertEx.Equal(0, ranker.CallCount);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAboveThresholdWithQuery_InjectsTopKReorderedByPriorityThenCreatedAt()
+    {
+        // Three enabled actions, threshold 2, top-k 2, non-blank query: the ranker is consulted once. The fake returns the
+        // two it chooses out-of-priority-order; the resolver must re-impose Priority-then-CreatedAtUtc before composing.
+        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);
+        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", priority: 1);
+        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", priority: 9);
+
+        var ranker = new RecordingRanker(selection: [lowPriority, highPriority]);
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([highPriority, lowPriority, ignored]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "run the tests").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(1, ranker.CallCount);
+        // Re-ordered by Priority ascending: highPriority (1) before lowPriority (5); the ignored third action is absent.
+        var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
+        AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenPlaybookEnabledButNoActions_AboveThresholdNeverEngagesRanker()
+    {
+        // The empty-set guard holds even when a query is present: no enabled actions => byte-identical base, ranker untouched.
+        var ranker = new RecordingRanker();
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 0, topK: 8, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
+        AssertEx.Equal(0, ranker.CallCount);
+    }
+
     private static async Task<string> ResolveAndHashAsync(IAgentDefinitionResolver resolver,
         IAgentDefinitionStore store,
         LocalChatRuntimePackageBuilder builder,
@@ -401,7 +494,56 @@ public sealed class AgentDefinitionResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
-        return new AgentDefinitionResolver(store, playbookStore, offerProvider, NullLogger<AgentDefinitionResolver>.Instance);
+        return new AgentDefinitionResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            NullLogger<AgentDefinitionResolver>.Instance);
+    }
+
+    // Builds a resolver with a caller-supplied ranker + explicit retrieval threshold/top-k, so the retrieval-gate tests
+    // can assert the ranker is consulted only above the threshold (with a non-blank query) and that the result is
+    // re-ordered by Priority/CreatedAtUtc.
+    private static AgentDefinitionResolver BuildResolverWithRanker(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        IPlaybookRetrievalRanker ranker,
+        int threshold,
+        int topK,
+        params AllowedToolDto[] offeredTools)
+    {
+        store = Substitute.For<IAgentDefinitionStore>();
+        playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        {
+            var modelId = callInfo.ArgAt<string?>(0);
+            var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
+            return capable
+                ? offeredTools
+                : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
+        });
+        offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
+        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions { RetrievalThreshold = threshold, TopK = topK });
+        return new AgentDefinitionResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, NullLogger<AgentDefinitionResolver>.Instance);
+    }
+
+    // A fake ranker that records how many times it was consulted and returns a fixed (deliberately out-of-order)
+    // selection, so a test can assert both the gate (consulted only above the threshold with a query) and the resolver's
+    // re-order of the ranker's output.
+    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    {
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+
+        public int CallCount { get; private set; }
+
+        public IReadOnlyList<PlaybookActionRecord> SelectTopK(string query, IReadOnlyList<PlaybookActionRecord> candidates, int k)
+        {
+            CallCount++;
+            return _selection ?? candidates;
+        }
     }
 
     private static AgentDefinitionRecord CreateDefinition(string name = "Agent",

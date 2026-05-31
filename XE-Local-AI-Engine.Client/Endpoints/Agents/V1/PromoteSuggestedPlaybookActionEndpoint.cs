@@ -8,9 +8,10 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Playbook P3/P4: promotes a pending Suggested/Analysis action to Enabled (human approval — staging ≠ active),
-///     gated by the P4 eval result. 404 when the action is missing, belongs to another agent, or is not a pending
-///     suggestion; 409 when the eval has not passed (required / regressed / stale). Operator-gated.
+///     Playbook P3/P4/P5: promotes a pending Suggested/Analysis action to Enabled (human approval — staging ≠ active),
+///     gated by the P4 eval result and the P5 enabled-action cap. 404 when the action is missing, belongs to another
+///     agent, or is not a pending suggestion; 409 when the eval has not passed (required / regressed / stale) or the
+///     agent is already at the enabled-action cap (CapReached). Operator-gated.
 /// </summary>
 public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
     : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
@@ -35,6 +36,13 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionServic
             case PlaybookPromotionStatus.NotFound:
                 await Send.NotFoundAsync(ct).ConfigureAwait(false);
                 return;
+            case PlaybookPromotionStatus.CapReached:
+                // Playbook P5 hard cap: the agent is already at MaxEnabledActions. Surface a typed 409 with the
+                // PascalCase status name (the established wire format every other branch uses) so the panel's parser
+                // recognizes it and can explain the block and prompt an archive/disable.
+                var capConflict = new PlaybookPromotionConflictResponse(result.Status.ToString(), ReasonFor(result.Status));
+                await Send.ResultAsync(Results.Conflict(capConflict)).ConfigureAwait(false);
+                return;
             default:
                 // EvalRequired / EvalRegressed / EvalStale (and a Promoted with no record) → the eval gate blocked the
                 // promotion. Surface a typed 409 so the panel can explain why Approve is unavailable (same Conflict-body
@@ -52,6 +60,7 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionServic
             PlaybookPromotionStatus.EvalRequired => "Run the eval before promoting — no eval has run since this action was authored or edited.",
             PlaybookPromotionStatus.EvalRegressed => "The latest eval regressed at least one golden case. Resolve the regression before promoting.",
             PlaybookPromotionStatus.EvalStale => "The action changed since the last eval. Re-run the eval before promoting.",
+            PlaybookPromotionStatus.CapReached => "The agent already has the maximum number of enabled playbook actions; archive or disable one before promoting.",
             _ => "Promotion is blocked by the eval gate."
         };
     }

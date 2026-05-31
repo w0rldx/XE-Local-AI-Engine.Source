@@ -30,7 +30,11 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             Priority = input.Priority,
             Version = 1,
             CreatedAtUtc = now,
-            UpdatedAtUtc = now
+            UpdatedAtUtc = now,
+            // P5 cohort-monitoring clock: a create-as-Enabled action gets its clock stamped now; otherwise it carries
+            // whatever the caller supplied (null for a fresh Suggested/Disabled action). Centralizing the stamp here and
+            // in UpdateAsync makes the store the single source of truth — every Enabled action gets an EnabledAtUtc.
+            EnabledAtUtc = input.State == PlaybookActionState.Enabled ? now : input.EnabledAtUtc
         };
 
         _ = _dbContext.PlaybookActions.Add(entity);
@@ -61,6 +65,13 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
                             || entity.Priority != input.Priority
                             || entity.State != (int)input.State;
 
+        // P5 cohort-monitoring clock: detect a transition INTO Enabled (read the pre-mutation state, before the
+        // assignment below). The eval-gated promote (Suggested->Enabled) and a manual Disabled->Enabled toggle both
+        // stamp the clock; an edit/eval-record/reject that stays out of Enabled carries the caller's value through.
+        // Never cleared on disable — the last-enabled instant is preserved.
+        var enabledNow = (int)PlaybookActionState.Enabled;
+        var transitioningIntoEnabled = entity.State != enabledNow && input.State == PlaybookActionState.Enabled;
+
         // AgentDefinitionId is deliberately NOT reassigned: an action never moves agents. The application service
         // already rejects a cross-agent update, and leaving the FK column untouched is defense-in-depth even if a
         // future caller bypasses that guard.
@@ -77,7 +88,13 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // eval (or clearing it on edit) must never bump Version (mirrors SourceFeedbackIds/Confidence above).
         entity.EvalResult = input.EvalResult;
         entity.Priority = input.Priority;
-        entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        // EnabledAtUtc is a pure timestamp, so like EvalResult it is excluded from configChanged and never bumps
+        // Version on its own; a co-occurring State change bumps Version on its own merit. Stamp now when transitioning
+        // into Enabled, otherwise carry the caller's value through so an edit/eval-record/reject preserves the
+        // last-enabled instant.
+        entity.EnabledAtUtc = transitioningIntoEnabled ? now : input.EnabledAtUtc;
+        entity.UpdatedAtUtc = now;
 
         if (configChanged)
         {
@@ -160,7 +177,8 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             entity.UpdatedAtUtc,
             DecodeFeedbackIds(entity.SourceFeedbackIds),
             entity.Confidence,
-            entity.EvalResult);
+            entity.EvalResult,
+            entity.EnabledAtUtc);
     }
 
     private static byte[]? EncodeOptional(string? value)

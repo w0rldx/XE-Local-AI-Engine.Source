@@ -926,7 +926,21 @@
 					"conflict": {
 						"EvalRequired": "Run the eval before approving this suggestion.",
 						"EvalRegressed": "Promotion blocked: the eval regressed a prior-good case.",
-						"EvalStale": "Promotion blocked: the suggestion changed since the last eval. Re-run the eval."
+						"EvalStale": "Promotion blocked: the suggestion changed since the last eval. Re-run the eval.",
+						"CapReached": "Promotion blocked: this agent is at its enabled-action cap. Archive or disable an enabled action first."
+					}
+				},
+				"monitor": {
+					"enabledCount": "{{count}} actions enabled",
+					"relevanceBanner": "Injection is relevance-gated: top-{{topK}} of {{count}} actions per turn.",
+					"none": "—",
+					"downRateLabel": "down-vote rate",
+					"flag": "Needs review",
+					"status": {
+						"Improved": "Improved",
+						"Flat": "Flat",
+						"Regressed": "Regressed",
+						"InsufficientData": "Insufficient data"
 					}
 				}
 			},

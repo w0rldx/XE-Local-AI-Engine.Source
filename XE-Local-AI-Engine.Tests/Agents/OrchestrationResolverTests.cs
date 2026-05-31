@@ -189,6 +189,34 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenParticipantAboveThresholdWithQuery_InjectsTopKIntoItsInstructions()
+    {
+        // Playbook P5 retrieval, per participant: a participant whose enabled set exceeds the threshold and a non-blank
+        // retrievalQuery must route through the SAME shared PlaybookRetrievalSelector the single-agent path uses, so only
+        // the ranker's top-k (re-ordered by Priority then CreatedAtUtc) is folded into that participant's instructions.
+        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);
+        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", priority: 1);
+        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", priority: 9);
+
+        var ranker = new RecordingRanker(selection: [lowPriority, highPriority]);
+        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+        playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([highPriority, lowPriority, ignored]));
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel, "run the tests").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(1, ranker.CallCount);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        // Top-k of the selector, re-ordered by Priority ascending (1 before 5); the ignored third action is absent.
+        AssertEx.Equal("Instructions for Specialist\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.", specialistSpec.Instructions);
+    }
+
+    [Test]
     public async Task ResolveAsync_DropsEdgesReferencingDroppedParticipant()
     {
         var triage = CreateDefinition(modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
@@ -264,7 +292,58 @@ public sealed class OrchestrationResolverTests
         });
 
         var options = Options.Create(new AgentHomeOptions { ToolCapableModels = [ToolCapableModel] });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, options, NullLogger<OrchestrationResolver>.Instance);
+        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions());
+        return new OrchestrationResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            retrievalOptions,
+            options,
+            NullLogger<OrchestrationResolver>.Instance);
+    }
+
+    // Builds a resolver with a caller-supplied ranker + explicit retrieval threshold/top-k, mirroring the single-agent
+    // AgentDefinitionResolverTests.BuildResolverWithRanker so the per-participant retrieval gate can be asserted.
+    private static OrchestrationResolver BuildResolverWithRanker(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        IPlaybookRetrievalRanker ranker,
+        int threshold,
+        int topK,
+        params AllowedToolDto[] offeredTools)
+    {
+        store = Substitute.For<IAgentDefinitionStore>();
+        playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        {
+            var modelId = callInfo.ArgAt<string?>(0);
+            var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
+            return capable
+                ? offeredTools
+                : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
+        });
+
+        var options = Options.Create(new AgentHomeOptions { ToolCapableModels = [ToolCapableModel] });
+        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions { RetrievalThreshold = threshold, TopK = topK });
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, options, NullLogger<OrchestrationResolver>.Instance);
+    }
+
+    // A fake ranker recording how many times it was consulted and returning a fixed (deliberately out-of-order)
+    // selection, so the test can assert the gate (consulted once, above threshold + non-blank query) and the
+    // selector's re-order of the ranker's output.
+    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    {
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+
+        public int CallCount { get; private set; }
+
+        public IReadOnlyList<PlaybookActionRecord> SelectTopK(string query, IReadOnlyList<PlaybookActionRecord> candidates, int k)
+        {
+            CallCount++;
+            return _selection ?? candidates;
+        }
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)

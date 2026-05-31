@@ -22,18 +22,25 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private readonly IAgentDefinitionStore _store;
     private readonly IPlaybookActionStore _playbookActionStore;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
+    private readonly IPlaybookRetrievalRanker _retrievalRanker;
+    private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly HashSet<string> _toolCapableModels;
     private readonly ILogger<OrchestrationResolver> _logger;
 
     public OrchestrationResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
         ILocalToolOfferProvider localToolOfferProvider,
+        IPlaybookRetrievalRanker retrievalRanker,
+        IOptions<PlaybookRetrievalOptions> retrievalOptions,
         IOptions<AgentHomeOptions> agentHomeOptions,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
         _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
+        _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
+        ArgumentNullException.ThrowIfNull(retrievalOptions);
+        _retrievalOptions = retrievalOptions.Value;
         ArgumentNullException.ThrowIfNull(agentHomeOptions);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -49,6 +56,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     public async Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator,
         string? activeModelId,
+        string? retrievalQuery = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(orchestrator);
@@ -76,7 +84,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             return null;
         }
 
-        var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, cancellationToken).ConfigureAwait(false);
+        var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, retrievalQuery, cancellationToken).ConfigureAwait(false);
         if (!participants.TryGetValue(topology.TriageAgentDefinitionId, out var triage))
         {
             _logger.LogWarning("Orchestrator {AgentDefinitionId} triage participant {TriageId} is missing, deleted, or not tool-capable; degrading to single-agent.",
@@ -126,6 +134,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private async Task<Dictionary<Guid, ResolvedParticipant>> LoadCapableParticipantsAsync(AgentDefinitionRecord orchestrator,
         OrchestrationTopology topology,
         string? activeModelId,
+        string? retrievalQuery,
         CancellationToken cancellationToken)
     {
         var capable = new Dictionary<Guid, ResolvedParticipant>();
@@ -154,14 +163,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
             // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
             // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
-            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, cancellationToken).ConfigureAwait(false);
+            var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, cancellationToken).ConfigureAwait(false);
             capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions);
         }
 
         return capable;
     }
 
-    private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, CancellationToken cancellationToken)
+    private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery, CancellationToken cancellationToken)
     {
         if (!participant.PlaybookEnabled)
         {
@@ -169,7 +178,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         }
 
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken).ConfigureAwait(false);
-        return PlaybookPromptComposer.Compose(participant.Instructions, enabled);
+        // The SAME relevance-retrieval decision as the single-agent path (PlaybookRetrievalSelector), applied per
+        // participant: below the threshold or with a blank query the full static prepend is kept byte-identical.
+        var selected = PlaybookRetrievalSelector.Select(_retrievalRanker,
+            retrievalQuery,
+            enabled,
+            _retrievalOptions.RetrievalThreshold,
+            _retrievalOptions.TopK);
+        return PlaybookPromptComposer.Compose(participant.Instructions, selected);
     }
 
     /// <summary>

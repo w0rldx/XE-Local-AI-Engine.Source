@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -298,6 +299,113 @@ public sealed class PlaybookActionServiceTests
                 && stored.Source == PlaybookActionSource.Analysis
                 && stored.EvalResult == pending.EvalResult),
             Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenAtEnabledCap_ReturnsCapReachedAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        // Cap of 2 with two already-Enabled actions: the eval passes, but the hard cap blocks the promote with no write.
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
+        var actionId = Guid.NewGuid();
+        var pending = CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(version: 1) };
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
+        store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId), EnabledRecord(agentId)]));
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.CapReached, result.Status);
+        AssertEx.True(result.Record is null, "A cap-blocked promote returns no record.");
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenUnderEnabledCap_PromotesToEnabled()
+    {
+        var agentId = Guid.NewGuid();
+        // Cap of 2 with one already-Enabled action: under the cap, the passing eval promotes normally.
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
+        var actionId = Guid.NewGuid();
+        var pending = CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(version: 1) };
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
+        store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
+        store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
+             .Returns(pending with { State = PlaybookActionState.Enabled });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.Promoted, result.Status);
+        await store.Received(1).UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenEnabledAtCap_ThrowsValidationAndDoesNotAdd()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
+        var input = CreateInput(agentId, state: PlaybookActionState.Enabled);
+        store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenDisabledAtCap_PersistsThroughStore()
+    {
+        var agentId = Guid.NewGuid();
+        // A create-as-Disabled never touches the Enabled cap, even when the agent is already at it.
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
+        var input = CreateInput(agentId, state: PlaybookActionState.Disabled);
+        store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
+        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
+
+        var result = await service.CreateAsync(input).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        await store.Received(1).AddAsync(input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenDisabledToEnabledAtCap_ThrowsValidationAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
+        var actionId = Guid.NewGuid();
+        // The action being updated is currently Disabled; the agent is already at the Enabled cap with a DIFFERENT action.
+        var existing = CreateRecord(CreateInput(agentId, state: PlaybookActionState.Disabled)) with { Id = actionId };
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
+        var input = CreateInput(agentId, state: PlaybookActionState.Enabled);
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateAsync(actionId, input)).ConfigureAwait(false);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenEditingAlreadyEnabledActionAtCap_DelegatesToStore()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
+        var actionId = Guid.NewGuid();
+        // The action is ALREADY Enabled and stays Enabled (an edit, not a transition into Enabled). Even at the cap it
+        // must not be blocked — the cap guard fires only on a non-Enabled -> Enabled transition.
+        var existing = CreateRecord(CreateInput(agentId, state: PlaybookActionState.Enabled)) with { Id = actionId };
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([existing]));
+        var input = CreateInput(agentId, state: PlaybookActionState.Enabled, behavior: "An edited behavior.");
+        store.UpdateAsync(actionId, input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input) with { Id = actionId });
+
+        var result = await service.UpdateAsync(actionId, input).ConfigureAwait(false);
+
+        AssertEx.NotNull(result);
+        await store.Received(1).UpdateAsync(actionId, input, Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -605,13 +713,18 @@ public sealed class PlaybookActionServiceTests
 
     private static PlaybookActionService CreateService(out IPlaybookActionStore store,
         out IAgentDefinitionStore agentStore,
-        bool agentExists)
+        bool agentExists,
+        int maxEnabledActions = 20)
     {
         store = Substitute.For<IPlaybookActionStore>();
         agentStore = Substitute.For<IAgentDefinitionStore>();
         agentStore.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                   .Returns(agentExists ? Task.FromResult<AgentDefinitionRecord?>(CreateAgent()) : Task.FromResult<AgentDefinitionRecord?>(null));
-        return new PlaybookActionService(store, agentStore);
+        // Default: no enabled actions, so the cap gate is inert unless a test seeds ListEnabledByAgentAsync.
+        store.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var actionOptions = Options.Create(new PlaybookActionOptions { MaxEnabledActions = maxEnabledActions });
+        return new PlaybookActionService(store, agentStore, actionOptions);
     }
 
     private static PlaybookActionInput CreateInput(Guid? agentDefinitionId = null,
@@ -639,6 +752,21 @@ public sealed class PlaybookActionServiceTests
             input.Behavior,
             input.Scope,
             input.Priority,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+    }
+
+    private static PlaybookActionRecord EnabledRecord(Guid agentDefinitionId)
+    {
+        return new PlaybookActionRecord(Guid.NewGuid(),
+            agentDefinitionId,
+            PlaybookActionState.Enabled,
+            PlaybookActionSource.Manual,
+            TriggerCondition: null,
+            "An already-enabled behavior.",
+            Scope: null,
+            Priority: 10,
             Version: 1,
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);

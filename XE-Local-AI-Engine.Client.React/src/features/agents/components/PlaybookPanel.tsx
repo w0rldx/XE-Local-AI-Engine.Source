@@ -19,10 +19,12 @@ import {
 import {
 	IconAlertTriangle,
 	IconArrowDown,
+	IconArrowRight,
 	IconArrowUp,
 	IconCheck,
 	IconChevronDown,
 	IconChevronUp,
+	IconFlag,
 	IconFlask,
 	IconPencil,
 	IconPlus,
@@ -46,6 +48,7 @@ import {
 	toSavePlaybookActionRequest,
 	toSaveSuggestedActionRequest,
 } from "@/features/agents/models/PlaybookActionModels";
+import type { PlaybookMonitorItem, PlaybookMonitorStatus } from "@/features/agents/models/PlaybookMonitorModels";
 import {
 	useAnalyzePlaybook,
 	useCreatePlaybookAction,
@@ -57,6 +60,7 @@ import {
 	useUpdatePlaybookAction,
 	useUpdateSuggestedAction,
 } from "@/features/agents/queries/usePlaybookActions";
+import { usePlaybookMonitor } from "@/features/agents/queries/usePlaybookMonitor";
 
 interface PlaybookPanelProps {
 	// The agent whose playbook is managed. The panel is rendered by the parent only when agentManagement is on; it
@@ -85,6 +89,10 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const [editorTarget, setEditorTarget] = useState<EditorTarget>(null);
 
 	const actionsQuery = usePlaybookActions(enabled ? agentDefinitionId : null);
+	// Playbook P5 — read-only cohort-monitoring signals per Enabled action + the relevance-retrieval config. Joined
+	// to the rows below by actionId; the read is independent of the action list (its own loading/error path) so a
+	// monitor failure degrades to "no signal" rather than blanking the governance panel.
+	const monitorQuery = usePlaybookMonitor(enabled ? agentDefinitionId : null);
 	const createMutation = useCreatePlaybookAction(agentDefinitionId);
 	const updateMutation = useUpdatePlaybookAction(agentDefinitionId);
 	const updateSuggestedMutation = useUpdateSuggestedAction(agentDefinitionId);
@@ -124,6 +132,28 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		() => orderedActions.reduce((max, action) => Math.max(max, action.priority), -1) + 1,
 		[orderedActions],
 	);
+
+	// Playbook P5 — the number of currently Enabled actions (the cohort under monitoring + the count the relevance
+	// gate / cap indicator reason about). Suggested/Disabled/Archived are excluded.
+	const enabledCount = useMemo(
+		() => orderedActions.filter((action) => action.state === "Enabled").length,
+		[orderedActions],
+	);
+
+	// Playbook P5 — index the monitoring signals by actionId so each Enabled row can join its signal in O(1). An
+	// action with no monitor item (no enable clock yet, or the read failed) simply renders the neutral "no signal".
+	const monitorByActionId = useMemo(() => {
+		const map = new Map<string, PlaybookMonitorItem>();
+		for (const item of monitorQuery.data?.items ?? []) {
+			map.set(item.actionId, item);
+		}
+		return map;
+	}, [monitorQuery.data]);
+
+	// Playbook P5 — the relevance-retrieval config. When more actions are Enabled than the threshold, injection is
+	// gated to the top-K most relevant per turn; the banner below surfaces that with the live numbers.
+	const retrieval = monitorQuery.data?.retrieval ?? null;
+	const showRelevanceBanner = retrieval !== null && enabledCount > retrieval.threshold;
 
 	const isMutating =
 		createMutation.isPending ||
@@ -329,6 +359,30 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 					) : null}
 				</Group>
 
+				{/* Playbook P5 — bounded-store cap indicator: how many actions are currently Enabled for this agent. The
+				    hard cap (MaxEnabledActions) is server-owned and not in this response, so the panel shows only the live
+				    Enabled count; the cap is surfaced via the typed CapReached 409 reason when a promote is blocked. */}
+				<Group gap="xs" align="center" data-testid="playbook-cap-indicator">
+					<Text size="xs" c="dimmed">
+						{t("pages.agents.playbook.monitor.enabledCount", "{{count}} actions enabled", {
+							count: enabledCount,
+						})}
+					</Text>
+				</Group>
+
+				{/* Playbook P5 — relevance-gated banner: once more actions are Enabled than the retrieval threshold,
+				    only the top-K most relevant are injected per turn (not all of them). Rendered only in that regime so
+				    the operator knows not every Enabled action reaches the model on every turn. */}
+				{showRelevanceBanner && retrieval !== null ? (
+					<Alert color="blue" variant="light" data-testid="playbook-relevance-banner">
+						{t(
+							"pages.agents.playbook.monitor.relevanceBanner",
+							"Injection is relevance-gated: top-{{topK}} of {{count}} actions per turn.",
+							{ topK: retrieval.topK, count: enabledCount },
+						)}
+					</Alert>
+				) : null}
+
 				{analyzeMutation.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-analyze-error">
 						{errorMessage(
@@ -416,6 +470,10 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 				{orderedActions.map((action, index) => {
 					const isEnabled = action.state === "Enabled";
+					// Playbook P5 — the cohort-monitoring signal for an Enabled action (joined by id). Disabled actions
+					// carry no live signal; an Enabled action with no monitor item yet (no enable clock) renders the
+					// neutral placeholder inside MonitorSignal.
+					const monitorItem = isEnabled ? (monitorByActionId.get(action.id) ?? null) : null;
 					return (
 						<Paper withBorder={true} p="xs" key={action.id} data-testid={`playbook-action-${action.id}`}>
 							<Stack gap={6}>
@@ -503,6 +561,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 									onChange={(event) => handleToggleState(action, event.currentTarget.checked)}
 									data-testid={`playbook-toggle-${action.id}`}
 								/>
+								{isEnabled ? <MonitorSignal actionId={action.id} item={monitorItem} /> : null}
 							</Stack>
 						</Paper>
 					);
@@ -515,6 +574,93 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 // Render an analysis confidence fraction (0..1) as a whole-percent string for display.
 function toConfidencePercent(confidence: number): string {
 	return `${Math.round(confidence * 100)}%`;
+}
+
+// Playbook P5 — render a down-vote rate fraction (0..1) as a whole-percent string for the before→after signal.
+function toDownRatePercent(rate: number): string {
+	return `${Math.round(rate * 100)}%`;
+}
+
+// Playbook P5 — the Mantine badge color per monitor verdict. Improved is positive (teal), Regressed negative
+// (red), Flat/InsufficientData neutral (gray) so the signal reads at a glance.
+const monitorStatusColors: Record<PlaybookMonitorStatus, string> = {
+	Improved: "teal",
+	Regressed: "red",
+	Flat: "gray",
+	InsufficientData: "gray",
+};
+
+// English fallback copy per verdict (the i18n key carries the localized text). "InsufficientData" reads as a
+// short human phrase rather than the wire token.
+const monitorStatusFallbacks: Record<PlaybookMonitorStatus, string> = {
+	Improved: "Improved",
+	Regressed: "Regressed",
+	Flat: "Flat",
+	InsufficientData: "Insufficient data",
+};
+
+interface MonitorSignalProps {
+	actionId: string;
+	// The monitoring signal for this Enabled action, or null when there is no signal yet (no enable clock / read
+	// failed) — in which case a neutral "—" placeholder renders.
+	item: PlaybookMonitorItem | null;
+}
+
+// Playbook P5 — the cohort-monitoring signal for one Enabled action: a status badge (Improved / Flat / Regressed /
+// Insufficient data), a compact before→after down-rate (e.g. "12% → 5%"), and a flag marker for operator review
+// when the action is flagged (dead/harmful — coarse, agent-level signal; the operator decides, never auto-disabled).
+// An action with no monitor item renders a neutral placeholder so the row reads consistently.
+function MonitorSignal({ actionId, item }: MonitorSignalProps) {
+	const { t } = useTranslation();
+
+	if (item === null) {
+		return (
+			<Text size="xs" c="dimmed" data-testid={`playbook-monitor-none-${actionId}`}>
+				{t("pages.agents.playbook.monitor.none", "—")}
+			</Text>
+		);
+	}
+
+	return (
+		<Group gap="xs" align="center" wrap="wrap" data-testid={`playbook-monitor-${actionId}`}>
+			<Badge
+				size="xs"
+				variant="light"
+				color={monitorStatusColors[item.status]}
+				data-testid={`playbook-monitor-status-${actionId}`}
+			>
+				{t(`pages.agents.playbook.monitor.status.${item.status}`, monitorStatusFallbacks[item.status])}
+			</Badge>
+			<Group gap={4} align="center" wrap="nowrap" data-testid={`playbook-monitor-rate-${actionId}`}>
+				<Text size="xs" c="dimmed">
+					{toDownRatePercent(item.beforeDownRate)}
+				</Text>
+				<IconArrowRight size={12} aria-hidden={true} />
+				<Text size="xs" c="dimmed">
+					{toDownRatePercent(item.afterDownRate)}
+				</Text>
+				<Text size="xs" c="dimmed">
+					{t("pages.agents.playbook.monitor.downRateLabel", "down-vote rate")}
+				</Text>
+			</Group>
+			{item.facetToolName ? (
+				<Badge size="xs" variant="outline" color="gray" data-testid={`playbook-monitor-facet-${actionId}`}>
+					{item.facetToolName}
+				</Badge>
+			) : null}
+			{item.flagged ? (
+				<Badge
+					size="xs"
+					variant="filled"
+					color="orange"
+					leftSection={<IconFlag size={10} />}
+					data-testid={`playbook-monitor-flag-${actionId}`}
+				>
+					{t("pages.agents.playbook.monitor.flag", "Needs review")}
+				</Badge>
+			) : null}
+		</Group>
+	);
 }
 
 interface SuggestedActionRowProps {

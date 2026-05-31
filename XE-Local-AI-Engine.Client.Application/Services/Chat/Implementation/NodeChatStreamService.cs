@@ -136,13 +136,17 @@ public sealed class NodeChatStreamService(
         // offer, and agent version 1. When bound, the definition supplies the system prompt, the intersected tool
         // offer (already approval-overridden), the pinned model profile, the reasoning effort, and the version that
         // feeds the config hash. The builder and config-hash plumbing are unchanged either way.
-        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+        // Playbook P5: the just-sent user turn is the relevance-retrieval query. The resolver injects only the most
+        // relevant Enabled playbook actions when the bound agent's Enabled set exceeds the retrieval threshold; below
+        // it (or with no binding) the query is inert and the prompt stays byte-identical to the pre-P5 path.
+        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
 
         // Loop P5: when the bound definition is a tool-capable orchestrator, resolve a compiled orchestration spec to
         // carry on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent
-        // (the orchestrator-as-lone-agent fallback), keeping the unbound/single-agent path byte-identical.
-        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, cancellationToken).ConfigureAwait(false);
+        // (the orchestrator-as-lone-agent fallback), keeping the unbound/single-agent path byte-identical. The same
+        // user turn drives per-participant playbook retrieval (Playbook P5).
+        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
 
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
         // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
@@ -402,6 +406,7 @@ public sealed class NodeChatStreamService(
     /// </summary>
     private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
         string? activeModel,
+        string? retrievalQuery,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
@@ -415,7 +420,7 @@ public sealed class NodeChatStreamService(
             return null;
         }
 
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, cancellationToken).ConfigureAwait(false);
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

@@ -157,17 +157,18 @@ export function findGoldenFieldOverLimit(request: CreateGoldenConversationReques
 	return field === "title" || field === "inputTurns" || field === "assertion" || field === "rubric" ? field : null;
 }
 
-// Playbook P4 — the 409 body returned when a blocked promote is attempted: a machine status + a human-readable
+// Playbook P4/P5 — the 409 body returned when a blocked promote is attempted: a machine status + a human-readable
 // reason. `EvalRequired` = no eval has run; `EvalRegressed` = the latest eval failed (a prior-good case broke);
-// `EvalStale` = the action was edited since the last passing eval.
-export type PromoteConflictStatus = "EvalRequired" | "EvalRegressed" | "EvalStale";
+// `EvalStale` = the action was edited since the last passing eval; `CapReached` (Playbook P5) = the agent is
+// already at its MaxEnabledActions bound, so the operator must archive/disable an Enabled action before promoting.
+export type PromoteConflictStatus = "EvalRequired" | "EvalRegressed" | "EvalStale" | "CapReached";
 
 export interface PromoteConflictBody {
 	readonly status: PromoteConflictStatus;
 	readonly reason: string;
 }
 
-export const promoteConflictStatusSchema = z.enum(["EvalRequired", "EvalRegressed", "EvalStale"]);
+export const promoteConflictStatusSchema = z.enum(["EvalRequired", "EvalRegressed", "EvalStale", "CapReached"]);
 
 const promoteConflictBodySchema = z.object({
 	status: promoteConflictStatusSchema,

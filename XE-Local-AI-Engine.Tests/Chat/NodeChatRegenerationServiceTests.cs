@@ -121,7 +121,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var runner = new RegenContextCapturingRunner(dispatcher);
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", 9));
 
         var service = new NodeChatRegenerationService(persistence,
@@ -149,7 +149,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        // Playbook P5: ResolvePrecedingUserTurnContent anchors the relevance-retrieval query to the user turn the
+        // regenerate re-answers — here the seeded "what is 2+2?" — not just any string. This is the only direct
+        // coverage of that variant-group-anchored query selection.
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "what is 2+2?"), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         AssertEx.Equal("Bound persona prompt.", runner.LastSystemPrompt);
         AssertEx.Equal(9, runner.LastAgentDefinitionVersion);
         AssertEx.Equal("high", runner.LastReasoningEffort);
@@ -184,7 +187,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
-        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                              .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", null, 4));
 
         var service = new NodeChatRegenerationService(persistence,
@@ -260,7 +263,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
-        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
     }
@@ -643,7 +646,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
     }
 
@@ -659,7 +662,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static IOrchestrationResolver CreateOrchestrationResolver()
     {
         var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
         return resolver;
     }
 
