@@ -382,6 +382,65 @@ public sealed class PlaybookActionStoreTests : IDisposable
     }
 
     [Test]
+    public async Task AddAsync_WithEvalResult_RoundTripsJsonString()
+    {
+        var databasePath = GetDatabasePath("eval-result-roundtrip.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        const string EvalJson = """{"passed":true,"goldenCaseCount":3,"regressedCaseCount":0}""";
+
+        Guid actionId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var agentId = await SeedAgentAsync(context);
+            var store = new PlaybookActionStore(context, TimeProvider.System);
+            var added = await store.AddAsync(CreateInput(agentId) with { EvalResult = EvalJson });
+            actionId = added.Id;
+
+            AssertEx.Equal(EvalJson, added.EvalResult);
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var readStore = new PlaybookActionStore(readContext, TimeProvider.System);
+
+        var byId = AssertEx.NotNull(await readStore.GetByIdAsync(actionId), "Action should be found by id.");
+        AssertEx.Equal(EvalJson, byId.EvalResult);
+
+        var list = await readStore.ListByAgentAsync((await readStore.GetByIdAsync(actionId))!.AgentDefinitionId);
+        AssertEx.Equal(EvalJson, list[0].EvalResult);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenOnlyEvalResultChanges_DoesNotBumpVersion()
+    {
+        var databasePath = GetDatabasePath("eval-result-no-bump.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(3_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput(agentId));
+        AssertEx.Equal(1, added.Version);
+        AssertEx.Null(added.EvalResult, "A new action carries no eval result.");
+
+        // Recording an eval is not a config-affecting edit (EvalResult is not injected into the prompt), so it must not
+        // bump Version even though every other field is unchanged.
+        clock.Advance(15);
+        var withEval = AssertEx.NotNull(
+            await store.UpdateAsync(added.Id, CreateInput(agentId) with { EvalResult = """{"passed":true}""" }),
+            "Update should find the action.");
+
+        AssertEx.Equal("""{"passed":true}""", withEval.EvalResult);
+        AssertEx.Equal(1, withEval.Version);
+        AssertEx.True(withEval.UpdatedAtUtc > added.UpdatedAtUtc, "Recording an eval should still advance UpdatedAtUtc.");
+    }
+
+    [Test]
     public async Task ListEnabledByAgentAsync_ExcludesSuggestedAction()
     {
         var databasePath = GetDatabasePath("enabled-excludes-suggested.sqlite");

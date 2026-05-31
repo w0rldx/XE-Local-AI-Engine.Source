@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Agents;
 
+using System.Text.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class PlaybookActionServiceTests
@@ -279,22 +281,27 @@ public sealed class PlaybookActionServiceTests
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
-        var pending = CreateSuggestedRecord(agentId, actionId);
+        // The gate now requires a passing eval matching the action's current Version before promotion is allowed.
+        var pending = CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(version: 1) };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
              .Returns(pending with { State = PlaybookActionState.Enabled });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
-        AssertEx.NotNull(result, "Promoting an owned pending suggestion should return the updated record.");
+        AssertEx.Equal(PlaybookPromotionStatus.Promoted, result.Status);
+        AssertEx.NotNull(result.Record, "A passing eval should promote the action and return the updated record.");
         await store.Received(1).UpdateAsync(
             actionId,
-            Arg.Is<PlaybookActionInput>(stored => stored.State == PlaybookActionState.Enabled && stored.Source == PlaybookActionSource.Analysis),
+            Arg.Is<PlaybookActionInput>(stored =>
+                stored.State == PlaybookActionState.Enabled
+                && stored.Source == PlaybookActionSource.Analysis
+                && stored.EvalResult == pending.EvalResult),
             Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
-    public async Task PromoteSuggestedAsync_WhenMissing_ReturnsNullAndDoesNotUpdate()
+    public async Task PromoteSuggestedAsync_WhenMissing_ReturnsNotFoundAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
@@ -303,12 +310,13 @@ public sealed class PlaybookActionServiceTests
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
-        AssertEx.Null(result, "Promoting a missing action must return null (404).");
+        AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
+        AssertEx.Null(result.Record, "A missing action must not return a record (404).");
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
-    public async Task PromoteSuggestedAsync_WhenDifferentAgent_ReturnsNullAndDoesNotUpdate()
+    public async Task PromoteSuggestedAsync_WhenDifferentAgent_ReturnsNotFoundAndDoesNotUpdate()
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
@@ -318,12 +326,12 @@ public sealed class PlaybookActionServiceTests
 
         var result = await service.PromoteSuggestedAsync(routeAgentId, actionId).ConfigureAwait(false);
 
-        AssertEx.Null(result, "Promoting another agent's suggestion must return null (404).");
+        AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
-    public async Task PromoteSuggestedAsync_WhenAlreadyEnabled_ReturnsNullAndDoesNotUpdate()
+    public async Task PromoteSuggestedAsync_WhenAlreadyEnabled_ReturnsNotFoundAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
@@ -333,12 +341,12 @@ public sealed class PlaybookActionServiceTests
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
-        AssertEx.Null(result, "Promoting an already-Enabled action must return null (not a pending suggestion).");
+        AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
-    public async Task PromoteSuggestedAsync_WhenManualSource_ReturnsNullAndDoesNotUpdate()
+    public async Task PromoteSuggestedAsync_WhenManualSource_ReturnsNotFoundAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
@@ -349,7 +357,96 @@ public sealed class PlaybookActionServiceTests
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
-        AssertEx.Null(result, "Promoting a Manual-source action must return null (not an Analysis suggestion).");
+        AssertEx.Equal(PlaybookPromotionStatus.NotFound, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenNoEvalRecorded_ReturnsEvalRequiredAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // No EvalResult recorded (null) — the gate blocks with EvalRequired.
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(agentId, actionId));
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalRequired, result.Status);
+        AssertEx.Null(result.Record);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenEvalFailed_ReturnsEvalRegressedAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // A recorded eval for the current Version but Passed == false — the gate blocks with EvalRegressed.
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = FailingEvalResultJson(version: 1) });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalRegressed, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenEvalForOlderVersion_ReturnsEvalStaleAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // A passing eval, but recorded for an older content snapshot (Version 1) than the action's current Version (2).
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { Version = 2, EvalResult = PassingEvalResultJson(version: 1) });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RecordEvalResultAsync_WhenOwnedPendingSuggestion_StoresEvalResultAndStaysSuggested()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        var pending = CreateSuggestedRecord(agentId, actionId);
+        var json = PassingEvalResultJson(version: 1);
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
+        store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
+             .Returns(pending with { EvalResult = json });
+
+        var result = await service.RecordEvalResultAsync(agentId, actionId, json).ConfigureAwait(false);
+
+        AssertEx.NotNull(result, "Recording an eval on an owned pending suggestion should return the updated record.");
+        await store.Received(1).UpdateAsync(
+            actionId,
+            Arg.Is<PlaybookActionInput>(stored =>
+                stored.State == PlaybookActionState.Suggested
+                && stored.Source == PlaybookActionSource.Analysis
+                && stored.Behavior == pending.Behavior
+                && stored.Priority == pending.Priority
+                && stored.EvalResult == json),
+            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RecordEvalResultAsync_WhenDifferentAgent_ReturnsNullAndDoesNotUpdate()
+    {
+        var routeAgentId = Guid.NewGuid();
+        var otherAgentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
+
+        var result = await service.RecordEvalResultAsync(routeAgentId, actionId, PassingEvalResultJson(version: 1)).ConfigureAwait(false);
+
+        AssertEx.Null(result, "Recording an eval on another agent's suggestion must return null (404).");
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -414,7 +511,9 @@ public sealed class PlaybookActionServiceTests
                 && stored.Priority == 7
                 && stored.Confidence.HasValue && Math.Abs(stored.Confidence.Value - 0.42d) < 1e-9
                 && stored.SourceFeedbackIds != null
-                && stored.SourceFeedbackIds.Count == 2),
+                && stored.SourceFeedbackIds.Count == 2
+                // Editing invalidates any prior eval pass: the store input must clear EvalResult.
+                && stored.EvalResult == null),
             Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -475,6 +574,33 @@ public sealed class PlaybookActionServiceTests
             UpdatedAtUtc: 10,
             SourceFeedbackIds: new[] { Guid.NewGuid() },
             Confidence: 0.6d);
+    }
+
+    private static string PassingEvalResultJson(int version)
+    {
+        return EvalResultJson(passed: true, version);
+    }
+
+    private static string FailingEvalResultJson(int version)
+    {
+        return EvalResultJson(passed: false, version);
+    }
+
+    private static string EvalResultJson(bool passed, int version)
+    {
+        var result = new PlaybookEvalResult(
+            passed,
+            EvaluatedAtUtc: 1_000,
+            ActionVersionAtEval: version,
+            ModelName: "test-model",
+            GoldenCaseCount: 1,
+            GoldenCaseTotal: 1,
+            BaselinePassCount: 1,
+            CandidatePassCount: passed ? 1 : 0,
+            RegressedCaseCount: passed ? 0 : 1,
+            ImprovedCaseCount: 0,
+            Cases: []);
+        return JsonSerializer.Serialize(result, PlaybookEvalResult.SerializerOptions);
     }
 
     private static PlaybookActionService CreateService(out IPlaybookActionStore store,

@@ -7,6 +7,7 @@ import {
 	listPlaybookActions,
 	promoteSuggested,
 	rejectSuggested,
+	runEval,
 	updatePlaybookAction,
 	updateSuggested,
 } from "@/features/agents/api/PlaybookActionsApi";
@@ -88,6 +89,20 @@ export function usePromoteSuggestedAction(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: (actionId: string) => promoteSuggested(agentDefinitionId, actionId),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: playbookQueryKeys.byAgent(agentDefinitionId) });
+		},
+	});
+}
+
+// Playbook P4 — run the eval gate for a single Suggested action against the agent's golden set. The mutation
+// records the EvalResult; invalidating the per-agent cache refreshes the Suggested row's eval badge + the
+// Approve gate (Approve stays disabled until evalResult.passed).
+export function useRunEval(agentDefinitionId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (actionId: string) => runEval(agentDefinitionId, actionId),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: playbookQueryKeys.byAgent(agentDefinitionId) });
 		},

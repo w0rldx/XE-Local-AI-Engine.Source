@@ -1,14 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 using FastEndpoints;
+using Microsoft.AspNetCore.Http;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Playbook P3: promotes a pending Suggested/Analysis action to Enabled (human approval — staging ≠ active).
-///     404 when the action is missing, belongs to another agent, or is not a pending suggestion. Operator-gated.
+///     Playbook P3/P4: promotes a pending Suggested/Analysis action to Enabled (human approval — staging ≠ active),
+///     gated by the P4 eval result. 404 when the action is missing, belongs to another agent, or is not a pending
+///     suggestion; 409 when the eval has not passed (required / regressed / stale). Operator-gated.
 /// </summary>
 public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)
     : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
@@ -23,13 +25,34 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionServic
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)
     {
-        var record = await _playbookActionService.PromoteSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct).ConfigureAwait(false);
-        if (record is null)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-            return;
-        }
+        var result = await _playbookActionService.PromoteSuggestedAsync(req.AgentDefinitionId, req.ActionId, ct).ConfigureAwait(false);
 
-        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
+        switch (result.Status)
+        {
+            case PlaybookPromotionStatus.Promoted when result.Record is not null:
+                await Send.OkAsync(result.Record.ToResponse(), ct).ConfigureAwait(false);
+                return;
+            case PlaybookPromotionStatus.NotFound:
+                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                return;
+            default:
+                // EvalRequired / EvalRegressed / EvalStale (and a Promoted with no record) → the eval gate blocked the
+                // promotion. Surface a typed 409 so the panel can explain why Approve is unavailable (same Conflict-body
+                // convention as the chat/auth endpoints).
+                var conflict = new PlaybookPromotionConflictResponse(result.Status.ToString(), ReasonFor(result.Status));
+                await Send.ResultAsync(Results.Conflict(conflict)).ConfigureAwait(false);
+                return;
+        }
+    }
+
+    private static string ReasonFor(PlaybookPromotionStatus status)
+    {
+        return status switch
+        {
+            PlaybookPromotionStatus.EvalRequired => "Run the eval before promoting — no eval has run since this action was authored or edited.",
+            PlaybookPromotionStatus.EvalRegressed => "The latest eval regressed at least one golden case. Resolve the regression before promoting.",
+            PlaybookPromotionStatus.EvalStale => "The action changed since the last eval. Re-run the eval before promoting.",
+            _ => "Promotion is blocked by the eval gate."
+        };
     }
 }

@@ -34,6 +34,11 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 action.Behavior = NodePayloadProtector.Decrypt(action.Behavior, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "behavior");
                 action.TriggerCondition = DecryptIfPresent(action.TriggerCondition, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "trigger_condition");
                 break;
+            case GoldenConversation golden:
+                golden.InputTurns = NodePayloadProtector.Decrypt(golden.InputTurns, context.NodeEncryptionKey.Span, Guid.Empty, golden.Id, "input_turns");
+                golden.Assertion = DecryptIfPresent(golden.Assertion, context.NodeEncryptionKey.Span, Guid.Empty, golden.Id, "assertion");
+                golden.Rubric = DecryptIfPresent(golden.Rubric, context.NodeEncryptionKey.Span, Guid.Empty, golden.Id, "rubric");
+                break;
             case McpServerRegistration registration:
                 registration.ArgumentsJson = DecryptIfPresent(registration.ArgumentsJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "arguments");
                 registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");

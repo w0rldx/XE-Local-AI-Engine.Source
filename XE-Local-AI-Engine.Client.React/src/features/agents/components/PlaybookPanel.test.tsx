@@ -29,6 +29,7 @@ const { hooksMock, confirmMock } = vi.hoisted(() => ({
 		useAnalyzePlaybook: vi.fn(),
 		usePromoteSuggestedAction: vi.fn(),
 		useRejectSuggestedAction: vi.fn(),
+		useRunEval: vi.fn(),
 	},
 	confirmMock: vi.fn(),
 }));
@@ -38,8 +39,9 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
 
+import { PromoteConflictError } from "@/features/agents/api/PlaybookActionsApi";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
-import type { PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
+import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
 
 function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 	return {
@@ -56,6 +58,26 @@ function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 		updatedAtUtc: 2000,
 		sourceFeedbackIds: null,
 		confidence: null,
+		evalResult: null,
+		...overrides,
+	};
+}
+
+// A passing/failing eval result keyed to the action's current version (so the gate is not "stale"). `passed`
+// drives the Approve gate; `regressedCaseCount`/`cases` drive the eval summary + regressed-cases list.
+function makeEvalResult(overrides: Partial<EvalResult> = {}): EvalResult {
+	return {
+		passed: true,
+		evaluatedAtUtc: 1748600000000,
+		actionVersionAtEval: 1,
+		modelName: "qwen3.5:9b",
+		goldenCaseCount: 3,
+		goldenCaseTotal: 3,
+		baselinePassCount: 3,
+		candidatePassCount: 3,
+		regressedCaseCount: 0,
+		improvedCaseCount: 0,
+		cases: [{ goldenCaseId: "g-1", scoredBy: "assertion", baselinePass: true, candidatePass: true, regressed: false }],
 		...overrides,
 	};
 }
@@ -74,7 +96,7 @@ function makeSuggestedAction(overrides: Partial<PlaybookAction> = {}): PlaybookA
 }
 
 function makeMutation() {
-	return { mutate: vi.fn(), isPending: false, error: null };
+	return { mutate: vi.fn(), isPending: false, error: null, variables: undefined };
 }
 
 // Analyze mutation also exposes isSuccess/data (the empty-result notice reads them).
@@ -125,6 +147,7 @@ describe("PlaybookPanel", () => {
 		hooksMock.useAnalyzePlaybook.mockReturnValue(makeAnalyzeMutation());
 		hooksMock.usePromoteSuggestedAction.mockReturnValue(makeMutation());
 		hooksMock.useRejectSuggestedAction.mockReturnValue(makeMutation());
+		hooksMock.useRunEval.mockReturnValue(makeMutation());
 	});
 
 	afterEach(() => {
@@ -275,16 +298,134 @@ describe("PlaybookPanel", () => {
 		expect(screen.getByTestId("playbook-no-suggestions")).toBeTruthy();
 	});
 
-	it("promotes a Suggested action through the promote mutation when Approve is clicked", () => {
+	it("promotes a Suggested action through the promote mutation when Approve is clicked (eval passed)", () => {
 		const promoteMutation = makeMutation();
 		hooksMock.usePromoteSuggestedAction.mockReturnValue(promoteMutation);
+		// Approve is eval-gated: a passing eval (matching the action version) is required to enable the control.
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ evalResult: makeEvalResult() })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const approve = screen.getByTestId("playbook-suggested-approve-suggested-1") as HTMLButtonElement;
+		expect(approve.disabled).toBe(false);
+		fireEvent.click(approve);
+
+		expect(promoteMutation.mutate).toHaveBeenCalledWith("suggested-1");
+	});
+
+	it("renders the evalResult pass badge + counts and disables Approve only when not passed", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ evalResult: makeEvalResult() })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-suggested-eval-status-suggested-1").textContent).toContain("passed");
+		expect(screen.getByTestId("playbook-suggested-eval-counts-suggested-1").textContent).toContain("0");
+		// Passing eval (current version) → Approve enabled.
+		expect((screen.getByTestId("playbook-suggested-approve-suggested-1") as HTMLButtonElement).disabled).toBe(false);
+		// No truncation when the evaluated count equals the total → the "evaluated N of TOTAL" note is absent.
+		expect(screen.queryByTestId("playbook-suggested-eval-truncated-suggested-1")).toBeNull();
+	});
+
+	it("surfaces the truncation note when the golden set was larger than the evaluated subset", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ evalResult: makeEvalResult({ goldenCaseCount: 25, goldenCaseTotal: 40 }) })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const note = screen.getByTestId("playbook-suggested-eval-truncated-suggested-1");
+		expect(note.textContent).toContain("25");
+		expect(note.textContent).toContain("40");
+	});
+
+	it("DISABLES Approve until the eval passes (no eval, regressed, and stale)", () => {
+		// No eval yet → Approve disabled.
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+		const { rerender } = renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+		expect((screen.getByTestId("playbook-suggested-approve-suggested-1") as HTMLButtonElement).disabled).toBe(true);
+		// No eval result → no eval summary rendered.
+		expect(screen.queryByTestId("playbook-suggested-eval-suggested-1")).toBeNull();
+
+		// A failing (regressed) eval → Approve stays disabled and the regressed list is shown.
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [
+				makeSuggestedAction({
+					evalResult: makeEvalResult({
+						passed: false,
+						regressedCaseCount: 1,
+						candidatePassCount: 2,
+						cases: [
+							{ goldenCaseId: "g-1", scoredBy: "judge", baselinePass: true, candidatePass: false, regressed: true },
+						],
+					}),
+				}),
+			],
+			isLoading: false,
+			error: null,
+		});
+		rerender(
+			<MantineProvider>
+				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
+			</MantineProvider>,
+		);
+		expect((screen.getByTestId("playbook-suggested-approve-suggested-1") as HTMLButtonElement).disabled).toBe(true);
+		expect(screen.getByTestId("playbook-suggested-eval-status-suggested-1").textContent).toContain("failed");
+		// Expand the regressed cases and confirm the goldenCaseId + how it was scored render.
+		fireEvent.click(screen.getByTestId("playbook-suggested-eval-toggle-suggested-1"));
+		const regressed = screen.getByTestId("playbook-suggested-eval-regressed-suggested-1");
+		expect(regressed.textContent).toContain("g-1");
+		expect(regressed.textContent).toContain("judge");
+
+		// A passing but STALE eval (ran against an older version) → Approve stays disabled.
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ version: 5, evalResult: makeEvalResult({ passed: true, actionVersionAtEval: 3 }) })],
+			isLoading: false,
+			error: null,
+		});
+		rerender(
+			<MantineProvider>
+				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
+			</MantineProvider>,
+		);
+		expect((screen.getByTestId("playbook-suggested-approve-suggested-1") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("runs the eval through the run-eval mutation when Run eval is clicked", () => {
+		const runEvalMutation = makeMutation();
+		hooksMock.useRunEval.mockReturnValue(runEvalMutation);
 		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
 
 		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
 
-		fireEvent.click(screen.getByTestId("playbook-suggested-approve-suggested-1"));
+		fireEvent.click(screen.getByTestId("playbook-suggested-run-eval-suggested-1"));
 
-		expect(promoteMutation.mutate).toHaveBeenCalledWith("suggested-1");
+		expect(runEvalMutation.mutate).toHaveBeenCalledWith("suggested-1");
+	});
+
+	it("surfaces a 409 promote conflict reason in the review-error alert", () => {
+		hooksMock.usePromoteSuggestedAction.mockReturnValue({
+			mutate: vi.fn(),
+			isPending: false,
+			error: new PromoteConflictError("EvalRegressed", "Candidate regressed golden case g-1."),
+			variables: undefined,
+		});
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// The panel maps the typed conflict status to a localized reason in the review-error alert.
+		const alert = screen.getByTestId("playbook-review-error");
+		expect(alert.textContent).toContain("regressed");
 	});
 
 	it("rejects a Suggested action through the reject mutation after confirmation", async () => {

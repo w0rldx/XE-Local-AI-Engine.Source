@@ -41,6 +41,9 @@ internal sealed record class PlaybookAction
     /// <summary>Analysis-agent confidence in [0,1] for a P3-proposed action; null for manual actions. Plaintext (structural).</summary>
     public double? Confidence { get; set; }
 
+    /// <summary>Regression-gate outcome JSON (ids + pass/fail + counts, no transcripts); null until eval runs; cleared on edit; structural — not sensitive.</summary>
+    public string? EvalResult { get; set; }
+
     /// <summary>Injection order; enabled actions inject ascending by this value. Plaintext (structural).</summary>
     public int Priority { get; set; }
 

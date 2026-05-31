@@ -905,6 +905,82 @@
 					"delete": "Could not delete the playbook action.",
 					"analyze": "Could not analyze feedback.",
 					"review": "Could not update the suggestion."
+				},
+				"eval": {
+					"runButton": "Run eval",
+					"passed": "Eval passed",
+					"failed": "Eval failed",
+					"counts": "{{regressed}} regressed / {{golden}} golden cases",
+					"truncated": "Evaluated {{evaluated}} of {{total}} golden cases.",
+					"regressedToggle": "Show {{count}} regressed cases",
+					"regressedCase": "{{id}} (scored by {{scoredBy}})",
+					"scoredBy": {
+						"assertion": "assertion",
+						"judge": "judge"
+					},
+					"gate": {
+						"needsEval": "Run the eval before approving this suggestion.",
+						"stale": "This suggestion changed since the last eval. Re-run the eval before approving.",
+						"regressed": "The eval regressed a prior-good case. Resolve the regression before approving."
+					},
+					"conflict": {
+						"EvalRequired": "Run the eval before approving this suggestion.",
+						"EvalRegressed": "Promotion blocked: the eval regressed a prior-good case.",
+						"EvalStale": "Promotion blocked: the suggestion changed since the last eval. Re-run the eval."
+					}
+				}
+			},
+			"golden": {
+				"title": "Golden conversations",
+				"subtitle": "Author golden cases that gate promotion: a candidate action must not regress them before {{name}} can enable it.",
+				"addButton": "Add golden case",
+				"loading": "Loading golden cases…",
+				"empty": "No golden cases yet. Add one so promotion can be eval-gated.",
+				"turnCount": "{{count}} input turns",
+				"hasAssertion": "assertion",
+				"hasRubric": "rubric",
+				"disabledBadge": "disabled",
+				"deleteAria": "Delete golden case",
+				"delete": {
+					"title": "Delete golden case",
+					"description": "Delete '{{title}}'? This cannot be undone."
+				},
+				"form": {
+					"titleRequired": "Title is required.",
+					"turnsRequired": "At least one input turn is required.",
+					"signalRequired": "Add at least a required/forbidden phrase or a rubric.",
+						"tooLong": {
+							"title": "Title is too long (max {{max}} characters).",
+							"inputTurns": "The input turns are too long (max {{max}} characters).",
+							"assertion": "The required/forbidden phrases are too long (max {{max}} characters).",
+							"rubric": "The rubric is too long (max {{max}} characters)."
+						},
+					"title": {
+						"label": "Title",
+						"placeholder": "Short operator label"
+					},
+					"turns": {
+						"label": "Input turns",
+						"description": "One turn per line as 'role: text'. A line without a colon is treated as a user turn.",
+						"placeholder": "user: Summarize the document…"
+					},
+					"required": {
+						"label": "Required phrases",
+						"description": "One per line. All must be present."
+					},
+					"forbidden": {
+						"label": "Forbidden phrases",
+						"description": "One per line. None may be present."
+					},
+					"rubric": {
+						"label": "Rubric",
+						"description": "Optional judge rubric (used when no assertion applies)."
+					}
+				},
+				"errors": {
+					"load": "Could not load golden cases.",
+					"save": "Could not save the golden case.",
+					"delete": "Could not delete the golden case."
 				}
 			},
 			"insights": 			{

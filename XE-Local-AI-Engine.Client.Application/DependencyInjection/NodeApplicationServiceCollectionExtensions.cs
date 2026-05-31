@@ -32,6 +32,8 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Embeddings;
 using XE_Local_AI_Engine.Client.Services.Embeddings.Implementation;
+using XE_Local_AI_Engine.Client.Services.Eval;
+using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
@@ -232,6 +234,35 @@ public static class NodeApplicationServiceCollectionExtensions
         // each proposal's evidence, dedupes, and writes Suggested actions for human review. Scoped to match the
         // scoped services it composes.
         builder.Services.AddScoped<IPlaybookAnalysisService, PlaybookAnalysisService>();
+        // Playbook P4 golden conversation store. Persists node-local golden cases bound to an agent definition with the
+        // InputTurns/Assertion/Rubric free text encrypted at rest by the node encryption interceptors; the eval runner
+        // reads enabled rows, and the CRUD service (below) orchestrates manual authoring. Scoped to match the scoped,
+        // DbContext-backed store.
+        builder.Services.AddScoped<IGoldenConversationStore, GoldenConversationStore>();
+        // Playbook P4 golden CRUD service: validates manual authoring (non-blank Title, existing owning agent, non-empty
+        // InputTurns, at least one of {Assertion, Rubric}) and ownership-guards delete. Scoped to match the scoped store.
+        builder.Services.AddScoped<IGoldenConversationService, GoldenConversationService>();
+        // Playbook P4 eval options: the node-local model used to re-run the agent loop + score judge-path cases. Defaults
+        // to the node's configured chat model when unset, so the eval never silently picks the cloud chat client (golden
+        // text + agent output stay on-node — §9 privacy).
+        builder.Services.AddOptions<PlaybookEvalOptions>()
+               .Bind(builder.Configuration.GetSection(PlaybookEvalOptions.Section))
+               .PostConfigure(evalOptions =>
+               {
+                   if (string.IsNullOrWhiteSpace(evalOptions.ModelName))
+                   {
+                       evalOptions.ModelName = builder.Configuration.GetValue<string>("Ollama:ChatModel")
+                                               ?? builder.Configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
+                                               ?? string.Empty;
+                   }
+               });
+        // Playbook P4 eval judge (the scoring surface): deterministic assertion path + node-local judge path. Singleton
+        // like the analysis agent — it holds no scoped state and receives the per-run node-local client as a parameter.
+        builder.Services.AddSingleton<IPlaybookEvalJudge, OllamaPlaybookEvalJudge>();
+        // Playbook P4 eval orchestration (the gate's evidence): re-runs the real agent loop over the golden set with the
+        // candidate vs baseline prompt, scores each case, and persists the plaintext EvalResult the promote gate reads.
+        // Scoped to match the scoped stores/services it composes. The .AI.Agent runner is registered in the agent runtime.
+        builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();

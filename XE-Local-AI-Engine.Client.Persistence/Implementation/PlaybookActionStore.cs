@@ -26,6 +26,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             Scope = input.Scope,
             SourceFeedbackIds = EncodeFeedbackIds(input.SourceFeedbackIds),
             Confidence = input.Confidence,
+            EvalResult = input.EvalResult,
             Priority = input.Priority,
             Version = 1,
             CreatedAtUtc = now,
@@ -72,6 +73,9 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // Scope/TriggerCondition). The P3 review paths (promote/reject/edit) carry the existing values through.
         entity.SourceFeedbackIds = EncodeFeedbackIds(input.SourceFeedbackIds);
         entity.Confidence = input.Confidence;
+        // EvalResult is deliberately excluded from configChanged: it is not injected into the prompt, so recording an
+        // eval (or clearing it on edit) must never bump Version (mirrors SourceFeedbackIds/Confidence above).
+        entity.EvalResult = input.EvalResult;
         entity.Priority = input.Priority;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -155,7 +159,8 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             entity.CreatedAtUtc,
             entity.UpdatedAtUtc,
             DecodeFeedbackIds(entity.SourceFeedbackIds),
-            entity.Confidence);
+            entity.Confidence,
+            entity.EvalResult);
     }
 
     private static byte[]? EncodeOptional(string? value)
