@@ -470,6 +470,204 @@ public sealed class PlaybookActionStoreTests : IDisposable
         AssertEx.Equal(enabledAction.Id, enabled[0].Id);
     }
 
+    [Test]
+    public async Task AddAsync_WhenCreatedAsEnabled_StampsEnabledAtUtc()
+    {
+        var databasePath = GetDatabasePath("enabled-at-create.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(5_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        // CreateInput defaults to State == Enabled, so the create-as-Enabled path stamps the cohort clock to now.
+        var added = await store.AddAsync(CreateInput(agentId));
+
+        AssertEx.Equal((long?)5_000L, added.EnabledAtUtc, "Create-as-Enabled should stamp EnabledAtUtc to now.");
+    }
+
+    [Test]
+    public async Task AddAsync_WhenCreatedAsSuggested_LeavesEnabledAtUtcNull()
+    {
+        var databasePath = GetDatabasePath("enabled-at-suggested-create.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, TimeProvider.System);
+
+        var added = await store.AddAsync(CreateInput(agentId) with
+        {
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            Confidence = 0.9d
+        });
+
+        AssertEx.Null(added.EnabledAtUtc, "A Suggested action is not yet enabled, so EnabledAtUtc stays null.");
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenTransitioningSuggestedToEnabled_StampsEnabledAtUtc()
+    {
+        var databasePath = GetDatabasePath("enabled-at-promote.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(6_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput(agentId) with
+        {
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            Confidence = 0.9d
+        });
+        AssertEx.Null(added.EnabledAtUtc, "A Suggested action carries no enabled clock.");
+
+        // The eval-gated promote funnels Suggested -> Enabled through UpdateAsync; the store stamps the clock then.
+        clock.Advance(20);
+        var promoted = AssertEx.NotNull(
+            await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                State = PlaybookActionState.Enabled,
+                Source = PlaybookActionSource.Analysis,
+                SourceFeedbackIds = new[] { Guid.NewGuid() },
+                Confidence = 0.9d
+            }),
+            "Update should find the action.");
+
+        AssertEx.Equal((long?)6_020L, promoted.EnabledAtUtc, "Promoting into Enabled should stamp EnabledAtUtc.");
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenTransitioningDisabledToEnabled_StampsEnabledAtUtc()
+    {
+        var databasePath = GetDatabasePath("enabled-at-reenable.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(7_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        // Start disabled (no enabled clock), then a manual toggle enables it — the store stamps the clock on that edge.
+        var added = await store.AddAsync(CreateInput(agentId) with { State = PlaybookActionState.Disabled });
+        AssertEx.Null(added.EnabledAtUtc, "A Disabled action carries no enabled clock.");
+
+        clock.Advance(30);
+        var enabled = AssertEx.NotNull(
+            await store.UpdateAsync(added.Id, CreateInput(agentId) with { State = PlaybookActionState.Enabled }),
+            "Update should find the action.");
+
+        AssertEx.Equal((long?)7_030L, enabled.EnabledAtUtc, "A manual Disabled -> Enabled toggle should stamp EnabledAtUtc.");
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenDisablingEnabledAction_PreservesEnabledAtUtc()
+    {
+        var databasePath = GetDatabasePath("enabled-at-disable-preserve.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(8_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput(agentId));
+        AssertEx.True(added.EnabledAtUtc.HasValue, "Create-as-Enabled stamps the clock.");
+        var enabledAt = added.EnabledAtUtc;
+
+        // Disabling must NOT clear the clock — the last-enabled instant is preserved for cohort monitoring. The caller
+        // round-trips the current record's EnabledAtUtc, which the store carries through unchanged on a non-enabling edit.
+        clock.Advance(40);
+        var disabled = AssertEx.NotNull(
+            await store.UpdateAsync(added.Id, CreateInput(agentId) with { State = PlaybookActionState.Disabled, EnabledAtUtc = enabledAt }),
+            "Update should find the action.");
+
+        AssertEx.Equal(enabledAt, disabled.EnabledAtUtc, "Disabling should preserve the last-enabled instant.");
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenRecordingEvalWhileEnabled_CarriesEnabledAtUtcAndDoesNotBumpVersion()
+    {
+        var databasePath = GetDatabasePath("enabled-at-eval-carry.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(9_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput(agentId));
+        AssertEx.True(added.EnabledAtUtc.HasValue, "Create-as-Enabled stamps the clock.");
+        var enabledAt = added.EnabledAtUtc;
+        AssertEx.Equal(1, added.Version);
+
+        // Recording an eval on an already-Enabled action is not a transition into Enabled, so the clock is carried
+        // through (not re-stamped) and — being a pure-timestamp/non-injected field — must not bump Version.
+        clock.Advance(50);
+        var withEval = AssertEx.NotNull(
+            await store.UpdateAsync(added.Id, CreateInput(agentId) with { EvalResult = """{"passed":true}""", EnabledAtUtc = enabledAt }),
+            "Update should find the action.");
+
+        AssertEx.Equal(enabledAt, withEval.EnabledAtUtc, "Recording an eval should carry the existing EnabledAtUtc through unchanged.");
+        AssertEx.Equal(1, withEval.Version);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenEditingSuggestedAction_LeavesEnabledAtUtcNull()
+    {
+        var databasePath = GetDatabasePath("enabled-at-suggested-edit.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(10_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new PlaybookActionStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput(agentId) with
+        {
+            State = PlaybookActionState.Suggested,
+            Source = PlaybookActionSource.Analysis,
+            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            Confidence = 0.9d
+        });
+        AssertEx.Null(added.EnabledAtUtc, "A Suggested action carries no enabled clock.");
+
+        // Editing a Suggested action (it stays Suggested) is not a transition into Enabled, so the clock stays null.
+        clock.Advance(60);
+        var edited = AssertEx.NotNull(
+            await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                State = PlaybookActionState.Suggested,
+                Source = PlaybookActionSource.Analysis,
+                Behavior = "Edited suggestion.",
+                SourceFeedbackIds = new[] { Guid.NewGuid() },
+                Confidence = 0.95d
+            }),
+            "Update should find the action.");
+
+        AssertEx.Null(edited.EnabledAtUtc, "Editing a still-Suggested action must not stamp EnabledAtUtc.");
+    }
+
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);

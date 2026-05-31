@@ -926,7 +926,21 @@
 					"conflict": {
 						"EvalRequired": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
 						"EvalRegressed": "Genehmigung blockiert: Die Eval hat einen zuvor guten Fall verschlechtert.",
-						"EvalStale": "Genehmigung blockiert: Der Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus."
+						"EvalStale": "Genehmigung blockiert: Der Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus.",
+						"CapReached": "Genehmigung blockiert: Dieser Agent hat sein Limit aktiver Aktionen erreicht. Archiviere oder deaktiviere zuerst eine aktive Aktion."
+					}
+				},
+				"monitor": {
+					"enabledCount": "{{count}} Aktionen aktiv",
+					"relevanceBanner": "Einfügung ist relevanzgesteuert: Top-{{topK}} von {{count}} Aktionen pro Zug.",
+					"none": "—",
+					"downRateLabel": "Abwertungsrate",
+					"flag": "Prüfung nötig",
+					"status": {
+						"Improved": "Verbessert",
+						"Flat": "Unverändert",
+						"Regressed": "Verschlechtert",
+						"InsufficientData": "Unzureichende Daten"
 					}
 				}
 			},

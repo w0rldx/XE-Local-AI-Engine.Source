@@ -305,6 +305,24 @@ describe("playbook actions API", () => {
 		});
 	});
 
+	it("parses the REAL host CapReached 409 body (PascalCase) through the boundary into a typed PromoteConflictError", async () => {
+		// Regression guard for the host/FE casing seam: the host emits the cap conflict as PascalCase `CapReached`
+		// (matching every other promotion status + the Zod enum). Feed the EXACT host body shape and exercise the real
+		// parse path (promoteSuggested → toPromoteError → parsePromoteConflictBody), NOT a direct PromoteConflictError
+		// construction, so a regression to camelCase `capReached` (which fails safeParse → null → generic error) is caught.
+		const capBody = {
+			status: "CapReached",
+			reason: "Archive an enabled action before promoting (cap reached).",
+		} as unknown;
+		axiosInstanceMock.post.mockRejectedValue(new ApiError(409, capBody as never));
+
+		await expect(promoteSuggested("ag/1", "s/1")).rejects.toBeInstanceOf(PromoteConflictError);
+		await expect(promoteSuggested("ag/1", "s/1")).rejects.toMatchObject({
+			status: "CapReached",
+			message: "Archive an enabled action before promoting (cap reached).",
+		});
+	});
+
 	it("passes a non-409 promote error through unchanged (not a PromoteConflictError)", async () => {
 		const original = new ApiError(404, { type: "about:blank", title: "Not Found", status: 404, detail: "gone" });
 		axiosInstanceMock.post.mockRejectedValue(original);

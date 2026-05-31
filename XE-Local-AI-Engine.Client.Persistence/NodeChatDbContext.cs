@@ -360,6 +360,10 @@ public sealed class NodeChatDbContext : DbContext
         builder.Property(entity => entity.UpdatedAtUtc)
                .HasColumnName("updated_at_utc");
 
+        // P5 cohort-monitoring clock — additive nullable column. Plaintext (a timestamp), not encrypted.
+        builder.Property(entity => entity.EnabledAtUtc)
+               .HasColumnName("enabled_at_utc");
+
         builder.HasIndex(entity => entity.AgentDefinitionId);
 
         // A playbook action is meaningless without its owning agent, so the FK cascades: deleting an agent removes its

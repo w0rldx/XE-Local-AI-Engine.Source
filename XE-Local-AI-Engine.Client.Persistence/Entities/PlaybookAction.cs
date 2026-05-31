@@ -53,4 +53,11 @@ internal sealed record class PlaybookAction
     public long CreatedAtUtc { get; set; }
 
     public long UpdatedAtUtc { get; set; }
+
+    /// <summary>
+    ///     Unix-ms timestamp (Playbook P5) of the most recent transition into <c>Enabled</c>; the cohort-monitoring clock
+    ///     that splits feedback into before/after windows. Null until the action is first enabled; preserved (never
+    ///     cleared) on disable so the last-enabled instant survives. Plaintext (a timestamp, structural — not sensitive).
+    /// </summary>
+    public long? EnabledAtUtc { get; set; }
 }

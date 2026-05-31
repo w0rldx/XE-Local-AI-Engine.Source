@@ -116,6 +116,11 @@ public static class LocalApiRoutes
         // Playbook P2: read-only per-agent feedback insights (aggregate over message_feedback). The literal
         // "feedback-insights" segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
         public const string FeedbackInsights = "agents/{agentDefinitionId}/feedback-insights";
+
+        // Playbook P5: read-only cohort monitoring for an agent's Enabled playbook actions. The literal "monitor"
+        // segment follows the literal "playbook" segment, so it never collides with PlaybookActionById's {actionId}
+        // param (same literal-vs-param rule as PlaybookAnalyze).
+        public const string PlaybookMonitor = "agents/{agentDefinitionId}/playbook/monitor";
     }
 
     public static class Mcp

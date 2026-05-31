@@ -19,7 +19,7 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { hooksMock, confirmMock } = vi.hoisted(() => ({
+const { hooksMock, monitorHookMock, confirmMock } = vi.hoisted(() => ({
 	hooksMock: {
 		usePlaybookActions: vi.fn(),
 		useCreatePlaybookAction: vi.fn(),
@@ -31,10 +31,14 @@ const { hooksMock, confirmMock } = vi.hoisted(() => ({
 		useRejectSuggestedAction: vi.fn(),
 		useRunEval: vi.fn(),
 	},
+	monitorHookMock: {
+		usePlaybookMonitor: vi.fn(),
+	},
 	confirmMock: vi.fn(),
 }));
 
 vi.mock("@/features/agents/queries/usePlaybookActions", () => hooksMock);
+vi.mock("@/features/agents/queries/usePlaybookMonitor", () => monitorHookMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
@@ -42,6 +46,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 import { PromoteConflictError } from "@/features/agents/api/PlaybookActionsApi";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
+import type { PlaybookMonitor, PlaybookMonitorItem } from "@/features/agents/models/PlaybookMonitorModels";
 
 function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 	return {
@@ -99,6 +104,35 @@ function makeMutation() {
 	return { mutate: vi.fn(), isPending: false, error: null, variables: undefined };
 }
 
+// Playbook P5 — a monitoring signal for one Enabled action (joined by actionId).
+function makeMonitorItem(overrides: Partial<PlaybookMonitorItem> = {}): PlaybookMonitorItem {
+	return {
+		actionId: "action-1",
+		enabledAtUtc: 1748600000000,
+		beforeDownRate: 0.12,
+		afterDownRate: 0.05,
+		afterSampleSize: 8,
+		status: "Improved",
+		flagged: false,
+		facetToolName: null,
+		...overrides,
+	};
+}
+
+// The monitor query result the panel reads: items[] + retrieval config. Defaults to an empty cohort + the
+// pinned threshold/topK so the relevance banner is OFF unless a test opts into more Enabled actions.
+function makeMonitor(overrides: Partial<PlaybookMonitor> = {}): PlaybookMonitor {
+	return {
+		items: [],
+		retrieval: { threshold: 8, topK: 8 },
+		...overrides,
+	};
+}
+
+function makeMonitorQuery(monitor: PlaybookMonitor = makeMonitor()) {
+	return { data: monitor, isLoading: false, error: null };
+}
+
 // Analyze mutation also exposes isSuccess/data (the empty-result notice reads them).
 function makeAnalyzeMutation(overrides: Record<string, unknown> = {}) {
 	return { mutate: vi.fn(), isPending: false, isSuccess: false, error: null, data: undefined, ...overrides };
@@ -140,6 +174,7 @@ describe("PlaybookPanel", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeAction()], isLoading: false, error: null });
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(makeMonitorQuery());
 		hooksMock.useCreatePlaybookAction.mockReturnValue(makeMutation());
 		hooksMock.useUpdatePlaybookAction.mockReturnValue(makeMutation());
 		hooksMock.useUpdateSuggestedAction.mockReturnValue(makeMutation());
@@ -501,5 +536,123 @@ describe("PlaybookPanel", () => {
 
 		expect(updateMutation.mutate).toHaveBeenCalledTimes(1);
 		expect(updateSuggestedMutation.mutate).not.toHaveBeenCalled();
+	});
+
+	it("disables the monitor query when the capability gate is off", () => {
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={false} />);
+
+		expect(monitorHookMock.usePlaybookMonitor).toHaveBeenCalledWith(null);
+	});
+
+	it("renders the cap indicator with the live Enabled count", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeAction({ id: "action-1", state: "Enabled" }), makeAction({ id: "action-2", state: "Disabled" })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// Only the Enabled action counts toward the cap indicator.
+		expect(screen.getByTestId("playbook-cap-indicator").textContent).toContain("1");
+	});
+
+	it("renders the monitoring signal (status badge + before→after down-rate) for an Enabled action", () => {
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(makeMonitor({ items: [makeMonitorItem({ actionId: "action-1" })] })),
+		);
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-monitor-status-action-1").textContent).toContain("Improved");
+		// 0.12 → 12%, 0.05 → 5%.
+		const rate = screen.getByTestId("playbook-monitor-rate-action-1");
+		expect(rate.textContent).toContain("12%");
+		expect(rate.textContent).toContain("5%");
+		// Not flagged → no flag marker.
+		expect(screen.queryByTestId("playbook-monitor-flag-action-1")).toBeNull();
+	});
+
+	it("renders the flag marker when the monitored action is flagged for review", () => {
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(
+				makeMonitor({ items: [makeMonitorItem({ actionId: "action-1", status: "Regressed", flagged: true })] }),
+			),
+		);
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-monitor-flag-action-1")).toBeTruthy();
+		expect(screen.getByTestId("playbook-monitor-status-action-1").textContent).toContain("Regressed");
+	});
+
+	it("renders a neutral placeholder when an Enabled action has no monitor signal yet", () => {
+		// No monitor items → the Enabled action has no enable clock yet → neutral placeholder, no badge.
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(makeMonitorQuery(makeMonitor({ items: [] })));
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-monitor-none-action-1")).toBeTruthy();
+		expect(screen.queryByTestId("playbook-monitor-status-action-1")).toBeNull();
+	});
+
+	it("does NOT render the monitoring signal for a Disabled action", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeAction({ id: "action-1", state: "Disabled" })],
+			isLoading: false,
+			error: null,
+		});
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(makeMonitor({ items: [makeMonitorItem({ actionId: "action-1" })] })),
+		);
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.queryByTestId("playbook-monitor-action-1")).toBeNull();
+		expect(screen.queryByTestId("playbook-monitor-none-action-1")).toBeNull();
+	});
+
+	it("shows the relevance-gated banner only when the Enabled count exceeds the retrieval threshold", () => {
+		const enabledActions = Array.from({ length: 3 }, (_, i) =>
+			makeAction({ id: `action-${i}`, state: "Enabled", priority: i }),
+		);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: enabledActions, isLoading: false, error: null });
+
+		// threshold 2, 3 Enabled → banner shows with topK + count.
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 2, topK: 2 } })),
+		);
+
+		const { rerender } = renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const banner = screen.getByTestId("playbook-relevance-banner");
+		expect(banner.textContent).toContain("2");
+		expect(banner.textContent).toContain("3");
+
+		// threshold 3, 3 Enabled (not strictly greater) → banner hidden.
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 3, topK: 2 } })),
+		);
+		rerender(
+			<MantineProvider>
+				<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />
+			</MantineProvider>,
+		);
+		expect(screen.queryByTestId("playbook-relevance-banner")).toBeNull();
+	});
+
+	it("surfaces the CapReached 409 reason in the review-error alert", () => {
+		hooksMock.usePromoteSuggestedAction.mockReturnValue({
+			mutate: vi.fn(),
+			isPending: false,
+			error: new PromoteConflictError("CapReached", "Archive an enabled action before promoting (cap reached)."),
+			variables: undefined,
+		});
+		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// The typed CapReached conflict maps to a localized cap reason in the review-error alert.
+		expect(screen.getByTestId("playbook-review-error").textContent).toContain("cap");
 	});
 });

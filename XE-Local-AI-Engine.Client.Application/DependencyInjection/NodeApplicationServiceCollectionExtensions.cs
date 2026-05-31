@@ -52,6 +52,8 @@ using XE_Local_AI_Engine.Client.Services.Manager;
 using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.Monitoring;
+using XE_Local_AI_Engine.Client.Services.Monitoring.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
@@ -263,6 +265,61 @@ public static class NodeApplicationServiceCollectionExtensions
         // candidate vs baseline prompt, scores each case, and persists the plaintext EvalResult the promote gate reads.
         // Scoped to match the scoped stores/services it composes. The .AI.Agent runner is registered in the agent runtime.
         builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
+        // Playbook P5 relevance-retrieval ranker: deterministic, model-free, stateless — a Singleton like the analysis
+        // agent. The resolver/orchestration paths consult it only when an agent's Enabled set exceeds the retrieval
+        // threshold and the send carries a non-blank query; below that the full static prepend is used (byte-identical).
+        builder.Services.AddSingleton<IPlaybookRetrievalRanker, LexicalPlaybookRetrievalRanker>();
+        builder.Services.AddOptions<PlaybookRetrievalOptions>()
+               .Bind(builder.Configuration.GetSection(PlaybookRetrievalOptions.Section))
+               .PostConfigure(static retrievalOptions =>
+               {
+                   // Guard against config that would disable the gate nonsensically: a non-positive top-k or threshold
+                   // is clamped to the defaults so retrieval, once engaged, always injects at least one action.
+                   if (retrievalOptions.RetrievalThreshold < 0)
+                   {
+                       retrievalOptions.RetrievalThreshold = 0;
+                   }
+
+                   if (retrievalOptions.TopK < 1)
+                   {
+                       retrievalOptions.TopK = 1;
+                   }
+               });
+        // Playbook P5 bounded-store options: the hard cap on Enabled actions per agent. PostConfigure floors the cap at
+        // 1 so a misconfigured non-positive value cannot wedge every promote/manual-enable.
+        builder.Services.AddOptions<PlaybookActionOptions>()
+               .Bind(builder.Configuration.GetSection(PlaybookActionOptions.Section))
+               .PostConfigure(static actionOptions =>
+               {
+                   if (actionOptions.MaxEnabledActions < 1)
+                   {
+                       actionOptions.MaxEnabledActions = 1;
+                   }
+               });
+        // Playbook P5 cohort-monitor read store: windowed feedback counts over the node-local message_feedback rows
+        // (joined to conversations.agent_definition_id + tool_events for the facet) — pure analytics, computed on read,
+        // writes nothing. Scoped to match the scoped, DbContext-backed store, like FeedbackInsightsStore.
+        builder.Services.AddScoped<IPlaybookMonitorStore, PlaybookMonitorStore>();
+        // Playbook P5 cohort-monitor application service: classifies each Enabled action's before/after down-rate against
+        // the epsilon + minimum-sample floor and flags Flat/Regressed for human review (never auto-disable). Invoked off
+        // the hot path by the monitor endpoint only. Scoped to match the scoped store it composes.
+        builder.Services.AddScoped<IPlaybookMonitorService, PlaybookMonitorService>();
+        builder.Services.AddOptions<PlaybookMonitorOptions>()
+               .Bind(builder.Configuration.GetSection(PlaybookMonitorOptions.Section))
+               .PostConfigure(static monitorOptions =>
+               {
+                   // Clamp to safe bounds: a negative epsilon would invert the dead-band, a non-positive sample floor
+                   // would let a single after-enable vote draw a verdict (and a flag).
+                   if (monitorOptions.ImprovementEpsilon < 0d)
+                   {
+                       monitorOptions.ImprovementEpsilon = 0d;
+                   }
+
+                   if (monitorOptions.MinSampleSize < 1)
+                   {
+                       monitorOptions.MinSampleSize = 1;
+                   }
+               });
         // Marker F sensitive-file exclusion policy for the workspace copy (stateless, name-based).
         builder.Services.AddSingleton<ISensitiveFileExclusionService, SensitiveFileExclusionService>();
         builder.Services.AddSingleton<DeadLetterFlushService>();
