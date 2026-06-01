@@ -1,9 +1,10 @@
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Paper, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCheck, IconPlus, IconSparkles, IconTrash, IconX } from "@tabler/icons-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { toast } from "@/core/ui/notifications/Toast";
 import {
 	type CreateGoldenConversationRequestDto,
 	findGoldenFieldOverLimit,
@@ -16,9 +17,11 @@ import {
 	type GoldenTurn,
 } from "@/features/agents/models/GoldenConversationModels";
 import {
+	useApproveGolden,
 	useCreateGoldenConversation,
 	useDeleteGoldenConversation,
 	useGoldenConversations,
+	useHarvestGolden,
 } from "@/features/agents/queries/useGoldenConversations";
 
 interface GoldenConversationPanelProps {
@@ -75,12 +78,39 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 	const goldenQuery = useGoldenConversations(enabled ? agentDefinitionId : null);
 	const createMutation = useCreateGoldenConversation(agentDefinitionId);
 	const deleteMutation = useDeleteGoldenConversation(agentDefinitionId);
+	const harvestMutation = useHarvestGolden(agentDefinitionId);
+	const approveMutation = useApproveGolden(agentDefinitionId);
 
-	const isMutating = createMutation.isPending || deleteMutation.isPending;
+	const isMutating =
+		createMutation.isPending || deleteMutation.isPending || harvestMutation.isPending || approveMutation.isPending;
 
 	const cases = goldenQuery.data ?? [];
+	// Harvested candidates awaiting operator review (inert until approved); everything else is the active list.
+	const pendingCases = cases.filter((goldenCase) => goldenCase.source === "harvested" && !goldenCase.enabled);
+	const activeCases = cases.filter((goldenCase) => !(goldenCase.source === "harvested" && !goldenCase.enabled));
 
 	const closeForm = useCallback(() => setFormOpen(false), []);
+
+	const handleHarvest = useCallback(() => {
+		harvestMutation.mutate(undefined, {
+			onSuccess: (result) => {
+				toast.success(
+					t(
+						"pages.agents.golden.harvest.success",
+						"{{created}} proposed, {{duplicate}} already harvested, {{skipped}} skipped.",
+						{ created: result.createdCount, duplicate: result.duplicateCount, skipped: result.skippedCount },
+					),
+				);
+			},
+		});
+	}, [harvestMutation, t]);
+
+	const handleApprove = useCallback(
+		(goldenCase: GoldenConversation) => {
+			approveMutation.mutate(goldenCase.id);
+		},
+		[approveMutation],
+	);
 
 	const handleCreate = useCallback(
 		(request: CreateGoldenConversationRequestDto) => {
@@ -130,16 +160,29 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 						</Text>
 					</Stack>
 					{!formOpen ? (
-						<Button
-							size="xs"
-							variant="light"
-							leftSection={<IconPlus size={14} />}
-							onClick={() => setFormOpen(true)}
-							disabled={isMutating}
-							data-testid="golden-add-button"
-						>
-							{t("pages.agents.golden.addButton", "Add golden case")}
-						</Button>
+						<Group gap="xs">
+							<Button
+								size="xs"
+								variant="light"
+								leftSection={<IconSparkles size={14} />}
+								onClick={handleHarvest}
+								loading={harvestMutation.isPending}
+								disabled={isMutating}
+								data-testid="golden-harvest-button"
+							>
+								{t("pages.agents.golden.harvest.button", "Harvest from 👍")}
+							</Button>
+							<Button
+								size="xs"
+								variant="light"
+								leftSection={<IconPlus size={14} />}
+								onClick={() => setFormOpen(true)}
+								disabled={isMutating}
+								data-testid="golden-add-button"
+							>
+								{t("pages.agents.golden.addButton", "Add golden case")}
+							</Button>
+						</Group>
 					) : null}
 				</Group>
 
@@ -155,6 +198,18 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 				{deleteMutation.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-delete-error">
 						{errorMessage(deleteMutation.error, t("pages.agents.golden.errors.delete", "Could not delete the golden case."))}
+					</Alert>
+				) : null}
+
+				{harvestMutation.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-harvest-error">
+						{errorMessage(harvestMutation.error, t("pages.agents.golden.errors.harvest", "Could not harvest golden cases."))}
+					</Alert>
+				) : null}
+
+				{approveMutation.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-approve-error">
+						{errorMessage(approveMutation.error, t("pages.agents.golden.errors.approve", "Could not approve the golden case."))}
 					</Alert>
 				) : null}
 
@@ -179,7 +234,30 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 					</Text>
 				) : null}
 
-				{cases.map((goldenCase) => (
+				{pendingCases.length > 0 ? (
+					<Stack gap="xs" data-testid="golden-pending-section">
+						<Text size="sm" fw={600}>
+							{t("pages.agents.golden.pending.heading", "Harvested (pending review)")}
+						</Text>
+						<Text size="xs" c="dimmed">
+							{t(
+								"pages.agents.golden.pending.hint",
+								"Review each harvested candidate, then approve it into the active golden set or reject it.",
+							)}
+						</Text>
+						{pendingCases.map((goldenCase) => (
+							<GoldenPendingRow
+								key={goldenCase.id}
+								goldenCase={goldenCase}
+								disabled={isMutating}
+								onApprove={() => handleApprove(goldenCase)}
+								onReject={() => handleDelete(goldenCase)}
+							/>
+						))}
+					</Stack>
+				) : null}
+
+				{activeCases.map((goldenCase) => (
 					<GoldenConversationRow
 						key={goldenCase.id}
 						goldenCase={goldenCase}
@@ -190,6 +268,15 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 			</Stack>
 		</Paper>
 	);
+}
+
+// First-turn preview of a harvested candidate's input conversation, used in the pending-review sub-section so the
+// operator can judge the case without expanding it: the count plus a truncated first turn.
+const PENDING_TURN_PREVIEW_MAX = 120;
+const PENDING_RUBRIC_PREVIEW_MAX = 200;
+
+function truncate(value: string, max: number): string {
+	return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
 interface GoldenConversationRowProps {
@@ -213,6 +300,11 @@ function GoldenConversationRow({ goldenCase, disabled, onDelete }: GoldenConvers
 						{!goldenCase.enabled ? (
 							<Badge size="xs" variant="outline" color="gray" data-testid={`golden-case-disabled-${goldenCase.id}`}>
 								{t("pages.agents.golden.disabledBadge", "disabled")}
+							</Badge>
+						) : null}
+						{goldenCase.source === "harvested" ? (
+							<Badge size="xs" variant="light" color="teal" data-testid={`golden-case-harvested-${goldenCase.id}`}>
+								{t("pages.agents.golden.harvestedBadge", "harvested")}
 							</Badge>
 						) : null}
 					</Group>
@@ -244,6 +336,73 @@ function GoldenConversationRow({ goldenCase, disabled, onDelete }: GoldenConvers
 					<IconTrash size={14} />
 				</ActionIcon>
 			</Group>
+		</Paper>
+	);
+}
+
+interface GoldenPendingRowProps {
+	goldenCase: GoldenConversation;
+	disabled: boolean;
+	onApprove: () => void;
+	onReject: () => void;
+}
+
+// One harvested candidate in the pending-review sub-section: title, a turns preview (count + first turn), the seeded
+// rubric (truncated), and Approve/Reject. Approve flips it into the active golden set; Reject deletes it (same
+// ownership-guarded delete as a manual case, with the existing confirm pattern).
+function GoldenPendingRow({ goldenCase, disabled, onApprove, onReject }: GoldenPendingRowProps) {
+	const { t } = useTranslation();
+
+	const firstTurn = goldenCase.inputTurns[0];
+	const rubricPreview = goldenCase.rubric ? truncate(goldenCase.rubric, PENDING_RUBRIC_PREVIEW_MAX) : null;
+
+	return (
+		<Paper withBorder={true} p="xs" data-testid={`golden-pending-${goldenCase.id}`}>
+			<Stack gap={6}>
+				<Text size="sm" fw={600}>
+					{goldenCase.title}
+				</Text>
+				<Text size="xs" c="dimmed" data-testid={`golden-pending-turns-${goldenCase.id}`}>
+					{firstTurn
+						? t("pages.agents.golden.pending.turnsPreview", "{{count}} turns · {{role}}: {{text}}", {
+								count: goldenCase.inputTurns.length,
+								role: firstTurn.role,
+								text: truncate(firstTurn.text, PENDING_TURN_PREVIEW_MAX),
+							})
+						: t("pages.agents.golden.pending.turnCount", "{{count}} input turns", {
+								count: goldenCase.inputTurns.length,
+							})}
+				</Text>
+				{rubricPreview ? (
+					<Text size="xs" c="dimmed" data-testid={`golden-pending-rubric-${goldenCase.id}`}>
+						{t("pages.agents.golden.pending.rubric", "Rubric: {{rubric}}", { rubric: rubricPreview })}
+					</Text>
+				) : null}
+				<Group justify="flex-end" gap="xs">
+					<Button
+						size="xs"
+						variant="subtle"
+						color="red"
+						leftSection={<IconTrash size={14} />}
+						onClick={onReject}
+						disabled={disabled}
+						data-testid={`golden-pending-reject-${goldenCase.id}`}
+					>
+						{t("pages.agents.golden.pending.reject", "Reject")}
+					</Button>
+					<Button
+						size="xs"
+						variant="light"
+						color="teal"
+						leftSection={<IconCheck size={14} />}
+						onClick={onApprove}
+						disabled={disabled}
+						data-testid={`golden-pending-approve-${goldenCase.id}`}
+					>
+						{t("pages.agents.golden.pending.approve", "Approve")}
+					</Button>
+				</Group>
+			</Stack>
 		</Paper>
 	);
 }

@@ -20,8 +20,14 @@ export interface GoldenAssertion {
 	readonly forbiddenPhrases: readonly string[];
 }
 
+// Provenance of a golden case. `manual` = operator-authored via the add form (Playbook P4); `harvested` = built
+// by the on-demand harvester from a thumbs-up assistant turn (harvest follow-up #2). A `source` discriminator is a
+// lowercase literal, matching the wire convention; harvested cases also carry the source message/conversation ids.
+export type GoldenConversationSource = "manual" | "harvested";
+
 // Domain view-model for a golden case. Timestamps are epoch milliseconds (long on the wire). `assertion`/`rubric`
-// are nullable (≥1 of the two is present); `enabled` lets an operator park a case without deleting it.
+// are nullable (≥1 of the two is present); `enabled` lets an operator park a case without deleting it. `source` plus
+// the two provenance ids record where a case came from — harvested-but-disabled cases are the pending-review set.
 export interface GoldenConversation {
 	readonly id: string;
 	readonly agentDefinitionId: string;
@@ -30,6 +36,9 @@ export interface GoldenConversation {
 	readonly assertion: GoldenAssertion | null;
 	readonly rubric: string | null;
 	readonly enabled: boolean;
+	readonly source: GoldenConversationSource;
+	readonly sourceMessageId: string | null;
+	readonly sourceConversationId: string | null;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
 }
@@ -63,7 +72,8 @@ const goldenAssertionSchema = z.object({
 });
 
 // Boundary schema for a single golden case on the wire. `assertion`/`rubric` are nullable; an absent/garbage
-// assertion degrades to null rather than failing the whole parse.
+// assertion degrades to null rather than failing the whole parse. `source` is a lowercase discriminator that
+// degrades to "manual" (`.catch`) when missing/garbage so an older payload without provenance still parses.
 const goldenConversationSchema = z.object({
 	id: z.string(),
 	agentDefinitionId: z.string(),
@@ -72,6 +82,9 @@ const goldenConversationSchema = z.object({
 	assertion: goldenAssertionSchema.nullish(),
 	rubric: z.string().nullish(),
 	enabled: z.boolean(),
+	source: z.enum(["manual", "harvested"]).catch("manual"),
+	sourceMessageId: z.string().nullish(),
+	sourceConversationId: z.string().nullish(),
 	createdAtUtc: z.number(),
 	updatedAtUtc: z.number(),
 });
@@ -101,6 +114,9 @@ export function toGoldenConversation(dto: GoldenConversationDto): GoldenConversa
 			: null,
 		rubric: dto.rubric ?? null,
 		enabled: dto.enabled,
+		source: dto.source,
+		sourceMessageId: dto.sourceMessageId ?? null,
+		sourceConversationId: dto.sourceConversationId ?? null,
 		createdAtUtc: dto.createdAtUtc,
 		updatedAtUtc: dto.updatedAtUtc,
 	};
@@ -116,13 +132,48 @@ export function toGoldenConversations(payload: unknown): GoldenConversation[] {
 	return parsed.data.items.map(toGoldenConversation);
 }
 
-// Validate + deserialize a single created golden case (the POST response is the bare case, not an envelope).
+// Validate + deserialize a single created golden case (the POST response is the bare case, not an envelope). The
+// approve endpoint returns the same bare shape, so it reuses this parser.
 export function toCreatedGoldenConversation(payload: unknown): GoldenConversation {
 	const parsed = goldenConversationSchema.safeParse(payload);
 	if (!parsed.success) {
 		throw new Error(`Invalid golden conversation payload: ${parsed.error.message}`);
 	}
 	return toGoldenConversation(parsed.data);
+}
+
+// Counts returned by POST /agents/{id}/golden-conversations/harvest: how many thumbs-up assistant turns were
+// scanned, how many new harvested candidates were staged (inert), how many were skipped as already-harvested
+// duplicates, and how many were skipped for another reason (e.g. no prior user turn). Surfaced in a success toast.
+export interface GoldenHarvestResult {
+	readonly thumbsUpScanned: number;
+	readonly createdCount: number;
+	readonly duplicateCount: number;
+	readonly skippedCount: number;
+}
+
+// Boundary schema for the harvest counts response — four non-negative integers on the wire.
+const goldenHarvestResultSchema = z.object({
+	thumbsUpScanned: z.number(),
+	createdCount: z.number(),
+	duplicateCount: z.number(),
+	skippedCount: z.number(),
+});
+
+// Validate + deserialize the harvest result at the boundary with safeParse, mirroring toCreatedGoldenConversation:
+// a malformed payload throws a descriptive error (caught by the TanStack Query error path) rather than surfacing
+// wrong counts in the toast.
+export function toGoldenHarvestResult(payload: unknown): GoldenHarvestResult {
+	const parsed = goldenHarvestResultSchema.safeParse(payload);
+	if (!parsed.success) {
+		throw new Error(`Invalid golden harvest payload: ${parsed.error.message}`);
+	}
+	return {
+		thumbsUpScanned: parsed.data.thumbsUpScanned,
+		createdCount: parsed.data.createdCount,
+		duplicateCount: parsed.data.duplicateCount,
+		skippedCount: parsed.data.skippedCount,
+	};
 }
 
 // Create-request boundary schema enforcing the same length caps as the backend before the POST. The turns and the

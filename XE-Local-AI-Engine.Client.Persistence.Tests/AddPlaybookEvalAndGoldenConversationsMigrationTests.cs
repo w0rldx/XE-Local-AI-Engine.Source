@@ -48,10 +48,12 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
             "Migration should create the golden_conversations table.");
 
         var goldenColumns = await GetGoldenConversationColumnInfoAsync(connection).ConfigureAwait(false);
+        // MigrateAsync() runs to head, which now includes the later AddGoldenConversationHarvestProvenance migration, so
+        // the three provenance columns are present alongside the columns this migration introduced.
         AssertEx.True(new HashSet<string>(goldenColumns.Keys, StringComparer.Ordinal).SetEquals(new[]
         {
             "id", "agent_definition_id", "title", "input_turns", "assertion", "rubric", "enabled",
-            "created_at_utc", "updated_at_utc"
+            "created_at_utc", "updated_at_utc", "source", "source_message_id", "source_conversation_id"
         }), "golden_conversations should expose the mapped columns.");
         AssertEx.True(goldenColumns["input_turns"], "input_turns should be non-nullable.");
         AssertEx.False(goldenColumns["assertion"], "assertion should be nullable.");

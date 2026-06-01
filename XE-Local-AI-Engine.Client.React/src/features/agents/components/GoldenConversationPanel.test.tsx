@@ -19,19 +19,23 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { hooksMock, confirmMock } = vi.hoisted(() => ({
+const { hooksMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useGoldenConversations: vi.fn(),
 		useCreateGoldenConversation: vi.fn(),
 		useDeleteGoldenConversation: vi.fn(),
+		useHarvestGolden: vi.fn(),
+		useApproveGolden: vi.fn(),
 	},
 	confirmMock: vi.fn(),
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock("@/features/agents/queries/useGoldenConversations", () => hooksMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import type { GoldenConversation } from "@/features/agents/models/GoldenConversationModels";
@@ -45,6 +49,9 @@ function makeGoldenCase(overrides: Partial<GoldenConversation> = {}): GoldenConv
 		assertion: { requiredPhrases: ["summary"], forbiddenPhrases: [] },
 		rubric: null,
 		enabled: true,
+		source: "manual",
+		sourceMessageId: null,
+		sourceConversationId: null,
 		createdAtUtc: 1000,
 		updatedAtUtc: 2000,
 		...overrides,
@@ -93,6 +100,8 @@ describe("GoldenConversationPanel", () => {
 		hooksMock.useGoldenConversations.mockReturnValue({ data: [makeGoldenCase()], isLoading: false, error: null });
 		hooksMock.useCreateGoldenConversation.mockReturnValue(makeMutation());
 		hooksMock.useDeleteGoldenConversation.mockReturnValue(makeMutation());
+		hooksMock.useHarvestGolden.mockReturnValue(makeMutation());
+		hooksMock.useApproveGolden.mockReturnValue(makeMutation());
 	});
 
 	afterEach(() => {
@@ -187,5 +196,90 @@ describe("GoldenConversationPanel", () => {
 		renderPanel(<GoldenConversationPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
 
 		expect(screen.getByTestId("golden-list-error")).toBeTruthy();
+	});
+
+	it("renders the pending-review sub-section for a harvested+disabled case with Approve and Reject buttons", () => {
+		const pendingCase = makeGoldenCase({
+			id: "golden-pending-1",
+			source: "harvested",
+			enabled: false,
+			sourceMessageId: "msg-1",
+			sourceConversationId: "conv-1",
+		});
+		hooksMock.useGoldenConversations.mockReturnValue({ data: [pendingCase], isLoading: false, error: null });
+
+		renderPanel(<GoldenConversationPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("golden-pending-section")).toBeTruthy();
+		expect(screen.getByTestId("golden-pending-golden-pending-1")).toBeTruthy();
+		expect(screen.getByTestId("golden-pending-approve-golden-pending-1")).toBeTruthy();
+		expect(screen.getByTestId("golden-pending-reject-golden-pending-1")).toBeTruthy();
+	});
+
+	it("clicking Approve on a pending case invokes the approve mutation with the case id", () => {
+		const approveMutation = makeMutation();
+		hooksMock.useApproveGolden.mockReturnValue(approveMutation);
+
+		const pendingCase = makeGoldenCase({
+			id: "golden-pending-2",
+			source: "harvested",
+			enabled: false,
+		});
+		hooksMock.useGoldenConversations.mockReturnValue({ data: [pendingCase], isLoading: false, error: null });
+
+		renderPanel(<GoldenConversationPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("golden-pending-approve-golden-pending-2"));
+
+		expect(approveMutation.mutate).toHaveBeenCalledTimes(1);
+		expect(approveMutation.mutate).toHaveBeenCalledWith("golden-pending-2");
+	});
+
+	it("clicking Reject on a pending case invokes the delete flow with confirmation", async () => {
+		confirmMock.mockResolvedValue(true);
+		const deleteMutation = makeMutation();
+		hooksMock.useDeleteGoldenConversation.mockReturnValue(deleteMutation);
+
+		const pendingCase = makeGoldenCase({
+			id: "golden-pending-3",
+			source: "harvested",
+			enabled: false,
+		});
+		hooksMock.useGoldenConversations.mockReturnValue({ data: [pendingCase], isLoading: false, error: null });
+
+		renderPanel(<GoldenConversationPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("golden-pending-reject-golden-pending-3"));
+		await Promise.resolve();
+
+		expect(confirmMock).toHaveBeenCalled();
+		expect(deleteMutation.mutate).toHaveBeenCalledWith("golden-pending-3");
+	});
+
+	it("shows the 'harvested' badge in the active list for a harvested+enabled case", () => {
+		const harvestedEnabled = makeGoldenCase({
+			id: "golden-harvested-active",
+			source: "harvested",
+			enabled: true,
+		});
+		hooksMock.useGoldenConversations.mockReturnValue({ data: [harvestedEnabled], isLoading: false, error: null });
+
+		renderPanel(<GoldenConversationPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// The case renders in the active list (not the pending section).
+		expect(screen.queryByTestId("golden-pending-section")).toBeNull();
+		expect(screen.getByTestId("golden-case-golden-harvested-active")).toBeTruthy();
+		expect(screen.getByTestId("golden-case-harvested-golden-harvested-active")).toBeTruthy();
+	});
+
+	it("clicking 'Harvest from 👍' invokes the harvest mutation", () => {
+		const harvestMutation = makeMutation();
+		hooksMock.useHarvestGolden.mockReturnValue(harvestMutation);
+
+		renderPanel(<GoldenConversationPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		fireEvent.click(screen.getByTestId("golden-harvest-button"));
+
+		expect(harvestMutation.mutate).toHaveBeenCalledTimes(1);
 	});
 });

@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -190,6 +192,167 @@ public sealed class GoldenConversationStoreTests : IDisposable
             "The SQLite file should not contain the plaintext assertion.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(rubric)),
             "The SQLite file should not contain the plaintext rubric.");
+    }
+
+    [Test]
+    public async Task AddAsync_WithHarvestedSourceAndProvenance_RoundTripsSourceIdsAndEncryptsContent()
+    {
+        var databasePath = GetDatabasePath("harvested-roundtrip.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var sourceMessageId = Guid.NewGuid();
+        var sourceConversationId = Guid.NewGuid();
+        var rubric = "SECRET-RUBRIC-" + Guid.NewGuid().ToString("N");
+
+        Guid goldenId;
+        Guid agentId;
+        await using (var writeContext = CreateContext(databasePath, keyHolder))
+        {
+            await writeContext.Database.EnsureDeletedAsync();
+            await writeContext.Database.EnsureCreatedAsync();
+            agentId = await SeedAgentAsync(writeContext);
+            var store = new GoldenConversationStore(writeContext, TimeProvider.System);
+            var added = await store.AddAsync(new GoldenConversationInput(
+                agentId,
+                Title: "Harvested case",
+                InputTurns,
+                Assertion: null,
+                rubric,
+                Enabled: false,
+                Source: GoldenConversationSource.Harvested,
+                SourceMessageId: sourceMessageId,
+                SourceConversationId: sourceConversationId));
+
+            AssertEx.Equal(GoldenConversationSource.Harvested, added.Source);
+            AssertEx.Equal(sourceMessageId, added.SourceMessageId);
+            AssertEx.Equal(sourceConversationId, added.SourceConversationId);
+            AssertEx.False(added.Enabled, "A harvested candidate is staged inert.");
+            goldenId = added.Id;
+        }
+
+        await using (var readContext = CreateContext(databasePath, keyHolder))
+        {
+            var readStore = new GoldenConversationStore(readContext, TimeProvider.System);
+
+            var byId = AssertEx.NotNull(await readStore.GetByIdAsync(goldenId), "Harvested golden case should be found by id.");
+            AssertEx.Equal(GoldenConversationSource.Harvested, byId.Source);
+            AssertEx.Equal(sourceMessageId, byId.SourceMessageId);
+            AssertEx.Equal(sourceConversationId, byId.SourceConversationId);
+            AssertEx.Equal(InputTurns, byId.InputTurns);
+            AssertEx.Equal(rubric, byId.Rubric);
+
+            var list = await readStore.ListByAgentAsync(agentId);
+            AssertEx.Equal(1, list.Count);
+            AssertEx.Equal(GoldenConversationSource.Harvested, list[0].Source);
+        }
+
+        // The encrypted columns are still ciphertext at rest for a harvested row (no interceptor exemption): the raw
+        // input_turns/rubric BLOBs must NOT equal the UTF-8 plaintext. Read after the EF contexts are disposed so the
+        // raw connection sees the committed row (there is exactly one golden row, so no id filter is needed — which also
+        // avoids depending on the provider's Guid-to-column storage format).
+        var rawInputTurns = await ReadRawInputTurnsAsync(databasePath).ConfigureAwait(false);
+        var rawRubric = await ReadRawRubricAsync(databasePath).ConfigureAwait(false);
+        AssertEx.False(rawInputTurns.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(InputTurns)),
+            "Harvested input_turns should be encrypted at rest, not stored as plaintext.");
+        AssertEx.False(rawRubric.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(rubric)),
+            "Harvested rubric should be encrypted at rest, not stored as plaintext.");
+    }
+
+    [Test]
+    public async Task SetEnabledAsync_OnDisabledRow_FlipsEnabledAndBumpsUpdatedAt()
+    {
+        var databasePath = GetDatabasePath("set-enabled.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(1_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var store = new GoldenConversationStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput(agentId) with { Enabled = false });
+        AssertEx.False(added.Enabled, "The seeded case starts disabled.");
+
+        clock.Advance(500);
+        var updated = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true), "SetEnabled should return the updated record.");
+
+        AssertEx.True(updated.Enabled, "SetEnabled(true) should flip the row enabled.");
+        AssertEx.Equal(added.CreatedAtUtc + 500, updated.UpdatedAtUtc);
+        AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "SetEnabled should bump UpdatedAtUtc.");
+
+        AssertEx.Null(await store.SetEnabledAsync(Guid.NewGuid(), true), "SetEnabled on an unknown id should return null.");
+    }
+
+    [Test]
+    public async Task ListSourceMessageIdsByAgentAsync_ReturnsOnlyHarvestedSourceIdsForTheAgent()
+    {
+        var databasePath = GetDatabasePath("source-ids.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var agentId = await SeedAgentAsync(context);
+        var otherAgentId = await SeedAgentAsync(context);
+        var store = new GoldenConversationStore(context, TimeProvider.System);
+
+        var firstSource = Guid.NewGuid();
+        var secondSource = Guid.NewGuid();
+
+        // A Manual row (null source) must be excluded; two Harvested rows for the agent must be returned; a Harvested
+        // row for a DIFFERENT agent must be excluded.
+        _ = await store.AddAsync(CreateInput(agentId) with { Title = "manual" });
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Title = "harvested-1",
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = firstSource,
+            SourceConversationId = Guid.NewGuid()
+        });
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Title = "harvested-2",
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = secondSource,
+            SourceConversationId = Guid.NewGuid()
+        });
+        _ = await store.AddAsync(CreateInput(otherAgentId) with
+        {
+            Title = "other-agent-harvested",
+            Source = GoldenConversationSource.Harvested,
+            SourceMessageId = Guid.NewGuid(),
+            SourceConversationId = Guid.NewGuid()
+        });
+
+        var sourceIds = await store.ListSourceMessageIdsByAgentAsync(agentId);
+
+        AssertEx.Equal(2, sourceIds.Count);
+        AssertEx.True(sourceIds.Contains(firstSource), "The first harvested source id should be returned.");
+        AssertEx.True(sourceIds.Contains(secondSource), "The second harvested source id should be returned.");
+    }
+
+    private static async Task<byte[]> ReadRawInputTurnsAsync(string databasePath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT input_turns FROM golden_conversations LIMIT 1;";
+        return await ReadBlobScalarAsync(command).ConfigureAwait(false);
+    }
+
+    private static async Task<byte[]> ReadRawRubricAsync(string databasePath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT rubric FROM golden_conversations LIMIT 1;";
+        return await ReadBlobScalarAsync(command).ConfigureAwait(false);
+    }
+
+    private static async Task<byte[]> ReadBlobScalarAsync(SqliteCommand command)
+    {
+        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return value as byte[] ?? throw new AssertionException("Expected a non-null encrypted BLOB.");
     }
 
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)

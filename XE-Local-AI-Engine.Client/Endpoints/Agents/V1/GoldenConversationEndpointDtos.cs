@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>One conversation turn in a golden case: a role (<c>user</c>/<c>assistant</c>) and its text.</summary>
@@ -53,6 +54,26 @@ public sealed class DeleteGoldenConversationRequest
 }
 
 /// <summary>
+///     Route request to harvest golden candidates for one agent. The owning agent id travels in the route; the body is
+///     empty (the client posts <c>{}</c> — a route-only POST, FastEndpoints 415s a truly empty body).
+/// </summary>
+public sealed class HarvestGoldenConversationsRequest
+{
+    public Guid AgentDefinitionId { get; init; }
+}
+
+/// <summary>
+///     Route request to approve a harvested golden candidate into the active set: both the owning agent id and the golden
+///     id travel in the route; the body is empty (the client posts <c>{}</c>).
+/// </summary>
+public sealed class ApproveGoldenConversationRequest
+{
+    public Guid AgentDefinitionId { get; init; }
+
+    public Guid GoldenConversationId { get; init; }
+}
+
+/// <summary>
 ///     Wire projection of a stored golden conversation case (Playbook P4). <see cref="InputTurns" /> and
 ///     <see cref="Assertion" /> are deserialized from the persisted JSON strings into the typed DTOs at the boundary so
 ///     the client never parses raw JSON. The free-text source is encrypted at rest; this projection is the decrypted,
@@ -74,6 +95,18 @@ public sealed class GoldenConversationResponse
 
     public required bool Enabled { get; init; }
 
+    /// <summary>
+    ///     Provenance discriminator — a lowercase literal (<c>"manual"</c>/<c>"harvested"</c>) matching the client's
+    ///     config-derived discriminator convention (distinct from PascalCase status enums on the wire).
+    /// </summary>
+    public required string Source { get; init; }
+
+    /// <summary>The thumbs-up assistant message a harvested case was proposed from; <c>null</c> for manual cases.</summary>
+    public Guid? SourceMessageId { get; init; }
+
+    /// <summary>The conversation a harvested case was proposed from; <c>null</c> for manual cases.</summary>
+    public Guid? SourceConversationId { get; init; }
+
     public required long CreatedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
@@ -84,6 +117,17 @@ public sealed class ListGoldenConversationsResponse
 {
     public required IReadOnlyList<GoldenConversationResponse> Items { get; init; }
 }
+
+/// <summary>
+///     Per-run counts for a golden harvest: thumbs-up sources scanned and how the candidates split across created /
+///     already-harvested (duplicate) / skipped. Counts only — the harvested turn/answer text never crosses the wire here
+///     (it rides the encrypted golden columns surfaced by the golden list).
+/// </summary>
+public sealed record GoldenHarvestResponse(
+    int ThumbsUpScanned,
+    int CreatedCount,
+    int DuplicateCount,
+    int SkippedCount);
 
 internal static class GoldenConversationMapper
 {
@@ -103,9 +147,27 @@ internal static class GoldenConversationMapper
             Assertion = DeserializeAssertion(record.Assertion),
             Rubric = record.Rubric,
             Enabled = record.Enabled,
+            Source = record.Source switch
+            {
+                GoldenConversationSource.Harvested => "harvested",
+                _ => "manual"
+            },
+            SourceMessageId = record.SourceMessageId,
+            SourceConversationId = record.SourceConversationId,
             CreatedAtUtc = record.CreatedAtUtc,
             UpdatedAtUtc = record.UpdatedAtUtc
         };
+    }
+
+    public static GoldenHarvestResponse ToResponse(this GoldenHarvestOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+
+        return new GoldenHarvestResponse(
+            outcome.ThumbsUpScanned,
+            outcome.CreatedCount,
+            outcome.DuplicateCount,
+            outcome.SkippedCount);
     }
 
     public static GoldenConversationCreateInput ToInput(this CreateGoldenConversationRequest request)

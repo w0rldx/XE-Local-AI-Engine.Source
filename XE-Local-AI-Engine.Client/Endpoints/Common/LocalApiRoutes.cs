@@ -149,6 +149,13 @@ public static class LocalApiRoutes
         public const string GoldenConversations = "agents/{agentDefinitionId}/golden-conversations";
         public const string GoldenConversation = "agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}";
 
+        // Harvest follow-up: on-demand thumbs-up harvest + per-candidate approve. The literal "harvest" segment follows
+        // "golden-conversations", so FastEndpoints prioritises it over the {goldenConversationId} param (same literal-vs-param
+        // rule as ToolCapableModels); "approve" is a literal segment after {goldenConversationId}, so it never collides with
+        // GoldenConversation's bare param route (the DELETE / GET-by-id surface).
+        public const string GoldenConversationsHarvest = "agents/{agentDefinitionId}/golden-conversations/harvest";
+        public const string GoldenConversationApprove = "agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve";
+
         // Playbook P2: read-only per-agent feedback insights (aggregate over message_feedback). The literal
         // "feedback-insights" segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
         public const string FeedbackInsights = "agents/{agentDefinitionId}/feedback-insights";

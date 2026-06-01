@@ -268,6 +268,18 @@ public static class NodeApplicationServiceCollectionExtensions
         // candidate vs baseline prompt, scores each case, and persists the plaintext EvalResult the promote gate reads.
         // Scoped to match the scoped stores/services it composes. The .AI.Agent runner is registered in the agent runtime.
         builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
+        // Golden harvest read boundary: reconstructs harvest candidates from an agent's thumbs-up assistant turns
+        // (plaintext thumbs-up scan via parameterized raw ADO, decrypted turn content via NodeChatDbContext). Scoped to
+        // match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IGoldenHarvestSourceStore, GoldenHarvestSourceStore>();
+        // Golden harvest options: server-side caps on candidates persisted per run and most-recent thumbs-up sources
+        // scanned. No model name — harvest invokes no LLM (deterministic, D1), so nothing is defaulted at composition.
+        builder.Services.AddOptions<GoldenHarvestOptions>()
+               .Bind(builder.Configuration.GetSection(GoldenHarvestOptions.Section));
+        // Golden harvest orchestration (deterministic, no model — D1): scans thumbs-up sources, dedups against already-
+        // harvested messages, and stages each fresh candidate inert via the golden CRUD service (same validation/caps/
+        // encryption). Scoped to match the scoped stores/service it composes.
+        builder.Services.AddScoped<IGoldenHarvestService, GoldenHarvestService>();
         // Playbook P5 relevance-retrieval ranker: the resolver/orchestration paths consult it only when an agent's
         // Enabled set exceeds the retrieval threshold and the send carries a non-blank query; below that the full static
         // prepend is used (byte-identical). The lexical ranker (deterministic, model-free, stateless) is registered

@@ -956,10 +956,24 @@
 				"hasAssertion": "Assertion",
 				"hasRubric": "Rubric",
 				"disabledBadge": "deaktiviert",
+				"harvestedBadge": "geerntet",
 				"deleteAria": "Golden-Fall löschen",
 				"delete": {
 					"title": "Golden-Fall löschen",
 					"description": "'{{title}}' löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"harvest": {
+					"button": "Aus 👍 ernten",
+					"success": "{{created}} vorgeschlagen, {{duplicate}} bereits geerntet, {{skipped}} übersprungen."
+				},
+				"pending": {
+					"heading": "Geerntet (Prüfung ausstehend)",
+					"hint": "Prüfe jeden geernteten Kandidaten und genehmige ihn dann in das aktive Golden-Set oder lehne ihn ab.",
+					"turnsPreview": "{{count}} Turns · {{role}}: {{text}}",
+					"turnCount": "{{count}} Eingabe-Turns",
+					"rubric": "Rubric: {{rubric}}",
+					"approve": "Genehmigen",
+					"reject": "Ablehnen"
 				},
 				"form": {
 					"titleRequired": "Titel ist erforderlich.",
@@ -996,7 +1010,9 @@
 				"errors": {
 					"load": "Golden-Fälle konnten nicht geladen werden.",
 					"save": "Der Golden-Fall konnte nicht gespeichert werden.",
-					"delete": "Der Golden-Fall konnte nicht gelöscht werden."
+					"delete": "Der Golden-Fall konnte nicht gelöscht werden.",
+					"harvest": "Golden-Fälle konnten nicht geerntet werden.",
+					"approve": "Der Golden-Fall konnte nicht genehmigt werden."
 				}
 			},
 			"insights": 			{

@@ -18,8 +18,10 @@ vi.mock("@/core/api/utils/LocalApiUrl", () => ({
 }));
 
 import {
+	approveGolden,
 	createGoldenConversation,
 	deleteGoldenConversation,
+	harvestGolden,
 	listGoldenConversations,
 } from "@/features/agents/api/GoldenConversationsApi";
 import type {
@@ -36,6 +38,9 @@ function makeDto(overrides: Partial<GoldenConversationDto> = {}): GoldenConversa
 		assertion: { requiredPhrases: ["summary"], forbiddenPhrases: ["error"] },
 		rubric: null,
 		enabled: true,
+		source: "manual",
+		sourceMessageId: null,
+		sourceConversationId: null,
 		createdAtUtc: 1000,
 		updatedAtUtc: 2000,
 		...overrides,
@@ -105,5 +110,55 @@ describe("golden conversations API", () => {
 		await deleteGoldenConversation("ag/1", "g/2");
 
 		expect(axiosInstanceMock.delete).toHaveBeenCalledWith("/local/agents/ag%2F1/golden-conversations/g%2F2", undefined);
+	});
+
+	it("harvestGolden POSTs to the harvest route with an empty body and returns the parsed counts", async () => {
+		axiosInstanceMock.post.mockResolvedValue({
+			data: { thumbsUpScanned: 8, createdCount: 2, duplicateCount: 1, skippedCount: 5 },
+		});
+
+		const result = await harvestGolden("agent-1");
+
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(0)).toBe("/local/agents/agent-1/golden-conversations/harvest");
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(1)).toEqual({});
+		expect(result.thumbsUpScanned).toBe(8);
+		expect(result.createdCount).toBe(2);
+		expect(result.duplicateCount).toBe(1);
+		expect(result.skippedCount).toBe(5);
+	});
+
+	it("harvestGolden encodes the agent id into the harvest route", async () => {
+		axiosInstanceMock.post.mockResolvedValue({
+			data: { thumbsUpScanned: 0, createdCount: 0, duplicateCount: 0, skippedCount: 0 },
+		});
+
+		await harvestGolden("ag/1");
+
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(0)).toBe(
+			"/local/agents/ag%2F1/golden-conversations/harvest",
+		);
+	});
+
+	it("approveGolden POSTs to the approve route with an empty body and returns the parsed golden case", async () => {
+		axiosInstanceMock.post.mockResolvedValue({ data: makeDto({ id: "golden-5", source: "harvested" }) });
+
+		const result = await approveGolden("agent-1", "golden-5");
+
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(0)).toBe(
+			"/local/agents/agent-1/golden-conversations/golden-5/approve",
+		);
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(1)).toEqual({});
+		expect(result.id).toBe("golden-5");
+		expect(result.source).toBe("harvested");
+	});
+
+	it("approveGolden encodes both ids into the approve route", async () => {
+		axiosInstanceMock.post.mockResolvedValue({ data: makeDto({ agentDefinitionId: "ag/1", id: "g/2" }) });
+
+		await approveGolden("ag/1", "g/2");
+
+		expect(axiosInstanceMock.post.mock.calls.at(-1)?.at(0)).toBe(
+			"/local/agents/ag%2F1/golden-conversations/g%2F2/approve",
+		);
 	});
 });
