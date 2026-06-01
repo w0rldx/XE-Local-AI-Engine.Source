@@ -110,11 +110,10 @@ export function ChatMessageList({
 	}, [scrollKey]);
 
 	return (
-		<ScrollArea type="auto" style={{ flex: 1, minHeight: 0 }}>
+		<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" style={{ flex: 1, minHeight: 0 }}>
 			<Stack gap="sm">
 				{revisionGroups.map((group) => {
 					const message = group.active;
-					const messageEntries = timelineEntries.filter((entry) => entry.messageId === message.id);
 					const isStreamingTarget = scopedStreamingMessage?.messageId === message.id && message.role === "assistant";
 					const isAssistant = message.role === "assistant";
 					const variantGroupId = message.variantGroupId;
@@ -134,11 +133,10 @@ export function ChatMessageList({
 						<ChatMessage
 							key={message.id}
 							message={message}
-							entries={messageEntries}
 							isStreaming={
 								isStreamingTarget ? (scopedStreamingMessage?.isActive ?? false) && !scopedStreamingMessage?.isQueued : false
 							}
-							streamingReasoning={isStreamingTarget ? scopedStreamingMessage?.reasoning : undefined}
+							streamingParts={isStreamingTarget ? scopedStreamingMessage?.parts : undefined}
 							streamingReasoningOverflowBytes={isStreamingTarget ? scopedStreamingMessage?.reasoningOverflowBytes : undefined}
 							placeholder={isStreamingTarget ? streamingPlaceholder : undefined}
 							onRegenerate={isAssistant ? onRegenerate : undefined}
@@ -177,11 +175,10 @@ export function ChatMessageList({
 							sortOrder: normalizedMessages.length + 1,
 						}}
 						placeholder={streamingPlaceholder}
-						streamingReasoning={scopedStreamingMessage.reasoning}
+						streamingParts={scopedStreamingMessage.parts}
 						streamingReasoningOverflowBytes={scopedStreamingMessage.reasoningOverflowBytes}
 						isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
 						reasoningEffort={reasoningEffort}
-						entries={timelineEntries.filter((entry) => entry.messageId === scopedStreamingMessage.messageId)}
 						footer={
 							<StreamingIndicator
 								error={scopedStreamingMessage.error}

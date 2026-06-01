@@ -32,7 +32,8 @@
 		"light": "Hell",
 		"dark": "Dunkel",
 		"switchToLight": "Zum hellen Modus wechseln",
-		"switchToDark": "Zum dunklen Modus wechseln"
+		"switchToDark": "Zum dunklen Modus wechseln",
+		"toggleColorScheme": "Farbschema umschalten"
 	},
 	"navigation": {
 		"home": "Start",
@@ -72,7 +73,13 @@
 			"done": "Fertig",
 			"failed": "Fehlgeschlagen",
 			"thinkingLive": "Denke…",
-			"thoughtFor": "Gedacht für {{s}}s"
+			"thoughtFor": "Gedacht für {{s}}s",
+			"name": "Tool",
+			"live": "live",
+			"argsLabel": "Argumente",
+			"resultLabel": "Ergebnis",
+			"errorLabel": "Fehler",
+			"noOutput": "(keine Ausgabe)"
 		}
 	},
 	"pages": {
@@ -694,6 +701,56 @@
 			"placeholder": {
 				"title": "Dashboard",
 				"description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
+			},
+			"eyebrow": "Worker-Node",
+			"title": "Dashboard",
+			"subtitle": "Lokale Worker-Verbindung überwachen und Verbindungsverhalten beim Start steuern.",
+			"loadingStatus": "Verbindungsstatus wird geladen…",
+			"unexpectedError": "Unerwarteter Fehler bei der Verbindungsaktion",
+			"notPairedHint": "Binde diesen Node, bevor du dich mit der zentralen Plattform verbindest.",
+			"platformConnection": {
+				"title": "Plattformverbindung",
+				"connect": "Verbinden",
+				"disconnect": "Trennen",
+				"refresh": "Aktualisieren"
+			},
+			"startupConnection": {
+				"title": "Startverbindung",
+				"enabled": "Aktiviert",
+				"disabled": "Deaktiviert",
+				"hint": "Auto-Verbindung bleibt nach dem Binden standardmäßig deaktiviert, bis du sie explizit aktivierst.",
+				"enableAutoConnect": "Auto-Verbindung aktivieren",
+				"disableAutoConnect": "Auto-Verbindung deaktivieren"
+			},
+			"nodeCredentials": {
+				"title": "Node-Anmeldedaten",
+				"binding": "Bindung",
+				"paired": "Gebunden",
+				"notPaired": "Nicht gebunden",
+				"bindingMethod": "Bindungsmethode",
+				"nodeName": "Node-Name",
+				"tokenExpires": "Token läuft ab",
+				"notAvailable": "Nicht verfügbar",
+				"tokenExpiredBadge": "Abgelaufen"
+			},
+			"lastUpdate": {
+				"title": "Letzte Aktualisierung",
+				"privacyNote": "Verbindungssteuerung gibt keine Zugriffs- oder Refresh-Tokens an den Browser zurück."
+			},
+			"connectionStatus": {
+				"preparingModel": "Modell wird vorbereitet",
+				"reconnecting": "Verbindet erneut",
+				"connecting": "Verbindet",
+				"connected": "Verbunden",
+				"disconnected": "Getrennt",
+				"pairing": "Koppelt",
+				"error": "Fehler",
+				"unknown": "Unbekannt"
+			},
+			"connectionHint": {
+				"reconnecting": "Deaktiviere Auto-Verbindung, um Wiederverbindungsversuche zu stoppen, oder warte, bis der Worker sich erholt.",
+				"autoConnectEnabled": "Auto-Verbindung ist aktiviert. Der Worker verbindet sich beim Start, sobald die Voraussetzungen erfüllt sind.",
+				"autoConnectDisabled": "Auto-Verbindung ist deaktiviert. Nutze Verbinden für eine manuelle Sitzung oder aktiviere die Startverbindung."
 			}
 		},
 		"nodeBinding": {
@@ -1419,7 +1476,13 @@
 			"tooltip": {
 				"collapse": "Einklappen",
 				"expand": "Ausklappen"
-			}
+			},
+			"ariaCollapse": "Seitenleiste einklappen",
+			"ariaExpand": "Seitenleiste ausklappen"
+		},
+		"headerBar": {
+			"logout": "Abmelden",
+			"openDrawer": "Navigation öffnen"
 		},
 		"tables": {
 			"button": {

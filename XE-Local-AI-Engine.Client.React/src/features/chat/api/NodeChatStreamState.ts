@@ -1,6 +1,15 @@
 import { nodeChatToolStreamEventTypes, type NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import { mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
-import type { ChatConversationModel, ChatMessageModel, ChatStreamingState, ChatTimelineEntry, MessageStatus } from "@/features/chat/models/ChatModels";
+import type {
+	ChatConversationModel,
+	ChatMessageModel,
+	ChatMessagePart,
+	ChatStreamingState,
+	ChatTimelineEntry,
+	ChatToolCall,
+	MessageStatus,
+} from "@/features/chat/models/ChatModels";
+import { buildMessageParts, type ReasoningSegmentInput, type TextSegmentInput, type ToolEntryInput } from "@/features/chat/models/MessageParts";
 
 export const nodeChatStreamEventTypes = {
 	userMessagePersisted: "user-message-persisted",
@@ -86,6 +95,149 @@ export function accumulateToolTimelineEntry(entries: ChatTimelineEntry[], entry:
 				}
 			: candidate,
 	);
+}
+
+/**
+ * Splits the prior ordered `parts[]` back into reasoning segments, tool entries, and text segments so the
+ * accumulator can extend them without losing any existing interleave. All three kinds must round-trip so the
+ * "byte-identical live vs reload" invariant holds for resumed/re-attached turns that carry text parts.
+ */
+function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
+	reasoningSegments: ReasoningSegmentInput[];
+	toolEntries: ToolEntryInput[];
+	textSegments: TextSegmentInput[];
+} {
+	const reasoningSegments: ReasoningSegmentInput[] = [];
+	const toolEntries: ToolEntryInput[] = [];
+	const textSegments: TextSegmentInput[] = [];
+	for (const part of parts ?? []) {
+		if (part.kind === "reasoning") {
+			reasoningSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
+		} else if (part.kind === "tool") {
+			toolEntries.push({
+				id: part.id,
+				sequence: part.sequence,
+				name: part.name,
+				state: part.state,
+				args: part.args,
+				result: part.result,
+				requiresApproval: part.requiresApproval,
+			});
+		} else if (part.kind === "text") {
+			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
+		}
+	}
+
+	return { reasoningSegments, toolEntries, textSegments };
+}
+
+/** The highest `sequence` across all accumulated parts — i.e. the wire position of the most recent part. */
+function maxPartSequence(
+	reasoningSegments: readonly ReasoningSegmentInput[],
+	toolEntries: readonly ToolEntryInput[],
+	textSegments: readonly TextSegmentInput[] = [],
+): number {
+	let max = Number.NEGATIVE_INFINITY;
+	for (const segment of reasoningSegments) {
+		max = Math.max(max, segment.sequence);
+	}
+	for (const entry of toolEntries) {
+		max = Math.max(max, entry.sequence);
+	}
+	for (const segment of textSegments) {
+		max = Math.max(max, segment.sequence);
+	}
+
+	return max;
+}
+
+/**
+ * Folds a reasoning delta into the ordered segments: when the most recent part is the trailing reasoning run the
+ * delta extends it; when the most recent part is a tool or text (or there is no segment yet) a NEW reasoning segment
+ * opens at this event's `sequence` — this is what produces the second Thoughts block after a tool (Option A interleave).
+ */
+function appendReasoningDelta(
+	reasoningSegments: ReasoningSegmentInput[],
+	toolEntries: readonly ToolEntryInput[],
+	textSegments: readonly TextSegmentInput[],
+	messageId: string,
+	sequence: number,
+	delta: string,
+): ReasoningSegmentInput[] {
+	const trailing = reasoningSegments.at(-1);
+	const lastIsTrailingReasoning =
+		trailing !== undefined && trailing.sequence >= maxPartSequence(reasoningSegments, toolEntries, textSegments);
+
+	if (lastIsTrailingReasoning && trailing) {
+		return reasoningSegments.map((segment, index) =>
+			index === reasoningSegments.length - 1 ? { ...segment, text: `${segment.text}${delta}` } : segment,
+		);
+	}
+
+	return [...reasoningSegments, { id: `${messageId}:${sequence}`, sequence, text: delta }];
+}
+
+/** Merges a tool call (collapsed requested→completed by id) into the ordered tool entries, preserving its slot. */
+function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatToolCall, sequence: number): ToolEntryInput[] {
+	const existingIndex = toolEntries.findIndex((entry) => entry.id === toolCall.id);
+	if (existingIndex < 0) {
+		return [
+			...toolEntries,
+			{
+				id: toolCall.id,
+				sequence,
+				name: toolCall.name,
+				state: toolCall.state,
+				args: toolCall.args,
+				result: toolCall.result,
+				requiresApproval: toolCall.requiresApproval,
+			},
+		];
+	}
+
+	return toolEntries.map((entry, index) =>
+		index === existingIndex
+			? {
+					...entry,
+					// Keep the original slot's sequence so the completed event never reorders the card; merge the
+					// latest state/args/result and preserve the requested event's approval flag (the completed event
+					// omits it, so a naive spread would clobber it to undefined).
+					name: toolCall.name || entry.name,
+					state: toolCall.state,
+					args: toolCall.args ?? entry.args,
+					result: toolCall.result ?? entry.result,
+					requiresApproval: toolCall.requiresApproval ?? entry.requiresApproval,
+				}
+			: entry,
+	);
+}
+
+/**
+ * Builds the next ordered `parts[]` for an assistant delta/terminal event, extending the prior parts with this
+ * event's reasoning. A `reasoningDelta` folds into the trailing segment (or opens a new one after a tool); a full
+ * `reasoning` replacement (terminal/resume) reseeds a single leading reasoning segment when no segments exist yet
+ * so the tool interleave is preserved while reasoning catches up. Returns undefined when the turn has no parts.
+ */
+function nextReasoningParts(
+	existing: ChatMessageModel | undefined,
+	event: NodeChatStreamEventDto,
+	reasoning: string | undefined,
+): ChatMessagePart[] | undefined {
+	const { reasoningSegments, toolEntries, textSegments } = decomposeParts(existing?.parts);
+
+	let nextReasoningSegments = reasoningSegments;
+	if (event.reasoningDelta) {
+		nextReasoningSegments = appendReasoningDelta(reasoningSegments, toolEntries, textSegments, event.messageId, event.sequence, event.reasoningDelta);
+	} else if (reasoning && reasoningSegments.length === 0) {
+		// A full reasoning value with no prior segment (e.g. terminal/resume rehydrate): seed one leading segment.
+		nextReasoningSegments = [{ id: `${event.messageId}:${event.sequence}`, sequence: event.sequence, text: reasoning }];
+	}
+
+	if (nextReasoningSegments.length === 0 && toolEntries.length === 0 && textSegments.length === 0) {
+		return undefined;
+	}
+
+	return buildMessageParts(nextReasoningSegments, toolEntries, textSegments);
 }
 
 function normalizeStatus(status: string | null | undefined, fallback: MessageStatus): MessageStatus {
@@ -174,13 +326,23 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 	// turn so the turn stays live (isActive) while tools run.
 	if (isToolStreamEvent(event.type)) {
 		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
+		// Merge the tool call into the ordered parts (collapsed requested→completed by tool-call id) so the in-flight
+		// turn renders the tool card in its real wire slot and the result shows the instant the completed event lands.
+		const toolCall = mapToolCallEvent(event);
+		const { reasoningSegments, toolEntries, textSegments } = decomposeParts(current?.parts);
+		const nextToolEntries = toolCall ? mergeToolEntry(toolEntries, toolCall, event.sequence) : toolEntries;
+		const nextParts = buildMessageParts(reasoningSegments, nextToolEntries, textSegments);
+		const nextConversation = current
+			? { ...conversation, messages: replaceMessage(conversation.messages, { ...current, parts: nextParts }) }
+			: conversation;
 		return {
-			conversation,
+			conversation: nextConversation,
 			streamingMessage: {
 				conversationId: event.conversationId,
 				messageId: event.messageId,
 				content: current?.content ?? "",
 				reasoning: current?.reasoning,
+				parts: nextParts,
 				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
 				isActive: true,
 				inputTokens: current?.inputTokens,
@@ -205,6 +367,7 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 				messageId: event.messageId,
 				content: currentAssistant?.content ?? event.content ?? "",
 				reasoning: currentAssistant?.reasoning ?? event.reasoning ?? undefined,
+				parts: currentAssistant?.parts,
 				startedAt: currentAssistant?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
 				isActive: true,
 				inputTokens: currentAssistant?.inputTokens ?? event.inputTokens ?? undefined,
@@ -224,12 +387,14 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 	const eventTime = isoFromUnixMilliseconds(event.occurredAtUtc);
 	const content = event.content ?? `${existing?.content ?? ""}${event.delta ?? ""}`;
 	const reasoning = event.reasoning ?? (event.reasoningDelta ? `${existing?.reasoning ?? ""}${event.reasoningDelta}` : existing?.reasoning);
+	const parts = nextReasoningParts(existing, event, reasoning ?? undefined);
 	const assistantMessage: ChatMessageModel = {
 		id: event.messageId,
 		conversationId: event.conversationId,
 		role: "assistant",
 		content,
 		reasoning: reasoning ?? undefined,
+		parts,
 		status,
 		createdAt: existing?.createdAt ?? eventTime,
 		updatedAt: eventTime,
@@ -256,6 +421,7 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 			messageId: event.messageId,
 			content,
 			reasoning: reasoning ?? undefined,
+			parts,
 			startedAt: assistantMessage.createdAt,
 			isActive: !isTerminal,
 			// Queued turns are live (isActive) but not yet streaming; clear once the streaming event arrives.
@@ -285,6 +451,7 @@ export function markNodeChatStreamTerminated(
 		role: "assistant",
 		content: existing?.content ?? "",
 		reasoning: existing?.reasoning,
+		parts: existing?.parts,
 		status,
 		createdAt: existing?.createdAt ?? nowIso,
 		updatedAt: nowIso,
@@ -310,6 +477,7 @@ export function markNodeChatStreamTerminated(
 			messageId,
 			content: assistantMessage.content,
 			reasoning: assistantMessage.reasoning,
+			parts: assistantMessage.parts,
 			startedAt: assistantMessage.createdAt,
 			isActive: false,
 			error,

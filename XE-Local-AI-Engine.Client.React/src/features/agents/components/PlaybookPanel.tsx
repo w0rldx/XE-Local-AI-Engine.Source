@@ -1022,7 +1022,7 @@ function PlaybookActionForm({
 							? t("pages.agents.playbook.form.behavior.required", "Behavior is required")
 							: undefined
 					}
-					onChange={(event) => setValues((current) => ({ ...current, behavior: event.currentTarget.value }))}
+					onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, behavior: value })); }}
 					data-testid="playbook-form-behavior"
 				/>
 				<Group grow={true} align="flex-start">
@@ -1030,7 +1030,7 @@ function PlaybookActionForm({
 						label={t("pages.agents.playbook.form.scope.label", "Scope")}
 						placeholder={t("pages.agents.playbook.form.scope.placeholder", "Optional topic/tool tag")}
 						value={values.scope}
-						onChange={(event) => setValues((current) => ({ ...current, scope: event.currentTarget.value }))}
+						onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, scope: value })); }}
 						data-testid="playbook-form-scope"
 					/>
 					<NumberInput
@@ -1072,7 +1072,7 @@ function PlaybookActionForm({
 					value={values.triggerCondition}
 					autosize={true}
 					minRows={1}
-					onChange={(event) => setValues((current) => ({ ...current, triggerCondition: event.currentTarget.value }))}
+					onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, triggerCondition: value })); }}
 					data-testid="playbook-form-trigger"
 				/>
 				{submitError ? (

@@ -155,7 +155,10 @@ public sealed record NodeChatTerminalizeMessageRequest(
     int? InputCount = null,
     int? OutputCount = null,
     int? TotalCount = null,
-    int? ReasoningCount = null);
+    int? ReasoningCount = null,
+    // Ordered interleave assembled from the run's reasoning segments + tool lifecycle. Null leaves any existing parts
+    // untouched; an empty list is a meaningful "no parts" (e.g. a plain-text turn) and overwrites.
+    IReadOnlyList<NodeChatMessagePart>? Parts = null);
 
 /// <summary>
 ///     Request DTO for node chat cancel operations.
@@ -197,7 +200,54 @@ public sealed record NodeChatSetConversationArchivedRequest(
     long UpdatedAtUtc);
 
 /// <summary>
-///     Transport DTO for node chat persisted message data.
+///     Represents the kind of an ordered assistant message part. The interleaved render region (reasoning segments
+///     and tool cards, ordered by <see cref="NodeChatMessagePart.Sequence" />) is reconstructed from these parts on
+///     reload so the live and reloaded views are identical. <c>text</c> covers the rarer mid-turn narration case.
+/// </summary>
+public static class NodeChatMessagePartKinds
+{
+    public const string Reasoning = "reasoning";
+    public const string Tool = "tool";
+    public const string Text = "text";
+}
+
+/// <summary>
+///     Represents the lifecycle state of a tool part. Mirrors the client tool-call state union; persisted tool parts
+///     carry the terminal state (<see cref="Received" /> or <see cref="Failed" />) once the tool has completed.
+/// </summary>
+public static class NodeChatToolPartStates
+{
+    public const string Requesting = "requesting";
+    public const string Waiting = "waiting";
+    public const string Received = "received";
+    public const string Failed = "failed";
+}
+
+/// <summary>
+///     One ordered part of an assistant turn: a reasoning segment, a tool call (collapsed requested-&gt;completed by
+///     <see cref="ToolCallId" />, including its result), or an interleaved text segment. Persisted in the
+///     <c>metadata_json</c> column alongside the flattened <c>Reasoning</c> so reload restores the exact interleave.
+///     That column is written via raw ADO.NET (<c>Encoding.UTF8.GetBytes</c>), the same plaintext-at-rest posture as
+///     the pre-existing reasoning/model/token fields on this path (single-user device; documented in
+///     <c>NodeChatPersistenceServiceTests</c>). Parts add no new exposure beyond what reasoning already carries.
+///     Optional fields are null for the kinds that do not use them (e.g. a reasoning part has only
+///     <see cref="Text" />).
+/// </summary>
+public sealed record NodeChatMessagePart(
+    string Kind,
+    int Sequence,
+    string? Text = null,
+    string? ToolCallId = null,
+    string? Name = null,
+    string? State = null,
+    string? Args = null,
+    string? Result = null,
+    bool? RequiresApproval = null);
+
+/// <summary>
+///     Transport DTO for node chat persisted message data. <c>Parts</c> is the ordered interleave (reasoning segments
+///     plus tool cards); it is null for legacy messages persisted before parts existed, in which case the client
+///     synthesizes a single Thoughts block from <c>Reasoning</c>.
 /// </summary>
 public sealed record NodeChatPersistedMessageDto(
     Guid MessageId,
@@ -223,7 +273,8 @@ public sealed record NodeChatPersistedMessageDto(
     Guid? ParentMessageId = null,
     Guid? VariantGroupId = null,
     string? FeedbackRating = null,
-    string? FeedbackComment = null) : ISelectedPathMessage;
+    string? FeedbackComment = null,
+    IReadOnlyList<NodeChatMessagePart>? Parts = null) : ISelectedPathMessage;
 
 /// <summary>
 ///     Transport DTO for node chat cancel result data.

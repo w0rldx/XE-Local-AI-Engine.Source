@@ -7,6 +7,7 @@ import {
 	IconSettingsAutomation,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
 import {
 	type ConnectionStatusDto,
@@ -16,27 +17,27 @@ import {
 	enableAutoConnect,
 	getConnectionStatus,
 } from "@/features/dashboard/api/ConnectionApi";
-import {
-	connectionActionHint,
-	connectionStatusColor,
-	connectionStatusLabel,
-	formatOptionalDate,
-} from "@/features/dashboard/models/ConnectionStatusModel";
+import { connectionStatusColor } from "@/features/dashboard/models/ConnectionStatusModel";
 import { connectionQueryKeys } from "@/features/dashboard/queries/ConnectionQueryKeys";
 
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Unexpected connection action error";
+function isTokenExpired(tokenExpiresAt?: string | null): boolean {
+	if (!tokenExpiresAt) {
+		return false;
+	}
+	const date = new Date(tokenExpiresAt);
+	return !Number.isNaN(date.getTime()) && date < new Date();
 }
 
-function statusSummary(status: ConnectionStatusDto): string {
-	if (!status.isPaired) {
-		return "Bind this node before connecting to the Central Platform.";
+function formatOptionalDateLocalized(value?: string | null): string {
+	if (!value) {
+		return "";
 	}
-
-	return connectionActionHint(status.state, status.autoConnectOnStart);
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 export function Dashboard() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const statusQuery = useQuery({
 		queryKey: connectionQueryKeys.status(),
@@ -82,33 +83,59 @@ export function Dashboard() {
 		enableAutoConnectMutation.isPending ||
 		disableAutoConnectMutation.isPending;
 
+	const getErrorMessage = (error: unknown): string =>
+		error instanceof Error ? error.message : t("pages.dashboard.unexpectedError");
+
+	const getConnectionStatusLabel = (state: string): string => {
+		const key = `pages.dashboard.connectionStatus.${state === "preparing-model" ? "preparingModel" : state}`;
+		return t(key, { defaultValue: t("pages.dashboard.connectionStatus.unknown") });
+	};
+
+	const getStatusSummary = (s: ConnectionStatusDto): string => {
+		if (!s.isPaired) {
+			return t("pages.dashboard.notPairedHint");
+		}
+		if (s.state === "reconnecting") {
+			return t("pages.dashboard.connectionHint.reconnecting");
+		}
+		if (s.autoConnectOnStart) {
+			return t("pages.dashboard.connectionHint.autoConnectEnabled");
+		}
+		return t("pages.dashboard.connectionHint.autoConnectDisabled");
+	};
+
+	const tokenExpired = status ? isTokenExpired(status.tokenExpiresAt) : false;
+	const tokenDisplay = status?.tokenExpiresAt
+		? formatOptionalDateLocalized(status.tokenExpiresAt)
+		: t("pages.dashboard.nodeCredentials.notAvailable");
+
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
 				<Stack gap={4}>
 					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						Worker Node
+						{t("pages.dashboard.eyebrow")}
 					</Text>
-					<Title order={2}>Dashboard</Title>
-					<Text c="dimmed">Monitor the local worker connection and control startup connection behavior.</Text>
+					<Title order={2}>{t("pages.dashboard.title")}</Title>
+					<Text c="dimmed">{t("pages.dashboard.subtitle")}</Text>
 				</Stack>
 
 				{statusQuery.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">Loading connection status…</Text>
+						<Text c="dimmed">{t("pages.dashboard.loadingStatus")}</Text>
 					</Group>
 				) : null}
 
 				{statusQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(statusQuery.error)}
+						{getErrorMessage(statusQuery.error)}
 					</Alert>
 				) : null}
 
 				{actionError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(actionError)}
+						{getErrorMessage(actionError)}
 					</Alert>
 				) : null}
 
@@ -117,10 +144,10 @@ export function Dashboard() {
 						<Card withBorder={true} radius="md" p="lg">
 							<Stack gap="md">
 								<Group justify="space-between" align="center">
-									<Title order={3}>Platform connection</Title>
-									<Badge color={connectionStatusColor(status.state)}>{connectionStatusLabel(status.state)}</Badge>
+									<Title order={3}>{t("pages.dashboard.platformConnection.title")}</Title>
+									<Badge color={connectionStatusColor(status.state)}>{getConnectionStatusLabel(status.state)}</Badge>
 								</Group>
-								<Text c="dimmed">{statusSummary(status)}</Text>
+								<Text c="dimmed">{getStatusSummary(status)}</Text>
 
 								{status.lastError ? (
 									<Alert color="red" icon={<IconAlertTriangle size={16} />}>
@@ -135,7 +162,7 @@ export function Dashboard() {
 										loading={connectMutation.isPending}
 										disabled={!status.canConnect || isActionPending}
 									>
-										Connect
+										{t("pages.dashboard.platformConnection.connect")}
 									</Button>
 									<Button
 										variant="outline"
@@ -144,7 +171,7 @@ export function Dashboard() {
 										loading={disconnectMutation.isPending}
 										disabled={!status.canDisconnect || isActionPending}
 									>
-										Disconnect
+										{t("pages.dashboard.platformConnection.disconnect")}
 									</Button>
 									<Button
 										variant="subtle"
@@ -152,7 +179,7 @@ export function Dashboard() {
 										onClick={() => statusQuery.refetch()}
 										disabled={statusQuery.isFetching}
 									>
-										Refresh
+										{t("pages.dashboard.platformConnection.refresh")}
 									</Button>
 								</Group>
 							</Stack>
@@ -161,12 +188,14 @@ export function Dashboard() {
 						<Card withBorder={true} radius="md" p="lg">
 							<Stack gap="md">
 								<Group justify="space-between" align="center">
-									<Title order={3}>Startup connection</Title>
+									<Title order={3}>{t("pages.dashboard.startupConnection.title")}</Title>
 									<Badge color={status.autoConnectOnStart ? "green" : "gray"}>
-										{status.autoConnectOnStart ? "Enabled" : "Disabled"}
+										{status.autoConnectOnStart
+											? t("pages.dashboard.startupConnection.enabled")
+											: t("pages.dashboard.startupConnection.disabled")}
 									</Badge>
 								</Group>
-								<Text c="dimmed">Auto-connect stays disabled by default after binding until you explicitly enable it.</Text>
+								<Text c="dimmed">{t("pages.dashboard.startupConnection.hint")}</Text>
 								<Group>
 									<Button
 										leftSection={<IconSettingsAutomation size={16} />}
@@ -174,7 +203,7 @@ export function Dashboard() {
 										loading={enableAutoConnectMutation.isPending}
 										disabled={!status.canEnableAutoConnect || isActionPending}
 									>
-										Enable auto-connect
+										{t("pages.dashboard.startupConnection.enableAutoConnect")}
 									</Button>
 									<Button
 										variant="outline"
@@ -182,7 +211,7 @@ export function Dashboard() {
 										loading={disableAutoConnectMutation.isPending}
 										disabled={!status.canDisableAutoConnect || isActionPending}
 									>
-										Disable auto-connect
+										{t("pages.dashboard.startupConnection.disableAutoConnect")}
 									</Button>
 								</Group>
 							</Stack>
@@ -190,24 +219,41 @@ export function Dashboard() {
 
 						<Card withBorder={true} radius="md" p="lg">
 							<Stack gap="md">
-								<Title order={3}>Node credentials</Title>
+								<Title order={3}>{t("pages.dashboard.nodeCredentials.title")}</Title>
 								<Table withTableBorder={true} withColumnBorders={true}>
 									<Table.Tbody>
 										<Table.Tr>
-											<Table.Th>Binding</Table.Th>
-											<Table.Td>{status.isPaired ? "Paired" : "Not paired"}</Table.Td>
+											<Table.Th>{t("pages.dashboard.nodeCredentials.binding")}</Table.Th>
+											<Table.Td>
+												{status.isPaired
+													? t("pages.dashboard.nodeCredentials.paired")
+													: t("pages.dashboard.nodeCredentials.notPaired")}
+											</Table.Td>
 										</Table.Tr>
 										<Table.Tr>
-											<Table.Th>Binding method</Table.Th>
-											<Table.Td>{status.bindingMethod ?? "Not available"}</Table.Td>
+											<Table.Th>{t("pages.dashboard.nodeCredentials.bindingMethod")}</Table.Th>
+											<Table.Td>
+												{status.bindingMethod ?? t("pages.dashboard.nodeCredentials.notAvailable")}
+											</Table.Td>
 										</Table.Tr>
 										<Table.Tr>
-											<Table.Th>Node name</Table.Th>
-											<Table.Td>{status.lastKnownNodeName ?? "Not available"}</Table.Td>
+											<Table.Th>{t("pages.dashboard.nodeCredentials.nodeName")}</Table.Th>
+											<Table.Td>
+												{status.lastKnownNodeName ?? t("pages.dashboard.nodeCredentials.notAvailable")}
+											</Table.Td>
 										</Table.Tr>
 										<Table.Tr>
-											<Table.Th>Token expires</Table.Th>
-											<Table.Td>{formatOptionalDate(status.tokenExpiresAt)}</Table.Td>
+											<Table.Th>{t("pages.dashboard.nodeCredentials.tokenExpires")}</Table.Th>
+											<Table.Td>
+												<Group gap="xs" wrap="nowrap">
+													<span>{tokenDisplay}</span>
+													{tokenExpired ? (
+														<Badge color="red" size="sm">
+															{t("pages.dashboard.nodeCredentials.tokenExpiredBadge")}
+														</Badge>
+													) : null}
+												</Group>
+											</Table.Td>
 										</Table.Tr>
 									</Table.Tbody>
 								</Table>
@@ -216,10 +262,14 @@ export function Dashboard() {
 
 						<Card withBorder={true} radius="md" p="lg">
 							<Stack gap="md">
-								<Title order={3}>Last update</Title>
-								<Text>{formatOptionalDate(status.lastUpdatedAt)}</Text>
+								<Title order={3}>{t("pages.dashboard.lastUpdate.title")}</Title>
+								<Text>
+									{status.lastUpdatedAt
+										? formatOptionalDateLocalized(status.lastUpdatedAt)
+										: t("pages.dashboard.nodeCredentials.notAvailable")}
+								</Text>
 								<Text size="sm" c="dimmed">
-									Connection controls never return access or refresh tokens to the browser.
+									{t("pages.dashboard.lastUpdate.privacyNote")}
 								</Text>
 							</Stack>
 						</Card>

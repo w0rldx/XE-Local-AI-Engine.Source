@@ -65,6 +65,23 @@ export interface NodeChatConversationResponseDto {
 	messages: NodeChatMessageResponseDto[];
 }
 
+/**
+ * One ordered interleave part on a persisted assistant turn (camelCase, System.Text.Json Web defaults). `kind`
+ * discriminates reasoning/text (carry `text`) from tool (carry `toolCallId`/`name`/`state`/`args`/`result`).
+ * Optional + additive: legacy messages omit `parts`, old clients ignore it.
+ */
+export interface NodeChatMessagePartDto {
+	kind: string;
+	sequence: number;
+	text?: string | null;
+	toolCallId?: string | null;
+	name?: string | null;
+	state?: string | null;
+	args?: string | null;
+	result?: string | null;
+	requiresApproval?: boolean | null;
+}
+
 export interface NodeChatMessageResponseDto {
 	messageId: string;
 	conversationId: string;
@@ -73,6 +90,8 @@ export interface NodeChatMessageResponseDto {
 	role: string;
 	content: string;
 	reasoning?: string | null;
+	// Ordered interleave (reasoning → tool → reasoning → …) for an assistant turn; absent/null on legacy + user turns.
+	parts?: NodeChatMessagePartDto[] | null;
 	status: string;
 	createdAtUtc: number;
 	updatedAtUtc: number;

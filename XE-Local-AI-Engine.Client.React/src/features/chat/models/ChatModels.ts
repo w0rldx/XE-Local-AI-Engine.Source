@@ -10,6 +10,45 @@ export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
 export type ToolCallState = "requesting" | "waiting" | "received" | "failed";
 
+export type ChatMessagePartKind = "reasoning" | "tool" | "text";
+
+/** A folded "Thoughts" run. Each reasoning segment renders as its own block (Option A interleave). */
+export interface ChatReasoningPart {
+	kind: "reasoning";
+	// Stable per segment (`${messageId}:${sequence}` live, `${messageId}:${sequence}` on reload).
+	id: string;
+	// Wire ordering key (the monotonic stream `sequence` at which this segment opened).
+	sequence: number;
+	text: string;
+}
+
+/** A single tool call, collapsed requested→completed by tool-call id, rendered as one state-driven card. */
+export interface ChatToolPart {
+	kind: "tool";
+	// Tool-call id (stable across requested/completed so the card never duplicates).
+	id: string;
+	sequence: number;
+	name: string;
+	state: ToolCallState;
+	args?: string;
+	result?: string;
+	requiresApproval?: boolean;
+}
+
+/**
+ * Forward-compat: an interleaved mid-turn answer/narration segment. The primary local-model case is
+ * reasoning↔tool interleave plus a single trailing answer (rendered from `message.content`), so `text`
+ * parts are rare; they exist so multi-step narration round-trips cleanly when the backend emits it.
+ */
+export interface ChatTextPart {
+	kind: "text";
+	id: string;
+	sequence: number;
+	text: string;
+}
+
+export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart;
+
 export type TimelineEventType =
 	| "ToolCall"
 	| "ToolResult"
@@ -42,6 +81,9 @@ export interface ChatMessageModel {
 	reasoningTokens?: number;
 	parentMessageId?: string;
 	variantGroupId?: string;
+	// Ordered interleave (reasoning → tool → reasoning → …) for an assistant turn. Drives the in-order render of
+	// the reasoning/tool region; the trailing answer still renders from `content`. Absent for user/legacy turns.
+	parts?: ChatMessagePart[];
 	// Node-local feedback on this assistant turn, carried on the message read DTO (feedback flow). Undefined when
 	// no feedback has been recorded; presence drives the feedback control's active state.
 	feedbackRating?: ChatFeedbackRating;
@@ -88,6 +130,9 @@ export interface ChatStreamingState {
 	content: string;
 	reasoning?: string;
 	reasoningOverflowBytes?: number;
+	// Ordered interleave parts for the in-flight turn (reasoning segments + tool cards, ordered by `sequence`).
+	// Built once per event by the reducer so the live render and the post-reload render are byte-identical.
+	parts?: ChatMessagePart[];
 	// The assistant turn's own start timestamp (server-stamped when available). Used to label the
 	// transient streaming placeholder so it does not borrow the conversation's last-updated time.
 	startedAt?: string;

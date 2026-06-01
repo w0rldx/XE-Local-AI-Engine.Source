@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatStreamServiceTests
@@ -40,6 +41,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -82,6 +84,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -127,6 +130,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -180,6 +184,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -218,6 +223,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -261,6 +267,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -311,6 +318,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -351,6 +359,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -403,6 +412,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -473,6 +483,7 @@ public sealed class NodeChatStreamServiceTests
             resolver,
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -530,6 +541,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             store,
             orchestrationResolver,
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -573,6 +585,7 @@ public sealed class NodeChatStreamServiceTests
             resolver,
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -591,11 +604,115 @@ public sealed class NodeChatStreamServiceTests
         await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenRequestModelNull_ResolvesOfferWithOperatorNodeDefaultModel()
+    {
+        // MED-4 regression: a "Local default" send carries a null request model. The offer-time active model must
+        // resolve to the operator's node-default selection (StoredNodeSettings.DefaultModelName), NOT the static
+        // config fallback — otherwise a tool-capable node default would never reach the capability gate and
+        // run_in_agent_home would be withheld even though the operator selected a tool-capable model.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore("qwen3:8b"),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        offerProvider.Received().GetOfferedTools("qwen3:8b");
+        offerProvider.DidNotReceive().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenRequestModelNullAndNoNodeDefault_ResolvesOfferWithStaticConfigDefault()
+    {
+        // MED-4 lower bound: with no operator node default the offer-time active model falls through to the static
+        // config fallback, so the pre-fix behaviour is preserved for a node that never set a default model.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        offerProvider.Received().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
+    }
+
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>()).Returns(tools);
         return provider;
+    }
+
+    // The default node-settings store: no operator-selected node default, so model resolution falls through to the
+    // request model (or the static config fallback). The capability-gate test supplies a tool-capable default.
+    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null)
+    {
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { DefaultModelName = defaultModelName });
+        return store;
     }
 
     // The default (unbound) resolver: ResolveAsync returns null, so the service keeps today's literals — these tests
@@ -778,6 +895,7 @@ public sealed class NodeChatStreamServiceTests
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 

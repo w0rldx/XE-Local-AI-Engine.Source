@@ -246,6 +246,127 @@ describe("node chat stream state", () => {
 		expect(failed.timelineEntry).toMatchObject({ id: "call-1", state: "failed", toolResult: "boom" });
 	});
 
+	it("builds ordered parts for reasoning → tool → reasoning, splitting a new Thoughts block after the tool", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"what time is it",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		// Reasoning before the tool (seq 3) opens the first segment.
+		const firstReasoning = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 3, content: null, delta: null, reasoningDelta: "let me check the clock" }),
+		);
+		// Tool requested (seq 4) then completed (seq 5) collapse onto one tool part.
+		const toolRequested = applyNodeChatStreamEvent(
+			firstReasoning.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, sequence: 4, toolCallId: "call-1", toolName: "get_time", arguments: "{}", content: null, delta: null }),
+		);
+		const toolCompleted = applyNodeChatStreamEvent(
+			toolRequested.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, sequence: 5, toolCallId: "call-1", toolName: "get_time", result: "12:00", isError: false, content: null, delta: null }),
+		);
+		// Reasoning after the tool (seq 6) must OPEN A NEW segment (Option A second Thoughts block).
+		const secondReasoning = applyNodeChatStreamEvent(
+			toolCompleted.conversation,
+			streamEvent({ sequence: 6, content: null, delta: null, reasoningDelta: "the tool says noon" }),
+		);
+
+		const parts = secondReasoning.streamingMessage.parts;
+		if (!parts) {
+			throw new Error("expected ordered parts on the streaming state");
+		}
+
+		expect(parts.map((part) => part.kind)).toEqual(["reasoning", "tool", "reasoning"]);
+		expect(parts[0]).toMatchObject({ kind: "reasoning", text: "let me check the clock" });
+		expect(parts[1]).toMatchObject({ kind: "tool", id: "call-1", name: "get_time", state: "received", args: "{}", result: "12:00" });
+		expect(parts[2]).toMatchObject({ kind: "reasoning", text: "the tool says noon" });
+	});
+
+	it("appends consecutive reasoning deltas into the same trailing segment", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hi",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const first = applyNodeChatStreamEvent(optimistic, streamEvent({ sequence: 3, content: null, delta: null, reasoningDelta: "think" }));
+		const second = applyNodeChatStreamEvent(first.conversation, streamEvent({ sequence: 4, content: null, delta: null, reasoningDelta: "ing more" }));
+
+		const parts = second.streamingMessage.parts ?? [];
+		expect(parts).toHaveLength(1);
+		expect(parts[0]).toMatchObject({ kind: "reasoning", text: "thinking more" });
+	});
+
+	it("does not duplicate a tool part when a completed event repeats for the same tool-call id (guards vercel/ai#6342)", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"go",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const requested = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, sequence: 3, toolCallId: "call-1", toolName: "get_time", content: null, delta: null }),
+		);
+		const completed = applyNodeChatStreamEvent(
+			requested.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, sequence: 4, toolCallId: "call-1", toolName: "get_time", result: "12:00", isError: false, content: null, delta: null }),
+		);
+		// A second completed event for the same id (e.g. a resume replay) must collapse onto the same part.
+		const completedAgain = applyNodeChatStreamEvent(
+			completed.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, sequence: 5, toolCallId: "call-1", toolName: "get_time", result: "12:00", isError: false, content: null, delta: null }),
+		);
+
+		const toolParts = (completedAgain.streamingMessage.parts ?? []).filter((part) => part.kind === "tool");
+		expect(toolParts).toHaveLength(1);
+		expect(toolParts[0]).toMatchObject({ kind: "tool", id: "call-1", state: "received", result: "12:00" });
+	});
+
+	it("preserves a prior text part when a new reasoning delta arrives (text parts survive re-decomposition)", () => {
+		// Seed a conversation message whose parts already contain a text segment (simulates a resumed/re-attached turn).
+		const withTextPart = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"go",
+			"2026-05-24T00:00:01.000Z",
+		);
+		// Inject a text part directly into the cached assistant message so the reducer reads it as prior state.
+		const seeded = {
+			...withTextPart,
+			messages: withTextPart.messages.map((message) =>
+				message.id === "assistant-1"
+					? {
+							...message,
+							parts: [{ kind: "text" as const, id: "assistant-1:1", sequence: 1, text: "narration" }],
+						}
+					: message,
+			),
+		};
+
+		// A new reasoning delta arrives after the text part: it should open a new reasoning segment, and the text
+		// part must survive in the resulting parts[] rather than being silently dropped.
+		const result = applyNodeChatStreamEvent(
+			seeded,
+			streamEvent({ sequence: 2, content: null, delta: null, reasoningDelta: "thinking" }),
+		);
+
+		const parts = result.streamingMessage.parts ?? [];
+		const textParts = parts.filter((part) => part.kind === "text");
+		const reasoningParts = parts.filter((part) => part.kind === "reasoning");
+		expect(textParts).toHaveLength(1);
+		expect(textParts[0]).toMatchObject({ kind: "text", text: "narration" });
+		expect(reasoningParts).toHaveLength(1);
+		expect(reasoningParts[0]).toMatchObject({ kind: "reasoning", text: "thinking" });
+		// Text (seq 1) precedes reasoning (seq 2) in the sorted output.
+		expect(parts.map((part) => part.kind)).toEqual(["text", "reasoning"]);
+	});
+
 	it("marks only the active assistant message as cancelled during local cancellation", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,

@@ -35,12 +35,13 @@ public sealed class ContainerLifecycleService
     public async Task<IReadOnlyList<RuntimeComponentStatusDto>> ListContainersAsync(CancellationToken cancellationToken)
     {
         var containers = await _dockerRuntimeClient.ListContainersAsync(cancellationToken).ConfigureAwait(false);
-        return containers.Select(ToRuntimeStatus).ToArray();
+        return ScopeToOwnedComponents(containers).Select(ToRuntimeStatus).ToArray();
     }
 
     public Task<ContainerActionReportDto> StartContainerAsync(string containerName, CancellationToken cancellationToken)
     {
         return ExecuteActionAsync("start",
+            containerName,
             () => _dockerRuntimeClient.StartContainerAsync(containerName, cancellationToken),
             cancellationToken);
     }
@@ -50,6 +51,7 @@ public sealed class ContainerLifecycleService
         CancellationToken cancellationToken)
     {
         return ExecuteActionAsync("stop",
+            containerName,
             () => _dockerRuntimeClient.StopContainerAsync(containerName, drainTimeout ?? DefaultDrainTimeout, cancellationToken),
             cancellationToken);
     }
@@ -59,6 +61,7 @@ public sealed class ContainerLifecycleService
         CancellationToken cancellationToken)
     {
         return ExecuteActionAsync("restart",
+            containerName,
             () => _dockerRuntimeClient.RestartContainerAsync(containerName, drainTimeout ?? DefaultDrainTimeout, cancellationToken),
             cancellationToken);
     }
@@ -167,10 +170,25 @@ public sealed class ContainerLifecycleService
     }
 
     private async Task<ContainerActionReportDto> ExecuteActionAsync(string action,
+        string containerName,
         Func<Task> operation,
         CancellationToken cancellationToken)
     {
         var startedAt = _timeProvider.GetUtcNow();
+
+        if (!ContainerOwnership.Owns(_runtimeOptions.Manifest, containerName))
+        {
+            return new ContainerActionReportDto
+            {
+                Action = action,
+                Succeeded = false,
+                StartedAt = startedAt,
+                CompletedAt = _timeProvider.GetUtcNow(),
+                Components = await ListContainersAsync(cancellationToken).ConfigureAwait(false),
+                Diagnostics = [$"container-not-owned:{containerName}"]
+            };
+        }
+
         await operation().ConfigureAwait(false);
         var components = await ListContainersAsync(cancellationToken).ConfigureAwait(false);
 
@@ -183,6 +201,35 @@ public sealed class ContainerLifecycleService
             Components = components,
             Diagnostics = []
         };
+    }
+
+    /// <summary>
+    ///     Restricts a raw daemon container listing to the runtime components this node manages and collapses
+    ///     terminated duplicates. Ownership is scoped by the node's static manifest (the containers it declares).
+    ///     The stance is FAIL-CLOSED: without a manifest the node owns nothing, so the listing is empty rather than
+    ///     exposing every daemon container (incl. cross-app containers) when no ownership boundary is known.
+    ///     Production nodes always boot with a manifest, so their scoping is unchanged. Among containers sharing a
+    ///     name (e.g. a stale, terminated duplicate alongside the live one) a single representative is kept,
+    ///     preferring a running instance so stopped stale dupes do not surface in the Manager UI.
+    /// </summary>
+    private IReadOnlyList<DockerContainerStatus> ScopeToOwnedComponents(IReadOnlyList<DockerContainerStatus> containers)
+    {
+        var owned = containers.Where(IsOwnedComponent);
+
+        return owned
+               .GroupBy(static container => container.Name, StringComparer.Ordinal)
+               .Select(SelectRepresentative)
+               .ToArray();
+    }
+
+    private bool IsOwnedComponent(DockerContainerStatus container)
+    {
+        return ContainerOwnership.Owns(_runtimeOptions.Manifest, container.Name);
+    }
+
+    private static DockerContainerStatus SelectRepresentative(IGrouping<string, DockerContainerStatus> group)
+    {
+        return group.FirstOrDefault(static container => container.IsRunning) ?? group.First();
     }
 
     private RuntimeComponentStatusDto ToRuntimeStatus(DockerContainerStatus container)
@@ -207,13 +254,7 @@ public sealed class ContainerLifecycleService
 
     private bool IsRuntimeComponent(RuntimeComponentStatusDto component)
     {
-        var manifest = _runtimeOptions.Manifest;
-        if (manifest is not null)
-        {
-            return manifest.Containers.Any(container => string.Equals(container.Name, component.Name, StringComparison.Ordinal));
-        }
-
-        return true;
+        return ContainerOwnership.Owns(_runtimeOptions.Manifest, component.Name);
     }
 
     private bool ContainerBelongsToRuntimeNetwork(ContainerManifest container)

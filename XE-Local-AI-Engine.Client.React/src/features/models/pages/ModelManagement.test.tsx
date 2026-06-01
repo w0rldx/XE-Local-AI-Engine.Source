@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -125,14 +125,22 @@ describe("ModelManagement", () => {
 		expect(screen.getByText("Ollama offline")).toBeTruthy();
 	});
 
-	it("shows the license preview and opens the full license dialog", async () => {
+	it("collapses the license text by default and expands inline on toggle", async () => {
 		renderWithProviders(<ModelManagement />);
 
-		const expandButton = await screen.findByText("Show full");
-		fireEvent.click(expandButton);
+		// Toggle is present and starts collapsed
+		const toggle = await screen.findByRole("button", { name: /show full/i });
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
 
-		const dialog = await screen.findByRole("dialog");
-		expect(within(dialog).getByText("Model license")).toBeTruthy();
-		expect(within(dialog).getByText("fake")).toBeTruthy();
+		// No dialog rendered initially
+		expect(screen.queryByRole("dialog")).toBeNull();
+
+		// Click expands inline — toggle switches to "Show less"
+		fireEvent.click(toggle);
+		expect(toggle.getAttribute("aria-expanded")).toBe("true");
+		expect(screen.getByRole("button", { name: /show less/i })).toBeTruthy();
+
+		// No dialog opened
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 });

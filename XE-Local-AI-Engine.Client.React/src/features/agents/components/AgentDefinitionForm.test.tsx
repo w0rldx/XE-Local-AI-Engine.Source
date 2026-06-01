@@ -158,6 +158,25 @@ describe("AgentDefinitionForm", () => {
 		expect(screen.getByTestId("agent-tool-selector")).toBeTruthy();
 	});
 
+	// Regression guard for the RC crash: onChange read event.currentTarget.value inside a deferred functional
+	// updater. React 19 nulls currentTarget after the synchronous handler returns, so the updater read null.value
+	// → TypeError. Fix: capture into a local const before the updater (e.g. `const v = e.currentTarget.value`).
+	// NOTE: React flushes synchronously in act() so this test cannot reproduce the timing failure; it only guards
+	// that the controlled value flows through correctly. A real-browser E2E test is needed to catch the
+	// null-currentTarget class of bug (see Plans/AGENT-MODE-TEST-RUNBOOK.md — documented gap).
+	it("accepts typed input into the multiline instructions field without crashing", () => {
+		const { onSubmit } = renderForm({ initialValues: { name: "Helper" } });
+
+		const instructions = screen.getByTestId("agent-form-instructions") as HTMLTextAreaElement;
+		fireEvent.change(instructions, { target: { value: "You are a careful assistant." } });
+
+		expect(instructions.value).toBe("You are a careful assistant.");
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Helper", instructions: "You are a careful assistant." }),
+		);
+	});
+
 	it("disables tool selection and shows a warning when the model is not tool-capable", () => {
 		renderForm({
 			initialValues: { modelProfile: "llama3:8b" },

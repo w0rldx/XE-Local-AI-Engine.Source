@@ -97,7 +97,10 @@ internal static class LocalChatMapper
             ParentMessageId = message.ParentMessageId,
             VariantGroupId = message.VariantGroupId,
             FeedbackRating = message.FeedbackRating,
-            FeedbackComment = message.FeedbackComment
+            FeedbackComment = message.FeedbackComment,
+            // Surface the persisted ordered interleave verbatim; null for legacy messages (client synthesizes from
+            // Reasoning). The DTO part records carry no transport-specific shape, so they pass through unchanged.
+            Parts = message.Parts
         };
     }
 }

@@ -5,6 +5,8 @@ import { IconLogout, IconMenu2 as MenuIcon } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { useTranslation } from "react-i18next";
+
 import { logoutNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar";
@@ -15,6 +17,7 @@ import { AboutDialogButton } from "@/features/about/components/AboutDialogButton
 import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Index";
 
 export function HeaderBar() {
+	const { t } = useTranslation();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const [logoutPending, setLogoutPending] = useState(false);
 	const navigate = useNavigate();
@@ -38,7 +41,7 @@ export function HeaderBar() {
 				<div className="flex flex-row items-center pl-2 md:hidden">
 					<ActionIcon
 						className="flex flex-row items-center"
-						aria-label="open drawer"
+						aria-label={t("components.headerBar.openDrawer")}
 						onClick={() => setDrawerOpen(true)}
 						variant="subtle"
 						style={{ display: "flex" }}
@@ -53,7 +56,7 @@ export function HeaderBar() {
 					<AboutDialogButton />
 					<LanguageMenu />
 					<Button variant="subtle" leftSection={<IconLogout size={16} />} loading={logoutPending} onClick={handleLogout}>
-						Logout
+						{t("components.headerBar.logout")}
 					</Button>
 				</div>
 			</div>

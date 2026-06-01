@@ -74,6 +74,81 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task TerminalizeAssistantMessageAsync_WithParts_RoundTripsOrderedInterleave()
+    {
+        await using var provider = await BuildProviderAsync("parts-roundtrip.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Parts", "node", 2000)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 2001)).ConfigureAwait(false);
+
+        // reasoning -> tool -> reasoning: a tool call between two reasoning runs is the Option A interleave that
+        // produces a second Thoughts block. The tool part carries args + result (the completed-phase data).
+        var parts = new List<NodeChatMessagePart>
+        {
+            new(NodeChatMessagePartKinds.Reasoning, 0, Text: "thinking before"),
+            new(NodeChatMessagePartKinds.Tool, 1, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{\"tz\":\"UTC\"}", Result: "2026-06-01T00:00:00Z"),
+            new(NodeChatMessagePartKinds.Reasoning, 2, Text: "thinking after")
+        };
+
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                2002,
+                "the answer",
+                "thinking before\nthinking after",
+                Parts: parts))
+            .ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        var loadedParts = AssertEx.NotNull(assistant.Parts);
+
+        AssertEx.Equal(3, loadedParts.Count);
+        AssertEx.Equal(NodeChatMessagePartKinds.Reasoning, loadedParts[0].Kind);
+        AssertEx.Equal("thinking before", loadedParts[0].Text);
+        AssertEx.Equal(NodeChatMessagePartKinds.Tool, loadedParts[1].Kind);
+        AssertEx.Equal("call-1", loadedParts[1].ToolCallId);
+        AssertEx.Equal("GetCurrentTime", loadedParts[1].Name);
+        AssertEx.Equal(NodeChatToolPartStates.Received, loadedParts[1].State);
+        AssertEx.Equal("{\"tz\":\"UTC\"}", loadedParts[1].Args);
+        AssertEx.Equal("2026-06-01T00:00:00Z", loadedParts[1].Result);
+        AssertEx.Equal(NodeChatMessagePartKinds.Reasoning, loadedParts[2].Kind);
+        AssertEx.Equal("thinking after", loadedParts[2].Text);
+        // The flattened Reasoning is still persisted for backward-compat + token counts.
+        AssertEx.Equal("thinking before\nthinking after", assistant.Reasoning);
+    }
+
+    [Test]
+    public async Task GetConversationAsync_WhenMetadataHasNoParts_ReturnsNullPartsWithoutError()
+    {
+        await using var provider = await BuildProviderAsync("parts-legacy.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy", "node", 2100)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 2101)).ConfigureAwait(false);
+
+        // Terminalize WITHOUT parts (the pre-parts shape): the serialized metadata omits the parts key entirely.
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                2102,
+                "legacy answer",
+                "legacy reasoning"))
+            .ConfigureAwait(false);
+
+        // Simulate an even older blob with no parts key by overwriting the raw metadata column with a parts-free JSON.
+        await OverwriteMetadataJsonAsync(provider, assistantMessageId, "{\"Reasoning\":\"legacy reasoning\",\"Model\":null}").ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Null(assistant.Parts);
+        AssertEx.Equal("legacy reasoning", assistant.Reasoning);
+        AssertEx.Equal("legacy answer", assistant.Content);
+    }
+
+    [Test]
     public async Task CancelMessageAsync_TerminalizesOnlyMatchingCorrelation()
     {
         await using var provider = await BuildProviderAsync("cancel.sqlite").ConfigureAwait(false);
@@ -646,6 +721,27 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var origin = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return (string)origin!;
+    }
+
+    private static async Task OverwriteMetadataJsonAsync(ServiceProvider provider, Guid messageId, string metadataJson)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE messages SET metadata_json = $metadata_json WHERE message_id = $message_id;";
+        // The metadata_json column is written/read as raw UTF-8 bytes via ADO.NET (no EF interceptor on this path),
+        // so writing plaintext UTF-8 here mirrors how the service persists the blob under the null key holder.
+        var metadataParameter = command.CreateParameter();
+        metadataParameter.ParameterName = "$metadata_json";
+        metadataParameter.Value = Encoding.UTF8.GetBytes(metadataJson);
+        command.Parameters.Add(metadataParameter);
+        var idParameter = command.CreateParameter();
+        idParameter.ParameterName = "$message_id";
+        idParameter.Value = messageId;
+        command.Parameters.Add(idParameter);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     private static async Task<byte[]> ReadRawMessageContentAsync(ServiceProvider provider, Guid messageId)

@@ -252,6 +252,13 @@ public sealed class NodeChatMessageResponse
     public string? FeedbackRating { get; init; }
 
     public string? FeedbackComment { get; init; }
+
+    /// <summary>
+    ///     Ordered interleave of reasoning segments and tool cards (serialized as <c>parts</c>). Null for legacy
+    ///     messages persisted before parts existed; the client synthesizes a single Thoughts block from
+    ///     <see cref="Reasoning" /> in that case.
+    /// </summary>
+    public IReadOnlyList<NodeChatMessagePart>? Parts { get; init; }
 }
 
 /// <summary>

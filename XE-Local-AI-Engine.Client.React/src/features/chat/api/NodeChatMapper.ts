@@ -3,6 +3,7 @@ import {
 	type NodeChatConversationResponseDto,
 	type NodeChatConversationSummaryResponseDto,
 	type NodeChatMessageFeedbackResponseDto,
+	type NodeChatMessagePartDto,
 	type NodeChatMessageResponseDto,
 	type NodeChatMessageRevisionsResponseDto,
 	type NodeChatStreamEventDto,
@@ -12,17 +13,78 @@ import type {
 	ChatFeedbackRating,
 	ChatMessageFeedback,
 	ChatMessageModel,
+	ChatMessagePart,
 	ChatMessageRevisions,
 	ChatOrigin,
 	ChatRole,
 	ChatToolCall,
 	MessageStatus,
+	ToolCallState,
 } from "@/features/chat/models/ChatModels";
 
 const knownRoles = new Set<ChatRole>(["user", "assistant", "system", "tool"]);
 const knownStatuses = new Set<MessageStatus>(["pending", "queued", "streaming", "completed", "cancelled", "failed", "interrupted"]);
 const knownOrigins = new Set<ChatOrigin>(["local", "remote"]);
 const knownRatings = new Set<ChatFeedbackRating>(["up", "down"]);
+const knownToolStates = new Set<ToolCallState>(["requesting", "waiting", "received", "failed"]);
+
+function toToolState(state: string | null | undefined): ToolCallState {
+	const normalized = (state ?? "").toLowerCase() as ToolCallState;
+	return knownToolStates.has(normalized) ? normalized : "received";
+}
+
+/**
+ * Maps the wire `parts[]` to the ordered `ChatMessagePart[]`. Tool parts key on `toolCallId` (stable across
+ * requested/completed); reasoning/text parts key on `${messageId}:${sequence}`. Unknown `kind` values are skipped
+ * so a forward-compat backend addition never breaks rendering. Returns undefined when no usable parts remain.
+ */
+function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | undefined): ChatMessagePart[] | undefined {
+	if (!parts || parts.length === 0) {
+		return undefined;
+	}
+
+	const mapped = parts.reduce<ChatMessagePart[]>((accumulator, part) => {
+		const kind = part.kind?.toLowerCase();
+		if (kind === "tool") {
+			accumulator.push({
+				kind: "tool",
+				id: part.toolCallId ?? `${messageId}:${part.sequence}`,
+				sequence: part.sequence,
+				name: part.name ?? "tool",
+				state: toToolState(part.state),
+				args: part.args ?? undefined,
+				result: part.result ?? undefined,
+				requiresApproval: part.requiresApproval ?? undefined,
+			});
+		} else if (kind === "reasoning" || kind === "text") {
+			accumulator.push({
+				kind,
+				id: `${messageId}:${part.sequence}`,
+				sequence: part.sequence,
+				text: part.text ?? "",
+			});
+		}
+
+		return accumulator;
+	}, []);
+
+	return mapped.length > 0 ? mapped : undefined;
+}
+
+/**
+ * Backward-compat synth for legacy turns persisted before ordered parts: a single leading reasoning segment from
+ * the flat `reasoning` blob so the Thoughts block still renders. Tools are not recoverable from legacy metadata,
+ * so they stay absent (matches the pre-fix reload behavior). Returns undefined when there is nothing to show.
+ */
+function synthesizeLegacyParts(messageId: string, reasoning: string | null | undefined): ChatMessagePart[] | undefined {
+	if (!reasoning || reasoning.trim().length === 0) {
+		return undefined;
+	}
+
+	// Keyed on the bare message id (not `${messageId}:0`) so a reloaded legacy turn matches the component-level synth
+	// and keeps the reasoning controls' stable testids.
+	return [{ kind: "reasoning", id: messageId, sequence: 0, text: reasoning }];
+}
 
 function toIso(unixMilliseconds: number): string {
 	const date = new Date(unixMilliseconds);
@@ -56,6 +118,9 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		role: toRole(dto.role),
 		content: dto.content,
 		reasoning: dto.reasoning ?? undefined,
+		// Prefer the persisted ordered parts so a reload restores the exact reasoning↔tool interleave; legacy turns
+		// (no parts) synthesize a single Thoughts block from the flat reasoning blob so they still render.
+		parts: mapParts(dto.messageId, dto.parts) ?? synthesizeLegacyParts(dto.messageId, dto.reasoning),
 		status: toStatus(dto.status),
 		createdAt: toIso(dto.createdAtUtc),
 		updatedAt: toIso(dto.updatedAtUtc),
@@ -151,8 +216,8 @@ export function mapMessageRevisions(dto: NodeChatMessageRevisionsResponseDto): C
 }
 
 /**
- * Maps a tool-lifecycle stream event into the `ChatToolCall` shape `ToolCallDisplay` renders. Returns null for
- * non-tool events. `tool-call-requested` → `waiting` when the tool needs approval (beta ships none) else
+ * Maps a tool-lifecycle stream event into the `ChatToolCall` shape the stream reducer folds into ordered parts.
+ * Returns null for non-tool events. `tool-call-requested` → `waiting` when the tool needs approval (beta ships none) else
  * `requesting`; `tool-call-completed` → `failed` when `isError` else `received`. The tool call id is the stable
  * key so a completed event can later collapse onto its requested entry.
  */
@@ -160,7 +225,9 @@ export function mapToolCallEvent(event: NodeChatStreamEventDto): ChatToolCall | 
 	if (event.type === nodeChatToolStreamEventTypes.toolCallRequested) {
 		const requiresApproval = event.requiresApproval ?? false;
 		return {
-			id: event.toolCallId ?? event.messageId,
+			// Fall back to a per-event unique key (messageId + sequence) so two distinct tool calls in one turn that
+			// both lack an explicit tool-call id are never collapsed onto the same card.
+			id: event.toolCallId ?? `${event.messageId}:${event.sequence}`,
 			name: event.toolName ?? "tool",
 			state: requiresApproval ? "waiting" : "requesting",
 			args: event.arguments ?? undefined,
@@ -170,7 +237,7 @@ export function mapToolCallEvent(event: NodeChatStreamEventDto): ChatToolCall | 
 
 	if (event.type === nodeChatToolStreamEventTypes.toolCallCompleted) {
 		return {
-			id: event.toolCallId ?? event.messageId,
+			id: event.toolCallId ?? `${event.messageId}:${event.sequence}`,
 			name: event.toolName ?? "tool",
 			state: event.isError ? "failed" : "received",
 			result: event.result ?? undefined,

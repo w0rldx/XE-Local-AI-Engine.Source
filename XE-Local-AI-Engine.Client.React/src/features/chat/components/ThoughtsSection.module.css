@@ -1,5 +1,9 @@
+/* Shared disclosure chrome for ThoughtsSection AND ToolCallCard so reasoning and tool blocks read as one
+   fluent family. Inter-block spacing is owned by the parent <Stack> in MessageParts — these blocks carry no
+   bottom margin of their own (keeps the reasoning↔tool↔reasoning gaps uniform). */
+
 .section {
-	margin-bottom: var(--mantine-spacing-sm);
+	min-width: 0;
 }
 
 .details {
@@ -49,11 +53,27 @@
 	overflow-wrap: anywhere;
 }
 
+/* Static header for the tool-call card — mirrors .summary's chrome (icon row + insets) without the clickable
+   disclosure affordance, since the tool body is always visible (the live result must show without a click). */
+
+.tool-header {
+	display: block;
+	min-height: 44px;
+	padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+	color: var(--mantine-color-dimmed);
+}
+
+/* Tool-call args/result body — same side/bottom insets as .reasoning-text, but leaves inner labels free to keep
+   their own (non-monospace) styles. */
+
+.tool-body {
+	padding: 0 var(--mantine-spacing-sm) var(--mantine-spacing-sm);
+}
+
 .streaming {
 	position: relative;
 	min-height: 88px;
 	overflow: hidden;
-	margin-bottom: var(--mantine-spacing-md);
 	border: 1px solid var(--mantine-color-default-border);
 	border-radius: var(--mantine-radius-md);
 	background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-7));
@@ -73,7 +93,9 @@
 @media (width <= 48em) {
 
 	.summary,
-	.reasoning-text {
+	.reasoning-text,
+	.tool-header,
+	.tool-body {
 		padding-right: var(--mantine-spacing-xs);
 		padding-left: var(--mantine-spacing-xs);
 	}

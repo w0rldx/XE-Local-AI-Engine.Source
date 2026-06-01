@@ -24,9 +24,12 @@ public sealed class GetToolCapableModelsEndpoint(IOptions<AgentHomeOptions> agen
 
     public override async Task HandleAsync(CancellationToken ct)
     {
+        // Configuration list binding appends rather than replaces, so an env/appsettings entry that repeats a default
+        // model id (the default is ["qwen3:8b"]) yields a duplicate in the bound list. Distinct it at the source so the
+        // response is a clean set; the offer provider already dedupes via an Ordinal HashSet on the same option.
         await Send.OkAsync(new ToolCapableModelsResponse
             {
-                Models = [.. _agentHomeOptions.Value.ToolCapableModels ?? []]
+                Models = [.. (_agentHomeOptions.Value.ToolCapableModels ?? []).Distinct(StringComparer.Ordinal)]
             },
             ct).ConfigureAwait(false);
     }

@@ -132,7 +132,7 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 				value={values.name}
 				required={true}
 				error={fieldError(errors, "name") ? t("pages.mcp.form.name.required", "Name is required") : undefined}
-				onChange={(event) => setValues((current) => ({ ...current, name: event.currentTarget.value }))}
+				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, name: value })); }}
 				data-testid="mcp-form-name"
 			/>
 			<Textarea
@@ -141,7 +141,7 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 				value={values.description}
 				autosize={true}
 				minRows={2}
-				onChange={(event) => setValues((current) => ({ ...current, description: event.currentTarget.value }))}
+				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, description: value })); }}
 				data-testid="mcp-form-description"
 			/>
 			<Select
@@ -165,7 +165,7 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 						value={values.command}
 						required={true}
 						error={fieldError(errors, "command")}
-						onChange={(event) => setValues((current) => ({ ...current, command: event.currentTarget.value }))}
+						onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, command: value })); }}
 						data-testid="mcp-form-command"
 					/>
 					<Textarea
@@ -182,9 +182,7 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 						label={t("pages.mcp.form.workingDirectory.label", "Working directory")}
 						placeholder={t("pages.mcp.form.workingDirectory.placeholder", "/optional/cwd")}
 						value={values.workingDirectory}
-						onChange={(event) =>
-							setValues((current) => ({ ...current, workingDirectory: event.currentTarget.value }))
-						}
+						onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, workingDirectory: value })); }}
 						data-testid="mcp-form-working-directory"
 					/>
 					<McpEnvEditor
@@ -204,7 +202,7 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 					value={values.url}
 					required={true}
 					error={fieldError(errors, "url")}
-					onChange={(event) => setValues((current) => ({ ...current, url: event.currentTarget.value }))}
+					onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, url: value })); }}
 					data-testid="mcp-form-url"
 				/>
 			)}

@@ -42,6 +42,33 @@ public sealed class LocalToolOfferProviderTests
     }
 
     [Test]
+    public void GetOfferedTools_WhenActiveModelEqualsToolCapableEntry_OffersAgentHomeTool()
+    {
+        // MED-4 regression: the live-evidence model id (qwen3:8b, the default ToolCapableModels entry) MUST satisfy
+        // the gate when it is the offer-time active model — the bug was that this model never reached this seam, not
+        // that the seam mismatched it. An exact match offers run_in_agent_home.
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b");
+
+        AssertEx.Contains(offered, tool => tool.Name == AgentHomeToolDefinition.ToolName);
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenActiveModelDiffersOnlyByCase_OmitsAgentHomeTool()
+    {
+        // The capability gate is intentionally an Ordinal (exact) match: a model id that differs only by case is NOT
+        // tool-capable. This pins the matching contract so a future change cannot silently loosen it.
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedTools("QWEN3:8B");
+
+        AssertEx.False(offered.Any(tool => tool.Name == AgentHomeToolDefinition.ToolName),
+            "the capability gate is an Ordinal exact match, so a case-only variant is not tool-capable");
+        AssertEx.Contains(offered, tool => tool.Name == "open_url");
+    }
+
+    [Test]
     public void GetOfferedTools_WhenModelIsNull_OmitsAgentHomeTool()
     {
         var provider = CreateProvider("qwen3:8b");

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,27 +40,53 @@ describe("ExpandableTextField", () => {
 		cleanup();
 	});
 
-	it("renders the clamped preview with its label", () => {
+	it("renders the clamped preview with its label and is collapsed by default", () => {
 		renderWithProviders(<ExpandableTextField label="License" value="Some short license" />);
 
 		expect(screen.getByText(/License: Some short license/)).toBeTruthy();
+		// No dialog — inline toggle only
 		expect(screen.queryByRole("dialog")).toBeNull();
+		// Toggle starts collapsed: aria-expanded=false and shows the expand label
+		const toggle = screen.getByRole("button", { name: /show full/i });
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
 	});
 
-	it("opens a dialog with the full value when expanded", async () => {
+	it("expands inline when the toggle is clicked and collapses again on second click", () => {
+		renderWithProviders(<ExpandableTextField label="License" value="full license body text" />);
+
+		const toggle = screen.getByRole("button", { name: /show full/i });
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+		fireEvent.click(toggle);
+		// After expanding: aria-expanded=true, label changes to "Show less"
+		expect(toggle.getAttribute("aria-expanded")).toBe("true");
+		expect(screen.getByRole("button", { name: /show less/i })).toBeTruthy();
+
+		fireEvent.click(toggle);
+		// After collapsing: aria-expanded=false, label back to "Show full"
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+		expect(screen.getByRole("button", { name: /show full/i })).toBeTruthy();
+	});
+
+	it("never renders a dialog", () => {
 		const fullValue = "line one\nline two\nfull license body text";
-		renderWithProviders(<ExpandableTextField label="License" value={fullValue} dialogTitle="Model license" />);
+		renderWithProviders(<ExpandableTextField label="License" value={fullValue} />);
 
-		fireEvent.click(screen.getByText("Show full"));
+		fireEvent.click(screen.getByRole("button", { name: /show full/i }));
 
-		const dialog = await screen.findByRole("dialog");
-		expect(within(dialog).getByText("Model license")).toBeTruthy();
-		expect(within(dialog).getByText(/full license body text/)).toBeTruthy();
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 
 	it("honors a custom expand label", () => {
 		renderWithProviders(<ExpandableTextField label="Notes" value="x" expandLabel="Expand notes" />);
 
 		expect(screen.getByText("Expand notes")).toBeTruthy();
+	});
+
+	it("honors a custom collapse label after expanding", () => {
+		renderWithProviders(<ExpandableTextField label="Notes" value="x" expandLabel="Expand notes" collapseLabel="Collapse notes" />);
+
+		fireEvent.click(screen.getByRole("button", { name: /expand notes/i }));
+		expect(screen.getByRole("button", { name: /collapse notes/i })).toBeTruthy();
 	});
 });
