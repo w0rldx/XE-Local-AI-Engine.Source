@@ -9,7 +9,7 @@ describe("navigationLinks", () => {
 		vi.doUnmock("@/capabilities/NodeCapabilities");
 	});
 
-	it("lists the node shell routes including the agents and mcp links when their capabilities are on", () => {
+	it("lists the node shell routes including the agents, mcp, and scheduler links when their capabilities are on", () => {
 		expect(navigationLinks.map((link) => [link.id, link.to])).toEqual([
 			["home", nodeRoutePaths.home],
 			["dashboard", nodeRoutePaths.dashboard],
@@ -23,6 +23,7 @@ describe("navigationLinks", () => {
 			["tools", nodeRoutePaths.tools],
 			["agents", nodeRoutePaths.agents],
 			["mcp", nodeRoutePaths.mcp],
+			["scheduler", nodeRoutePaths.scheduler],
 		]);
 	});
 
@@ -56,5 +57,21 @@ describe("navigationLinks", () => {
 
 		const { navigationLinks: gatedLinks } = await import("@/data/navigation/NavigationMenuData");
 		expect(gatedLinks.some((link) => link.id === "mcp")).toBe(false);
+	});
+
+	it("hides the scheduler link when scheduler is off", async () => {
+		vi.resetModules();
+		vi.doMock("@/capabilities/NodeCapabilities", async () => {
+			const actual = await vi.importActual<typeof import("@/capabilities/NodeCapabilities")>(
+				"@/capabilities/NodeCapabilities",
+			);
+			return {
+				...actual,
+				nodeCapabilities: { ...actual.nodeCapabilities, scheduler: false },
+			};
+		});
+
+		const { navigationLinks: gatedLinks } = await import("@/data/navigation/NavigationMenuData");
+		expect(gatedLinks.some((link) => link.id === "scheduler")).toBe(false);
 	});
 });

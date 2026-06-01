@@ -11,6 +11,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.mcpServers).toBe(true);
 	});
 
+	it("enables the scheduler by default", () => {
+		expect(nodeCapabilities.scheduler).toBe(true);
+	});
+
 	it("keeps node chat local-first and approval-gated for initial parity", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
@@ -40,6 +44,7 @@ describe("nodeCapabilities", () => {
 			tools: "/tools",
 			agents: "/agents",
 			mcp: "/mcp",
+			scheduler: "/scheduler",
 		});
 	});
 });

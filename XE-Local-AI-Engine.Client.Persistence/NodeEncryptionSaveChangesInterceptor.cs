@@ -120,6 +120,28 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 
+        // Scheduled job definitions are node-scoped (no conversation/message), so the AAD binds the empty conversation
+        // id to the definition's own id plus the column name. Only the opaque job parameters are encrypted; they are
+        // optional, so they encrypt only when present.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ScheduledJobDefinition>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.ParameterJson), Guid.Empty, entry.Entity.Id, "parameter_json", trackedProperties);
+        }
+
+        // Scheduled job runs are node-scoped, so the AAD binds the empty conversation id to the run's own id plus the
+        // column name. Only the structured run detail is encrypted; it is optional.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ScheduledJobRun>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailsJson), Guid.Empty, entry.Entity.Id, "details_json", trackedProperties);
+        }
+
+        // Scheduled job run events are node-scoped, so the AAD binds the empty conversation id to the event's own id
+        // plus the column name. Only the structured event payload is encrypted; it is optional.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ScheduledJobRunEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DataJson), Guid.Empty, entry.Entity.Id, "data_json", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

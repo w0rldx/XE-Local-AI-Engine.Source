@@ -167,6 +167,36 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Local API contract type for scheduler.
+    /// </summary>
+    public static class Scheduler
+    {
+        // Flat template catalog — a distinct literal so it never collides with the {scheduledJobId} param on Jobs.
+        public const string Templates = "scheduler/templates";
+
+        // Job collection (GET list, POST create) and individual job resource (GET, PUT, DELETE).
+        public const string Jobs = "scheduler/jobs";
+        public const string JobById = "scheduler/jobs/{scheduledJobId}";
+
+        // Lifecycle actions — literal segments after the {scheduledJobId} param; FastEndpoints prioritises literals
+        // over route params so these never collide with JobById (same pattern as playbook promote/reject).
+        public const string JobEnable = "scheduler/jobs/{scheduledJobId}/enable";
+        public const string JobDisable = "scheduler/jobs/{scheduledJobId}/disable";
+        public const string JobTrigger = "scheduler/jobs/{scheduledJobId}/trigger";
+
+        // Run history — flat collection (query-filtered) and individual run.
+        public const string Runs = "scheduler/runs";
+        public const string RunById = "scheduler/runs/{runId}";
+
+        // Cancel a running job run — literal segment after the {runId} param (literals prioritised over route params).
+        public const string RunCancel = "scheduler/runs/{runId}/cancel";
+
+        // SignalR push hub for scheduler lifecycle events. Full path (mapped via MapHub, not the FastEndpoints prefix),
+        // mirroring LocalChat.Hub / RuntimeManager.Hub.
+        public const string Hub = "/api/local/v1/scheduler/hub";
+    }
+
+    /// <summary>
     ///     Local API contract type for mcp.
     /// </summary>
     public static class Mcp

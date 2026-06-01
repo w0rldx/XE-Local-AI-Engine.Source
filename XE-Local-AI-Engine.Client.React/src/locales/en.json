@@ -46,6 +46,7 @@
 		"tools": "Tools",
 		"agents": "Agents",
 		"mcp": "MCP",
+		"scheduler": "Scheduler",
 		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
@@ -1200,6 +1201,152 @@
 				"save": "Could not save the MCP server.",
 				"delete": "Could not delete the MCP server.",
 				"enable": "Could not change the server state."
+			}
+		},
+		"scheduler": {
+			"eyebrow": "Worker Node",
+			"title": "Scheduler",
+			"subtitle": "Schedule recurring and one-off jobs on this node. Jobs are disabled until you enable them, and parameters are stored encrypted.",
+			"createButton": "Create job",
+			"list": {
+				"loading": "Loading scheduled jobs…",
+				"empty": "No scheduled jobs yet. Create one to get started.",
+				"hasParameters": "Yes",
+				"noParameters": "—",
+				"enabledAria": "Toggle {{name}}",
+				"triggerAria": "Run {{name}} now",
+				"editAria": "Edit {{name}}",
+				"deleteAria": "Delete {{name}}",
+				"columns": {
+					"name": "Name",
+					"kind": "Kind",
+					"schedule": "Schedule",
+					"parameters": "Parameters",
+					"enabled": "Enabled",
+					"actions": "Actions"
+				}
+			},
+			"editor": {
+				"createTitle": "Create scheduled job",
+				"editTitle": "Edit scheduled job"
+			},
+			"form": {
+				"template": {
+					"label": "Template",
+					"description": "The job template determines what this job does.",
+					"placeholder": "Select a template"
+				},
+				"displayName": {
+					"label": "Name",
+					"placeholder": "Nightly cleanup"
+				},
+				"description": {
+					"label": "Description",
+					"placeholder": "Optional short summary"
+				},
+				"scheduleKind": {
+					"label": "Schedule kind",
+					"options": {
+						"Cron": "Cron",
+						"OneShot": "One-off",
+						"SimpleInterval": "Interval"
+					}
+				},
+				"cronExpression": {
+					"label": "Cron expression",
+					"description": "Quartz cron syntax, e.g. 0 0 3 * * ?"
+				},
+				"intervalSeconds": {
+					"label": "Interval (seconds)"
+				},
+				"repeatCount": {
+					"label": "Repeat count",
+					"description": "Leave blank to repeat forever."
+				},
+				"startAtUtc": {
+					"label": "Start at"
+				},
+				"timeZoneId": {
+					"label": "Time zone"
+				},
+				"misfirePolicy": {
+					"label": "Misfire policy",
+					"description": "How a missed fire is handled when the node was unavailable.",
+					"options": {
+						"Smart": "Smart",
+						"SkipMissed": "Skip missed",
+						"FireOnceNow": "Fire once now"
+					}
+				},
+				"maxRuntimeSeconds": {
+					"label": "Max runtime (seconds)",
+					"description": "Leave blank for no runtime limit."
+				},
+				"preventOverlap": {
+					"label": "Prevent overlapping runs"
+				},
+				"parameters": {
+					"label": "Parameters (JSON)",
+					"description": "Optional template parameters as JSON. Stored encrypted and never shown again after saving."
+				}
+			},
+			"runs": {
+				"title": "Run history",
+				"loading": "Loading run history…",
+				"empty": "No runs match the current filters.",
+				"viewAria": "View run",
+				"cancelAria": "Cancel run",
+				"columns": {
+					"status": "Status",
+					"trigger": "Trigger",
+					"fired": "Fired",
+					"duration": "Duration",
+					"summary": "Summary",
+					"actions": "Actions"
+				},
+				"filters": {
+					"job": "Job",
+					"status": "Status",
+					"allJobs": "All jobs",
+					"allStatuses": "All statuses"
+				},
+				"status": {
+					"Queued": "Queued",
+					"Running": "Running",
+					"Succeeded": "Succeeded",
+					"Failed": "Failed",
+					"Cancelled": "Cancelled",
+					"TimedOut": "Timed out",
+					"Skipped": "Skipped"
+				},
+				"trigger": {
+					"Schedule": "Schedule",
+					"Manual": "Manual",
+					"Agent": "Agent",
+					"System": "System"
+				},
+				"detail": {
+					"loading": "Loading run…",
+					"empty": "Select a run to view its details.",
+					"fired": "Fired",
+					"completed": "Completed",
+					"duration": "Duration",
+					"summary": "Summary"
+				}
+			},
+			"delete": {
+				"title": "Delete scheduled job",
+				"description": "Delete '{{name}}'? This cannot be undone."
+			},
+			"errors": {
+				"load": "Could not load scheduled jobs.",
+				"loadRuns": "Could not load run history.",
+				"loadRun": "Could not load the run.",
+				"save": "Could not save the scheduled job.",
+				"delete": "Could not delete the scheduled job.",
+				"enable": "Could not change the job state.",
+				"trigger": "Could not trigger the job.",
+				"cancel": "Could not cancel the run."
 			}
 		},
 		"schedule": {

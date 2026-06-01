@@ -50,6 +50,7 @@ try
     await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
     await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
     await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
+    await ReconcileStaleScheduledRunsAsync(app.Services).ConfigureAwait(false);
     ActivateInvocationResumeRegistry(app.Services);
     RegisterWorkerShutdownDrain(app);
 
@@ -117,6 +118,8 @@ try
     app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<RuntimeManagerHub>(LocalApiRoutes.RuntimeManager.Hub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
     if (!app.Environment.IsProduction())
@@ -193,6 +196,26 @@ static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider servi
     var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
 
     await recoveryService.RecoverInterruptedMessagesAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds()).ConfigureAwait(false);
+}
+
+static async Task ReconcileStaleScheduledRunsAsync(IServiceProvider services)
+{
+    ArgumentNullException.ThrowIfNull(services);
+
+    // A previous process may have died mid-run, leaving Queued/Running rows whose in-memory cancellation registry is
+    // gone. Reconcile them to a sanitized terminal state BEFORE the Quartz hosted service starts firing recovery work,
+    // so the history never shows a run stuck Running forever. Cheap no-op when there is no scheduler history.
+    await using var scope = services.CreateAsyncScope();
+    var runStore = scope.ServiceProvider.GetRequiredService<XE_Local_AI_Engine.Client.Persistence.IScheduledJobRunStore>();
+
+    var reconciledCount = await runStore.MarkStaleActiveRunsAsync(
+        XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledRunStatus.Failed,
+        "Run was interrupted by a node restart and reconciled at startup.").ConfigureAwait(false);
+
+    if (reconciledCount > 0)
+    {
+        Log.Information("Reconciled {ReconciledCount} stale scheduled job run(s) at startup.", reconciledCount);
+    }
 }
 
 static void ActivateInvocationResumeRegistry(IServiceProvider services)

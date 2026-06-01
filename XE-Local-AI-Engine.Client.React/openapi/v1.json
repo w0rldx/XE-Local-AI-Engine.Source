@@ -7,10 +7,2834 @@
   },
   "servers": [
     {
-      "url": "https://localhost:50722"
+      "url": "https://localhost:50799"
     }
   ],
   "paths": {
+    "/api/local/v1/scheduler/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpoint",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/jobs": {
+      "post": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1CreateScheduledJobEndpoint",
+        "requestBody": {
+          "x-name": "CreateScheduledJobRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1CreateScheduledJobRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobsEndpoint",
+        "parameters": [
+          {
+            "name": "includeDeleted",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/jobs/{scheduledJobId}": {
+      "delete": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1DeleteScheduledJobEndpoint",
+        "parameters": [
+          {
+            "name": "scheduledJobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1GetScheduledJobEndpoint",
+        "parameters": [
+          {
+            "name": "scheduledJobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1UpdateScheduledJobEndpoint",
+        "parameters": [
+          {
+            "name": "scheduledJobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateScheduledJobRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1UpdateScheduledJobRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/jobs/{scheduledJobId}/disable": {
+      "post": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1DisableScheduledJobEndpoint",
+        "parameters": [
+          {
+            "name": "scheduledJobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/jobs/{scheduledJobId}/enable": {
+      "post": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1EnableScheduledJobEndpoint",
+        "parameters": [
+          {
+            "name": "scheduledJobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/runs/{runId}": {
+      "get": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/runs": {
+      "get": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoint",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduledRunStatus"
+                }
+              ]
+            }
+          },
+          {
+            "name": "fromUtc",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "toUtc",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "scheduledJobId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/templates": {
+      "get": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger": {
+      "post": {
+        "tags": [
+          "Scheduler"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1TriggerScheduledJobEndpoint",
+        "parameters": [
+          {
+            "name": "scheduledJobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/runtime/containers/action": {
+      "post": {
+        "tags": [
+          "Runtime"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpoint",
+        "requestBody": {
+          "x-name": "RuntimeContainerActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeContainerActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeContainerActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/runtime/status": {
+      "get": {
+        "tags": [
+          "Runtime"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/node-settings": {
+      "get": {
+        "tags": [
+          "Node-Settings"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Node-Settings"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpoint",
+        "requestBody": {
+          "x-name": "SaveNodeSettingsRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/binding/cancel": {
+      "post": {
+        "tags": [
+          "Binding"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBindingV1CancelNodeBindingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/binding/poll": {
+      "post": {
+        "tags": [
+          "Binding"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsNodeBindingV1PollNodeBindingEndpoint",
+        "requestBody": {
+          "x-name": "PollNodeBindingSessionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/binding/start": {
+      "post": {
+        "tags": [
+          "Binding"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBindingV1NodeBindingSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/mcp/servers": {
+      "post": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1CreateMcpServerEndpoint",
+        "requestBody": {
+          "x-name": "CreateMcpServerRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1CreateMcpServerRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1ListMcpServersEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1ListMcpServersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/mcp/servers/{mcpServerId}": {
+      "delete": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1DeleteMcpServerEndpoint",
+        "parameters": [
+          {
+            "name": "mcpServerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerEndpoint",
+        "parameters": [
+          {
+            "name": "mcpServerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1UpdateMcpServerEndpoint",
+        "parameters": [
+          {
+            "name": "mcpServerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateMcpServerRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1UpdateMcpServerRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/mcp/servers/{mcpServerId}/tools": {
+      "get": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerToolsEndpoint",
+        "parameters": [
+          {
+            "name": "mcpServerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerToolsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/tool-catalog": {
+      "get": {
+        "tags": [
+          "Tool-Catalog"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1GetToolCatalogEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1ToolCatalogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/mcp/servers/{mcpServerId}/enabled": {
+      "patch": {
+        "tags": [
+          "Mcp"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1SetMcpServerEnabledEndpoint",
+        "parameters": [
+          {
+            "name": "mcpServerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetMcpServerEnabledRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1SetMcpServerEnabledRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/{modelName}": {
+      "delete": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/{modelName}/details": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1LocalModelDetailsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ListLocalModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/pull": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelEndpoint",
+        "requestBody": {
+          "x-name": "PullLocalModelRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/select": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint",
+        "requestBody": {
+          "x-name": "SelectLocalModelRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/cancel": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpoint",
+        "requestBody": {
+          "x-name": "CancelNodeChatMessageRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpoint",
+        "requestBody": {
+          "x-name": "CreateNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpoint",
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}": {
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatConversationEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/rename": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "RenameNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/pin": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1PinNodeChatConversationEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "PinNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1PinNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/archive": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ArchiveNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/branch/{messageId}": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback": {
+      "put": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetNodeChatMessageFeedbackRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/selected-path": {
+      "put": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpoint",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetNodeChatSelectedPathRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/invocations": {
+      "get": {
+        "tags": [
+          "Invocations"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsInvocationsV1GetInvocationMonitorEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationMonitorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/connection/connect": {
+      "post": {
+        "tags": [
+          "Connection"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1ConnectConnectionEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsConnectionV1ConnectionStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/connection/auto-connect/disable": {
+      "post": {
+        "tags": [
+          "Connection"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1DisableAutoConnectEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsConnectionV1ConnectionStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/connection/disconnect": {
+      "post": {
+        "tags": [
+          "Connection"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1DisconnectConnectionEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsConnectionV1ConnectionStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/connection/auto-connect/enable": {
+      "post": {
+        "tags": [
+          "Connection"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1EnableAutoConnectEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsConnectionV1ConnectionStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/connection": {
+      "get": {
+        "tags": [
+          "Connection"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1GetConnectionStatusEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsConnectionV1ConnectionStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/cloud-settings": {
+      "delete": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1CloudSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1CloudSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpoint",
+        "requestBody": {
+          "x-name": "SaveCloudSettingsRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1CloudSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/auth/status": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeAuthStatusEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeAuthStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/local/v1/auth/setup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeSetupEndpoint",
+        "requestBody": {
+          "x-name": "NodeSetupRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeSetupRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/local/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginEndpoint",
+        "requestBody": {
+          "x-name": "NodeLoginRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeAccessTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/local/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeRefreshEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeAccessTokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/local/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeLogoutEndpoint",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/auth/change-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeChangePasswordEndpoint",
+        "requestBody": {
+          "x-name": "NodeChangePasswordRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeChangePasswordRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeMeEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeMeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/diagnostics/validation-probe": {
       "post": {
         "tags": [
@@ -61,6 +2885,1083 @@
         "security": [
           {
             "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/analyze": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1AnalyzePlaybookEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ListPlaybookActionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ApproveGoldenConversationEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "goldenConversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1CreateAgentDefinitionEndpoint",
+        "requestBody": {
+          "x-name": "CreateAgentDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1CreateAgentDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentDefinitionsEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentDefinitionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/golden-conversations": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1CreateGoldenConversationEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "CreateGoldenConversationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1CreateGoldenConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenConversationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1CreatePlaybookActionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "CreatePlaybookActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1CreatePlaybookActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ListPlaybookActionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}": {
+      "delete": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentDefinitionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateAgentDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}": {
+      "delete": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteGoldenConversationEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "goldenConversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}": {
+      "delete": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1DeletePlaybookActionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1UpdatePlaybookActionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdatePlaybookActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1UpdatePlaybookActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/feedback-insights": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/monitor": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/tool-capable-models": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetToolCapableModelsEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ToolCapableModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenHarvestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/reject": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/eval": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/suggested": {
+      "put": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpoint",
+        "parameters": [
+          {
+            "name": "agentDefinitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "actionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateSuggestedPlaybookActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
           }
         ]
       }
@@ -68,27 +3969,923 @@
   },
   "components": {
     "schemas": {
-      "XE_Local_AI_EngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse": {
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "cancellationRequestedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "templateId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scheduleKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduleKind"
+          },
+          "cronExpression": {
+            "type": "string",
+            "nullable": true
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "repeatCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "startAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "endAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timeZoneId": {
+            "type": "string"
+          },
+          "misfirePolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesSchedulerMisfirePolicy"
+          },
+          "preventOverlap": {
+            "type": "boolean"
+          },
+          "maxRuntimeSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "hasParameters": {
+            "type": "boolean"
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduledJobCreator"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "disabledAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "deletedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesScheduleKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Cron",
+          "OneShot",
+          "SimpleInterval"
+        ],
+        "enum": [
+          "Cron",
+          "OneShot",
+          "SimpleInterval"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesSchedulerMisfirePolicy": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Smart",
+          "SkipMissed",
+          "FireOnceNow"
+        ],
+        "enum": [
+          "Smart",
+          "SkipMissed",
+          "FireOnceNow"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesScheduledJobCreator": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "User",
+          "Agent",
+          "System"
+        ],
+        "enum": [
+          "User",
+          "Agent",
+          "System"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1CreateScheduledJobRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduleKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduleKind"
+          },
+          "cronExpression": {
+            "type": "string",
+            "nullable": true
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "repeatCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "startAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "endAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timeZoneId": {
+            "type": "string"
+          },
+          "misfirePolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesSchedulerMisfirePolicy"
+          },
+          "preventOverlap": {
+            "type": "boolean"
+          },
+          "maxRuntimeSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "parameters": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobActionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "scheduledJobId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "templateId": {
+            "type": "string"
+          },
+          "triggeredBy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduledRunTrigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduledRunStatus"
+          },
+          "scheduledFireTimeUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "actualFireTimeUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "cancellationRequestedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesScheduledRunTrigger": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Schedule",
+          "Manual",
+          "Agent",
+          "System"
+        ],
+        "enum": [
+          "Schedule",
+          "Manual",
+          "Agent",
+          "System"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceEntitiesScheduledRunStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled",
+          "TimedOut",
+          "Skipped"
+        ],
+        "enum": [
+          "Queued",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled",
+          "TimedOut",
+          "Skipped"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobRunResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobRunsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobTemplatesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobTemplateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parameterSchema": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultParameters": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportedScheduleKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduleKind"
+            }
+          },
+          "defaultScheduleKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduleKind"
+          },
+          "defaultMisfirePolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesSchedulerMisfirePolicy"
+          },
+          "defaultMaxRuntimeSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "allowManualTrigger": {
+            "type": "boolean"
+          },
+          "allowAgentCreation": {
+            "type": "boolean"
+          },
+          "historyDetailLevel": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsSchedulerV1UpdateScheduledJobRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduleKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesScheduleKind"
+          },
+          "cronExpression": {
+            "type": "string",
+            "nullable": true
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "repeatCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "startAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "endAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timeZoneId": {
+            "type": "string"
+          },
+          "misfirePolicy": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesSchedulerMisfirePolicy"
+          },
+          "preventOverlap": {
+            "type": "boolean"
+          },
+          "maxRuntimeSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "parameters": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeContainerActionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "containerName": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "succeeded": {
+            "type": "boolean"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeComponentStatusDto"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeComponentStatusDto": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "name": {
             "type": "string"
+          },
+          "desiredState": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsContainerDesiredState"
+          },
+          "health": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsContainerHealth"
+          },
+          "imageReference": {
+            "type": "string"
+          },
+          "digestVerified": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest": {
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsContainerDesiredState": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Running",
+          "Stopped"
+        ],
+        "enum": [
+          "Running",
+          "Stopped"
+        ]
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsContainerHealth": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Unknown",
+          "Starting",
+          "Healthy",
+          "Unhealthy",
+          "Stopped"
+        ],
+        "enum": [
+          "Unknown",
+          "Starting",
+          "Healthy",
+          "Unhealthy",
+          "Stopped"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeContainerActionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name"
+        "properties": {
+          "containerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string",
+            "nullable": true
+          },
+          "drainTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentStatusDto"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsHostCapabilitiesDto"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeComponentStatusDto"
+            }
+          },
+          "modelProviderHealth": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeModelProviderHealthResponse"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeLocalModelResponse"
+            }
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentStatusDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentState"
+          },
+          "desiredState": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentDesiredState"
+          },
+          "runtimeLifecycle": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeLifecycle"
+          },
+          "bootstrapModelReady": {
+            "type": "boolean"
+          },
+          "webUiUrl": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeComponentStatusDto"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentState": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Unknown",
+          "Starting",
+          "Running",
+          "Degraded",
+          "Stopping",
+          "Stopped",
+          "Failed"
         ],
+        "enum": [
+          "Unknown",
+          "Starting",
+          "Running",
+          "Degraded",
+          "Stopping",
+          "Stopped",
+          "Failed"
+        ]
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentDesiredState": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Running",
+          "Stopped"
+        ],
+        "enum": [
+          "Running",
+          "Stopped"
+        ]
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeLifecycle": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Managed",
+          "Native",
+          "External"
+        ],
+        "enum": [
+          "Managed",
+          "Native",
+          "External"
+        ]
+      },
+      "XE_Local_AI_EngineHostAgentAbstractionsContractsHostCapabilitiesDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cpuAvailable": {
+            "type": "boolean"
+          },
+          "nvidiaGpuInference": {
+            "type": "boolean"
+          },
+          "gpuRuntimeConfigured": {
+            "type": "boolean"
+          },
+          "amdGpuStatus": {
+            "type": "string"
+          },
+          "runtimeDiskBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeModelProviderHealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "providerName": {
+            "type": "string"
+          },
+          "isHealthy": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeLocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "providerName": {
+            "type": "string"
+          },
+          "isAvailable": {
+            "type": "boolean"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "maxContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "runtimeMode": {
+            "type": "string"
+          },
+          "bootstrapModel": {
+            "type": "string"
+          },
+          "defaultChatModel": {
+            "type": "string"
+          },
+          "maxRuntimeDiskGb": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "stopDrainTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestContainerResponse"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestContainerResponse": {
+        "type": "object",
+        "additionalProperties": false,
         "properties": {
           "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestEnvironmentResponse"
+            }
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestVolumeResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestEnvironmentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeManifestVolumeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maxMessageRequestTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "defaultModelName": {
             "type": "string",
-            "maxLength": 64,
-            "minLength": 0,
-            "nullable": false
+            "nullable": true
+          },
+          "minMessageRequestTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedMessageRequestTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maxMessageRequestTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 5
+          },
+          "defaultModelName": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -157,12 +4954,2303 @@
             "nullable": true
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBindingV1CancelNodeBindingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cancelled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBindingV1PollNodeBindingSessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "deviceCode": {
+            "type": "string"
+          },
+          "userCode": {
+            "type": "string"
+          },
+          "verificationUri": {
+            "type": "string"
+          },
+          "verificationUriComplete": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBindingV1NodeBindingSessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "deviceCode": {
+            "type": "string"
+          },
+          "userCode": {
+            "type": "string"
+          },
+          "verificationUri": {
+            "type": "string"
+          },
+          "verificationUriComplete": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "intervalSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "transportKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTransportKind"
+          },
+          "command": {
+            "type": "string",
+            "nullable": true
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workingDirectory": {
+            "type": "string",
+            "nullable": true
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceMcpTransportKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Stdio",
+          "Http"
+        ],
+        "enum": [
+          "Stdio",
+          "Http"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1CreateMcpServerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "transportKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTransportKind"
+          },
+          "command": {
+            "type": "string",
+            "nullable": true
+          },
+          "arguments": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "workingDirectory": {
+            "type": "string",
+            "nullable": true
+          },
+          "env": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1DeleteMcpServerRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1McpServerToolsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpDiscoveredToolResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1McpDiscoveredToolResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiresApproval": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerToolsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1ToolCatalogResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1ToolCatalogEntryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1ToolCatalogEntryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "requiresApproval": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1ListMcpServersResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1SetMcpServerEnabledRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1UpdateMcpServerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "transportKind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTransportKind"
+          },
+          "command": {
+            "type": "string",
+            "nullable": true
+          },
+          "arguments": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "workingDirectory": {
+            "type": "string",
+            "nullable": true
+          },
+          "env": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1LocalModelDetailsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "maxContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "template": {
+            "type": "string",
+            "nullable": true
+          },
+          "system": {
+            "type": "string",
+            "nullable": true
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1ListLocalModelsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isAvailable": {
+            "type": "boolean"
+          },
+          "selectedModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "configuredDefaultModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1LocalModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1LocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "modifiedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "family": {
+            "type": "string",
+            "nullable": true
+          },
+          "parameterSize": {
+            "type": "string",
+            "nullable": true
+          },
+          "quantizationLevel": {
+            "type": "string",
+            "nullable": true
+          },
+          "isSelected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "completedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selectedModelName": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "cancelled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "messageId",
+          "requestId"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "messageId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "requestId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSeenUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "purged": {
+            "type": "boolean"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "branchOfConversationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "selectedPath": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "reasoning": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "inputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "totalTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "parentMessageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "variantGroupId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "feedbackRating": {
+            "type": "string",
+            "nullable": true
+          },
+          "feedbackComment": {
+            "type": "string",
+            "nullable": true
+          },
+          "parts": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatMessagePart"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesChatNodeChatMessagePart": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "toolCallId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "args": {
+            "type": "string",
+            "nullable": true
+          },
+          "result": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiresApproval": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0,
+            "nullable": true
+          },
+          "userId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0,
+            "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatDeleteConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "cancelRequested": {
+            "type": "boolean"
+          },
+          "purged": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1DeleteNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "purgeImmediately": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatConversationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSeenUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastMessagePreview": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastMessageStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "purged": {
+            "type": "boolean"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatConversationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1RenameNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1PinNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isPinned": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceConversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "branchedConversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "copiedMessageCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "variantGroupId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "rating": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rating": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatSelectedPathResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "selectedPath": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selectedPath": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationMonitorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "current": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationCurrentResponse"
+              }
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationHistoryResponse"
+            }
+          },
+          "historyCapacity": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationCurrentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "invocationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/C0reAISharedContractsEnumsInvocationStatus"
+          },
+          "modelUsed": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureCategory": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsEnumsFailureCategory"
+              }
+            ]
+          },
+          "streamedChunkCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "streamedThinkingChunkCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pendingToolCallCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasPendingApproval": {
+            "type": "boolean"
+          }
+        }
+      },
+      "C0reAISharedContractsEnumsInvocationStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Assigned",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          "Pending",
+          "Assigned",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "XE_Local_AI_EngineClientModelsEnumsFailureCategory": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Cancelled",
+          "Timeout",
+          "AgentRuntime",
+          "ProviderUnreachable",
+          "Unexpected",
+          "AgentToolCall",
+          "HashMismatch",
+          "ModelUnavailable"
+        ],
+        "enum": [
+          "Cancelled",
+          "Timeout",
+          "AgentRuntime",
+          "ProviderUnreachable",
+          "Unexpected",
+          "AgentToolCall",
+          "HashMismatch",
+          "ModelUnavailable"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationHistoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "invocationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/C0reAISharedContractsEnumsInvocationStatus"
+          },
+          "modelUsed": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureCategory": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsEnumsFailureCategory"
+              }
+            ]
+          },
+          "streamedChunkCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "streamedThinkingChunkCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsConnectionV1ConnectionStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isPaired": {
+            "type": "boolean"
+          },
+          "autoConnectOnStart": {
+            "type": "boolean"
+          },
+          "bindingMethod": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastKnownNodeName": {
+            "type": "string",
+            "nullable": true
+          },
+          "tokenExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "canConnect": {
+            "type": "boolean"
+          },
+          "canDisconnect": {
+            "type": "boolean"
+          },
+          "canEnableAutoConnect": {
+            "type": "boolean"
+          },
+          "canDisableAutoConnect": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1CloudSettingsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "providerName": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "deploymentName": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasStoredApiKey": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "endpoint",
+          "apiKey",
+          "deploymentName"
+        ],
+        "properties": {
+          "providerName": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "apiKey": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "deploymentName": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeAuthStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "setupRequired": {
+            "type": "boolean"
+          },
+          "authenticated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeSetupRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 256,
+            "minLength": 0,
+            "pattern": "^[^@]+@[^@]+$",
+            "nullable": false
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeAccessTokenResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 256,
+            "minLength": 0,
+            "pattern": "^[^@]+@[^@]+$",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeChangePasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 0,
+            "nullable": false
+          },
+          "newPassword": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeMeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userName": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListPlaybookActionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistencePlaybookActionState"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistencePlaybookActionSource"
+          },
+          "triggerCondition": {
+            "type": "string",
+            "nullable": true
+          },
+          "behavior": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sourceFeedbackIds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "evalResult": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookEvalResultResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistencePlaybookActionState": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Suggested",
+          "Enabled",
+          "Disabled",
+          "Archived"
+        ],
+        "enum": [
+          "Suggested",
+          "Enabled",
+          "Disabled",
+          "Archived"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistencePlaybookActionSource": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Manual",
+          "Analysis"
+        ],
+        "enum": [
+          "Manual",
+          "Analysis"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookEvalResultResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "passed": {
+            "type": "boolean"
+          },
+          "evaluatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "actionVersionAtEval": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "goldenCaseCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "goldenCaseTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "baselinePassCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "candidatePassCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "regressedCaseCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "improvedCaseCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "goldenCaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "scoredBy": {
+            "type": "string"
+          },
+          "baselinePass": {
+            "type": "boolean"
+          },
+          "candidatePass": {
+            "type": "boolean"
+          },
+          "regressed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AnalyzePlaybookRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GoldenConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "inputTurns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenTurnDto"
+            }
+          },
+          "assertion": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenAssertionDto"
+              }
+            ]
+          },
+          "rubric": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceMessageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "sourceConversationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GoldenTurnDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GoldenAssertionDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requiredPhrases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "forbiddenPhrases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ApproveGoldenConversationRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentDefinitionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "modelProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceAgentDefinitionKind"
+          },
+          "allowedToolNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "toolApprovals": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "orchestrationTopologyJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "playbookEnabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientPersistenceAgentDefinitionKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Single",
+          "Orchestrator"
+        ],
+        "enum": [
+          "Single",
+          "Orchestrator"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1CreateAgentDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceAgentDefinitionKind"
+          },
+          "allowedToolNames": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "toolApprovals": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "orchestrationTopologyJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "playbookEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1CreateGoldenConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "inputTurns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenTurnDto"
+            }
+          },
+          "assertion": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenAssertionDto"
+              }
+            ]
+          },
+          "rubric": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1CreatePlaybookActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistencePlaybookActionState"
+          },
+          "triggerCondition": {
+            "type": "string",
+            "nullable": true
+          },
+          "behavior": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteAgentDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteGoldenConversationRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1DeletePlaybookActionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "agentName": {
+            "type": "string"
+          },
+          "generatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "minOccurrenceThreshold": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1OverallFeedbackResponse"
+          },
+          "byTool": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ToolFeedbackResponse"
+            }
+          },
+          "exemplars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1FeedbackExemplarResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1OverallFeedbackResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "up": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "down": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "downRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "meetsThreshold": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ToolFeedbackResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "toolName": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "up": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "down": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "downRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "meetsThreshold": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1FeedbackExemplarResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rating": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentFeedbackInsightsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentPlaybookMonitorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse"
+            }
+          },
+          "retrieval": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookRetrievalResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "enabledAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "beforeDownRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "afterDownRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "afterSampleSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesMonitoringPlaybookMonitorStatus"
+          },
+          "flagged": {
+            "type": "boolean"
+          },
+          "facetToolName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesMonitoringPlaybookMonitorStatus": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "InsufficientData",
+          "Improved",
+          "Flat",
+          "Regressed"
+        ],
+        "enum": [
+          "InsufficientData",
+          "Improved",
+          "Flat",
+          "Regressed"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookRetrievalResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "threshold": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "topK": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ranker": {
+            "type": "string"
+          },
+          "embeddingModel": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentPlaybookMonitorRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ToolCapableModelsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1GoldenHarvestResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "thumbsUpScanned": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "duplicateCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skippedCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentDefinitionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentDefinitionResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1GoldenConversationResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceAgentDefinitionKind"
+          },
+          "allowedToolNames": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "toolApprovals": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "orchestrationTopologyJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "playbookEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1UpdatePlaybookActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistencePlaybookActionState"
+          },
+          "triggerCondition": {
+            "type": "string",
+            "nullable": true
+          },
+          "behavior": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "behavior": {
+            "type": "string",
+            "nullable": true
+          },
+          "triggerCondition": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       }
     },
     "securitySchemes": {
       "JWTBearerAuth": {
         "type": "http",
         "description": "Enter a JWT token to authorize the requests...",
+        "scheme": "Bearer",
+        "bearerFormat": "JWT"
+      },
+      "Bearer": {
+        "type": "http",
         "scheme": "Bearer",
         "bearerFormat": "JWT"
       }

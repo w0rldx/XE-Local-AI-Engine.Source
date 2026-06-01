@@ -47,6 +47,15 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 registration.EnvJson = DecryptIfPresent(registration.EnvJson, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "env");
                 registration.Description = DecryptIfPresent(registration.Description, context.NodeEncryptionKey.Span, Guid.Empty, registration.Id, "description");
                 break;
+            case ScheduledJobDefinition jobDefinition:
+                jobDefinition.ParameterJson = DecryptIfPresent(jobDefinition.ParameterJson, context.NodeEncryptionKey.Span, Guid.Empty, jobDefinition.Id, "parameter_json");
+                break;
+            case ScheduledJobRun run:
+                run.DetailsJson = DecryptIfPresent(run.DetailsJson, context.NodeEncryptionKey.Span, Guid.Empty, run.Id, "details_json");
+                break;
+            case ScheduledJobRunEvent runEvent:
+                runEvent.DataJson = DecryptIfPresent(runEvent.DataJson, context.NodeEncryptionKey.Span, Guid.Empty, runEvent.Id, "data_json");
+                break;
         }
 
         return entity;

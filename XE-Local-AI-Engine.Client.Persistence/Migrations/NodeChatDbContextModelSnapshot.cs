@@ -561,6 +561,227 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.ToTable("playbook_actions", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledJobDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("CronExpression")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cron_expression");
+
+                    b.Property<long?>("DeletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("deleted_at_utc");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<long?>("DisabledAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("disabled_at_utc");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.Property<long?>("EndAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("end_at_utc");
+
+                    b.Property<long?>("IntervalSeconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("interval_seconds");
+
+                    b.Property<int?>("MaxRuntimeSeconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_runtime_seconds");
+
+                    b.Property<int>("MisfirePolicy")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("misfire_policy");
+
+                    b.Property<byte[]>("ParameterJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("parameter_json");
+
+                    b.Property<bool>("PreventOverlap")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("prevent_overlap");
+
+                    b.Property<int?>("RepeatCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("repeat_count");
+
+                    b.Property<int>("ScheduleKind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("schedule_kind");
+
+                    b.Property<long?>("StartAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("start_at_utc");
+
+                    b.Property<string>("TemplateId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("template_id");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("UTC")
+                        .HasColumnName("time_zone_id");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId", "Enabled");
+
+                    b.ToTable("scheduled_job_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledJobRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("ActualFireTimeUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("actual_fire_time_utc");
+
+                    b.Property<long?>("CancellationRequestedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cancellation_requested_at_utc");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("DetailsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("details_json");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("ErrorDetails")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_details");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("QuartzFireInstanceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("quartz_fire_instance_id");
+
+                    b.Property<long?>("ScheduledFireTimeUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("scheduled_fire_time_utc");
+
+                    b.Property<Guid>("ScheduledJobId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scheduled_job_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("TemplateId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("template_id");
+
+                    b.Property<int>("TriggeredBy")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("triggered_by");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuartzFireInstanceId")
+                        .IsUnique()
+                        .HasFilter("quartz_fire_instance_id IS NOT NULL");
+
+                    b.HasIndex("ScheduledJobId", "ActualFireTimeUtc");
+
+                    b.ToTable("scheduled_job_runs", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledJobRunEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("DataJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("data_json");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("level");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("message");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("scheduled_job_run_events", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GoldenConversation", b =>
                 {
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", null)
@@ -608,6 +829,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", null)
                         .WithMany()
                         .HasForeignKey("AgentDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledJobRunEvent", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledJobRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

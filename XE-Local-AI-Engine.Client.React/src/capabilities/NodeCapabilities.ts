@@ -22,6 +22,7 @@ export interface NodeCapabilityConfig {
 	readonly invocationMonitor: boolean;
 	readonly agentManagement: boolean;
 	readonly mcpServers: boolean;
+	readonly scheduler: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -51,6 +52,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// MCP server registration surface (dynamic tool-catalog). On by default; node-local SQLite-backed CRUD. Registered
 	// servers are disabled until explicitly enabled, and every discovered MCP tool defaults to approval-on.
 	mcpServers: true,
+	// Quartz scheduler management surface. On by default; node-local SQLite-backed CRUD. Jobs are disabled until
+	// explicitly enabled, and job parameters are stored encrypted (never returned on the wire).
+	scheduler: true,
 };
 
 export const nodeRoutePaths = {
@@ -69,6 +73,8 @@ export const nodeRoutePaths = {
 	agents: "/agents",
 	// MCP server management page (dynamic tool-catalog) — gated on nodeCapabilities.mcpServers
 	mcp: "/mcp",
+	// Quartz scheduler management page — gated on nodeCapabilities.scheduler
+	scheduler: "/scheduler",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;
