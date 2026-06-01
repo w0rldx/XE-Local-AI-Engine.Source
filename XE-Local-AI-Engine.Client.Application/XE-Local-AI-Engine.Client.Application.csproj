@@ -19,6 +19,11 @@
     <PackageReference Include="ModelContextProtocol"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
+    <PackageReference Include="Quartz"/>
+    <PackageReference Include="Quartz.Extensions.Hosting"/>
+    <PackageReference Include="Quartz.Plugins"/>
+    <PackageReference Include="Quartz.Plugins.TimeZoneConverter"/>
+    <PackageReference Include="Quartz.Serialization.SystemTextJson"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="System.Numerics.Tensors"/>
   </ItemGroup>

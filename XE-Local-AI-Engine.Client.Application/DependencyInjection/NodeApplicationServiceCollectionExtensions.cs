@@ -52,6 +52,7 @@ using XE_Local_AI_Engine.Client.Services.Manager;
 using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Monitoring;
 using XE_Local_AI_Engine.Client.Services.Monitoring.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -280,6 +281,12 @@ public static class NodeApplicationServiceCollectionExtensions
         // harvested messages, and stages each fresh candidate inert via the golden CRUD service (same validation/caps/
         // encryption). Scoped to match the scoped stores/service it composes.
         builder.Services.AddScoped<IGoldenHarvestService, GoldenHarvestService>();
+        // Marker 1 scheduler persistence stores. Persist node-local job definitions, run history, and per-run events
+        // with ParameterJson/DetailsJson/DataJson encrypted at rest by the node encryption interceptors. Scoped to
+        // match the scoped, DbContext-backed stores that compose them. No Quartz NuGet package until Marker 2.
+        builder.Services.AddScoped<IScheduledJobDefinitionStore, ScheduledJobDefinitionStore>();
+        builder.Services.AddScoped<IScheduledJobRunStore, ScheduledJobRunStore>();
+        builder.Services.AddScoped<IScheduledJobRunEventStore, ScheduledJobRunEventStore>();
         // Playbook P5 relevance-retrieval ranker: the resolver/orchestration paths consult it only when an agent's
         // Enabled set exceeds the retrieval threshold and the send carries a non-blank query; below that the full static
         // prepend is used (byte-identical). The lexical ranker (deterministic, model-free, stateless) is registered
@@ -362,6 +369,13 @@ public static class NodeApplicationServiceCollectionExtensions
                .Bind(configuration.GetSection(McpOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<McpOptions>, McpOptionsValidator>();
+        // Marker 1 scheduler options. Controls whether the Quartz scheduler is active, concurrency, history retention,
+        // and the embedded QRTZ table prefix. Validated on start; the Quartz hosted service (Marker 2) reads Enabled
+        // before starting so a disabled scheduler never fires jobs.
+        builder.Services.AddOptions<SchedulerOptions>()
+               .Bind(configuration.GetSection(SchedulerOptions.Section))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<SchedulerOptions>, SchedulerOptionsValidator>();
         builder.Services.AddSingleton<IMcpClientFactory, McpClientFactory>();
         builder.Services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
         builder.Services.AddHostedService<McpServerStartupConnector>();

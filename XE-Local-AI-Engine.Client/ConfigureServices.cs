@@ -20,9 +20,11 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Represents configure services.
@@ -44,6 +46,14 @@ public static class ConfigureServices
         // XE-Local-AI-Engine.Client.Application class library. The host only wires web-framework
         // concerns below (FastEndpoints, auth, SignalR, rate limiting, health checks, hosted services).
         builder.AddNodeApplication(configuration);
+
+        // Quartz scheduler runtime (persistent store + hosted service + dispatcher). Registers nothing when
+        // Scheduler:Enabled is false. The QRTZ_ tables are created by the same node-chat EF migration.
+        builder.AddNodeScheduler(configuration);
+
+        // Hub-backed scheduler event publisher — supersedes the no-op default registered in AddNodeScheduler so
+        // run/definition lifecycle events broadcast to connected SignalR clients (SchedulerHub mapped in Program).
+        builder.Services.AddSingleton<ISchedulerEventPublisher, SchedulerEventPublisher>();
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.
@@ -177,6 +187,7 @@ public static class ConfigureServices
         builder.Services.AddHostedService<HeartbeatBackgroundService>();
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
         builder.Services.AddHostedService<RetentionSweeperService>();
+        builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])

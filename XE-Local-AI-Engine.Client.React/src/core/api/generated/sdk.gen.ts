@@ -3,9 +3,259 @@
 import type { Client, Options as Options2, TDataShape } from "./client";
 import { client } from "./client.gen";
 import type {
+	XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointResponses,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointData,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointResponses,
 	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointData,
 	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointErrors,
 	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointErrors,
+	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointErrors,
+	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointErrors,
+	XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointErrors,
+	XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointResponses,
+	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointData,
+	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointErrors,
+	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointResponses,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointData,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointErrors,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointResponses,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointData,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointErrors,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointResponses,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointData,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointErrors,
+	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointResponses,
+	XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointData,
+	XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointErrors,
+	XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointResponses,
+	XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointData,
+	XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointErrors,
+	XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointResponses,
+	XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointData,
+	XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointErrors,
+	XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointResponses,
+	XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointData,
+	XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointErrors,
+	XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointResponses,
+	XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointData,
+	XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointErrors,
+	XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointResponses,
+	XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointData,
+	XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointErrors,
+	XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointData,
+	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointResponses,
+	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData,
+	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointErrors,
+	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponses,
+	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData,
+	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointErrors,
+	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponses,
+	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData,
+	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointErrors,
+	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointResponses,
+	XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointData,
+	XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointErrors,
+	XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointResponses,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointData,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointErrors,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointResponses,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointData,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointErrors,
+	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointResponses,
+	XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointData,
+	XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointErrors,
+	XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointResponses,
+	XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointData,
+	XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointErrors,
+	XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointResponses,
+	XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointData,
+	XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointErrors,
+	XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointResponses,
 } from "./types.gen";
 
 export type Options<
@@ -26,6 +276,1128 @@ export type Options<
 	meta?: Record<string, unknown>;
 };
 
+export const xeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/runs/{runId}/cancel",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/disable",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/enable",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/runs/{runId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/runs",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/templates",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointResponses,
+		XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpoint = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/runtime/containers/action",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpoint = <
+	ThrowOnError extends boolean = false,
+>(
+	options?: Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointResponses,
+		XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/runtime/status",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointResponses,
+		XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/node-settings",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointResponses,
+		XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/node-settings",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponses,
+		XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/binding/cancel",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointResponses,
+		XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/binding/poll",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointResponses,
+		XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/binding/start",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers/{mcpServerId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers/{mcpServerId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers/{mcpServerId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers/{mcpServerId}/tools",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/tool-catalog",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).patch<
+		XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointResponses,
+		XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/mcp/servers/{mcpServerId}/enabled",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/details",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/pull",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/select",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).patch<
+		XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/rename",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).patch<
+		XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/pin",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpoint = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).patch<
+		XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/archive",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/branch/{messageId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpoint = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpoint = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/selected-path",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointResponses,
+		XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/invocations",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointResponses,
+		XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/connection/connect",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointResponses,
+		XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/connection/auto-connect/disable",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointResponses,
+		XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/connection/disconnect",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointResponses,
+		XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/connection/auto-connect/enable",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointResponses,
+		XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/connection",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointResponses,
+		XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointResponses,
+		XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointResponses,
+		XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointResponses, unknown, ThrowOnError>({
+		responseType: "json",
+		url: "/api/local/v1/auth/status",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointResponses,
+		XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointErrors,
+		ThrowOnError
+	>({
+		url: "/api/local/v1/auth/setup",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointResponses,
+		XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		url: "/api/local/v1/auth/login",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointResponses, unknown, ThrowOnError>({
+		responseType: "json",
+		url: "/api/local/v1/auth/refresh",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointResponses,
+		XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/auth/logout",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointResponses,
+		XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/auth/change-password",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointResponses,
+		XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/auth/me",
+		...options,
+	});
+
 export const xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpoint = <ThrowOnError extends boolean = false>(
 	options: Options<XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointData, ThrowOnError>,
 ) =>
@@ -35,8 +1407,408 @@ export const xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbe
 		ThrowOnError
 	>({
 		responseType: "json",
-		security: [{ scheme: "bearer", type: "http" }],
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
 		url: "/api/local/v1/diagnostics/validation-probe",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/analyze",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointErrors,
+		ThrowOnError
+	>({
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/feedback-insights",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/monitor",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/tool-capable-models",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpoint = <
+	ThrowOnError extends boolean = false,
+>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/reject",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/eval",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointResponses,
+		XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/suggested",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

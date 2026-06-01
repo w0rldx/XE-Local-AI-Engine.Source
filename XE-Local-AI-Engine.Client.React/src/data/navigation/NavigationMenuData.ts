@@ -1,5 +1,6 @@
 import type { IconProps } from "@tabler/icons-react";
 import {
+	IconCalendarClock,
 	IconCloudCog,
 	IconCpu,
 	IconDashboard,
@@ -107,6 +108,14 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.mcp",
 		to: nodeRoutePaths.mcp,
 	},
+	// Scheduler management link is gated on the static scheduler capability (Quartz scheduler). Filtered out of the
+	// rendered menu below when the capability is off, mirroring the agents/mcp entries.
+	{
+		id: "scheduler",
+		icon: IconCalendarClock,
+		translationKey: "navigation.scheduler",
+		to: nodeRoutePaths.scheduler,
+	},
 ];
 
 // Capability-gated navigation links: identity for everything except the agents/mcp entries, which are hidden
@@ -118,6 +127,9 @@ export const navigationLinks: INavigationLink[] = allNavigationLinks.filter((lin
 	}
 	if (link.id === "mcp") {
 		return nodeCapabilities.mcpServers;
+	}
+	if (link.id === "scheduler") {
+		return nodeCapabilities.scheduler;
 	}
 	return true;
 });

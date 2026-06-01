@@ -1,4 +1,4 @@
 {
   "maxMessageRequestTimeoutSeconds": 300,
-  "defaultModelName": null
+  "defaultModelName": "gemma4:e4b"
 }

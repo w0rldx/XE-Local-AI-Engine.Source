@@ -36,6 +36,12 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<McpServerRegistration> McpServers => Set<McpServerRegistration>();
 
+    internal DbSet<ScheduledJobDefinition> ScheduledJobDefinitions => Set<ScheduledJobDefinition>();
+
+    internal DbSet<ScheduledJobRun> ScheduledJobRuns => Set<ScheduledJobRun>();
+
+    internal DbSet<ScheduledJobRunEvent> ScheduledJobRunEvents => Set<ScheduledJobRunEvent>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -52,6 +58,9 @@ public sealed class NodeChatDbContext : DbContext
         ConfigurePlaybookAction(modelBuilder.Entity<PlaybookAction>());
         ConfigureGoldenConversation(modelBuilder.Entity<GoldenConversation>());
         ConfigureMcpServer(modelBuilder.Entity<McpServerRegistration>());
+        ConfigureScheduledJobDefinition(modelBuilder.Entity<ScheduledJobDefinition>());
+        ConfigureScheduledJobRun(modelBuilder.Entity<ScheduledJobRun>());
+        ConfigureScheduledJobRunEvent(modelBuilder.Entity<ScheduledJobRunEvent>());
     }
 
     private static void ConfigureConversation(EntityTypeBuilder<NodeConversation> builder)
@@ -482,5 +491,180 @@ public sealed class NodeChatDbContext : DbContext
         // The server Name is the source of the qualified tool-name slug, so uniqueness keeps tool names collision-free.
         builder.HasIndex(entity => entity.Name)
                .IsUnique();
+    }
+
+    private static void ConfigureScheduledJobDefinition(EntityTypeBuilder<ScheduledJobDefinition> builder)
+    {
+        builder.ToTable("scheduled_job_definitions");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.TemplateId)
+               .HasColumnName("template_id");
+
+        builder.Property(entity => entity.DisplayName)
+               .HasColumnName("display_name");
+
+        builder.Property(entity => entity.Description)
+               .HasColumnName("description");
+
+        builder.Property(entity => entity.Enabled)
+               .HasColumnName("enabled")
+               .HasDefaultValue(true);
+
+        builder.Property(entity => entity.ScheduleKind)
+               .HasColumnName("schedule_kind");
+
+        builder.Property(entity => entity.CronExpression)
+               .HasColumnName("cron_expression");
+
+        builder.Property(entity => entity.IntervalSeconds)
+               .HasColumnName("interval_seconds");
+
+        builder.Property(entity => entity.RepeatCount)
+               .HasColumnName("repeat_count");
+
+        builder.Property(entity => entity.StartAtUtc)
+               .HasColumnName("start_at_utc");
+
+        builder.Property(entity => entity.EndAtUtc)
+               .HasColumnName("end_at_utc");
+
+        builder.Property(entity => entity.TimeZoneId)
+               .HasColumnName("time_zone_id")
+               .HasDefaultValue("UTC");
+
+        builder.Property(entity => entity.MisfirePolicy)
+               .HasColumnName("misfire_policy");
+
+        builder.Property(entity => entity.PreventOverlap)
+               .HasColumnName("prevent_overlap")
+               .HasDefaultValue(false);
+
+        builder.Property(entity => entity.MaxRuntimeSeconds)
+               .HasColumnName("max_runtime_seconds");
+
+        builder.Property(entity => entity.ParameterJson)
+               .HasColumnName("parameter_json");
+
+        builder.Property(entity => entity.CreatedBy)
+               .HasColumnName("created_by");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        builder.Property(entity => entity.DisabledAtUtc)
+               .HasColumnName("disabled_at_utc");
+
+        builder.Property(entity => entity.DeletedAtUtc)
+               .HasColumnName("deleted_at_utc");
+
+        builder.HasIndex(entity => new { entity.TemplateId, entity.Enabled });
+    }
+
+    private static void ConfigureScheduledJobRun(EntityTypeBuilder<ScheduledJobRun> builder)
+    {
+        builder.ToTable("scheduled_job_runs");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.ScheduledJobId)
+               .HasColumnName("scheduled_job_id");
+
+        builder.Property(entity => entity.TemplateId)
+               .HasColumnName("template_id");
+
+        builder.Property(entity => entity.QuartzFireInstanceId)
+               .HasColumnName("quartz_fire_instance_id");
+
+        builder.Property(entity => entity.TriggeredBy)
+               .HasColumnName("triggered_by");
+
+        builder.Property(entity => entity.Status)
+               .HasColumnName("status");
+
+        builder.Property(entity => entity.ScheduledFireTimeUtc)
+               .HasColumnName("scheduled_fire_time_utc");
+
+        builder.Property(entity => entity.ActualFireTimeUtc)
+               .HasColumnName("actual_fire_time_utc");
+
+        builder.Property(entity => entity.CompletedAtUtc)
+               .HasColumnName("completed_at_utc");
+
+        builder.Property(entity => entity.DurationMs)
+               .HasColumnName("duration_ms");
+
+        builder.Property(entity => entity.Summary)
+               .HasColumnName("summary");
+
+        builder.Property(entity => entity.DetailsJson)
+               .HasColumnName("details_json");
+
+        builder.Property(entity => entity.ErrorMessage)
+               .HasColumnName("error_message");
+
+        builder.Property(entity => entity.ErrorDetails)
+               .HasColumnName("error_details");
+
+        builder.Property(entity => entity.CancellationRequestedAtUtc)
+               .HasColumnName("cancellation_requested_at_utc");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.HasIndex(entity => new { entity.ScheduledJobId, entity.ActualFireTimeUtc });
+
+        // The fire-instance id is the idempotency key for the upsert, so it is unique — but only among rows that
+        // actually carry one (manual/system runs leave it null), hence the filtered unique index.
+        builder.HasIndex(entity => entity.QuartzFireInstanceId)
+               .IsUnique()
+               .HasFilter("quartz_fire_instance_id IS NOT NULL");
+
+        // A run intentionally has NO enforced FK to its definition: runs outlive definitions (a removed/soft-deleted
+        // definition must not cascade away its run history). Same intentional no-FK precedent as conversation->definition.
+    }
+
+    private static void ConfigureScheduledJobRunEvent(EntityTypeBuilder<ScheduledJobRunEvent> builder)
+    {
+        builder.ToTable("scheduled_job_run_events");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.RunId)
+               .HasColumnName("run_id");
+
+        builder.Property(entity => entity.Sequence)
+               .HasColumnName("sequence");
+
+        builder.Property(entity => entity.Level)
+               .HasColumnName("level");
+
+        builder.Property(entity => entity.Message)
+               .HasColumnName("message");
+
+        builder.Property(entity => entity.DataJson)
+               .HasColumnName("data_json");
+
+        builder.Property(entity => entity.OccurredAtUtc)
+               .HasColumnName("occurred_at_utc");
+
+        builder.HasIndex(entity => new { entity.RunId, entity.Sequence })
+               .IsUnique();
+
+        // An event is meaningless without its owning run, so the FK cascades: deleting a run removes its events.
+        builder.HasOne<ScheduledJobRun>()
+               .WithMany()
+               .HasForeignKey(entity => entity.RunId)
+               .OnDelete(DeleteBehavior.Cascade);
     }
 }

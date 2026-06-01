@@ -1,0 +1,65 @@
+namespace XE_Local_AI_Engine.Client;
+
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Quartz;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
+
+/// <summary>
+///     Registers the node-local Quartz scheduler runtime: the persistent (SQLite) job store, the hosted service that
+///     drives it, the dispatch executor + dispatch <see cref="IJob" /> variants, and the template registry. The QRTZ_
+///     tables are created by the Marker 1 EF migration in the same node-chat SQLite database, so the store runs with
+///     schema validation on. When <see cref="SchedulerOptions.Enabled" /> is <c>false</c> this registers nothing — the
+///     persistence tables and options remain, but no scheduler or hosted service is wired up.
+/// </summary>
+public static class NodeSchedulerServiceCollectionExtensions
+{
+    public static IHostApplicationBuilder AddNodeScheduler(this IHostApplicationBuilder builder, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var options = configuration.GetSection(SchedulerOptions.Section).Get<SchedulerOptions>() ?? new SchedulerOptions();
+        if (!options.Enabled)
+        {
+            return builder;
+        }
+
+        builder.Services.AddQuartz(q =>
+        {
+            q.SchedulerName = "XE Local AI Engine Scheduler";
+            q.UseDefaultThreadPool(tp => tp.MaxConcurrency = options.MaxConcurrency);
+            q.UsePersistentStore(s =>
+            {
+                s.UseProperties = true;
+                s.PerformSchemaValidation = true; // QRTZ_ tables already created by Marker 1 migration
+                s.UseMicrosoftSQLite(db =>
+                {
+                    // Resolve the shared node-sqlite connection by NAME, not value: Quartz looks the name up in
+                    // IConfiguration's ConnectionStrings when the scheduler starts (post-config-build), exactly like the
+                    // NodeChatDbContext registration reads it lazily. Reading the literal string here at registration
+                    // time would throw under WebApplicationFactory, whose connection string is layered in after services
+                    // are registered.
+                    db.ConnectionStringName = "node-sqlite";
+                    db.TablePrefix = options.QuartzTablePrefix; // "QRTZ_"
+                });
+                s.UseSystemTextJsonSerializer();
+            });
+            q.UseTimeZoneConverter();
+            q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = TimeSpan.FromMinutes(options.DefaultMaxRuntimeMinutes));
+        });
+        builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
+
+        builder.Services.AddScoped<ISchedulerDispatchExecutor, SchedulerDispatchExecutor>();
+        builder.Services.AddTransient<SchedulerDispatchJob>();
+        builder.Services.AddTransient<NonOverlappingSchedulerDispatchJob>();
+        builder.Services.AddSingleton<IScheduledJobTemplateRegistry, ScheduledJobTemplateRegistry>();
+        builder.Services.AddScoped<IScheduledJobManagementService, ScheduledJobManagementService>();
+
+        // Default no-op publisher so the dispatcher/management service resolve a publisher in Application-only and test
+        // hosts. The Client host registers a hub-backed publisher (ConfigureServices) that supersedes this.
+        builder.Services.TryAddSingleton<ISchedulerEventPublisher, NullSchedulerEventPublisher>();
+
+        return builder;
+    }
+}

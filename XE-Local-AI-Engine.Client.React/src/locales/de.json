@@ -46,6 +46,7 @@
 		"tools": "Tools",
 		"agents": "Agenten",
 		"mcp": "MCP",
+		"scheduler": "Planer",
 		"manager": "Manager",
 		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
@@ -1200,6 +1201,152 @@
 				"save": "Der MCP-Server konnte nicht gespeichert werden.",
 				"delete": "Der MCP-Server konnte nicht gelöscht werden.",
 				"enable": "Der Serverstatus konnte nicht geändert werden."
+			}
+		},
+		"scheduler": {
+			"eyebrow": "Worker-Node",
+			"title": "Planer",
+			"subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Aufgaben sind deaktiviert, bis du sie aktivierst, und Parameter werden verschlüsselt gespeichert.",
+			"createButton": "Aufgabe erstellen",
+			"list": {
+				"loading": "Geplante Aufgaben werden geladen…",
+				"empty": "Noch keine geplanten Aufgaben. Erstelle eine, um zu beginnen.",
+				"hasParameters": "Ja",
+				"noParameters": "—",
+				"enabledAria": "{{name}} umschalten",
+				"triggerAria": "{{name}} jetzt ausführen",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"kind": "Art",
+					"schedule": "Zeitplan",
+					"parameters": "Parameter",
+					"enabled": "Aktiviert",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Geplante Aufgabe erstellen",
+				"editTitle": "Geplante Aufgabe bearbeiten"
+			},
+			"form": {
+				"template": {
+					"label": "Vorlage",
+					"description": "Die Aufgabenvorlage bestimmt, was diese Aufgabe tut.",
+					"placeholder": "Vorlage auswählen"
+				},
+				"displayName": {
+					"label": "Name",
+					"placeholder": "Nächtliche Bereinigung"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"scheduleKind": {
+					"label": "Zeitplanart",
+					"options": {
+						"Cron": "Cron",
+						"OneShot": "Einmalig",
+						"SimpleInterval": "Intervall"
+					}
+				},
+				"cronExpression": {
+					"label": "Cron-Ausdruck",
+					"description": "Quartz-Cron-Syntax, z. B. 0 0 3 * * ?"
+				},
+				"intervalSeconds": {
+					"label": "Intervall (Sekunden)"
+				},
+				"repeatCount": {
+					"label": "Wiederholungen",
+					"description": "Leer lassen, um unbegrenzt zu wiederholen."
+				},
+				"startAtUtc": {
+					"label": "Startzeitpunkt"
+				},
+				"timeZoneId": {
+					"label": "Zeitzone"
+				},
+				"misfirePolicy": {
+					"label": "Verpasste-Auslösung-Richtlinie",
+					"description": "Wie eine verpasste Auslösung behandelt wird, wenn der Node nicht verfügbar war.",
+					"options": {
+						"Smart": "Intelligent",
+						"SkipMissed": "Verpasste überspringen",
+						"FireOnceNow": "Einmal jetzt auslösen"
+					}
+				},
+				"maxRuntimeSeconds": {
+					"label": "Maximale Laufzeit (Sekunden)",
+					"description": "Leer lassen für keine Laufzeitbegrenzung."
+				},
+				"preventOverlap": {
+					"label": "Überlappende Ausführungen verhindern"
+				},
+				"parameters": {
+					"label": "Parameter (JSON)",
+					"description": "Optionale Vorlagenparameter als JSON. Verschlüsselt gespeichert und nach dem Speichern nie wieder angezeigt."
+				}
+			},
+			"runs": {
+				"title": "Ausführungsverlauf",
+				"loading": "Ausführungsverlauf wird geladen…",
+				"empty": "Keine Ausführungen entsprechen den aktuellen Filtern.",
+				"viewAria": "Ausführung ansehen",
+				"cancelAria": "Ausführung abbrechen",
+				"columns": {
+					"status": "Status",
+					"trigger": "Auslöser",
+					"fired": "Ausgelöst",
+					"duration": "Dauer",
+					"summary": "Zusammenfassung",
+					"actions": "Aktionen"
+				},
+				"filters": {
+					"job": "Aufgabe",
+					"status": "Status",
+					"allJobs": "Alle Aufgaben",
+					"allStatuses": "Alle Status"
+				},
+				"status": {
+					"Queued": "In Warteschlange",
+					"Running": "Läuft",
+					"Succeeded": "Erfolgreich",
+					"Failed": "Fehlgeschlagen",
+					"Cancelled": "Abgebrochen",
+					"TimedOut": "Zeitüberschreitung",
+					"Skipped": "Übersprungen"
+				},
+				"trigger": {
+					"Schedule": "Zeitplan",
+					"Manual": "Manuell",
+					"Agent": "Agent",
+					"System": "System"
+				},
+				"detail": {
+					"loading": "Ausführung wird geladen…",
+					"empty": "Wähle eine Ausführung, um ihre Details anzuzeigen.",
+					"fired": "Ausgelöst",
+					"completed": "Abgeschlossen",
+					"duration": "Dauer",
+					"summary": "Zusammenfassung"
+				}
+			},
+			"delete": {
+				"title": "Geplante Aufgabe löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Geplante Aufgaben konnten nicht geladen werden.",
+				"loadRuns": "Ausführungsverlauf konnte nicht geladen werden.",
+				"loadRun": "Die Ausführung konnte nicht geladen werden.",
+				"save": "Die geplante Aufgabe konnte nicht gespeichert werden.",
+				"delete": "Die geplante Aufgabe konnte nicht gelöscht werden.",
+				"enable": "Der Aufgabenstatus konnte nicht geändert werden.",
+				"trigger": "Die Aufgabe konnte nicht ausgelöst werden.",
+				"cancel": "Die Ausführung konnte nicht abgebrochen werden."
 			}
 		},
 		"schedule": {
