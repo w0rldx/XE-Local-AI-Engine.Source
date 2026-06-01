@@ -26,6 +26,9 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
             Assertion = EncodeOptional(input.Assertion),
             Rubric = EncodeOptional(input.Rubric),
             Enabled = input.Enabled,
+            Source = input.Source,
+            SourceMessageId = input.SourceMessageId,
+            SourceConversationId = input.SourceConversationId,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
@@ -70,6 +73,35 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
         return entity is null ? null : ToRecord(entity);
     }
 
+    public async Task<GoldenConversationRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default)
+    {
+        var entity = await _dbContext.GoldenConversations
+                                     .FirstOrDefaultAsync(golden => golden.Id == id, cancellationToken)
+                                     .ConfigureAwait(false);
+
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.Enabled = enabled;
+        entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToRecord(entity);
+    }
+
+    public async Task<IReadOnlyList<Guid>> ListSourceMessageIdsByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.GoldenConversations
+                               .AsNoTracking()
+                               .Where(golden => golden.AgentDefinitionId == agentDefinitionId && golden.SourceMessageId != null)
+                               .Select(golden => golden.SourceMessageId!.Value)
+                               .ToArrayAsync(cancellationToken)
+                               .ConfigureAwait(false);
+    }
+
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.GoldenConversations
@@ -98,7 +130,10 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
             entity.Rubric is null ? null : Decode(entity.Rubric),
             entity.Enabled,
             entity.CreatedAtUtc,
-            entity.UpdatedAtUtc);
+            entity.UpdatedAtUtc,
+            entity.Source,
+            entity.SourceMessageId,
+            entity.SourceConversationId);
     }
 
     private static byte[]? EncodeOptional(string? value)

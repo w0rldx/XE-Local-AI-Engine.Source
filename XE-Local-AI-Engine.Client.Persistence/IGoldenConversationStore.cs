@@ -26,6 +26,19 @@ public interface IGoldenConversationStore
     /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no golden case has that id.</summary>
     Task<GoldenConversationRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Sets <c>Enabled</c> on the golden case with <paramref name="id" /> and bumps <c>UpdatedAtUtc</c>. Returns the
+    ///     updated record, or <c>null</c> when no golden case has that id.
+    /// </summary>
+    Task<GoldenConversationRecord?> SetEnabledAsync(Guid id, bool enabled, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Returns the <c>SourceMessageId</c> of every harvested golden case for <paramref name="agentDefinitionId" />
+    ///     (rows whose <c>SourceMessageId</c> is set), for dedup. Projected server-side so the encrypted columns are never
+    ///     decrypted.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListSourceMessageIdsByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
+
     /// <summary>Removes the golden case with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
@@ -44,7 +57,10 @@ public sealed record GoldenConversationRecord(
     string? Rubric,
     bool Enabled,
     long CreatedAtUtc,
-    long UpdatedAtUtc);
+    long UpdatedAtUtc,
+    Entities.GoldenConversationSource Source = Entities.GoldenConversationSource.Manual,
+    Guid? SourceMessageId = null,
+    Guid? SourceConversationId = null);
 
 /// <summary>
 ///     Mutable fields of a golden conversation case supplied on create. Free text is passed as plaintext strings; the
@@ -57,4 +73,7 @@ public sealed record GoldenConversationInput(
     string InputTurns,
     string? Assertion,
     string? Rubric,
-    bool Enabled);
+    bool Enabled,
+    Entities.GoldenConversationSource Source = Entities.GoldenConversationSource.Manual,
+    Guid? SourceMessageId = null,
+    Guid? SourceConversationId = null);

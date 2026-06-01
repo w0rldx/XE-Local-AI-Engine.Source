@@ -404,6 +404,18 @@ public sealed class NodeChatDbContext : DbContext
         builder.Property(entity => entity.Enabled)
                .HasColumnName("enabled");
 
+        // Harvest provenance — additive columns. Plaintext (an enum + two ids), not encrypted; the sensitive harvested
+        // text reuses the already-encrypted input_turns/rubric columns.
+        builder.Property(entity => entity.Source)
+               .HasColumnName("source")
+               .HasDefaultValue(GoldenConversationSource.Manual);
+
+        builder.Property(entity => entity.SourceMessageId)
+               .HasColumnName("source_message_id");
+
+        builder.Property(entity => entity.SourceConversationId)
+               .HasColumnName("source_conversation_id");
+
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
 

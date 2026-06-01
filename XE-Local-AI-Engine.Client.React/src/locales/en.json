@@ -956,10 +956,24 @@
 				"hasAssertion": "assertion",
 				"hasRubric": "rubric",
 				"disabledBadge": "disabled",
+				"harvestedBadge": "harvested",
 				"deleteAria": "Delete golden case",
 				"delete": {
 					"title": "Delete golden case",
 					"description": "Delete '{{title}}'? This cannot be undone."
+				},
+				"harvest": {
+					"button": "Harvest from 👍",
+					"success": "{{created}} proposed, {{duplicate}} already harvested, {{skipped}} skipped."
+				},
+				"pending": {
+					"heading": "Harvested (pending review)",
+					"hint": "Review each harvested candidate, then approve it into the active golden set or reject it.",
+					"turnsPreview": "{{count}} turns · {{role}}: {{text}}",
+					"turnCount": "{{count}} input turns",
+					"rubric": "Rubric: {{rubric}}",
+					"approve": "Approve",
+					"reject": "Reject"
 				},
 				"form": {
 					"titleRequired": "Title is required.",
@@ -996,7 +1010,9 @@
 				"errors": {
 					"load": "Could not load golden cases.",
 					"save": "Could not save the golden case.",
-					"delete": "Could not delete the golden case."
+					"delete": "Could not delete the golden case.",
+					"harvest": "Could not harvest golden cases.",
+					"approve": "Could not approve the golden case."
 				}
 			},
 			"insights": 			{

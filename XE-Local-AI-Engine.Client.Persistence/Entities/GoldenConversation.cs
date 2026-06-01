@@ -34,6 +34,15 @@ internal sealed record class GoldenConversation
     /// <summary>Operator can park a case without deleting it. Plaintext (structural).</summary>
     public bool Enabled { get; set; }
 
+    /// <summary>Provenance: hand-authored (<see cref="GoldenConversationSource.Manual" />) or harvested from a thumbs-up turn. Plaintext (structural).</summary>
+    public GoldenConversationSource Source { get; set; }
+
+    /// <summary>The thumbs-up assistant message a harvested case was proposed from — provenance + dedup key. Null for manual cases. Plaintext Guid (not sensitive).</summary>
+    public Guid? SourceMessageId { get; set; }
+
+    /// <summary>The conversation a harvested case was proposed from — provenance. Null for manual cases. Plaintext Guid (not sensitive).</summary>
+    public Guid? SourceConversationId { get; set; }
+
     public long CreatedAtUtc { get; set; }
 
     public long UpdatedAtUtc { get; set; }

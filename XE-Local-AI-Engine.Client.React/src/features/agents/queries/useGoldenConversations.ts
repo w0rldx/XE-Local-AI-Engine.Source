@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	approveGolden,
 	createGoldenConversation,
 	deleteGoldenConversation,
+	harvestGolden,
 	listGoldenConversations,
 } from "@/features/agents/api/GoldenConversationsApi";
 import type { CreateGoldenConversationRequestDto } from "@/features/agents/models/GoldenConversationModels";
@@ -37,6 +39,32 @@ export function useDeleteGoldenConversation(agentDefinitionId: string) {
 
 	return useMutation({
 		mutationFn: (goldenId: string) => deleteGoldenConversation(agentDefinitionId, goldenId),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: goldenConversationsQueryKeys.byAgent(agentDefinitionId) });
+		},
+	});
+}
+
+// Harvest golden candidates from the agent's thumbs-up turns. Returns the scan/created/duplicate/skipped counts to
+// the caller (surfaced in a toast) and invalidates the per-agent golden list so newly-staged candidates appear.
+export function useHarvestGolden(agentDefinitionId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: () => harvestGolden(agentDefinitionId),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: goldenConversationsQueryKeys.byAgent(agentDefinitionId) });
+		},
+	});
+}
+
+// Approve a harvested-but-disabled candidate into the active golden set. Invalidates the per-agent golden list so
+// the approved case moves out of the pending-review sub-section into the active list.
+export function useApproveGolden(agentDefinitionId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (goldenId: string) => approveGolden(agentDefinitionId, goldenId),
 		onSuccess: async () => {
 			await queryClient.invalidateQueries({ queryKey: goldenConversationsQueryKeys.byAgent(agentDefinitionId) });
 		},
