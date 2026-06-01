@@ -43,6 +43,8 @@ export function CloudSettings() {
 	});
 	const [formValues, setFormValues] = useState<CloudSettingsFormValues>(emptyFormValues);
 	const [message, setMessage] = useState<string | undefined>();
+	const [touchedFields, setTouchedFields] = useState<Partial<Record<keyof CloudSettingsFormValues, true>>>({});
+	const [submitted, setSubmitted] = useState(false);
 
 	useEffect(() => {
 		if (settingsQuery.data) {
@@ -51,20 +53,35 @@ export function CloudSettings() {
 				apiKey: "",
 				deploymentName: settingsQuery.data.deploymentName ?? "",
 			});
+			setTouchedFields({});
+			setSubmitted(false);
 		}
 	}, [settingsQuery.data]);
 
 	const errors = useMemo(() => validateCloudSettingsForm(formValues), [formValues]);
 	const hasErrors = Object.keys(errors).length > 0;
 
+	// Only expose an error for a field when the user has interacted with it or after a save attempt.
+	const visibleErrors = useMemo(
+		() =>
+			submitted
+				? errors
+				: (Object.fromEntries(
+						Object.entries(errors).filter(([key]) => touchedFields[key as keyof CloudSettingsFormValues]),
+					) as Partial<Record<keyof CloudSettingsFormValues, string>>),
+		[errors, touchedFields, submitted],
+	);
+
 	const saveMutation = useMutation({
-		mutationFn: () =>
-			saveCloudSettings({
+		mutationFn: () => {
+			setSubmitted(true);
+			return saveCloudSettings({
 				providerName: "AzureFoundry",
 				endpoint: formValues.endpoint.trim(),
 				apiKey: formValues.apiKey.trim(),
 				deploymentName: formValues.deploymentName.trim(),
-			}),
+			});
+		},
 		onSuccess: async (settings: CloudSettingsDto) => {
 			setMessage(
 				settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
@@ -74,6 +91,8 @@ export function CloudSettings() {
 				apiKey: "",
 				deploymentName: settings.deploymentName ?? "",
 			});
+			setTouchedFields({});
+			setSubmitted(false);
 			queryClient.setQueryData(cloudSettingsQueryKeys.settings(), settings);
 			await queryClient.invalidateQueries({ queryKey: cloudSettingsQueryKeys.settings() });
 		},
@@ -148,15 +167,17 @@ export function CloudSettings() {
 							label="Azure OpenAI endpoint"
 							placeholder="https://example.openai.azure.com/"
 							value={formValues.endpoint}
-							onChange={(event) => setFormValues((current) => ({ ...current, endpoint: event.currentTarget.value }))}
-							error={errors.endpoint}
+							onChange={(event) => { const value = event.currentTarget.value; setFormValues((current) => ({ ...current, endpoint: value })); }}
+							onBlur={() => setTouchedFields((current) => ({ ...current, endpoint: true }))}
+							error={visibleErrors.endpoint}
 						/>
 						<TextInput
 							label="Deployment name"
 							placeholder="gpt-4o"
 							value={formValues.deploymentName}
-							onChange={(event) => setFormValues((current) => ({ ...current, deploymentName: event.currentTarget.value }))}
-							error={errors.deploymentName}
+							onChange={(event) => { const value = event.currentTarget.value; setFormValues((current) => ({ ...current, deploymentName: value })); }}
+							onBlur={() => setTouchedFields((current) => ({ ...current, deploymentName: true }))}
+							error={visibleErrors.deploymentName}
 						/>
 						<PasswordInput
 							label="API key"
@@ -166,8 +187,9 @@ export function CloudSettings() {
 									: "The key is sent only to the local worker API."
 							}
 							value={formValues.apiKey}
-							onChange={(event) => setFormValues((current) => ({ ...current, apiKey: event.currentTarget.value }))}
-							error={errors.apiKey}
+							onChange={(event) => { const value = event.currentTarget.value; setFormValues((current) => ({ ...current, apiKey: value })); }}
+							onBlur={() => setTouchedFields((current) => ({ ...current, apiKey: true }))}
+							error={visibleErrors.apiKey}
 						/>
 						<Group>
 							<Button

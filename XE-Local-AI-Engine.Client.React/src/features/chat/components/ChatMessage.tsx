@@ -1,7 +1,6 @@
 import { ActionIcon, Avatar, Badge, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
 import {
 	IconCheck,
-	IconChecks,
 	IconChevronLeft,
 	IconChevronRight,
 	IconCopy,
@@ -16,18 +15,31 @@ import { useTranslation } from "react-i18next";
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
 import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
-import { ThoughtsSection } from "@/features/chat/components/ThoughtsSection";
-import { ChatActivityTimeline, ToolCallDisplay } from "@/features/chat/components/ToolCallDisplay";
-import type {
-	ChatFeedbackRating,
-	ChatMessageFeedback,
-	ChatMessageModel,
-	ChatTimelineEntry,
-	ChatToolCall,
-	ReasoningEffort,
-} from "@/features/chat/models/ChatModels";
+import { MessageParts } from "@/features/chat/components/MessageParts";
+import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel, ChatMessagePart, ReasoningEffort } from "@/features/chat/models/ChatModels";
 
-const EMPTY_ENTRIES: ChatTimelineEntry[] = [];
+const EMPTY_PARTS: ChatMessagePart[] = [];
+
+/**
+ * Resolves the ordered parts to render for an assistant turn. Prefers the streaming/persisted `parts`; otherwise
+ * synthesizes a single Thoughts segment from the flat `reasoning` blob (legacy turns + direct renders), keyed on
+ * the message id so the reasoning controls keep their stable testids.
+ */
+function resolveParts(message: ChatMessageModel, streamingParts: ChatMessagePart[] | undefined): ChatMessagePart[] {
+	if (streamingParts && streamingParts.length > 0) {
+		return streamingParts;
+	}
+
+	if (message.parts && message.parts.length > 0) {
+		return message.parts;
+	}
+
+	if (message.reasoning && message.reasoning.trim().length > 0) {
+		return [{ kind: "reasoning", id: message.id, sequence: 0, text: message.reasoning }];
+	}
+
+	return EMPTY_PARTS;
+}
 
 /** Prev/next navigation across the sibling revisions (variant group) of an assistant turn. */
 export interface ChatMessageRevisionNav {
@@ -42,9 +54,10 @@ interface ChatMessageProps {
 	placeholder?: string;
 	footer?: ReactNode;
 	isStreaming?: boolean;
-	streamingReasoning?: string;
+	// Ordered interleave parts for the in-flight turn (from the stream reducer). When absent the component falls
+	// back to the persisted `message.parts`, then to a synthesized Thoughts segment from `message.reasoning`.
+	streamingParts?: ChatMessagePart[];
 	streamingReasoningOverflowBytes?: number;
-	entries?: ChatTimelineEntry[];
 	onRegenerate?: (messageId: string) => void;
 	revisionNav?: ChatMessageRevisionNav;
 	onBranch?: (messageId: string) => void;
@@ -69,33 +82,13 @@ function roleLabel(role: ChatMessageModel["role"]): string {
 	return role === "assistant" ? "Assistant" : role === "user" ? "You" : role;
 }
 
-function calls(entries: ChatTimelineEntry[]): ChatToolCall[] {
-	return entries.reduce<ChatToolCall[]>((accumulator, entry) => {
-		if (!entry.toolName) {
-			return accumulator;
-		}
-
-		accumulator.push({
-			id: entry.id,
-			name: entry.toolName,
-			state: entry.state ?? (entry.type === "ToolResult" ? "received" : "waiting"),
-			args: entry.toolArgs,
-			result: entry.toolResult,
-			requiresApproval: entry.requiresApproval,
-		});
-
-		return accumulator;
-	}, []);
-}
-
 export function ChatMessage({
 	message,
 	placeholder,
 	footer,
 	isStreaming = false,
-	streamingReasoning,
+	streamingParts,
 	streamingReasoningOverflowBytes = 0,
-	entries = EMPTY_ENTRIES,
 	onRegenerate,
 	revisionNav,
 	onBranch,
@@ -113,7 +106,7 @@ export function ChatMessage({
 	const content = message.content.trim().length > 0 ? message.content : placeholder;
 	const time = timeText(message.updatedAt ?? message.createdAt);
 	const hasContentStarted = message.content.trim().length > 0;
-	const toolCalls = assistantMessage ? calls(entries) : [];
+	const parts = assistantMessage ? resolveParts(message, streamingParts) : EMPTY_PARTS;
 	const canCopy = hasContentStarted && !isStreaming;
 	const canRegenerate = assistantMessage && !isStreaming && Boolean(onRegenerate);
 	const canBranch = assistantMessage && !isStreaming && Boolean(onBranch);
@@ -234,7 +227,6 @@ export function ChatMessage({
 								{time}
 							</Text>
 						) : null}
-						<IconChecks size={12} color="var(--mantine-color-teal-6)" />
 						{actions}
 					</Group>
 					{footer}
@@ -277,18 +269,14 @@ export function ChatMessage({
 					) : null}
 				</Group>
 				{assistantMessage ? (
-					<ThoughtsSection
-						messageId={message.id}
-						reasoning={message.reasoning}
-						streamingContent={streamingReasoning}
-						streamingOverflowBytes={streamingReasoningOverflowBytes}
+					<MessageParts
+						parts={parts}
 						isStreaming={isStreaming}
+						streamingReasoningOverflowBytes={streamingReasoningOverflowBytes}
 						hasContentStarted={hasContentStarted}
 						reasoningBypassed={reasoningEffort === "none" && (message.reasoning?.trim().length ?? 0) > 0}
 					/>
 				) : null}
-				{assistantMessage && isStreaming ? <ToolCallDisplay calls={toolCalls} /> : null}
-				{assistantMessage && !isStreaming ? <ChatActivityTimeline entries={entries} /> : null}
 				<AnimatePresence initial={false}>
 					{content ? (
 						<m.div

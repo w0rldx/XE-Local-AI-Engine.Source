@@ -201,6 +201,52 @@ describe("node chat mapper", () => {
 		expect(message.feedbackRating).toBeUndefined();
 		expect(message.feedbackComment).toBeUndefined();
 	});
+
+	it("maps the persisted ordered parts into the message's interleave", () => {
+		const message = mapSingleMessage({
+			reasoning: "flat blob",
+			parts: [
+				{ kind: "reasoning", sequence: 0, text: "first thoughts" },
+				{ kind: "tool", sequence: 1, toolCallId: "call-1", name: "get_time", state: "received", args: "{}", result: "12:00", requiresApproval: false },
+				{ kind: "reasoning", sequence: 2, text: "second thoughts" },
+			],
+		});
+
+		expect(message.parts).toEqual([
+			{ kind: "reasoning", id: "message-1:0", sequence: 0, text: "first thoughts" },
+			{ kind: "tool", id: "call-1", sequence: 1, name: "get_time", state: "received", args: "{}", result: "12:00", requiresApproval: false },
+			{ kind: "reasoning", id: "message-1:2", sequence: 2, text: "second thoughts" },
+		]);
+	});
+
+	it("keys a tool part on the message id + sequence when the wire omits the tool-call id", () => {
+		const message = mapSingleMessage({
+			parts: [{ kind: "tool", sequence: 4, name: "noop", state: "requesting" }],
+		});
+
+		expect(message.parts?.[0]).toMatchObject({ kind: "tool", id: "message-1:4", name: "noop" });
+	});
+
+	it("skips an unknown part kind so a forward-compat backend addition never breaks rendering", () => {
+		const message = mapSingleMessage({
+			parts: [
+				{ kind: "reasoning", sequence: 0, text: "kept" },
+				{ kind: "future-kind", sequence: 1, text: "ignored" },
+			],
+		});
+
+		expect(message.parts).toEqual([{ kind: "reasoning", id: "message-1:0", sequence: 0, text: "kept" }]);
+	});
+
+	it("synthesizes a single Thoughts block from flat reasoning for legacy turns without parts", () => {
+		const message = mapSingleMessage({ reasoning: "legacy thoughts", parts: null });
+
+		expect(message.parts).toEqual([{ kind: "reasoning", id: "message-1", sequence: 0, text: "legacy thoughts" }]);
+	});
+
+	it("leaves parts undefined for a legacy turn with neither parts nor reasoning", () => {
+		expect(mapSingleMessage({ reasoning: null, parts: null }).parts).toBeUndefined();
+	});
 });
 
 describe("node chat tool-call event mapper", () => {
@@ -276,8 +322,8 @@ describe("node chat tool-call event mapper", () => {
 		).toMatchObject({ id: "call-1", state: "failed", result: "boom" });
 	});
 
-	it("falls back to the message id when no tool call id is present", () => {
-		expect(mapToolCallEvent(streamEvent({ type: "tool-call-requested", messageId: "message-9", toolName: "noop" }))?.id).toBe("message-9");
+	it("falls back to messageId:sequence when no tool call id is present, keeping distinct calls separate", () => {
+		expect(mapToolCallEvent(streamEvent({ type: "tool-call-requested", messageId: "message-9", sequence: 4, toolName: "noop" }))?.id).toBe("message-9:4");
 	});
 
 	it("returns null for non-tool stream events", () => {

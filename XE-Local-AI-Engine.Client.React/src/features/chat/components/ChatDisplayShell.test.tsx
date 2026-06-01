@@ -7,7 +7,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatConversationModel, ChatDisplayShellProps, ChatTimelineEntry } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatDisplayShellProps, ChatMessagePart } from "@/features/chat/models/ChatModels";
 
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
@@ -52,7 +52,7 @@ function shellProps(overrides: Partial<ChatDisplayShellProps> = {}): ChatDisplay
 	};
 }
 
-describe("ChatDisplayShell tool-call timeline pass-through", () => {
+describe("ChatDisplayShell tool-call parts pass-through", () => {
 	beforeEach(() => {
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
@@ -87,37 +87,33 @@ describe("ChatDisplayShell tool-call timeline pass-through", () => {
 		cleanup();
 	});
 
-	it("renders the streaming tool-call display for timeline entries scoped to their assistant message", () => {
-		const timelineEntries: ChatTimelineEntry[] = [
-			{
-				id: "call-1",
-				messageId: "assistant-1",
-				type: "ToolCall",
-				toolName: "search_docs",
-				toolArgs: '{"q":"x"}',
-				state: "requesting",
-				createdAt: "2026-05-24T00:00:01.500Z",
-			},
+	it("renders the streaming tool-call card from the streaming state's ordered parts", () => {
+		const parts: ChatMessagePart[] = [
+			{ kind: "tool", id: "call-1", sequence: 1, name: "search_docs", state: "requesting", args: '{"q":"x"}' },
 		];
 
 		renderWithProviders(
 			<ChatDisplayShell
 				{...shellProps({
-					timelineEntries,
-					// A live streaming turn targeting the assistant message renders the ToolCallDisplay group.
-					streamingMessage: { conversationId: "conversation-1", messageId: "assistant-1", content: "Here is the answer.", isActive: true },
+					// A live streaming turn targeting the assistant message renders its ordered parts as tool cards.
+					streamingMessage: {
+						conversationId: "conversation-1",
+						messageId: "assistant-1",
+						content: "Here is the answer.",
+						isActive: true,
+						parts,
+					},
 				})}
 			/>,
 		);
 
-		expect(screen.getByTestId("chat-tool-call-group")).toBeTruthy();
-		expect(screen.getByTestId("chat-tool-call-row-search_docs")).toBeTruthy();
+		expect(screen.getByTestId("chat-tool-call-card-search_docs")).toBeTruthy();
 	});
 
-	it("renders no tool-call display when no timeline entries are passed through", () => {
+	it("renders no tool-call card when the turn has no tool parts", () => {
 		renderWithProviders(<ChatDisplayShell {...shellProps()} />);
 
-		expect(screen.queryByTestId("chat-tool-call-group")).toBeNull();
+		expect(screen.queryByTestId("chat-tool-call-card-search_docs")).toBeNull();
 	});
 
 	it("suppresses the empty-state while the selected conversation's messages are loading", () => {

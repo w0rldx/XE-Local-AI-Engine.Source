@@ -189,7 +189,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 						<UnstyledButton
 							onClick={toggleSidebar}
 							className={classes["toggle-button"]}
-							aria-label={sideBarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+							aria-label={sideBarCollapsed ? t("components.sideNavigationBar.ariaExpand") : t("components.sideNavigationBar.ariaCollapse")}
 						>
 							{sideBarCollapsed ? <IconLayoutSidebarLeftExpand size={20} /> : <IconLayoutSidebarLeftCollapse size={20} />}
 						</UnstyledButton>

@@ -16,7 +16,8 @@ public interface INodeChatInvocationPump
 
     Task<NodeChatPumpTerminalResult> TerminalizeAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
-        string? requestedModel);
+        string? requestedModel,
+        IReadOnlyList<NodeChatMessagePart>? parts = null);
 
     Task<NodeChatPumpTerminalResult> TerminalizeInterruptedAsync(NodeChatMessageCorrelation correlation,
         NodeChatPumpCursor cursor,

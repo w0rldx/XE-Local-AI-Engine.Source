@@ -174,7 +174,7 @@ export function AgentDefinitionForm({
 				value={values.name}
 				required={true}
 				error={fieldErrors.name ? t("pages.agents.form.name.required", "Name is required") : undefined}
-				onChange={(event) => setValues((current) => ({ ...current, name: event.currentTarget.value }))}
+				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, name: value })); }}
 				data-testid="agent-form-name"
 			/>
 			<Textarea
@@ -183,7 +183,7 @@ export function AgentDefinitionForm({
 				value={values.description}
 				autosize={true}
 				minRows={2}
-				onChange={(event) => setValues((current) => ({ ...current, description: event.currentTarget.value }))}
+				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, description: value })); }}
 				data-testid="agent-form-description"
 			/>
 			<Textarea
@@ -202,7 +202,7 @@ export function AgentDefinitionForm({
 						? t("pages.agents.form.instructions.required", "Instructions are required")
 						: undefined
 				}
-				onChange={(event) => setValues((current) => ({ ...current, instructions: event.currentTarget.value }))}
+				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, instructions: value })); }}
 				data-testid="agent-form-instructions"
 			/>
 			<Group grow={true} align="flex-start">
@@ -238,9 +238,7 @@ export function AgentDefinitionForm({
 					"Append this agent's enabled playbook actions to its instructions at run time.",
 				)}
 				checked={values.playbookEnabled}
-				onChange={(event) =>
-					setValues((current) => ({ ...current, playbookEnabled: event.currentTarget.checked }))
-				}
+				onChange={(event) => { const checked = event.currentTarget.checked; setValues((current) => ({ ...current, playbookEnabled: checked })); }}
 				data-testid="agent-form-playbook-enabled"
 			/>
 			{values.kind === "Orchestrator" ? (

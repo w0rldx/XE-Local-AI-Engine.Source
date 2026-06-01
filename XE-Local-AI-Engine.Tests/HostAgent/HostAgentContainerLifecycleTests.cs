@@ -28,12 +28,74 @@ public sealed class HostAgentContainerLifecycleTests
                 }
             ]
         };
-        var service = new ContainerLifecycleService(docker, TimeProvider.System);
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
 
         var containers = await service.ListContainersAsync(CancellationToken.None);
 
         AssertEx.ContainsSingle(containers, container =>
             container.Name == "ollama" && container.Health == ContainerHealth.Healthy && container.DigestVerified);
+    }
+
+    [Test]
+    public async Task ListContainersAsync_ScopesToManifestOwnedComponentsAndPrunesTerminatedDuplicates()
+    {
+        var docker = new FakeDockerRuntimeClient
+        {
+            Containers =
+            [
+                // Unowned cross-app daemon containers must never surface.
+                CreateContainer("postgres-aspire-c0re-1", true, "bridge"),
+                CreateContainer("pgadmin-c0re", true, "bridge"),
+                // Owned component with a live instance plus a terminated stale duplicate of the same name.
+                CreateContainer("ollama", false, "xe-engine-net"),
+                CreateContainer("ollama", true, "xe-engine-net"),
+                // Owned component that is currently running.
+                CreateContainer("xe-node-web-server", true, "xe-engine-net")
+            ]
+        };
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
+
+        var containers = await service.ListContainersAsync(CancellationToken.None);
+
+        AssertEx.Equal(2, containers.Count);
+        AssertEx.False(containers.Any(component => component.Name == "postgres-aspire-c0re-1"));
+        AssertEx.False(containers.Any(component => component.Name == "pgadmin-c0re"));
+        AssertEx.ContainsSingle(containers, component =>
+            component.Name == "ollama" && component.Health == ContainerHealth.Healthy);
+        AssertEx.ContainsSingle(containers, component =>
+            component.Name == "xe-node-web-server" && component.Health == ContainerHealth.Healthy);
+    }
+
+    [Test]
+    public async Task ListContainersAsync_WhenManifestMissing_ReturnsEmptyOwningNothing()
+    {
+        var docker = new FakeDockerRuntimeClient
+        {
+            Containers =
+            [
+                CreateContainer("postgres-aspire-c0re-1", true, "bridge"),
+                CreateContainer("pgadmin-c0re", true, "bridge"),
+                CreateContainer("ollama", true, "xe-engine-net"),
+                CreateContainer("xe-node-web-server", true, "xe-engine-net")
+            ]
+        };
+        var service = new ContainerLifecycleService(docker, TimeProvider.System);
+
+        var containers = await service.ListContainersAsync(CancellationToken.None);
+
+        AssertEx.Equal(0, containers.Count);
     }
 
     [Test]
@@ -52,13 +114,64 @@ public sealed class HostAgentContainerLifecycleTests
                 }
             ]
         };
-        var service = new ContainerLifecycleService(docker, TimeProvider.System);
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
 
         var report = await service.StartContainerAsync("ollama", CancellationToken.None);
 
         AssertEx.Equal("start", report.Action);
         AssertEx.True(report.Succeeded);
         AssertEx.Equal(1, docker.StartCount);
+    }
+
+    [Test]
+    public async Task StartContainerAsync_WhenContainerNotOwned_DeniesActionWithDiagnostic()
+    {
+        var docker = new FakeDockerRuntimeClient
+        {
+            Containers =
+            [
+                CreateContainer("postgres-aspire-c0re-1", true, "bridge")
+            ]
+        };
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
+
+        var report = await service.StartContainerAsync("postgres-aspire-c0re-1", CancellationToken.None);
+
+        AssertEx.Equal("start", report.Action);
+        AssertEx.False(report.Succeeded);
+        AssertEx.Contains(report.Diagnostics, "container-not-owned:postgres-aspire-c0re-1");
+        AssertEx.Equal(0, docker.StartCount);
+    }
+
+    [Test]
+    public async Task StartContainerAsync_WhenManifestMissing_DeniesActionAndDoesNotInvokeDocker()
+    {
+        var docker = new FakeDockerRuntimeClient
+        {
+            Containers =
+            [
+                CreateContainer("ollama", false, "xe-engine-net")
+            ]
+        };
+        var service = new ContainerLifecycleService(docker, TimeProvider.System);
+
+        var report = await service.StartContainerAsync("ollama", CancellationToken.None);
+
+        AssertEx.False(report.Succeeded);
+        AssertEx.Contains(report.Diagnostics, "container-not-owned:ollama");
+        AssertEx.Equal(0, docker.StartCount);
     }
 
     [Test]
@@ -77,12 +190,70 @@ public sealed class HostAgentContainerLifecycleTests
                 }
             ]
         };
-        var service = new ContainerLifecycleService(docker, TimeProvider.System);
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
 
         await service.StopContainerAsync("ollama", TimeSpan.FromSeconds(12), CancellationToken.None);
 
         AssertEx.Equal(1, docker.StopCount);
         AssertEx.Equal(TimeSpan.FromSeconds(12), docker.LastDrainTimeout);
+    }
+
+    [Test]
+    public async Task StopContainerAsync_WhenContainerNotOwned_DeniesActionWithDiagnostic()
+    {
+        var docker = new FakeDockerRuntimeClient
+        {
+            Containers =
+            [
+                CreateContainer("pgadmin-c0re", true, "bridge")
+            ]
+        };
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
+
+        var report = await service.StopContainerAsync("pgadmin-c0re", TimeSpan.FromSeconds(12), CancellationToken.None);
+
+        AssertEx.Equal("stop", report.Action);
+        AssertEx.False(report.Succeeded);
+        AssertEx.Contains(report.Diagnostics, "container-not-owned:pgadmin-c0re");
+        AssertEx.Equal(0, docker.StopCount);
+    }
+
+    [Test]
+    public async Task RestartContainerAsync_WhenContainerNotOwned_DeniesActionWithDiagnostic()
+    {
+        var docker = new FakeDockerRuntimeClient
+        {
+            Containers =
+            [
+                CreateContainer("pgadmin-c0re", true, "bridge")
+            ]
+        };
+        var service = new ContainerLifecycleService(docker,
+            TimeProvider.System,
+            null,
+            new HostAgentRuntimeOptions
+            {
+                Manifest = CreateManifest()
+            });
+
+        var report = await service.RestartContainerAsync("pgadmin-c0re", TimeSpan.FromSeconds(12), CancellationToken.None);
+
+        AssertEx.Equal("restart", report.Action);
+        AssertEx.False(report.Succeeded);
+        AssertEx.Contains(report.Diagnostics, "container-not-owned:pgadmin-c0re");
+        AssertEx.Equal(0, docker.RestartCount);
     }
 
     [Test]
@@ -284,6 +455,8 @@ public sealed class HostAgentContainerLifecycleTests
 
         public int StopCount { get; private set; }
 
+        public int RestartCount { get; private set; }
+
         public TimeSpan LastDrainTimeout { get; private set; }
 
         public List<string> StartedContainers { get; } = [];
@@ -363,6 +536,9 @@ public sealed class HostAgentContainerLifecycleTests
 
         public Task RestartContainerAsync(string containerName, TimeSpan drainTimeout, CancellationToken cancellationToken)
         {
+            RestartCount++;
+            LastDrainTimeout = drainTimeout;
+            UpdateContainerRunningState(containerName, true);
             return Task.CompletedTask;
         }
 

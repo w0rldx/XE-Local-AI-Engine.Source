@@ -159,4 +159,40 @@ describe("ChatMessage actions", () => {
 
 		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
 	});
+
+	it("renders the ordered parts interleave: reasoning → tool card → reasoning", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({
+					parts: [
+						{ kind: "reasoning", id: "assistant-1:0", sequence: 0, text: "first thoughts" },
+						{ kind: "tool", id: "call-1", sequence: 1, name: "get_time", state: "received", result: "12:00" },
+						{ kind: "reasoning", id: "assistant-1:2", sequence: 2, text: "second thoughts" },
+					],
+				})}
+			/>,
+		);
+
+		// Two distinct folded Thoughts blocks (Option A) plus one tool card, all from the ordered parts.
+		expect(screen.getByTestId("chat-message-reasoning-assistant-1:0")).toBeTruthy();
+		expect(screen.getByTestId("chat-message-reasoning-assistant-1:2")).toBeTruthy();
+		expect(screen.getByTestId("chat-tool-call-card-get_time")).toBeTruthy();
+		// The trailing answer still renders from message.content.
+		expect(screen.getByText("Here is the answer.")).toBeTruthy();
+	});
+
+	it("renders the live tool card and its result from the streaming parts while streaming", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ status: "streaming", content: "" })}
+				isStreaming={true}
+				streamingParts={[
+					{ kind: "reasoning", id: "assistant-1:0", sequence: 0, text: "thinking" },
+					{ kind: "tool", id: "call-1", sequence: 1, name: "get_time", state: "received", result: "12:00" },
+				]}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toContain("12:00");
+	});
 });

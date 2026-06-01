@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Default <see cref="INodeChatRegenerationService" />. Reuses the shared runner/pump/dispatcher the local send
@@ -31,6 +32,7 @@ public sealed class NodeChatRegenerationService(
     IAgentDefinitionResolver agentDefinitionResolver,
     IAgentDefinitionStore agentDefinitionStore,
     IOrchestrationResolver orchestrationResolver,
+    INodeSettingsStore nodeSettingsStore,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -127,18 +129,31 @@ public sealed class NodeChatRegenerationService(
             }
         }
 
+        // Accumulates the ordered reasoning/tool interleave so the regenerated turn persists parts[] (the reload
+        // render source), symmetric with the send path. Fed by the tool handler below and the pump's reasoning deltas.
+        var parts = new NodeChatPartAccumulator();
+
         void OnToolCallLifecycleChanged(object? _, ToolCallLifecycleChangedEventArgs args)
         {
             if (args.Payload.InvocationId == requestId)
             {
-                eventChannel.Writer.TryWrite(ToToolCallEvent(correlation, args.Payload, sequence.Next()));
+                var toolSequence = sequence.Next();
+                AccumulateToolPart(parts, args.Payload, toolSequence);
+                eventChannel.Writer.TryWrite(ToToolCallEvent(correlation, args.Payload, toolSequence));
             }
         }
 
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
-        var activeModel = original.Model ?? localChatOptions.Value.DefaultModel;
+        // Mirror the send path exactly (NodeChatStreamService): resolve the offer-time active model with the same
+        // precedence as the model list/selection (ListLocalModelsEndpoint) — the original turn's model first, then the
+        // operator's node-default selection (StoredNodeSettings.DefaultModelName), then the static config fallback.
+        // Without the node-default step a regenerate of a "Local default" turn (original.Model is null) would resolve
+        // the static fallback instead of the operator's node default, so a tool-capable node default would never
+        // satisfy the capability gate and run_in_agent_home would be withheld on the rerun.
+        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var activeModel = original.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
 
         // Mirror the send path exactly (NodeChatStreamService): resolve the conversation's bound definition so a
         // regenerated turn reruns with the SAME persona, tools, model, and version a fresh send would — a missed
@@ -182,6 +197,7 @@ public sealed class NodeChatRegenerationService(
             correlation,
             original.Model,
             sequence,
+            parts,
             linkedCancellation.Token);
         var runTask = RunInvocationAsync(package,
             placeholder.MessageId,
@@ -269,6 +285,7 @@ public sealed class NodeChatRegenerationService(
         NodeChatMessageCorrelation correlation,
         string? requestedModel,
         NodeChatStreamSequence sequence,
+        NodeChatPartAccumulator parts,
         CancellationToken cancellationToken)
     {
         // The shared pump owns all persistence (INTO the variant row, by correlation); this only fans the
@@ -286,10 +303,15 @@ public sealed class NodeChatRegenerationService(
 
                 if (flush.Persisted is not null)
                 {
+                    var deltaSequence = sequence.Next();
+                    // Feed the reasoning delta into the interleave under the SAME sequence as its SSE event so the
+                    // accumulated reasoning segments order correctly against the concurrently-stamped tool parts.
+                    parts.AppendReasoning(flush.ReasoningDelta, deltaSequence);
+
                     await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantDelta,
                             correlation,
                             flush.Persisted,
-                            sequence.Next(),
+                            deltaSequence,
                             flush.ContentDelta,
                             flush.ReasoningDelta),
                         cancellationToken).ConfigureAwait(false);
@@ -297,7 +319,9 @@ public sealed class NodeChatRegenerationService(
 
                 if (NodeChatInvocationPump.IsTerminal(state.Status))
                 {
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel).ConfigureAwait(false);
+                    // Empty snapshot -> null so the persisted parts are left untouched rather than overwritten empty.
+                    var snapshot = parts.HasParts ? parts.Snapshot() : null;
+                    var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel, snapshot).ConfigureAwait(false);
                     terminalPersisted = true;
 
                     await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
@@ -501,6 +525,17 @@ public sealed class NodeChatRegenerationService(
             outputTokens ?? message.OutputCount,
             totalTokens ?? message.TotalCount,
             reasoningTokens ?? message.ReasoningCount);
+    }
+
+    private static void AccumulateToolPart(NodeChatPartAccumulator parts, ToolCallLifecyclePayload payload, long sequence)
+    {
+        if (payload.Phase == ToolCallLifecyclePhase.Requested)
+        {
+            parts.AppendToolRequested(payload.ToolCallId, payload.ToolName, payload.Arguments, payload.RequiresApproval, sequence);
+            return;
+        }
+
+        parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
     }
 
     private ChatStreamEvent ToToolCallEvent(NodeChatMessageCorrelation correlation,

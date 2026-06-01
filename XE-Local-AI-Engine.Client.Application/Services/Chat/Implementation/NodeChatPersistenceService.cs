@@ -321,7 +321,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             request.TotalCount,
             request.ReasoningCount,
             true,
-            cancellationToken);
+            cancellationToken,
+            request.Parts);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -517,7 +518,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     AddParameter(messageCommand, "$role", message.Role);
                     AddParameter(messageCommand, "$content", Encode(message.Content));
                     AddParameter(messageCommand, "$metadata_json",
-                        SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount));
+                        SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount, message.Parts));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);
                     AddParameter(messageCommand, "$updated_at_utc", message.UpdatedAtUtc);
                     AddParameter(messageCommand, "$status", message.Status);
@@ -834,7 +835,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         int? totalTokens,
         int? reasoningTokens,
         bool replaceContent,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<NodeChatMessagePart>? parts = null)
     {
         ValidateCorrelation(correlation);
 
@@ -857,7 +859,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 var nextOutputTokens = outputTokens ?? current.OutputCount;
                 var nextTotalTokens = totalTokens ?? current.TotalCount;
                 var nextReasoningTokens = reasoningTokens ?? current.ReasoningCount;
-                var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens);
+                // A null parts arg leaves the persisted parts untouched (a partial flush carries no parts); a
+                // non-null list (including empty) is the authoritative interleave from terminalize and overwrites.
+                var nextParts = parts ?? current.Parts;
+                var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -891,7 +896,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     InputCount = nextInputTokens,
                     OutputCount = nextOutputTokens,
                     TotalCount = nextTotalTokens,
-                    ReasoningCount = nextReasoningTokens
+                    ReasoningCount = nextReasoningTokens,
+                    Parts = nextParts
                 };
             },
             cancellationToken).ConfigureAwait(false);
@@ -988,7 +994,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await reader.IsDBNullAsync(12, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(12)),
                 await reader.IsDBNullAsync(13, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(13)),
                 await reader.IsDBNullAsync(14, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(14),
-                await reader.IsDBNullAsync(15, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(15)));
+                await reader.IsDBNullAsync(15, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(15),
+                metadata.Parts));
         }
 
         return messages;
@@ -1081,14 +1088,15 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         int? inputTokens,
         int? outputTokens,
         int? totalTokens,
-        int? reasoningTokens)
+        int? reasoningTokens,
+        IReadOnlyList<NodeChatMessagePart>? parts = null)
     {
-        if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null)
+        if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null && parts is null)
         {
             return null;
         }
 
-        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens), MetadataJsonOptions));
+        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts), MetadataJsonOptions));
     }
 
     private static string? SerializeSelectedPath(IReadOnlyDictionary<Guid, Guid> selectedPath)
@@ -1172,5 +1180,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         int? InputCount,
         int? OutputCount,
         int? TotalCount,
-        int? ReasoningCount);
+        int? ReasoningCount,
+        // Optional ordered interleave. Added after the original metadata shape, so it is the trailing member: a legacy
+        // blob written before parts existed omits the key and deserializes with Parts = null (backward-compatible).
+        // Stored as plaintext UTF-8 JSON (same posture as Reasoning/Model/token fields on this raw-ADO path —
+        // single-user device; see NodeChatPersistenceServiceTests for the documented at-rest posture).
+        IReadOnlyList<NodeChatMessagePart>? Parts = null);
 }

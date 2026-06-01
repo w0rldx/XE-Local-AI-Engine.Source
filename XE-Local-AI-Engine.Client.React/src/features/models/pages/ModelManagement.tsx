@@ -259,7 +259,7 @@ export function ModelManagement() {
 									) : null}
 									{detailsQuery.data?.system ? <Alert color="blue">System prompt: {detailsQuery.data.system}</Alert> : null}
 									{detailsQuery.data?.license ? (
-										<ExpandableTextField label="License" value={detailsQuery.data.license} dialogTitle="Model license" />
+										<ExpandableTextField label="License" value={detailsQuery.data.license} />
 									) : null}
 								</Stack>
 							) : (

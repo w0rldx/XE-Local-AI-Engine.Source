@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatRegenerationServiceTests : IDisposable
@@ -61,6 +62,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -139,6 +141,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             resolver,
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -202,6 +205,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             store,
             orchestrationResolver,
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -253,6 +257,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             resolver,
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -298,6 +303,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -361,6 +367,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -415,6 +422,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -460,6 +468,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -523,6 +532,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -565,6 +575,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -601,6 +612,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
             CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -639,6 +651,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>()).Returns(tools);
         return provider;
+    }
+
+    // The default node-settings store: no operator-selected node default, so model resolution falls through to the
+    // original turn's model (or the static config fallback) exactly as the send path does.
+    private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null)
+    {
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { DefaultModelName = defaultModelName });
+        return store;
     }
 
     // The default (unbound) resolver: ResolveAsync returns null, so the regeneration path keeps today's literals —

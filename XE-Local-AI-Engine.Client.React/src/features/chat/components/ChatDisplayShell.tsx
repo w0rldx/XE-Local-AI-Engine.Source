@@ -109,9 +109,6 @@ export function ChatDisplayShell({
 					{conversation?.title?.trim() || t("pages.chat.windowTitle", "Local chat")}
 				</Text>
 			</Group>
-			<Text size="xs" c="dimmed">
-				{t("pages.chat.localPreviewSubtitle", "Local node display shell — safe mock data")}
-			</Text>
 		</Stack>
 	);
 

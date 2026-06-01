@@ -32,7 +32,8 @@
 		"light": "Light",
 		"dark": "Dark",
 		"switchToLight": "Switch to light mode",
-		"switchToDark": "Switch to dark mode"
+		"switchToDark": "Switch to dark mode",
+		"toggleColorScheme": "Toggle color scheme"
 	},
 	"navigation": {
 		"home": "Home",
@@ -72,7 +73,13 @@
 			"done": "Done",
 			"failed": "Failed",
 			"thinkingLive": "Thinking…",
-			"thoughtFor": "Thought for {{s}}s"
+			"thoughtFor": "Thought for {{s}}s",
+			"name": "tool",
+			"live": "live",
+			"argsLabel": "Arguments",
+			"resultLabel": "Result",
+			"errorLabel": "Error",
+			"noOutput": "(no output)"
 		}
 	},
 	"pages": {
@@ -694,6 +701,56 @@
 			"placeholder": {
 				"title": "Dashboard",
 				"description": "Remote connection state and node health controls will be added here."
+			},
+			"eyebrow": "Worker Node",
+			"title": "Dashboard",
+			"subtitle": "Monitor the local worker connection and control startup connection behavior.",
+			"loadingStatus": "Loading connection status…",
+			"unexpectedError": "Unexpected connection action error",
+			"notPairedHint": "Bind this node before connecting to the Central Platform.",
+			"platformConnection": {
+				"title": "Platform connection",
+				"connect": "Connect",
+				"disconnect": "Disconnect",
+				"refresh": "Refresh"
+			},
+			"startupConnection": {
+				"title": "Startup connection",
+				"enabled": "Enabled",
+				"disabled": "Disabled",
+				"hint": "Auto-connect stays disabled by default after binding until you explicitly enable it.",
+				"enableAutoConnect": "Enable auto-connect",
+				"disableAutoConnect": "Disable auto-connect"
+			},
+			"nodeCredentials": {
+				"title": "Node credentials",
+				"binding": "Binding",
+				"paired": "Paired",
+				"notPaired": "Not paired",
+				"bindingMethod": "Binding method",
+				"nodeName": "Node name",
+				"tokenExpires": "Token expires",
+				"notAvailable": "Not available",
+				"tokenExpiredBadge": "Expired"
+			},
+			"lastUpdate": {
+				"title": "Last update",
+				"privacyNote": "Connection controls never return access or refresh tokens to the browser."
+			},
+			"connectionStatus": {
+				"preparingModel": "Preparing model",
+				"reconnecting": "Reconnecting",
+				"connecting": "Connecting",
+				"connected": "Connected",
+				"disconnected": "Disconnected",
+				"pairing": "Pairing",
+				"error": "Error",
+				"unknown": "Unknown"
+			},
+			"connectionHint": {
+				"reconnecting": "Disable auto-connect to stop reconnect attempts, or wait for the worker to recover.",
+				"autoConnectEnabled": "Auto-connect is enabled. The worker will connect on startup after prerequisites are ready.",
+				"autoConnectDisabled": "Auto-connect is disabled. Use Connect for a manual session or enable startup connection."
 			}
 		},
 		"nodeBinding": {
@@ -1419,7 +1476,13 @@
 			"tooltip": {
 				"collapse": "Collapse",
 				"expand": "Expand"
-			}
+			},
+			"ariaCollapse": "Collapse sidebar",
+			"ariaExpand": "Expand sidebar"
+		},
+		"headerBar": {
+			"logout": "Logout",
+			"openDrawer": "Open navigation"
 		},
 		"tables": {
 			"button": {

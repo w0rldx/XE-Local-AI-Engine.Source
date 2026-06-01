@@ -66,7 +66,8 @@ public sealed class NodeChatInvocationPump(
     /// </summary>
     public async Task<NodeChatPumpTerminalResult> TerminalizeAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
-        string? requestedModel)
+        string? requestedModel,
+        IReadOnlyList<NodeChatMessagePart>? parts = null)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -85,7 +86,10 @@ public sealed class NodeChatInvocationPump(
                 state.InputTokens,
                 state.OutputTokens,
                 state.TotalTokens,
-                state.ReasoningTokens),
+                state.ReasoningTokens,
+                // Null when the caller assembled no interleave (platform path, or a turn with no parts); the persisted
+                // parts are then left untouched. The local front doors pass the accumulated ordered parts here.
+                parts),
             CancellationToken.None).ConfigureAwait(false);
 
         return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);
