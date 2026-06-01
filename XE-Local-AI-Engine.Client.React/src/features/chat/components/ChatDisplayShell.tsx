@@ -69,6 +69,7 @@ export function ChatDisplayShell({
 			conversations={conversations}
 			selectedConversationId={selectedConversationId}
 			collapsed={isMobile ? false : conversationListCollapsed}
+			embedded={isMobile}
 			disabled={inputStatus.chatInputDisabled}
 			searchQuery={conversationSearchQuery}
 			showArchived={showArchivedConversations}
@@ -186,6 +187,9 @@ export function ChatDisplayShell({
 					withCloseButton={true}
 					title={t("pages.chat.conversations", "Conversations")}
 					data-testid="chat-conversations-drawer"
+					// Body padding is 0 so the embedded list controls their own md inset; pad the header inline to match
+					// so the drawer title lines up with the search field + conversation rows below it instead of flush-left.
+					styles={{ header: { paddingInline: "var(--mantine-spacing-md)" } }}
 				>
 					{conversationList}
 				</Drawer>

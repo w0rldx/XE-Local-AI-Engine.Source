@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -89,5 +89,22 @@ describe("ToolCallCard", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "requesting", result: undefined })} />);
 
 		expect(screen.queryByTestId("chat-tool-call-no-output-get_time")).toBeNull();
+	});
+
+	it("starts minimized and keeps an operator-expanded state across a remount (keyed by tool id)", () => {
+		// Default is collapsed.
+		const first = renderWithProviders(<ToolCallCard part={toolPart({ id: "persist-1", name: "persist_tool" })} />);
+		const details = screen.getByTestId("chat-tool-call-disclosure-persist_tool") as HTMLDetailsElement;
+		expect(details.open).toBe(false);
+
+		// Operator expands the card; the native <details> toggle drives the controlled state + the persistence map.
+		details.open = true;
+		fireEvent(details, new Event("toggle", { bubbles: false }));
+		expect((screen.getByTestId("chat-tool-call-disclosure-persist_tool") as HTMLDetailsElement).open).toBe(true);
+
+		// The transient-streaming → persisted-message swap unmounts and remounts the card; the expand survives.
+		first.unmount();
+		renderWithProviders(<ToolCallCard part={toolPart({ id: "persist-1", name: "persist_tool" })} />);
+		expect((screen.getByTestId("chat-tool-call-disclosure-persist_tool") as HTMLDetailsElement).open).toBe(true);
 	});
 });

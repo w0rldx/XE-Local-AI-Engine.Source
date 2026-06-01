@@ -1,6 +1,7 @@
 import { Alert, Button, Card, Container, PasswordInput, Stack, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconLock } from "@tabler/icons-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
@@ -8,12 +9,20 @@ import { loginNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
 
+// Translate the raw failure into an operator-facing message instead of surfacing axios' "Request failed with
+// status code 401". 401 = wrong password; a missing response = the node is unreachable; anything else is generic.
 function getErrorMessage(error: unknown): string {
-	if (error instanceof Error) {
-		return error.message;
+	if (isAxiosError(error)) {
+		if (error.response?.status === 401) {
+			return "Incorrect password. Please try again.";
+		}
+
+		if (!error.response) {
+			return "Can't reach the node. Check that it's running and try again.";
+		}
 	}
 
-	return "Login failed. Check the password and try again.";
+	return "Sign in failed. Please try again.";
 }
 
 export function Login() {

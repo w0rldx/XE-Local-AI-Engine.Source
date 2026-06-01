@@ -84,7 +84,9 @@ export function ChatMessageList({
 		? undefined
 		: scopedStreamingMessage?.error ||
 			(scopedStreamingMessage?.isQueued
-				? t("pages.chat.queued", "Queued — waiting for current task")
+				? // Queued is surfaced solely by the StreamingIndicator pill below the turn; emitting it as the body
+					// placeholder too would show the same text twice.
+					undefined
 				: scopedStreamingMessage?.isActive
 					? t("pages.chat.waitingForResponse", "Waiting for response")
 					: undefined);
