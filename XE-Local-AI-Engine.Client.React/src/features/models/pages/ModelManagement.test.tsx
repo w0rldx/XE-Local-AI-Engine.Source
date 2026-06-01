@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -88,7 +88,8 @@ describe("ModelManagement", () => {
 	it("renders local models and details", async () => {
 		renderWithProviders(<ModelManagement />);
 
-		expect(await screen.findByText("llama3:8b")).toBeTruthy();
+		// "llama3:8b" appears both as the table row button and the details-card title, so match the set, not one node.
+		expect((await screen.findAllByText("llama3:8b")).length).toBeGreaterThan(0);
 		expect(screen.getByText("1.0 GB")).toBeTruthy();
 		expect(screen.getByText("Default")).toBeTruthy();
 		expect(await screen.findByText("Context length: 8,192")).toBeTruthy();
@@ -125,22 +126,18 @@ describe("ModelManagement", () => {
 		expect(screen.getByText("Ollama offline")).toBeTruthy();
 	});
 
-	it("collapses the license text by default and expands inline on toggle", async () => {
+	it("shows license and template in a dialog rather than an inline expander", async () => {
 		renderWithProviders(<ModelManagement />);
 
-		// Toggle is present and starts collapsed
-		const toggle = await screen.findByRole("button", { name: /show full/i });
-		expect(toggle.getAttribute("aria-expanded")).toBe("false");
-
-		// No dialog rendered initially
+		// The trigger is a button — no inline "Show full / Show less" expander — and no dialog is open initially.
+		const trigger = await screen.findByTestId("model-license-template-button");
+		expect(screen.queryByRole("button", { name: /show full/i })).toBeNull();
 		expect(screen.queryByRole("dialog")).toBeNull();
 
-		// Click expands inline — toggle switches to "Show less"
-		fireEvent.click(toggle);
-		expect(toggle.getAttribute("aria-expanded")).toBe("true");
-		expect(screen.getByRole("button", { name: /show less/i })).toBeTruthy();
-
-		// No dialog opened
-		expect(screen.queryByRole("dialog")).toBeNull();
+		// Clicking opens a dialog containing BOTH the template and the license.
+		fireEvent.click(trigger);
+		const dialog = await screen.findByRole("dialog");
+		expect(within(dialog).getByTestId("model-template-content").textContent).toContain("{{ .Prompt }}");
+		expect(within(dialog).getByTestId("model-license-content").textContent).toContain("fake");
 	});
 });

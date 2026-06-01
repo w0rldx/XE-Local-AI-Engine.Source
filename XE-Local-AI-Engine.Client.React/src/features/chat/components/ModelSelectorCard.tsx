@@ -1,5 +1,5 @@
 import { Badge, Box, Divider, Group, Paper, Popover, ScrollArea, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
-import { IconBrain, IconChevronDown, IconChevronRight, IconSearch, IconSparkles } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronRight, IconCpu, IconSearch, IconSparkles } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -160,7 +160,6 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 		>
 			<Popover.Target>
 				<Paper
-					p="xs"
 					radius="md"
 					data-testid="chat-model-selector-selected"
 					className={cx(classes["trigger-paper"], selected && classes["trigger-paper-selected"], classes["compact-trigger"], classes["compact-paper"])}
@@ -180,8 +179,8 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 						aria-label={t("pages.chat.modelLabel", "Model")}
 					>
 						<Group gap="xs" wrap="nowrap" align="center">
-							<IconBrain size={16} color="var(--mantine-color-dimmed)" />
-							<Text size="xs" fw={600} lineClamp={1} style={{ flex: 1, minWidth: 0 }}>
+							<IconCpu size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
+							<Text size="xs" fw={600} lineClamp={1} className={classes["trigger-label"]} style={{ flex: 1, minWidth: 0 }}>
 								{selectedLabel}
 							</Text>
 							<IconChevronDown size={12} color="var(--mantine-color-dimmed)" className={cx(classes["chevron"], pickerOpened && classes["chevron-open"])} />

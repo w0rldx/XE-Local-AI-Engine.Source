@@ -13,13 +13,45 @@
 }
 
 .compact-trigger {
-	width: 220px;
+	/* Flex-basis only: in the composer's nowrap control row the trigger shrinks below this floor (min-width:0 +
+	   flex-shrink) so the row never wraps the send button to a second line on mobile; caps at 220px on roomy layouts. */
+	width: clamp(6rem, 34vw, 13.75rem);
+	flex: 0 1 auto;
+	min-width: 0;
 }
 
 .compact-paper {
-	height: 34px;
+	/* 36px matches the composer's action icons + send button so the whole control row is one even height. */
+	height: 36px;
+	box-sizing: border-box;
 	display: flex;
 	align-items: center;
+	padding: 0 var(--mantine-spacing-xs);
+}
+
+/* On small windows collapse the trigger to a 36×36 icon-only button (brain only) so the model name never runs
+   under the neighbouring action icons. The popover still opens on tap. */
+@media (width <= 600px) {
+
+	.compact-trigger {
+		width: 36px;
+		min-width: 36px;
+		flex: 0 0 auto;
+	}
+
+	.compact-paper {
+		justify-content: center;
+		padding: 0;
+	}
+
+	.compact-trigger-button {
+		justify-content: center;
+	}
+
+	.trigger-label,
+	.chevron {
+		display: none;
+	}
 }
 
 .compact-trigger-button {

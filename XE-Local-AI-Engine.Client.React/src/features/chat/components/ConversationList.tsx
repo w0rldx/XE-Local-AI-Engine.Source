@@ -25,6 +25,9 @@ interface ConversationListProps {
 	conversations: ChatConversationModel[];
 	selectedConversationId?: string;
 	collapsed?: boolean;
+	// Rendered inside the mobile Drawer, which already supplies the "Conversations" title + close button. Drops this
+	// component's own bordered card + header (title + collapse toggle) so they are not duplicated.
+	embedded?: boolean;
 	disabled?: boolean;
 	searchQuery?: string;
 	showArchived?: boolean;
@@ -80,6 +83,7 @@ export function ConversationList({
 	conversations,
 	selectedConversationId,
 	collapsed = false,
+	embedded = false,
 	disabled = false,
 	searchQuery = "",
 	showArchived = false,
@@ -170,10 +174,12 @@ export function ConversationList({
 				<ActionIcon
 					variant="filled"
 					color="dark"
+					size={40}
+					radius="md"
 					onClick={onCreateConversation}
 					aria-label={t("pages.chat.newConversation", "New conversation")}
 				>
-					<IconPlus size={15} />
+					<IconPlus size={16} />
 				</ActionIcon>
 				<ScrollArea style={{ flex: 1, width: "100%", minHeight: 0 }} type="auto">
 					<Stack gap={6} align="center">
@@ -204,24 +210,27 @@ export function ConversationList({
 
 	return (
 		<Paper
-			withBorder={true}
+			withBorder={!embedded}
+			radius={embedded ? 0 : undefined}
 			h="100%"
 			data-testid="conversation-list"
-			style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+			style={{ display: "flex", flexDirection: "column", minHeight: 0, background: embedded ? "transparent" : undefined }}
 		>
-			<Group justify="space-between" px="md" pt="md" pb="xs">
-				<Text fw={700}>{t("pages.chat.conversations", "Conversations")}</Text>
-				<Tooltip label={t("pages.chat.conversationList.hide", "Hide conversations")} position="left">
-					<ActionIcon
-						variant="subtle"
-						onClick={onToggleCollapse}
-						aria-label={t("pages.chat.conversationList.collapseAria", "Collapse conversations")}
-					>
-						<IconChevronLeft size={16} />
-					</ActionIcon>
-				</Tooltip>
-			</Group>
-			<Group gap={8} px="md" pb="xs" wrap="nowrap">
+			{embedded ? null : (
+				<Group justify="space-between" px="md" pt="md" pb="xs">
+					<Text fw={700}>{t("pages.chat.conversations", "Conversations")}</Text>
+					<Tooltip label={t("pages.chat.conversationList.hide", "Hide conversations")} position="left">
+						<ActionIcon
+							variant="subtle"
+							onClick={onToggleCollapse}
+							aria-label={t("pages.chat.conversationList.collapseAria", "Collapse conversations")}
+						>
+							<IconChevronLeft size={16} />
+						</ActionIcon>
+					</Tooltip>
+				</Group>
+			)}
+			<Group gap={8} px="md" pt={embedded ? "sm" : undefined} pb="xs" wrap="nowrap">
 				<TextInput
 					placeholder={t("pages.chat.conversationList.searchPlaceholder", "Search")}
 					leftSection={<IconSearch size={14} />}

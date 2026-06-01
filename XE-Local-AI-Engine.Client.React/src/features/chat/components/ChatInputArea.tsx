@@ -87,8 +87,8 @@ export function ChatInputArea({
 					disabled={disabled || isSending}
 					styles={{ input: { paddingLeft: "var(--mantine-spacing-xs)", paddingRight: "var(--mantine-spacing-xs)", background: "transparent" } }}
 				/>
-				<Group justify="space-between" align="center" mt={4} px={4}>
-					<Group gap={4}>
+				<Group justify="space-between" align="center" wrap="nowrap" gap="xs" mt={4} px={4}>
+					<Group gap={4} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
 						<ModelSelectorCard
 							modelOptions={modelOptions}
 							selectedModel={selectedModel}
@@ -99,6 +99,7 @@ export function ChatInputArea({
 							<Menu.Target>
 								<Tooltip label={t("pages.chat.reasoningEffortLabel", "Reasoning effort")}>
 									<ActionIcon
+										size={36}
 										variant={reasoningEnabled ? "light" : "subtle"}
 										color={reasoningEnabled ? "primary" : "gray"}
 										disabled={reasoningMenuDisabled}
@@ -121,6 +122,7 @@ export function ChatInputArea({
 						{capabilities.showLocalToolControls ? (
 							<Tooltip label={toolsEnabled ? t("pages.chat.localToolsEnabled", "Local tools enabled") : t("pages.chat.localToolsDisabled", "Local tools disabled")}>
 								<ActionIcon
+									size={36}
 									variant={toolsEnabled ? "light" : "subtle"}
 									color={toolsEnabled ? "primary" : "gray"}
 									disabled={disabled || isSending || !onToggleTools}
@@ -135,14 +137,14 @@ export function ChatInputArea({
 						) : null}
 						{capabilities.showFileAttachmentControls ? (
 							<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>
-								<ActionIcon variant="subtle" color="gray" disabled={true} aria-label="Attach file">
+								<ActionIcon size={36} variant="subtle" color="gray" disabled={true} aria-label="Attach file">
 									<IconPaperclip size={15} />
 								</ActionIcon>
 							</Tooltip>
 						) : null}
 						{capabilities.showImageAttachmentControls ? (
 							<Tooltip label={t("pages.chat.composer.image", "Attach image")}>
-								<ActionIcon variant="subtle" color="gray" disabled={true} aria-label="Attach image">
+								<ActionIcon size={36} variant="subtle" color="gray" disabled={true} aria-label="Attach image">
 									<IconPhoto size={15} />
 								</ActionIcon>
 							</Tooltip>
@@ -161,6 +163,7 @@ export function ChatInputArea({
 						disabled={sendDisabled}
 						color={isSending ? "red" : "dark"}
 						size="sm"
+						style={{ flexShrink: 0 }}
 						leftSection={isSending ? <IconPlayerStopFilled size={13} /> : <IconSend size={13} />}
 						aria-label={isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
 					>

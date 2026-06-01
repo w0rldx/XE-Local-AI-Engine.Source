@@ -1,6 +1,7 @@
-import { Badge, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconArrowRight, IconCheck, IconLoader2, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
+import { Badge, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
+import { IconChevronDown, IconShieldHalf, IconTool } from "@tabler/icons-react";
 import { m, useReducedMotion } from "framer-motion";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
@@ -10,6 +11,14 @@ import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatMod
 interface ToolCallCardProps {
 	part: ChatToolPart;
 }
+
+/**
+ * Per-tool-call expand state, persisted across remounts and keyed by the stable tool-call id. When the final answer
+ * arrives the assistant turn moves from the transient streaming placeholder into the persisted message list — a real
+ * unmount/remount — so component-local `useState` would snap an operator-expanded card back to collapsed. This module
+ * map carries the operator's choice through that swap. Default stays collapsed (no entry → false).
+ */
+const expandedByToolId = new Map<string, boolean>();
 
 function isLiveState(state: ToolCallState): boolean {
 	return state === "requesting" || state === "waiting";
@@ -41,50 +50,22 @@ function formatStructured(value?: string): string | undefined {
 	}
 }
 
-/** Right-aligned at-a-glance status marker, occupying the slot where ThoughtsSection shows its chevron. */
-function StatusIcon({ state }: { state: ToolCallState }) {
-	const reduced = useReducedMotion();
-
-	if (state === "requesting") {
-		return (
-			<m.span
-				style={{ display: "inline-flex" }}
-				animate={reduced ? { x: 0, opacity: 1 } : { x: [0, 4, 10], opacity: [0.5, 1, 0] }}
-				transition={reduced ? { duration: 0 } : { duration: 1.1, repeat: Number.POSITIVE_INFINITY, ease: "easeOut" }}
-			>
-				<IconArrowRight size={14} />
-			</m.span>
-		);
-	}
-
-	if (state === "waiting") {
-		return (
-			<m.span
-				style={{ display: "inline-flex" }}
-				animate={reduced ? { rotate: 0 } : { rotate: 360 }}
-				transition={reduced ? { duration: 0 } : { duration: 0.9, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-			>
-				<IconLoader2 size={14} />
-			</m.span>
-		);
-	}
-
-	return (
-		<ThemeIcon size={18} radius="xl" color={state === "received" ? "teal" : "red"} variant="light">
-			{state === "received" ? <IconCheck size={12} /> : <IconX size={12} />}
-		</ThemeIcon>
-	);
-}
-
 /**
- * One state-driven tool card rendered in BOTH streaming and final states (no component swap on completion). It
- * wears the SAME disclosure chrome as {@link ThoughtsSection} (shared CSS module + accent ThemeIcon header) so a
- * tool block reads as a sibling of a reasoning block, but its body is always visible — `requesting`/`waiting`
- * show a live marker + args; `received` adds the result the instant the completed event lands; `failed` surfaces
- * the error. Args/result JSON is pretty-printed when parseable.
+ * One state-driven tool card rendered in BOTH streaming and final states (no component swap on completion). It is a
+ * collapsible disclosure that mirrors {@link ThoughtsSection} (shared CSS module + accent ThemeIcon header + chevron)
+ * so a tool block reads as a sibling of a reasoning block. **Default minimized**: the header always shows the tool
+ * name + at-a-glance state badge; expanding reveals the args/result body. `requesting`/`waiting` show a live badge,
+ * `received` carries the result, `failed` surfaces the error. Args/result JSON is pretty-printed when parseable.
  */
 export function ToolCallCard({ part }: ToolCallCardProps) {
 	const { t } = useTranslation();
+	const reduced = useReducedMotion();
+	const [expanded, setExpanded] = useState(() => expandedByToolId.get(part.id) ?? false);
+
+	const handleToggle = (open: boolean) => {
+		expandedByToolId.set(part.id, open);
+		setExpanded(open);
+	};
 	const formattedArgs = formatStructured(part.args);
 	const formattedResult = formatStructured(part.result);
 	const stateLabel =
@@ -95,12 +76,20 @@ export function ToolCallCard({ part }: ToolCallCardProps) {
 				: part.state === "received"
 					? t("chat.toolCall.done", "Done")
 					: t("chat.toolCall.failed", "Failed");
-	const hasBody = Boolean(formattedArgs) || Boolean(formattedResult) || part.state === "received";
+	const toolName = part.name || t("chat.toolCall.name", "tool");
 
 	return (
 		<div className={classes["section"]}>
+			{/* Native <details> drives the summary toggle + a11y; the body lives in a Mantine Collapse (outside the
+			    <details>) so it animates open AND close — consistent with ThoughtsSection. A body nested in <details> is
+			    hidden instantly by the browser on close, which is why the close used to snap. */}
 			<div className={classes["details"]} data-testid={`chat-tool-call-card-${part.name}`} data-state={part.state}>
-				<div className={classes["tool-header"]}>
+				<details
+					data-testid={`chat-tool-call-disclosure-${part.name}`}
+					open={expanded}
+					onToggle={(event) => handleToggle(event.currentTarget.open)}
+				>
+					<summary className={`${classes["summary"]} mantine-focus-auto`} data-testid={`chat-tool-call-summary-${part.name}`}>
 					<span className={classes["summary-content"]}>
 						<Group gap="xs" wrap="nowrap" align="center" style={{ minWidth: 0 }}>
 							<ThemeIcon size={22} radius="xl" variant="filled" style={{ background: CHAT_ACCENT_SOFT, color: CHAT_ACCENT }}>
@@ -114,7 +103,7 @@ export function ToolCallCard({ part }: ToolCallCardProps) {
 								c="dimmed"
 								style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
 							>
-								{part.name || t("chat.toolCall.name", "tool")}
+								{toolName}
 							</Text>
 							{part.requiresApproval ? (
 								<ThemeIcon
@@ -136,44 +125,51 @@ export function ToolCallCard({ part }: ToolCallCardProps) {
 								</Text>
 							) : null}
 						</Group>
-						<StatusIcon state={part.state} />
+						<m.span
+							style={{ display: "inline-flex" }}
+							animate={{ rotate: expanded ? 0 : -90 }}
+							transition={reduced ? { duration: 0 } : { duration: 0.2 }}
+						>
+							<IconChevronDown size={14} />
+						</m.span>
 					</span>
-				</div>
-				{hasBody ? (
-					<Stack gap={6} className={classes["tool-body"]}>
-						{formattedArgs ? (
-							<Stack gap={2}>
-								<Text size="xs" c="dimmed" fw={600}>
-									{t("chat.toolCall.argsLabel", "Arguments")}
-								</Text>
-								<Text component="pre" ff="monospace" fz="xs" style={{ margin: 0, overflowX: "auto", whiteSpace: "pre-wrap" }}>
-									{formattedArgs}
-								</Text>
-							</Stack>
-						) : null}
-						{formattedResult ? (
-							<Stack gap={2}>
-								<Text size="xs" c="dimmed" fw={600}>
-									{part.state === "failed" ? t("chat.toolCall.errorLabel", "Error") : t("chat.toolCall.resultLabel", "Result")}
-								</Text>
-								<Text
-									component="pre"
-									ff="monospace"
-									fz="xs"
-									c={part.state === "failed" ? "red" : undefined}
-									style={{ margin: 0, overflowX: "auto", whiteSpace: "pre-wrap" }}
-									data-testid={`chat-tool-call-result-${part.name}`}
-								>
-									{formattedResult}
-								</Text>
-							</Stack>
-						) : part.state === "received" ? (
-							<Text size="xs" c="dimmed" ff="monospace" data-testid={`chat-tool-call-no-output-${part.name}`}>
-								{t("chat.toolCall.noOutput", "(no output)")}
+				</summary>
+				</details>
+				<Collapse expanded={expanded} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
+				<Stack gap={6} className={classes["tool-body"]}>
+					{formattedArgs ? (
+						<Stack gap={2}>
+							<Text size="xs" c="dimmed" fw={600}>
+								{t("chat.toolCall.argsLabel", "Arguments")}
 							</Text>
-						) : null}
-					</Stack>
-				) : null}
+							<Text component="pre" ff="monospace" fz="xs" style={{ margin: 0, overflowX: "auto", whiteSpace: "pre-wrap" }}>
+								{formattedArgs}
+							</Text>
+						</Stack>
+					) : null}
+					{formattedResult ? (
+						<Stack gap={2}>
+							<Text size="xs" c="dimmed" fw={600}>
+								{part.state === "failed" ? t("chat.toolCall.errorLabel", "Error") : t("chat.toolCall.resultLabel", "Result")}
+							</Text>
+							<Text
+								component="pre"
+								ff="monospace"
+								fz="xs"
+								c={part.state === "failed" ? "red" : undefined}
+								style={{ margin: 0, overflowX: "auto", whiteSpace: "pre-wrap" }}
+								data-testid={`chat-tool-call-result-${part.name}`}
+							>
+								{formattedResult}
+							</Text>
+						</Stack>
+					) : part.state === "received" ? (
+						<Text size="xs" c="dimmed" ff="monospace" data-testid={`chat-tool-call-no-output-${part.name}`}>
+							{t("chat.toolCall.noOutput", "(no output)")}
+						</Text>
+					) : null}
+				</Stack>
+				</Collapse>
 			</div>
 		</div>
 	);

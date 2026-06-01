@@ -4,22 +4,26 @@ import {
 	Badge,
 	Button,
 	Card,
+	Code,
 	Container,
 	Group,
 	Loader,
+	Modal,
 	Progress,
+	ScrollArea,
 	SimpleGrid,
 	Stack,
 	Table,
 	Text,
 	TextInput,
 	Title,
+	Tooltip,
 } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconCloudDownload, IconRefresh, IconRobot, IconTrash } from "@tabler/icons-react";
+import { useDisclosure } from "@mantine/hooks";
+import { IconAlertTriangle, IconCheck, IconCloudDownload, IconFileText, IconRefresh, IconRobot, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ExpandableTextField } from "@/core/ui/components/ExpandableTextField/ExpandableTextField";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import {
 	deleteLocalModel,
@@ -44,6 +48,8 @@ export function ModelManagement() {
 	const [pullModelName, setPullModelName] = useState("");
 	const [message, setMessage] = useState<string | undefined>();
 	const [pullProgress, setPullProgress] = useState<number | undefined>();
+	// License + template can both be very long; they live in a modal (not an inline expander) so the details card stays compact.
+	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
 
 	const modelsQuery = useQuery({
 		queryKey: localModelsQueryKeys.list(),
@@ -213,24 +219,28 @@ export function ModelManagement() {
 												<Table.Td>{model.quantizationLabel}</Table.Td>
 												<Table.Td>
 													<Group gap="xs">
-														<ActionIcon
-															aria-label={`Set ${model.modelName} as default`}
-															variant="subtle"
-															color="green"
-															disabled={isActionPending}
-															onClick={() => selectMutation.mutate(model.modelName)}
-														>
-															<IconCheck size={16} />
-														</ActionIcon>
-														<ActionIcon
-															aria-label={`Delete ${model.modelName}`}
-															variant="subtle"
-															color="red"
-															disabled={isActionPending}
-															onClick={() => confirmDelete(model.modelName)}
-														>
-															<IconTrash size={16} />
-														</ActionIcon>
+														<Tooltip label="Set as default model" withArrow={true}>
+															<ActionIcon
+																aria-label={`Set ${model.modelName} as default`}
+																variant="subtle"
+																color="green"
+																disabled={isActionPending}
+																onClick={() => selectMutation.mutate(model.modelName)}
+															>
+																<IconCheck size={16} />
+															</ActionIcon>
+														</Tooltip>
+														<Tooltip label="Delete model" withArrow={true}>
+															<ActionIcon
+																aria-label={`Delete ${model.modelName}`}
+																variant="subtle"
+																color="red"
+																disabled={isActionPending}
+																onClick={() => confirmDelete(model.modelName)}
+															>
+																<IconTrash size={16} />
+															</ActionIcon>
+														</Tooltip>
 													</Group>
 												</Table.Td>
 											</Table.Tr>
@@ -254,12 +264,18 @@ export function ModelManagement() {
 									<Text>Family: {selectedModel.familyLabel}</Text>
 									<Text>Quantization: {selectedModel.quantizationLabel}</Text>
 									<Text>Context length: {detailsQuery.data?.maxContextTokens?.toLocaleString() ?? "Unknown"}</Text>
-									{detailsQuery.data?.template ? (
-										<Text style={{ whiteSpace: "pre-wrap" }}>Template: {detailsQuery.data.template}</Text>
-									) : null}
 									{detailsQuery.data?.system ? <Alert color="blue">System prompt: {detailsQuery.data.system}</Alert> : null}
-									{detailsQuery.data?.license ? (
-										<ExpandableTextField label="License" value={detailsQuery.data.license} />
+									{detailsQuery.data?.template || detailsQuery.data?.license ? (
+										<Button
+											variant="light"
+											size="xs"
+											leftSection={<IconFileText size={14} />}
+											onClick={openDetailsModal}
+											data-testid="model-license-template-button"
+											style={{ alignSelf: "flex-start" }}
+										>
+											View license &amp; template
+										</Button>
 									) : null}
 								</Stack>
 							) : (
@@ -268,6 +284,40 @@ export function ModelManagement() {
 						</Stack>
 					</Card>
 				</SimpleGrid>
+
+				<Modal
+					opened={detailsModalOpened}
+					onClose={closeDetailsModal}
+					title={`${selectedModel?.modelName ?? "Model"} — license & template`}
+					size="lg"
+					scrollAreaComponent={ScrollArea.Autosize}
+				>
+					<Stack gap="lg">
+						{detailsQuery.data?.template ? (
+							<Stack gap={4}>
+								<Text fw={600} size="sm">
+									Template
+								</Text>
+								<Code block={true} style={{ whiteSpace: "pre-wrap" }} data-testid="model-template-content">
+									{detailsQuery.data.template}
+								</Code>
+							</Stack>
+						) : null}
+						{detailsQuery.data?.license ? (
+							<Stack gap={4}>
+								<Text fw={600} size="sm">
+									License
+								</Text>
+								<Code block={true} style={{ whiteSpace: "pre-wrap" }} data-testid="model-license-content">
+									{detailsQuery.data.license}
+								</Code>
+							</Stack>
+						) : null}
+						{!detailsQuery.data?.template && !detailsQuery.data?.license ? (
+							<Text c="dimmed">No license or template provided for this model.</Text>
+						) : null}
+					</Stack>
+				</Modal>
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
