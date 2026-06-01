@@ -180,11 +180,12 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken).ConfigureAwait(false);
         // The SAME relevance-retrieval decision as the single-agent path (PlaybookRetrievalSelector), applied per
         // participant: below the threshold or with a blank query the full static prepend is kept byte-identical.
-        var selected = PlaybookRetrievalSelector.Select(_retrievalRanker,
+        var selected = await PlaybookRetrievalSelector.SelectAsync(_retrievalRanker,
             retrievalQuery,
             enabled,
             _retrievalOptions.RetrievalThreshold,
-            _retrievalOptions.TopK);
+            _retrievalOptions.TopK,
+            cancellationToken).ConfigureAwait(false);
         return PlaybookPromptComposer.Compose(participant.Instructions, selected);
     }
 

@@ -933,6 +933,8 @@
 				"monitor": {
 					"enabledCount": "{{count}} Aktionen aktiv",
 					"relevanceBanner": "Einfügung ist relevanzgesteuert: Top-{{topK}} von {{count}} Aktionen pro Zug.",
+					"rankerEmbedding": "Sortiert nach Embedding-Ähnlichkeit (Modell {{model}}).",
+					"rankerLexical": "Sortiert nach lexikalischer Überschneidung.",
 					"none": "—",
 					"downRateLabel": "Abwertungsrate",
 					"flag": "Prüfung nötig",

@@ -163,6 +163,21 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         return new OllamaApiClient(_ollamaClient.Uri, selection.ModelName);
     }
 
+    /// <inheritdoc />
+    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ModelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ProviderName);
+
+        if (!string.Equals(selection.ProviderName, ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Provider selection '{selection.ProviderName}' does not match '{ProviderName}'.", nameof(selection));
+        }
+
+        return new OllamaApiClient(_ollamaClient.Uri, selection.ModelName);
+    }
+
     private async Task<int?> TryReadContextLengthAsync(string modelName, CancellationToken ct)
     {
         try

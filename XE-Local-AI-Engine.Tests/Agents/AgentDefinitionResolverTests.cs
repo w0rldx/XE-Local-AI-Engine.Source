@@ -539,10 +539,13 @@ public sealed class AgentDefinitionResolverTests
 
         public int CallCount { get; private set; }
 
-        public IReadOnlyList<PlaybookActionRecord> SelectTopK(string query, IReadOnlyList<PlaybookActionRecord> candidates, int k)
+        public Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
+            IReadOnlyList<PlaybookActionRecord> candidates,
+            int k,
+            CancellationToken cancellationToken)
         {
             CallCount++;
-            return _selection ?? candidates;
+            return Task.FromResult(_selection ?? candidates);
         }
     }
 

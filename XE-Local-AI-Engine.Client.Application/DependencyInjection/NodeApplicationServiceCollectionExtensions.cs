@@ -268,10 +268,14 @@ public static class NodeApplicationServiceCollectionExtensions
         // candidate vs baseline prompt, scores each case, and persists the plaintext EvalResult the promote gate reads.
         // Scoped to match the scoped stores/services it composes. The .AI.Agent runner is registered in the agent runtime.
         builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
-        // Playbook P5 relevance-retrieval ranker: deterministic, model-free, stateless — a Singleton like the analysis
-        // agent. The resolver/orchestration paths consult it only when an agent's Enabled set exceeds the retrieval
-        // threshold and the send carries a non-blank query; below that the full static prepend is used (byte-identical).
-        builder.Services.AddSingleton<IPlaybookRetrievalRanker, LexicalPlaybookRetrievalRanker>();
+        // Playbook P5 relevance-retrieval ranker: the resolver/orchestration paths consult it only when an agent's
+        // Enabled set exceeds the retrieval threshold and the send carries a non-blank query; below that the full static
+        // prepend is used (byte-identical). The lexical ranker (deterministic, model-free, stateless) is registered
+        // concretely as the fallback/disabled path; the embedding ranker is the IPlaybookRetrievalRanker — it resolves
+        // the concrete lexical for graceful degradation and ranks via the node-local embedding model only when
+        // EmbeddingModelName is configured. Both are Singletons (the embedding cache is a long-lived RAM-only store).
+        builder.Services.AddSingleton<LexicalPlaybookRetrievalRanker>();
+        builder.Services.AddSingleton<IPlaybookRetrievalRanker, EmbeddingPlaybookRetrievalRanker>();
         builder.Services.AddOptions<PlaybookRetrievalOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookRetrievalOptions.Section))
                .PostConfigure(static retrievalOptions =>
@@ -286,6 +290,13 @@ public static class NodeApplicationServiceCollectionExtensions
                    if (retrievalOptions.TopK < 1)
                    {
                        retrievalOptions.TopK = 1;
+                   }
+
+                   // The embedding cache bound floors at 1 (mirror the MaxEnabledActions clamp) so a misconfigured
+                   // non-positive value cannot wedge candidate caching once the embedding ranker engages.
+                   if (retrievalOptions.EmbeddingCacheMaxEntries < 1)
+                   {
+                       retrievalOptions.EmbeddingCacheMaxEntries = 1;
                    }
                });
         // Playbook P5 bounded-store options: the hard cap on Enabled actions per agent. PostConfigure floors the cap at

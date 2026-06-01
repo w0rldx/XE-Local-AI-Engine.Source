@@ -32,7 +32,7 @@ function makeResponse(overrides: Partial<PlaybookMonitorDto> = {}): PlaybookMoni
 				facetToolName: "search",
 			},
 		],
-		retrieval: { threshold: 8, topK: 8 },
+		retrieval: { threshold: 8, topK: 8, ranker: "lexical", embeddingModel: null },
 		...overrides,
 	};
 }
@@ -55,6 +55,47 @@ describe("playbook monitor API", () => {
 		expect(result.items[0]?.facetToolName).toBe("search");
 		expect(result.retrieval.threshold).toBe(8);
 		expect(result.retrieval.topK).toBe(8);
+		// Lexical default: ranker surfaces and the embedding model normalizes to null.
+		expect(result.retrieval.ranker).toBe("lexical");
+		expect(result.retrieval.embeddingModel).toBeNull();
+	});
+
+	it("carries the embedding ranker and model through the boundary when embeddings are active", async () => {
+		axiosInstanceMock.get.mockResolvedValue({
+			data: makeResponse({ retrieval: { threshold: 8, topK: 8, ranker: "embedding", embeddingModel: "nomic-embed-text" } }),
+		});
+
+		const result = await getPlaybookMonitor("agent-1");
+
+		expect(result.retrieval.ranker).toBe("embedding");
+		expect(result.retrieval.embeddingModel).toBe("nomic-embed-text");
+	});
+
+	it("normalizes an omitted embeddingModel to null (lexical path without the field)", async () => {
+		// The host omits embeddingModel entirely on the lexical path; the boundary normalizes it to null.
+		axiosInstanceMock.get.mockResolvedValue({
+			data: makeResponse({ retrieval: { threshold: 8, topK: 8, ranker: "lexical" } as PlaybookMonitorDto["retrieval"] }),
+		});
+
+		const result = await getPlaybookMonitor("agent-1");
+
+		expect(result.retrieval.ranker).toBe("lexical");
+		expect(result.retrieval.embeddingModel).toBeNull();
+	});
+
+	it("throws when the ranker is not one of the known lowercase literals", async () => {
+		axiosInstanceMock.get.mockResolvedValue({
+			data: makeResponse({
+				retrieval: {
+					threshold: 8,
+					topK: 8,
+					ranker: "Embedding" as PlaybookMonitorDto["retrieval"]["ranker"],
+					embeddingModel: null,
+				},
+			}),
+		});
+
+		await expect(getPlaybookMonitor("agent-1")).rejects.toThrow(/Invalid playbook monitor payload/);
 	});
 
 	it("normalizes a null facet tool name (an action without a tool scope)", async () => {

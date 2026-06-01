@@ -12,18 +12,21 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 public sealed class LexicalPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 {
-    public IReadOnlyList<PlaybookActionRecord> SelectTopK(string query, IReadOnlyList<PlaybookActionRecord> candidates, int k)
+    public Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
+        IReadOnlyList<PlaybookActionRecord> candidates,
+        int k,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidates);
 
         if (k <= 0 || candidates.Count == 0)
         {
-            return [];
+            return Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]);
         }
 
         var queryTokens = Tokenize(query);
 
-        return candidates
+        IReadOnlyList<PlaybookActionRecord> selected = candidates
             .Select(candidate => new ScoredCandidate(candidate, ScoreOverlap(queryTokens, Tokenize(candidate.TriggerCondition ?? candidate.Behavior))))
             .OrderByDescending(scored => scored.Score)
             .ThenBy(scored => scored.Action.Priority)
@@ -31,6 +34,8 @@ public sealed class LexicalPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             .Take(k)
             .Select(scored => scored.Action)
             .ToList();
+
+        return Task.FromResult(selected);
     }
 
     private static int ScoreOverlap(IReadOnlySet<string> queryTokens, IReadOnlySet<string> candidateTokens)

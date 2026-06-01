@@ -15,4 +15,17 @@ public sealed class PlaybookRetrievalOptions
 
     /// <summary>Maximum number of actions injected per send once retrieval engages.</summary>
     public int TopK { get; set; } = 8;
+
+    /// <summary>
+    ///     Node-local embedding model used to rank candidates by semantic similarity once retrieval engages. Null or
+    ///     empty (the default) keeps the model-free lexical ranker as the effective ranker; any embedding failure also
+    ///     falls back to lexical, so a send never breaks and CI stays deterministic without Ollama.
+    /// </summary>
+    public string? EmbeddingModelName { get; set; }
+
+    /// <summary>Provider key for the embedding model; must match a registered node-local provider (default "ollama").</summary>
+    public string EmbeddingProviderName { get; set; } = "ollama";
+
+    /// <summary>Upper bound on the in-memory candidate-embedding cache (RAM-only, never persisted). Floored at 1.</summary>
+    public int EmbeddingCacheMaxEntries { get; set; } = 512;
 }

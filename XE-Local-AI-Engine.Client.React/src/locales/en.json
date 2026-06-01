@@ -933,6 +933,8 @@
 				"monitor": {
 					"enabledCount": "{{count}} actions enabled",
 					"relevanceBanner": "Injection is relevance-gated: top-{{topK}} of {{count}} actions per turn.",
+					"rankerEmbedding": "Ranked by embedding similarity (model {{model}}).",
+					"rankerLexical": "Ranked by lexical overlap.",
 					"none": "—",
 					"downRateLabel": "down-vote rate",
 					"flag": "Needs review",

@@ -12,6 +12,11 @@ internal static class PlaybookMonitorMapper
         ArgumentNullException.ThrowIfNull(views);
         ArgumentNullException.ThrowIfNull(retrievalOptions);
 
+        // An embedding model name turns on the embedding ranker; blank keeps the model-free lexical ranker (plan §9).
+        var embeddingActive = !string.IsNullOrWhiteSpace(retrievalOptions.EmbeddingModelName);
+        var ranker = embeddingActive ? "embedding" : "lexical";
+        var embeddingModel = embeddingActive ? retrievalOptions.EmbeddingModelName : null;
+
         return new AgentPlaybookMonitorResponse(
             [.. views.Select(static view => new PlaybookActionMonitorItemResponse(
                 view.ActionId,
@@ -22,6 +27,6 @@ internal static class PlaybookMonitorMapper
                 view.Status,
                 view.Flagged,
                 view.FacetToolName))],
-            new PlaybookRetrievalResponse(retrievalOptions.RetrievalThreshold, retrievalOptions.TopK));
+            new PlaybookRetrievalResponse(retrievalOptions.RetrievalThreshold, retrievalOptions.TopK, ranker, embeddingModel));
     }
 }

@@ -372,14 +372,28 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 				{/* Playbook P5 — relevance-gated banner: once more actions are Enabled than the retrieval threshold,
 				    only the top-K most relevant are injected per turn (not all of them). Rendered only in that regime so
-				    the operator knows not every Enabled action reaches the model on every turn. */}
+				    the operator knows not every Enabled action reaches the model on every turn. The v2 ranker clause
+				    names HOW relevance is scored: node-local embedding similarity (with the model) when the operator
+				    configured one, otherwise lexical token-overlap (the default + auto-fallback). */}
 				{showRelevanceBanner && retrieval !== null ? (
 					<Alert color="blue" variant="light" data-testid="playbook-relevance-banner">
 						{t(
 							"pages.agents.playbook.monitor.relevanceBanner",
 							"Injection is relevance-gated: top-{{topK}} of {{count}} actions per turn.",
 							{ topK: retrieval.topK, count: enabledCount },
-						)}
+						)}{" "}
+						<Text span={true} size="sm" data-testid="playbook-relevance-ranker">
+							{retrieval.ranker === "embedding"
+								? t(
+										"pages.agents.playbook.monitor.rankerEmbedding",
+										"Ranked by embedding similarity (model {{model}}).",
+										{ model: retrieval.embeddingModel ?? "" },
+									)
+								: t(
+										"pages.agents.playbook.monitor.rankerLexical",
+										"Ranked by lexical overlap.",
+									)}
+						</Text>
 					</Alert>
 				) : null}
 

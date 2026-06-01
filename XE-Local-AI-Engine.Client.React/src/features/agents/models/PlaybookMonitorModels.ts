@@ -30,11 +30,21 @@ export interface PlaybookMonitorItem {
 	readonly facetToolName: string | null;
 }
 
+// Which ranker the node uses to pick the top-K actions once retrieval is gated. "embedding" = cosine over node-
+// local embeddings (active only when the operator configured an embedding model); "lexical" = token-overlap (the
+// effective default and the auto-fallback when embeddings are off/unreachable). The active ranker is decided
+// purely by whether the node configured an embedding model.
+export type PlaybookRetrievalRanker = "embedding" | "lexical";
+
 // Relevance-retrieval config the panel surfaces in the "injection is relevance-gated" banner. `threshold` is the
 // Enabled-action count past which per-turn retrieval kicks in; `topK` is how many actions are injected per turn.
+// `ranker` names the active selection strategy; `embeddingModel` is the configured embedding model name, present
+// only when `ranker === "embedding"` (null/absent for lexical).
 export interface PlaybookRetrievalConfig {
 	readonly threshold: number;
 	readonly topK: number;
+	readonly ranker: PlaybookRetrievalRanker;
+	readonly embeddingModel: string | null;
 }
 
 export interface PlaybookMonitor {
@@ -59,6 +69,10 @@ const monitorItemSchema = z.object({
 const retrievalSchema = z.object({
 	threshold: z.number(),
 	topK: z.number(),
+	// Lowercase literals matching the host enum exactly.
+	ranker: z.enum(["embedding", "lexical"]),
+	// Present only on the embedding path; omitted or null for lexical. Accept both shapes and normalize to null.
+	embeddingModel: z.string().nullable().optional(),
 });
 
 // Boundary schema for the GET /agents/{id}/playbook/monitor response.
@@ -82,6 +96,12 @@ export function toPlaybookMonitor(payload: unknown): PlaybookMonitor {
 	const dto = parsed.data;
 	return {
 		items: dto.items.map((item) => ({ ...item })),
-		retrieval: { ...dto.retrieval },
+		retrieval: {
+			threshold: dto.retrieval.threshold,
+			topK: dto.retrieval.topK,
+			ranker: dto.retrieval.ranker,
+			// Normalize an omitted/undefined embeddingModel (lexical path) to an explicit null for the domain shape.
+			embeddingModel: dto.retrieval.embeddingModel ?? null,
+		},
 	};
 }

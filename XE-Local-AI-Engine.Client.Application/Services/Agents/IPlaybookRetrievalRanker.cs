@@ -15,7 +15,11 @@ public interface IPlaybookRetrievalRanker
     ///     <paramref name="query" />, ordered by relevance descending with a deterministic tiebreak (Priority ascending,
     ///     then CreatedAtUtc ascending). When <paramref name="k" /> is non-positive or <paramref name="candidates" /> is
     ///     empty the result is empty; when <paramref name="query" /> is blank the candidates are returned in priority
-    ///     order, capped to <paramref name="k" />.
+    ///     order, capped to <paramref name="k" />. The method is asynchronous so an embedding-backed ranker can issue a
+    ///     node-local model call; the lexical default computes synchronously and completes immediately.
     /// </summary>
-    IReadOnlyList<PlaybookActionRecord> SelectTopK(string query, IReadOnlyList<PlaybookActionRecord> candidates, int k);
+    Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
+        IReadOnlyList<PlaybookActionRecord> candidates,
+        int k,
+        CancellationToken cancellationToken);
 }
