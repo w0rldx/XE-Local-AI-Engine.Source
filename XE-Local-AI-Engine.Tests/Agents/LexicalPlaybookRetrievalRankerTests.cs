@@ -10,13 +10,13 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     private static readonly IPlaybookRetrievalRanker Ranker = new LexicalPlaybookRetrievalRanker();
 
     [Test]
-    public void SelectTopK_WithHigherOverlap_RanksMoreRelevantFirst()
+    public async Task SelectTopK_WithHigherOverlap_RanksMoreRelevantFirst()
     {
         var weather = Action("weather forecast rain temperature", priority: 10, createdAtUtc: 1);
         var cooking = Action("cooking recipe oven bake", priority: 10, createdAtUtc: 2);
         var partial = Action("forecast the weekend", priority: 10, createdAtUtc: 3);
 
-        var result = Ranker.SelectTopK("what is the weather forecast", [cooking, partial, weather], 3);
+        var result = await Ranker.SelectTopKAsync("what is the weather forecast", [cooking, partial, weather], 3, CancellationToken.None);
 
         AssertEx.Equal(3, result.Count);
         AssertEx.Equal(weather.Id, result[0].Id, "Two shared tokens (weather, forecast) must rank first.");
@@ -25,12 +25,12 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     }
 
     [Test]
-    public void SelectTopK_ForFixedInput_IsDeterministic()
+    public async Task SelectTopK_ForFixedInput_IsDeterministic()
     {
         var candidates = SampleCandidates();
 
-        var first = Ranker.SelectTopK("deploy the production build", candidates, 2);
-        var second = Ranker.SelectTopK("deploy the production build", candidates, 2);
+        var first = await Ranker.SelectTopKAsync("deploy the production build", candidates, 2, CancellationToken.None);
+        var second = await Ranker.SelectTopKAsync("deploy the production build", candidates, 2, CancellationToken.None);
 
         AssertEx.Equal(first.Count, second.Count);
         for (var index = 0; index < first.Count; index++)
@@ -40,14 +40,14 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     }
 
     [Test]
-    public void SelectTopK_OnScoreTie_BreaksByPriorityThenCreatedAtUtc()
+    public async Task SelectTopK_OnScoreTie_BreaksByPriorityThenCreatedAtUtc()
     {
         // All three share exactly one token ("deploy") with the query, so the tiebreak decides the order.
         var lowPriority = Action("deploy", priority: 5, createdAtUtc: 99);
         var highPriorityOlder = Action("deploy", priority: 50, createdAtUtc: 1);
         var highPriorityNewer = Action("deploy", priority: 50, createdAtUtc: 2);
 
-        var result = Ranker.SelectTopK("deploy", [highPriorityNewer, highPriorityOlder, lowPriority], 3);
+        var result = await Ranker.SelectTopKAsync("deploy", [highPriorityNewer, highPriorityOlder, lowPriority], 3, CancellationToken.None);
 
         AssertEx.Equal(lowPriority.Id, result[0].Id, "Lower Priority wins the tiebreak.");
         AssertEx.Equal(highPriorityOlder.Id, result[1].Id, "Equal Priority breaks by older CreatedAtUtc.");
@@ -55,23 +55,23 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     }
 
     [Test]
-    public void SelectTopK_WhenKExceedsCandidates_ReturnsAll()
+    public async Task SelectTopK_WhenKExceedsCandidates_ReturnsAll()
     {
         var candidates = SampleCandidates();
 
-        var result = Ranker.SelectTopK("production deploy", candidates, candidates.Count + 10);
+        var result = await Ranker.SelectTopKAsync("production deploy", candidates, candidates.Count + 10, CancellationToken.None);
 
         AssertEx.Equal(candidates.Count, result.Count, "k larger than the candidate count returns every candidate.");
     }
 
     [Test]
-    public void SelectTopK_WhenQueryIsBlank_FallsBackToPriorityOrder()
+    public async Task SelectTopK_WhenQueryIsBlank_FallsBackToPriorityOrder()
     {
         var third = Action("alpha", priority: 30, createdAtUtc: 1);
         var first = Action("beta", priority: 10, createdAtUtc: 5);
         var second = Action("gamma", priority: 20, createdAtUtc: 3);
 
-        var result = Ranker.SelectTopK("   ", [third, first, second], 3);
+        var result = await Ranker.SelectTopKAsync("   ", [third, first, second], 3, CancellationToken.None);
 
         AssertEx.Equal(first.Id, result[0].Id, "Blank query (zero overlap) falls back to Priority ascending.");
         AssertEx.Equal(second.Id, result[1].Id);
@@ -79,17 +79,17 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     }
 
     [Test]
-    public void SelectTopK_WhenCandidatesEmpty_ReturnsEmpty()
+    public async Task SelectTopK_WhenCandidatesEmpty_ReturnsEmpty()
     {
-        var result = Ranker.SelectTopK("anything", [], 5);
+        var result = await Ranker.SelectTopKAsync("anything", [], 5, CancellationToken.None);
 
         AssertEx.Equal(0, result.Count);
     }
 
     [Test]
-    public void SelectTopK_WhenKIsNonPositive_ReturnsEmpty()
+    public async Task SelectTopK_WhenKIsNonPositive_ReturnsEmpty()
     {
-        var result = Ranker.SelectTopK("weather", SampleCandidates(), 0);
+        var result = await Ranker.SelectTopKAsync("weather", SampleCandidates(), 0, CancellationToken.None);
 
         AssertEx.Equal(0, result.Count);
     }

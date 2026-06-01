@@ -124,7 +124,8 @@ function makeMonitorItem(overrides: Partial<PlaybookMonitorItem> = {}): Playbook
 function makeMonitor(overrides: Partial<PlaybookMonitor> = {}): PlaybookMonitor {
 	return {
 		items: [],
-		retrieval: { threshold: 8, topK: 8 },
+		// Default to the lexical ranker (embeddings off) — the effective default + auto-fallback.
+		retrieval: { threshold: 8, topK: 8, ranker: "lexical", embeddingModel: null },
 		...overrides,
 	};
 }
@@ -620,7 +621,7 @@ describe("PlaybookPanel", () => {
 
 		// threshold 2, 3 Enabled → banner shows with topK + count.
 		monitorHookMock.usePlaybookMonitor.mockReturnValue(
-			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 2, topK: 2 } })),
+			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 2, topK: 2, ranker: "lexical", embeddingModel: null } })),
 		);
 
 		const { rerender } = renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
@@ -631,7 +632,7 @@ describe("PlaybookPanel", () => {
 
 		// threshold 3, 3 Enabled (not strictly greater) → banner hidden.
 		monitorHookMock.usePlaybookMonitor.mockReturnValue(
-			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 3, topK: 2 } })),
+			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 3, topK: 2, ranker: "lexical", embeddingModel: null } })),
 		);
 		rerender(
 			<MantineProvider>
@@ -639,6 +640,41 @@ describe("PlaybookPanel", () => {
 			</MantineProvider>,
 		);
 		expect(screen.queryByTestId("playbook-relevance-banner")).toBeNull();
+	});
+
+	it("names the embedding ranker (with the model) in the relevance banner when embeddings are active", () => {
+		const enabledActions = Array.from({ length: 3 }, (_, i) =>
+			makeAction({ id: `action-${i}`, state: "Enabled", priority: i }),
+		);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: enabledActions, isLoading: false, error: null });
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(
+				makeMonitor({ retrieval: { threshold: 2, topK: 2, ranker: "embedding", embeddingModel: "nomic-embed-text" } }),
+			),
+		);
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const ranker = screen.getByTestId("playbook-relevance-ranker");
+		expect(ranker.textContent).toContain("embedding similarity");
+		expect(ranker.textContent).toContain("nomic-embed-text");
+	});
+
+	it("names the lexical ranker in the relevance banner when embeddings are off", () => {
+		const enabledActions = Array.from({ length: 3 }, (_, i) =>
+			makeAction({ id: `action-${i}`, state: "Enabled", priority: i }),
+		);
+		hooksMock.usePlaybookActions.mockReturnValue({ data: enabledActions, isLoading: false, error: null });
+		monitorHookMock.usePlaybookMonitor.mockReturnValue(
+			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 2, topK: 2, ranker: "lexical", embeddingModel: null } })),
+		);
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const ranker = screen.getByTestId("playbook-relevance-ranker");
+		expect(ranker.textContent).toContain("lexical overlap");
+		// No embedding model name leaks into the lexical clause.
+		expect(ranker.textContent).not.toContain("nomic-embed-text");
 	});
 
 	it("surfaces the CapReached 409 reason in the review-error alert", () => {

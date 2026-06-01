@@ -20,6 +20,7 @@
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Serilog"/>
+    <PackageReference Include="System.Numerics.Tensors"/>
   </ItemGroup>
 
   <ItemGroup>

@@ -78,11 +78,12 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         }
 
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken).ConfigureAwait(false);
-        var selected = PlaybookRetrievalSelector.Select(_retrievalRanker,
+        var selected = await PlaybookRetrievalSelector.SelectAsync(_retrievalRanker,
             retrievalQuery,
             enabled,
             _retrievalOptions.RetrievalThreshold,
-            _retrievalOptions.TopK);
+            _retrievalOptions.TopK,
+            cancellationToken).ConfigureAwait(false);
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 

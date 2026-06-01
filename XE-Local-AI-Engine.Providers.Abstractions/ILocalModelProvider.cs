@@ -39,4 +39,12 @@ public interface ILocalModelProvider
     ///     <see cref="LocalModelSelection.ProviderName" /> matches <see cref="ProviderName" />.
     /// </summary>
     IChatClient CreateChatClient(LocalModelSelection selection);
+
+    /// <summary>
+    ///     Creates an embedding generator for the selected provider/model pair. Callers must pass a selection whose
+    ///     <see cref="LocalModelSelection.ProviderName" /> matches <see cref="ProviderName" />. Embeddings are produced
+    ///     by the node-local runtime only, never a shared/cloud endpoint, so playbook and prompt text never leave the
+    ///     node. The returned client is <see cref="IDisposable" />; the caller owns and disposes it.
+    /// </summary>
+    IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection);
 }
