@@ -260,7 +260,7 @@ export const zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeComponentStatu
 	health: zXeLocalAiEngineHostAgentAbstractionsContractsContainerHealth.optional(),
 	imageReference: z.string().optional(),
 	digestVerified: z.boolean().optional(),
-	observedAt: z.iso.datetime().optional(),
+	observedAt: z.iso.datetime({ offset: true }).optional(),
 	diagnostics: z.array(z.string()).optional(),
 });
 
@@ -268,8 +268,8 @@ export const zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeContainerActi
 	containerName: z.string().optional(),
 	action: z.string().optional(),
 	succeeded: z.boolean().optional(),
-	startedAt: z.iso.datetime().optional(),
-	completedAt: z.iso.datetime().optional(),
+	startedAt: z.iso.datetime({ offset: true }).optional(),
+	completedAt: z.iso.datetime({ offset: true }).optional(),
 	components: z.array(zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeComponentStatusDto).optional(),
 	diagnostics: z.array(z.string()).optional(),
 });
@@ -304,7 +304,7 @@ export const zXeLocalAiEngineHostAgentAbstractionsContractsHostAgentStatusDto = 
 	runtimeLifecycle: zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeLifecycle.optional(),
 	bootstrapModelReady: z.boolean().optional(),
 	webUiUrl: z.string().optional(),
-	observedAt: z.iso.datetime().optional(),
+	observedAt: z.iso.datetime({ offset: true }).optional(),
 	components: z.array(zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeComponentStatusDto).optional(),
 	diagnostics: z.array(z.string()).optional(),
 });
@@ -319,14 +319,14 @@ export const zXeLocalAiEngineHostAgentAbstractionsContractsHostCapabilitiesDto =
 		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
 		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
 		.optional(),
-	observedAt: z.iso.datetime().optional(),
+	observedAt: z.iso.datetime({ offset: true }).optional(),
 	diagnostics: z.array(z.string()).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeModelProviderHealthResponse = z.object({
 	providerName: z.string().optional(),
 	isHealthy: z.boolean().optional(),
-	observedAt: z.iso.datetime().optional(),
+	observedAt: z.iso.datetime({ offset: true }).optional(),
 	diagnostics: z.array(z.string()).optional(),
 });
 
@@ -339,7 +339,7 @@ export const zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeLocalModelRes
 		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
 		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
 		.nullish(),
-	modifiedAt: z.iso.datetime().nullish(),
+	modifiedAt: z.iso.datetime({ offset: true }).nullish(),
 	maxContextTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -463,7 +463,7 @@ export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionR
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	expiresAt: z.iso.datetime().nullish(),
+	expiresAt: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionRequest = z.object({
@@ -471,7 +471,7 @@ export const zXeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingSessionR
 	userCode: z.string().optional(),
 	verificationUri: z.string().optional(),
 	verificationUriComplete: z.string().optional(),
-	expiresAt: z.iso.datetime().optional(),
+	expiresAt: z.iso.datetime({ offset: true }).optional(),
 	intervalSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -484,7 +484,7 @@ export const zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionRespo
 	userCode: z.string().optional(),
 	verificationUri: z.string().optional(),
 	verificationUriComplete: z.string().optional(),
-	expiresAt: z.iso.datetime().optional(),
+	expiresAt: z.iso.datetime({ offset: true }).optional(),
 	intervalSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -996,9 +996,9 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentRespon
 	conversationId: z.guid().optional(),
 	status: zC0ReAiSharedContractsEnumsInvocationStatus.optional(),
 	modelUsed: z.string().nullish(),
-	startedAt: z.iso.datetime().optional(),
-	lastUpdatedAt: z.iso.datetime().optional(),
-	completedAt: z.iso.datetime().nullish(),
+	startedAt: z.iso.datetime({ offset: true }).optional(),
+	lastUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+	completedAt: z.iso.datetime({ offset: true }).nullish(),
 	error: z.string().nullish(),
 	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
 	streamedChunkCount: z
@@ -1024,8 +1024,8 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryRespon
 	conversationId: z.guid().optional(),
 	status: zC0ReAiSharedContractsEnumsInvocationStatus.optional(),
 	modelUsed: z.string().nullish(),
-	startedAt: z.iso.datetime().optional(),
-	completedAt: z.iso.datetime().optional(),
+	startedAt: z.iso.datetime({ offset: true }).optional(),
+	completedAt: z.iso.datetime({ offset: true }).optional(),
 	durationMs: z.coerce
 		.bigint()
 		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
@@ -1058,12 +1058,12 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorRespon
 export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
 	state: z.string().optional(),
 	lastError: z.string().nullish(),
-	lastUpdatedAt: z.iso.datetime().optional(),
+	lastUpdatedAt: z.iso.datetime({ offset: true }).optional(),
 	isPaired: z.boolean().optional(),
 	autoConnectOnStart: z.boolean().optional(),
 	bindingMethod: z.string().nullish(),
 	lastKnownNodeName: z.string().nullish(),
-	tokenExpiresAt: z.iso.datetime().nullish(),
+	tokenExpiresAt: z.iso.datetime({ offset: true }).nullish(),
 	canConnect: z.boolean().optional(),
 	canDisconnect: z.boolean().optional(),
 	canEnableAutoConnect: z.boolean().optional(),
@@ -1100,7 +1100,7 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.object({
 	accessToken: z.string().optional(),
-	expiresAtUtc: z.iso.datetime().optional(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = z.object({
