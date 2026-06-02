@@ -47,6 +47,20 @@ internal sealed record class AgentDefinition
     public bool PlaybookEnabled { get; set; }
 
     /// <summary>
+    ///     Backing int for <see cref="AgentDefinitionSource" />; provenance of the row. Default <c>0</c> (Manual).
+    ///     Plaintext (structural) — like <see cref="Name" />, not part of the encrypted surface and never set by the
+    ///     operator create/update contract (only the import path stamps Seeded).
+    /// </summary>
+    public int Source { get; set; }
+
+    /// <summary>
+    ///     Stable starter-pack import key (the catalog slug) for a <see cref="AgentDefinitionSource.Seeded" /> row, or
+    ///     <c>null</c> for a manual row. Plaintext (structural); a filtered unique index enforces one row per slug so a
+    ///     re-import never duplicates a seeded persona.
+    /// </summary>
+    public string? SeedSlug { get; set; }
+
+    /// <summary>
     ///     Bumped on each config-affecting update; feeds the runtime package version and config hash so a definition
     ///     edit invalidates resume the same way a server-side version bump does.
     /// </summary>
