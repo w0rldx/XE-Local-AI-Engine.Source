@@ -1486,11 +1486,39 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse = z.ob
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse = z.object({
+	imported: z.array(z.string()).optional(),
+	skippedExisting: z.array(z.string()).optional(),
+	unknown: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest = z.object({
+	slugs: z.array(z.string()).nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = z.object({
+	slug: z.string().optional(),
+	name: z.string().optional(),
+	description: z.string().nullish(),
+	division: z.string().optional(),
+	estimatedPromptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	hasOriginalTools: z.boolean().optional(),
+	alreadyImported: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary).optional(),
+});
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse).optional(),
@@ -2240,6 +2268,18 @@ export const zHarvestGoldenConversationsPath = z.object({
  * Success
  */
 export const zHarvestGoldenConversationsResponse = zXeLocalAiEngineClientEndpointsAgentsV1GoldenHarvestResponse;
+
+export const zImportAgentTemplatesBody = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest;
+
+/**
+ * Success
+ */
+export const zImportAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
+
+/**
+ * Success
+ */
+export const zListAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
 
 export const zPromoteSuggestedPlaybookActionPath = z.object({
 	agentDefinitionId: z.guid(),

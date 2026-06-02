@@ -3969,6 +3969,87 @@
         ]
       }
     },
+    "/api/local/v1/agents/templates/import": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "importAgentTemplates",
+        "requestBody": {
+          "x-name": "ImportAgentTemplatesRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ImportAgentTemplatesRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ImportAgentTemplatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/agents/templates": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "listAgentTemplates",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentTemplatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote": {
       "post": {
         "tags": [
@@ -7591,6 +7672,43 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ImportAgentTemplatesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "imported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skippedExisting": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unknown": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ImportAgentTemplatesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slugs": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentDefinitionsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -7606,6 +7724,47 @@
       "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentTemplatesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentTemplateSummary"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentTemplateSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "division": {
+            "type": "string"
+          },
+          "estimatedPromptTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasOriginalTools": {
+            "type": "boolean"
+          },
+          "alreadyImported": {
+            "type": "boolean"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsResponse": {
         "type": "object",

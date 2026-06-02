@@ -1103,12 +1103,36 @@ export type XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsRequ
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse = {
+	imported?: Array<string>;
+	skippedExisting?: Array<string>;
+	unknown?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest = {
+	slugs?: Array<string> | null;
+};
+
 export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = {
+	slug?: string;
+	name?: string;
+	description?: string | null;
+	division?: string;
+	estimatedPromptTokens?: number;
+	hasOriginalTools?: boolean;
+	alreadyImported?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsResponse = {
@@ -3644,6 +3668,60 @@ export type HarvestGoldenConversationsResponses = {
 };
 
 export type HarvestGoldenConversationsResponse = HarvestGoldenConversationsResponses[keyof HarvestGoldenConversationsResponses];
+
+export type ImportAgentTemplatesData = {
+	body: XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/agents/templates/import";
+};
+
+export type ImportAgentTemplatesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ImportAgentTemplatesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
+};
+
+export type ImportAgentTemplatesResponse = ImportAgentTemplatesResponses[keyof ImportAgentTemplatesResponses];
+
+export type ListAgentTemplatesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/agents/templates";
+};
+
+export type ListAgentTemplatesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListAgentTemplatesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
+};
+
+export type ListAgentTemplatesResponse = ListAgentTemplatesResponses[keyof ListAgentTemplatesResponses];
 
 export type PromoteSuggestedPlaybookActionData = {
 	body?: never;

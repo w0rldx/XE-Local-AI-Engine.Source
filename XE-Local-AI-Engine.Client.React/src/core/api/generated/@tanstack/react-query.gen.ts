@@ -54,8 +54,10 @@ import {
 	getToolCapableModels,
 	getToolCatalog,
 	harvestGoldenConversations,
+	importAgentTemplates,
 	listAgentDefinitions,
 	listAgentPlaybookActions,
+	listAgentTemplates,
 	listApprovedImages,
 	listGoldenConversations,
 	listLocalModels,
@@ -202,10 +204,14 @@ import type {
 	GetToolCatalogResponse,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsResponse,
+	ImportAgentTemplatesData,
+	ImportAgentTemplatesResponse,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsResponse,
 	ListAgentPlaybookActionsData,
 	ListAgentPlaybookActionsResponse,
+	ListAgentTemplatesData,
+	ListAgentTemplatesResponse,
 	ListApprovedImagesData,
 	ListApprovedImagesResponse,
 	ListGoldenConversationsData,
@@ -2081,6 +2087,48 @@ export const harvestGoldenConversationsMutation = (
 	};
 	return mutationOptions;
 };
+
+export const importAgentTemplatesMutation = (
+	options?: Partial<Options<ImportAgentTemplatesData>>,
+): UseMutationOptions<ImportAgentTemplatesResponse, AxiosError<DefaultError>, Options<ImportAgentTemplatesData>> => {
+	const mutationOptions: UseMutationOptions<
+		ImportAgentTemplatesResponse,
+		AxiosError<DefaultError>,
+		Options<ImportAgentTemplatesData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await importAgentTemplates({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listAgentTemplatesQueryKey = (options?: Options<ListAgentTemplatesData>) =>
+	createQueryKey("listAgentTemplates", options);
+
+export const listAgentTemplatesOptions = (options?: Options<ListAgentTemplatesData>) =>
+	queryOptions<
+		ListAgentTemplatesResponse,
+		AxiosError<DefaultError>,
+		ListAgentTemplatesResponse,
+		ReturnType<typeof listAgentTemplatesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listAgentTemplates({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listAgentTemplatesQueryKey(options),
+	});
 
 export const promoteSuggestedPlaybookActionMutation = (
 	options?: Partial<Options<PromoteSuggestedPlaybookActionData>>,

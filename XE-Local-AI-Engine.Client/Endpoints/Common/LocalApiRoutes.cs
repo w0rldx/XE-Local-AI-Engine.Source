@@ -129,6 +129,11 @@ public static class LocalApiRoutes
         // Distinct literal segment under the agents surface so it cannot collide with DefinitionById.
         public const string ToolCapableModels = "agents/tool-capable-models";
 
+        // Curated starter-pack catalog (GET list) and the operator-triggered import action. Literal segments after
+        // "agents" keep these distinct from the {agentDefinitionId} route param.
+        public const string Templates = "agents/templates";
+        public const string TemplateImport = "agents/templates/import";
+
         // Per-agent playbook actions nested under the agent definition.
         public const string Playbook = "agents/{agentDefinitionId}/playbook";
         public const string PlaybookActionById = "agents/{agentDefinitionId}/playbook/{actionId}";
