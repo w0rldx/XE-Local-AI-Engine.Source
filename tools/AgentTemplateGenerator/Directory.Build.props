@@ -1,0 +1,19 @@
+<Project>
+  <!--
+    Standalone build-time dev tool. Intentionally NOT held to the product analyzer/CPM
+    rules: MSBuild's nearest-wins Directory.Build.props discovery stops here, so the strict
+    repo-root props (TreatWarningsAsErrors, AnalysisMode=All, SonarAnalyzer, CPM) do NOT apply.
+    This tool is excluded from the product solution (XE-Local-AI-Engine.slnx) and the runtime
+    graph; it exists only to regenerate Templates/agent-templates.seed.json from vendored .md.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzers>false</RunAnalyzers>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

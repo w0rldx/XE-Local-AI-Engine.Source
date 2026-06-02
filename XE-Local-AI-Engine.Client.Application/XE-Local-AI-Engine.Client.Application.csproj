@@ -29,6 +29,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Curated starter-pack templates, transformed once at build time from the vendored agency-agents source. The
+         catalog loads this by manifest-resource-name suffix at runtime, so no network egress occurs. -->
+    <EmbeddedResource Include="Services\Agents\Templates\agent-templates.seed.json"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
