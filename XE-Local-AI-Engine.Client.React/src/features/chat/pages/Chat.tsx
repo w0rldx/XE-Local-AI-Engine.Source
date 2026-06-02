@@ -29,9 +29,9 @@ import type {
 } from "@/features/chat/models/ChatModels";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
+import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
-import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
 import { getLocalModelDetails, listLocalModels } from "@/features/models/api/LocalModelsApi";
 import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
@@ -45,24 +45,6 @@ const localDefaultModelOption: ModelOption = {
 	isAvailable: true,
 	statusLabel: "Runtime-selected model",
 };
-
-function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOption {
-	const statusLabel = [
-		model.isSelected ? "Node default" : undefined,
-		model.parameterSize ?? undefined,
-		model.quantizationLevel ?? undefined,
-	]
-		.filter((part): part is string => Boolean(part))
-		.join(" · ");
-
-	return {
-		value: model.modelName,
-		label: model.modelName,
-		isReasoningModel: false,
-		isAvailable: nodeAvailable,
-		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
-	};
-}
 
 const chatUiCapabilities = buildChatUiCapabilities(nodeCapabilities.chat);
 const emptyConversations: ChatConversationModel[] = [];
@@ -192,7 +174,7 @@ export function Chat() {
 			return [localDefaultModelOption];
 		}
 
-		return [localDefaultModelOption, ...response.items.map((model) => toModelOption(model, response.isAvailable))];
+		return [localDefaultModelOption, ...toChatModelOptions(response.items, response.isAvailable)];
 	}, [localModelsQuery.data]);
 	const selectedModelOption = useMemo(
 		() => modelOptions.find((option) => option.value === selectedModel),

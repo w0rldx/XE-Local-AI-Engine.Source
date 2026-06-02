@@ -24,6 +24,10 @@ describe("local model model helpers", () => {
       parameterSize: "8B",
       quantizationLevel: "Q4_0",
       isSelected: true,
+      kind: "Chat",
+      detectedKind: "Chat",
+      capabilities: ["completion", "tools"],
+      isOverridden: false,
     });
 
     expect(model).toEqual({
@@ -34,6 +38,10 @@ describe("local model model helpers", () => {
       parameterSizeLabel: "8B",
       quantizationLabel: "Q4_0",
       isSelected: true,
+      kind: "Chat",
+      detectedKind: "Chat",
+      capabilities: ["completion", "tools"],
+      isOverridden: false,
     });
   });
 

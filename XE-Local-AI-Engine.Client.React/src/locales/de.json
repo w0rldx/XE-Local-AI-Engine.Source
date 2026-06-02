@@ -111,7 +111,8 @@
 			"modelExpired": "Nicht geladen",
 			"modelSelector": {
 				"availableModels": "Verfügbare Modelle",
-				"hint": "Wähle ein auf dem ausgewählten Node installiertes Modell."
+				"hint": "Wähle ein auf dem ausgewählten Node installiertes Modell.",
+				"noChatModels": "Keine chat-fähigen Modelle"
 			},
 			"reasoningEffortLabel": "Reasoning-Effort",
 			"reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
@@ -776,6 +777,21 @@
 			"placeholder": {
 				"title": "Modelle",
 				"description": "Lokale Modellauflistung, Auswahl, Pull und Löschen werden hier ergänzt."
+			},
+			"type": {
+				"columnHeader": "Typ",
+				"kind": {
+					"chat": "Chat",
+					"embedding": "Embedding",
+					"unknown": "Unbekannt"
+				},
+				"capability": {
+					"tools": "Werkzeuge",
+					"vision": "Bild",
+					"thinking": "Denken"
+				},
+				"overrideLabel": "Typ überschreiben",
+				"reset": "Auf erkannt zurücksetzen"
 			}
 		},
 		"manager": {

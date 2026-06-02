@@ -198,6 +198,11 @@ public static class NodeApplicationServiceCollectionExtensions
         // (Lane 2) reads only enabled rows, and the CRUD service (Lane 3) orchestrates registration. Scoped to match
         // the scoped, DbContext-backed store.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
+        // Model-type classification store. Persists the digest-keyed detection cache and the operator override, keyed by
+        // model name (NOCASE). Unencrypted — model names/digests/capabilities/kinds are not secrets. The classification
+        // service reads/writes through it to resolve the effective kind that filters the chat picker. Scoped to match
+        // the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IModelClassificationStore, ModelClassificationStore>();
         // Playbook P2 feedback-insights read store. Read-only aggregate over the node-local message_feedback rows
         // (joined to conversations.agent_definition_id + tool_events) — pure analytics, touches only plaintext
         // columns, writes nothing. Scoped to match the scoped, DbContext-backed store.
@@ -358,6 +363,11 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<DeadLetterFlushService>();
         builder.Services.AddSingleton<IWorkerShutdownDrainService, WorkerShutdownDrainService>();
         builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
+        // Model-type classification service: resolves each model's effective kind (override ?? detected) over the
+        // classification store, lazily probing /api/show and caching by digest. Scoped because it depends on the
+        // scoped, DbContext-backed IModelClassificationStore (a singleton could not consume it); the singleton
+        // IOllamaModelService is safe to consume from a scoped service.
+        builder.Services.AddScoped<IModelClassificationService, ModelClassificationService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
         // Loop P4 MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the

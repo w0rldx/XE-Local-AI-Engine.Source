@@ -40,7 +40,7 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
             ? contextLength
             : (int?)null;
 
-        return new OllamaModelDetails(response, maxContextTokens);
+        return new OllamaModelDetails(response, maxContextTokens, response.Capabilities ?? []);
     }
 
     public async IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName,

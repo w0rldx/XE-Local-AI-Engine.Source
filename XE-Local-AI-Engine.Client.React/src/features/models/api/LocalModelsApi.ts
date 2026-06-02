@@ -11,6 +11,14 @@ export interface LocalModelDto {
   parameterSize: string | null;
   quantizationLevel: string | null;
   isSelected: boolean;
+  // Effective classification (override ?? detected) as a ModelKind string ("Chat" | "Embedding" | "Unknown").
+  kind: string;
+  // Machine-detected classification as a ModelKind string; drives the "reset to detected" affordance.
+  detectedKind: string;
+  // Raw Ollama capability strings for read-only badges (e.g. "tools", "vision", "thinking").
+  capabilities: string[];
+  // True when an operator override is set, so the effective kind differs from the detected one.
+  isOverridden: boolean;
 }
 
 export interface ListLocalModelsResponseDto {
@@ -53,6 +61,14 @@ export interface DeleteLocalModelResponseDto {
   deleted: boolean;
 }
 
+export interface ModelKindResponseDto {
+  modelName: string;
+  kind: string;
+  detectedKind: string;
+  capabilities: string[];
+  isOverridden: boolean;
+}
+
 function encodeModelRouteSegment(modelName: string): string {
   return encodeURIComponent(modelName.trim());
 }
@@ -79,5 +95,22 @@ export async function pullLocalModel(request: PullLocalModelRequestDto, config?:
 
 export async function deleteLocalModel(modelName: string, config?: AxiosRequestConfig): Promise<DeleteLocalModelResponseDto> {
   const { data } = await axiosInstance.delete<DeleteLocalModelResponseDto>(buildLocalApiUrl(`models/${encodeModelRouteSegment(modelName)}`), config);
+  return data;
+}
+
+export async function setLocalModelKind(modelName: string, kind: string, config?: AxiosRequestConfig): Promise<ModelKindResponseDto> {
+  const { data } = await axiosInstance.put<ModelKindResponseDto>(
+    buildLocalApiUrl(`models/${encodeModelRouteSegment(modelName)}/kind`),
+    { kind },
+    config,
+  );
+  return data;
+}
+
+export async function resetLocalModelKind(modelName: string, config?: AxiosRequestConfig): Promise<ModelKindResponseDto> {
+  const { data } = await axiosInstance.delete<ModelKindResponseDto>(
+    buildLocalApiUrl(`models/${encodeModelRouteSegment(modelName)}/kind`),
+    config,
+  );
   return data;
 }

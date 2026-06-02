@@ -111,7 +111,8 @@
 			"modelExpired": "Not loaded",
 			"modelSelector": {
 				"availableModels": "Available models",
-				"hint": "Choose a model installed on the selected node."
+				"hint": "Choose a model installed on the selected node.",
+				"noChatModels": "No chat-capable models"
 			},
 			"reasoningEffortLabel": "Reasoning effort",
 			"reasoningEffortUnavailable": "Reasoning is unavailable for the selected model",
@@ -776,6 +777,21 @@
 			"placeholder": {
 				"title": "Models",
 				"description": "Local model listing, selection, pull, and delete controls will be added here."
+			},
+			"type": {
+				"columnHeader": "Type",
+				"kind": {
+					"chat": "Chat",
+					"embedding": "Embedding",
+					"unknown": "Unknown"
+				},
+				"capability": {
+					"tools": "Tools",
+					"vision": "Vision",
+					"thinking": "Thinking"
+				},
+				"overrideLabel": "Override type",
+				"reset": "Reset to detected"
 			}
 		},
 		"manager": {

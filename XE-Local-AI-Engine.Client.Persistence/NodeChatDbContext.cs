@@ -36,6 +36,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<McpServerRegistration> McpServers => Set<McpServerRegistration>();
 
+    internal DbSet<ModelClassification> ModelClassifications => Set<ModelClassification>();
+
     internal DbSet<ScheduledJobDefinition> ScheduledJobDefinitions => Set<ScheduledJobDefinition>();
 
     internal DbSet<ScheduledJobRun> ScheduledJobRuns => Set<ScheduledJobRun>();
@@ -58,6 +60,7 @@ public sealed class NodeChatDbContext : DbContext
         ConfigurePlaybookAction(modelBuilder.Entity<PlaybookAction>());
         ConfigureGoldenConversation(modelBuilder.Entity<GoldenConversation>());
         ConfigureMcpServer(modelBuilder.Entity<McpServerRegistration>());
+        ConfigureModelClassification(modelBuilder.Entity<ModelClassification>());
         ConfigureScheduledJobDefinition(modelBuilder.Entity<ScheduledJobDefinition>());
         ConfigureScheduledJobRun(modelBuilder.Entity<ScheduledJobRun>());
         ConfigureScheduledJobRunEvent(modelBuilder.Entity<ScheduledJobRunEvent>());
@@ -491,6 +494,37 @@ public sealed class NodeChatDbContext : DbContext
         // The server Name is the source of the qualified tool-name slug, so uniqueness keeps tool names collision-free.
         builder.HasIndex(entity => entity.Name)
                .IsUnique();
+    }
+
+    private static void ConfigureModelClassification(EntityTypeBuilder<ModelClassification> builder)
+    {
+        builder.ToTable("model_classifications");
+        builder.HasKey(entity => entity.ModelName);
+
+        builder.Property(entity => entity.ModelName)
+               .HasColumnName("model_name")
+               // Case-insensitive collation so the model-name primary key and lookups treat names differing only in
+               // case as the same model, matching the application-layer service's case-insensitive handling.
+               .UseCollation("NOCASE");
+
+        builder.Property(entity => entity.Digest)
+               .HasColumnName("digest");
+
+        builder.Property(entity => entity.DetectedKind)
+               .HasColumnName("detected_kind")
+               .HasDefaultValue(ModelKind.Unknown);
+
+        builder.Property(entity => entity.DetectedCapabilitiesJson)
+               .HasColumnName("detected_capabilities_json");
+
+        builder.Property(entity => entity.OverrideKind)
+               .HasColumnName("override_kind");
+
+        builder.Property(entity => entity.DetectedAtUtc)
+               .HasColumnName("detected_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
     }
 
     private static void ConfigureScheduledJobDefinition(EntityTypeBuilder<ScheduledJobDefinition> builder)
