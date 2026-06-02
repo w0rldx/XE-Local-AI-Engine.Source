@@ -5,22 +5,24 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { modelFitQueryKeys } from "@/features/model-fit/queries/ModelFitQueryKeys";
-
-const { apiMock } = vi.hoisted(() => ({
-	apiMock: {
-		refreshRecommendations: vi.fn(),
-	},
+// The refresh hook dispatches the domain `scheduledJobId` to the generated `refreshRecommendationsMutation()`'s
+// `mutationFn`, wrapping it in withResponseValidation. Mock the generated TanStack module so the test owns the
+// mutationFn and can assert the wire envelope the hook built without hitting the network.
+const { mutationMock } = vi.hoisted(() => ({
+	mutationMock: { mutationFn: vi.fn() },
 }));
 
-vi.mock("@/features/model-fit/api/ModelFitApi", () => ({
-	refreshRecommendations: apiMock.refreshRecommendations,
-	// Read functions are imported by the module but unused in these mutation tests.
-	listApprovedImages: vi.fn(),
-	getLatestRecommendations: vi.fn(),
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
+	refreshRecommendationsMutation: vi.fn(() => ({ mutationFn: mutationMock.mutationFn })),
+	// Read options are imported by the module under test but unused in these mutation tests.
+	listApprovedImagesOptions: vi.fn(),
+	getLatestRecommendationsOptions: vi.fn(),
 }));
 
-import { useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
+import { modelFitInvalidationKey, modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
+
+// The generated query key the refresh mutation invalidates (partial `_id` match), built via the production helper.
+const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
 
 // Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
@@ -42,14 +44,14 @@ function makeWrapper() {
 
 describe("useRefreshRecommendations", () => {
 	beforeEach(() => {
-		apiMock.refreshRecommendations.mockResolvedValue({ scheduledJobId: "job-1" });
+		mutationMock.mutationFn.mockResolvedValue({ scheduledJobId: "job-1" });
 	});
 
 	afterEach(() => {
 		vi.clearAllMocks();
 	});
 
-	it("fires the existing scheduler job and invalidates the latest-recommendations cache", async () => {
+	it("dispatches the domain job id to the generated mutation body and invalidates the latest cache", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
 
@@ -57,12 +59,14 @@ describe("useRefreshRecommendations", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(apiMock.refreshRecommendations).toHaveBeenCalledWith("job-1");
-		expect(invalidatedKeys).toContainEqual(modelFitQueryKeys.latestRoot());
+		// TanStack v5 calls mutationFn(variables, context) — assert the variables via the first call arg only
+		// (a toHaveBeenCalledWith({...}) would fail on the 2nd context argument).
+		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1" } });
+		expect(invalidatedKeys).toContainEqual(LATEST_KEY);
 	});
 
 	it("surfaces a refresh error and does not invalidate", async () => {
-		apiMock.refreshRecommendations.mockRejectedValue(new Error("Request failed with status code 400"));
+		mutationMock.mutationFn.mockRejectedValue(new Error("Request failed with status code 400"));
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
 
@@ -70,6 +74,6 @@ describe("useRefreshRecommendations", () => {
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 
-		expect(invalidatedKeys).not.toContainEqual(modelFitQueryKeys.latestRoot());
+		expect(invalidatedKeys).not.toContainEqual(LATEST_KEY);
 	});
 });

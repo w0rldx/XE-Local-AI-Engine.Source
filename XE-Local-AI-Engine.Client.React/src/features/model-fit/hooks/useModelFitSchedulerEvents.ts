@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { modelRecommendationCheckTemplateId } from "@/features/model-fit/models/ModelFitModels";
-import { modelFitQueryKeys } from "@/features/model-fit/queries/ModelFitQueryKeys";
+import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
 
 // Realtime authoritative refetch for the model-fit pages. Reuses the SAME scheduler SignalR hub and event-name
 // conventions as useSchedulerHub (no second hub server) — but where useSchedulerHub invalidates only scheduler
@@ -14,13 +14,14 @@ import { modelFitQueryKeys } from "@/features/model-fit/queries/ModelFitQueryKey
 // run for that template reaches a terminal status the cached recommendation snapshot may have changed; we
 // invalidate the latest-recommendations query and let TanStack Query refetch the canonical state.
 //
+// The data layer is the generated hey-api TanStack query layer, whose query keys are single-element arrays
+// `[{ _id: "<operationId>", ... }]`. Invalidating with the `_id` partial object (via modelFitInvalidationKey)
+// matches every cached (useCase, providerName) variant of the latest-recommendations query — the realtime
+// analogue of the old latestRoot() prefix invalidation.
+//
 // Terminal events only: RunCompleted/RunFailed/RunCancelled change the stored snapshot (or its diagnostics).
 // RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly.
-const TERMINAL_RUN_EVENTS = [
-	"scheduler.runCompleted",
-	"scheduler.runFailed",
-	"scheduler.runCancelled",
-] as const;
+const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"] as const;
 
 // Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubEvent). Only templateId is needed
 // here to decide whether the event concerns model-fit.
@@ -58,7 +59,7 @@ export function useModelFitSchedulerEvents(): void {
 			if (!isModelRecommendationRun(payload)) {
 				return;
 			}
-			queryClient.invalidateQueries({ queryKey: modelFitQueryKeys.latestRoot() }).catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }).catch(() => undefined);
 		};
 
 		for (const eventName of TERMINAL_RUN_EVENTS) {
