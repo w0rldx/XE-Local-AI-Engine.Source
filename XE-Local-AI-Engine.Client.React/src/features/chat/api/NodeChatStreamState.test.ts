@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import {
 	accumulateToolTimelineEntry,
 	appendOptimisticNodeChatSend,
@@ -9,6 +8,7 @@ import {
 	nodeChatStreamEventTypes,
 } from "@/features/chat/api/NodeChatStreamState";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 const conversation: ChatConversationModel = {
 	id: "conversation-1",
@@ -61,14 +61,35 @@ describe("node chat stream state", () => {
 		const partial = applyNodeChatStreamEvent(optimistic, streamEvent({ content: "hello back", delta: "hello back" }));
 		const terminal = applyNodeChatStreamEvent(
 			partial.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.assistantCompleted, status: "completed", content: "hello back", delta: null, inputTokens: 10, outputTokens: 3, totalTokens: 13 }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				status: "completed",
+				content: "hello back",
+				delta: null,
+				inputTokens: 10,
+				outputTokens: 3,
+				totalTokens: 13,
+			}),
 		);
 
 		expect(partial.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "hello back", isActive: true });
-		expect(terminal.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "hello back", isActive: false, totalTokens: 13 });
+		expect(terminal.streamingMessage).toMatchObject({
+			messageId: "assistant-1",
+			content: "hello back",
+			isActive: false,
+			totalTokens: 13,
+		});
 		expect(terminal.conversation.messages).toMatchObject([
 			{ id: "user-1", role: "user", content: "hello", status: "completed" },
-			{ id: "assistant-1", role: "assistant", content: "hello back", status: "completed", inputTokens: 10, outputTokens: 3, totalTokens: 13 },
+			{
+				id: "assistant-1",
+				role: "assistant",
+				content: "hello back",
+				status: "completed",
+				inputTokens: 10,
+				outputTokens: 3,
+				totalTokens: 13,
+			},
 		]);
 	});
 
@@ -93,7 +114,12 @@ describe("node chat stream state", () => {
 			queued.conversation,
 			streamEvent({ type: nodeChatStreamEventTypes.assistantStreaming, status: "streaming", content: "hi", delta: "hi" }),
 		);
-		expect(streaming.streamingMessage).toMatchObject({ messageId: "assistant-1", isQueued: false, isActive: true, content: "hi" });
+		expect(streaming.streamingMessage).toMatchObject({
+			messageId: "assistant-1",
+			isQueued: false,
+			isActive: true,
+			content: "hi",
+		});
 		expect(streaming.conversation.messages.find((message) => message.id === "assistant-1")?.status).toBe("streaming");
 	});
 
@@ -168,7 +194,10 @@ describe("node chat stream state", () => {
 			requiresApproval: false,
 		});
 		// The tool event leaves the assistant message content/status untouched and keeps the turn live.
-		expect(requested.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({ content: "partial", status: "streaming" });
+		expect(requested.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			content: "partial",
+			status: "streaming",
+		});
 		expect(requested.streamingMessage).toMatchObject({ messageId: "assistant-1", content: "partial", isActive: true });
 		expect(requested.isTerminal).toBe(false);
 	});
@@ -192,11 +221,25 @@ describe("node chat stream state", () => {
 	it("transitions the requested entry to received on tool-call-completed, keyed by tool call id", () => {
 		const requested = applyNodeChatStreamEvent(
 			conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, toolCallId: "call-1", toolName: "search_docs", content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-1",
+				toolName: "search_docs",
+				content: null,
+				delta: null,
+			}),
 		);
 		const completed = applyNodeChatStreamEvent(
 			conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, toolCallId: "call-1", toolName: "search_docs", result: "3 results", isError: false, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				toolCallId: "call-1",
+				toolName: "search_docs",
+				result: "3 results",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
 		);
 
 		const requestedEntry = requested.timelineEntry;
@@ -215,11 +258,26 @@ describe("node chat stream state", () => {
 	it("preserves the requiresApproval flag when the completed entry merges over the requested entry", () => {
 		const requested = applyNodeChatStreamEvent(
 			conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, toolCallId: "call-1", toolName: "delete_file", requiresApproval: true, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				requiresApproval: true,
+				content: null,
+				delta: null,
+			}),
 		);
 		const completed = applyNodeChatStreamEvent(
 			conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, toolCallId: "call-1", toolName: "delete_file", result: "ok", isError: false, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				result: "ok",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
 		);
 
 		const requestedEntry = requested.timelineEntry;
@@ -240,7 +298,15 @@ describe("node chat stream state", () => {
 	it("maps a failed tool-call-completed event to a failed timeline entry", () => {
 		const failed = applyNodeChatStreamEvent(
 			conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, toolCallId: "call-1", toolName: "search_docs", result: "boom", isError: true, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				toolCallId: "call-1",
+				toolName: "search_docs",
+				result: "boom",
+				isError: true,
+				content: null,
+				delta: null,
+			}),
 		);
 
 		expect(failed.timelineEntry).toMatchObject({ id: "call-1", state: "failed", toolResult: "boom" });
@@ -262,11 +328,28 @@ describe("node chat stream state", () => {
 		// Tool requested (seq 4) then completed (seq 5) collapse onto one tool part.
 		const toolRequested = applyNodeChatStreamEvent(
 			firstReasoning.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, sequence: 4, toolCallId: "call-1", toolName: "get_time", arguments: "{}", content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				sequence: 4,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				arguments: "{}",
+				content: null,
+				delta: null,
+			}),
 		);
 		const toolCompleted = applyNodeChatStreamEvent(
 			toolRequested.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, sequence: 5, toolCallId: "call-1", toolName: "get_time", result: "12:00", isError: false, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 5,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				result: "12:00",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
 		);
 		// Reasoning after the tool (seq 6) must OPEN A NEW segment (Option A second Thoughts block).
 		const secondReasoning = applyNodeChatStreamEvent(
@@ -281,7 +364,14 @@ describe("node chat stream state", () => {
 
 		expect(parts.map((part) => part.kind)).toEqual(["reasoning", "tool", "reasoning"]);
 		expect(parts[0]).toMatchObject({ kind: "reasoning", text: "let me check the clock" });
-		expect(parts[1]).toMatchObject({ kind: "tool", id: "call-1", name: "get_time", state: "received", args: "{}", result: "12:00" });
+		expect(parts[1]).toMatchObject({
+			kind: "tool",
+			id: "call-1",
+			name: "get_time",
+			state: "received",
+			args: "{}",
+			result: "12:00",
+		});
 		expect(parts[2]).toMatchObject({ kind: "reasoning", text: "the tool says noon" });
 	});
 
@@ -293,8 +383,14 @@ describe("node chat stream state", () => {
 			"2026-05-24T00:00:01.000Z",
 		);
 
-		const first = applyNodeChatStreamEvent(optimistic, streamEvent({ sequence: 3, content: null, delta: null, reasoningDelta: "think" }));
-		const second = applyNodeChatStreamEvent(first.conversation, streamEvent({ sequence: 4, content: null, delta: null, reasoningDelta: "ing more" }));
+		const first = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 3, content: null, delta: null, reasoningDelta: "think" }),
+		);
+		const second = applyNodeChatStreamEvent(
+			first.conversation,
+			streamEvent({ sequence: 4, content: null, delta: null, reasoningDelta: "ing more" }),
+		);
 
 		const parts = second.streamingMessage.parts ?? [];
 		expect(parts).toHaveLength(1);
@@ -311,16 +407,41 @@ describe("node chat stream state", () => {
 
 		const requested = applyNodeChatStreamEvent(
 			optimistic,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallRequested, sequence: 3, toolCallId: "call-1", toolName: "get_time", content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				sequence: 3,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				content: null,
+				delta: null,
+			}),
 		);
 		const completed = applyNodeChatStreamEvent(
 			requested.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, sequence: 4, toolCallId: "call-1", toolName: "get_time", result: "12:00", isError: false, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 4,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				result: "12:00",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
 		);
 		// A second completed event for the same id (e.g. a resume replay) must collapse onto the same part.
 		const completedAgain = applyNodeChatStreamEvent(
 			completed.conversation,
-			streamEvent({ type: nodeChatStreamEventTypes.toolCallCompleted, sequence: 5, toolCallId: "call-1", toolName: "get_time", result: "12:00", isError: false, content: null, delta: null }),
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				sequence: 5,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				result: "12:00",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
 		);
 
 		const toolParts = (completedAgain.streamingMessage.parts ?? []).filter((part) => part.kind === "tool");

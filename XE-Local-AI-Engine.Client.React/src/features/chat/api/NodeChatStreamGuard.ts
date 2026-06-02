@@ -1,4 +1,4 @@
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
+import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 export type StreamWatchdogCategory = "no-first-chunk" | "inter-chunk-stall";
 

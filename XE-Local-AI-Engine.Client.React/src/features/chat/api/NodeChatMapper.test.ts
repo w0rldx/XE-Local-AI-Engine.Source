@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
-import type { NodeChatMessageResponseDto } from "@/features/chat/api/NodeChatApi";
+import type { XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse } from "@/core/api/generated";
 import { mapConversation, mapConversationSummary, mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
+import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
+
+type NodeChatMessageResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse;
 
 function messageDto(overrides: Partial<NodeChatMessageResponseDto> = {}): NodeChatMessageResponseDto {
 	return {
@@ -207,14 +209,32 @@ describe("node chat mapper", () => {
 			reasoning: "flat blob",
 			parts: [
 				{ kind: "reasoning", sequence: 0, text: "first thoughts" },
-				{ kind: "tool", sequence: 1, toolCallId: "call-1", name: "get_time", state: "received", args: "{}", result: "12:00", requiresApproval: false },
+				{
+					kind: "tool",
+					sequence: 1,
+					toolCallId: "call-1",
+					name: "get_time",
+					state: "received",
+					args: "{}",
+					result: "12:00",
+					requiresApproval: false,
+				},
 				{ kind: "reasoning", sequence: 2, text: "second thoughts" },
 			],
 		});
 
 		expect(message.parts).toEqual([
 			{ kind: "reasoning", id: "message-1:0", sequence: 0, text: "first thoughts" },
-			{ kind: "tool", id: "call-1", sequence: 1, name: "get_time", state: "received", args: "{}", result: "12:00", requiresApproval: false },
+			{
+				kind: "tool",
+				id: "call-1",
+				sequence: 1,
+				name: "get_time",
+				state: "received",
+				args: "{}",
+				result: "12:00",
+				requiresApproval: false,
+			},
 			{ kind: "reasoning", id: "message-1:2", sequence: 2, text: "second thoughts" },
 		]);
 	});
@@ -323,7 +343,9 @@ describe("node chat tool-call event mapper", () => {
 	});
 
 	it("falls back to messageId:sequence when no tool call id is present, keeping distinct calls separate", () => {
-		expect(mapToolCallEvent(streamEvent({ type: "tool-call-requested", messageId: "message-9", sequence: 4, toolName: "noop" }))?.id).toBe("message-9:4");
+		expect(
+			mapToolCallEvent(streamEvent({ type: "tool-call-requested", messageId: "message-9", sequence: 4, toolName: "noop" }))?.id,
+		).toBe("message-9:4");
 	});
 
 	it("returns null for non-tool stream events", () => {

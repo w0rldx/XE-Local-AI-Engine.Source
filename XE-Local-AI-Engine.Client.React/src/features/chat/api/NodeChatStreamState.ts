@@ -1,4 +1,3 @@
-import { nodeChatToolStreamEventTypes, type NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import { mapToolCallEvent } from "@/features/chat/api/NodeChatMapper";
 import type {
 	ChatConversationModel,
@@ -9,7 +8,13 @@ import type {
 	ChatToolCall,
 	MessageStatus,
 } from "@/features/chat/models/ChatModels";
-import { buildMessageParts, type ReasoningSegmentInput, type TextSegmentInput, type ToolEntryInput } from "@/features/chat/models/MessageParts";
+import {
+	buildMessageParts,
+	type ReasoningSegmentInput,
+	type TextSegmentInput,
+	type ToolEntryInput,
+} from "@/features/chat/models/MessageParts";
+import { type NodeChatStreamEventDto, nodeChatToolStreamEventTypes } from "@/features/chat/models/NodeChatStreamTypes";
 
 export const nodeChatStreamEventTypes = {
 	userMessagePersisted: "user-message-persisted",
@@ -30,7 +35,15 @@ function isToolStreamEvent(eventType: string): boolean {
 	return eventType === nodeChatStreamEventTypes.toolCallRequested || eventType === nodeChatStreamEventTypes.toolCallCompleted;
 }
 
-const knownStatuses = new Set<MessageStatus>(["pending", "queued", "streaming", "completed", "cancelled", "failed", "interrupted"]);
+const knownStatuses = new Set<MessageStatus>([
+	"pending",
+	"queued",
+	"streaming",
+	"completed",
+	"cancelled",
+	"failed",
+	"interrupted",
+]);
 
 export interface OptimisticNodeChatSendIds {
 	userMessageId: string;
@@ -227,7 +240,14 @@ function nextReasoningParts(
 
 	let nextReasoningSegments = reasoningSegments;
 	if (event.reasoningDelta) {
-		nextReasoningSegments = appendReasoningDelta(reasoningSegments, toolEntries, textSegments, event.messageId, event.sequence, event.reasoningDelta);
+		nextReasoningSegments = appendReasoningDelta(
+			reasoningSegments,
+			toolEntries,
+			textSegments,
+			event.messageId,
+			event.sequence,
+			event.reasoningDelta,
+		);
 	} else if (reasoning && reasoningSegments.length === 0) {
 		// A full reasoning value with no prior segment (e.g. terminal/resume rehydrate): seed one leading segment.
 		nextReasoningSegments = [{ id: `${event.messageId}:${event.sequence}`, sequence: event.sequence, text: reasoning }];
@@ -272,7 +292,9 @@ function isoFromUnixMilliseconds(value: number | undefined): string {
 function replaceMessage(messages: ChatMessageModel[], nextMessage: ChatMessageModel): ChatMessageModel[] {
 	const existingIndex = messages.findIndex((message) => message.id === nextMessage.id);
 	if (existingIndex < 0) {
-		return [...messages, nextMessage].toSorted((left, right) => left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt));
+		return [...messages, nextMessage].toSorted(
+			(left, right) => left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt),
+		);
 	}
 
 	return messages.map((message, index) => (index === existingIndex ? nextMessage : message));
@@ -317,7 +339,10 @@ export function appendOptimisticNodeChatSend(
 	};
 }
 
-export function applyNodeChatStreamEvent(conversation: ChatConversationModel, event: NodeChatStreamEventDto): AppliedNodeChatStreamEvent {
+export function applyNodeChatStreamEvent(
+	conversation: ChatConversationModel,
+	event: NodeChatStreamEventDto,
+): AppliedNodeChatStreamEvent {
 	const terminalStatus = terminalStatusForEvent(event.type);
 	const isTerminal = terminalStatus !== undefined;
 
@@ -359,7 +384,9 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 	// Some backend stream versions report the assistant correlation id on the user-persisted event,
 	// so treating that event as an assistant mutation would clobber the placeholder.
 	if (event.type === nodeChatStreamEventTypes.userMessagePersisted) {
-		const currentAssistant = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
+		const currentAssistant = conversation.messages.find(
+			(message) => message.id === event.messageId && message.role === "assistant",
+		);
 		return {
 			conversation,
 			streamingMessage: {
@@ -386,7 +413,8 @@ export function applyNodeChatStreamEvent(conversation: ChatConversationModel, ev
 	const status = normalizeStatus(event.status, fallbackStatus);
 	const eventTime = isoFromUnixMilliseconds(event.occurredAtUtc);
 	const content = event.content ?? `${existing?.content ?? ""}${event.delta ?? ""}`;
-	const reasoning = event.reasoning ?? (event.reasoningDelta ? `${existing?.reasoning ?? ""}${event.reasoningDelta}` : existing?.reasoning);
+	const reasoning =
+		event.reasoning ?? (event.reasoningDelta ? `${existing?.reasoning ?? ""}${event.reasoningDelta}` : existing?.reasoning);
 	const parts = nextReasoningParts(existing, event, reasoning ?? undefined);
 	const assistantMessage: ChatMessageModel = {
 		id: event.messageId,

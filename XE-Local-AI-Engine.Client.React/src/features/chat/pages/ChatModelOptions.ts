@@ -1,5 +1,9 @@
+import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
-import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
+
+// Local alias for the generated REST model response (backend OpenAPI is the single source of truth). Every field
+// is optional on the generated type, so each read below coalesces to the prior default.
+type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
 export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOption {
 	const statusLabel = [
@@ -10,9 +14,10 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		.filter((part): part is string => Boolean(part))
 		.join(" · ");
 
+	const modelName = model.modelName ?? "";
 	return {
-		value: model.modelName,
-		label: model.modelName,
+		value: modelName,
+		label: modelName,
 		isReasoningModel: false,
 		isAvailable: nodeAvailable,
 		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,

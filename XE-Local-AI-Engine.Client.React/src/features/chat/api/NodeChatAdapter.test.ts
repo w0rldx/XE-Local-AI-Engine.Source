@@ -55,8 +55,8 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 	nodeChatConnection: connectionMock.nodeChatConnection,
 }));
 
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
+import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 const streamRequest = {
 	conversationId: "conversation-1",
@@ -129,7 +129,10 @@ describe("nodeChatAdapter SignalR streaming", () => {
 	});
 
 	it("threads the selected reasoning effort into the SendMessage stream request", async () => {
-		nodeChatAdapter.sendMessage({ ...streamRequest, reasoningEffort: "none" }, new AbortController().signal)[Symbol.asyncIterator]().next();
+		nodeChatAdapter
+			.sendMessage({ ...streamRequest, reasoningEffort: "none" }, new AbortController().signal)
+			[Symbol.asyncIterator]()
+			.next();
 		await settle();
 
 		expect(connectionMock.state.lastMethod).toBe("SendMessage");
@@ -137,7 +140,10 @@ describe("nodeChatAdapter SignalR streaming", () => {
 	});
 
 	it("forwards useLocalTools on the SendMessage stream payload", async () => {
-		nodeChatAdapter.sendMessage({ ...streamRequest, useLocalTools: true }, new AbortController().signal)[Symbol.asyncIterator]().next();
+		nodeChatAdapter
+			.sendMessage({ ...streamRequest, useLocalTools: true }, new AbortController().signal)
+			[Symbol.asyncIterator]()
+			.next();
 		await settle();
 
 		expect(connectionMock.state.lastMethod).toBe("SendMessage");
@@ -169,11 +175,15 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 		// The resume registry stamps the invocation id as the message id; the adapter remaps it back.
 		const resumed = iterator.next();
-		connectionMock.state.currentSubscriber?.next(streamEvent({ messageId: "request-1", sequence: 2, content: "hi there", delta: " there" }));
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ messageId: "request-1", sequence: 2, content: "hi there", delta: " there" }),
+		);
 		await expect(resumed).resolves.toMatchObject({ value: { messageId: "assistant-1", content: "hi there" }, done: false });
 
 		const done = iterator.next();
-		connectionMock.state.currentSubscriber?.next(streamEvent({ type: "assistant-completed", messageId: "request-1", sequence: 3, status: "completed", content: "hi there" }));
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ type: "assistant-completed", messageId: "request-1", sequence: 3, status: "completed", content: "hi there" }),
+		);
 		await settle();
 		connectionMock.state.currentSubscriber?.complete();
 		await expect(done).resolves.toMatchObject({ value: { type: "assistant-completed", messageId: "assistant-1" } });
@@ -245,7 +255,9 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		await settle();
 
 		// Latch the server-minted variant id + requestId from the first event.
-		connectionMock.state.currentSubscriber?.next(streamEvent({ messageId: "variant-9", requestId: "request-9", sequence: 1, content: "draft", delta: "draft" }));
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ messageId: "variant-9", requestId: "request-9", sequence: 1, content: "draft", delta: "draft" }),
+		);
 		await expect(first).resolves.toMatchObject({ value: { messageId: "variant-9", content: "draft" }, done: false });
 
 		// Drop + reconnect -> adapter re-attaches via ResumeMessage keyed by the latched requestId.
@@ -262,7 +274,9 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 		// Resume events stamp the invocation id as the message id; the adapter remaps to the latched variant id.
 		const resumed = iterator.next();
-		connectionMock.state.currentSubscriber?.next(streamEvent({ messageId: "request-9", sequence: 2, content: "draft done", delta: " done" }));
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ messageId: "request-9", sequence: 2, content: "draft done", delta: " done" }),
+		);
 		await expect(resumed).resolves.toMatchObject({ value: { messageId: "variant-9", content: "draft done" }, done: false });
 	});
 

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
-import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
+
+type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
 function model(modelName: string, kind: string): LocalModelDto {
 	return {

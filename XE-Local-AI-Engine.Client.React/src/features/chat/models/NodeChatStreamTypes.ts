@@ -1,0 +1,50 @@
+// SignalR-stream-only DTOs for the node chat streaming path. These have NO OpenAPI/generated equivalent
+// (the stream rides the SignalR hub, not the REST surface), so they live here as hand types that survive
+// the hey-api REST migration. Moved verbatim out of the now-deleted NodeChatApi.ts.
+
+export interface NodeChatStreamRequestDto {
+	conversationId: string;
+	content: string;
+	userMessageId?: string;
+	messageId?: string;
+	requestId?: string;
+	model?: string;
+	useLocalTools?: boolean;
+	// Reasoning budget for the turn ("none" | "low" | "medium" | "high"); null/absent lets the model default.
+	reasoningEffort?: string;
+	// Selected-path map {variantGroupId -> selectedMessageId} for the just-clicked conversation tree path. The
+	// server persists it and assembles context from the selected branch only; absent falls back to the stored map.
+	selectedPath?: Record<string, string>;
+}
+
+export interface NodeChatStreamEventDto {
+	type: string;
+	conversationId: string;
+	messageId: string;
+	requestId: string;
+	status: string;
+	sequence: number;
+	occurredAtUtc: number;
+	delta?: string | null;
+	reasoningDelta?: string | null;
+	content?: string | null;
+	reasoning?: string | null;
+	error?: string | null;
+	model?: string | null;
+	inputTokens?: number | null;
+	outputTokens?: number | null;
+	totalTokens?: number | null;
+	reasoningTokens?: number | null;
+	// Tool lifecycle fields (Phase D6): present on `tool-call-requested` / `tool-call-completed` events only.
+	toolCallId?: string | null;
+	toolName?: string | null;
+	arguments?: string | null;
+	requiresApproval?: boolean | null;
+	result?: string | null;
+	isError?: boolean | null;
+}
+
+export const nodeChatToolStreamEventTypes = {
+	toolCallRequested: "tool-call-requested",
+	toolCallCompleted: "tool-call-completed",
+} as const;
