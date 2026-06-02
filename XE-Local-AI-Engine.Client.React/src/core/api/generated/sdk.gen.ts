@@ -152,12 +152,18 @@ import type {
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsErrors,
 	HarvestGoldenConversationsResponses,
+	ImportAgentTemplatesData,
+	ImportAgentTemplatesErrors,
+	ImportAgentTemplatesResponses,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsErrors,
 	ListAgentDefinitionsResponses,
 	ListAgentPlaybookActionsData,
 	ListAgentPlaybookActionsErrors,
 	ListAgentPlaybookActionsResponses,
+	ListAgentTemplatesData,
+	ListAgentTemplatesErrors,
+	ListAgentTemplatesResponses,
 	ListApprovedImagesData,
 	ListApprovedImagesErrors,
 	ListApprovedImagesResponses,
@@ -364,9 +370,12 @@ import {
 	zGetToolCatalogResponse,
 	zHarvestGoldenConversationsPath,
 	zHarvestGoldenConversationsResponse,
+	zImportAgentTemplatesBody,
+	zImportAgentTemplatesResponse,
 	zListAgentDefinitionsResponse,
 	zListAgentPlaybookActionsPath,
 	zListAgentPlaybookActionsResponse,
+	zListAgentTemplatesResponse,
 	zListApprovedImagesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
@@ -2389,6 +2398,54 @@ export const harvestGoldenConversations = <ThrowOnError extends boolean = false>
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest",
+		...options,
+	});
+
+export const importAgentTemplates = <ThrowOnError extends boolean = false>(
+	options: Options<ImportAgentTemplatesData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ImportAgentTemplatesResponses, ImportAgentTemplatesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zImportAgentTemplatesBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zImportAgentTemplatesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/templates/import",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listAgentTemplates = <ThrowOnError extends boolean = false>(
+	options?: Options<ListAgentTemplatesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListAgentTemplatesResponses, ListAgentTemplatesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListAgentTemplatesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/templates",
 		...options,
 	});
 

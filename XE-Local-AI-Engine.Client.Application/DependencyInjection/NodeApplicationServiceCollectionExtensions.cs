@@ -209,6 +209,12 @@ public static class NodeApplicationServiceCollectionExtensions
         // Orchestration resolver: compiles an orchestrator definition and topology into the loopback orchestration spec.
         builder.Services.AddScoped<IOrchestrationResolver, OrchestrationResolver>();
         builder.Services.AddScoped<IAgentDefinitionService, AgentDefinitionService>();
+        // Starter-pack template catalog: loads the embedded agent-templates.seed.json once (zero runtime egress) and
+        // serves the curated personas. Singleton because the catalog is immutable and read-once.
+        builder.Services.AddSingleton<IAgentTemplateCatalog, AgentTemplateCatalog>();
+        // Starter-pack import service: idempotent, additive import of catalog templates into ordinary chat-persona
+        // definitions through the forge-proof seeded store path. Scoped to match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IAgentTemplateImportService, AgentTemplateImportService>();
         // Playbook action service: validates manual authoring, owns agent existence checks, and delegates
         // persistence/versioning to the store. The resolver folds enabled actions into the prompt.
         builder.Services.AddScoped<IPlaybookActionService, PlaybookActionService>();
