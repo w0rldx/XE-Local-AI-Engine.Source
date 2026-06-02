@@ -5,13 +5,15 @@ import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { toSaveAgentDefinitionRequest } from "@/features/agents/api/AgentDefinitionsApi";
 import { AgentDefinitionForm, type AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
+import { toSaveAgentDefinitionRequest } from "@/features/agents/models/AgentDefinitionMappers";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import {
 	deserializeOrchestrationTopology,
@@ -25,8 +27,6 @@ import {
 	useUpdateAgentDefinition,
 } from "@/features/agents/queries/useAgentDefinitions";
 import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
-import { listLocalModels } from "@/features/models/api/LocalModelsApi";
-import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
 function errorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error ? error.message : fallback;
@@ -72,10 +72,7 @@ export function AgentsPage() {
 
 	const definitionsQuery = useAgentDefinitions();
 	const toolCapableModelsQuery = useToolCapableModels();
-	const modelsQuery = useQuery({
-		queryKey: localModelsQueryKeys.list(),
-		queryFn: ({ signal }) => listLocalModels({ signal }),
-	});
+	const modelsQuery = useQuery(withResponseValidation(listLocalModelsOptions()));
 
 	const createMutation = useCreateAgentDefinition();
 	const updateMutation = useUpdateAgentDefinition();
@@ -85,7 +82,7 @@ export function AgentsPage() {
 	const toolCapableModels = toolCapableModelsQuery.data ?? [];
 
 	const modelOptions = useMemo<AgentModelOption[]>(
-		() => (modelsQuery.data?.items ?? []).map((model) => ({ value: model.modelName, label: model.modelName })),
+		() => (modelsQuery.data?.items ?? []).map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" })),
 		[modelsQuery.data],
 	);
 

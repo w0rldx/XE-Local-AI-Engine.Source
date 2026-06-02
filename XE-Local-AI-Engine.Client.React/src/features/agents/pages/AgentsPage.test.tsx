@@ -50,8 +50,18 @@ vi.mock("@/features/agents/queries/usePlaybookActions", () => playbookHooksMock)
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
-vi.mock("@/features/models/api/LocalModelsApi", () => ({
-	listLocalModels: vi.fn().mockResolvedValue({ items: [] }),
+// AgentsPage repointed its model dropdown onto the generated SDK (listLocalModelsOptions). Partially mock the
+// generated TanStack module so the page's useQuery(withResponseValidation(listLocalModelsOptions())) resolves an
+// empty list without a real request, while every other generated options/mutation export stays real — the editor
+// mounts the playbook/feedback/golden panels, whose hooks reach other exports from this same module. The real
+// withResponseValidation bridge still wraps the mocked queryFn.
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
+	listLocalModelsOptions: vi.fn(() => ({
+		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
+		queryKey: [{ _id: "listLocalModels" }],
+		queryFn: async () => ({ items: [] }),
+	})),
 }));
 // The agent form's tool selector fetches the catalog via useToolCatalog (dynamic tool-catalog). Mock it so opening the
 // editor never issues a real request and renders deterministically.
