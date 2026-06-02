@@ -5,9 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatApi";
+import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
 import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
 import {
 	accumulateToolTimelineEntry,
@@ -32,8 +34,6 @@ import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
-import { getLocalModelDetails, listLocalModels } from "@/features/models/api/LocalModelsApi";
-import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
 
@@ -160,8 +160,7 @@ export function Chat() {
 	});
 
 	const localModelsQuery = useQuery({
-		queryKey: localModelsQueryKeys.list(),
-		queryFn: ({ signal }) => listLocalModels({ signal }),
+		...withResponseValidation(listLocalModelsOptions()),
 		// Keep the prior model list while a refetch is in flight so a transient response that momentarily omits
 		// the selected model can't trip the reconcile effect and reset selectedModel to the default (which would
 		// undercut the persisted selection from #4).
@@ -174,7 +173,7 @@ export function Chat() {
 			return [localDefaultModelOption];
 		}
 
-		return [localDefaultModelOption, ...toChatModelOptions(response.items, response.isAvailable)];
+		return [localDefaultModelOption, ...toChatModelOptions(response.items ?? [], response.isAvailable ?? false)];
 	}, [localModelsQuery.data]);
 	const selectedModelOption = useMemo(
 		() => modelOptions.find((option) => option.value === selectedModel),
@@ -199,8 +198,7 @@ export function Chat() {
 	}, [localModelsQuery.data?.configuredDefaultModelName, localModelsQuery.data?.selectedModelName, selectedModel]);
 
 	const selectedModelDetailsQuery = useQuery({
-		queryKey: localModelsQueryKeys.details(selectedConcreteModelName),
-		queryFn: ({ signal }) => getLocalModelDetails(selectedConcreteModelName, { signal }),
+		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
 		enabled: selectedConcreteModelName.length > 0,
 	});
 
@@ -734,7 +732,7 @@ export function Chat() {
 				const result = await nodeChatAdapter.branchConversation(selectedConversationId, messageId);
 				// Surface the branched Origin=Local conversation: refresh history and open it.
 				await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
-				setRequestedConversationId(result.branchedConversationId);
+				setRequestedConversationId(result.branchedConversationId ?? "");
 			} catch (error) {
 				if (isNodeChatReadOnlyConflict(error)) {
 					setStreamError(

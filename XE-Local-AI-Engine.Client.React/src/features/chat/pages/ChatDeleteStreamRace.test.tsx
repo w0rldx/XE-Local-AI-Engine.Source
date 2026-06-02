@@ -6,13 +6,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
-import { Chat } from "@/features/chat/pages/Chat";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
+import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
+import { Chat } from "@/features/chat/pages/Chat";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
-import { listLocalModels } from "@/features/models/api/LocalModelsApi";
 
 vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 	nodeChatAdapter: {
@@ -33,9 +32,27 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 	},
 }));
 
-vi.mock("@/features/models/api/LocalModelsApi", () => ({
-	listLocalModels: vi.fn(),
-	getLocalModelDetails: vi.fn(),
+// Chat.tsx repointed its model list/details onto the generated SDK (listLocalModelsOptions /
+// getLocalModelDetailsOptions). Partially mock the generated TanStack module so the page's
+// useQuery(withResponseValidation(...)) resolves a deterministic empty list without a real request; the real
+// withResponseValidation bridge still wraps the mocked queryFn. The list queryFn is hoisted so beforeEach can set
+// the resolved payload, mirroring the prior listLocalModels mock.
+const { listLocalModelsQueryFn } = vi.hoisted(() => ({
+	listLocalModelsQueryFn: vi.fn(),
+}));
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
+	listLocalModelsOptions: vi.fn(() => ({
+		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
+		queryKey: [{ _id: "listLocalModels" }],
+		queryFn: () => listLocalModelsQueryFn(),
+	})),
+	getLocalModelDetailsOptions: vi.fn(() => ({
+		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
+		queryKey: [{ _id: "getLocalModelDetails" }],
+		queryFn: async () => ({}),
+	})),
 }));
 
 // The A9 readiness gate eager-connects the shared hub on mount; stub it as already connected so the page
@@ -49,7 +66,6 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 }));
 
 const adapter = vi.mocked(nodeChatAdapter);
-const listLocalModelsMock = vi.mocked(listLocalModels);
 
 function installJsdomEnvironmentMocks(): void {
 	Object.defineProperty(window, "matchMedia", {
@@ -133,7 +149,13 @@ describe("Chat delete-vs-stream race", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
-		listLocalModelsMock.mockResolvedValue({ items: [], isAvailable: true, selectedModelName: null, configuredDefaultModelName: null, error: null });
+		listLocalModelsQueryFn.mockResolvedValue({
+			items: [],
+			isAvailable: true,
+			selectedModelName: null,
+			configuredDefaultModelName: null,
+			error: null,
+		});
 		adapter.getConversation.mockResolvedValue(conversation());
 		// The list starts with the one conversation; the delete drops it so a post-delete list refetch (and the
 		// selection fallback) cannot legitimately re-fetch the removed thread — isolating the stream race.

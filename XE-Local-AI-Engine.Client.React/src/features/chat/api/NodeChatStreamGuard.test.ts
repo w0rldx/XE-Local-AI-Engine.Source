@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { NodeChatStreamEventDto } from "@/features/chat/api/NodeChatApi";
 import { guardNodeChatStream, StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
+import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 function event(sequence: number, content: string): NodeChatStreamEventDto {
 	return {
@@ -84,7 +84,9 @@ describe("guardNodeChatStream", () => {
 			yield event(1, "b");
 		}
 
-		const iterator = guardNodeChatStream(stalling(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[Symbol.asyncIterator]();
+		const iterator = guardNodeChatStream(stalling(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
 		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
 
 		const stalled = iterator.next().then(

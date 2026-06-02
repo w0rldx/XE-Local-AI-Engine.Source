@@ -1,13 +1,11 @@
-import {
-	nodeChatToolStreamEventTypes,
-	type NodeChatConversationResponseDto,
-	type NodeChatConversationSummaryResponseDto,
-	type NodeChatMessageFeedbackResponseDto,
-	type NodeChatMessagePartDto,
-	type NodeChatMessageResponseDto,
-	type NodeChatMessageRevisionsResponseDto,
-	type NodeChatStreamEventDto,
-} from "@/features/chat/api/NodeChatApi";
+import type {
+	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse,
+	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse,
+	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse,
+	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse,
+	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse,
+	XeLocalAiEngineClientServicesChatNodeChatMessagePart,
+} from "@/core/api/generated";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
@@ -21,9 +19,27 @@ import type {
 	MessageStatus,
 	ToolCallState,
 } from "@/features/chat/models/ChatModels";
+import { type NodeChatStreamEventDto, nodeChatToolStreamEventTypes } from "@/features/chat/models/NodeChatStreamTypes";
+
+// Local aliases for the generated REST response types (the backend OpenAPI is the single source of truth). Every
+// generated field is optional (`x?: T`), so each mapper coalesces missing values to the prior default below.
+type NodeChatConversationResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+type NodeChatConversationSummaryResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse;
+type NodeChatMessageResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse;
+type NodeChatMessagePartDto = XeLocalAiEngineClientServicesChatNodeChatMessagePart;
+type NodeChatMessageRevisionsResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
+type NodeChatMessageFeedbackResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
 
 const knownRoles = new Set<ChatRole>(["user", "assistant", "system", "tool"]);
-const knownStatuses = new Set<MessageStatus>(["pending", "queued", "streaming", "completed", "cancelled", "failed", "interrupted"]);
+const knownStatuses = new Set<MessageStatus>([
+	"pending",
+	"queued",
+	"streaming",
+	"completed",
+	"cancelled",
+	"failed",
+	"interrupted",
+]);
 const knownOrigins = new Set<ChatOrigin>(["local", "remote"]);
 const knownRatings = new Set<ChatFeedbackRating>(["up", "down"]);
 const knownToolStates = new Set<ToolCallState>(["requesting", "waiting", "received", "failed"]);
@@ -45,11 +61,12 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 
 	const mapped = parts.reduce<ChatMessagePart[]>((accumulator, part) => {
 		const kind = part.kind?.toLowerCase();
+		const sequence = part.sequence ?? 0;
 		if (kind === "tool") {
 			accumulator.push({
 				kind: "tool",
-				id: part.toolCallId ?? `${messageId}:${part.sequence}`,
-				sequence: part.sequence,
+				id: part.toolCallId ?? `${messageId}:${sequence}`,
+				sequence,
 				name: part.name ?? "tool",
 				state: toToolState(part.state),
 				args: part.args ?? undefined,
@@ -59,8 +76,8 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 		} else if (kind === "reasoning" || kind === "text") {
 			accumulator.push({
 				kind,
-				id: `${messageId}:${part.sequence}`,
-				sequence: part.sequence,
+				id: `${messageId}:${sequence}`,
+				sequence,
 				text: part.text ?? "",
 			});
 		}
@@ -111,20 +128,21 @@ function titleOrFallback(title: string | null | undefined): string {
 }
 
 export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
+	const messageId = dto.messageId ?? "";
 	return {
-		id: dto.messageId,
-		conversationId: dto.conversationId,
+		id: messageId,
+		conversationId: dto.conversationId ?? "",
 		requestId: dto.requestId ?? undefined,
-		role: toRole(dto.role),
-		content: dto.content,
+		role: toRole(dto.role ?? ""),
+		content: dto.content ?? "",
 		reasoning: dto.reasoning ?? undefined,
 		// Prefer the persisted ordered parts so a reload restores the exact reasoning↔tool interleave; legacy turns
 		// (no parts) synthesize a single Thoughts block from the flat reasoning blob so they still render.
-		parts: mapParts(dto.messageId, dto.parts) ?? synthesizeLegacyParts(dto.messageId, dto.reasoning),
-		status: toStatus(dto.status),
-		createdAt: toIso(dto.createdAtUtc),
-		updatedAt: toIso(dto.updatedAtUtc),
-		sortOrder: dto.sequence,
+		parts: mapParts(messageId, dto.parts) ?? synthesizeLegacyParts(messageId, dto.reasoning),
+		status: toStatus(dto.status ?? ""),
+		createdAt: toIso(dto.createdAtUtc ?? 0),
+		updatedAt: toIso(dto.updatedAtUtc ?? 0),
+		sortOrder: dto.sequence ?? 0,
 		model: dto.model ?? undefined,
 		error: dto.error ?? undefined,
 		origin: toOrigin(dto.origin),
@@ -142,17 +160,17 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 }
 
 export function mapConversationSummary(dto: NodeChatConversationSummaryResponseDto): ChatConversationModel {
-	const lastSeen = toIso(dto.lastSeenUtc);
+	const lastSeen = toIso(dto.lastSeenUtc ?? 0);
 
 	return {
-		id: dto.conversationId,
+		id: dto.conversationId ?? "",
 		title: titleOrFallback(dto.title),
-		createdAt: toIso(dto.createdAtUtc),
+		createdAt: toIso(dto.createdAtUtc ?? 0),
 		updatedAt: lastSeen,
 		lastActivity: lastSeen,
 		lastMessagePreview: dto.lastMessagePreview ?? undefined,
-		isPinned: dto.isPinned,
-		isArchived: dto.archived,
+		isPinned: dto.isPinned ?? false,
+		isArchived: dto.archived ?? false,
 		origin: toOrigin(dto.origin),
 		messages: [],
 	};
@@ -166,11 +184,11 @@ const MAX_PREVIEW_LENGTH = 120;
 function previewFromMessages(messages: NodeChatMessageResponseDto[]): string | undefined {
 	let latest: NodeChatMessageResponseDto | undefined;
 	for (const message of messages) {
-		if (message.content.trim().length === 0) {
+		if ((message.content ?? "").trim().length === 0) {
 			continue;
 		}
 
-		if (!latest || message.sequence > latest.sequence) {
+		if (!latest || (message.sequence ?? 0) > (latest.sequence ?? 0)) {
 			latest = message;
 		}
 	}
@@ -179,26 +197,27 @@ function previewFromMessages(messages: NodeChatMessageResponseDto[]): string | u
 		return undefined;
 	}
 
-	const normalized = latest.content.replace(/\s+/g, " ").trim();
+	const normalized = (latest.content ?? "").replace(/\s+/g, " ").trim();
 	return normalized.length > MAX_PREVIEW_LENGTH ? `${normalized.slice(0, MAX_PREVIEW_LENGTH - 1)}…` : normalized;
 }
 
 export function mapConversation(dto: NodeChatConversationResponseDto): ChatConversationModel {
-	const lastSeen = toIso(dto.lastSeenUtc);
+	const lastSeen = toIso(dto.lastSeenUtc ?? 0);
+	const messages = dto.messages ?? [];
 
 	return {
-		id: dto.conversationId,
+		id: dto.conversationId ?? "",
 		title: titleOrFallback(dto.title),
-		createdAt: toIso(dto.createdAtUtc),
+		createdAt: toIso(dto.createdAtUtc ?? 0),
 		updatedAt: lastSeen,
 		lastActivity: lastSeen,
-		lastMessagePreview: previewFromMessages(dto.messages),
-		isPinned: dto.isPinned,
-		isArchived: dto.archived,
+		lastMessagePreview: previewFromMessages(messages),
+		isPinned: dto.isPinned ?? false,
+		isArchived: dto.archived ?? false,
 		origin: toOrigin(dto.origin),
 		branchOfConversationId: dto.branchOfConversationId ?? undefined,
 		selectedPath: dto.selectedPath ?? undefined,
-		messages: dto.messages.map(mapMessage),
+		messages: messages.map(mapMessage),
 	};
 }
 
@@ -209,9 +228,9 @@ function toRating(rating: string): ChatFeedbackRating {
 
 export function mapMessageRevisions(dto: NodeChatMessageRevisionsResponseDto): ChatMessageRevisions {
 	return {
-		messageId: dto.messageId,
+		messageId: dto.messageId ?? "",
 		variantGroupId: dto.variantGroupId ?? undefined,
-		variants: dto.variants.map(mapMessage).toSorted((left, right) => left.sortOrder - right.sortOrder),
+		variants: (dto.variants ?? []).map(mapMessage).toSorted((left, right) => left.sortOrder - right.sortOrder),
 	};
 }
 
@@ -249,11 +268,11 @@ export function mapToolCallEvent(event: NodeChatStreamEventDto): ChatToolCall | 
 
 export function mapMessageFeedback(dto: NodeChatMessageFeedbackResponseDto): ChatMessageFeedback {
 	return {
-		messageId: dto.messageId,
-		conversationId: dto.conversationId,
-		rating: toRating(dto.rating),
+		messageId: dto.messageId ?? "",
+		conversationId: dto.conversationId ?? "",
+		rating: toRating(dto.rating ?? ""),
 		comment: dto.comment ?? undefined,
-		createdAt: toIso(dto.createdAtUtc),
-		updatedAt: toIso(dto.updatedAtUtc),
+		createdAt: toIso(dto.createdAtUtc ?? 0),
+		updatedAt: toIso(dto.updatedAtUtc ?? 0),
 	};
 }

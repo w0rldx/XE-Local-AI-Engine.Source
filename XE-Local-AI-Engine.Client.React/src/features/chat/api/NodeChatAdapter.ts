@@ -1,21 +1,20 @@
+import { ApiError } from "@/core/api/errors/ApiError";
 import {
-	branchConversation,
-	cancelMessage,
-	createConversation,
-	deleteConversation,
-	getConversation,
-	listConversations,
-	listMessageRevisions,
-	type NodeChatBranchConversationResponseDto,
-	type NodeChatFeedbackRating,
-	type NodeChatStreamEventDto,
-	type NodeChatStreamRequestDto,
-	renameConversation,
-	setConversationArchived,
-	setConversationPinned,
-	setMessageFeedback,
-	setSelectedPath,
-} from "@/features/chat/api/NodeChatApi";
+	archiveNodeChatConversation,
+	branchNodeChatConversation,
+	cancelNodeChatMessage,
+	createNodeChatConversation,
+	deleteNodeChatConversation,
+	getNodeChatConversation,
+	listNodeChatConversations,
+	listNodeChatMessageRevisions,
+	pinNodeChatConversation,
+	renameNodeChatConversation,
+	setNodeChatMessageFeedback,
+	setNodeChatSelectedPath,
+	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
+} from "@/core/api/generated";
+import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import { nodeChatConnection } from "@/features/chat/api/NodeChatConnection";
 import {
 	mapConversation,
@@ -24,7 +23,13 @@ import {
 	mapMessageRevisions,
 } from "@/features/chat/api/NodeChatMapper";
 import { guardNodeChatStream } from "@/features/chat/api/NodeChatStreamGuard";
-import type { ChatConversationModel, ChatMessageFeedback, ChatMessageRevisions } from "@/features/chat/models/ChatModels";
+import type {
+	ChatConversationModel,
+	ChatFeedbackRating,
+	ChatMessageFeedback,
+	ChatMessageRevisions,
+} from "@/features/chat/models/ChatModels";
+import type { NodeChatStreamEventDto, NodeChatStreamRequestDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 /* eslint-disable react-doctor/async-await-in-loop */
 
@@ -71,12 +76,12 @@ export interface NodeChatAdapter {
 		conversationId: string,
 		messageId: string,
 		options?: RequestOptions,
-	): Promise<NodeChatBranchConversationResponseDto>;
+	): Promise<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse>;
 	listMessageRevisions(conversationId: string, messageId: string, options?: RequestOptions): Promise<ChatMessageRevisions | null>;
 	setMessageFeedback(
 		conversationId: string,
 		messageId: string,
-		rating: NodeChatFeedbackRating,
+		rating: ChatFeedbackRating,
 		comment: string | undefined,
 		options?: RequestOptions,
 	): Promise<ChatMessageFeedback>;
@@ -281,45 +286,103 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 
 export const nodeChatAdapter: NodeChatAdapter = {
 	async listConversations(options) {
-		const response = await listConversations({ includeArchived: options?.includeArchived ?? false }, { signal: options?.signal });
-		return response.items.map(mapConversationSummary);
+		const { data } = await callWithResponseValidation(
+			listNodeChatConversations({
+				query: { includeArchived: options?.includeArchived ?? false },
+				signal: options?.signal,
+				throwOnError: true,
+			}),
+		);
+		return (data.items ?? []).map(mapConversationSummary);
 	},
 	async getConversation(conversationId, options) {
-		return mapConversation(await getConversation(conversationId, { signal: options?.signal }));
+		const { data } = await callWithResponseValidation(
+			getNodeChatConversation({ path: { conversationId }, signal: options?.signal, throwOnError: true }),
+		);
+		return mapConversation(data);
 	},
 	async createConversation(request, options) {
-		return mapConversation(await createConversation(request, { signal: options?.signal }));
+		const { data } = await callWithResponseValidation(
+			createNodeChatConversation({ body: request ?? {}, signal: options?.signal, throwOnError: true }),
+		);
+		return mapConversation(data);
 	},
 	async deleteConversation(conversationId, purgeImmediately, options) {
-		await deleteConversation(conversationId, purgeImmediately ?? false, { signal: options?.signal });
-	},
-	async renameConversation(conversationId, title, options) {
-		return mapConversation(await renameConversation(conversationId, { title }, { signal: options?.signal }));
-	},
-	async setConversationPinned(conversationId, isPinned, options) {
-		return mapConversation(await setConversationPinned(conversationId, { isPinned }, { signal: options?.signal }));
-	},
-	async setConversationArchived(conversationId, archived, options) {
-		return mapConversation(await setConversationArchived(conversationId, { archived }, { signal: options?.signal }));
-	},
-	async branchConversation(conversationId, messageId, options) {
-		return branchConversation(conversationId, messageId, { signal: options?.signal });
-	},
-	async listMessageRevisions(conversationId, messageId, options) {
-		const response = await listMessageRevisions(conversationId, messageId, { signal: options?.signal });
-		return response ? mapMessageRevisions(response) : null;
-	},
-	async setMessageFeedback(conversationId, messageId, rating, comment, options) {
-		return mapMessageFeedback(
-			await setMessageFeedback(conversationId, messageId, { rating, comment }, { signal: options?.signal }),
+		await callWithResponseValidation(
+			deleteNodeChatConversation({
+				path: { conversationId },
+				body: { purgeImmediately: purgeImmediately ?? false },
+				signal: options?.signal,
+				throwOnError: true,
+			}),
 		);
 	},
+	async renameConversation(conversationId, title, options) {
+		const { data } = await callWithResponseValidation(
+			renameNodeChatConversation({ path: { conversationId }, body: { title }, signal: options?.signal, throwOnError: true }),
+		);
+		return mapConversation(data);
+	},
+	async setConversationPinned(conversationId, isPinned, options) {
+		const { data } = await callWithResponseValidation(
+			pinNodeChatConversation({ path: { conversationId }, body: { isPinned }, signal: options?.signal, throwOnError: true }),
+		);
+		return mapConversation(data);
+	},
+	async setConversationArchived(conversationId, archived, options) {
+		const { data } = await callWithResponseValidation(
+			archiveNodeChatConversation({ path: { conversationId }, body: { archived }, signal: options?.signal, throwOnError: true }),
+		);
+		return mapConversation(data);
+	},
+	async branchConversation(conversationId, messageId, options) {
+		// The ids bind from the route; the OpenAPI spec types this body as `never` (no schema), but the body MUST be
+		// an empty JSON object at runtime — FastEndpoints rejects an empty-body POST with 415 at model-binding
+		// (before the route guard runs), and the generated client omits the request data when `body === undefined`.
+		// Cast `{}` past the `never` body type so the runtime payload is the required empty object.
+		const { data } = await callWithResponseValidation(
+			branchNodeChatConversation({
+				path: { conversationId, messageId },
+				body: {} as unknown as never,
+				signal: options?.signal,
+				throwOnError: true,
+			}),
+		);
+		return data;
+	},
+	async listMessageRevisions(conversationId, messageId, options) {
+		try {
+			const { data } = await callWithResponseValidation(
+				listNodeChatMessageRevisions({ path: { conversationId, messageId }, signal: options?.signal, throwOnError: true }),
+			);
+			return mapMessageRevisions(data);
+		} catch (error) {
+			// A message with no variants returns 404 — surface null (no revisions) rather than an error.
+			if (error instanceof ApiError && error.statusCode === 404) {
+				return null;
+			}
+			throw error;
+		}
+	},
+	async setMessageFeedback(conversationId, messageId, rating, comment, options) {
+		const { data } = await callWithResponseValidation(
+			setNodeChatMessageFeedback({
+				path: { conversationId, messageId },
+				body: { rating, comment },
+				signal: options?.signal,
+				throwOnError: true,
+			}),
+		);
+		return mapMessageFeedback(data);
+	},
 	async cancelMessage(request, options) {
-		await cancelMessage(request, { signal: options?.signal });
+		await callWithResponseValidation(cancelNodeChatMessage({ body: request, signal: options?.signal, throwOnError: true }));
 	},
 	async persistSelectedPath(conversationId, selectedPath, options) {
-		const response = await setSelectedPath(conversationId, { selectedPath }, { signal: options?.signal });
-		return response.selectedPath;
+		const { data } = await callWithResponseValidation(
+			setNodeChatSelectedPath({ path: { conversationId }, body: { selectedPath }, signal: options?.signal, throwOnError: true }),
+		);
+		return data.selectedPath ?? {};
 	},
 	sendMessage(request, signal) {
 		const streamRequest = toStreamRequest(request);
@@ -342,7 +405,10 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		// (RegenerateMessage(conversationId, messageId, effort, useLocalTools, selectedPath)).
 		return guardNodeChatStream(
 			signalRStream(
-				{ method: "RegenerateMessage", args: [conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath ?? null] },
+				{
+					method: "RegenerateMessage",
+					args: [conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath ?? null],
+				},
 				signal,
 			),
 		);
