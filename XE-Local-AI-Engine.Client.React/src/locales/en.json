@@ -813,6 +813,20 @@
 			"title": "Agent definitions",
 			"subtitle": "Author local agent personas: instructions, model, reasoning effort, and the tools they may use.",
 			"createButton": "New agent",
+			"templatesButton": "Add starter agents",
+			"templates": {
+				"title": "Add starter agents",
+				"subtitle": "Import curated starter personas as editable agent definitions. They land with no tools — grant tools after import.",
+				"loading": "Loading starter agents…",
+				"loadError": "Could not load starter agents.",
+				"importError": "Could not import the selected agents.",
+				"empty": "No starter agents are available.",
+				"tokenBadge": "~{{count}} tokens",
+				"tokenWarning": "This persona's estimated prompt is large for local models. Estimate is a chars/4 heuristic.",
+				"alreadyImported": "Imported",
+				"importButton": "Import selected ({{count}})",
+				"importSuccess": "{{imported}} added, {{skipped}} skipped."
+			},
 			"list": {
 				"loading": "Loading agent definitions…",
 				"empty": "No agent definitions yet. Create one to get started.",
@@ -1055,12 +1069,12 @@
 					"titleRequired": "Title is required.",
 					"turnsRequired": "At least one input turn is required.",
 					"signalRequired": "Add at least a required/forbidden phrase or a rubric.",
-						"tooLong": {
-							"title": "Title is too long (max {{max}} characters).",
-							"inputTurns": "The input turns are too long (max {{max}} characters).",
-							"assertion": "The required/forbidden phrases are too long (max {{max}} characters).",
-							"rubric": "The rubric is too long (max {{max}} characters)."
-						},
+					"tooLong": {
+						"title": "Title is too long (max {{max}} characters).",
+						"inputTurns": "The input turns are too long (max {{max}} characters).",
+						"assertion": "The required/forbidden phrases are too long (max {{max}} characters).",
+						"rubric": "The rubric is too long (max {{max}} characters)."
+					},
 					"title": {
 						"label": "Title",
 						"placeholder": "Short operator label"
@@ -1091,7 +1105,7 @@
 					"approve": "Could not approve the golden case."
 				}
 			},
-			"insights": 			{
+			"insights": {
 				"title": "Feedback insights",
 				"subtitle": "Read-only summary of the up/down feedback and comments collected for {{name}}.",
 				"loading": "Loading feedback insights…",
