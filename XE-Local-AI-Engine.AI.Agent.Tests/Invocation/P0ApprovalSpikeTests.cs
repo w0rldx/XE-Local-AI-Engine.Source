@@ -1,4 +1,4 @@
-// P0 approval-gate spike. Inert unless built with -p:DefineConstants=P0_SPIKE so the branch always
+// Approval-gate probe. Inert unless built with -p:DefineConstants=P0_SPIKE so the branch always
 // builds. Run via /tmp/p0.sh. See memory 'agent-mode-foundation'.
 //
 // WHAT THIS PROVES (the real §4 gate, corrected 2026-05-29):
@@ -6,9 +6,9 @@
 // wrapped in ApprovalRequiredAIFunction, FICC does NOT execute it — it replaces the FunctionCallContent
 // with a ToolApprovalRequestContent and returns it to the caller. The caller resumes by replaying the
 // message history plus a ToolApprovalResponseContent (request.CreateResponse(approved)); FICC then
-// reconstructs the FunctionCallContent and invokes the tool. This spike proves that approve->resume works
+// reconstructs the FunctionCallContent and invokes the tool. This probe proves that approve->resume works
 // THREADLESS (no AgentSession, no in-process held stream) on a real local tool-capable model — the exact
-// shape the encrypted/distributed transport (§4) needs.
+// shape the encrypted/distributed transport needs.
 //
 // Pinned-version note: Extensions.AI 10.6.0 uses ToolApprovalRequestContent/ToolApprovalResponseContent.
 // The older FunctionApprovalRequestContent type (and the AgentSession-based sample in some docs) belongs
@@ -17,7 +17,7 @@
 // to the threadless gate the node requires.
 //
 // Model caveat: small local models (qwen3.5:9b) are nondeterministic about whether they emit the tool
-// call at all (§8 risk 1). The seed is written to force an immediate tool call and run#1 retries a few
+// call at all. The seed is written to force an immediate tool call and run#1 retries a few
 // times; a run where the model never calls the tool is reported INCONCLUSIVE, distinct from a gate failure.
 #if P0_SPIKE
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
@@ -30,11 +30,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp;
 
 /// <summary>
-///     P0 approval spike (GATE). Proves a THREADLESS framework-native human-in-the-loop approve→resume on a
+///     Approval-gate probe. Proves a THREADLESS framework-native human-in-the-loop approve→resume on a
 ///     real local tool-capable model: run#1 (an <see cref="ApprovalRequiredAIFunction" /> tool +
 ///     <c>UseFunctionInvocation</c>) must PAUSE — surface a <see cref="ToolApprovalRequestContent" /> and
 ///     NOT execute the tool; run#2 replays the full history plus the approval response and MUST execute the
-///     tool. Execution is ground-truth via a marker file, not inferred from model text. Opt-in via env
+///     tool. Execution is ground-truth via a sentinel file, not inferred from model text. Opt-in via env
 ///     <c>P0_RUN_LIVE=1</c> so default CI stays offline.
 /// </summary>
 public sealed class P0ApprovalSpikeTests

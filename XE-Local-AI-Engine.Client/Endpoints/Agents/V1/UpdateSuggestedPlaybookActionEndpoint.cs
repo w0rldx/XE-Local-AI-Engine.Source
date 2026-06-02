@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Playbook P3: edits a pending Suggested/Analysis action before review. The action stays Suggested/Analysis and
+///     analysis staging: edits a pending Suggested/Analysis action before review. The action stays Suggested/Analysis and
 ///     keeps its evidence + confidence; only the operator-editable fields change. 404 when the action is missing,
 ///     belongs to another agent, or is not a pending suggestion. Operator-gated. A separate route from the manual
 ///     PUT so analysis provenance is never rewritten to Manual.

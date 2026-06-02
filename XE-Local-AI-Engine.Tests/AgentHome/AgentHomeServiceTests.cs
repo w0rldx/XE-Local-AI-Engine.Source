@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker I-pre service-level coverage: the real <see cref="AgentHomeService" /> drives the real
+///     Service-level coverage: the real <see cref="AgentHomeService" /> drives the real
 ///     <see cref="AgentHomeManifestService" /> (temp host root) and the <see cref="FakeSandboxRuntimeProvider" />
 ///     end-to-end, with a fake resolver/identity injected through a real scope factory. No Docker, no Ollama.
 /// </summary>
@@ -136,8 +136,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         {
             Prepared = prepared,
             Goal = "g",
-            // export_patch is required for the Marker G export (Marker I gates it on AllowedActions in addition to the
-            // baseline-exists gate).
+            // export_patch is required for patch export; the service gates it on AllowedActions in addition to the
+            // baseline-exists gate.
             AllowedActions = ["read_workspace", "export_patch"]
         });
 
@@ -683,7 +683,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         var serviceProvider = new ServiceCollection()
             .AddScoped(_ => resolver)
-            // Marker K: the service resolves a fresh per-run logger from a scope. Register the real logger so the run
+            // The service resolves a fresh per-run logger from a scope. Register the real logger so the run
             // writes JSONL into the temp run dir (best-effort; never fails the run).
             .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
             .BuildServiceProvider();

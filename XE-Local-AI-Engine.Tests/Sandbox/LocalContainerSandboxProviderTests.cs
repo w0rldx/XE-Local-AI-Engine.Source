@@ -21,12 +21,12 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker J-local <see cref="LocalContainerSandboxProvider" /> tests. The provider is a thin gRPC client, so these
+///     <see cref="LocalContainerSandboxProvider" /> tests. The provider is a thin gRPC client, so these
 ///     run it against a real in-process gRPC server on a Unix socket whose <see cref="RecordingSandboxControlService" />
 ///     records each request and returns scripted replies — no Docker, no HostAgent. They assert SPI↔proto translation,
 ///     HMAC metadata with the right method names, the RpcException→SandboxHandleInvalidException mapping, capabilities,
-///     and the deterministic container name. The F TOCTOU guards (no-follow open + byte-recheck) are exercised on the
-///     host filesystem with no container at all (AgentHome plan §7.1, §9.1).
+///     and the deterministic container name. The host-side TOCTOU guards (no-follow open + byte-recheck) are exercised
+///     on the host filesystem with no container at all.
 /// </summary>
 public sealed class LocalContainerSandboxProviderTests
 {
@@ -309,7 +309,6 @@ public sealed class LocalContainerSandboxProviderTests
         AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts));
     }
 
-    // ---- F TOCTOU host-side guards (no Docker — pure host filesystem, AgentHome plan §7.1) ----
 
     [Test]
     public async Task CopyIntoAsync_WhenFinalComponentIsSymlink_Rejects()
@@ -362,7 +361,7 @@ public sealed class LocalContainerSandboxProviderTests
     [Test]
     public async Task CopyIntoAsync_WhenFileGrowsConcurrently_NeverSendsATruncatedCopy()
     {
-        // §7.1.2 growth parity (safety invariant — deterministic, no timing dependence): while a file is appended
+        // Growth parity safety invariant (deterministic, no timing dependence): while a file is appended
         // concurrently, every copy the provider sends MUST be the exact consistent snapshot (== cap bytes), never a
         // buffer torn/truncated to the stale size. A grown read is blocked (null) instead. This invariant holds on
         // every iteration regardless of how the append/read interleave.

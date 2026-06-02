@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Analysis;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Playbook P3: runs the analysis agent over one agent's feedback aggregate and persists the resulting Suggested
+///     analysis staging: runs the analysis agent over one agent's feedback aggregate and persists the resulting Suggested
 ///     actions for review. Returns the created suggestions (an empty list when the feedback is below threshold or no
 ///     proposal survived validation/dedup); 404 when the agent does not exist. Operator-gated.
 /// </summary>

@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Worker-side AgentHome configuration (section <c>AgentHome</c>, AgentHome plan §13). layout initializer introduces the
-///     minimal surface the layout initializer needs; broader runtime/quota options arrive with later markers. The
+///     Worker-side AgentHome configuration (section <c>AgentHome</c>). The layout initializer introduces the
+///     minimal surface the layout initializer needs; broader runtime/quota options are explicit follow-up configuration work. The
 ///     <c>AgentHome:Sandbox</c> child section is bound separately by <c>SandboxOptions</c>.
 /// </summary>
 public sealed class AgentHomeOptions
@@ -30,7 +30,7 @@ public sealed class AgentHomeOptions
 
     /// <summary>
     ///     The runtime profile the worker enables for AgentHome runs. The model may only request
-    ///     the closed-enum profile from the §7 schema; the worker rejects a requested profile that is not this one.
+    ///     the closed-enum profile from the tool schema; the worker rejects a requested profile that is not this one.
     /// </summary>
     public string DefaultRuntimeProfile { get; set; } = "dotnet-agent-home";
 
@@ -41,41 +41,41 @@ public sealed class AgentHomeOptions
     public int PrepareTimeoutSeconds { get; set; } = 900;
 
     /// <summary>
-    ///     Timeout for a single in-sandbox command, applied separately from the preparation timeout (AgentHome plan
-    ///     §6.1). Defaults to 300 seconds.
+    ///     Timeout for a single in-sandbox command, applied separately from the preparation timeout.
+    ///     Defaults to 300 seconds.
     /// </summary>
     public int CommandTimeoutSeconds { get; set; } = 300;
 
     /// <summary>
-    ///     Hard per-folder byte budget for a selected folder. The workspace copy (workspace copy) sums the surviving
+    ///     Hard per-folder byte budget for a selected folder. Workspace copy sums the surviving
     ///     (post-exclusion) file sizes before copying; a folder over budget is reported as blocked and skipped rather
     ///     than copied. Defaults to 536870912 (512 MiB).
     /// </summary>
     public long MaxSelectedFolderBytes { get; set; } = 536870912;
 
     /// <summary>
-    ///     Hard byte budget for an exported patch. The patch export (patch export) measures the captured
+    ///     Hard byte budget for an exported patch. Patch export measures the captured
     ///     <c>changes.patch</c>; a patch over budget is reported as blocked and not written, while the
     ///     <c>changed-files.json</c> metadata is still kept. Defaults to 52428800 (50 MiB).
     /// </summary>
     public long MaxPatchBytes { get; set; } = 52428800;
 
     /// <summary>
-    ///     The model ids the worker considers tool-capable for AgentHome (AgentHome plan locked decision 10). The
+    ///     The model ids the worker considers tool-capable for AgentHome (the AgentHome tool-capability allowlist). The
     ///     loopback offer list omits <c>run_in_agent_home</c> when the active model id is not in this list; the encrypted
     ///     path stays server-gated by <c>AiModel.SupportsToolCalling</c>. Defaults to <c>["qwen3:8b"]</c>.
     /// </summary>
     public IReadOnlyList<string> ToolCapableModels { get; set; } = ["qwen3:8b"];
 
     /// <summary>
-    ///     Whether the host patch apply (host patch apply, AgentHome plan §9.2) may apply a binary change. When
+    ///     Whether host patch apply may apply a binary change. When
     ///     <see langword="false" /> (the default), a patch containing a binary block is rejected outright — binary
     ///     content never touches the host. When flipped on, binary changes apply via git's <c>--binary</c> literal form.
     /// </summary>
     public bool AllowBinaryPatchApply { get; set; }
 
     /// <summary>
-    ///     Timeout for a single host <c>git apply</c> invocation during the patch apply (host patch apply, AgentHome plan §9.2),
+    ///     Timeout for a single host <c>git apply</c> invocation during host patch apply,
     ///     applied separately from the in-sandbox command timeout. Defaults to 120 seconds.
     /// </summary>
     public int PatchApplyTimeoutSeconds { get; set; } = 120;

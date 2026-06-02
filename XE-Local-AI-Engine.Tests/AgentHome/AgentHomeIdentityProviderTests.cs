@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker I owner-subject derivation (Decision 6): the owner id is the user subject decoded from the worker access
+///     Owner-subject derivation coverage: the owner id is the user subject decoded from the worker access
 ///     token (the server mints it in both <c>sub</c> and <see cref="ClaimTypes.NameIdentifier" />), while the node id
 ///     stays the persisted client node id. With no token (unpaired loopback) the owner falls back to the node id.
 /// </summary>

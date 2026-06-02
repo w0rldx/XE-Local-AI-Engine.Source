@@ -4,9 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Represents wsl2 driver.
-/// </summary>
 public sealed class Wsl2Driver
 {
     private readonly HostAgentWslOptions _options;

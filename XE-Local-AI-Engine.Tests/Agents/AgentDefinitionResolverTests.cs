@@ -105,7 +105,7 @@ public sealed class AgentDefinitionResolverTests
     [Test]
     public async Task ResolveAsync_ProjectsOfferedMcpTool_AndAppliesAutoExecuteOverride()
     {
-        // P3 <-> P4 integration: once an MCP tool is in the offer (approval-ON by default), a definition can name it in
+        // MCP tool projection: once an MCP tool is in the offer (approval-ON by default), a definition can name it in
         // AllowedToolNames and override it to auto-execute via ToolApprovals — no resolver change, the qualified name is
         // treated like any other offered tool.
         const string mcpTool = "mcp__weather__get_forecast";

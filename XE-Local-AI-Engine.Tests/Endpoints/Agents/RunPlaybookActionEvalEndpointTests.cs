@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Playbook P4 eval endpoint (<c>POST agents/{id}/playbook/{actionId}/eval</c>). The happy path is exercised against
+///     Playbook eval endpoint (<c>POST agents/{id}/playbook/{actionId}/eval</c>). The happy path is exercised against
 ///     a Suggested action with NO golden cases — the eval service short-circuits to a failing result without calling the
 ///     model, so the full endpoint → service → persist path runs with no Ollama. The model-dependent scoring path is
 ///     covered by the Wave-2 service unit tests.

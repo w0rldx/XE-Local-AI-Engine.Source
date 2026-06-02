@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Models.Events;
 
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
-/// <summary>
-///     Value object carrying invocation assigned envelope data.
-/// </summary>
 public sealed record InvocationAssignedEnvelope
 {
     public int Version { get; init; } = 2;

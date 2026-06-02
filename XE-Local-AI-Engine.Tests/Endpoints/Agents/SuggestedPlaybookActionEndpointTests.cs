@@ -138,7 +138,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        // Playbook P4: the eval gate blocks a promote until the latest eval has passed. A freshly-authored suggestion
+        // The eval gate blocks a promote until the latest eval has passed. A freshly-authored suggestion
         // has no eval, so the gate returns 409 EvalRequired and the action stays Suggested (still inert). A successful
         // 200/Enabled promote requires a passing eval (model-dependent — covered by the Wave-2 service unit tests).
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);

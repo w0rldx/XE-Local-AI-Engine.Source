@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
 ///     Shared constants and argument helpers for the in-sandbox git commands used by the workspace baseline (workspace copy)
-///     and the patch export (patch export). Centralizing the executable, the workspace root, and the byte-stabilizing
+///     and patch export. Centralizing the executable, the workspace root, and the byte-stabilizing
 ///     <c>-c</c> flags keeps the baseline and the diff consistent — the baseline must be created
 ///     with the same hardened configuration the diff is later taken under, or the diff bytes drift under copied
 ///     <c>.gitattributes</c>.

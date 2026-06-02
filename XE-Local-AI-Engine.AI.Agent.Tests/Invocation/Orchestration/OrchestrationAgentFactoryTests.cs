@@ -1,7 +1,7 @@
-// Production-grade tests of the loop P5 handoff orchestration factory + run session. Fully deterministic — a
+// Production-grade tests of the handoff orchestration factory + run session. Fully deterministic — a
 // scripted IChatClient stands in for the model (NO Ollama, NO network) — and drives the PRODUCTION surface
 // (IOrchestrationAgentFactory.CreateAsync + IOrchestrationRunSession.WatchAsync / RespondToApprovalAsync), not the
-// raw workflow. Evolves the proven shapes from P5HandoffSpikeTests into regression guards.
+// raw workflow. Evolves the framework-handoff probe shapes into regression guards.
 #pragma warning disable MEAI001 // ApprovalRequiredAIFunction is [Experimental]; adopted deliberately (loop plan §4).
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 

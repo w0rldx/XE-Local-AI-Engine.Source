@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-/// <summary>
-///     FastEndpoints handler for updating a scheduled job definition (PUT scheduler/jobs/{scheduledJobId}).
-/// </summary>
 public sealed class UpdateScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
     : Endpoint<UpdateScheduledJobRequest, ScheduledJobResponse>
 {

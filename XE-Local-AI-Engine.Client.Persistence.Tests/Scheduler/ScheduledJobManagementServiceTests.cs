@@ -665,7 +665,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // Auto-interrupt opt-in — Marker 4 makes UseJobAutoInterrupt actually apply
+    // Auto-interrupt opt-in — UseJobAutoInterrupt actually applies
     // ──────────────────────────────────────────────────────────────────────
 
     [Test]

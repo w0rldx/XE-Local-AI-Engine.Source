@@ -71,7 +71,7 @@ public static class AgentServiceCollectionExtensions
         // Multi-agent handoff orchestration. Reuses the same IChatClient + tool registries as the single-agent
         // factory; confines all Microsoft.Agents.AI.Workflows types behind IOrchestrationRunSession.
         _ = services.AddSingleton<IOrchestrationAgentFactory, OrchestrationAgentFactory>();
-        // Playbook P4 eval gate (golden-conversation runner). Stateless: builds a per-call agent over the
+        // Playbook eval gate (golden-conversation runner). Stateless: builds a per-call agent over the
         // caller-supplied node-local IChatClient with an empty tool set and runs it threadless.
         _ = services.AddSingleton<IPlaybookEvalAgentRunner, MafPlaybookEvalAgentRunner>();
         return services;

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Eval.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic CI guard for the Playbook P4 eval runner (no Ollama, no network). A scripted
+///     Deterministic CI guard for the playbook eval runner (no Ollama, no network). A scripted
 ///     <see cref="IChatClient" /> stands in for the node-local model so the runner's behaviour — final-text
 ///     return, tools-off, instruction flow-through, threadless — is fully reproducible.
 /// </summary>

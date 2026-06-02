@@ -67,8 +67,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     disabled the query is skipped entirely and the base Instructions flow through unchanged — keeping the
     ///     resolved prompt (and thus the runtime config hash) byte-identical to the no-playbook path. When the enabled set
     ///     exceeds the retrieval threshold and a non-blank <paramref name="retrievalQuery" /> is supplied, only the
-    ///     top-k most relevant actions are injected (Playbook P5, plan §4.2); at or below the threshold — or with a blank
-    ///     query — the full static prepend is used, so the resolved prompt stays byte-identical to the pre-P5 path.
+    ///     top-k most relevant actions are injected (relevance retrieval and cohort monitoring, the relevance-retrieval gate); at or below the threshold — or with a blank
+    ///     query — the full static prepend is used, so the resolved prompt stays byte-identical to the pre-retrieval path.
     /// </summary>
     private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
     {

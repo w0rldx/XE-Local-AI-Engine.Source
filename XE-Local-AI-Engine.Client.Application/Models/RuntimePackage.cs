@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
-/// <summary>
-///     Value object carrying runtime package data.
-/// </summary>
 public sealed record RuntimePackage
 {
     public required Guid InvocationId { get; init; }

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Read-only aggregate over the node-local per-message feedback (Playbook P2). Groups the
+///     Read-only aggregate over the node-local per-message feedback. Groups the
 ///     <c>message_feedback</c> rows already persisted by the chat path (joined to
 ///     <c>conversations.agent_definition_id</c>) into a per-agent shape so recurring patterns surface for the
 ///     operator. Pure analytics: no feedback is collected here and no playbook action is written.

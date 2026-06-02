@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 /// <summary>
 ///     Registers the node-local Quartz scheduler runtime: the persistent (SQLite) job store, the hosted service that
 ///     drives it, the dispatch executor + dispatch <see cref="IJob" /> variants, and the template registry. The QRTZ_
-///     tables are created by the Marker 1 EF migration in the same node-chat SQLite database, so the store runs with
+///     tables are created by the scheduler EF migration in the same node-chat SQLite database, so the store runs with
 ///     schema validation on. When <see cref="SchedulerOptions.Enabled" /> is <c>false</c> this registers nothing — the
 ///     persistence tables and options remain, but no scheduler or hosted service is wired up.
 /// </summary>
@@ -33,7 +33,7 @@ public static class NodeSchedulerServiceCollectionExtensions
             q.UsePersistentStore(s =>
             {
                 s.UseProperties = true;
-                s.PerformSchemaValidation = true; // QRTZ_ tables already created by Marker 1 migration
+                s.PerformSchemaValidation = true; // QRTZ_ tables are created by the scheduler EF migration.
                 s.UseMicrosoftSQLite(db =>
                 {
                     // Resolve the shared node-sqlite connection by NAME, not value: Quartz looks the name up in

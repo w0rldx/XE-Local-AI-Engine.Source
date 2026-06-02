@@ -8,9 +8,6 @@ using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Parameters;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
-/// <summary>
-///     Application service for envelope crypto behavior.
-/// </summary>
 public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
 {
     private const int EpochKeyLength = 32;

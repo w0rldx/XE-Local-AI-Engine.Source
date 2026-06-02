@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 ///     tree once to plan the copy (applying the sensitive-file exclusions, resolving symlinks/reparse points against
 ///     the canonical root, and summing surviving bytes), blocks a folder that exceeds the byte budget, then copies the
 ///     survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox provider. After at least
-///     one folder copies it creates a temporary in-sandbox git baseline that patch export's patch export diffs against. The
+///     one folder copies it creates a temporary in-sandbox git baseline that patch export diffs against. The
 ///     model-facing result carries aliases and counts only — never host paths.
 /// </summary>
 internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
@@ -81,7 +81,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
         if (folder.Mode == SelectedFolderMode.ReadOnlyMount)
         {
-            // No MVP provider supports read-only mounts; copy instead.
+            // The current sandbox providers do not support read-only mounts; copy instead.
             _logger.LogInformation(
                 "Selected folder {Alias} requested a read-only mount; copying instead (no provider mount support).",
                 folder.Alias);
@@ -231,12 +231,12 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     private async Task CreateGitBaselineAsync(SandboxHandle handle, CancellationToken cancellationToken)
     {
         // The baseline must be captured after copy and before any agent edit, so it lives in preparation (workspace copy),
-        // not in the run-time patch export (patch export), which runs after the agent has changed files. The §9.1
+        // not in the run-time patch export, which runs after the agent has changed files. The hardened git
         // byte-stabilizing flags (hooks/attributes disabled, autocrlf/filemode off) make the later diff reproducible
         // even if a copied .gitattributes would otherwise perturb the bytes; the baseline must use the same flags the
         // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
         // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; real git
-        // state arrives with the local-container provider (J-local).
+        // state arrives with the HostAgent-backed local-container provider.
         var timeout = TimeSpan.FromSeconds(_options.PrepareTimeoutSeconds);
         var commands = new[]
         {

@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 
 using System.Runtime.InteropServices;
 
-/// <summary>
-///     Represents windows console control handler.
-/// </summary>
 public static class WindowsConsoleControlHandler
 {
     public static IDisposable Register(IHostApplicationLifetime applicationLifetime)

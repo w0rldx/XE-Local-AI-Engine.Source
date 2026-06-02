@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Linux.Capabilities;
 
-/// <summary>
-///     Application service for rootless docker bootstrap hosted behavior.
-/// </summary>
 public sealed class RootlessDockerBootstrapHostedService : IHostedService
 {
     private readonly ILogger<RootlessDockerBootstrapHostedService> _logger;

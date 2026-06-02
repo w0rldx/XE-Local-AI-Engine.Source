@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker H memory proposal export coverage: schema validation, secret scanning, and collector behaviour.
+///     Memory-proposal export coverage: schema validation, secret scanning, and collector behaviour.
 ///     No Docker, no real sandbox — the service reads host-side JSONL files written by the agent (or test fixtures).
 /// </summary>
 public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
@@ -35,7 +35,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         }
     }
 
-    // ── No-proposals-directory ────────────────────────────────────────────
 
     [Test]
     public async Task CollectAsync_WhenNoProposalsDirectory_ReturnsEmpty()
@@ -49,7 +48,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Empty(result.Rejections, "no rejections when the directory does not exist");
     }
 
-    // ── Valid proposals ───────────────────────────────────────────────────
 
     [Test]
     public async Task CollectAsync_ValidNodeMemoryProposal_Accepted()
@@ -125,7 +123,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Empty(result.Rejections);
     }
 
-    // ── Schema validation — malformed records rejected ────────────────────
 
     [Test]
     public async Task CollectAsync_InvalidJson_Rejected()
@@ -270,7 +267,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Equal(1, result.Rejections.Count, "one bad-json record rejected");
     }
 
-    // ── Source tracking ───────────────────────────────────────────────────
 
     [Test]
     public async Task CollectAsync_SourceLineIndexTracked()
@@ -291,7 +287,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Equal(1, result.Rejections[0].SourceLineIndex);
     }
 
-    // ── Secret scanner — reject-whole-record classes ──────────────────────
 
     [Test]
     public async Task CollectAsync_PemPrivateKeyInContent_RecordRejected()
@@ -339,7 +334,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Equal(1, result.Rejections.Count);
     }
 
-    // ── Secret scanner — redact-in-content classes ────────────────────────
 
     [Test]
     public async Task CollectAsync_GitHubTokenInContent_RedactedNotRejected()
@@ -404,7 +398,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:slack-token]");
     }
 
-    // ── High-entropy bearer token at a NON-ZERO content offset (HIGH bug regression) ──
 
     [Test]
     public async Task CollectAsync_HighEntropyBearerAtNonZeroOffset_RedactsTokenKeepsKeywordNoLeakNoThrow()
@@ -432,7 +425,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.False(content.Contains(token[..8], StringComparison.Ordinal), "no leading fragment of the token may survive");
     }
 
-    // ── Keyword-free high-entropy fallback (security MED-1) ────────────────
 
     [Test]
     public async Task CollectAsync_BareHighEntropyToken_RedactedNotRejected()
@@ -470,7 +462,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
             "an ordinary long identifier (low entropy) must not be redacted");
     }
 
-    // ── Evidence path host-path rejection (security MED-2) ─────────────────
 
     [Test]
     public async Task CollectAsync_AbsoluteHostPathInEvidence_RecordRejected()
@@ -519,7 +510,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Empty(result.Rejections);
     }
 
-    // ── Benign prose — no false positives ─────────────────────────────────
 
     [Test]
     public async Task CollectAsync_BenignWordPassword_NotRedacted()
@@ -570,7 +560,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Equal(2, result.Proposals[0].Evidence.Count);
     }
 
-    // ── Azure connection string ────────────────────────────────────────────
 
     [Test]
     public async Task CollectAsync_AzureConnectionStringInContent_RedactedNotRejected()
@@ -587,7 +576,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:azure-connection-string]");
     }
 
-    // ── Remove operation with empty content guard ─────────────────────────
 
     [Test]
     public async Task CollectAsync_RemoveOperationWithContent_Accepted()
@@ -605,7 +593,6 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Equal("remove", result.Proposals[0].Operation);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
 
     private static IAgentHomeMemoryProposalService CreateService()
     {

@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Startup/options validator for cloud provider options settings.
-/// </summary>
 public sealed class CloudProviderOptionsValidator : IValidateOptions<CloudProviderOptions>
 {
     public ValidateOptionsResult Validate(string? name, CloudProviderOptions options)

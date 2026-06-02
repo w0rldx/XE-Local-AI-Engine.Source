@@ -1,11 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 /// <summary>
-///     Deep host-path canonicalization for the sandbox workspace copy — the work the
-///     registration-time <c>SelectedFolderResolver.IsSafeHostPath</c> deferred. It resolves the trusted root to its
-///     real canonical path (following symlinks), rejects <c>\\?\</c>/<c>\\.\</c> extended/device paths, control
-///     characters, and relative/traversal segments, and decides whether a reparse point (Windows junction/symlink,
-///     Linux symlink) escapes the trusted root. Everything fails closed: an unresolvable path is treated as unsafe.
+///     Deep host-path canonicalization for the sandbox workspace copy. It resolves the trusted root to its real
+///     canonical path (following symlinks), rejects <c>\\?\</c>/<c>\\.\</c> extended/device paths, control characters,
+///     and relative/traversal segments, and decides whether a reparse point (Windows junction/symlink, Linux symlink)
+///     escapes the trusted root. Everything fails closed: an unresolvable path is treated as unsafe.
 /// </summary>
 internal static class HostPathSafety
 {

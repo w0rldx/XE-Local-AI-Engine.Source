@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Playbook P4 eval-gate orchestration (offline / batch — never on the chat streaming path). Re-runs the real agent
+///     Golden-conversation evaluation orchestration (offline / batch — never on the chat streaming path). Re-runs the real agent
 ///     loop over the agent's golden conversation set with the candidate playbook prompt vs the current baseline, scores
 ///     each case (assertion or node-local judge), and persists a plaintext <see cref="PlaybookEvalResult" /> on the
 ///     pending Suggested action so the promote gate can decide whether the candidate may be enabled.

@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Closes the Marker A/B reservation: cancellation propagates from an agent run into an in-flight client-local
+///     Cancellation propagates from an agent run into an in-flight client-local
 ///     tool. The runner cancels by cancelling the token it threads into <c>RunStreamingAsync</c>; this test drives a
 ///     <see cref="ChatClientAgent" /> with a blocking <see cref="MetadataToolFunction" /> (the same bridge type that
 ///     backs <c>run_in_agent_home</c>) and a scripted model, then cancels the run token mid-tool and asserts the

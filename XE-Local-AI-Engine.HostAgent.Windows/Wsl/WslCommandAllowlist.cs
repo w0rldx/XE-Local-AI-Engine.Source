@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl;
 
 using System.Text.RegularExpressions;
 
-/// <summary>
-///     Represents wsl command allowlist.
-/// </summary>
 public static partial class WslCommandAllowlist
 {
     private const string DistroUser = "xe-engine";

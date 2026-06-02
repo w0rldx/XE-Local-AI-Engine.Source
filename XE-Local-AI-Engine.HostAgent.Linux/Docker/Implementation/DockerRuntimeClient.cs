@@ -254,8 +254,8 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         // managed-runtime DockerImageReference.Parse (which mandates repo:tag@sha256 and rejects :latest).
         var hostConfig = new HostConfig
         {
-            // MVP: both None and the (reserved) Restricted posture map to the no-network default; a real restricted
-            // egress policy is post-MVP. None is the secure default.
+            // Both None and the reserved Restricted posture map to the no-network default; a restricted egress policy
+            // is not implemented yet. None is the secure default.
             NetworkMode = "none",
             SecurityOpt = ["no-new-privileges"],
             CapDrop = ["ALL"],

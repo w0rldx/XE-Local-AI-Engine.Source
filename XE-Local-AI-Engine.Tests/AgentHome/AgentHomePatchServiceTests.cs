@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker G patch-export coverage: the real <see cref="AgentHomePatchService" /> runs the two diff commands against
+///     Patch-export coverage: the real <see cref="AgentHomePatchService" /> runs the two diff commands against
 ///     the <see cref="FakeSandboxRuntimeProvider" /> (whose git is scripted — no Docker, no real git), then parses the
 ///     scripted output into <c>changed-files.json</c>, enforces the byte budget, and writes the artifacts host-side.
 ///     Real-git byte-equality under <c>.gitattributes</c> perturbation, the <c>--binary</c> not-silently-dropped
-///     behavior, and binary-patch apply rejection are proven by the real provider in Marker J-local — not here.
+///     behavior, and binary-patch apply rejection are proven by the env-gated real-git smoke — not here.
 /// </summary>
 public sealed class AgentHomePatchServiceTests : IDisposable
 {

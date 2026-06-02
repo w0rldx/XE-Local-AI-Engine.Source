@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 public sealed record GoldenTurnDto(string Role, string Text);
 
 /// <summary>
-///     Deterministic assertion for a golden case (Playbook P4, D2 scoring): the candidate output must contain every
+///     Deterministic assertion for golden-conversation scoring: the candidate output must contain every
 ///     <see cref="RequiredPhrases" /> and none of the <see cref="ForbiddenPhrases" />.
 /// </summary>
 public sealed record GoldenAssertionDto(
@@ -25,7 +25,7 @@ public sealed class ListGoldenConversationsRequest
 }
 
 /// <summary>
-///     Create request for a golden conversation case (Playbook P4). The owning agent id travels in the route; the body
+///     Create request for a golden conversation case. The owning agent id travels in the route; the body
 ///     carries the operator-authored fields. The endpoint serializes <see cref="InputTurns" />/<see cref="Assertion" />
 ///     to camelCase JSON strings before persisting (the runner parses the same shape). At least one of
 ///     <see cref="Assertion" />/<see cref="Rubric" /> must be present (enforced by the service).
@@ -74,7 +74,7 @@ public sealed class ApproveGoldenConversationRequest
 }
 
 /// <summary>
-///     Wire projection of a stored golden conversation case (Playbook P4). <see cref="InputTurns" /> and
+///     Wire projection of a stored golden conversation case. <see cref="InputTurns" /> and
 ///     <see cref="Assertion" /> are deserialized from the persisted JSON strings into the typed DTOs at the boundary so
 ///     the client never parses raw JSON. The free-text source is encrypted at rest; this projection is the decrypted,
 ///     typed view.

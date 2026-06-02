@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 
-/// <summary>
-///     Transport DTO for host agent status data.
-/// </summary>
 public sealed record HostAgentStatusDto
 {
     [JsonRequired]

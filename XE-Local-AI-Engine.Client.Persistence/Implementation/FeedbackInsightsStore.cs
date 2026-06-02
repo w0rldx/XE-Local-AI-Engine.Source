@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Raw-SQL aggregate read over the node-local chat database (Playbook P2). Mirrors the chat persistence read
+///     Raw-SQL aggregate read over the node-local chat database. Mirrors the chat persistence read
 ///     idiom (parameterized ADO over the scoped <see cref="NodeChatDbContext" /> connection) rather than EF entity
 ///     materialization, because the aggregate touches only plaintext columns and spans every conversation — the
 ///     per-conversation write key on the persistence writer is irrelevant to a whole-database read.

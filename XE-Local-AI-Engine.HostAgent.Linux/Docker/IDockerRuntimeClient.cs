@@ -28,9 +28,9 @@ public interface IDockerRuntimeClient
         bool follow,
         CancellationToken cancellationToken);
 
-    // --- AgentHome sandbox operations (local-container sandbox, plan §4.1) ---
+    // --- AgentHome sandbox operations ---
 
-    /// <summary>Creates and starts a dedicated, hardened sandbox container (D5) and returns its container id.</summary>
+    /// <summary>Creates and starts a dedicated, hardened sandbox container and returns its container id.</summary>
     Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken);
 
     /// <summary>Finds an existing sandbox container by name, returning its container id or <see langword="null" />.</summary>
@@ -43,10 +43,10 @@ public interface IDockerRuntimeClient
     /// </summary>
     Task<IReadOnlyDictionary<string, string>?> GetSandboxContainerLabelsAsync(string containerId, CancellationToken cancellationToken);
 
-    /// <summary>Execs a command inside the container, capturing stdout/stderr and the exit code (D9 best-effort cancel).</summary>
+    /// <summary>Execs a command inside the container, capturing stdout/stderr and the exit code (best-effort cancel).</summary>
     Task<DockerExecResult> ExecInContainerAsync(string containerId, DockerExecRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Writes <paramref name="content" /> to <paramref name="destinationPath" /> inside the container (whole-file, D4).</summary>
+    /// <summary>Writes <paramref name="content" /> to <paramref name="destinationPath" /> inside the container as a whole-file byte payload.</summary>
     Task CopyIntoContainerAsync(string containerId, string destinationPath, ReadOnlyMemory<byte> content, int fileMode, CancellationToken cancellationToken);
 
     /// <summary>Reads the file at <paramref name="sourcePath" /> out of the container as raw bytes.</summary>

@@ -158,7 +158,7 @@ public sealed class NodeChatRegenerationService(
         // Mirror the send path exactly (NodeChatStreamService): resolve the conversation's bound definition so a
         // regenerated turn reruns with the SAME persona, tools, model, and version a fresh send would — a missed
         // hydration here would make reruns diverge from sends. A null result keeps the default persona.
-        // Playbook P5: a regenerate answers the SAME question as the original, so the relevance-retrieval query is the
+        // A regenerate answers the same question as the original, so the relevance-retrieval query is the
         // user turn that precedes the turn being regenerated (the same cutoff the regeneration context anchors on). When
         // that user turn cannot be found the query is null and the resolver falls back to the full static prepend.
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
@@ -475,7 +475,7 @@ public sealed class NodeChatRegenerationService(
 
     /// <summary>
     ///     The content of the latest USER turn strictly before the original's variant group — the question the
-    ///     regenerate re-answers, used as the Playbook P5 relevance-retrieval query. Mirrors the cutoff anchor used by
+    ///     regenerate re-answers, used as the relevance-retrieval query. Mirrors the cutoff anchor used by
     ///     <see cref="ResolvePrecedingUserTurnCutoff" />; returns <c>null</c> when no such user turn exists, so the
     ///     resolver falls back to the full static prepend.
     /// </summary>

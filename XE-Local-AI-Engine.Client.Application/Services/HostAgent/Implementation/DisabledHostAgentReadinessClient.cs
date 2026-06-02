@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
 
 /// <summary>
-///     Client boundary for disabled host agent readiness operations.
+///     Readiness client used when HostAgent startup gating is disabled.
 /// </summary>
 public sealed class DisabledHostAgentReadinessClient : IHostAgentReadinessClient
 {

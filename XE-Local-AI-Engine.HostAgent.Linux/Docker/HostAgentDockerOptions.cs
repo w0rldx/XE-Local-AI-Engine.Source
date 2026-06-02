@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
-/// <summary>
-///     Configuration options for host agent docker behavior.
-/// </summary>
 public sealed class HostAgentDockerOptions
 {
     public string Endpoint { get; set; } = GetDefaultRootlessDockerEndpoint();

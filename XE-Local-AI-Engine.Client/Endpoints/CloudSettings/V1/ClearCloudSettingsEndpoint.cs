@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-/// <summary>
-///     FastEndpoints handler for the clear cloud settings local API operation.
-/// </summary>
 public sealed class ClearCloudSettingsEndpoint(
     ICloudCredentialStore cloudCredentialStore,
     ICapabilityReporter capabilityReporter,

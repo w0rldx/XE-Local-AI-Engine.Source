@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Capability gate (AgentHome Decision 7): the loopback offer omits <c>run_in_agent_home</c> and every MCP tool
 ///     when the active model is not in <see cref="AgentHomeOptions.ToolCapableModels" />, and offers them when it is.
-///     Loop P4 extends this: the offer/known-name/known-tool surfaces merge the live MCP snapshot, MCP tools join the
+///     The offer/known-name/known-tool surfaces merge the live MCP snapshot, MCP tools join the
 ///     capable-only set, and <c>GetKnownTools</c> tags each entry with its source.
 /// </summary>
 public sealed class LocalToolOfferProviderTests

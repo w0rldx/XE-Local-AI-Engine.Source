@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     MVP regex-based secret scanner for memory proposal records. Applies per-match dispositions:
+///     Regex-based secret scanner for memory proposal records. Applies per-match dispositions:
 ///     <list type="bullet">
 ///         <item>
 ///             <description>
@@ -24,7 +24,7 @@ using System.Text.RegularExpressions;
 ///             </description>
 ///         </item>
 ///     </list>
-///     This is not comprehensive DLP. The UI/API must label proposals as untrusted until reviewed (§10).
+///     This is not comprehensive DLP. The UI/API must label proposals as untrusted until reviewed.
 /// </summary>
 internal static partial class MemoryProposalSecretScanner
 {

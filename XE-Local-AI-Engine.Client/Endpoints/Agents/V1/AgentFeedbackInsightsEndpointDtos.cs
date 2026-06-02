@@ -7,7 +7,7 @@ public sealed class GetAgentFeedbackInsightsRequest
 }
 
 /// <summary>
-///     Wire projection of the per-agent feedback aggregate (Playbook P2, read-only analytics). All fields serialize
+///     Wire projection of the per-agent feedback aggregate (feedback insights, read-only analytics). All fields serialize
 ///     camelCase; <see cref="Exemplars" /> are node-local, capped and truncated by the application service.
 /// </summary>
 public sealed class AgentFeedbackInsightsResponse
@@ -27,9 +27,6 @@ public sealed class AgentFeedbackInsightsResponse
     public required IReadOnlyList<FeedbackExemplarResponse> Exemplars { get; init; }
 }
 
-/// <summary>
-///     Response DTO for overall feedback operations.
-/// </summary>
 public sealed class OverallFeedbackResponse
 {
     public required int Total { get; init; }
@@ -43,9 +40,6 @@ public sealed class OverallFeedbackResponse
     public required bool MeetsThreshold { get; init; }
 }
 
-/// <summary>
-///     Response DTO for tool feedback operations.
-/// </summary>
 public sealed class ToolFeedbackResponse
 {
     public required string ToolName { get; init; }
@@ -61,9 +55,6 @@ public sealed class ToolFeedbackResponse
     public required bool MeetsThreshold { get; init; }
 }
 
-/// <summary>
-///     Response DTO for feedback exemplar operations.
-/// </summary>
 public sealed class FeedbackExemplarResponse
 {
     public required string Rating { get; init; }

@@ -12,9 +12,6 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-/// <summary>
-///     Application service for node chat stream behavior.
-/// </summary>
 public sealed class NodeChatStreamService(
     INodeChatPersistenceService persistence,
     INodeChatInvocationPump invocationPump,
@@ -154,16 +151,16 @@ public sealed class NodeChatStreamService(
         // offer, and agent version 1. When bound, the definition supplies the system prompt, the intersected tool
         // offer (already approval-overridden), the pinned model profile, the reasoning effort, and the version that
         // feeds the config hash. The builder and config-hash plumbing are unchanged either way.
-        // Playbook P5: the just-sent user turn is the relevance-retrieval query. The resolver injects only the most
+        // The just-sent user turn is the relevance-retrieval query. The resolver injects only the most
         // relevant Enabled playbook actions when the bound agent's Enabled set exceeds the retrieval threshold; below
         // it (or with no binding) the query is inert and the prompt stays byte-identical to the pre-P5 path.
         var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
 
-        // Loop P5: when the bound definition is a tool-capable orchestrator, resolve a compiled orchestration spec to
+        // When the bound definition is a tool-capable orchestrator, resolve a compiled orchestration spec to
         // carry on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent
         // (the orchestrator-as-lone-agent fallback), keeping the unbound/single-agent path byte-identical. The same
-        // user turn drives per-participant playbook retrieval (Playbook P5).
+        // user turn drives per-participant playbook retrieval.
         var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
 
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent

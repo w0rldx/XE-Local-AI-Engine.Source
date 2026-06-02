@@ -6,17 +6,17 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker J-local env-gated smoke (AgentHome plan §7.2 / §9.3). It validates the Marker G real-git behaviors the
+///     Env-gated AgentHome real-git smoke coverage. It validates the real-git patch-export behaviors the
 ///     fake provider cannot prove — they need a real <c>git</c> inside the AgentHome runtime image. The smoke drives
 ///     the <c>docker</c> CLI directly (it is a validation harness, not the production path: the production path is the
-///     <c>LocalContainerSandboxProvider</c> → HostAgent gRPC → Docker.DotNet chain) and runs the EXACT
-///     <see cref="AgentHomeGit" /> hardened-flag command sequence the worker emits, so a drift between this and G's
-///     command construction would surface here.
+///     <c>LocalContainerSandboxProvider</c> → HostAgent gRPC → Docker.DotNet chain) and runs the same
+///     <see cref="AgentHomeGit" /> hardened-flag command sequence the worker emits, so command-construction drift
+///     would surface here.
 ///
 ///     It is NOT in the default CI run: it skips with an explicit BLOCKED note unless
 ///     <c>AGENTHOME_DOCKER_SMOKE=1</c> is set AND Docker is reachable AND the
 ///     <c>dotnet-agent-home:2026-05-agenthome-mvp</c> image is present. If the image is unavailable the smoke is
-///     BLOCKED, never failed — it does not gate MVP completion (plan §8 / §12).
+///     BLOCKED, never failed — it does not gate the default test suite.
 /// </summary>
 public sealed class AgentHomeRealGitSmokeTests
 {
@@ -39,7 +39,7 @@ public sealed class AgentHomeRealGitSmokeTests
     [Test]
     public async Task GitAttributes_DoesNotPerturbBaselineToDiffByteConsistency()
     {
-        // §7.2 (1): a copied .gitattributes (with content-altering filters) must not change the diff bytes, because the
+        // A copied .gitattributes file with content-altering filters must not change the diff bytes, because the
         // hardened flags disable the global attributes file. A modified text file must still diff to a stable patch.
         var container = await StartSmokeContainerOrSkipAsync().ConfigureAwait(false);
         await using var _ = container;
@@ -61,14 +61,11 @@ public sealed class AgentHomeRealGitSmokeTests
     [Test]
     public async Task BinaryChange_AppearsAsBinaryPatchAndRoundTripsLosslessly()
     {
-        // §7.2 (2)+(3): a binary change appears in the --binary patch (as a "GIT binary patch" / base85 literal), and
+        // A binary change appears in the --binary patch (as a "GIT binary patch" / base85 literal), and
         // the exported patch reconstructs the exact modified bytes when re-applied.
         //
-        // J-LOCAL FINDING (criterion 3): the plan's premise that a plain `git apply` (without --binary) *rejects* the
-        // patch is FALSE for modern git (verified: git 2.43.0). `git diff --binary` emits FULL-blob "literal" base85
-        // deltas, which a plain `git apply` happily applies and exits 0 — `--binary` is only strictly required for the
-        // "delta"-against-source form git avoids here. So the load-bearing, real assertion is byte round-trip fidelity
-        // (the binary content is not lossily dropped from the export), NOT a plain-apply rejection.
+        // Modern git accepts this full-blob binary patch with plain `git apply`; the safety property under test is
+        // byte round-trip fidelity, proving the binary content is present in the export and is not silently dropped.
         var container = await StartSmokeContainerOrSkipAsync().ConfigureAwait(false);
         await using var _ = container;
 
@@ -82,7 +79,7 @@ public sealed class AgentHomeRealGitSmokeTests
 
         var patch = await PatchDiffAsync(container).ConfigureAwait(false);
         AssertEx.Equal(0, patch.ExitCode);
-        // The binary change is present in the export as a literal binary patch — not silently dropped (criterion 2).
+        // The binary change is present in the export as a literal binary patch — not silently dropped.
         AssertEx.Contains(patch.StandardOutput, "GIT binary patch");
 
         // Write the captured patch into the container, revert to baseline, then re-apply and prove byte round-trip.
@@ -106,7 +103,7 @@ public sealed class AgentHomeRealGitSmokeTests
     [Test]
     public async Task GitIgnoreEmptiedBaseline_StillCommitsViaAllowEmpty()
     {
-        // §7.2 (4): a copied .gitignore that hides every file makes `git add -A` stage nothing; --allow-empty keeps the
+        // A copied .gitignore that hides every file makes `git add -A` stage nothing; --allow-empty keeps the
         // baseline commit from failing, so a valid HEAD exists for the later diff.
         var container = await StartSmokeContainerOrSkipAsync().ConfigureAwait(false);
         await using var _ = container;
@@ -123,7 +120,7 @@ public sealed class AgentHomeRealGitSmokeTests
     [Test]
     public async Task RealNonZeroGitExit_IsObservable()
     {
-        // §7.2 (5): a genuine git failure surfaces a non-zero exit (the signal G's IsSuccessful guard turns into Failed),
+        // A genuine git failure surfaces a non-zero exit, which the patch-export IsSuccessful guard turns into Failed,
         // NOT a clean zero-change export. Here: a diff against a non-existent ref fails.
         var container = await StartSmokeContainerOrSkipAsync().ConfigureAwait(false);
         await using var _ = container;
@@ -139,7 +136,7 @@ public sealed class AgentHomeRealGitSmokeTests
     [Test]
     public async Task QuotePathFalse_KeepsLiteralTabFilenameMappingConsistent()
     {
-        // §7.2 (6): core.quotePath=false emits non-ASCII/odd path bytes literally, so the --name-status parser (which
+        // core.quotePath=false emits non-ASCII/odd path bytes literally, so the --name-status parser (which
         // splits on \t) maps <alias>/<rel> consistently with the patch. A filename containing a literal tab is the
         // adversarial case the name-status \t-split must not be confused by.
         var container = await StartSmokeContainerOrSkipAsync().ConfigureAwait(false);
@@ -157,7 +154,6 @@ public sealed class AgentHomeRealGitSmokeTests
             "core.quotePath=false must emit the path bytes literally, not C-quoted.");
     }
 
-    // ---- helpers: the EXACT AgentHomeGit command sequence the worker emits ----
 
     private static Task<ExecResult> PatchDiffAsync(SmokeContainer container)
     {
@@ -190,7 +186,7 @@ public sealed class AgentHomeRealGitSmokeTests
 
     private static Task<ExecResult> GitAsync(SmokeContainer container, params string[] tail)
     {
-        // AgentHomeGit.Arguments prefixes the §9.1 hardened flags (hooksPath, attributesfile, quotePath=false) — using
+        // AgentHomeGit.Arguments prefixes the hardened git flags (hooksPath, attributesfile, quotePath=false) — using
         // the production helper keeps the smoke faithful to the exact command the worker runs in the sandbox.
         var arguments = new List<string> { "git" };
         arguments.AddRange(AgentHomeGit.Arguments(tail));

@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Build-barrier coverage for the Marker J-local <c>SandboxControl</c> proto surface (plan §3, §9.1):
-///     the D2 unary-only security guard, and lossless serialization of the new messages (bytes for copy/read,
+///     Build-barrier coverage for the HostAgent <c>SandboxControl</c> proto surface: the unary-only HMAC
+///     security guard, and lossless serialization of the new messages (bytes for copy/read,
 ///     the network enum, maps, the nested attach key, and the handle timestamp) so the
 ///     <c>LocalContainerSandboxProvider</c> can stay a 1:1 translator of the SPI DTOs.
 /// </summary>
@@ -37,8 +37,8 @@ public sealed class SandboxControlProtoTests
         }
     }
 
-    // D2 (plan §2): the global HMAC interceptor only overrides the unary + server-streaming handlers, so a
-    // client- or bidi-streaming rpc on SandboxControl would silently bypass HMAC authentication. This guard
+    // The global HMAC interceptor only overrides the unary + server-streaming handlers, so a client- or
+    // bidi-streaming rpc on SandboxControl would silently bypass HMAC authentication. This guard
     // fails the build if any SandboxControl rpc is ever made streaming.
     [Test]
     public void SandboxControl_EveryRpcIsUnary()
@@ -176,7 +176,7 @@ public sealed class SandboxControlProtoTests
     [Test]
     public void CopyIntoRequest_RoundTripsContentBytesAndFileMode()
     {
-        // 0xff is non-UTF8; this proves the wire transport is binary-safe (D3/D4 bytes, not strings).
+        // 0xff is non-UTF8; this proves the wire transport is binary-safe bytes, not strings.
         var content = new byte[] { 0xde, 0xad, 0xbe, 0xef, 0x00 };
         var original = new CopyIntoRequest
         {

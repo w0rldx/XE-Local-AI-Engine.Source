@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Outcome of <see cref="IDockerRuntimeClient.ExecInContainerAsync" /> (local-container sandbox plan §4.1).
+///     Outcome of <see cref="IDockerRuntimeClient.ExecInContainerAsync" /> for a sandbox command.
 ///     <see cref="Completed" /> is <see langword="false" /> when the exec was cancelled or the read-loop was torn
 ///     down before the process finished; the service maps that to a non-completed <c>SandboxCommandResult</c>.
 /// </summary>

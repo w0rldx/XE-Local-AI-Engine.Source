@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 using System.Runtime.Versioning;
 using System.Security.Principal;
 
-/// <summary>
-///     Value object carrying windows host identity data.
-/// </summary>
 public sealed record WindowsHostIdentity(
     SecurityIdentifier UserSid,
     SecurityIdentifier AdministratorsSid,

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 ///     host-side log files under <c>runs/&lt;run-id&gt;/logs/</c>. All writes are sequential within a
 ///     single run (one append per call); concurrent callers for different runs each hold independent
 ///     instances (the run gateway constructs one per run). Raw host paths and secrets are never written — the
-///     caller is responsible for supplying model-safe values (§11 / AgentHome plan two-roots split).
+///     caller is responsible for supplying model-safe values under the two-root host/sandbox split.
 /// </summary>
 internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
 {

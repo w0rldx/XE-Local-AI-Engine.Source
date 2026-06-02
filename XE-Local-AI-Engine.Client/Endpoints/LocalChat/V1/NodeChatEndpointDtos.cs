@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>
-///     Request DTO for create node chat conversation operations.
-/// </summary>
 public sealed class CreateNodeChatConversationRequest
 {
     public string? Title { get; init; }
@@ -18,9 +15,6 @@ public sealed class CreateNodeChatConversationRequest
     public Guid? AgentDefinitionId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for list node chat conversations operations.
-/// </summary>
 public sealed class ListNodeChatConversationsRequest
 {
     public bool IncludeArchived { get; init; }
@@ -28,25 +22,16 @@ public sealed class ListNodeChatConversationsRequest
     public int? Limit { get; init; }
 }
 
-/// <summary>
-///     Response DTO for list node chat conversations operations.
-/// </summary>
 public sealed class ListNodeChatConversationsResponse
 {
     public required IReadOnlyList<NodeChatConversationSummaryResponse> Items { get; init; }
 }
 
-/// <summary>
-///     Request DTO for get node chat conversation operations.
-/// </summary>
 public sealed class GetNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for delete node chat conversation operations.
-/// </summary>
 public sealed class DeleteNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
@@ -54,9 +39,6 @@ public sealed class DeleteNodeChatConversationRequest
     public bool PurgeImmediately { get; init; }
 }
 
-/// <summary>
-///     Request DTO for rename node chat conversation operations.
-/// </summary>
 public sealed class RenameNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
@@ -64,9 +46,6 @@ public sealed class RenameNodeChatConversationRequest
     public string? Title { get; init; }
 }
 
-/// <summary>
-///     Request DTO for pin node chat conversation operations.
-/// </summary>
 public sealed class PinNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
@@ -74,9 +53,6 @@ public sealed class PinNodeChatConversationRequest
     public bool IsPinned { get; init; }
 }
 
-/// <summary>
-///     Request DTO for archive node chat conversation operations.
-/// </summary>
 public sealed class ArchiveNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
@@ -84,9 +60,6 @@ public sealed class ArchiveNodeChatConversationRequest
     public bool Archived { get; init; }
 }
 
-/// <summary>
-///     Request DTO for cancel node chat message operations.
-/// </summary>
 public sealed class CancelNodeChatMessageRequest
 {
     public Guid ConversationId { get; init; }
@@ -96,9 +69,6 @@ public sealed class CancelNodeChatMessageRequest
     public Guid RequestId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for branch node chat conversation operations.
-/// </summary>
 public sealed class BranchNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }
@@ -106,9 +76,6 @@ public sealed class BranchNodeChatConversationRequest
     public Guid MessageId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for list node chat message revisions operations.
-/// </summary>
 public sealed class ListNodeChatMessageRevisionsRequest
 {
     public Guid ConversationId { get; init; }
@@ -116,9 +83,6 @@ public sealed class ListNodeChatMessageRevisionsRequest
     public Guid MessageId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for set node chat message feedback operations.
-/// </summary>
 public sealed class SetNodeChatMessageFeedbackRequest
 {
     public Guid ConversationId { get; init; }
@@ -130,9 +94,6 @@ public sealed class SetNodeChatMessageFeedbackRequest
     public string? Comment { get; init; }
 }
 
-/// <summary>
-///     Request DTO for get node chat message feedback operations.
-/// </summary>
 public sealed class GetNodeChatMessageFeedbackRequest
 {
     public Guid ConversationId { get; init; }
@@ -140,9 +101,6 @@ public sealed class GetNodeChatMessageFeedbackRequest
     public Guid MessageId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for set node chat selected path operations.
-/// </summary>
 public sealed class SetNodeChatSelectedPathRequest
 {
     public Guid ConversationId { get; init; }
@@ -150,9 +108,6 @@ public sealed class SetNodeChatSelectedPathRequest
     public IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat conversation summary operations.
-/// </summary>
 public sealed class NodeChatConversationSummaryResponse
 {
     public required Guid ConversationId { get; init; }
@@ -176,9 +131,6 @@ public sealed class NodeChatConversationSummaryResponse
     public required bool Archived { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat conversation operations.
-/// </summary>
 public sealed class NodeChatConversationResponse
 {
     public required Guid ConversationId { get; init; }
@@ -206,9 +158,6 @@ public sealed class NodeChatConversationResponse
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat message operations.
-/// </summary>
 public sealed class NodeChatMessageResponse
 {
     public required Guid MessageId { get; init; }
@@ -261,9 +210,6 @@ public sealed class NodeChatMessageResponse
     public IReadOnlyList<NodeChatMessagePart>? Parts { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat cancel message operations.
-/// </summary>
 public sealed class NodeChatCancelMessageResponse
 {
     public required Guid ConversationId { get; init; }
@@ -277,9 +223,6 @@ public sealed class NodeChatCancelMessageResponse
     public required bool Cancelled { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat delete conversation operations.
-/// </summary>
 public sealed class NodeChatDeleteConversationResponse
 {
     public required Guid ConversationId { get; init; }
@@ -289,9 +232,6 @@ public sealed class NodeChatDeleteConversationResponse
     public required bool Purged { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat branch conversation operations.
-/// </summary>
 public sealed class NodeChatBranchConversationResponse
 {
     public required Guid SourceConversationId { get; init; }
@@ -301,9 +241,6 @@ public sealed class NodeChatBranchConversationResponse
     public required int CopiedMessageCount { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat message revisions operations.
-/// </summary>
 public sealed class NodeChatMessageRevisionsResponse
 {
     public required Guid MessageId { get; init; }
@@ -313,9 +250,6 @@ public sealed class NodeChatMessageRevisionsResponse
     public required IReadOnlyList<NodeChatMessageResponse> Variants { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat message feedback operations.
-/// </summary>
 public sealed class NodeChatMessageFeedbackResponse
 {
     public required Guid MessageId { get; init; }
@@ -331,9 +265,6 @@ public sealed class NodeChatMessageFeedbackResponse
     public required long UpdatedAtUtc { get; init; }
 }
 
-/// <summary>
-///     Response DTO for node chat selected path operations.
-/// </summary>
 public sealed class NodeChatSelectedPathResponse
 {
     public required Guid ConversationId { get; init; }

@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using NSec.Cryptography;
 
-/// <summary>
-///     Value object carrying node key resolution data.
-/// </summary>
 public sealed record NodeKeyResolution
 {
     public required string RequestedKeyId { get; init; }

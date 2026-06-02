@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-/// <summary>
-///     FastEndpoints handler for the get agent definition local API operation.
-/// </summary>
 public sealed class GetAgentDefinitionEndpoint(IAgentDefinitionService agentDefinitionService)
     : Endpoint<GetAgentDefinitionRequest, AgentDefinitionResponse>
 {

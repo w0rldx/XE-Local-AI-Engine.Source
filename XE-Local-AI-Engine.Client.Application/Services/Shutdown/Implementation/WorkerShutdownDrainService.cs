@@ -7,9 +7,6 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
-/// <summary>
-///     Application service for worker shutdown drain behavior.
-/// </summary>
 public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
 {
     private readonly DeadLetterFlushService _deadLetterFlushService;

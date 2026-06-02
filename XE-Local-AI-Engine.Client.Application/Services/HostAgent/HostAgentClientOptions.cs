@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.HostAgent;
 
-/// <summary>
-///     Configuration options for host agent client behavior.
-/// </summary>
 public sealed record HostAgentClientOptions
 {
     public const string SectionName = "HostAgent:Client";

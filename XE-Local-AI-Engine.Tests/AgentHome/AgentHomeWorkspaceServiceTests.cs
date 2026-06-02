@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker F workspace-copy coverage: the real <see cref="AgentHomeWorkspaceService" /> walks a real temp source
+///     Workspace-copy coverage: the real <see cref="AgentHomeWorkspaceService" /> walks a real temp source
 ///     tree and copies survivors into the <see cref="FakeSandboxRuntimeProvider" /> in-memory sandbox (no Docker). It
 ///     proves exclusions, symlink-escape rejection, the per-folder byte budget, the git baseline, and the read-only
 ///     mount copy fallback.
@@ -160,7 +160,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
         var gitCommands = provider.ExecutedCommands.Where(command => command.Executable == "git").ToArray();
 
-        // Every baseline command runs in the selected workspace with the §9.1 byte-stabilizing -c flags so a copied
+        // Every baseline command runs in the selected workspace with the byte-stabilizing git flags so a copied
         // .gitattributes cannot perturb the baseline (and thus the later diff) bytes.
         AssertEx.True(gitCommands.Length > 0, "the baseline must issue git commands");
         AssertEx.True(

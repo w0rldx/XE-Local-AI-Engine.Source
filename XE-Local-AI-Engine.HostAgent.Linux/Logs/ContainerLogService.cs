@@ -4,9 +4,6 @@ using System.Runtime.CompilerServices;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using XE_Local_AI_Engine.HostAgent.Linux.Lifecycle;
 
-/// <summary>
-///     Application service for container log behavior.
-/// </summary>
 public sealed class ContainerLogService
 {
     private readonly IDockerRuntimeClient _dockerRuntimeClient;

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Insights;
 
 /// <summary>
-///     Read-only per-agent feedback insights (Playbook P2). Aggregates the node-local message feedback already
+///     Read-only per-agent feedback insights (feedback insights). Aggregates the node-local message feedback already
 ///     persisted by the chat path — no writes, so no mutation guard. Operator-gated. Returns 404 when the agent
 ///     definition does not exist.
 /// </summary>

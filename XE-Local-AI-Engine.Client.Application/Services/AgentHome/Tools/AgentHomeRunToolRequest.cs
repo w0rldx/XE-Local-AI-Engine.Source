@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 /// <summary>
 ///     Typed projection of the <c>run_in_agent_home</c> JSON arguments. The
 ///     <see cref="MetadataToolFunction" /> bridge stays JSON-in / JSON-out, so the handler deserializes into this
-///     record and validates it against the §7 constraints before any execution — the schema advertised to the
+///     record and validates it against the tool constraints before any execution — the schema advertised to the
 ///     model is advisory; this validation is authoritative.
 /// </summary>
 internal sealed record AgentHomeRunToolRequest
@@ -21,7 +21,7 @@ internal sealed record AgentHomeRunToolRequest
     public IReadOnlyList<string>? AllowedActions { get; init; }
 }
 
-/// <summary>Validates an <see cref="AgentHomeRunToolRequest" /> against the AgentHome plan §7 constraints.</summary>
+/// <summary>Validates an <see cref="AgentHomeRunToolRequest" /> against the AgentHome tool constraints.</summary>
 internal static partial class AgentHomeRunToolRequestValidator
 {
     private const int GoalMaxLength = 4000;

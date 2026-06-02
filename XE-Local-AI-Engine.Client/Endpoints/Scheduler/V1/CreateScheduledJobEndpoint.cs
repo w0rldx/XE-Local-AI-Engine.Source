@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-/// <summary>
-///     FastEndpoints handler for creating a scheduled job definition (POST scheduler/jobs).
-/// </summary>
 public sealed class CreateScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
     : Endpoint<CreateScheduledJobRequest, ScheduledJobResponse>
 {

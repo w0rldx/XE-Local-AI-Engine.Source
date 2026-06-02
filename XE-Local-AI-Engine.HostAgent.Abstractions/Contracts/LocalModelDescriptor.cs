@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 
-/// <summary>
-///     Value object carrying local model descriptor data.
-/// </summary>
 public sealed record LocalModelDescriptor
 {
     [JsonRequired]

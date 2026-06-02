@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeBinding.V1.Mappers;
 using XE_Local_AI_Engine.Client.Models.NodeBinding;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-/// <summary>
-///     FastEndpoints handler for the start node binding local API operation.
-/// </summary>
 public sealed class StartNodeBindingEndpoint(INodeBindingService nodeBindingService) : EndpointWithoutRequest<NodeBindingSessionResponse>
 {
     private readonly INodeBindingService _nodeBindingService = nodeBindingService ?? throw new ArgumentNullException(nameof(nodeBindingService));

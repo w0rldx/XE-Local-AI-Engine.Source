@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     resolves, runtime/display-name present, enum values defined), persists the definition via
 ///     <see cref="IScheduledJobDefinitionStore" /> <em>first</em>, then reconciles the Quartz job/trigger to match the
 ///     stored state. The store owns id/timestamp stamping and the soft-delete/enable lifecycle; this service never
-///     re-implements them. It returns the decrypted M1 store records/projections, throws
+///     re-implements them. It returns the decrypted scheduled-job records/projections, throws
 ///     <see cref="ScheduledJobValidationException" /> on bad input, and returns <c>null</c> for a missing definition/run.
 /// </summary>
 public interface IScheduledJobManagementService
@@ -86,7 +86,7 @@ public interface IScheduledJobManagementService
 
 /// <summary>
 ///     The editable fields of a scheduled job definition supplied on create/update through the management API.
-///     <see cref="Parameters" /> is the plaintext parameter JSON; the store encrypts it at rest. Unlike the M1
+///     <see cref="Parameters" /> is the plaintext parameter JSON; the store encrypts it at rest. Unlike the persistence
 ///     <c>ScheduledJobDefinitionInput</c>, this carries neither <c>Enabled</c> (create persists enabled, update preserves
 ///     the current state) nor <c>CreatedBy</c> (the service stamps the creator) — those are not operator-editable.
 /// </summary>

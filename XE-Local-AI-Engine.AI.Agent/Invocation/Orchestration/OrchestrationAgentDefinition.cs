@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 
 /// <summary>
 ///     The compiled, MAF-agnostic input to <see cref="IOrchestrationAgentFactory" />: the triage agent, the full
-///     participant set (which INCLUDES the triage), the handoff edges, and the §1.3 workflow knobs. The resolver
-///     (Lane B) produces this 1:1 from a <c>Kind=Orchestrator</c> agent definition's topology; the factory turns it
+///     participant set (which INCLUDES the triage), the handoff edges, and the workflow knobs. The resolver
+///     produces this 1:1 from a <c>Kind=Orchestrator</c> agent definition's topology; the factory turns it
 ///     into a handoff <c>Workflow</c> and a drive session, confining all <c>Microsoft.Agents.AI.Workflows</c> types
 ///     to this assembly.
 /// </summary>

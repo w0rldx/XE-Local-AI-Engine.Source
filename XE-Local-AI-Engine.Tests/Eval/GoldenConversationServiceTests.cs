@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Golden-set create-validation unit tests (Playbook P4, D4). The service rejects over-long boundary fields before
+///     Golden-set create-validation unit tests. The service rejects over-long boundary fields before
 ///     persisting (mirroring the PlaybookAction free-text cap), so a client cannot push an unbounded encrypted payload.
 /// </summary>
 public sealed class GoldenConversationServiceTests

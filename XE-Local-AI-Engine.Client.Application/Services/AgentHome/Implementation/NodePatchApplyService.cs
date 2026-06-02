@@ -8,21 +8,21 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 
 /// <summary>
-///     host patch apply host patch apply. Applies exported <c>changes.patch</c> onto the real
-///     host selected folders, mapping each sandbox-relative <c>a/&lt;alias&gt;/…</c> / <c>b/&lt;alias&gt;/…</c> prefix
-///     back to its trusted host root via <see cref="ISelectedFolderResolver" /> and applying only under that root.
-///     Traversal-rejected, cross-alias-rejected, binary-rejected by default, preview-before-apply, every applied file
-///     logged folder-relative.
+///     Applies exported <c>changes.patch</c> files onto trusted host selected folders. Each sandbox-relative
+///     <c>a/&lt;alias&gt;/…</c> / <c>b/&lt;alias&gt;/…</c> prefix is resolved through
+///     <see cref="ISelectedFolderResolver" /> and applied only under that host root. The apply path rejects traversal
+///     and cross-alias writes, rejects binary changes by default, previews before applying, and logs applied files
+///     folder-relative.
 /// </summary>
 /// <remarks>
-///     Security model (§9.2 / §11 / §17): all path validation is authoritative and independent of git's behaviour.
+///     Security model: all path validation is authoritative and independent of git's behaviour.
 ///     The written paths are derived from the patch BODY lines (<c>--- a/…</c>, <c>+++ b/…</c>,
 ///     <c>rename from/to</c>, <c>copy from/to</c>) — NOT the <c>diff --git</c> header — because git acts on the body
 ///     paths. The header is kept only as a cross-check. The within-root + symlink-escape guard runs over every body
-///     path; the plan explicitly forbids delegating safety to git ("never trust git's path handling", plan §D3/§D4).
+///     path; safety never delegates to git path handling.
 ///     Residual TOCTOU: there is a bounded symlink-swap window between the <c>--check</c> pass and the actual write.
 ///     If a caller-controlled symlink is swapped into an intermediate directory after <c>--check</c>, git will reject
-///     the write with "beyond a symbolic link" (modern git). This is documented-bounded per plan §281 — the host
+///     the write with "beyond a symbolic link" (modern git). This bounded residual risk remains because the host
 ///     folder is user-trusted and a full transactional fence would require OS-level file locking.
 /// </remarks>
 internal sealed partial class NodePatchApplyService : INodePatchApplyService
@@ -265,13 +265,13 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     private async Task<ApplyPlan> BuildPlanAsync(NodePatchApplyRequest request, CancellationToken cancellationToken)
     {
-        // D2 step 1: validate the untrusted RunId shape before composing any path.
+        // Validate the untrusted RunId shape before composing any path.
         if (!IsValidRunId(request.RunId))
         {
             return ApplyPlan.Invalid("the run id is not a valid identifier.");
         }
 
-        // D2 step 2/3: resolve the patch path and gate on changes.patch presence (never changed-files.json).
+        // Resolve the patch path and gate on changes.patch presence (never changed-files.json).
         var patchPath = Path.Combine(ResolveAgentHomeRoot(), RunsDirectoryName, request.RunId, PatchesDirectoryName, PatchFileName);
         var fileInfo = new FileInfo(patchPath);
         if (!fileInfo.Exists)
@@ -329,7 +329,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             parsed.Add(parseResult);
         }
 
-        // D5: binary reject by default — reject the whole apply when a binary block is present and the option is off.
+        // Binary reject by default — reject the whole apply when a binary block is present and the option is off.
         if (containsBinary && !_options.AllowBinaryPatchApply)
         {
             rejections.Add("the patch contains a binary change, which is not allowed.");
@@ -398,7 +398,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return null;
         }
 
-        // D3 step 4: every target relative path (extracted from the BODY lines that git actually acts on) must resolve
+        // Every target relative path (extracted from the BODY lines that git actually acts on) must resolve
         // under the alias root. This is our own authoritative guard — we never rely on git's path validation.
         // A symlinked intermediate dir that escapes the root is also rejected (EscapesViaReparsePoint).
         foreach (var block in blocks)
@@ -845,7 +845,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         catch (Exception exception)
         {
             // Any other failure (identity error, I/O, DI, logger) is swallowed. A log write must never throw past
-            // a successful host mutation (D6 / plan §9.2 best-effort contract).
+            // a successful host mutation because run-log writes are best-effort.
             _logger.LogDebug(exception, "AgentHome patch apply log append for {EventName} failed.", eventName);
         }
     }

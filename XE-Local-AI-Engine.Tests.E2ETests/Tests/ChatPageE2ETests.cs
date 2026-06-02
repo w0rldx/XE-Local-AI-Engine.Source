@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
 ///     Browser-driven E2E tests for the node Chat page (<c>/chat</c>), mirroring the manual
-///     probe in the xe-node-react-client plan §4.8.
+///     probe in the chat page E2E coverage contract.
 ///     <para>
 ///         Coverage: page render, conversation creation, message send + stream completion
 ///         (assistant-completed path), and cancel/dispose (stream aborted, terminal status).

@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 ///     Supplies the owner/node identity used to build a <c>SandboxAttachKey</c> for AgentHome runs. The
 ///     <c>run_in_agent_home</c> handler is JSON-in / JSON-out and carries no owner context, and the worker persists
 ///     only its node id (the owner is a token subject claim), so the orchestration sources identity through this seam.
-///     The MVP implementation is node-scoped; AgentHome gateway refines the owner once the distributed/multi-user path is live.
+///     The current implementation is node-scoped; future owner refinement belongs at the AgentHome gateway boundary.
 /// </summary>
 internal interface IAgentHomeIdentityProvider
 {

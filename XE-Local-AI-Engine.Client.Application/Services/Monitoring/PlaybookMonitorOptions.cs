@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Monitoring;
 
 /// <summary>
-///     Options for the Playbook P5 cohort monitor. <see cref="ImprovementEpsilon" /> is the dead-band around
+///     Options for the relevance retrieval and cohort monitoring cohort monitor. <see cref="ImprovementEpsilon" /> is the dead-band around
 ///     the before/after down-vote rate within which a change is treated as Flat; <see cref="MinSampleSize" /> is the
 ///     minimum after-enable sample count below which the verdict is InsufficientData and the action is never flagged
 ///     (mirrors the established feedback floor of 3).

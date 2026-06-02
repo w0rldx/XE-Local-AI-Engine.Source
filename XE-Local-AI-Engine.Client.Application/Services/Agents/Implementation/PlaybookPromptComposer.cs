@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
 ///     Folds an agent's enabled playbook actions into its system prompt. The header text and bullet format live here
-///     alone so the deferred P5 relevance-retrieval path can reuse the composer with a filtered subset.
+///     alone so the deferred relevance-retrieval path can reuse the composer with a filtered subset.
 /// </summary>
 internal static class PlaybookPromptComposer
 {

@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Playbook P4/P5: the promote endpoint's eval gate and enabled-action cap. A Suggested action with no recorded eval
+///     Promote endpoint tests for the eval gate and enabled-action cap. A Suggested action with no recorded eval
 ///     cannot be promoted — the gate returns 409 with a typed conflict body (<c>{ status: "EvalRequired", reason }</c>)
 ///     and the action stays Suggested (still inert). When the agent is already at the cap, a promote whose eval passed is
 ///     blocked with 409 (<c>{ status: "CapReached", reason }</c>).
@@ -74,7 +74,7 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     public async Task Promote_WhenAgentAtEnabledCap_ReturnsConflictCapReached()
     {
         // Cap of 1 (the floor the PostConfigure clamps to) with one already-Enabled action puts the agent at the cap, so a
-        // promote whose eval passed and is current is blocked by the P5 hard cap rather than the eval gate.
+        // promote whose eval passed and is current is blocked by the enabled-action hard cap rather than the eval gate.
         await using var factory = new TestingWebAppFactory
         {
             ConfigureAdditionalTestServices = static services =>

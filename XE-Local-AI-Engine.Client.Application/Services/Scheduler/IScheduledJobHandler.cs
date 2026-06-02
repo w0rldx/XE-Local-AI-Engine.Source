@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Marker interface implemented by every scheduled-job template handler. Each handler owns exactly one
+///     Template interface implemented by every scheduled-job handler. Each handler owns exactly one
 ///     <see cref="TemplateId" /> and is discovered at startup by <see cref="IScheduledJobTemplateRegistry" />.
 /// </summary>
 public interface IScheduledJobHandler
@@ -14,7 +14,7 @@ public interface IScheduledJobHandler
 
     /// <summary>
     ///     Metadata describing the template: display name, supported schedule kinds, default policy overrides,
-    ///     and capability flags. Exposed by the management API (Marker 3) and used by the UI template picker.
+    ///     and capability flags. Exposed by the management API and used by the UI template picker.
     /// </summary>
     ScheduledJobTemplateDescriptor Descriptor { get; }
 

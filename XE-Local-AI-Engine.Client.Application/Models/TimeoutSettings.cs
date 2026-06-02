@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
-/// <summary>
-///     Value object carrying timeout settings data.
-/// </summary>
 public sealed record TimeoutSettings
 {
     public int InvocationTimeoutSeconds { get; init; } = 300;

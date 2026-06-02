@@ -5,10 +5,10 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Default <see cref="IGoldenConversationService" /> (Playbook P4 manual authoring + the harvest follow-up's
-///     staging path, D3). Validates a golden case before persisting (non-blank Title, existing owning agent, non-empty
+///     Default <see cref="IGoldenConversationService" /> for manual golden-case authoring and harvested-candidate
+///     staging. Validates a golden case before persisting (non-blank Title, existing owning agent, non-empty
 ///     InputTurns, at least one of {Assertion, Rubric}, boundary length caps) and applies the same IDOR-safe ownership
-///     guard to delete/approve as the P1/P3 review paths. The manual create path pins Source=Manual; the harvested
+///     guard to delete/approve as the manual-authoring and analysis-review paths. The manual create path pins Source=Manual; the harvested
 ///     create path pins Source=Harvested + stages the case inert. Reuses <see cref="PlaybookActionValidationException" />
 ///     so callers map a validation failure the same way for both playbook surfaces.
 /// </summary>
@@ -55,7 +55,7 @@ internal sealed class GoldenConversationService(
         }
 
         // Stage every harvested candidate inert regardless of the input's Enabled flag: the operator approves it into the
-        // active set later (D3), so it stays out of the eval gate until then (the Enabled==true runner filter).
+        // active set later, so it stays out of eval runs until then (the Enabled==true runner filter).
         var storeInput = new GoldenConversationInput(
             input.AgentDefinitionId,
             input.Title,
@@ -122,7 +122,7 @@ internal sealed class GoldenConversationService(
             throw new PlaybookActionValidationException("InputTurns is required.");
         }
 
-        // D2: a golden case must carry at least one scoring signal — an assertion (deterministic) and/or a rubric
+        // judge path: a golden case must carry at least one scoring signal — an assertion (deterministic) and/or a rubric
         // (judge). A case with neither cannot be scored, so it is rejected at the boundary.
         if (string.IsNullOrWhiteSpace(input.Assertion) && string.IsNullOrWhiteSpace(input.Rubric))
         {

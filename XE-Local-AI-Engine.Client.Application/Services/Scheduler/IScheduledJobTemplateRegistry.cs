@@ -2,13 +2,13 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Read-only registry of all <see cref="IScheduledJobHandler" /> implementations discovered at startup.
-///     Registered as a singleton by <c>NodeSchedulerServiceCollectionExtensions</c> (Marker 2 — Agent A).
+///     Registered as a singleton by <c>NodeSchedulerServiceCollectionExtensions</c> .
 /// </summary>
 public interface IScheduledJobTemplateRegistry
 {
     /// <summary>
     ///     Returns the descriptors of all registered templates in registration order. Used by the management
-    ///     API (Marker 3) to populate the template-picker list.
+    ///     API  to populate the template-picker list.
     /// </summary>
     IReadOnlyList<ScheduledJobTemplateDescriptor> ListTemplates();
 

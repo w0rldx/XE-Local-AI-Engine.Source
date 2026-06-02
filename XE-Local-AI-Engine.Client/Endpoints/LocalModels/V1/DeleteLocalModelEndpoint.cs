@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
-/// <summary>
-///     FastEndpoints handler for the delete local model local API operation.
-/// </summary>
 public sealed class DeleteLocalModelEndpoint(
     IOllamaModelService modelService,
     ModelNameValidator modelNameValidator) : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>

@@ -14,10 +14,11 @@ using DockerNetworkMode = XE_Local_AI_Engine.HostAgent.Linux.Docker.SandboxNetwo
 using ProtoNetworkMode = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.SandboxNetworkMode;
 
 /// <summary>
-///     Handler coverage for <see cref="SandboxRuntimeService" /> (Marker J-local plan §4.2, §9.1) driven entirely by
-///     <see cref="FakeDockerRuntimeClient" /> — NO Docker. Asserts spec mapping (limits/network/labels), exec result
-///     translation, byte-lossless copy-into → read-file round-trips, best-effort cancel unblocking a blocking exec,
-///     and kill invalidation. Also pins the pure resource/network → <c>HostConfig</c> mapping.
+///     Handler coverage for <see cref="SandboxRuntimeService" /> driven entirely by
+///     <see cref="FakeDockerRuntimeClient" /> — no Docker daemon is required. Asserts spec mapping
+///     (limits/network/labels), exec result translation, byte-lossless copy-into → read-file round-trips, best-effort
+///     cancel unblocking a blocking exec, and kill invalidation. Also pins the pure resource/network →
+///     <c>HostConfig</c> mapping.
 /// </summary>
 public sealed class SandboxRuntimeServiceTests
 {
@@ -135,7 +136,7 @@ public sealed class SandboxRuntimeServiceTests
     public async Task CreateOrAttachSandbox_WhenExistingContainerHasDifferentProfile_RejectsAttach()
     {
         // Same owner + node → same deterministic container name → the existing container is FOUND, but its profile
-        // label differs from the new request's. A name match alone must NOT reuse it (§6.2.1 rule 15).
+        // label differs from the new request's. A name match alone must NOT reuse it.
         var (service, _) = CreateService();
         await service.CreateOrAttachSandbox(CreateRequest(), Context());
 
@@ -321,7 +322,7 @@ public sealed class SandboxRuntimeServiceTests
     {
         var (service, _) = CreateService();
 
-        // No sandbox was ever created; a kill must not throw (best-effort, plan §6).
+        // No sandbox was ever created; a kill must not throw because kill is best-effort.
         await service.KillSandbox(new KillSandboxRequest { SandboxId = "never-existed" }, Context());
     }
 

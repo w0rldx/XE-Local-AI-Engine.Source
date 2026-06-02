@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Analysis;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Playbook P3 orchestration: on demand, read the per-agent feedback aggregate (Playbook P2), gate it on the
+///     analysis staging orchestration: on demand, read the per-agent feedback aggregate (feedback insights), gate it on the
 ///     "never act on n=1" threshold, ask the analysis agent for candidate actions, reject any without valid evidence,
 ///     drop near-duplicates of existing actions, and persist the survivors as <c>Suggested</c>/<c>Analysis</c> actions
 ///     for human review. Suggestions are inert by construction (the resolver injects only <c>Enabled</c> actions);

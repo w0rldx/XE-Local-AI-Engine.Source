@@ -459,7 +459,7 @@ public sealed class PlaybookActionServiceTests
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
-        // A Suggested state but Manual source is not a P3 suggestion — the provenance guard must reject it.
+        // A Suggested state with Manual source is not a generated suggestion, so the provenance guard must reject it.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with { Source = PlaybookActionSource.Manual });
 

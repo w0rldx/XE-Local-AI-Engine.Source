@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Playbook P5: the read-only playbook monitor endpoint. Operator-gated; 404 when the agent does not exist; 200 with
+///     Read-only playbook monitor endpoint tests. Operator-gated; 404 when the agent does not exist; 200 with
 ///     an empty <c>items</c> array for an agent with no Enabled actions, plus a <c>retrieval</c> block carrying the
 ///     relevance-gating thresholds.
 /// </summary>
@@ -95,7 +95,7 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         using var document = JsonDocument.Parse(payload);
         var retrieval = document.RootElement.GetProperty("retrieval");
 
-        // A configured EmbeddingModelName turns on the embedding ranker and surfaces the model name (plan §9).
+        // A configured EmbeddingModelName turns on the embedding ranker and surfaces the model name.
         AssertEx.Equal("embedding", retrieval.GetProperty("ranker").GetString());
         AssertEx.Equal("nomic-embed-text", retrieval.GetProperty("embeddingModel").GetString());
     }

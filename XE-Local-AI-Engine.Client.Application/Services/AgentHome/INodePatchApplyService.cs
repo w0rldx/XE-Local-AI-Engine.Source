@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 ///     and applying only under that root (traversal-rejected, binary-rejected by default).
 /// </summary>
 /// <remarks>
-///     The <see cref="PreviewAsync" /> / <see cref="ApplyApprovedAsync" /> split IS the §9.2 approval gate: a caller
+///     The <see cref="PreviewAsync" /> / <see cref="ApplyApprovedAsync" /> split is the approval gate: a caller
 ///     obtains a preview, surfaces it for an explicit human confirm, then calls <see cref="ApplyApprovedAsync" />. The
 ///     surface is a user-driven worker-local action — never a model-invoked tool (locked surface decision); the model
 ///     cannot trigger host mutation. <see cref="ApplyApprovedAsync" /> re-runs the full validation + dry-run check

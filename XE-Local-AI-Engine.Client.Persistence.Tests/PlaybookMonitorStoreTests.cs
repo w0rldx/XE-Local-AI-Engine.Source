@@ -54,7 +54,7 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
         await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, createdAtUtc: 150);
         await InsertFeedbackAsync(connection, Guid.NewGuid(), cAArchived, Up, createdAtUtc: 200);
         await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Down, createdAtUtc: 250);
-        // Excluded: purged conversation + the other agent's feedback must not leak into Agent A's windows.
+        // Excluded: purged conversation + the other agent's feedback must not leak into the primary agent's windows.
         await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, createdAtUtc: 40);
         await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, createdAtUtc: 160);
         await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, createdAtUtc: 50);

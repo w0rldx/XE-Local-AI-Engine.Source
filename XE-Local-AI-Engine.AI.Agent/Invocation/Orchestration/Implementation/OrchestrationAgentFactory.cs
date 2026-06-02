@@ -56,8 +56,8 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         // is already FunctionInvokingChatClient-wrapped) plus its own resolved tools. ChatClientAgent's ctor detects
         // the existing FICC and sets the agent's own tools as AdditionalTools, while the handoff builder injects the
         // bodyless handoff_to_* declarations the executor routes — FICC has no implementation for those so it lets
-        // them flow through unserviced. (The spike notes "do NOT pre-wrap" for an EXTERNAL FICC that would try to
-        // invoke handoff_to_*; the pre-decorated pipeline is safe because the same FICC services only the agent's own
+        // them flow through unserviced. An external FICC that tried to invoke handoff_to_* would be unsafe, but the
+        // pre-decorated pipeline is safe because the same FICC services only the agent's own
         // tools — proven by CreateAsync_ApprovalAcrossHandoff_OverProductionDecoratedClient_StillSurfacesAndExecutes.)
         // The agent's Name/Description drive handoff routing (the target's Description is the routing reason).
         var agentsByKey = new Dictionary<string, AIAgent>(StringComparer.Ordinal);
@@ -87,7 +87,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
                                  .ConfigureAwait(false);
 
         // HandoffStart only ACCUMULATES the seed messages (AutoSendTurnToken=false); a TurnToken actually starts the
-        // conversation. Mirrors the §1.8 spike — without this the run idles forever.
+        // conversation. Without this turn token the run idles forever after accepting the seed messages.
         _ = await streamingRun
                   .TrySendMessageAsync(new TurnToken(definition.EmitStreamingUpdates))
                   .ConfigureAwait(false);

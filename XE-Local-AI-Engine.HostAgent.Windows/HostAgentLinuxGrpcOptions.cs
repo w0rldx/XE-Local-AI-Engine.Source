@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.HostAgent.Windows;
 
-/// <summary>
-///     Configuration options for host agent linux grpc behavior.
-/// </summary>
 public sealed class HostAgentLinuxGrpcOptions
 {
     public const string SectionName = "HostAgent:LinuxGrpc";

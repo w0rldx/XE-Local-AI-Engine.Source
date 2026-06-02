@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Hosting;
 
 using System.Globalization;
 
-/// <summary>
-///     Configuration options for host agent tcp behavior.
-/// </summary>
 public sealed class HostAgentTcpOptions
 {
     public const string SectionName = "HostAgent:Tcp";

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Harvest follow-up: scans one agent's most-recent thumbs-up assistant turns and stages golden candidates inert
+///     Scans one agent's most-recent thumbs-up assistant turns and stages harvested golden candidates inert
 ///     (deterministic, no model). Returns the per-run counts; 404 when the agent does not exist. A route-only POST (the
 ///     client posts <c>{}</c> — FastEndpoints 415s a truly empty body). Operator-gated.
 /// </summary>

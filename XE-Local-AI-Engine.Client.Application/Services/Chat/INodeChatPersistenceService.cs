@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>
-///     Application service for i node chat persistence behavior.
-/// </summary>
 public interface INodeChatPersistenceService
 {
     Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default);

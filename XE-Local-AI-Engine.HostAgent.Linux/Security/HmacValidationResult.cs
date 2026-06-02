@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Security;
 
 using global::Grpc.Core;
 
-/// <summary>
-///     Value object carrying hmac validation result data.
-/// </summary>
 public sealed record HmacValidationResult
 {
     private HmacValidationResult(bool succeeded, StatusCode statusCode, string detail)

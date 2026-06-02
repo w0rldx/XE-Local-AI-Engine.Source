@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Default <see cref="IOrchestrationResolver" />. Compiles a <c>Kind=Orchestrator</c> definition + its topology
-///     into an <see cref="OrchestrationSpec" />, reusing the P3 per-definition tool projection for every participant.
+///     into an <see cref="OrchestrationSpec" />, reusing the per-definition tool projection for every participant.
 ///     Every rejection path returns <c>null</c> (degrade to single-agent) and logs WHY — orchestration never fails a
 ///     turn, it falls back. Capability gating mirrors the single-agent path: a model is tool-capable iff it is in
 ///     <see cref="AgentHomeOptions.ToolCapableModels" /> (the same allow-list <c>LocalToolOfferProvider</c> uses).
@@ -128,7 +128,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     /// <summary>
     ///     Loads each topology participant, drops (and logs) any that no longer exist or whose pinned model is not
-    ///     tool-capable, and projects each survivor's tools with the P3 projection logic. Returns the survivors keyed
+    ///     tool-capable, and projects each survivor's tools with the agent-definition projection logic. Returns the survivors keyed
     ///     by id, deduplicated (a participant id listed twice resolves once).
     /// </summary>
     private async Task<Dictionary<Guid, ResolvedParticipant>> LoadCapableParticipantsAsync(AgentDefinitionRecord orchestrator,
@@ -240,7 +240,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     }
 
     /// <summary>
-    ///     The SAME projection P3 <c>AgentDefinitionResolver.ProjectAllowedTools</c> applies: start from the
+    ///     The same projection <c>AgentDefinitionResolver.ProjectAllowedTools</c> applies: start from the
     ///     capability-gated offer for the participant's own effective model (its pinned profile, else the turn's active
     ///     model), keep only the tools the definition allows, and override each tool's approval flag per the
     ///     definition. Names the definition allows but the offer does not contain are dropped and logged — never

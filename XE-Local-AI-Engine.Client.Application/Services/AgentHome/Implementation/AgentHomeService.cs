@@ -11,16 +11,16 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     AgentHome gateway <see cref="IAgentHomeService" />. Drives the real orchestration end-to-end against the configured
 ///     provider (the deterministic fake by default): <see cref="RunLifecycleAsync" /> resolves owner/node identity once,
 ///     acquires a run-level single-flight guard keyed by that owner-node, then runs Prepare + Run under it. Prepare
-///     builds the attach key, recovers the worker-local layout, attaches/creates the sandbox, resolves and copies (F)
+///     builds the attach key, recovers the worker-local layout, attaches/creates the sandbox, resolves and copies
 ///     the selected folders, and creates the git baseline. Run executes one bounded, profile-driven command — with the
-///     copied workspace as its working directory so the post-run patch (G) diffs the real CWD — classifies
-///     timeout-vs-cancel, and feeds the gated patch (G) and memory (H) exports plus run-scoped logging (K).
+///     copied workspace as its working directory so the post-run patch export diffs the real CWD — classifies
+///     timeout-vs-cancel, and feeds the gated patch export, memory proposal export, and run-scoped logging.
 ///     <para>
-///         Deferred to local-container sandbox (the real local-container provider): a real nested MAF agent loop, real
-///         <c>dotnet build/test</c> and real git, multi-command sequences, and a per-command enforcement matrix. Marker
-///         I proves the worker-side orchestration + busy/cancel/owner hardening on the fake; the single MVP command is
-///         the profile's liveness/work probe, and <c>allowedActions</c> gates the optional G/H steps (a real per-command
-///         scope matrix is J-local).
+///         Deferred to the HostAgent-backed local-container provider: a real nested MAF agent loop, real
+///         <c>dotnet build/test</c> and real git, multi-command sequences, and per-command enforcement. The
+///         service-level tests prove worker-side orchestration plus busy/cancel/owner hardening on the fake provider;
+///         the single command is the profile's liveness/work probe, and <c>allowedActions</c> gates the optional patch
+///         and memory exports.
 ///     </para>
 /// </summary>
 internal sealed class AgentHomeService : IAgentHomeService
@@ -34,16 +34,16 @@ internal sealed class AgentHomeService : IAgentHomeService
         ChangedFilesRelativePath = null
     };
 
-    // Per-RuntimeProfile in-sandbox command descriptor. The MVP carries a single entry (the worker's only enabled
-    // profile); replacing the hardcoded probe with a keyed descriptor lets J-local add real per-profile commands
-    // without re-touching RunAsync. The command is the profile's liveness/work probe on the fake.
+    // Per-RuntimeProfile in-sandbox command descriptor. The current slice carries a single enabled profile; keeping it
+    // keyed lets the HostAgent-backed provider add real per-profile commands without re-touching RunAsync. The command
+    // is the profile's liveness/work probe on the fake.
     private static readonly IReadOnlyDictionary<string, AgentHomeCommandDescriptor> ProfileCommands =
         new Dictionary<string, AgentHomeCommandDescriptor>(StringComparer.Ordinal)
         {
             ["dotnet-agent-home"] = new("dotnet", ["--version"])
         };
 
-    // Run-level single-flight guard (§6.6 rule 1/5): one semaphore per owner-node, created on demand. A second run for
+    // Run-level single-flight guard: one semaphore per owner-node, created on demand. A second run for
     // the same owner-node while one is in flight is rejected (non-blocking Wait(0)), not queued. Keyed by a string so
     // the guard does not couple to SandboxAttachKey value-equality (which folds in ManifestVersion/RuntimeProfile).
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _runGuards = new(StringComparer.Ordinal);
@@ -91,7 +91,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         cancellationToken.ThrowIfCancellationRequested();
 
         // Resolve identity FIRST so the guard key exists before Prepare. A second run for the same owner-node while one
-        // is in flight is rejected, not queued (§6.6 rule 5).
+        // is in flight is rejected, not queued.
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
         var guardKey = string.Create(CultureInfo.InvariantCulture, $"{identity.OwnerUserId} {identity.NodeId}");
         var guard = _runGuards.GetOrAdd(guardKey, static _ => new SemaphoreSlim(1, 1));
@@ -210,8 +210,8 @@ internal sealed class AgentHomeService : IAgentHomeService
             string.Create(CultureInfo.InvariantCulture, $"goal_length={request.Goal.Length}"),
             cancellationToken).ConfigureAwait(false);
 
-        // The single MVP command is sourced from a per-profile descriptor (not the old hardcoded probe). When a folder
-        // copied, run it with the copied workspace as the CWD so G diffs the real working tree.
+        // The single command is sourced from a per-profile descriptor. When a folder copied, run it with the copied
+        // workspace as the CWD so patch export diffs the real working tree.
         var descriptor = ResolveCommandDescriptor(request.Prepared.RuntimeProfile);
         var hasWorkspace = HasCopiedWorkspace(request.Prepared.FolderSnapshots);
         var commandRequest = new SandboxCommandRequest
@@ -247,7 +247,7 @@ internal sealed class AgentHomeService : IAgentHomeService
             }
 
             // Only commandCts fired (CancelAfter) → a TIMEOUT → surface a non-throwing result so the conversation can
-            // continue (§ Decision 5). The patch/memory exports are skipped; K records the timeout.
+            // continue. The patch/memory exports are skipped; the run logger records the timeout.
             await AppendCommandSafelyAsync(runLogger, runId, descriptor, completed: false, exitCode: -1, commandStartedAt,
                 nameof(OperationCanceledException), CancellationToken.None).ConfigureAwait(false);
             await AppendEventSafelyAsync(runLogger, "timed_out",
@@ -274,8 +274,8 @@ internal sealed class AgentHomeService : IAgentHomeService
         await AppendCommandSafelyAsync(runLogger, runId, descriptor, result.Completed, result.ExitCode, commandStartedAt,
             errorClass: null, cancellationToken).ConfigureAwait(false);
 
-        // patch export: after the command runs (the agent has edited files in later markers), export the diff against the
-        // workspace copy git baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).
+        // Patch export runs after the command so the agent's file edits are diffed against the workspace-copy git
+        // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).
         var patch = await ExportPatchAsync(request, runId, runDirectory, commandCts.Token).ConfigureAwait(false);
 
         // memory-proposal export: collect the agent-written memory proposals — gated on propose_memory ∈ AllowedActions.
@@ -512,6 +512,6 @@ internal sealed class AgentHomeService : IAgentHomeService
             $"run-{unixMs}-{counter}");
     }
 
-    /// <summary>The executable + arguments for a runtime profile's single MVP in-sandbox command.</summary>
+    /// <summary>The executable and arguments for a runtime profile's in-sandbox command.</summary>
     private sealed record AgentHomeCommandDescriptor(string Executable, IReadOnlyList<string> Arguments);
 }

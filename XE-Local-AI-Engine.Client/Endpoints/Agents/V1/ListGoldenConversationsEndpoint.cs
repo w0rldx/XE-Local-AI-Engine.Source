@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Playbook P4: lists one agent's golden conversation set. Mirrors the playbook-list convention — returns
-///     <c>{ items: [...] }</c> (empty for an unknown agent, never a 404). Operator-gated.
+///     Lists one agent's golden conversation set. Mirrors the playbook-list convention — returns <c>{ items: [...] }</c>
+///     (empty for an unknown agent, never a 404). Operator-gated.
 /// </summary>
 public sealed class ListGoldenConversationsEndpoint(IGoldenConversationService goldenConversationService)
     : Endpoint<ListGoldenConversationsRequest, ListGoldenConversationsResponse>

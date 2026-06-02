@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 
 /// <summary>
-///     Client boundary for host agent linux grpc operations.
+///     Windows-side gRPC client boundary for Linux HostAgent operations.
 /// </summary>
 public sealed class HostAgentLinuxGrpcClient : IHostAgentLinuxClient, IDisposable
 {

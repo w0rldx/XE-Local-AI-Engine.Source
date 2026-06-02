@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Configuration for the local-container sandbox <c>local-container</c> sandbox provider. Bound
+///     Configuration for the <c>local-container</c> sandbox provider. Bound
 ///     from the <c>LocalContainer</c> section. These values shape the sandbox-container the provider asks HostAgent to
 ///     create (image, resource ceiling, network posture) and bound the whole-file copy-into transfer
-///     (<see cref="MaxCopyFileBytes" />, AgentHome plan §5.2 / D4). The provider itself is Docker-free — it is a thin
+///     (<see cref="MaxCopyFileBytes" />). The provider itself is Docker-free — it is a thin
 ///     gRPC client to HostAgent, which owns the privileged Docker work — so no Docker SDK type appears here.
 /// </summary>
 public sealed record LocalContainerOptions
@@ -14,10 +14,10 @@ public sealed record LocalContainerOptions
     /// <summary>The default per-file copy ceiling (64 MiB). A file over this is skipped and logged, never truncated.</summary>
     public const long DefaultMaxCopyFileBytes = 64L * 1024 * 1024;
 
-    /// <summary>The container engine. Only <c>Docker</c> is supported for the MVP.</summary>
+    /// <summary>The container engine. The current local HostAgent runtime supports <c>Docker</c>.</summary>
     public string Engine { get; init; } = "Docker";
 
-    /// <summary>Reserved no-op flag for the MVP: the existing HostAgent Docker client is API-based, not CLI-based (§1.3).</summary>
+    /// <summary>Reserved no-op flag: the HostAgent Docker client is API-based, not CLI-based.</summary>
     public bool UseCli { get; init; }
 
     /// <summary>Optional Docker host override. Null lets HostAgent use its configured rootless socket.</summary>

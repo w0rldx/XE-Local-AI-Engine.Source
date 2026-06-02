@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Extension methods that translate between endpoint DTOs and the management service's input/record types.
-///     This is the SOLE point in the Client project that references Agent A's record member names — only this
+///     This is the sole point in the Client project that references the scheduler record member names — only this
 ///     file needs adjustment if those names change.
 /// </summary>
 internal static class SchedulerMapper

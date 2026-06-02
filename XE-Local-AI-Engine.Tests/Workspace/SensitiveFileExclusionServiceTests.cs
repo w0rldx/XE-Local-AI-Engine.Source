@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker F exclusion-rule coverage (AgentHome plan §8.3, plan §1884 validation): secrets, the host <c>.git</c>
-///     baseline, credential bundles, and generated/heavy output directories are excluded; ordinary source files are not.
+///     Sensitive-file exclusion coverage: secrets, the host <c>.git</c> baseline, credential bundles, and
+///     generated/heavy output directories are excluded; ordinary source files are not.
 /// </summary>
 public sealed class SensitiveFileExclusionServiceTests
 {

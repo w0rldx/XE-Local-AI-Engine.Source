@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-/// <summary>
-///     Application service for connection control behavior.
-/// </summary>
 public sealed class ConnectionControlService(
     ConnectionState connectionState,
     IWorkerHubConnection workerHubConnection,

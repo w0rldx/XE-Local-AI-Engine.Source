@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Default <see cref="IPlaybookEvalJudge" /> (Playbook P4, D2). The deterministic assertion path scores in plain
+///     Default <see cref="IPlaybookEvalJudge" /> for golden-conversation scoring. The deterministic assertion path scores in plain
 ///     code (no model call), keeping gate-critical cases stable; the judge path forces a structured JSON verdict from
 ///     the SUPPLIED node-local client (mirrors <c>OllamaPlaybookAnalysisAgent</c>: cached <see cref="JsonSerializerOptions" />,
 ///     positional-record DTO, system + user messages, <c>Temperature = 0</c>). Golden text never leaves the node — the

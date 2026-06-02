@@ -48,9 +48,6 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
     }
 }
 
-/// <summary>
-///     Value object carrying struct data.
-/// </summary>
 public readonly record struct NodeChatPersistenceWriteKey(Guid ConversationId, Guid? MessageId)
 {
     public static NodeChatPersistenceWriteKey ForConversation(Guid conversationId)

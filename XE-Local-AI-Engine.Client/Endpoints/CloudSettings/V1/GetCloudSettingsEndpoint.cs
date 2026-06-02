@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-/// <summary>
-///     FastEndpoints handler for the get cloud settings local API operation.
-/// </summary>
 public sealed class GetCloudSettingsEndpoint(ICloudCredentialStore cloudCredentialStore) : EndpointWithoutRequest<CloudSettingsResponse>
 {
     private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));

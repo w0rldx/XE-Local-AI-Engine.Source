@@ -126,7 +126,7 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_ProjectsParticipantToolsLikeP3()
     {
-        // Each participant's tools are projected with the SAME logic as P3: offer ∩ AllowedToolNames, approval override.
+        // Each participant's tools are projected with the same contract as single-agent resolution: offer ∩ AllowedToolNames, approval override.
         var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
         var specialist = CreateDefinition(name: "Specialist",
             modelProfile: ToolCapableModel,
@@ -191,7 +191,7 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_WhenParticipantAboveThresholdWithQuery_InjectsTopKIntoItsInstructions()
     {
-        // Playbook P5 retrieval, per participant: a participant whose enabled set exceeds the threshold and a non-blank
+        // Per-participant playbook retrieval: a participant whose enabled set exceeds the threshold and a non-blank
         // retrievalQuery must route through the SAME shared PlaybookRetrievalSelector the single-agent path uses, so only
         // the ranker's top-k (re-ordered by Priority then CreatedAtUtc) is folded into that participant's instructions.
         var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);

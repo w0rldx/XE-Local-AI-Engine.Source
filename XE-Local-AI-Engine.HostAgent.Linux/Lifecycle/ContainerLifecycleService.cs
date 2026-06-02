@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using XE_Local_AI_Engine.HostAgent.Linux.Reconciliation;
 
-/// <summary>
-///     Application service for container lifecycle behavior.
-/// </summary>
 public sealed class ContainerLifecycleService
 {
     private static readonly TimeSpan DefaultDrainTimeout = TimeSpan.FromSeconds(30);

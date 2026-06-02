@@ -20,10 +20,10 @@ public interface IOrchestrationResolver
     /// <param name="orchestrator">The conversation's bound definition (must be <c>Kind=Orchestrator</c> to resolve).</param>
     /// <param name="activeModelId">The model the turn runs on when the orchestrator pins none; gates capability.</param>
     /// <param name="retrievalQuery">
-    ///     The incoming user-turn text used to relevance-gate each participant's playbook injection (Playbook P5, plan
+    ///     The incoming user-turn text used to relevance-gate each participant's playbook injection (relevance retrieval and cohort monitoring, plan
     ///     §4.2), applied with the SAME threshold/top-k/re-order decision as the single-agent path. Blank (or at/below the
     ///     threshold) keeps the full static prepend per participant, so each participant's composed prompt stays
-    ///     byte-identical to the pre-P5 path.
+    ///     byte-identical to the pre-retrieval path.
     /// </param>
     Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, CancellationToken cancellationToken = default);
 }

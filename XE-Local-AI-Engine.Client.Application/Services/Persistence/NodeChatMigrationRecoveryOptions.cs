@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence;
 
-/// <summary>
-///     Configuration options for node chat migration recovery behavior.
-/// </summary>
 public sealed class NodeChatMigrationRecoveryOptions
 {
     public const string SectionName = "NodeChatMigrations";

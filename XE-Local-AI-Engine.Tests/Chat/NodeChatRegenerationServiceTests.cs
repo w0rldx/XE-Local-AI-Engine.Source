@@ -152,7 +152,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
-        // Playbook P5: ResolvePrecedingUserTurnContent anchors the relevance-retrieval query to the user turn the
+        // ResolvePrecedingUserTurnContent anchors the relevance-retrieval query to the user turn the
         // regenerate re-answers — here the seeded "what is 2+2?" — not just any string. This is the only direct
         // coverage of that variant-group-anchored query selection.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "what is 2+2?"), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -167,7 +167,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenBoundToOrchestrator_CarriesOrchestrationSpecOnPackage()
     {
-        // Loop P5 hydration symmetry: a regenerated turn on a conversation bound to a Kind=Orchestrator definition must
+        // Orchestrator hydration symmetry: a regenerated turn on a conversation bound to a Kind=Orchestrator definition must
         // carry the SAME orchestration spec a fresh send would — a missed hydration here would make reruns diverge.
         await using var provider = await BuildProviderAsync("regeneration-orchestrator.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
@@ -663,7 +663,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     // The default (unbound) resolver: ResolveAsync returns null, so the regeneration path keeps today's literals —
-    // these tests exercise the default chat persona. P3 binding behaviour is covered by the dedicated bound tests.
+    // these tests exercise the default chat persona. Bound-agent behavior is covered by the dedicated bound tests.
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();

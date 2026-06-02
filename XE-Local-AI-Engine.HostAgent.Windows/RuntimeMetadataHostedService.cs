@@ -7,9 +7,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
-/// <summary>
-///     Application service for runtime metadata hosted behavior.
-/// </summary>
 public sealed class RuntimeMetadataHostedService : IHostedService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)

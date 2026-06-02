@@ -32,7 +32,7 @@ internal sealed record class PlaybookAction
     public string? Scope { get; set; }
 
     /// <summary>
-    ///     Provenance for an analysis-proposed action (Playbook P3): a JSON array of feedback message/conversation ids
+    ///     Provenance for an analysis-proposed action: a JSON array of feedback message/conversation ids
     ///     that drove this action. Null for manually-authored actions. Plaintext — these are ids only (no comment
     ///     text), so they are not sensitive and are NOT encrypted.
     /// </summary>
@@ -55,7 +55,7 @@ internal sealed record class PlaybookAction
     public long UpdatedAtUtc { get; set; }
 
     /// <summary>
-    ///     Unix-ms timestamp (Playbook P5) of the most recent transition into <c>Enabled</c>; the cohort-monitoring clock
+    ///     Unix-ms timestamp of the most recent transition into <c>Enabled</c>; the cohort-monitoring clock
     ///     that splits feedback into before/after windows. Null until the action is first enabled; preserved (never
     ///     cleared) on disable so the last-enabled instant survives. Plaintext (a timestamp, structural — not sensitive).
     /// </summary>

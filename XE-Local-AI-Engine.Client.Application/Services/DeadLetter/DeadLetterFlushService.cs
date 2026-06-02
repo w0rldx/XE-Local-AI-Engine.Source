@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.DeadLetter;
 
 using XE_Local_AI_Engine.Client.Services.Connection;
 
-/// <summary>
-///     Application service for dead letter flush behavior.
-/// </summary>
 public sealed class DeadLetterFlushService
 {
     private readonly IDeadLetterStore _deadLetterStore;

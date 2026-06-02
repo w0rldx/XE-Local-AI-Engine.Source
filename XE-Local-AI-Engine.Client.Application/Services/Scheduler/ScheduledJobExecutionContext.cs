@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     All runtime information the dispatcher passes to a <see cref="IScheduledJobHandler" /> for a single
-///     scheduled invocation. Created by <c>SchedulerDispatchExecutor</c> (Marker 2) and consumed by handlers.
+///     scheduled invocation. Created by <c>SchedulerDispatchExecutor</c> and consumed by handlers.
 /// </summary>
 public sealed class ScheduledJobExecutionContext
 {
@@ -43,8 +43,8 @@ public sealed class ScheduledJobExecutionContext
     ///     Optional progress-reporting callback. Handlers may invoke this to emit intermediate progress events
     ///     that are recorded in <c>scheduled_job_run_events</c>.
     ///     <para>
-    ///         <b>Marker 4 wiring point</b> — this property is intentionally a no-op placeholder. Marker 4
-    ///         (run-history recording) will inject a real implementation via the dispatcher before passing the
+    ///         <b>Progress callback wiring point</b> — this property defaults to a no-op until run-history recording
+    ///         injects a real implementation via the dispatcher before passing the
     ///         context to the handler. Handlers should null-check before calling; a <see langword="null" /> value
     ///         means progress events are silently dropped (acceptable for Summary-level templates).
     ///     </para>

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 /// <summary>
-///     Client boundary for i host agent operations.
+///     Client boundary for HostAgent lifecycle, capability, container, and log operations.
 /// </summary>
 public interface IHostAgentClient
 {

@@ -47,7 +47,7 @@ internal sealed class PlaybookActionService(
 
         // The manual route never touches an analysis-provenance action: the mapper pins Source = Manual on the input,
         // so letting it update an Analysis action would silently rewrite its provenance to Manual and drop its
-        // evidence. Analysis (Suggested/Archived) actions are edited only via the dedicated P3 review paths.
+        // evidence. Analysis (Suggested/Archived) actions are edited only via the dedicated analysis-review paths.
         if (existing.Source != PlaybookActionSource.Manual)
         {
             return null;
@@ -130,8 +130,8 @@ internal sealed class PlaybookActionService(
 
     public async Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
-        // Human-approved staging → active, gated by the Playbook P4 eval result. The ownership/state guard runs first
-        // (NotFound → 404), then the eval gate (Eval* → 409), and only an eval that passed and is current flips Enabled.
+        // Human-approved staging → active, gated by the golden-conversation evaluation result. The ownership/state
+        // guard runs first (NotFound → 404), then evaluation status (Eval* → 409), and only a passed, current eval flips Enabled.
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
         if (pending is null)
         {
@@ -171,7 +171,7 @@ internal sealed class PlaybookActionService(
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, null);
         }
 
-        // Hard cap (Playbook P5, plan §5): the eval may pass, but if the agent is already at MaxEnabledActions the
+        // Hard cap (relevance retrieval and cohort monitoring, the enabled-action cap): the eval may pass, but if the agent is already at MaxEnabledActions the
         // promote is blocked with no store write — the operator archives/disables an Enabled action first. The pending
         // suggestion is not yet Enabled, so the count needs no exclusion here.
         var enabledCount = await CountEnabledAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
@@ -323,14 +323,14 @@ internal sealed class PlaybookActionService(
             throw new PlaybookActionValidationException("Behavior is required.");
         }
 
-        // P1 authors only manual actions; Analysis is reserved for the deferred self-improvement phase.
+        // Manual authoring creates only manual actions; Analysis is reserved for the deferred self-improvement phase.
         if (input.Source != PlaybookActionSource.Manual)
         {
             throw new PlaybookActionValidationException("Only Manual playbook actions can be authored in this phase.");
         }
 
-        // The full lifecycle is persisted, but P1 accepts only the human-toggleable states; Suggested (analysis
-        // proposals) and Archived are reserved for later phases.
+        // The full lifecycle is persisted, but Manual authoring accepts only the human-toggleable states; Suggested (analysis
+        // proposals) and Archived are reserved for the analysis-review workflow.
         if (input.State is not PlaybookActionState.Enabled and not PlaybookActionState.Disabled)
         {
             throw new PlaybookActionValidationException($"State '{input.State}' is not available in this phase; use Enabled or Disabled.");

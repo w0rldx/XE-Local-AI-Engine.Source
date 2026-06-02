@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
-/// <summary>
-///     FastEndpoints handler for the delete mcp server local API operation.
-/// </summary>
 public sealed class DeleteMcpServerEndpoint(IMcpServerService mcpServerService)
     : Endpoint<DeleteMcpServerRequest>
 {

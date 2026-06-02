@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using FluentValidation;
 
-/// <summary>
-///     Startup/options validator for get local model details request settings.
-/// </summary>
 public sealed class GetLocalModelDetailsRequestValidator : Validator<GetLocalModelDetailsRequest>
 {
     public GetLocalModelDetailsRequestValidator()
@@ -16,9 +13,6 @@ public sealed class GetLocalModelDetailsRequestValidator : Validator<GetLocalMod
     }
 }
 
-/// <summary>
-///     Startup/options validator for delete local model request settings.
-/// </summary>
 public sealed class DeleteLocalModelRequestValidator : Validator<DeleteLocalModelRequest>
 {
     public DeleteLocalModelRequestValidator()
@@ -29,9 +23,6 @@ public sealed class DeleteLocalModelRequestValidator : Validator<DeleteLocalMode
     }
 }
 
-/// <summary>
-///     Startup/options validator for select local model request settings.
-/// </summary>
 public sealed class SelectLocalModelRequestValidator : Validator<SelectLocalModelRequest>
 {
     public SelectLocalModelRequestValidator()
@@ -42,9 +33,6 @@ public sealed class SelectLocalModelRequestValidator : Validator<SelectLocalMode
     }
 }
 
-/// <summary>
-///     Startup/options validator for pull local model request settings.
-/// </summary>
 public sealed class PullLocalModelRequestValidator : Validator<PullLocalModelRequest>
 {
     public PullLocalModelRequestValidator()

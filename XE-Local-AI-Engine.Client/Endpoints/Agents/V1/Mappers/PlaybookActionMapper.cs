@@ -53,7 +53,7 @@ internal static class PlaybookActionMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // P1 pins Source = Manual: provenance is never client-supplied. Analysis is reserved for the deferred phase.
+        // Manual authoring pins Source = Manual: provenance is never client-supplied. Analysis-sourced actions use the dedicated review routes.
         return new PlaybookActionInput(request.AgentDefinitionId,
             request.State,
             PlaybookActionSource.Manual,
@@ -67,7 +67,7 @@ internal static class PlaybookActionMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // P1 pins Source = Manual: provenance is never client-supplied. Analysis is reserved for the deferred phase.
+        // Manual authoring pins Source = Manual: provenance is never client-supplied. Analysis-sourced actions use the dedicated review routes.
         return new PlaybookActionInput(request.AgentDefinitionId,
             request.State,
             PlaybookActionSource.Manual,

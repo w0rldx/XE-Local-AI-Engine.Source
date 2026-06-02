@@ -18,9 +18,6 @@ public static class ChatStreamEventTypes
     public const string ToolCallCompleted = "tool-call-completed";
 }
 
-/// <summary>
-///     Request DTO for node chat stream operations.
-/// </summary>
 public sealed record NodeChatStreamRequest(
     Guid ConversationId,
     string Content,
@@ -32,9 +29,6 @@ public sealed record NodeChatStreamRequest(
     string? ReasoningEffort = null,
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null);
 
-/// <summary>
-///     Value object carrying chat stream event data.
-/// </summary>
 public sealed record ChatStreamEvent(
     string Type,
     Guid ConversationId,

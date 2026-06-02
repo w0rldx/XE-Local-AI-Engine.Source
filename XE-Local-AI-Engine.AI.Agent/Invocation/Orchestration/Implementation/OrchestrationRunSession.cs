@@ -130,7 +130,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     private static ExternalResponse BuildApprovalResponse(ExternalRequest request, bool approved, string? reason)
     {
         // The request payload is the ToolApprovalRequestContent (the FICC-surfaced approval). Build its response and
-        // wrap it in the ExternalResponse the held run expects (proven shape from the §1.8 handoff spike).
+        // wrap it in the ExternalResponse the held run expects for a paused handoff workflow.
         if (request.Data?.AsType(typeof(object)) is not ToolApprovalRequestContent approvalRequest)
         {
             throw new InvalidOperationException("Orchestration approval request did not carry a tool-approval payload.");

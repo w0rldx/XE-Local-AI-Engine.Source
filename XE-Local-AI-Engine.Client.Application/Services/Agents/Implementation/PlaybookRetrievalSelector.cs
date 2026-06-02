@@ -3,18 +3,18 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     The single, shared Playbook P5 relevance-retrieval decision. Both the single-agent
+///     The single, shared relevance retrieval and cohort monitoring relevance-retrieval decision. Both the single-agent
 ///     <see cref="AgentDefinitionResolver" /> and the per-participant <see cref="OrchestrationResolver" /> route through
 ///     this helper so the threshold gate, the top-k selection, and the deterministic re-order are applied identically and
 ///     never duplicated. Below the threshold (or with a blank query) the caller's full Enabled set is returned unchanged,
-///     so the composed prompt — and thus the runtime config hash — stays byte-identical to the pre-P5 static prepend.
+///     so the composed prompt — and thus the runtime config hash — stays byte-identical to the pre-retrieval static prepend.
 /// </summary>
 internal static class PlaybookRetrievalSelector
 {
     /// <summary>
     ///     Chooses the subset of <paramref name="enabled" /> to inject for one send. When the set is at or below
     ///     <paramref name="retrievalThreshold" /> or <paramref name="retrievalQuery" /> is blank, the set is returned as-is
-    ///     (static prepend, byte-identical to pre-P5) WITHOUT awaiting or invoking the ranker — so the no-op fast path
+    ///     (static prepend, byte-identical to the pre-retrieval path) WITHOUT awaiting or invoking the ranker — so the no-op fast path
     ///     never constructs an embedding client. Otherwise the <paramref name="ranker" /> selects the top
     ///     <paramref name="topK" />, which are then re-ordered by Priority then CreatedAtUtc to preserve the composer's
     ///     deterministic store-order contract (the composer never re-sorts).

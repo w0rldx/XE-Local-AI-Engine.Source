@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-/// <summary>
-///     Startup/options validator for scheduler options settings.
-/// </summary>
 public sealed class SchedulerOptionsValidator : IValidateOptions<SchedulerOptions>
 {
     public ValidateOptionsResult Validate(string? name, SchedulerOptions options)

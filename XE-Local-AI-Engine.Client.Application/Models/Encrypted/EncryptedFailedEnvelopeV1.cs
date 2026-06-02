@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 
-/// <summary>
-///     Value object carrying encrypted failed envelope v1 data.
-/// </summary>
 public sealed record EncryptedFailedEnvelopeV1
 {
     public int ProtocolVersion { get; init; } = 1;

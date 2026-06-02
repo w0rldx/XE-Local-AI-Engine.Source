@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Configuration;
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>
-///     Configuration options for central platform behavior.
-/// </summary>
 public sealed class CentralPlatformOptions
 {
     public const string SectionName = "CentralPlatform";

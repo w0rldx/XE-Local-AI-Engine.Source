@@ -5,9 +5,6 @@ using FastEndpoints.Swagger;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-/// <summary>
-///     FastEndpoints handler for the node auth status local API operation.
-/// </summary>
 public sealed class NodeAuthStatusEndpoint(INodeAuthService authService) : EndpointWithoutRequest<NodeAuthStatusResponse>
 {
     public override void Configure()
@@ -28,9 +25,6 @@ public sealed class NodeAuthStatusEndpoint(INodeAuthService authService) : Endpo
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the node setup local API operation.
-/// </summary>
 public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<NodeSetupRequest>
 {
     public override void Configure()
@@ -67,9 +61,6 @@ public sealed class NodeSetupEndpoint(INodeAuthService authService) : Endpoint<N
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the node login local API operation.
-/// </summary>
 public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<NodeLoginRequest, NodeAccessTokenResponse>
 {
     public override void Configure()
@@ -118,9 +109,6 @@ public sealed class NodeLoginEndpoint(INodeAuthService authService) : Endpoint<N
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the node refresh local API operation.
-/// </summary>
 public sealed class NodeRefreshEndpoint(INodeAuthService authService) : EndpointWithoutRequest<NodeAccessTokenResponse>
 {
     public override void Configure()
@@ -169,9 +157,6 @@ public sealed class NodeRefreshEndpoint(INodeAuthService authService) : Endpoint
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the node logout local API operation.
-/// </summary>
 public sealed class NodeLogoutEndpoint(INodeAuthService authService) : EndpointWithoutRequest
 {
     public override void Configure()
@@ -189,9 +174,6 @@ public sealed class NodeLogoutEndpoint(INodeAuthService authService) : EndpointW
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the node change password local API operation.
-/// </summary>
 public sealed class NodeChangePasswordEndpoint(INodeAuthService authService) : Endpoint<NodeChangePasswordRequest>
 {
     public override void Configure()
@@ -219,9 +201,6 @@ public sealed class NodeChangePasswordEndpoint(INodeAuthService authService) : E
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the node me local API operation.
-/// </summary>
 public sealed class NodeMeEndpoint(INodeAuthService authService) : EndpointWithoutRequest<NodeMeResponse>
 {
     public override void Configure()

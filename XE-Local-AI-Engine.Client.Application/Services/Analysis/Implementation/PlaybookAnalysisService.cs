@@ -21,7 +21,7 @@ internal sealed class PlaybookAnalysisService(
 
     public async Task<PlaybookAnalysisOutcome> AnalyzeAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
-        // Read the P2 aggregate (reuse — never re-derive). Null means the agent does not exist → the endpoint 404s.
+        // Read the feedback-insights aggregate (reuse — never re-derive). Null means the agent does not exist → the endpoint 404s.
         var insights = await _insightsService.GetAgentFeedbackInsightsAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (insights is null)
         {
