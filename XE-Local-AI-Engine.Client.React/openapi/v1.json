@@ -4827,8 +4827,8 @@
           "Stopped"
         ],
         "enum": [
-          "Running",
-          "Stopped"
+          "running",
+          "stopped"
         ]
       },
       "XE_Local_AI_EngineHostAgentAbstractionsContractsContainerHealth": {
@@ -4842,11 +4842,11 @@
           "Stopped"
         ],
         "enum": [
-          "Unknown",
-          "Starting",
-          "Healthy",
-          "Unhealthy",
-          "Stopped"
+          "unknown",
+          "starting",
+          "healthy",
+          "unhealthy",
+          "stopped"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1RuntimeContainerActionRequest": {
@@ -4948,13 +4948,13 @@
           "Failed"
         ],
         "enum": [
-          "Unknown",
-          "Starting",
-          "Running",
-          "Degraded",
-          "Stopping",
-          "Stopped",
-          "Failed"
+          "unknown",
+          "starting",
+          "running",
+          "degraded",
+          "stopping",
+          "stopped",
+          "failed"
         ]
       },
       "XE_Local_AI_EngineHostAgentAbstractionsContractsHostAgentDesiredState": {
@@ -4965,8 +4965,8 @@
           "Stopped"
         ],
         "enum": [
-          "Running",
-          "Stopped"
+          "running",
+          "stopped"
         ]
       },
       "XE_Local_AI_EngineHostAgentAbstractionsContractsRuntimeLifecycle": {
@@ -4978,9 +4978,9 @@
           "External"
         ],
         "enum": [
-          "Managed",
-          "Native",
-          "External"
+          "managed",
+          "native",
+          "external"
         ]
       },
       "XE_Local_AI_EngineHostAgentAbstractionsContractsHostCapabilitiesDto": {

@@ -8,8 +8,8 @@ describe("RuntimeManagerModel", () => {
 		expect(formatRuntimeText(" ")).toBe("—");
 		expect(formatRuntimeBytes(1_073_741_824)).toBe("1.0 GB");
 		expect(formatRuntimeTimestamp("1970-01-01T00:00:00Z")).toBe("Not reported");
-		expect(getRuntimeStatusColor("Running")).toBe("green");
-		expect(getComponentHealthColor("Unhealthy")).toBe("red");
+		expect(getRuntimeStatusColor("running")).toBe("green");
+		expect(getComponentHealthColor("unhealthy")).toBe("red");
 	});
 
 	it("sorts components by name", () => {
