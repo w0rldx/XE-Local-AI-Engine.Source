@@ -244,6 +244,101 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         return Task.CompletedTask;
     }
 
+    // --- Model-fit utility one-shot run (scriptable, plan Marker 2) ---
+
+    private readonly object _utilitySync = new();
+    private ScriptedUtilityRun _scriptedUtilityRun = new(0, string.Empty, string.Empty, false);
+
+    /// <summary>Test seam: the spec passed to the last <see cref="RunUtilityContainerAsync" /> call, or <c>null</c> if never called.</summary>
+    public UtilityContainerRunSpec? LastUtilityRunSpec { get; private set; }
+
+    /// <summary>Test seam: whether the utility container created by the last run was removed (cleanup assertion).</summary>
+    public bool LastUtilityContainerRemoved { get; private set; }
+
+    /// <summary>Test seam: how many times <see cref="RunUtilityContainerAsync" /> was invoked.</summary>
+    public int UtilityRunCount { get; private set; }
+
+    /// <summary>Test seam: how many orphaned utility containers <see cref="RemoveOrphanedUtilityContainersAsync" /> reports.</summary>
+    public int OrphanedUtilityContainerCount { get; set; }
+
+    /// <summary>Test seam: scripts the result the next utility run returns (default behavior is exit 0, empty output).</summary>
+    public void ScriptUtilityRun(int exitCode, string standardOutput = "", string standardError = "")
+    {
+        ArgumentNullException.ThrowIfNull(standardOutput);
+        ArgumentNullException.ThrowIfNull(standardError);
+
+        lock (_utilitySync)
+        {
+            _scriptedUtilityRun = new ScriptedUtilityRun(exitCode, standardOutput, standardError, false);
+        }
+    }
+
+    /// <summary>Test seam: makes the next utility run block until its cancellation token fires, so cancel/timeout is testable.</summary>
+    public void ScriptBlockingUtilityRun()
+    {
+        lock (_utilitySync)
+        {
+            _scriptedUtilityRun = new ScriptedUtilityRun(0, string.Empty, string.Empty, true);
+        }
+    }
+
+    public async Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentException.ThrowIfNullOrWhiteSpace(spec.Image);
+
+        ScriptedUtilityRun scripted;
+        lock (_utilitySync)
+        {
+            LastUtilityRunSpec = spec;
+            LastUtilityContainerRemoved = false;
+            UtilityRunCount++;
+            scripted = _scriptedUtilityRun;
+        }
+
+        if (scripted.Blocks)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancellation/timeout cleanup: the container is stopped/removed unless debug retention keeps it.
+                lock (_utilitySync)
+                {
+                    LastUtilityContainerRemoved = !spec.RetainOnFailure;
+                }
+
+                return new UtilityContainerRunResult
+                {
+                    ExitCode = -1,
+                    Completed = false
+                };
+            }
+        }
+
+        lock (_utilitySync)
+        {
+            // The normal path removes the container unless it failed AND debug retention was requested.
+            LastUtilityContainerRemoved = !(scripted.ExitCode != 0 && spec.RetainOnFailure);
+        }
+
+        return new UtilityContainerRunResult
+        {
+            ExitCode = scripted.ExitCode,
+            StandardOutput = scripted.StandardOutput,
+            StandardError = scripted.StandardError,
+            Completed = true
+        };
+    }
+
+    public Task<int> RemoveOrphanedUtilityContainersAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(OrphanedUtilityContainerCount);
+    }
+
     private FakeSandbox GetAliveSandbox(string containerId)
     {
         return _sandboxes.TryGetValue(containerId, out var sandbox)
@@ -312,4 +407,6 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
     }
 
     private sealed record ScriptedExec(int ExitCode, string StandardOutput, string StandardError, bool Blocks);
+
+    private sealed record ScriptedUtilityRun(int ExitCode, string StandardOutput, string StandardError, bool Blocks);
 }

@@ -2,10 +2,11 @@ import { z } from "zod";
 
 // Mirrors the backend scheduler enums. The wire contract serializes each enum as its STRING name (camelCase
 // is used elsewhere, but enum members ride as their PascalCase names). Schedule kinds: Cron drives a cron
-// expression; OneShot fires once at startAtUtc; SimpleInterval repeats every intervalSeconds.
-export type ScheduleKind = "Cron" | "OneShot" | "SimpleInterval";
+// expression; OneShot fires once at startAtUtc; SimpleInterval repeats every intervalSeconds; Manual is a
+// durable on-demand job with no trigger (fired only via "Refresh now"/trigger), so it has no schedule fields.
+export type ScheduleKind = "Cron" | "OneShot" | "SimpleInterval" | "Manual";
 
-export const scheduleKinds: readonly ScheduleKind[] = ["Cron", "OneShot", "SimpleInterval"];
+export const scheduleKinds: readonly ScheduleKind[] = ["Cron", "OneShot", "SimpleInterval", "Manual"];
 
 // Misfire recovery policy applied by Quartz when a trigger is missed (node asleep / overloaded). Smart lets
 // Quartz pick per trigger type; SkipMissed drops the missed fire; FireOnceNow fires a single catch-up run.
@@ -137,7 +138,7 @@ export interface ScheduledJobFormValues {
 	parameters: string;
 }
 
-const scheduleKindSchema = z.enum(["Cron", "OneShot", "SimpleInterval"]);
+const scheduleKindSchema = z.enum(["Cron", "OneShot", "SimpleInterval", "Manual"]);
 const misfirePolicySchema = z.enum(["Smart", "SkipMissed", "FireOnceNow"]);
 
 // Parses an optional positive integer from a form string. Returns undefined for a blank field, null for a value
@@ -170,8 +171,8 @@ export function parseDateTimeLocal(value: string): number | null | undefined {
 
 // Zod schema validating the form before submit. The form is a convenience — the backend re-validates and is
 // authoritative — so this guards only the obvious shape errors per schedule kind: Cron needs a cron expression;
-// SimpleInterval needs intervalSeconds > 0; OneShot needs a valid startAtUtc. maxRuntimeSeconds (when present)
-// and repeatCount (when present) must be positive integers.
+// SimpleInterval needs intervalSeconds > 0; OneShot needs a valid startAtUtc; Manual needs no schedule fields.
+// maxRuntimeSeconds (when present) and repeatCount (when present) must be positive integers.
 export const scheduledJobFormSchema = z
 	.object({
 		templateId: z.string().trim().min(1),
@@ -205,7 +206,7 @@ export const scheduledJobFormSchema = z
 					path: ["intervalSeconds"],
 				});
 			}
-		} else {
+		} else if (value.scheduleKind === "OneShot") {
 			const start = parseDateTimeLocal(value.startAtUtc);
 			if (start === undefined) {
 				ctx.addIssue({ code: "custom", message: "A start time is required", path: ["startAtUtc"] });
@@ -213,6 +214,7 @@ export const scheduledJobFormSchema = z
 				ctx.addIssue({ code: "custom", message: "Start time is invalid", path: ["startAtUtc"] });
 			}
 		}
+		// Manual: a durable on-demand job has no cron/interval/start-at fields, so there is nothing to validate.
 
 		if (parsePositiveInteger(value.repeatCount) === null) {
 			ctx.addIssue({

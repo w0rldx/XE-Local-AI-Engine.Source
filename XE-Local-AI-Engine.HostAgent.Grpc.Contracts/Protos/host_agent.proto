@@ -238,3 +238,69 @@ message CancelCommandRequest {
 message KillSandboxRequest {
   string sandbox_id = 1;
 }
+
+// Narrow approved-image model-fit utility runner (llmfit recommend/benchmark, plan Marker 2). A THIRD unary service
+// distinct from HostAgentControl/SandboxControl, served by the same HostAgent.Linux gRPC server so the global HMAC
+// interceptor authenticates every call. The rpc is UNARY by design (the interceptor only covers unary/server-streaming
+// handlers). This is NOT a general Docker executor: the request carries INTENT only (operation + validated params + a
+// pinned image reference). There is deliberately NO command/argv/executable/image-name field — the HostAgent builds the
+// llmfit argv from a fixed server-side command profile and re-validates the image reference against an allowlist.
+service ModelFitUtilityControl {
+  rpc RunModelFitUtility (RunModelFitUtilityRequest) returns (RunModelFitUtilityReply);
+}
+
+// Mirrors the Persistence ModelFitOperation. RECOMMEND is the primary path; BENCHMARK is built here but its
+// endpoint/template exposure is gated to a later marker.
+enum ModelFitOperationMessage {
+  MODEL_FIT_OPERATION_UNSPECIFIED = 0;
+  MODEL_FIT_OPERATION_RECOMMEND = 1;
+  MODEL_FIT_OPERATION_BENCHMARK = 2;
+}
+
+// The container network posture for a utility run. NONE attaches no network (recommend is fully offline); RUNTIME
+// attaches the managed runtime network so the provider DNS name (e.g. http://ollama:11434) resolves for benchmark.
+enum ModelFitNetworkModeMessage {
+  MODEL_FIT_NETWORK_MODE_NONE = 0;
+  MODEL_FIT_NETWORK_MODE_RUNTIME = 1;
+}
+
+// Terminal status of a utility run. Mirrors the Persistence ModelFitRunStatus terminal states.
+enum ModelFitTerminalStatusMessage {
+  MODEL_FIT_TERMINAL_STATUS_UNSPECIFIED = 0;
+  SUCCEEDED = 1;
+  FAILED = 2;
+  CANCELLED = 3;
+  TIMED_OUT = 4;
+}
+
+// Intent-level request. The image reference is the pinned repo:tag@sha256 the node already validated; the HostAgent
+// RE-validates it (defense in depth) and rejects anything not canonical/allowlisted before running.
+message RunModelFitUtilityRequest {
+  string image_reference = 1;            // pinned repo:tag@sha256 — HostAgent re-validates
+  ModelFitOperationMessage operation = 2;
+  string use_case = 3;                   // recommend only; HostAgent appends only if non-empty
+  int32 limit = 4;                       // recommend only; >0
+  string model_name = 5;                 // benchmark only (required for bench)
+  string provider_name = 6;              // e.g. "ollama"
+  string provider_url = 7;               // e.g. http://ollama:11434 (benchmark --url)
+  ModelFitNetworkModeMessage network = 8;
+  int32 cpu_cores_override = 9;          // 0 = unset
+  int32 ram_override_gb = 10;            // 0 = unset
+  int32 vram_override_gb = 11;           // 0 = unset
+  int32 timeout_seconds = 12;            // <=0 => use HostAgent default max runtime
+}
+
+// Captured one-shot result. standard_output/standard_error carry the raw text over the trusted HMAC channel (the node
+// stores them encrypted and sanitizes for the API). sanitized_error is an operator-safe one-liner that never carries
+// secrets or raw stderr.
+message RunModelFitUtilityReply {
+  ModelFitTerminalStatusMessage status = 1;
+  int32 exit_code = 2;
+  string standard_output = 3;            // raw stdout (the JSON) — node treats as sensitive
+  string standard_error = 4;             // raw stderr
+  bool completed = 5;
+  int64 duration_ms = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
+  string sanitized_error = 9;            // operator-safe one-liner, never secrets
+}

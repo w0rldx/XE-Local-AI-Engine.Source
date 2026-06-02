@@ -56,6 +56,15 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case ScheduledJobRunEvent runEvent:
                 runEvent.DataJson = DecryptIfPresent(runEvent.DataJson, context.NodeEncryptionKey.Span, Guid.Empty, runEvent.Id, "data_json");
                 break;
+            case ModelFitSnapshot snapshot:
+                snapshot.RawJson = DecryptIfPresent(snapshot.RawJson, context.NodeEncryptionKey.Span, Guid.Empty, snapshot.Id, "raw_json");
+                snapshot.StderrExcerpt = DecryptIfPresent(snapshot.StderrExcerpt, context.NodeEncryptionKey.Span, Guid.Empty, snapshot.Id, "stderr_excerpt");
+                snapshot.DiagnosticsJson = DecryptIfPresent(snapshot.DiagnosticsJson, context.NodeEncryptionKey.Span, Guid.Empty, snapshot.Id, "diagnostics_json");
+                break;
+            case ModelFitBenchmark benchmark:
+                benchmark.RawJson = DecryptIfPresent(benchmark.RawJson, context.NodeEncryptionKey.Span, Guid.Empty, benchmark.Id, "bench_raw_json");
+                benchmark.DiagnosticsJson = DecryptIfPresent(benchmark.DiagnosticsJson, context.NodeEncryptionKey.Span, Guid.Empty, benchmark.Id, "bench_diagnostics_json");
+                break;
         }
 
         return entity;

@@ -23,6 +23,7 @@ export interface NodeCapabilityConfig {
 	readonly agentManagement: boolean;
 	readonly mcpServers: boolean;
 	readonly scheduler: boolean;
+	readonly modelFit: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -55,6 +56,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Quartz scheduler management surface. On by default; node-local SQLite-backed CRUD. Jobs are disabled until
 	// explicitly enabled, and job parameters are stored encrypted (never returned on the wire).
 	scheduler: true,
+	// llmfit model-fit surface (Model recommendations + read-only Approved reference images). On by default; reads
+	// are cache-only (never run llmfit), refreshes delegate to the scheduler. Approved image references are
+	// code/seed-owned and never editable from the browser.
+	modelFit: true,
 };
 
 export const nodeRoutePaths = {
@@ -75,6 +80,10 @@ export const nodeRoutePaths = {
 	mcp: "/mcp",
 	// Quartz scheduler management page — gated on nodeCapabilities.scheduler
 	scheduler: "/scheduler",
+	// llmfit model recommendations page — gated on nodeCapabilities.modelFit
+	modelRecommendations: "/model-recommendations",
+	// llmfit approved reference images page (read-only) — gated on nodeCapabilities.modelFit
+	approvedImages: "/approved-images",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;

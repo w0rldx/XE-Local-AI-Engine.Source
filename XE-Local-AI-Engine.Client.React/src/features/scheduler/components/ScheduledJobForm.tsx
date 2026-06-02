@@ -136,6 +136,9 @@ export function ScheduledJobForm({
 	const isCron = values.scheduleKind === "Cron";
 	const isInterval = values.scheduleKind === "SimpleInterval";
 	const isOneShot = values.scheduleKind === "OneShot";
+	// A Manual job is a durable on-demand job with no trigger — it has no cron/interval/start-at fields, so those
+	// inputs are hidden and a short note explains that it runs only when triggered.
+	const isManual = values.scheduleKind === "Manual";
 
 	return (
 		<Stack gap="md" data-testid="scheduled-job-form">
@@ -190,6 +193,12 @@ export function ScheduledJobForm({
 				onChange={handleScheduleKindChange}
 				data-testid="scheduler-form-schedule-kind"
 			/>
+
+			{isManual ? (
+				<Alert variant="light" data-testid="scheduler-form-manual-note">
+					{t("pages.scheduler.form.scheduleKind.manualNote", "Runs only when triggered manually.")}
+				</Alert>
+			) : null}
 
 			{isCron ? (
 				<TextInput

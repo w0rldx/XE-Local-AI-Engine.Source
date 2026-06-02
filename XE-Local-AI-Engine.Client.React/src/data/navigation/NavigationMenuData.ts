@@ -1,12 +1,14 @@
 import type { IconProps } from "@tabler/icons-react";
 import {
 	IconCalendarClock,
+	IconChartBar,
 	IconCloudCog,
 	IconCpu,
 	IconDashboard,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
+	IconPhotoShield,
 	IconPlug,
 	IconPlugConnected,
 	IconRobot,
@@ -116,6 +118,20 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.scheduler",
 		to: nodeRoutePaths.scheduler,
 	},
+	// Model-fit links (llmfit recommendations + read-only approved images) are gated on the static modelFit
+	// capability. Filtered out of the rendered menu below when the capability is off, mirroring the entries above.
+	{
+		id: "model-recommendations",
+		icon: IconChartBar,
+		translationKey: "navigation.modelRecommendations",
+		to: nodeRoutePaths.modelRecommendations,
+	},
+	{
+		id: "approved-images",
+		icon: IconPhotoShield,
+		translationKey: "navigation.approvedImages",
+		to: nodeRoutePaths.approvedImages,
+	},
 ];
 
 // Capability-gated navigation links: identity for everything except the agents/mcp entries, which are hidden
@@ -130,6 +146,9 @@ export const navigationLinks: INavigationLink[] = allNavigationLinks.filter((lin
 	}
 	if (link.id === "scheduler") {
 		return nodeCapabilities.scheduler;
+	}
+	if (link.id === "model-recommendations" || link.id === "approved-images") {
+		return nodeCapabilities.modelFit;
 	}
 	return true;
 });

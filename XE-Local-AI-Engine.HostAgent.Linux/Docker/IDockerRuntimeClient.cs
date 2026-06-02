@@ -54,4 +54,24 @@ public interface IDockerRuntimeClient
 
     /// <summary>Force-removes a sandbox container (kill + rm); subsequent operations against it fail.</summary>
     Task RemoveSandboxContainerAsync(string containerId, CancellationToken cancellationToken);
+
+    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner, plan Marker 2) ---
+
+    /// <summary>
+    ///     Runs a single one-shot utility container to completion and returns its captured result (plan Marker 2). The
+    ///     container is created from the pinned <see cref="UtilityContainerRunSpec.Image" /> with the supplied argv, the
+    ///     least-privilege hardening posture, and the requested network, then awaited for exit under a timeout. The
+    ///     container is removed afterwards (force) UNLESS the run failed and
+    ///     <see cref="UtilityContainerRunSpec.RetainOnFailure" /> is set. On cancellation/timeout the container is
+    ///     stopped/killed and removed (subject to the same retention rule) and a non-completed result is returned. NEVER
+    ///     mounts the Docker socket or host binds.
+    /// </summary>
+    Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Best-effort removal of leftover model-fit utility containers (those stamped with the utility label) from a
+    ///     prior crash. Returns the count removed. Used by the startup reconciler so orphaned llmfit containers do not
+    ///     keep consuming resources.
+    /// </summary>
+    Task<int> RemoveOrphanedUtilityContainersAsync(CancellationToken cancellationToken);
 }

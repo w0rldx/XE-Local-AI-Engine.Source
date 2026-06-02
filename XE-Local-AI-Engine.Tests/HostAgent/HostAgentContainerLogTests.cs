@@ -234,5 +234,15 @@ public sealed class HostAgentContainerLogTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<int> RemoveOrphanedUtilityContainersAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(0);
+        }
     }
 }

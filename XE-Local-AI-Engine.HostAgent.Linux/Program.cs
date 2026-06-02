@@ -73,6 +73,12 @@ public static class Program
         builder.Services.Configure<HostAgentHmacOptions>(options =>
             HostAgentHmacOptions.Bind(options, builder.Configuration));
         builder.Services.AddSingleton<SandboxRuntimeService>();
+        // Marker 2 narrow approved-image model-fit utility runner. Options are bound from HostAgent:ModelFitUtility; the
+        // service is the gRPC server impl of the third unary ModelFitUtilityControl contract (HMAC-covered via the same
+        // server interceptor). The reconciliation hosted service removes orphaned utility containers on startup.
+        builder.Services.Configure<ModelFitUtilityOptions>(builder.Configuration.GetSection(ModelFitUtilityOptions.SectionName));
+        builder.Services.AddSingleton<ModelFitUtilityControlService>();
+        builder.Services.AddHostedService<ModelFitUtilityReconciliationHostedService>();
         builder.Services.AddGrpc(options => options.Interceptors.Add<HmacAuthenticationInterceptor>());
 
         builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -96,6 +102,7 @@ public static class Program
 
         app.MapGrpcService<HostAgentControlService>();
         app.MapGrpcService<SandboxRuntimeService>();
+        app.MapGrpcService<ModelFitUtilityControlService>();
         app.UseLocalAdminRequestGuards();
         app.MapLocalAdminEndpoints();
         app.Run();
