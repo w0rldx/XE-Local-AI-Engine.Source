@@ -43,8 +43,8 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
 
-import { PromoteConflictError } from "@/features/agents/api/PlaybookActionsApi";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
+import { PromoteConflictError } from "@/features/agents/models/PlaybookActionMappers";
 import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
 import type { PlaybookMonitor, PlaybookMonitorItem } from "@/features/agents/models/PlaybookMonitorModels";
 
@@ -400,9 +400,7 @@ describe("PlaybookPanel", () => {
 						passed: false,
 						regressedCaseCount: 1,
 						candidatePassCount: 2,
-						cases: [
-							{ goldenCaseId: "g-1", scoredBy: "judge", baselinePass: true, candidatePass: false, regressed: true },
-						],
+						cases: [{ goldenCaseId: "g-1", scoredBy: "judge", baselinePass: true, candidatePass: false, regressed: true }],
 					}),
 				}),
 			],
@@ -576,9 +574,7 @@ describe("PlaybookPanel", () => {
 
 	it("renders the flag marker when the monitored action is flagged for review", () => {
 		monitorHookMock.usePlaybookMonitor.mockReturnValue(
-			makeMonitorQuery(
-				makeMonitor({ items: [makeMonitorItem({ actionId: "action-1", status: "Regressed", flagged: true })] }),
-			),
+			makeMonitorQuery(makeMonitor({ items: [makeMonitorItem({ actionId: "action-1", status: "Regressed", flagged: true })] })),
 		);
 
 		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
@@ -614,9 +610,7 @@ describe("PlaybookPanel", () => {
 	});
 
 	it("shows the relevance-gated banner only when the Enabled count exceeds the retrieval threshold", () => {
-		const enabledActions = Array.from({ length: 3 }, (_, i) =>
-			makeAction({ id: `action-${i}`, state: "Enabled", priority: i }),
-		);
+		const enabledActions = Array.from({ length: 3 }, (_, i) => makeAction({ id: `action-${i}`, state: "Enabled", priority: i }));
 		hooksMock.usePlaybookActions.mockReturnValue({ data: enabledActions, isLoading: false, error: null });
 
 		// threshold 2, 3 Enabled → banner shows with topK + count.
@@ -643,9 +637,7 @@ describe("PlaybookPanel", () => {
 	});
 
 	it("names the embedding ranker (with the model) in the relevance banner when embeddings are active", () => {
-		const enabledActions = Array.from({ length: 3 }, (_, i) =>
-			makeAction({ id: `action-${i}`, state: "Enabled", priority: i }),
-		);
+		const enabledActions = Array.from({ length: 3 }, (_, i) => makeAction({ id: `action-${i}`, state: "Enabled", priority: i }));
 		hooksMock.usePlaybookActions.mockReturnValue({ data: enabledActions, isLoading: false, error: null });
 		monitorHookMock.usePlaybookMonitor.mockReturnValue(
 			makeMonitorQuery(
@@ -661,9 +653,7 @@ describe("PlaybookPanel", () => {
 	});
 
 	it("names the lexical ranker in the relevance banner when embeddings are off", () => {
-		const enabledActions = Array.from({ length: 3 }, (_, i) =>
-			makeAction({ id: `action-${i}`, state: "Enabled", priority: i }),
-		);
+		const enabledActions = Array.from({ length: 3 }, (_, i) => makeAction({ id: `action-${i}`, state: "Enabled", priority: i }));
 		hooksMock.usePlaybookActions.mockReturnValue({ data: enabledActions, isLoading: false, error: null });
 		monitorHookMock.usePlaybookMonitor.mockReturnValue(
 			makeMonitorQuery(makeMonitor({ retrieval: { threshold: 2, topK: 2, ranker: "lexical", embeddingModel: null } })),

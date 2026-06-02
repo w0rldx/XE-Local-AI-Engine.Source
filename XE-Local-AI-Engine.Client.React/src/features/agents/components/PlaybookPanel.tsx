@@ -36,17 +36,19 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { PromoteConflictError } from "@/features/agents/api/PlaybookActionsApi";
+import {
+	PromoteConflictError,
+	toSavePlaybookActionRequest,
+	toSaveSuggestedActionRequest,
+} from "@/features/agents/models/PlaybookActionMappers";
 import {
 	comparePlaybookActions,
-	emptyPlaybookActionForm,
 	type EvalResult,
+	emptyPlaybookActionForm,
 	type PlaybookAction,
 	type PlaybookActionFormValues,
 	playbookActionFormSchema,
 	toPlaybookActionFormValues,
-	toSavePlaybookActionRequest,
-	toSaveSuggestedActionRequest,
 } from "@/features/agents/models/PlaybookActionModels";
 import type { PlaybookMonitorItem, PlaybookMonitorStatus } from "@/features/agents/models/PlaybookMonitorModels";
 import {
@@ -105,14 +107,12 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	// Manual governance: the existing Enabled/Disabled actions (and any unknown state that degraded to Disabled).
 	// Suggested actions are the analysis-proposed proposals awaiting human review and render in their own section.
 	const orderedActions = useMemo(
-		() =>
-			[...(actionsQuery.data ?? [])].filter((action) => action.state !== "Suggested").sort(comparePlaybookActions),
+		() => [...(actionsQuery.data ?? [])].filter((action) => action.state !== "Suggested").sort(comparePlaybookActions),
 		[actionsQuery.data],
 	);
 
 	const suggestedActions = useMemo(
-		() =>
-			[...(actionsQuery.data ?? [])].filter((action) => action.state === "Suggested").sort(comparePlaybookActions),
+		() => [...(actionsQuery.data ?? [])].filter((action) => action.state === "Suggested").sort(comparePlaybookActions),
 		[actionsQuery.data],
 	);
 
@@ -135,10 +135,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 	// Playbook P5 — the number of currently Enabled actions (the cohort under monitoring + the count the relevance
 	// gate / cap indicator reason about). Suggested/Disabled/Archived are excluded.
-	const enabledCount = useMemo(
-		() => orderedActions.filter((action) => action.state === "Enabled").length,
-		[orderedActions],
-	);
+	const enabledCount = useMemo(() => orderedActions.filter((action) => action.state === "Enabled").length, [orderedActions]);
 
 	// Playbook P5 — index the monitoring signals by actionId so each Enabled row can join its signal in O(1). An
 	// action with no monitor item (no enable clock yet, or the read failed) simply renders the neutral "no signal".
@@ -230,10 +227,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		async (action: PlaybookAction) => {
 			const confirmed = await confirm({
 				title: t("pages.agents.playbook.delete.title", "Delete playbook action"),
-				description: t(
-					"pages.agents.playbook.delete.description",
-					"Delete this playbook action? This cannot be undone.",
-				),
+				description: t("pages.agents.playbook.delete.description", "Delete this playbook action? This cannot be undone."),
 				confirmationText: t("common.delete", "Delete"),
 				cancellationText: t("common.cancel", "Cancel"),
 			});
@@ -291,9 +285,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	}
 
 	const isEditorOpen = editorTarget !== null;
-	const formInitialValues = editingAction
-		? toPlaybookActionFormValues(editingAction)
-		: emptyPlaybookActionForm(nextPriority);
+	const formInitialValues = editingAction ? toPlaybookActionFormValues(editingAction) : emptyPlaybookActionForm(nextPriority);
 	const isEditingSuggested = editingAction?.state === "Suggested";
 	const saveError = createMutation.error ?? updateMutation.error ?? updateSuggestedMutation.error;
 	const submitError = saveError
@@ -302,18 +294,14 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 	// "No new suggestions" notice: shown only after a completed analyze run that returned zero proposals and when
 	// there are no Suggested actions outstanding to review.
-	const showNoSuggestionsNotice =
-		analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
+	const showNoSuggestionsNotice = analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
 	// A blocked promote (the eval gate, HTTP 409) surfaces as a typed PromoteConflictError carrying the precise
 	// reason (needs eval / regressed / stale). Prefer a localized message keyed by its status; fall back to the
 	// generic review error for any other promote/reject failure.
 	const reviewError = promoteMutation.error ?? rejectMutation.error ?? runEvalMutation.error;
 	const promoteRejectError =
 		promoteMutation.error instanceof PromoteConflictError
-			? t(
-					`pages.agents.playbook.eval.conflict.${promoteMutation.error.status}`,
-					promoteMutation.error.message,
-				)
+			? t(`pages.agents.playbook.eval.conflict.${promoteMutation.error.status}`, promoteMutation.error.message)
 			: reviewError
 				? errorMessage(reviewError, t("pages.agents.playbook.errors.review", "Could not update the suggestion."))
 				: undefined;
@@ -384,25 +372,17 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 						)}{" "}
 						<Text span={true} size="sm" data-testid="playbook-relevance-ranker">
 							{retrieval.ranker === "embedding"
-								? t(
-										"pages.agents.playbook.monitor.rankerEmbedding",
-										"Ranked by embedding similarity (model {{model}}).",
-										{ model: retrieval.embeddingModel ?? "" },
-									)
-								: t(
-										"pages.agents.playbook.monitor.rankerLexical",
-										"Ranked by lexical overlap.",
-									)}
+								? t("pages.agents.playbook.monitor.rankerEmbedding", "Ranked by embedding similarity (model {{model}}).", {
+										model: retrieval.embeddingModel ?? "",
+									})
+								: t("pages.agents.playbook.monitor.rankerLexical", "Ranked by lexical overlap.")}
 						</Text>
 					</Alert>
 				) : null}
 
 				{analyzeMutation.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-analyze-error">
-						{errorMessage(
-							analyzeMutation.error,
-							t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."),
-						)}
+						{errorMessage(analyzeMutation.error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))}
 					</Alert>
 				) : null}
 
@@ -452,9 +432,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 						key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
 						initialValues={formInitialValues}
 						hideStateField={isEditingSuggested}
-						isSubmitting={
-							createMutation.isPending || updateMutation.isPending || updateSuggestedMutation.isPending
-						}
+						isSubmitting={createMutation.isPending || updateMutation.isPending || updateSuggestedMutation.isPending}
 						submitError={submitError}
 						onSubmit={handleSubmit}
 						onCancel={closeEditor}
@@ -722,15 +700,7 @@ function gateReasonFallback(reason: PromoteGateReason): string {
 // "Based on N feedback items" summary that expands to the cited ids and points the operator to the feedback
 // insights panel mounted on the same page. Carries Approve (→ promote), Edit (→ existing edit form/PUT), and
 // Reject (→ archive) controls.
-function SuggestedActionRow({
-	action,
-	disabled,
-	isEvaluating,
-	onApprove,
-	onEdit,
-	onReject,
-	onRunEval,
-}: SuggestedActionRowProps) {
+function SuggestedActionRow({ action, disabled, isEvaluating, onApprove, onEdit, onReject, onRunEval }: SuggestedActionRowProps) {
 	const { t } = useTranslation();
 	const [evidenceOpen, setEvidenceOpen] = useState(false);
 
@@ -741,9 +711,7 @@ function SuggestedActionRow({
 	// version; the tooltip explains why (no eval yet / regressed / stale).
 	const gateReason = promoteGateReason(action);
 	const canPromote = gateReason === "passed";
-	const promoteTooltip = canPromote
-		? null
-		: t(`pages.agents.playbook.eval.gate.${gateReason}`, gateReasonFallback(gateReason));
+	const promoteTooltip = canPromote ? null : t(`pages.agents.playbook.eval.gate.${gateReason}`, gateReasonFallback(gateReason));
 
 	return (
 		<Paper withBorder={true} p="xs" key={action.id} data-testid={`playbook-suggested-${action.id}`}>
@@ -755,12 +723,7 @@ function SuggestedActionRow({
 								{t("pages.agents.playbook.source.Analysis", "Analysis")}
 							</Badge>
 							{action.confidence !== null ? (
-								<Badge
-									size="xs"
-									variant="outline"
-									color="blue"
-									data-testid={`playbook-suggested-confidence-${action.id}`}
-								>
+								<Badge size="xs" variant="outline" color="blue" data-testid={`playbook-suggested-confidence-${action.id}`}>
 									{t("pages.agents.playbook.confidenceLabel", "Confidence {{value}}", {
 										value: toConfidencePercent(action.confidence),
 									})}
@@ -798,10 +761,7 @@ function SuggestedActionRow({
 								<Collapse expanded={evidenceOpen}>
 									<Stack gap={2} data-testid={`playbook-suggested-evidence-${action.id}`}>
 										<Text size="xs" c="dimmed">
-											{t(
-												"pages.agents.playbook.evidenceHint",
-												"Review these items in the Feedback insights panel below.",
-											)}
+											{t("pages.agents.playbook.evidenceHint", "Review these items in the Feedback insights panel below.")}
 										</Text>
 										{feedbackIds.map((feedbackId) => (
 											<Text key={feedbackId} size="xs" c="dimmed" style={{ wordBreak: "break-all" }}>
@@ -940,12 +900,7 @@ function EvalResultSummary({ actionId, evalResult }: EvalResultSummaryProps) {
 					<Collapse expanded={open}>
 						<Stack gap={2} data-testid={`playbook-suggested-eval-regressed-${actionId}`}>
 							{regressedCases.map((evalCase) => (
-								<Text
-									key={evalCase.goldenCaseId}
-									size="xs"
-									c="dimmed"
-									style={{ wordBreak: "break-all" }}
-								>
+								<Text key={evalCase.goldenCaseId} size="xs" c="dimmed" style={{ wordBreak: "break-all" }}>
 									{t("pages.agents.playbook.eval.regressedCase", "{{id}} (scored by {{scoredBy}})", {
 										id: evalCase.goldenCaseId,
 										scoredBy: t(`pages.agents.playbook.eval.scoredBy.${evalCase.scoredBy}`, evalCase.scoredBy),
@@ -1017,12 +972,11 @@ function PlaybookActionForm({
 					required={true}
 					autosize={true}
 					minRows={2}
-					error={
-						fieldErrors.behavior
-							? t("pages.agents.playbook.form.behavior.required", "Behavior is required")
-							: undefined
-					}
-					onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, behavior: value })); }}
+					error={fieldErrors.behavior ? t("pages.agents.playbook.form.behavior.required", "Behavior is required") : undefined}
+					onChange={(event) => {
+						const value = event.currentTarget.value;
+						setValues((current) => ({ ...current, behavior: value }));
+					}}
 					data-testid="playbook-form-behavior"
 				/>
 				<Group grow={true} align="flex-start">
@@ -1030,7 +984,10 @@ function PlaybookActionForm({
 						label={t("pages.agents.playbook.form.scope.label", "Scope")}
 						placeholder={t("pages.agents.playbook.form.scope.placeholder", "Optional topic/tool tag")}
 						value={values.scope}
-						onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, scope: value })); }}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							setValues((current) => ({ ...current, scope: value }));
+						}}
 						data-testid="playbook-form-scope"
 					/>
 					<NumberInput
@@ -1055,9 +1012,7 @@ function PlaybookActionForm({
 							]}
 							value={values.state}
 							allowDeselect={false}
-							onChange={(value) =>
-								setValues((current) => ({ ...current, state: value === "Disabled" ? "Disabled" : "Enabled" }))
-							}
+							onChange={(value) => setValues((current) => ({ ...current, state: value === "Disabled" ? "Disabled" : "Enabled" }))}
 							data-testid="playbook-form-state"
 						/>
 					)}
@@ -1072,7 +1027,10 @@ function PlaybookActionForm({
 					value={values.triggerCondition}
 					autosize={true}
 					minRows={1}
-					onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, triggerCondition: value })); }}
+					onChange={(event) => {
+						const value = event.currentTarget.value;
+						setValues((current) => ({ ...current, triggerCondition: value }));
+					}}
 					data-testid="playbook-form-trigger"
 				/>
 				{submitError ? (
@@ -1091,12 +1049,7 @@ function PlaybookActionForm({
 					>
 						{t("common.cancel", "Cancel")}
 					</Button>
-					<Button
-						size="xs"
-						onClick={handleSubmit}
-						loading={isSubmitting}
-						data-testid="playbook-form-submit"
-					>
+					<Button size="xs" onClick={handleSubmit} loading={isSubmitting} data-testid="playbook-form-submit">
 						{t("common.save", "Save")}
 					</Button>
 				</Group>
