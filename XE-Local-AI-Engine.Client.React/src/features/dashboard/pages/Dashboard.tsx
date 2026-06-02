@@ -9,16 +9,18 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import type { XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse } from "@/core/api/generated";
 import {
-	type ConnectionStatusDto,
-	connectWorker,
-	disableAutoConnect,
-	disconnectWorker,
-	enableAutoConnect,
-	getConnectionStatus,
-} from "@/features/dashboard/api/ConnectionApi";
-import { connectionStatusColor } from "@/features/dashboard/models/ConnectionStatusModel";
-import { connectionQueryKeys } from "@/features/dashboard/queries/ConnectionQueryKeys";
+	connectConnectionMutation,
+	disableAutoConnectMutation,
+	disconnectConnectionMutation,
+	enableAutoConnectMutation,
+	getConnectionStatusOptions,
+	getConnectionStatusQueryKey,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toConnectionStatusViewModel } from "@/features/dashboard/models/ConnectionMappers";
+import { type ConnectionStatusViewModel, connectionStatusColor } from "@/features/dashboard/models/ConnectionStatusModel";
 
 function isTokenExpired(tokenExpiresAt?: string | null): boolean {
 	if (!tokenExpiresAt) {
@@ -40,48 +42,43 @@ export function Dashboard() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const statusQuery = useQuery({
-		queryKey: connectionQueryKeys.status(),
-		queryFn: ({ signal }) => getConnectionStatus({ signal }),
+		...withResponseValidation(getConnectionStatusOptions()),
+		select: toConnectionStatusViewModel,
 		refetchInterval: 5000,
 	});
 
+	// Every connection action returns the fresh wire status; cache it under the generated status query key (the
+	// `select` maps it to the view model) and invalidate so the polling query picks up the change immediately.
+	const onActionSuccess = async (status: XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse) => {
+		queryClient.setQueryData(getConnectionStatusQueryKey(), status);
+		await queryClient.invalidateQueries({ queryKey: getConnectionStatusQueryKey() });
+	};
+
 	const connectMutation = useMutation({
-		mutationFn: () => connectWorker(),
-		onSuccess: async (status: ConnectionStatusDto) => {
-			queryClient.setQueryData(connectionQueryKeys.status(), status);
-			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
-		},
+		...withResponseValidation(connectConnectionMutation()),
+		onSuccess: onActionSuccess,
 	});
 	const disconnectMutation = useMutation({
-		mutationFn: () => disconnectWorker(),
-		onSuccess: async (status: ConnectionStatusDto) => {
-			queryClient.setQueryData(connectionQueryKeys.status(), status);
-			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
-		},
+		...withResponseValidation(disconnectConnectionMutation()),
+		onSuccess: onActionSuccess,
 	});
-	const enableAutoConnectMutation = useMutation({
-		mutationFn: () => enableAutoConnect(),
-		onSuccess: async (status: ConnectionStatusDto) => {
-			queryClient.setQueryData(connectionQueryKeys.status(), status);
-			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
-		},
+	const enableAutoConnectMutationResult = useMutation({
+		...withResponseValidation(enableAutoConnectMutation()),
+		onSuccess: onActionSuccess,
 	});
-	const disableAutoConnectMutation = useMutation({
-		mutationFn: () => disableAutoConnect(),
-		onSuccess: async (status: ConnectionStatusDto) => {
-			queryClient.setQueryData(connectionQueryKeys.status(), status);
-			await queryClient.invalidateQueries({ queryKey: connectionQueryKeys.status() });
-		},
+	const disableAutoConnectMutationResult = useMutation({
+		...withResponseValidation(disableAutoConnectMutation()),
+		onSuccess: onActionSuccess,
 	});
 
 	const status = statusQuery.data;
 	const actionError =
-		connectMutation.error ?? disconnectMutation.error ?? enableAutoConnectMutation.error ?? disableAutoConnectMutation.error;
+		connectMutation.error ?? disconnectMutation.error ?? enableAutoConnectMutationResult.error ?? disableAutoConnectMutationResult.error;
 	const isActionPending =
 		connectMutation.isPending ||
 		disconnectMutation.isPending ||
-		enableAutoConnectMutation.isPending ||
-		disableAutoConnectMutation.isPending;
+		enableAutoConnectMutationResult.isPending ||
+		disableAutoConnectMutationResult.isPending;
 
 	const getErrorMessage = (error: unknown): string =>
 		error instanceof Error ? error.message : t("pages.dashboard.unexpectedError");
@@ -91,7 +88,7 @@ export function Dashboard() {
 		return t(key, { defaultValue: t("pages.dashboard.connectionStatus.unknown") });
 	};
 
-	const getStatusSummary = (s: ConnectionStatusDto): string => {
+	const getStatusSummary = (s: ConnectionStatusViewModel): string => {
 		if (!s.isPaired) {
 			return t("pages.dashboard.notPairedHint");
 		}
@@ -158,7 +155,7 @@ export function Dashboard() {
 								<Group>
 									<Button
 										leftSection={<IconPlugConnected size={16} />}
-										onClick={() => connectMutation.mutate()}
+										onClick={() => connectMutation.mutate({})}
 										loading={connectMutation.isPending}
 										disabled={!status.canConnect || isActionPending}
 									>
@@ -167,7 +164,7 @@ export function Dashboard() {
 									<Button
 										variant="outline"
 										leftSection={<IconPlugConnectedX size={16} />}
-										onClick={() => disconnectMutation.mutate()}
+										onClick={() => disconnectMutation.mutate({})}
 										loading={disconnectMutation.isPending}
 										disabled={!status.canDisconnect || isActionPending}
 									>
@@ -199,16 +196,16 @@ export function Dashboard() {
 								<Group>
 									<Button
 										leftSection={<IconSettingsAutomation size={16} />}
-										onClick={() => enableAutoConnectMutation.mutate()}
-										loading={enableAutoConnectMutation.isPending}
+										onClick={() => enableAutoConnectMutationResult.mutate({})}
+										loading={enableAutoConnectMutationResult.isPending}
 										disabled={!status.canEnableAutoConnect || isActionPending}
 									>
 										{t("pages.dashboard.startupConnection.enableAutoConnect")}
 									</Button>
 									<Button
 										variant="outline"
-										onClick={() => disableAutoConnectMutation.mutate()}
-										loading={disableAutoConnectMutation.isPending}
+										onClick={() => disableAutoConnectMutationResult.mutate({})}
+										loading={disableAutoConnectMutationResult.isPending}
 										disabled={!status.canDisableAutoConnect || isActionPending}
 									>
 										{t("pages.dashboard.startupConnection.disableAutoConnect")}

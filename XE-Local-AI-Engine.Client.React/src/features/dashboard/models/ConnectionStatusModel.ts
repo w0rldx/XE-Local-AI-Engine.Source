@@ -1,5 +1,23 @@
 export type ConnectionStateValue = "disconnected" | "connecting" | "connected" | "reconnecting" | "pairing" | "error" | "preparing-model" | "unknown";
 
+// Stricter domain view-model the dashboard renders. The generated connection-status response has all-optional
+// fields (`x?: T`); this shape coalesces every field to a required value so the page never null-checks the wire
+// shape. Produced by ConnectionMappers.toConnectionStatusViewModel.
+export interface ConnectionStatusViewModel {
+	state: string;
+	lastError: string | null;
+	lastUpdatedAt: string;
+	isPaired: boolean;
+	autoConnectOnStart: boolean;
+	bindingMethod: string | null;
+	lastKnownNodeName: string | null;
+	tokenExpiresAt: string | null;
+	canConnect: boolean;
+	canDisconnect: boolean;
+	canEnableAutoConnect: boolean;
+	canDisableAutoConnect: boolean;
+}
+
 export function connectionStatusColor(state: string): "blue" | "green" | "orange" | "red" | "gray" {
 	switch (state) {
 		case "connected":
