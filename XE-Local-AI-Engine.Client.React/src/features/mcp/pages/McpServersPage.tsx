@@ -4,10 +4,10 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { toSaveMcpServerRequest } from "@/features/mcp/api/McpServersApi";
 import { McpServerForm } from "@/features/mcp/components/McpServerForm";
 import { McpServerList } from "@/features/mcp/components/McpServerList";
 import { McpServerToolsPanel } from "@/features/mcp/components/McpServerToolsPanel";
+import { toSaveMcpServerRequest } from "@/features/mcp/models/McpServerMappers";
 import type { McpServerFormValues, McpServerRegistration } from "@/features/mcp/models/McpServerModels";
 import {
 	useCreateMcpServer,
@@ -89,14 +89,17 @@ export function McpServersPage() {
 
 	const handleSubmit = useCallback(
 		(values: McpServerFormValues) => {
-			const request = toSaveMcpServerRequest(values);
+			const body = toSaveMcpServerRequest(values);
 
 			if (editorTarget?.mode === "edit") {
-				updateMutation.mutate({ id: editorTarget.id, request }, { onSuccess: () => closeEditor() });
+				updateMutation.mutate(
+					{ path: { mcpServerId: editorTarget.id }, body },
+					{ onSuccess: () => closeEditor() },
+				);
 				return;
 			}
 
-			createMutation.mutate(request, { onSuccess: () => closeEditor() });
+			createMutation.mutate({ body }, { onSuccess: () => closeEditor() });
 		},
 		[closeEditor, createMutation, editorTarget, updateMutation],
 	);
@@ -116,7 +119,7 @@ export function McpServersPage() {
 				if (expandedToolsId === server.id) {
 					setExpandedToolsId(null);
 				}
-				deleteMutation.mutate(server.id);
+				deleteMutation.mutate({ path: { mcpServerId: server.id } });
 			}
 		},
 		[confirm, deleteMutation, expandedToolsId, t],
