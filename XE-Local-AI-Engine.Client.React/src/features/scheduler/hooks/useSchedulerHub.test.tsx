@@ -5,8 +5,6 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { schedulerQueryKeys } from "@/features/scheduler/queries/SchedulerQueryKeys";
-
 // Captured event handlers keyed by the SignalR client-method name the hook subscribes to.
 const handlers = new Map<string, (...args: unknown[]) => void>();
 
@@ -39,6 +37,7 @@ vi.mock("@microsoft/signalr", () => ({
 
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
+import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
 const RUN_EVENTS = [
 	"scheduler.runStarted",
@@ -48,6 +47,16 @@ const RUN_EVENTS = [
 	"scheduler.runProgress",
 ];
 
+// The §7.6 bridge: the hub must invalidate the generated query keys, which are single-element arrays
+// `[{ _id: "<operationId>", ... }]`. A job-definition push invalidates listScheduledJobs; a run push invalidates
+// both listScheduledJobRuns and getScheduledJobRun. Invalidation is by the `_id` partial object (TanStack
+// partial-object matching), so it matches every cached variant regardless of the query/path the call carried.
+// These expected keys are built via the same production helper the hub uses.
+const JOBS_KEY = schedulerInvalidationKey(schedulerQueryIds.listJobs);
+const RUNS_KEY = schedulerInvalidationKey(schedulerQueryIds.listRuns);
+const RUN_KEY = schedulerInvalidationKey(schedulerQueryIds.getRun);
+
+// queryKey of every invalidateQueries call, so a test can assert the partial `_id` key shape the hub passed.
 const invalidatedKeys: unknown[] = [];
 
 function renderHub() {
@@ -64,7 +73,24 @@ function renderHub() {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return renderHook(() => useSchedulerHub(), { wrapper: Wrapper });
+	return { ...renderHook(() => useSchedulerHub(), { wrapper: Wrapper }), queryClient };
+}
+
+// Seeds a real query whose key matches the generated full-key shape `[{ _id, ... }]`, then drives an event and
+// asserts TanStack actually marked it stale — proving the hub's partial `_id` invalidation reaches a live query
+// keyed off the full generated options object (not just that invalidateQueries was called with a key).
+function renderHubWithSeededQuery(fullQueryKey: readonly unknown[]) {
+	handlers.clear();
+	signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
+		handlers.set(name, handler);
+	});
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } } });
+	queryClient.setQueryData(fullQueryKey as unknown[], { items: [] });
+	function Wrapper({ children }: { children: ReactNode }) {
+		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+	}
+	renderHook(() => useSchedulerHub(), { wrapper: Wrapper });
+	return queryClient;
 }
 
 describe("useSchedulerHub", () => {
@@ -105,21 +131,43 @@ describe("useSchedulerHub", () => {
 		}
 	});
 
-	it("invalidates the jobs cache on a definition-changed event", () => {
+	it("invalidates the generated listScheduledJobs key on a definition-changed event", () => {
 		renderHub();
 
 		handlers.get("scheduler.jobDefinitionChanged")?.();
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.jobsRoot());
+		expect(invalidatedKeys).toContainEqual(JOBS_KEY);
 	});
 
-	it("invalidates the run caches on every run event", () => {
+	it("invalidates the generated run keys on every run event", () => {
 		for (const eventName of RUN_EVENTS) {
 			renderHub();
 			handlers.get(eventName)?.();
-			expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runsRoot());
-			expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runRoot());
+			expect(invalidatedKeys).toContainEqual(RUNS_KEY);
+			expect(invalidatedKeys).toContainEqual(RUN_KEY);
 		}
+	});
+
+	it("marks a seeded jobs query stale via the partial `_id` match (the §7.6 bridge end-to-end)", () => {
+		// A real query keyed off the FULL generated options shape `[{ _id, ..., query }]` — the partial `_id`
+		// invalidation must still reach it.
+		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+		const fullJobsKey = [{ _id: "listScheduledJobs", query: { includeDeleted: false } }];
+		const queryClient = renderHubWithSeededQuery(fullJobsKey);
+
+		handlers.get("scheduler.jobDefinitionChanged")?.();
+
+		expect(queryClient.getQueryState(fullJobsKey)?.isInvalidated).toBe(true);
+	});
+
+	it("marks a seeded run query stale via the partial `_id` match (the §7.6 bridge end-to-end)", () => {
+		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+		const fullRunsKey = [{ _id: "listScheduledJobRuns", query: { status: "Running" } }];
+		const queryClient = renderHubWithSeededQuery(fullRunsKey);
+
+		handlers.get("scheduler.runStarted")?.();
+
+		expect(queryClient.getQueryState(fullRunsKey)?.isInvalidated).toBe(true);
 	});
 
 	it("unsubscribes and stops the connection on unmount", () => {

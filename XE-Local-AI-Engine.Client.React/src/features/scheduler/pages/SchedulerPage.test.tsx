@@ -202,7 +202,7 @@ describe("SchedulerPage", () => {
 
 		fireEvent.click(screen.getByTestId("scheduler-job-trigger-job-1"));
 
-		expect(triggerMutation.mutate).toHaveBeenCalledWith("job-1");
+		expect(triggerMutation.mutate).toHaveBeenCalledWith({ path: { scheduledJobId: "job-1" } });
 	});
 
 	it("surfaces a load error", () => {
