@@ -45,7 +45,7 @@ vi.mock("@microsoft/signalr", () => ({
 }));
 
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { streamRuntimeLogs, type RuntimeLogLineDto } from "@/features/runtime-manager/api/RuntimeManagerApi";
+import { streamRuntimeLogs, type RuntimeLogLineDto } from "@/features/runtime-manager/api/RuntimeLogStream";
 
 const logLine: RuntimeLogLineDto = {
 	containerName: "ollama",
@@ -59,7 +59,7 @@ async function settle(): Promise<void> {
 	await Promise.resolve();
 }
 
-describe("RuntimeManagerApi log streaming", () => {
+describe("RuntimeLogStream log streaming", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		useNodeAuthStore.getState().actions.clear();

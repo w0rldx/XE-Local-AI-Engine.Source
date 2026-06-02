@@ -1,9 +1,77 @@
-import type {
-	RuntimeComponentStatusDto,
-	RuntimeContainerActionName,
-	RuntimeLogLineDto,
-	RuntimeManifestDto,
-} from "@/features/runtime-manager/api/RuntimeManagerApi";
+import type { RuntimeLogLineDto } from "@/features/runtime-manager/api/RuntimeLogStream";
+
+export type RuntimeContainerActionName = "start" | "stop" | "restart";
+
+// Stricter domain view-models the runtime-manager page renders. The generated status response has all-optional
+// fields (`x?: T`); RuntimeManagerMappers coalesces every field to a required value so the page never null-checks
+// the wire shape.
+export interface RuntimeComponentStatusDto {
+	name: string;
+	desiredState: string;
+	health: string;
+	imageReference: string;
+	digestVerified: boolean;
+	observedAt: string;
+	diagnostics: string[];
+}
+
+export interface HostAgentStatusDto {
+	state: string;
+	desiredState: string;
+	runtimeLifecycle: string;
+	bootstrapModelReady: boolean;
+	webUiUrl: string;
+	observedAt: string;
+	diagnostics: string[];
+}
+
+export interface HostCapabilitiesDto {
+	cpuAvailable: boolean;
+	nvidiaGpuInference: boolean;
+	gpuRuntimeConfigured: boolean;
+	amdGpuStatus: string;
+	runtimeDiskBytes: number;
+	observedAt: string;
+	diagnostics: string[];
+}
+
+export interface RuntimeManifestEnvironmentDto {
+	name: string;
+	value: string;
+}
+
+export interface RuntimeManifestVolumeDto {
+	source: string;
+	target: string;
+	readOnly: boolean;
+}
+
+export interface RuntimeManifestContainerDto {
+	name: string;
+	image: string;
+	network: string;
+	environment: RuntimeManifestEnvironmentDto[];
+	volumes: RuntimeManifestVolumeDto[];
+}
+
+export interface RuntimeManifestDto {
+	available: boolean;
+	schemaVersion: number | null;
+	runtimeMode: string;
+	bootstrapModel: string;
+	defaultChatModel: string;
+	maxRuntimeDiskGb: number | null;
+	stopDrainTimeoutSeconds: number | null;
+	containers: RuntimeManifestContainerDto[];
+	diagnostics: string[];
+}
+
+export interface RuntimeManagerStatusViewModel {
+	status: HostAgentStatusDto;
+	capabilities: HostCapabilitiesDto;
+	components: RuntimeComponentStatusDto[];
+	manifest: RuntimeManifestDto;
+}
 
 export const runtimeEmptyValue = "—";
 

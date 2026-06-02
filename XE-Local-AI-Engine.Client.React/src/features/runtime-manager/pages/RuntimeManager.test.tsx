@@ -6,17 +6,27 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RuntimeManagerStatusResponseDto } from "@/features/runtime-manager/api/RuntimeManagerApi";
+import type { XeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse } from "@/core/api/generated";
 
-const { apiMock } = vi.hoisted(() => ({
-	apiMock: {
-		executeRuntimeContainerAction: vi.fn(),
-		getRuntimeManagerStatus: vi.fn(),
+const { generatedMock, logStreamMock } = vi.hoisted(() => ({
+	generatedMock: {
+		getRuntimeManagerStatusOptions: vi.fn(),
+		getRuntimeManagerStatusQueryKey: vi.fn(() => ["getRuntimeManagerStatus"]),
+		executeRuntimeContainerActionMutation: vi.fn(),
+		statusFn: vi.fn(),
+		actionFn: vi.fn(),
+	},
+	logStreamMock: {
 		streamRuntimeLogs: vi.fn(),
 	},
 }));
 
-vi.mock("@/features/runtime-manager/api/RuntimeManagerApi", () => apiMock);
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
+	getRuntimeManagerStatusOptions: generatedMock.getRuntimeManagerStatusOptions,
+	getRuntimeManagerStatusQueryKey: generatedMock.getRuntimeManagerStatusQueryKey,
+	executeRuntimeContainerActionMutation: generatedMock.executeRuntimeContainerActionMutation,
+}));
+vi.mock("@/features/runtime-manager/api/RuntimeLogStream", () => logStreamMock);
 
 import { RuntimeManager } from "@/features/runtime-manager/pages/RuntimeManager";
 
@@ -57,8 +67,12 @@ describe("RuntimeManager", () => {
 				disconnect = vi.fn();
 			},
 		});
-		apiMock.getRuntimeManagerStatus.mockResolvedValue(createSnapshot());
-		apiMock.executeRuntimeContainerAction.mockResolvedValue({
+		generatedMock.statusFn.mockResolvedValue(createSnapshot());
+		generatedMock.getRuntimeManagerStatusOptions.mockReturnValue({
+			queryKey: ["getRuntimeManagerStatus"],
+			queryFn: generatedMock.statusFn,
+		});
+		generatedMock.actionFn.mockResolvedValue({
 			containerName: "ollama",
 			action: "restart",
 			succeeded: true,
@@ -67,7 +81,8 @@ describe("RuntimeManager", () => {
 			components: [],
 			diagnostics: ["restart:ok"],
 		});
-		apiMock.streamRuntimeLogs.mockImplementation(async function* () {
+		generatedMock.executeRuntimeContainerActionMutation.mockReturnValue({ mutationFn: generatedMock.actionFn });
+		logStreamMock.streamRuntimeLogs.mockImplementation(async function* () {
 			yield {
 				containerName: "ollama",
 				stream: "stdout",
@@ -106,9 +121,13 @@ describe("RuntimeManager", () => {
 		fireEvent.click(await screen.findByRole("tab", { name: /Components/i }));
 		fireEvent.click(await screen.findByRole("button", { name: "Restart" }));
 
-		await waitFor(() => expect(apiMock.executeRuntimeContainerAction).toHaveBeenCalledWith({ containerName: "ollama", action: "restart", drainTimeoutSeconds: 30 }));
+		await waitFor(() =>
+			expect(generatedMock.actionFn.mock.calls[0]?.[0]).toEqual({
+				body: { containerName: "ollama", action: "restart", drainTimeoutSeconds: 30 },
+			}),
+		);
 		expect(await screen.findByText("restart requested for ollama.")).toBeTruthy();
-		await waitFor(() => expect(apiMock.getRuntimeManagerStatus).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(generatedMock.statusFn).toHaveBeenCalledTimes(2));
 	});
 
 	it("starts a cancellable log follow stream", async () => {
@@ -118,12 +137,17 @@ describe("RuntimeManager", () => {
 		fireEvent.click(await screen.findByRole("tab", { name: /Logs/i }));
 		fireEvent.click(await screen.findByRole("button", { name: "Follow logs" }));
 
-		await waitFor(() => expect(apiMock.streamRuntimeLogs).toHaveBeenCalledWith({ containerName: "ollama", tailLines: 200, follow: true }, expect.any(AbortSignal)));
+		await waitFor(() =>
+			expect(logStreamMock.streamRuntimeLogs).toHaveBeenCalledWith(
+				{ containerName: "ollama", tailLines: 200, follow: true },
+				expect.any(AbortSignal),
+			),
+		);
 		expect(await screen.findByText(/ollama\/stdout: ready/i)).toBeTruthy();
 	});
 });
 
-function createSnapshot(): RuntimeManagerStatusResponseDto {
+function createSnapshot(): XeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse {
 	return {
 		status: {
 			state: "Running",

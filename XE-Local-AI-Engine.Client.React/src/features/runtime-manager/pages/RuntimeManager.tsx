@@ -20,12 +20,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-	executeRuntimeContainerAction,
-	getRuntimeManagerStatus,
-	type RuntimeContainerActionName,
-	type RuntimeLogLineDto,
-	streamRuntimeLogs,
-} from "@/features/runtime-manager/api/RuntimeManagerApi";
+	executeRuntimeContainerActionMutation,
+	getRuntimeManagerStatusOptions,
+	getRuntimeManagerStatusQueryKey,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { type RuntimeLogLineDto, streamRuntimeLogs } from "@/features/runtime-manager/api/RuntimeLogStream";
+import { toRuntimeManagerStatusViewModel } from "@/features/runtime-manager/models/RuntimeManagerMappers";
 import {
 	formatRuntimeBoolean,
 	formatRuntimeBytes,
@@ -35,10 +36,10 @@ import {
 	getComponentHealthColor,
 	getRuntimeStatusColor,
 	manifestSummary,
+	type RuntimeContainerActionName,
 	runtimeContainerActionLabel,
 	sortRuntimeComponents,
 } from "@/features/runtime-manager/models/RuntimeManagerModel";
-import { runtimeManagerQueryKeys } from "@/features/runtime-manager/queries/RuntimeManagerQueryKeys";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer */
 
@@ -97,8 +98,8 @@ export function RuntimeManager() {
 	const [isFollowingLogs, setIsFollowingLogs] = useState(false);
 	const logAbortControllerRef = useRef<AbortController | undefined>(undefined);
 	const statusQuery = useQuery({
-		queryKey: runtimeManagerQueryKeys.status(),
-		queryFn: ({ signal }) => getRuntimeManagerStatus({ signal }),
+		...withResponseValidation(getRuntimeManagerStatusOptions()),
+		select: toRuntimeManagerStatusViewModel,
 	});
 	const snapshot = statusQuery.data;
 	const sortedComponents = useMemo(() => sortRuntimeComponents(snapshot?.components ?? []), [snapshot]);
@@ -114,19 +115,20 @@ export function RuntimeManager() {
 		return [...names].toSorted((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }));
 	}, [snapshot, sortedComponents]);
 	const actionMutation = useMutation({
-		mutationFn: (request: { containerName: string; action: RuntimeContainerActionName }) =>
-			executeRuntimeContainerAction({ ...request, drainTimeoutSeconds: snapshot?.manifest.stopDrainTimeoutSeconds ?? undefined }),
+		...withResponseValidation(executeRuntimeContainerActionMutation()),
 		onSuccess: async (response) => {
-			setActionMessage(`${response.action} requested for ${response.containerName}.`);
-			await queryClient.invalidateQueries({ queryKey: runtimeManagerQueryKeys.status() });
+			setActionMessage(`${response.action ?? ""} requested for ${response.containerName ?? ""}.`);
+			await queryClient.invalidateQueries({ queryKey: getRuntimeManagerStatusQueryKey() });
 		},
 	});
 	const runContainerAction = useCallback(
 		(containerName: string, action: RuntimeContainerActionName) => {
 			setActionMessage(undefined);
-			actionMutation.mutate({ containerName, action });
+			actionMutation.mutate({
+				body: { containerName, action, drainTimeoutSeconds: snapshot?.manifest.stopDrainTimeoutSeconds ?? undefined },
+			});
 		},
-		[actionMutation],
+		[actionMutation, snapshot],
 	);
 	const stopLogFollow = useCallback(() => {
 		logAbortControllerRef.current?.abort();
@@ -353,8 +355,8 @@ export function RuntimeManager() {
 																		onClick={() => runContainerAction(component.name, action)}
 																		loading={
 																			actionMutation.isPending &&
-																			actionMutation.variables?.containerName === component.name &&
-																			actionMutation.variables?.action === action
+																			actionMutation.variables?.body?.containerName === component.name &&
+																			actionMutation.variables?.body?.action === action
 																		}
 																		disabled={actionMutation.isPending}
 																	>
