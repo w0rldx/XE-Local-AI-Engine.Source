@@ -16,7 +16,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpoint",
+        "operationId": "cancelScheduledJobRun",
         "parameters": [
           {
             "name": "runId",
@@ -61,7 +61,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1CreateScheduledJobEndpoint",
+        "operationId": "createScheduledJob",
         "requestBody": {
           "x-name": "CreateScheduledJobRequest",
           "description": "",
@@ -106,7 +106,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobsEndpoint",
+        "operationId": "listScheduledJobs",
         "parameters": [
           {
             "name": "includeDeleted",
@@ -150,7 +150,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1DeleteScheduledJobEndpoint",
+        "operationId": "deleteScheduledJob",
         "parameters": [
           {
             "name": "scheduledJobId",
@@ -186,7 +186,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1GetScheduledJobEndpoint",
+        "operationId": "getScheduledJob",
         "parameters": [
           {
             "name": "scheduledJobId",
@@ -229,7 +229,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1UpdateScheduledJobEndpoint",
+        "operationId": "updateScheduledJob",
         "parameters": [
           {
             "name": "scheduledJobId",
@@ -287,7 +287,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1DisableScheduledJobEndpoint",
+        "operationId": "disableScheduledJob",
         "parameters": [
           {
             "name": "scheduledJobId",
@@ -332,7 +332,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1EnableScheduledJobEndpoint",
+        "operationId": "enableScheduledJob",
         "parameters": [
           {
             "name": "scheduledJobId",
@@ -377,7 +377,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint",
+        "operationId": "getScheduledJobRun",
         "parameters": [
           {
             "name": "runId",
@@ -422,7 +422,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoint",
+        "operationId": "listScheduledJobRuns",
         "parameters": [
           {
             "name": "status",
@@ -497,7 +497,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpoint",
+        "operationId": "listScheduledJobTemplates",
         "responses": {
           "200": {
             "description": "Success",
@@ -531,7 +531,7 @@
         "tags": [
           "Scheduler"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsSchedulerV1TriggerScheduledJobEndpoint",
+        "operationId": "triggerScheduledJob",
         "parameters": [
           {
             "name": "scheduledJobId",
@@ -569,7 +569,7 @@
         "tags": [
           "Runtime"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpoint",
+        "operationId": "executeRuntimeContainerAction",
         "requestBody": {
           "x-name": "RuntimeContainerActionRequest",
           "description": "",
@@ -616,7 +616,7 @@
         "tags": [
           "Runtime"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpoint",
+        "operationId": "getRuntimeManagerStatus",
         "responses": {
           "200": {
             "description": "Success",
@@ -650,7 +650,7 @@
         "tags": [
           "Node-Settings"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint",
+        "operationId": "getNodeSettings",
         "responses": {
           "200": {
             "description": "Success",
@@ -682,7 +682,7 @@
         "tags": [
           "Node-Settings"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpoint",
+        "operationId": "saveNodeSettings",
         "requestBody": {
           "x-name": "SaveNodeSettingsRequest",
           "description": "",
@@ -739,7 +739,7 @@
         "tags": [
           "Binding"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoint",
+        "operationId": "cancelNodeBinding",
         "responses": {
           "200": {
             "description": "Success",
@@ -773,7 +773,7 @@
         "tags": [
           "Binding"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsNodeBindingV1PollNodeBindingEndpoint",
+        "operationId": "pollNodeBinding",
         "requestBody": {
           "x-name": "PollNodeBindingSessionRequest",
           "description": "",
@@ -820,7 +820,7 @@
         "tags": [
           "Binding"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint",
+        "operationId": "startNodeBinding",
         "responses": {
           "200": {
             "description": "Success",
@@ -854,7 +854,7 @@
         "tags": [
           "Model-Fit"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint",
+        "operationId": "getLatestRecommendations",
         "parameters": [
           {
             "name": "useCase",
@@ -906,7 +906,7 @@
         "tags": [
           "Model-Fit"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsModelFitV1ListApprovedImagesEndpoint",
+        "operationId": "listApprovedImages",
         "responses": {
           "200": {
             "description": "Success",
@@ -940,7 +940,7 @@
         "tags": [
           "Model-Fit"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint",
+        "operationId": "refreshRecommendations",
         "requestBody": {
           "x-name": "RefreshRecommendationsRequest",
           "description": "",
@@ -987,7 +987,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1CreateMcpServerEndpoint",
+        "operationId": "createMcpServer",
         "requestBody": {
           "x-name": "CreateMcpServerRequest",
           "description": "",
@@ -1032,7 +1032,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1ListMcpServersEndpoint",
+        "operationId": "listMcpServers",
         "responses": {
           "200": {
             "description": "Success",
@@ -1066,7 +1066,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1DeleteMcpServerEndpoint",
+        "operationId": "deleteMcpServer",
         "parameters": [
           {
             "name": "mcpServerId",
@@ -1102,7 +1102,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerEndpoint",
+        "operationId": "getMcpServer",
         "parameters": [
           {
             "name": "mcpServerId",
@@ -1145,7 +1145,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1UpdateMcpServerEndpoint",
+        "operationId": "updateMcpServer",
         "parameters": [
           {
             "name": "mcpServerId",
@@ -1203,7 +1203,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1GetMcpServerToolsEndpoint",
+        "operationId": "getMcpServerTools",
         "parameters": [
           {
             "name": "mcpServerId",
@@ -1248,7 +1248,7 @@
         "tags": [
           "Tool-Catalog"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1GetToolCatalogEndpoint",
+        "operationId": "getToolCatalog",
         "responses": {
           "200": {
             "description": "Success",
@@ -1282,7 +1282,7 @@
         "tags": [
           "Mcp"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsMcpV1SetMcpServerEnabledEndpoint",
+        "operationId": "setMcpServerEnabled",
         "parameters": [
           {
             "name": "mcpServerId",
@@ -1340,7 +1340,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint",
+        "operationId": "deleteLocalModel",
         "parameters": [
           {
             "name": "modelName",
@@ -1394,7 +1394,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint",
+        "operationId": "deleteModelKind",
         "parameters": [
           {
             "name": "modelName",
@@ -1436,7 +1436,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1PutModelKindEndpoint",
+        "operationId": "putModelKind",
         "parameters": [
           {
             "name": "modelName",
@@ -1493,7 +1493,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint",
+        "operationId": "getLocalModelDetails",
         "parameters": [
           {
             "name": "modelName",
@@ -1547,7 +1547,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint",
+        "operationId": "listLocalModels",
         "responses": {
           "200": {
             "description": "Success",
@@ -1581,7 +1581,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelEndpoint",
+        "operationId": "pullLocalModel",
         "requestBody": {
           "x-name": "PullLocalModelRequest",
           "description": "",
@@ -1638,7 +1638,7 @@
         "tags": [
           "Models"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint",
+        "operationId": "selectLocalModel",
         "requestBody": {
           "x-name": "SelectLocalModelRequest",
           "description": "",
@@ -1695,7 +1695,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpoint",
+        "operationId": "cancelNodeChatMessage",
         "requestBody": {
           "x-name": "CancelNodeChatMessageRequest",
           "description": "",
@@ -1752,7 +1752,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpoint",
+        "operationId": "createNodeChatConversation",
         "requestBody": {
           "x-name": "CreateNodeChatConversationRequest",
           "description": "",
@@ -1807,7 +1807,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpoint",
+        "operationId": "listNodeChatConversations",
         "parameters": [
           {
             "name": "includeArchived",
@@ -1870,7 +1870,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpoint",
+        "operationId": "deleteNodeChatConversation",
         "parameters": [
           {
             "name": "conversationId",
@@ -1941,7 +1941,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatConversationEndpoint",
+        "operationId": "getNodeChatConversation",
         "parameters": [
           {
             "name": "conversationId",
@@ -1996,7 +1996,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpoint",
+        "operationId": "renameNodeChatConversation",
         "parameters": [
           {
             "name": "conversationId",
@@ -2054,7 +2054,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1PinNodeChatConversationEndpoint",
+        "operationId": "pinNodeChatConversation",
         "parameters": [
           {
             "name": "conversationId",
@@ -2112,7 +2112,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpoint",
+        "operationId": "archiveNodeChatConversation",
         "parameters": [
           {
             "name": "conversationId",
@@ -2170,7 +2170,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpoint",
+        "operationId": "branchNodeChatConversation",
         "parameters": [
           {
             "name": "conversationId",
@@ -2224,7 +2224,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpoint",
+        "operationId": "createNodeChatMessageRevision",
         "parameters": [
           {
             "name": "conversationId",
@@ -2276,7 +2276,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpoint",
+        "operationId": "listNodeChatMessageRevisions",
         "parameters": [
           {
             "name": "conversationId",
@@ -2330,7 +2330,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpoint",
+        "operationId": "setNodeChatMessageFeedback",
         "parameters": [
           {
             "name": "conversationId",
@@ -2395,7 +2395,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpoint",
+        "operationId": "getNodeChatMessageFeedback",
         "parameters": [
           {
             "name": "conversationId",
@@ -2449,7 +2449,7 @@
         "tags": [
           "Chat"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpoint",
+        "operationId": "setNodeChatSelectedPath",
         "parameters": [
           {
             "name": "conversationId",
@@ -2517,7 +2517,7 @@
         "tags": [
           "Invocations"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsInvocationsV1GetInvocationMonitorEndpoint",
+        "operationId": "getInvocationMonitor",
         "responses": {
           "200": {
             "description": "Success",
@@ -2551,7 +2551,7 @@
         "tags": [
           "Connection"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1ConnectConnectionEndpoint",
+        "operationId": "connectConnection",
         "responses": {
           "200": {
             "description": "Success",
@@ -2585,7 +2585,7 @@
         "tags": [
           "Connection"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1DisableAutoConnectEndpoint",
+        "operationId": "disableAutoConnect",
         "responses": {
           "200": {
             "description": "Success",
@@ -2619,7 +2619,7 @@
         "tags": [
           "Connection"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1DisconnectConnectionEndpoint",
+        "operationId": "disconnectConnection",
         "responses": {
           "200": {
             "description": "Success",
@@ -2653,7 +2653,7 @@
         "tags": [
           "Connection"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1EnableAutoConnectEndpoint",
+        "operationId": "enableAutoConnect",
         "responses": {
           "200": {
             "description": "Success",
@@ -2687,7 +2687,7 @@
         "tags": [
           "Connection"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsConnectionV1GetConnectionStatusEndpoint",
+        "operationId": "getConnectionStatus",
         "responses": {
           "200": {
             "description": "Success",
@@ -2721,7 +2721,7 @@
         "tags": [
           "Cloud-Settings"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpoint",
+        "operationId": "clearCloudSettings",
         "responses": {
           "200": {
             "description": "Success",
@@ -2753,7 +2753,7 @@
         "tags": [
           "Cloud-Settings"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoint",
+        "operationId": "getCloudSettings",
         "responses": {
           "200": {
             "description": "Success",
@@ -2785,7 +2785,7 @@
         "tags": [
           "Cloud-Settings"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpoint",
+        "operationId": "saveCloudSettings",
         "requestBody": {
           "x-name": "SaveCloudSettingsRequest",
           "description": "",
@@ -2842,7 +2842,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeAuthStatusEndpoint",
+        "operationId": "nodeAuthStatus",
         "responses": {
           "200": {
             "description": "Success",
@@ -2862,7 +2862,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeSetupEndpoint",
+        "operationId": "nodeSetup",
         "requestBody": {
           "x-name": "NodeSetupRequest",
           "description": "",
@@ -2898,7 +2898,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeLoginEndpoint",
+        "operationId": "nodeLogin",
         "requestBody": {
           "x-name": "NodeLoginRequest",
           "description": "",
@@ -2941,7 +2941,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeRefreshEndpoint",
+        "operationId": "nodeRefresh",
         "responses": {
           "200": {
             "description": "Success",
@@ -2961,7 +2961,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeLogoutEndpoint",
+        "operationId": "nodeLogout",
         "responses": {
           "204": {
             "description": "No Content"
@@ -2988,7 +2988,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeChangePasswordEndpoint",
+        "operationId": "nodeChangePassword",
         "requestBody": {
           "x-name": "NodeChangePasswordRequest",
           "description": "",
@@ -3038,7 +3038,7 @@
         "tags": [
           "Auth"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAuthV1NodeMeEndpoint",
+        "operationId": "nodeMe",
         "responses": {
           "200": {
             "description": "Success",
@@ -3072,7 +3072,7 @@
         "tags": [
           "Diagnostics"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpoint",
+        "operationId": "validationProblemProbe",
         "requestBody": {
           "x-name": "ValidationProblemProbeRequest",
           "description": "",
@@ -3129,7 +3129,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1AnalyzePlaybookEndpoint",
+        "operationId": "analyzePlaybook",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3174,7 +3174,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ApproveGoldenConversationEndpoint",
+        "operationId": "approveGoldenConversation",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3228,7 +3228,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1CreateAgentDefinitionEndpoint",
+        "operationId": "createAgentDefinition",
         "requestBody": {
           "x-name": "CreateAgentDefinitionRequest",
           "description": "",
@@ -3273,7 +3273,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentDefinitionsEndpoint",
+        "operationId": "listAgentDefinitions",
         "responses": {
           "200": {
             "description": "Success",
@@ -3307,7 +3307,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1CreateGoldenConversationEndpoint",
+        "operationId": "createGoldenConversation",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3363,7 +3363,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsEndpoint",
+        "operationId": "listGoldenConversations",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3408,7 +3408,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1CreatePlaybookActionEndpoint",
+        "operationId": "createPlaybookAction",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3464,7 +3464,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpoint",
+        "operationId": "listAgentPlaybookActions",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3509,7 +3509,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpoint",
+        "operationId": "deleteAgentDefinition",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3545,7 +3545,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentDefinitionEndpoint",
+        "operationId": "getAgentDefinition",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3588,7 +3588,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpoint",
+        "operationId": "updateAgentDefinition",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3646,7 +3646,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1DeleteGoldenConversationEndpoint",
+        "operationId": "deleteGoldenConversation",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3693,7 +3693,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1DeletePlaybookActionEndpoint",
+        "operationId": "deletePlaybookAction",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3738,7 +3738,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1UpdatePlaybookActionEndpoint",
+        "operationId": "updatePlaybookAction",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3805,7 +3805,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpoint",
+        "operationId": "getAgentFeedbackInsights",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3850,7 +3850,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoint",
+        "operationId": "getAgentPlaybookMonitor",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3895,7 +3895,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1GetToolCapableModelsEndpoint",
+        "operationId": "getToolCapableModels",
         "responses": {
           "200": {
             "description": "Success",
@@ -3929,7 +3929,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpoint",
+        "operationId": "harvestGoldenConversations",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -3974,7 +3974,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpoint",
+        "operationId": "promoteSuggestedPlaybookAction",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -4028,7 +4028,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpoint",
+        "operationId": "rejectSuggestedPlaybookAction",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -4082,7 +4082,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpoint",
+        "operationId": "runPlaybookActionEval",
         "parameters": [
           {
             "name": "agentDefinitionId",
@@ -4136,7 +4136,7 @@
         "tags": [
           "Agents"
         ],
-        "operationId": "XE_Local_AI_EngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpoint",
+        "operationId": "updateSuggestedPlaybookAction",
         "parameters": [
           {
             "name": "agentDefinitionId",

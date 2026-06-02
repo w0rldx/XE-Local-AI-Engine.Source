@@ -5,7 +5,7 @@ const { probeEndpoint } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/core/api/generated", () => ({
-	xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpoint: probeEndpoint,
+	validationProblemProbe: probeEndpoint,
 }));
 
 import { probeLocalApi } from "@/features/api-foundation/api/ValidationProblemProbeApi";
