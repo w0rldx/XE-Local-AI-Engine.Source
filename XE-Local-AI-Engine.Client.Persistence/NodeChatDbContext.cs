@@ -325,6 +325,15 @@ public sealed class NodeChatDbContext : DbContext
                .HasColumnName("playbook_enabled")
                .HasDefaultValue(false);
 
+        // Provenance — additive structural columns. Plaintext (an int + a slug), not encrypted; the seeded import path
+        // is the only writer that sets Source=Seeded / SeedSlug, keeping provenance forge-proof.
+        builder.Property(entity => entity.Source)
+               .HasColumnName("source")
+               .HasDefaultValue((int)AgentDefinitionSource.Manual);
+
+        builder.Property(entity => entity.SeedSlug)
+               .HasColumnName("seed_slug");
+
         builder.Property(entity => entity.Version)
                .HasColumnName("version");
 
@@ -336,6 +345,13 @@ public sealed class NodeChatDbContext : DbContext
 
         // Name is a human label, not a key: index it for list/search but do not enforce uniqueness.
         builder.HasIndex(entity => entity.Name);
+
+        // The seed slug is the idempotency key for a re-import, so it is unique — but only among seeded rows that
+        // actually carry one (manual rows leave it null), hence the filtered unique index. This is the DB-level guard
+        // beneath the service-level skip.
+        builder.HasIndex(entity => entity.SeedSlug)
+               .IsUnique()
+               .HasFilter("\"seed_slug\" IS NOT NULL");
     }
 
     private static void ConfigurePlaybookAction(EntityTypeBuilder<PlaybookAction> builder)

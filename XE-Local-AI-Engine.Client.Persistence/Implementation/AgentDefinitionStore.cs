@@ -44,6 +44,40 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         return ToRecord(entity);
     }
 
+    public async Task<AgentDefinitionRecord> AddSeededAsync(AgentDefinitionInput input, string seedSlug, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentException.ThrowIfNullOrWhiteSpace(seedSlug);
+
+        var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var entity = new AgentDefinition
+        {
+            Id = Guid.NewGuid(),
+            Name = input.Name,
+            Description = EncodeOptional(input.Description),
+            Instructions = Encoding.UTF8.GetBytes(input.Instructions),
+            ModelProfile = input.ModelProfile,
+            ReasoningEffort = input.ReasoningEffort,
+            Kind = (int)input.Kind,
+            AllowedToolNamesJson = SerializeToolNames(input.AllowedToolNames),
+            ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
+            OrchestrationTopologyJson = input.OrchestrationTopologyJson,
+            PlaybookEnabled = input.PlaybookEnabled,
+            // The only place a seeded provenance is stamped — the manual AddAsync leaves Source at the entity default
+            // (Manual), keeping the operator create/update contract unable to forge a seeded row.
+            Source = (int)AgentDefinitionSource.Seeded,
+            SeedSlug = seedSlug,
+            Version = 1,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        };
+
+        _ = _dbContext.AgentDefinitions.Add(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return ToRecord(entity);
+    }
+
     public async Task<AgentDefinitionRecord?> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -140,6 +174,20 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         return entities.Select(ToRecord).ToArray();
     }
 
+    public async Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default)
+    {
+        // Project the slug column only — never load the encrypted Instructions/Description, since this is just the
+        // idempotency check before an import.
+        var slugs = await _dbContext.AgentDefinitions
+                                    .AsNoTracking()
+                                    .Where(definition => definition.Source == (int)AgentDefinitionSource.Seeded && definition.SeedSlug != null)
+                                    .Select(definition => definition.SeedSlug!)
+                                    .ToListAsync(cancellationToken)
+                                    .ConfigureAwait(false);
+
+        return slugs.ToHashSet(StringComparer.Ordinal);
+    }
+
     private static AgentDefinitionRecord ToRecord(AgentDefinition entity)
     {
         return new AgentDefinitionRecord(
@@ -156,7 +204,9 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.Version,
             entity.CreatedAtUtc,
             entity.UpdatedAtUtc,
-            entity.PlaybookEnabled);
+            entity.PlaybookEnabled,
+            (AgentDefinitionSource)entity.Source,
+            entity.SeedSlug);
     }
 
     private static byte[]? EncodeOptional(string? value)

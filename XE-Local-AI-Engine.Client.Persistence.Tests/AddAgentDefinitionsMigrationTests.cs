@@ -47,13 +47,14 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             "Migration should create the agent_definitions table.");
 
         // MigrateAsync applies every migration, so the column set reflects later additive migrations too
-        // (playbook_enabled lands in AddPlaybookActions). This asserts the post-full-migrate shape.
+        // (playbook_enabled lands in AddPlaybookActions; source/seed_slug land in AddAgentDefinitionSeedProvenance).
+        // This asserts the post-full-migrate shape.
         var definitionColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);
         AssertEx.True(definitionColumns.SetEquals(new[]
         {
             "id", "name", "description", "instructions", "model_profile", "reasoning_effort", "kind",
             "allowed_tool_names_json", "tool_approvals_json", "orchestration_topology_json", "version",
-            "created_at_utc", "updated_at_utc", "playbook_enabled"
+            "created_at_utc", "updated_at_utc", "playbook_enabled", "source", "seed_slug"
         }), "agent_definitions should expose the mapped columns.");
 
         var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);

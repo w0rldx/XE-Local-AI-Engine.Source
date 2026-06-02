@@ -15,6 +15,21 @@ public interface IAgentDefinitionStore
     Task<AgentDefinitionRecord> AddAsync(AgentDefinitionInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Persists a new starter-pack definition exactly like <see cref="AddAsync" /> but stamps
+    ///     <c>Source = Seeded</c> and the supplied <paramref name="seedSlug" />. This is the <b>only</b> method that
+    ///     mints a seeded row — the operator create/update contract always writes <c>Manual</c> — so provenance stays
+    ///     forge-proof.
+    /// </summary>
+    Task<AgentDefinitionRecord> AddSeededAsync(AgentDefinitionInput input, string seedSlug, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Returns the set of <c>SeedSlug</c> values already present on seeded rows (Ordinal-cased), used as a cheap
+    ///     idempotency check before import. Projects the slug column only — no <c>Instructions</c>/<c>Description</c>
+    ///     decryption.
+    /// </summary>
+    Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Applies <paramref name="input" /> to the definition identified by <paramref name="id" />, stamping
     ///     <c>UpdatedAtUtc</c> and incrementing <c>Version</c> only when a config-affecting field changed (Instructions,
     ///     tool lists, approvals, ModelProfile, ReasoningEffort, Kind, topology — never Name/Description alone). Returns
