@@ -1,7 +1,7 @@
 import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconPlus, IconRobot } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPlus, IconRobot, IconSparkles } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
@@ -10,6 +10,7 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { AgentDefinitionForm, type AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
+import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
@@ -69,6 +70,8 @@ export function AgentsPage() {
 	const openCreate = useAgentManagementStore((state) => state.actions.openCreate);
 	const openEdit = useAgentManagementStore((state) => state.actions.openEdit);
 	const closeEditor = useAgentManagementStore((state) => state.actions.closeEditor);
+
+	const [isGalleryOpen, setGalleryOpen] = useState(false);
 
 	const definitionsQuery = useAgentDefinitions();
 	const toolCapableModelsQuery = useToolCapableModels();
@@ -159,9 +162,19 @@ export function AgentsPage() {
 						</Text>
 					</Stack>
 					{!isEditorOpen ? (
-						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="agent-create-button">
-							{t("pages.agents.createButton", "New agent")}
-						</Button>
+						<Group gap="sm">
+							<Button
+								variant="default"
+								leftSection={<IconSparkles size={16} />}
+								onClick={() => setGalleryOpen(true)}
+								data-testid="agent-templates-button"
+							>
+								{t("pages.agents.templatesButton", "Add starter agents")}
+							</Button>
+							<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="agent-create-button">
+								{t("pages.agents.createButton", "New agent")}
+							</Button>
+						</Group>
 					) : null}
 				</Group>
 
@@ -246,6 +259,8 @@ export function AgentsPage() {
 						</Stack>
 					</Card>
 				)}
+
+				<AgentTemplateGallery opened={isGalleryOpen} onClose={() => setGalleryOpen(false)} />
 			</Stack>
 		</Container>
 	);

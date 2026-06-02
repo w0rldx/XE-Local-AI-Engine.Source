@@ -813,6 +813,20 @@
 			"title": "Agent-Definitionen",
 			"subtitle": "Lokale Agent-Personas erstellen: Anweisungen, Modell, Reasoning-Aufwand und die nutzbaren Tools.",
 			"createButton": "Neuer Agent",
+			"templatesButton": "Starter-Agenten hinzufügen",
+			"templates": {
+				"title": "Starter-Agenten hinzufügen",
+				"subtitle": "Importiere kuratierte Starter-Personas als bearbeitbare Agent-Definitionen. Sie kommen ohne Tools an — Tools nach dem Import vergeben.",
+				"loading": "Starter-Agenten werden geladen…",
+				"loadError": "Starter-Agenten konnten nicht geladen werden.",
+				"importError": "Die ausgewählten Agenten konnten nicht importiert werden.",
+				"empty": "Es sind keine Starter-Agenten verfügbar.",
+				"tokenBadge": "~{{count}} Tokens",
+				"tokenWarning": "Der geschätzte Prompt dieser Persona ist für lokale Modelle groß. Die Schätzung ist eine Zeichen/4-Heuristik.",
+				"alreadyImported": "Importiert",
+				"importButton": "Auswahl importieren ({{count}})",
+				"importSuccess": "{{imported}} hinzugefügt, {{skipped}} übersprungen."
+			},
 			"list": {
 				"loading": "Agent-Definitionen werden geladen…",
 				"empty": "Noch keine Agent-Definitionen. Erstelle eine, um zu beginnen.",
@@ -1055,12 +1069,12 @@
 					"titleRequired": "Titel ist erforderlich.",
 					"turnsRequired": "Mindestens ein Eingabe-Turn ist erforderlich.",
 					"signalRequired": "Füge mindestens eine erforderliche/verbotene Phrase oder eine Rubric hinzu.",
-						"tooLong": {
-							"title": "Der Titel ist zu lang (max. {{max}} Zeichen).",
-							"inputTurns": "Die Eingabe-Turns sind zu lang (max. {{max}} Zeichen).",
-							"assertion": "Die erforderlichen/verbotenen Phrasen sind zu lang (max. {{max}} Zeichen).",
-							"rubric": "Die Rubric ist zu lang (max. {{max}} Zeichen)."
-						},
+					"tooLong": {
+						"title": "Der Titel ist zu lang (max. {{max}} Zeichen).",
+						"inputTurns": "Die Eingabe-Turns sind zu lang (max. {{max}} Zeichen).",
+						"assertion": "Die erforderlichen/verbotenen Phrasen sind zu lang (max. {{max}} Zeichen).",
+						"rubric": "Die Rubric ist zu lang (max. {{max}} Zeichen)."
+					},
 					"title": {
 						"label": "Titel",
 						"placeholder": "Kurzes Bedienerlabel"
@@ -1091,7 +1105,7 @@
 					"approve": "Der Golden-Fall konnte nicht genehmigt werden."
 				}
 			},
-			"insights": 			{
+			"insights": {
 				"title": "Feedback-Einblicke",
 				"subtitle": "Schreibgeschützte Zusammenfassung des Daumen-hoch/runter-Feedbacks und der Kommentare für {{name}}.",
 				"loading": "Feedback-Einblicke werden geladen…",
