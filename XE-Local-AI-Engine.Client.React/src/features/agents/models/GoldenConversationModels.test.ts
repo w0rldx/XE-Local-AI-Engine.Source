@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	parsePromoteConflictBody,
-	toCreatedGoldenConversation,
+	toGoldenConversation,
 	toGoldenConversations,
 	toGoldenHarvestResult,
+} from "@/features/agents/models/GoldenConversationMappers";
+import {
+	findGoldenFieldOverLimit,
+	GOLDEN_TITLE_MAX,
+	parsePromoteConflictBody,
 } from "@/features/agents/models/GoldenConversationModels";
 
-// Minimal valid DTO for toGoldenConversation tests.
-function makeDto(overrides: Record<string, unknown> = {}): unknown {
+// The response-shape validation that the former hand-zod schemas owned now lives in the generated zod validator
+// (`validator: true`) + the withResponseValidation bridge at the hook, so these tests no longer assert reject-on-
+// malformed behaviour. Instead they cover (1) the coalescing mappers that project the optional-field generated wire
+// shape into the strict domain view-model, (2) the surviving FORM-cap validator, and (3) the 409 promote-conflict
+// body parser (consumed by PlaybookActionMappers). A generated-shaped DTO has every field optional (`x?: T`).
+function makeResponseDto(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 	return {
 		id: "g-10",
 		agentDefinitionId: "agent-1",
@@ -26,8 +34,8 @@ function makeDto(overrides: Record<string, unknown> = {}): unknown {
 	};
 }
 
-describe("GoldenConversationModels", () => {
-	it("parses a golden case list envelope, normalizing a null assertion/rubric", () => {
+describe("toGoldenConversations — list mapper", () => {
+	it("maps a list envelope, normalizing a null assertion/rubric and provenance", () => {
 		const result = toGoldenConversations({
 			items: [
 				{
@@ -61,14 +69,19 @@ describe("GoldenConversationModels", () => {
 		expect(result[1]?.assertion).toBeNull();
 		expect(result[1]?.rubric).toBe("Is the explanation correct?");
 		expect(result[1]?.enabled).toBe(false);
+		// Provenance defaults: an absent source coalesces to "manual" and absent ids to null.
+		expect(result[0]?.source).toBe("manual");
+		expect(result[0]?.sourceMessageId).toBeNull();
 	});
 
-	it("throws when the golden list payload does not match the contract", () => {
-		expect(() => toGoldenConversations({ items: [{ id: "g-1" }] })).toThrow(/Invalid golden conversations payload/);
+	it("coalesces an absent items array to an empty list", () => {
+		expect(toGoldenConversations({})).toEqual([]);
 	});
+});
 
-	it("parses a created golden case from the bare (non-envelope) POST response", () => {
-		const created = toCreatedGoldenConversation({
+describe("toGoldenConversation — single mapper + provenance", () => {
+	it("maps a created/approved bare case (non-envelope response)", () => {
+		const created = toGoldenConversation({
 			id: "g-3",
 			agentDefinitionId: "agent-1",
 			title: "Created",
@@ -84,23 +97,8 @@ describe("GoldenConversationModels", () => {
 		expect(created.assertion?.forbiddenPhrases).toEqual(["oops"]);
 	});
 
-	it("parses a well-formed 409 promote-conflict body", () => {
-		const body = parsePromoteConflictBody({ status: "EvalRequired", reason: "Run the eval first." });
-
-		expect(body).toEqual({ status: "EvalRequired", reason: "Run the eval first." });
-	});
-
-	it("returns null for an unknown/garbage promote-conflict body", () => {
-		expect(parsePromoteConflictBody({ status: "Nope", reason: "x" })).toBeNull();
-		expect(parsePromoteConflictBody({ detail: "RFC7807 problem details" })).toBeNull();
-		expect(parsePromoteConflictBody(null)).toBeNull();
-	});
-});
-
-describe("toGoldenConversation — source / provenance mapping", () => {
 	it("maps source='manual' and null provenance ids", () => {
-		// Exercise through the schema boundary so Zod validates and normalises the payload.
-		const result = toCreatedGoldenConversation(makeDto({ source: "manual" }));
+		const result = toGoldenConversation(makeResponseDto({ source: "manual" }));
 
 		expect(result.source).toBe("manual");
 		expect(result.sourceMessageId).toBeNull();
@@ -108,8 +106,8 @@ describe("toGoldenConversation — source / provenance mapping", () => {
 	});
 
 	it("maps source='harvested' with provenance ids", () => {
-		const result = toCreatedGoldenConversation(
-			makeDto({
+		const result = toGoldenConversation(
+			makeResponseDto({
 				source: "harvested",
 				sourceMessageId: "msg-abc",
 				sourceConversationId: "conv-xyz",
@@ -121,18 +119,28 @@ describe("toGoldenConversation — source / provenance mapping", () => {
 		expect(result.sourceConversationId).toBe("conv-xyz");
 	});
 
-	it("degrades an unknown/garbage source value to 'manual' via the .catch fallback (schema boundary)", () => {
-		// The Zod schema uses .catch("manual") so unrecognised literals silently normalise.
-		// The degradation happens at the schema boundary (safeParse), so exercise it through
-		// toCreatedGoldenConversation which validates an unknown payload against the schema.
-		const result = toCreatedGoldenConversation(makeDto({ source: "garbage_unknown_value" }));
+	it("degrades an unknown/garbage source value to 'manual'", () => {
+		const result = toGoldenConversation(makeResponseDto({ source: "garbage_unknown_value" }));
 
 		expect(result.source).toBe("manual");
+	});
+
+	it("coalesces missing fields to safe domain defaults", () => {
+		const result = toGoldenConversation({});
+
+		expect(result.id).toBe("");
+		expect(result.title).toBe("");
+		expect(result.inputTurns).toEqual([]);
+		expect(result.assertion).toBeNull();
+		expect(result.rubric).toBeNull();
+		expect(result.enabled).toBe(false);
+		expect(result.source).toBe("manual");
+		expect(result.createdAtUtc).toBe(0);
 	});
 });
 
 describe("toGoldenHarvestResult", () => {
-	it("parses a valid harvest counts payload", () => {
+	it("maps a harvest counts payload", () => {
 		const result = toGoldenHarvestResult({
 			thumbsUpScanned: 10,
 			createdCount: 3,
@@ -146,9 +154,48 @@ describe("toGoldenHarvestResult", () => {
 		expect(result.skippedCount).toBe(5);
 	});
 
-	it("throws on a malformed harvest payload (safeParse path)", () => {
-		expect(() => toGoldenHarvestResult({ thumbsUpScanned: "not-a-number" })).toThrow(/Invalid golden harvest payload/);
-		expect(() => toGoldenHarvestResult(null)).toThrow(/Invalid golden harvest payload/);
-		expect(() => toGoldenHarvestResult({ createdCount: 1 })).toThrow(/Invalid golden harvest payload/);
+	it("coalesces missing counts to zero", () => {
+		expect(toGoldenHarvestResult({})).toEqual({
+			thumbsUpScanned: 0,
+			createdCount: 0,
+			duplicateCount: 0,
+			skippedCount: 0,
+		});
+	});
+});
+
+describe("findGoldenFieldOverLimit — create-request form caps", () => {
+	it("returns null when the request is within all caps", () => {
+		expect(
+			findGoldenFieldOverLimit({
+				title: "Short",
+				inputTurns: [{ role: "user", text: "hi" }],
+				rubric: "Is it right?",
+			}),
+		).toBeNull();
+	});
+
+	it("flags an over-long title", () => {
+		expect(
+			findGoldenFieldOverLimit({
+				title: "x".repeat(GOLDEN_TITLE_MAX + 1),
+				inputTurns: [{ role: "user", text: "hi" }],
+				rubric: "ok",
+			}),
+		).toBe("title");
+	});
+});
+
+describe("parsePromoteConflictBody", () => {
+	it("parses a well-formed 409 promote-conflict body", () => {
+		const body = parsePromoteConflictBody({ status: "EvalRequired", reason: "Run the eval first." });
+
+		expect(body).toEqual({ status: "EvalRequired", reason: "Run the eval first." });
+	});
+
+	it("returns null for an unknown/garbage promote-conflict body", () => {
+		expect(parsePromoteConflictBody({ status: "Nope", reason: "x" })).toBeNull();
+		expect(parsePromoteConflictBody({ detail: "RFC7807 problem details" })).toBeNull();
+		expect(parsePromoteConflictBody(null)).toBeNull();
 	});
 });
