@@ -236,18 +236,15 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
             }
         }
 
-        // After the stream completes, ChatActivityTimeline (not ToolCallDisplay) renders the persisted
-        // tool-call entries. Assert the activity timeline and the Calculate entry are visible.
-        await Expect(Page.GetByTestId("chat-activity-timeline"))
+        // After the stream completes, the ordered-parts renderer persists each tool call as a
+        // ToolCallCard entry (testid `chat-tool-call-card-<name>`), which replaced the former
+        // ChatActivityTimeline / `chat-activity-entry-<name>` structure. The card container (its
+        // summary) is always visible; the result body sits in a collapsed Collapse, so assert the
+        // card, not the result.
+        await Expect(Page.GetByTestId("chat-tool-call-card-Calculate"))
             .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
             {
                 Timeout = 5000
-            });
-
-        await Expect(Page.GetByTestId("chat-activity-entry-Calculate"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
-            {
-                Timeout = 3000
             });
     }
 
