@@ -167,14 +167,14 @@ export type XeLocalAiEngineHostAgentAbstractionsContractsRuntimeComponentStatusD
 	diagnostics?: Array<string>;
 };
 
-export type XeLocalAiEngineHostAgentAbstractionsContractsContainerDesiredState = "Running" | "Stopped";
+export type XeLocalAiEngineHostAgentAbstractionsContractsContainerDesiredState = "running" | "stopped";
 
 export type XeLocalAiEngineHostAgentAbstractionsContractsContainerHealth =
-	| "Unknown"
-	| "Starting"
-	| "Healthy"
-	| "Unhealthy"
-	| "Stopped";
+	| "unknown"
+	| "starting"
+	| "healthy"
+	| "unhealthy"
+	| "stopped";
 
 export type XeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeContainerActionRequest = {
 	containerName?: string | null;
@@ -203,17 +203,17 @@ export type XeLocalAiEngineHostAgentAbstractionsContractsHostAgentStatusDto = {
 };
 
 export type XeLocalAiEngineHostAgentAbstractionsContractsHostAgentState =
-	| "Unknown"
-	| "Starting"
-	| "Running"
-	| "Degraded"
-	| "Stopping"
-	| "Stopped"
-	| "Failed";
+	| "unknown"
+	| "starting"
+	| "running"
+	| "degraded"
+	| "stopping"
+	| "stopped"
+	| "failed";
 
-export type XeLocalAiEngineHostAgentAbstractionsContractsHostAgentDesiredState = "Running" | "Stopped";
+export type XeLocalAiEngineHostAgentAbstractionsContractsHostAgentDesiredState = "running" | "stopped";
 
-export type XeLocalAiEngineHostAgentAbstractionsContractsRuntimeLifecycle = "Managed" | "Native" | "External";
+export type XeLocalAiEngineHostAgentAbstractionsContractsRuntimeLifecycle = "managed" | "native" | "external";
 
 export type XeLocalAiEngineHostAgentAbstractionsContractsHostCapabilitiesDto = {
 	cpuAvailable?: boolean;

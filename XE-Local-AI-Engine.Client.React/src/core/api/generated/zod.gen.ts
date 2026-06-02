@@ -244,14 +244,14 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	parameters: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineHostAgentAbstractionsContractsContainerDesiredState = z.enum(["Running", "Stopped"]);
+export const zXeLocalAiEngineHostAgentAbstractionsContractsContainerDesiredState = z.enum(["running", "stopped"]);
 
 export const zXeLocalAiEngineHostAgentAbstractionsContractsContainerHealth = z.enum([
-	"Unknown",
-	"Starting",
-	"Healthy",
-	"Unhealthy",
-	"Stopped",
+	"unknown",
+	"starting",
+	"healthy",
+	"unhealthy",
+	"stopped",
 ]);
 
 export const zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeComponentStatusDto = z.object({
@@ -285,18 +285,18 @@ export const zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeContainerActi
 });
 
 export const zXeLocalAiEngineHostAgentAbstractionsContractsHostAgentState = z.enum([
-	"Unknown",
-	"Starting",
-	"Running",
-	"Degraded",
-	"Stopping",
-	"Stopped",
-	"Failed",
+	"unknown",
+	"starting",
+	"running",
+	"degraded",
+	"stopping",
+	"stopped",
+	"failed",
 ]);
 
-export const zXeLocalAiEngineHostAgentAbstractionsContractsHostAgentDesiredState = z.enum(["Running", "Stopped"]);
+export const zXeLocalAiEngineHostAgentAbstractionsContractsHostAgentDesiredState = z.enum(["running", "stopped"]);
 
-export const zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeLifecycle = z.enum(["Managed", "Native", "External"]);
+export const zXeLocalAiEngineHostAgentAbstractionsContractsRuntimeLifecycle = z.enum(["managed", "native", "external"]);
 
 export const zXeLocalAiEngineHostAgentAbstractionsContractsHostAgentStatusDto = z.object({
 	state: zXeLocalAiEngineHostAgentAbstractionsContractsHostAgentState.optional(),

@@ -16,6 +16,7 @@ using NSwag;
 using Serilog;
 using Serilog.Sinks.SystemConsole.Themes;
 using XE_Local_AI_Engine.Client.BackgroundServices;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
@@ -89,6 +90,12 @@ public static class ConfigureServices
                     Scheme = JwtBearerDefaults.AuthenticationScheme,
                     BearerFormat = "JWT"
                 });
+
+                // NJsonSchema emits CLR member names for string enums; honor [JsonStringEnumMemberName]
+                // so the OpenAPI enum values match the wire format (e.g. host-agent runtime-status enums
+                // serialize "running"/"managed", not "Running"/"Managed"). Without this, generated client
+                // validators reject valid responses.
+                settings.SchemaSettings.SchemaProcessors.Add(new JsonStringEnumMemberNameSchemaProcessor());
             };
 
             options.ExcludeNonFastEndpoints = true;

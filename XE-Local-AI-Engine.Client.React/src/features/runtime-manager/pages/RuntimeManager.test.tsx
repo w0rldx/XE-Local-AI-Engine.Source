@@ -96,7 +96,7 @@ describe("RuntimeManager", () => {
 		renderWithProviders(<RuntimeManager />);
 
 		expect(await screen.findByRole("heading", { name: "Runtime manager", level: 2 })).toBeTruthy();
-		expect((await screen.findAllByText("Running")).length).toBeGreaterThan(0);
+		expect((await screen.findAllByText("running")).length).toBeGreaterThan(0);
 		expect(screen.getByText("Runtime lifecycle")).toBeTruthy();
 		expect(screen.getByText("1.0 GB")).toBeTruthy();
 	});
@@ -150,9 +150,9 @@ describe("RuntimeManager", () => {
 function createSnapshot(): XeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse {
 	return {
 		status: {
-			state: "Running",
-			desiredState: "Running",
-			runtimeLifecycle: "Managed",
+			state: "running",
+			desiredState: "running",
+			runtimeLifecycle: "managed",
 			bootstrapModelReady: true,
 			webUiUrl: "http://127.0.0.1:8080",
 			observedAt: "2026-05-24T12:00:00Z",
@@ -171,8 +171,8 @@ function createSnapshot(): XeLocalAiEngineClientEndpointsRuntimeManagerV1Runtime
 		components: [
 			{
 				name: "ollama",
-				desiredState: "Running",
-				health: "Healthy",
+				desiredState: "running",
+				health: "healthy",
 				imageReference: "ollama/ollama:0.11.10@sha256:test",
 				digestVerified: true,
 				observedAt: "2026-05-24T12:00:00Z",

@@ -118,13 +118,13 @@ export function formatRuntimeBytes(bytes: number | null | undefined): string {
 
 export function getRuntimeStatusColor(state: string | undefined): "green" | "red" | "yellow" | "gray" {
 	switch (state) {
-		case "Running":
+		case "running":
 			return "green";
-		case "Failed":
+		case "failed":
 			return "red";
-		case "Starting":
-		case "Stopping":
-		case "Degraded":
+		case "starting":
+		case "stopping":
+		case "degraded":
 			return "yellow";
 		default:
 			return "gray";
@@ -133,11 +133,11 @@ export function getRuntimeStatusColor(state: string | undefined): "green" | "red
 
 export function getComponentHealthColor(health: string | undefined): "green" | "red" | "yellow" | "gray" {
 	switch (health) {
-		case "Healthy":
+		case "healthy":
 			return "green";
-		case "Unhealthy":
+		case "unhealthy":
 			return "red";
-		case "Starting":
+		case "starting":
 			return "yellow";
 		default:
 			return "gray";
