@@ -3,13 +3,18 @@ import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconSettings } from "
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { getNodeSettings, type NodeSettingsDto, saveNodeSettings } from "@/features/node-settings/api/NodeSettingsApi";
+import type { SaveNodeSettingsResponse } from "@/core/api/generated";
+import {
+	getNodeSettingsOptions,
+	getNodeSettingsQueryKey,
+	saveNodeSettingsMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	type NodeSettingsTimeoutInput,
 	nodeSettingsDefaults,
 	toValidNodeSettingsTimeoutSeconds,
 } from "@/features/node-settings/models/NodeSettingsModel";
-import { nodeSettingsQueryKeys } from "@/features/node-settings/queries/NodeSettingsQueryKeys";
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected node settings error";
@@ -17,10 +22,7 @@ function errorMessage(error: unknown): string {
 
 export function NodeSettings() {
 	const queryClient = useQueryClient();
-	const settingsQuery = useQuery({
-		queryKey: nodeSettingsQueryKeys.settings(),
-		queryFn: ({ signal }) => getNodeSettings({ signal }),
-	});
+	const settingsQuery = useQuery(withResponseValidation(getNodeSettingsOptions()));
 	const settings = settingsQuery.data;
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
@@ -28,7 +30,7 @@ export function NodeSettings() {
 	const [message, setMessage] = useState<string | undefined>();
 
 	useEffect(() => {
-		if (settings) {
+		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
 			setTimeoutSeconds(settings.maxMessageRequestTimeoutSeconds);
 		}
 	}, [settings]);
@@ -42,15 +44,14 @@ export function NodeSettings() {
 	);
 
 	const saveMutation = useMutation({
-		mutationFn: () =>
-			saveNodeSettings({
-				maxMessageRequestTimeoutSeconds: timeoutToSave ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
-			}),
-		onSuccess: async (updatedSettings: NodeSettingsDto) => {
+		...withResponseValidation(saveNodeSettingsMutation()),
+		onSuccess: async (updatedSettings: SaveNodeSettingsResponse) => {
 			setMessage("Node settings saved. Capability reporting was requested for the worker connection.");
-			setTimeoutSeconds(updatedSettings.maxMessageRequestTimeoutSeconds);
-			queryClient.setQueryData(nodeSettingsQueryKeys.settings(), updatedSettings);
-			await queryClient.invalidateQueries({ queryKey: nodeSettingsQueryKeys.settings() });
+			setTimeoutSeconds(
+				updatedSettings.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
+			);
+			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
+			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
 		},
 	});
 
@@ -113,7 +114,14 @@ export function NodeSettings() {
 						<Group>
 							<Button
 								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={() => saveMutation.mutate()}
+								onClick={() =>
+									saveMutation.mutate({
+										body: {
+											maxMessageRequestTimeoutSeconds:
+												timeoutToSave ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
+										},
+									})
+								}
 								loading={saveMutation.isPending}
 								disabled={!canSave}
 							>
