@@ -5,311 +5,307 @@ import type { AxiosError } from "axios";
 
 import { client } from "../client.gen";
 import {
+	analyzePlaybook,
+	approveGoldenConversation,
+	archiveNodeChatConversation,
+	branchNodeChatConversation,
+	cancelNodeBinding,
+	cancelNodeChatMessage,
+	cancelScheduledJobRun,
+	clearCloudSettings,
+	connectConnection,
+	createAgentDefinition,
+	createGoldenConversation,
+	createMcpServer,
+	createNodeChatConversation,
+	createNodeChatMessageRevision,
+	createPlaybookAction,
+	createScheduledJob,
+	deleteAgentDefinition,
+	deleteGoldenConversation,
+	deleteLocalModel,
+	deleteMcpServer,
+	deleteModelKind,
+	deleteNodeChatConversation,
+	deletePlaybookAction,
+	deleteScheduledJob,
+	disableAutoConnect,
+	disableScheduledJob,
+	disconnectConnection,
+	enableAutoConnect,
+	enableScheduledJob,
+	executeRuntimeContainerAction,
+	getAgentDefinition,
+	getAgentFeedbackInsights,
+	getAgentPlaybookMonitor,
+	getCloudSettings,
+	getConnectionStatus,
+	getInvocationMonitor,
+	getLatestRecommendations,
+	getLocalModelDetails,
+	getMcpServer,
+	getMcpServerTools,
+	getNodeChatConversation,
+	getNodeChatMessageFeedback,
+	getNodeSettings,
+	getRuntimeManagerStatus,
+	getScheduledJob,
+	getScheduledJobRun,
+	getToolCapableModels,
+	getToolCatalog,
+	harvestGoldenConversations,
+	listAgentDefinitions,
+	listAgentPlaybookActions,
+	listApprovedImages,
+	listGoldenConversations,
+	listLocalModels,
+	listMcpServers,
+	listNodeChatConversations,
+	listNodeChatMessageRevisions,
+	listScheduledJobRuns,
+	listScheduledJobs,
+	listScheduledJobTemplates,
+	nodeAuthStatus,
+	nodeChangePassword,
+	nodeLogin,
+	nodeLogout,
+	nodeMe,
+	nodeRefresh,
+	nodeSetup,
 	type Options,
-	xeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpoint,
-	xeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpoint,
-	xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpoint,
-	xeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpoint,
-	xeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpoint,
-	xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoint,
-	xeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpoint,
-	xeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpoint,
-	xeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpoint,
-	xeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpoint,
-	xeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpoint,
-	xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpoint,
-	xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpoint,
-	xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpoint,
-	xeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpoint,
-	xeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpoint,
-	xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint,
-	xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint,
-	xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint,
-	xeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoint,
-	xeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpoint,
-	xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint,
-	xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint,
-	xeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpoint,
-	xeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpoint,
-	xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpoint,
-	xeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpoint,
+	pinNodeChatConversation,
+	pollNodeBinding,
+	promoteSuggestedPlaybookAction,
+	pullLocalModel,
+	putModelKind,
+	refreshRecommendations,
+	rejectSuggestedPlaybookAction,
+	renameNodeChatConversation,
+	runPlaybookActionEval,
+	saveCloudSettings,
+	saveNodeSettings,
+	selectLocalModel,
+	setMcpServerEnabled,
+	setNodeChatMessageFeedback,
+	setNodeChatSelectedPath,
+	startNodeBinding,
+	triggerScheduledJob,
+	updateAgentDefinition,
+	updateMcpServer,
+	updatePlaybookAction,
+	updateScheduledJob,
+	updateSuggestedPlaybookAction,
+	validationProblemProbe,
 } from "../sdk.gen";
 import type {
-	XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointData,
-	XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointData,
-	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointError,
-	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointError,
-	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointError,
-	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointResponse,
-	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointData,
-	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointError,
-	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointResponse,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointData,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointResponse,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointData,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointResponse,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointData,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointError,
-	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointResponse,
-	XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointData,
-	XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointResponse,
-	XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointData,
-	XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointResponse,
-	XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointData,
-	XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointResponse,
-	XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointData,
-	XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointResponse,
-	XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointData,
-	XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointResponse,
-	XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointData,
-	XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointError,
-	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointError,
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointError,
-	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointError,
-	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointError,
-	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointData,
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointError,
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointError,
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointError,
-	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointError,
-	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponse,
-	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData,
-	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointError,
-	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointResponse,
-	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData,
-	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponse,
-	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData,
-	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponse,
-	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData,
-	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponse,
-	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData,
-	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponse,
-	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData,
-	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponse,
-	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData,
-	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointResponse,
-	XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointData,
-	XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointResponse,
-	XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointData,
-	XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointResponse,
-	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointData,
-	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointError,
-	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointResponse,
-	XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointData,
-	XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointResponse,
-	XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointData,
-	XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointResponse,
-	XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointData,
-	XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointResponse,
+	AnalyzePlaybookData,
+	AnalyzePlaybookResponse,
+	ApproveGoldenConversationData,
+	ApproveGoldenConversationResponse,
+	ArchiveNodeChatConversationData,
+	ArchiveNodeChatConversationResponse,
+	BranchNodeChatConversationData,
+	BranchNodeChatConversationResponse,
+	CancelNodeBindingData,
+	CancelNodeBindingResponse,
+	CancelNodeChatMessageData,
+	CancelNodeChatMessageError,
+	CancelNodeChatMessageResponse,
+	CancelScheduledJobRunData,
+	CancelScheduledJobRunResponse,
+	ClearCloudSettingsData,
+	ClearCloudSettingsResponse,
+	ConnectConnectionData,
+	ConnectConnectionResponse,
+	CreateAgentDefinitionData,
+	CreateAgentDefinitionResponse,
+	CreateGoldenConversationData,
+	CreateGoldenConversationResponse,
+	CreateMcpServerData,
+	CreateMcpServerResponse,
+	CreateNodeChatConversationData,
+	CreateNodeChatConversationError,
+	CreateNodeChatConversationResponse,
+	CreateNodeChatMessageRevisionData,
+	CreateNodeChatMessageRevisionResponse,
+	CreatePlaybookActionData,
+	CreatePlaybookActionResponse,
+	CreateScheduledJobData,
+	CreateScheduledJobResponse,
+	DeleteAgentDefinitionData,
+	DeleteAgentDefinitionResponse,
+	DeleteGoldenConversationData,
+	DeleteGoldenConversationResponse,
+	DeleteLocalModelData,
+	DeleteLocalModelError,
+	DeleteLocalModelResponse,
+	DeleteMcpServerData,
+	DeleteMcpServerResponse,
+	DeleteModelKindData,
+	DeleteModelKindResponse,
+	DeleteNodeChatConversationData,
+	DeleteNodeChatConversationError,
+	DeleteNodeChatConversationResponse,
+	DeletePlaybookActionData,
+	DeletePlaybookActionResponse,
+	DeleteScheduledJobData,
+	DeleteScheduledJobResponse,
+	DisableAutoConnectData,
+	DisableAutoConnectResponse,
+	DisableScheduledJobData,
+	DisableScheduledJobResponse,
+	DisconnectConnectionData,
+	DisconnectConnectionResponse,
+	EnableAutoConnectData,
+	EnableAutoConnectResponse,
+	EnableScheduledJobData,
+	EnableScheduledJobResponse,
+	ExecuteRuntimeContainerActionData,
+	ExecuteRuntimeContainerActionResponse,
+	GetAgentDefinitionData,
+	GetAgentDefinitionResponse,
+	GetAgentFeedbackInsightsData,
+	GetAgentFeedbackInsightsResponse,
+	GetAgentPlaybookMonitorData,
+	GetAgentPlaybookMonitorResponse,
+	GetCloudSettingsData,
+	GetCloudSettingsResponse,
+	GetConnectionStatusData,
+	GetConnectionStatusResponse,
+	GetInvocationMonitorData,
+	GetInvocationMonitorResponse,
+	GetLatestRecommendationsData,
+	GetLatestRecommendationsResponse,
+	GetLocalModelDetailsData,
+	GetLocalModelDetailsError,
+	GetLocalModelDetailsResponse,
+	GetMcpServerData,
+	GetMcpServerResponse,
+	GetMcpServerToolsData,
+	GetMcpServerToolsResponse,
+	GetNodeChatConversationData,
+	GetNodeChatConversationError,
+	GetNodeChatConversationResponse,
+	GetNodeChatMessageFeedbackData,
+	GetNodeChatMessageFeedbackResponse,
+	GetNodeSettingsData,
+	GetNodeSettingsResponse,
+	GetRuntimeManagerStatusData,
+	GetRuntimeManagerStatusResponse,
+	GetScheduledJobData,
+	GetScheduledJobResponse,
+	GetScheduledJobRunData,
+	GetScheduledJobRunResponse,
+	GetToolCapableModelsData,
+	GetToolCapableModelsResponse,
+	GetToolCatalogData,
+	GetToolCatalogResponse,
+	HarvestGoldenConversationsData,
+	HarvestGoldenConversationsResponse,
+	ListAgentDefinitionsData,
+	ListAgentDefinitionsResponse,
+	ListAgentPlaybookActionsData,
+	ListAgentPlaybookActionsResponse,
+	ListApprovedImagesData,
+	ListApprovedImagesResponse,
+	ListGoldenConversationsData,
+	ListGoldenConversationsResponse,
+	ListLocalModelsData,
+	ListLocalModelsResponse,
+	ListMcpServersData,
+	ListMcpServersResponse,
+	ListNodeChatConversationsData,
+	ListNodeChatConversationsError,
+	ListNodeChatConversationsResponse,
+	ListNodeChatMessageRevisionsData,
+	ListNodeChatMessageRevisionsResponse,
+	ListScheduledJobRunsData,
+	ListScheduledJobRunsResponse,
+	ListScheduledJobsData,
+	ListScheduledJobsResponse,
+	ListScheduledJobTemplatesData,
+	ListScheduledJobTemplatesResponse,
+	NodeAuthStatusData,
+	NodeAuthStatusResponse,
+	NodeChangePasswordData,
+	NodeChangePasswordError,
+	NodeChangePasswordResponse,
+	NodeLoginData,
+	NodeLoginError,
+	NodeLoginResponse,
+	NodeLogoutData,
+	NodeLogoutResponse,
+	NodeMeData,
+	NodeMeResponse,
+	NodeRefreshData,
+	NodeRefreshResponse,
+	NodeSetupData,
+	NodeSetupError,
+	NodeSetupResponse,
+	PinNodeChatConversationData,
+	PinNodeChatConversationResponse,
+	PollNodeBindingData,
+	PollNodeBindingResponse,
+	PromoteSuggestedPlaybookActionData,
+	PromoteSuggestedPlaybookActionResponse,
+	PullLocalModelData,
+	PullLocalModelError,
+	PullLocalModelResponse,
+	PutModelKindData,
+	PutModelKindResponse,
+	RefreshRecommendationsData,
+	RefreshRecommendationsResponse,
+	RejectSuggestedPlaybookActionData,
+	RejectSuggestedPlaybookActionResponse,
+	RenameNodeChatConversationData,
+	RenameNodeChatConversationResponse,
+	RunPlaybookActionEvalData,
+	RunPlaybookActionEvalResponse,
+	SaveCloudSettingsData,
+	SaveCloudSettingsError,
+	SaveCloudSettingsResponse,
+	SaveNodeSettingsData,
+	SaveNodeSettingsError,
+	SaveNodeSettingsResponse,
+	SelectLocalModelData,
+	SelectLocalModelError,
+	SelectLocalModelResponse,
+	SetMcpServerEnabledData,
+	SetMcpServerEnabledResponse,
+	SetNodeChatMessageFeedbackData,
+	SetNodeChatMessageFeedbackResponse,
+	SetNodeChatSelectedPathData,
+	SetNodeChatSelectedPathError,
+	SetNodeChatSelectedPathResponse,
+	StartNodeBindingData,
+	StartNodeBindingResponse,
+	TriggerScheduledJobData,
+	TriggerScheduledJobResponse,
+	UpdateAgentDefinitionData,
+	UpdateAgentDefinitionResponse,
+	UpdateMcpServerData,
+	UpdateMcpServerResponse,
+	UpdatePlaybookActionData,
+	UpdatePlaybookActionResponse,
+	UpdateScheduledJobData,
+	UpdateScheduledJobResponse,
+	UpdateSuggestedPlaybookActionData,
+	UpdateSuggestedPlaybookActionResponse,
+	ValidationProblemProbeData,
+	ValidationProblemProbeError,
+	ValidationProblemProbeResponse,
 } from "../types.gen";
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointData>
-> => {
+export const cancelScheduledJobRunMutation = (
+	options?: Partial<Options<CancelScheduledJobRunData>>,
+): UseMutationOptions<CancelScheduledJobRunResponse, AxiosError<DefaultError>, Options<CancelScheduledJobRunData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointResponse,
+		CancelScheduledJobRunResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpointData>
+		Options<CancelScheduledJobRunData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1CancelScheduledJobRunEndpoint({
+			const { data } = await cancelScheduledJobRun({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -359,21 +355,18 @@ const createQueryKey = <TOptions extends Options>(
 	return [params];
 };
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpoint", options);
+export const listScheduledJobsQueryKey = (options: Options<ListScheduledJobsData>) =>
+	createQueryKey("listScheduledJobs", options);
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointData>,
-) =>
+export const listScheduledJobsOptions = (options: Options<ListScheduledJobsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointResponse,
+		ListScheduledJobsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointQueryKey>
+		ListScheduledJobsResponse,
+		ReturnType<typeof listScheduledJobsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpoint({
+			const { data } = await listScheduledJobs({
 				...options,
 				...queryKey[0],
 				signal,
@@ -381,23 +374,19 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointO
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobsEndpointQueryKey(options),
+		queryKey: listScheduledJobsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointData>
-> => {
+export const createScheduledJobMutation = (
+	options?: Partial<Options<CreateScheduledJobData>>,
+): UseMutationOptions<CreateScheduledJobResponse, AxiosError<DefaultError>, Options<CreateScheduledJobData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointResponse,
+		CreateScheduledJobResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpointData>
+		Options<CreateScheduledJobData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpoint({
+			const { data } = await createScheduledJob({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -408,20 +397,16 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointData>
-> => {
+export const deleteScheduledJobMutation = (
+	options?: Partial<Options<DeleteScheduledJobData>>,
+): UseMutationOptions<DeleteScheduledJobResponse, AxiosError<DefaultError>, Options<DeleteScheduledJobData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointResponse,
+		DeleteScheduledJobResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpointData>
+		Options<DeleteScheduledJobData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpoint({
+			const { data } = await deleteScheduledJob({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -432,21 +417,17 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1DeleteScheduledJobEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpoint", options);
+export const getScheduledJobQueryKey = (options: Options<GetScheduledJobData>) => createQueryKey("getScheduledJob", options);
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointData>,
-) =>
+export const getScheduledJobOptions = (options: Options<GetScheduledJobData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointResponse,
+		GetScheduledJobResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointQueryKey>
+		GetScheduledJobResponse,
+		ReturnType<typeof getScheduledJobQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpoint({
+			const { data } = await getScheduledJob({
 				...options,
 				...queryKey[0],
 				signal,
@@ -454,23 +435,19 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointOpt
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobEndpointQueryKey(options),
+		queryKey: getScheduledJobQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointData>
-> => {
+export const updateScheduledJobMutation = (
+	options?: Partial<Options<UpdateScheduledJobData>>,
+): UseMutationOptions<UpdateScheduledJobResponse, AxiosError<DefaultError>, Options<UpdateScheduledJobData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointResponse,
+		UpdateScheduledJobResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpointData>
+		Options<UpdateScheduledJobData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpoint({
+			const { data } = await updateScheduledJob({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -481,20 +458,16 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointData>
-> => {
+export const disableScheduledJobMutation = (
+	options?: Partial<Options<DisableScheduledJobData>>,
+): UseMutationOptions<DisableScheduledJobResponse, AxiosError<DefaultError>, Options<DisableScheduledJobData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointResponse,
+		DisableScheduledJobResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpointData>
+		Options<DisableScheduledJobData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpoint({
+			const { data } = await disableScheduledJob({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -505,20 +478,16 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1DisableScheduledJobEndpoin
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointData>
-> => {
+export const enableScheduledJobMutation = (
+	options?: Partial<Options<EnableScheduledJobData>>,
+): UseMutationOptions<EnableScheduledJobResponse, AxiosError<DefaultError>, Options<EnableScheduledJobData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointResponse,
+		EnableScheduledJobResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpointData>
+		Options<EnableScheduledJobData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpoint({
+			const { data } = await enableScheduledJob({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -529,21 +498,18 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1EnableScheduledJobEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint", options);
+export const getScheduledJobRunQueryKey = (options: Options<GetScheduledJobRunData>) =>
+	createQueryKey("getScheduledJobRun", options);
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointData>,
-) =>
+export const getScheduledJobRunOptions = (options: Options<GetScheduledJobRunData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointResponse,
+		GetScheduledJobRunResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointQueryKey>
+		GetScheduledJobRunResponse,
+		ReturnType<typeof getScheduledJobRunQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint({
+			const { data } = await getScheduledJobRun({
 				...options,
 				...queryKey[0],
 				signal,
@@ -551,24 +517,21 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpoint
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsSchedulerV1GetScheduledJobRunEndpointQueryKey(options),
+		queryKey: getScheduledJobRunQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoint", options);
+export const listScheduledJobRunsQueryKey = (options?: Options<ListScheduledJobRunsData>) =>
+	createQueryKey("listScheduledJobRuns", options);
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointData>,
-) =>
+export const listScheduledJobRunsOptions = (options?: Options<ListScheduledJobRunsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointResponse,
+		ListScheduledJobRunsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointQueryKey>
+		ListScheduledJobRunsResponse,
+		ReturnType<typeof listScheduledJobRunsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoint({
+			const { data } = await listScheduledJobRuns({
 				...options,
 				...queryKey[0],
 				signal,
@@ -576,24 +539,21 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpoi
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsEndpointQueryKey(options),
+		queryKey: listScheduledJobRunsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpoint", options);
+export const listScheduledJobTemplatesQueryKey = (options?: Options<ListScheduledJobTemplatesData>) =>
+	createQueryKey("listScheduledJobTemplates", options);
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointData>,
-) =>
+export const listScheduledJobTemplatesOptions = (options?: Options<ListScheduledJobTemplatesData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointResponse,
+		ListScheduledJobTemplatesResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointQueryKey>
+		ListScheduledJobTemplatesResponse,
+		ReturnType<typeof listScheduledJobTemplatesQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpoint({
+			const { data } = await listScheduledJobTemplates({
 				...options,
 				...queryKey[0],
 				signal,
@@ -601,23 +561,19 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesE
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobTemplatesEndpointQueryKey(options),
+		queryKey: listScheduledJobTemplatesQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointData>
-> => {
+export const triggerScheduledJobMutation = (
+	options?: Partial<Options<TriggerScheduledJobData>>,
+): UseMutationOptions<TriggerScheduledJobResponse, AxiosError<DefaultError>, Options<TriggerScheduledJobData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointResponse,
+		TriggerScheduledJobResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpointData>
+		Options<TriggerScheduledJobData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpoint({
+			const { data } = await triggerScheduledJob({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -628,20 +584,20 @@ export const xeLocalAiEngineClientEndpointsSchedulerV1TriggerScheduledJobEndpoin
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointData>>,
+export const executeRuntimeContainerActionMutation = (
+	options?: Partial<Options<ExecuteRuntimeContainerActionData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointResponse,
+	ExecuteRuntimeContainerActionResponse,
 	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointData>
+	Options<ExecuteRuntimeContainerActionData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointResponse,
+		ExecuteRuntimeContainerActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpointData>
+		Options<ExecuteRuntimeContainerActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContainerActionEndpoint({
+			const { data } = await executeRuntimeContainerAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -652,21 +608,18 @@ export const xeLocalAiEngineClientEndpointsRuntimeManagerV1ExecuteRuntimeContain
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpoint", options);
+export const getRuntimeManagerStatusQueryKey = (options?: Options<GetRuntimeManagerStatusData>) =>
+	createQueryKey("getRuntimeManagerStatus", options);
 
-export const xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointData>,
-) =>
+export const getRuntimeManagerStatusOptions = (options?: Options<GetRuntimeManagerStatusData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointResponse,
+		GetRuntimeManagerStatusResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointQueryKey>
+		GetRuntimeManagerStatusResponse,
+		ReturnType<typeof getRuntimeManagerStatusQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpoint({
+			const { data } = await getRuntimeManagerStatus({
 				...options,
 				...queryKey[0],
 				signal,
@@ -674,24 +627,20 @@ export const xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStat
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsRuntimeManagerV1GetRuntimeManagerStatusEndpointQueryKey(options),
+		queryKey: getRuntimeManagerStatusQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint", options);
+export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
 
-export const xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointData>,
-) =>
+export const getNodeSettingsOptions = (options?: Options<GetNodeSettingsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointResponse,
+		GetNodeSettingsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointQueryKey>
+		GetNodeSettingsResponse,
+		ReturnType<typeof getNodeSettingsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint({
+			const { data } = await getNodeSettings({
 				...options,
 				...queryKey[0],
 				signal,
@@ -699,23 +648,19 @@ export const xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpoint
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsNodeSettingsV1GetNodeSettingsEndpointQueryKey(options),
+		queryKey: getNodeSettingsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointData>
-> => {
+export const saveNodeSettingsMutation = (
+	options?: Partial<Options<SaveNodeSettingsData>>,
+): UseMutationOptions<SaveNodeSettingsResponse, AxiosError<SaveNodeSettingsError>, Options<SaveNodeSettingsData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpointData>
+		SaveNodeSettingsResponse,
+		AxiosError<SaveNodeSettingsError>,
+		Options<SaveNodeSettingsData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpoint({
+			const { data } = await saveNodeSettings({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -726,20 +671,16 @@ export const xeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsEndpoin
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData>
-> => {
+export const cancelNodeBindingMutation = (
+	options?: Partial<Options<CancelNodeBindingData>>,
+): UseMutationOptions<CancelNodeBindingResponse, AxiosError<DefaultError>, Options<CancelNodeBindingData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponse,
+		CancelNodeBindingResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData>
+		Options<CancelNodeBindingData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoint({
+			const { data } = await cancelNodeBinding({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -750,20 +691,12 @@ export const xeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoin
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData>
-	> = {
+export const pollNodeBindingMutation = (
+	options?: Partial<Options<PollNodeBindingData>>,
+): UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> => {
+	const mutationOptions: UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpoint({
+			const { data } = await pollNodeBinding({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -774,20 +707,12 @@ export const xeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointM
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpointData>
-	> = {
+export const startNodeBindingMutation = (
+	options?: Partial<Options<StartNodeBindingData>>,
+): UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> => {
+	const mutationOptions: UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint({
+			const { data } = await startNodeBinding({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -798,21 +723,18 @@ export const xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint", options);
+export const getLatestRecommendationsQueryKey = (options: Options<GetLatestRecommendationsData>) =>
+	createQueryKey("getLatestRecommendations", options);
 
-export const xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData>,
-) =>
+export const getLatestRecommendationsOptions = (options: Options<GetLatestRecommendationsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponse,
+		GetLatestRecommendationsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointQueryKey>
+		GetLatestRecommendationsResponse,
+		ReturnType<typeof getLatestRecommendationsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint({
+			const { data } = await getLatestRecommendations({
 				...options,
 				...queryKey[0],
 				signal,
@@ -820,24 +742,21 @@ export const xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEnd
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointQueryKey(options),
+		queryKey: getLatestRecommendationsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint", options);
+export const listApprovedImagesQueryKey = (options?: Options<ListApprovedImagesData>) =>
+	createQueryKey("listApprovedImages", options);
 
-export const xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData>,
-) =>
+export const listApprovedImagesOptions = (options?: Options<ListApprovedImagesData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponse,
+		ListApprovedImagesResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointQueryKey>
+		ListApprovedImagesResponse,
+		ReturnType<typeof listApprovedImagesQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint({
+			const { data } = await listApprovedImages({
 				...options,
 				...queryKey[0],
 				signal,
@@ -845,23 +764,19 @@ export const xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointO
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointQueryKey(options),
+		queryKey: listApprovedImagesQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData>
-> => {
+export const refreshRecommendationsMutation = (
+	options?: Partial<Options<RefreshRecommendationsData>>,
+): UseMutationOptions<RefreshRecommendationsResponse, AxiosError<DefaultError>, Options<RefreshRecommendationsData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponse,
+		RefreshRecommendationsResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData>
+		Options<RefreshRecommendationsData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint({
+			const { data } = await refreshRecommendations({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -872,21 +787,17 @@ export const xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpo
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint", options);
+export const listMcpServersQueryKey = (options?: Options<ListMcpServersData>) => createQueryKey("listMcpServers", options);
 
-export const xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData>,
-) =>
+export const listMcpServersOptions = (options?: Options<ListMcpServersData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointResponse,
+		ListMcpServersResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointQueryKey>
+		ListMcpServersResponse,
+		ReturnType<typeof listMcpServersQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint({
+			const { data } = await listMcpServers({
 				...options,
 				...queryKey[0],
 				signal,
@@ -894,23 +805,15 @@ export const xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointOptions = 
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointQueryKey(options),
+		queryKey: listMcpServersQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointData>
-	> = {
+export const createMcpServerMutation = (
+	options?: Partial<Options<CreateMcpServerData>>,
+): UseMutationOptions<CreateMcpServerResponse, AxiosError<DefaultError>, Options<CreateMcpServerData>> => {
+	const mutationOptions: UseMutationOptions<CreateMcpServerResponse, AxiosError<DefaultError>, Options<CreateMcpServerData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpoint({
+			const { data } = await createMcpServer({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -921,20 +824,12 @@ export const xeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpointMutation 
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointData>
-	> = {
+export const deleteMcpServerMutation = (
+	options?: Partial<Options<DeleteMcpServerData>>,
+): UseMutationOptions<DeleteMcpServerResponse, AxiosError<DefaultError>, Options<DeleteMcpServerData>> => {
+	const mutationOptions: UseMutationOptions<DeleteMcpServerResponse, AxiosError<DefaultError>, Options<DeleteMcpServerData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpoint({
+			const { data } = await deleteMcpServer({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -945,21 +840,12 @@ export const xeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpointMutation 
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpoint", options);
+export const getMcpServerQueryKey = (options: Options<GetMcpServerData>) => createQueryKey("getMcpServer", options);
 
-export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointData>,
-) =>
-	queryOptions<
-		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointResponse,
-		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointQueryKey>
-	>({
+export const getMcpServerOptions = (options: Options<GetMcpServerData>) =>
+	queryOptions<GetMcpServerResponse, AxiosError<DefaultError>, GetMcpServerResponse, ReturnType<typeof getMcpServerQueryKey>>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpoint({
+			const { data } = await getMcpServer({
 				...options,
 				...queryKey[0],
 				signal,
@@ -967,23 +853,15 @@ export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointOptions = (
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsMcpV1GetMcpServerEndpointQueryKey(options),
+		queryKey: getMcpServerQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData>
-	> = {
+export const updateMcpServerMutation = (
+	options?: Partial<Options<UpdateMcpServerData>>,
+): UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> => {
+	const mutationOptions: UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpoint({
+			const { data } = await updateMcpServer({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -994,21 +872,18 @@ export const xeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointMutation 
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpoint", options);
+export const getMcpServerToolsQueryKey = (options: Options<GetMcpServerToolsData>) =>
+	createQueryKey("getMcpServerTools", options);
 
-export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointData>,
-) =>
+export const getMcpServerToolsOptions = (options: Options<GetMcpServerToolsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointResponse,
+		GetMcpServerToolsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointQueryKey>
+		GetMcpServerToolsResponse,
+		ReturnType<typeof getMcpServerToolsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpoint({
+			const { data } = await getMcpServerTools({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1016,24 +891,20 @@ export const xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointOptions
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsMcpV1GetMcpServerToolsEndpointQueryKey(options),
+		queryKey: getMcpServerToolsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpoint", options);
+export const getToolCatalogQueryKey = (options?: Options<GetToolCatalogData>) => createQueryKey("getToolCatalog", options);
 
-export const xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointData>,
-) =>
+export const getToolCatalogOptions = (options?: Options<GetToolCatalogData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointResponse,
+		GetToolCatalogResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointQueryKey>
+		GetToolCatalogResponse,
+		ReturnType<typeof getToolCatalogQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpoint({
+			const { data } = await getToolCatalog({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1041,23 +912,19 @@ export const xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointOptions = 
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsMcpV1GetToolCatalogEndpointQueryKey(options),
+		queryKey: getToolCatalogQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointData>
-> => {
+export const setMcpServerEnabledMutation = (
+	options?: Partial<Options<SetMcpServerEnabledData>>,
+): UseMutationOptions<SetMcpServerEnabledResponse, AxiosError<DefaultError>, Options<SetMcpServerEnabledData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointResponse,
+		SetMcpServerEnabledResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointData>
+		Options<SetMcpServerEnabledData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpoint({
+			const { data } = await setMcpServerEnabled({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1068,20 +935,16 @@ export const xeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointMutat
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData>
-> => {
+export const deleteLocalModelMutation = (
+	options?: Partial<Options<DeleteLocalModelData>>,
+): UseMutationOptions<DeleteLocalModelResponse, AxiosError<DeleteLocalModelError>, Options<DeleteLocalModelData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData>
+		DeleteLocalModelResponse,
+		AxiosError<DeleteLocalModelError>,
+		Options<DeleteLocalModelData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint({
+			const { data } = await deleteLocalModel({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1092,20 +955,12 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData>
-	> = {
+export const deleteModelKindMutation = (
+	options?: Partial<Options<DeleteModelKindData>>,
+): UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> => {
+	const mutationOptions: UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint({
+			const { data } = await deleteModelKind({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1116,20 +971,12 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointM
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData>
-	> = {
+export const putModelKindMutation = (
+	options?: Partial<Options<PutModelKindData>>,
+): UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> => {
+	const mutationOptions: UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpoint({
+			const { data } = await putModelKind({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1140,21 +987,18 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointMuta
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint", options);
+export const getLocalModelDetailsQueryKey = (options: Options<GetLocalModelDetailsData>) =>
+	createQueryKey("getLocalModelDetails", options);
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData>,
-) =>
+export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetailsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointError>,
-		XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointQueryKey>
+		GetLocalModelDetailsResponse,
+		AxiosError<GetLocalModelDetailsError>,
+		GetLocalModelDetailsResponse,
+		ReturnType<typeof getLocalModelDetailsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint({
+			const { data } = await getLocalModelDetails({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1162,24 +1006,20 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndp
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointQueryKey(options),
+		queryKey: getLocalModelDetailsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint", options);
+export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) => createQueryKey("listLocalModels", options);
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointData>,
-) =>
+export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointResponse,
+		ListLocalModelsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointQueryKey>
+		ListLocalModelsResponse,
+		ReturnType<typeof listLocalModelsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint({
+			const { data } = await listLocalModels({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1187,23 +1027,19 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointO
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpointQueryKey(options),
+		queryKey: listLocalModelsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData>
-> => {
+export const pullLocalModelMutation = (
+	options?: Partial<Options<PullLocalModelData>>,
+): UseMutationOptions<PullLocalModelResponse, AxiosError<PullLocalModelError>, Options<PullLocalModelData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData>
+		PullLocalModelResponse,
+		AxiosError<PullLocalModelError>,
+		Options<PullLocalModelData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpoint({
+			const { data } = await pullLocalModel({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1214,20 +1050,16 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointMu
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData>
-> => {
+export const selectLocalModelMutation = (
+	options?: Partial<Options<SelectLocalModelData>>,
+): UseMutationOptions<SelectLocalModelResponse, AxiosError<SelectLocalModelError>, Options<SelectLocalModelData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData>
+		SelectLocalModelResponse,
+		AxiosError<SelectLocalModelError>,
+		Options<SelectLocalModelData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint({
+			const { data } = await selectLocalModel({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1238,20 +1070,20 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointData>>,
+export const cancelNodeChatMessageMutation = (
+	options?: Partial<Options<CancelNodeChatMessageData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointData>
+	CancelNodeChatMessageResponse,
+	AxiosError<CancelNodeChatMessageError>,
+	Options<CancelNodeChatMessageData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpointData>
+		CancelNodeChatMessageResponse,
+		AxiosError<CancelNodeChatMessageError>,
+		Options<CancelNodeChatMessageData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpoint({
+			const { data } = await cancelNodeChatMessage({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1262,21 +1094,18 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageEndpo
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpoint", options);
+export const listNodeChatConversationsQueryKey = (options: Options<ListNodeChatConversationsData>) =>
+	createQueryKey("listNodeChatConversations", options);
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointData>,
-) =>
+export const listNodeChatConversationsOptions = (options: Options<ListNodeChatConversationsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointError>,
-		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointQueryKey>
+		ListNodeChatConversationsResponse,
+		AxiosError<ListNodeChatConversationsError>,
+		ListNodeChatConversationsResponse,
+		ReturnType<typeof listNodeChatConversationsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpoint({
+			const { data } = await listNodeChatConversations({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1284,23 +1113,23 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsE
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatConversationsEndpointQueryKey(options),
+		queryKey: listNodeChatConversationsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointData>>,
+export const createNodeChatConversationMutation = (
+	options?: Partial<Options<CreateNodeChatConversationData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointData>
+	CreateNodeChatConversationResponse,
+	AxiosError<CreateNodeChatConversationError>,
+	Options<CreateNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpointData>
+		CreateNodeChatConversationResponse,
+		AxiosError<CreateNodeChatConversationError>,
+		Options<CreateNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationEndpoint({
+			const { data } = await createNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1311,20 +1140,20 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversation
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointData>>,
+export const deleteNodeChatConversationMutation = (
+	options?: Partial<Options<DeleteNodeChatConversationData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointData>
+	DeleteNodeChatConversationResponse,
+	AxiosError<DeleteNodeChatConversationError>,
+	Options<DeleteNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpointData>
+		DeleteNodeChatConversationResponse,
+		AxiosError<DeleteNodeChatConversationError>,
+		Options<DeleteNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationEndpoint({
+			const { data } = await deleteNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1335,21 +1164,18 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversation
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpoint", options);
+export const getNodeChatConversationQueryKey = (options: Options<GetNodeChatConversationData>) =>
+	createQueryKey("getNodeChatConversation", options);
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointData>,
-) =>
+export const getNodeChatConversationOptions = (options: Options<GetNodeChatConversationData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointError>,
-		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointQueryKey>
+		GetNodeChatConversationResponse,
+		AxiosError<GetNodeChatConversationError>,
+		GetNodeChatConversationResponse,
+		ReturnType<typeof getNodeChatConversationQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpoint({
+			const { data } = await getNodeChatConversation({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1357,23 +1183,19 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEnd
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationEndpointQueryKey(options),
+		queryKey: getNodeChatConversationQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointData>
-> => {
+export const renameNodeChatConversationMutation = (
+	options?: Partial<Options<RenameNodeChatConversationData>>,
+): UseMutationOptions<RenameNodeChatConversationResponse, AxiosError<DefaultError>, Options<RenameNodeChatConversationData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointResponse,
+		RenameNodeChatConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpointData>
+		Options<RenameNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversationEndpoint({
+			const { data } = await renameNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1384,20 +1206,16 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1RenameNodeChatConversation
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointData>
-> => {
+export const pinNodeChatConversationMutation = (
+	options?: Partial<Options<PinNodeChatConversationData>>,
+): UseMutationOptions<PinNodeChatConversationResponse, AxiosError<DefaultError>, Options<PinNodeChatConversationData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointResponse,
+		PinNodeChatConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpointData>
+		Options<PinNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEndpoint({
+			const { data } = await pinNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1408,20 +1226,20 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationEnd
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointData>>,
+export const archiveNodeChatConversationMutation = (
+	options?: Partial<Options<ArchiveNodeChatConversationData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointResponse,
+	ArchiveNodeChatConversationResponse,
 	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointData>
+	Options<ArchiveNodeChatConversationData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointResponse,
+		ArchiveNodeChatConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpointData>
+		Options<ArchiveNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationEndpoint({
+			const { data } = await archiveNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1432,20 +1250,16 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversatio
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointData>
-> => {
+export const branchNodeChatConversationMutation = (
+	options?: Partial<Options<BranchNodeChatConversationData>>,
+): UseMutationOptions<BranchNodeChatConversationResponse, AxiosError<DefaultError>, Options<BranchNodeChatConversationData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointResponse,
+		BranchNodeChatConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpointData>
+		Options<BranchNodeChatConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationEndpoint({
+			const { data } = await branchNodeChatConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1456,21 +1270,18 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversation
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpoint", options);
+export const listNodeChatMessageRevisionsQueryKey = (options: Options<ListNodeChatMessageRevisionsData>) =>
+	createQueryKey("listNodeChatMessageRevisions", options);
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointData>,
-) =>
+export const listNodeChatMessageRevisionsOptions = (options: Options<ListNodeChatMessageRevisionsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointResponse,
+		ListNodeChatMessageRevisionsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointQueryKey>
+		ListNodeChatMessageRevisionsResponse,
+		ReturnType<typeof listNodeChatMessageRevisionsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpoint({
+			const { data } = await listNodeChatMessageRevisions({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1478,23 +1289,23 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisio
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsLocalChatV1ListNodeChatMessageRevisionsEndpointQueryKey(options),
+		queryKey: listNodeChatMessageRevisionsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointData>>,
+export const createNodeChatMessageRevisionMutation = (
+	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointResponse,
+	CreateNodeChatMessageRevisionResponse,
 	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointData>
+	Options<CreateNodeChatMessageRevisionData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointResponse,
+		CreateNodeChatMessageRevisionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpointData>
+		Options<CreateNodeChatMessageRevisionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevisionEndpoint({
+			const { data } = await createNodeChatMessageRevision({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1505,21 +1316,18 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatMessageRevis
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpoint", options);
+export const getNodeChatMessageFeedbackQueryKey = (options: Options<GetNodeChatMessageFeedbackData>) =>
+	createQueryKey("getNodeChatMessageFeedback", options);
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointData>,
-) =>
+export const getNodeChatMessageFeedbackOptions = (options: Options<GetNodeChatMessageFeedbackData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointResponse,
+		GetNodeChatMessageFeedbackResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointQueryKey>
+		GetNodeChatMessageFeedbackResponse,
+		ReturnType<typeof getNodeChatMessageFeedbackQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpoint({
+			const { data } = await getNodeChatMessageFeedback({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1527,23 +1335,19 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedback
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackEndpointQueryKey(options),
+		queryKey: getNodeChatMessageFeedbackQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointData>
-> => {
+export const setNodeChatMessageFeedbackMutation = (
+	options?: Partial<Options<SetNodeChatMessageFeedbackData>>,
+): UseMutationOptions<SetNodeChatMessageFeedbackResponse, AxiosError<DefaultError>, Options<SetNodeChatMessageFeedbackData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointResponse,
+		SetNodeChatMessageFeedbackResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpointData>
+		Options<SetNodeChatMessageFeedbackData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpoint({
+			const { data } = await setNodeChatMessageFeedback({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1554,20 +1358,20 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedback
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointData>>,
+export const setNodeChatSelectedPathMutation = (
+	options?: Partial<Options<SetNodeChatSelectedPathData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointData>
+	SetNodeChatSelectedPathResponse,
+	AxiosError<SetNodeChatSelectedPathError>,
+	Options<SetNodeChatSelectedPathData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpointData>
+		SetNodeChatSelectedPathResponse,
+		AxiosError<SetNodeChatSelectedPathError>,
+		Options<SetNodeChatSelectedPathData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpoint({
+			const { data } = await setNodeChatSelectedPath({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1578,21 +1382,18 @@ export const xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEnd
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpoint", options);
+export const getInvocationMonitorQueryKey = (options?: Options<GetInvocationMonitorData>) =>
+	createQueryKey("getInvocationMonitor", options);
 
-export const xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointData>,
-) =>
+export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonitorData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointResponse,
+		GetInvocationMonitorResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointQueryKey>
+		GetInvocationMonitorResponse,
+		ReturnType<typeof getInvocationMonitorQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpoint({
+			const { data } = await getInvocationMonitor({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1600,23 +1401,19 @@ export const xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndp
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsInvocationsV1GetInvocationMonitorEndpointQueryKey(options),
+		queryKey: getInvocationMonitorQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointData>
-> => {
+export const connectConnectionMutation = (
+	options?: Partial<Options<ConnectConnectionData>>,
+): UseMutationOptions<ConnectConnectionResponse, AxiosError<DefaultError>, Options<ConnectConnectionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointResponse,
+		ConnectConnectionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpointData>
+		Options<ConnectConnectionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpoint({
+			const { data } = await connectConnection({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1627,20 +1424,16 @@ export const xeLocalAiEngineClientEndpointsConnectionV1ConnectConnectionEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointData>
-> => {
+export const disableAutoConnectMutation = (
+	options?: Partial<Options<DisableAutoConnectData>>,
+): UseMutationOptions<DisableAutoConnectResponse, AxiosError<DefaultError>, Options<DisableAutoConnectData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointResponse,
+		DisableAutoConnectResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpointData>
+		Options<DisableAutoConnectData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpoint({
+			const { data } = await disableAutoConnect({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1651,20 +1444,16 @@ export const xeLocalAiEngineClientEndpointsConnectionV1DisableAutoConnectEndpoin
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointData>
-> => {
+export const disconnectConnectionMutation = (
+	options?: Partial<Options<DisconnectConnectionData>>,
+): UseMutationOptions<DisconnectConnectionResponse, AxiosError<DefaultError>, Options<DisconnectConnectionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointResponse,
+		DisconnectConnectionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpointData>
+		Options<DisconnectConnectionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpoint({
+			const { data } = await disconnectConnection({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1675,20 +1464,16 @@ export const xeLocalAiEngineClientEndpointsConnectionV1DisconnectConnectionEndpo
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointData>
-> => {
+export const enableAutoConnectMutation = (
+	options?: Partial<Options<EnableAutoConnectData>>,
+): UseMutationOptions<EnableAutoConnectResponse, AxiosError<DefaultError>, Options<EnableAutoConnectData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointResponse,
+		EnableAutoConnectResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpointData>
+		Options<EnableAutoConnectData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpoint({
+			const { data } = await enableAutoConnect({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1699,21 +1484,18 @@ export const xeLocalAiEngineClientEndpointsConnectionV1EnableAutoConnectEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpoint", options);
+export const getConnectionStatusQueryKey = (options?: Options<GetConnectionStatusData>) =>
+	createQueryKey("getConnectionStatus", options);
 
-export const xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointData>,
-) =>
+export const getConnectionStatusOptions = (options?: Options<GetConnectionStatusData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointResponse,
+		GetConnectionStatusResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointQueryKey>
+		GetConnectionStatusResponse,
+		ReturnType<typeof getConnectionStatusQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpoint({
+			const { data } = await getConnectionStatus({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1721,23 +1503,19 @@ export const xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpoi
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsConnectionV1GetConnectionStatusEndpointQueryKey(options),
+		queryKey: getConnectionStatusQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointData>
-> => {
+export const clearCloudSettingsMutation = (
+	options?: Partial<Options<ClearCloudSettingsData>>,
+): UseMutationOptions<ClearCloudSettingsResponse, AxiosError<DefaultError>, Options<ClearCloudSettingsData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointResponse,
+		ClearCloudSettingsResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpointData>
+		Options<ClearCloudSettingsData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndpoint({
+			const { data } = await clearCloudSettings({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1748,21 +1526,17 @@ export const xeLocalAiEngineClientEndpointsCloudSettingsV1ClearCloudSettingsEndp
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoint", options);
+export const getCloudSettingsQueryKey = (options?: Options<GetCloudSettingsData>) => createQueryKey("getCloudSettings", options);
 
-export const xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointData>,
-) =>
+export const getCloudSettingsOptions = (options?: Options<GetCloudSettingsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointResponse,
+		GetCloudSettingsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointQueryKey>
+		GetCloudSettingsResponse,
+		ReturnType<typeof getCloudSettingsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoint({
+			const { data } = await getCloudSettings({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1770,23 +1544,19 @@ export const xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpoi
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsCloudSettingsV1GetCloudSettingsEndpointQueryKey(options),
+		queryKey: getCloudSettingsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointData>
-> => {
+export const saveCloudSettingsMutation = (
+	options?: Partial<Options<SaveCloudSettingsData>>,
+): UseMutationOptions<SaveCloudSettingsResponse, AxiosError<SaveCloudSettingsError>, Options<SaveCloudSettingsData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpointData>
+		SaveCloudSettingsResponse,
+		AxiosError<SaveCloudSettingsError>,
+		Options<SaveCloudSettingsData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpoint({
+			const { data } = await saveCloudSettings({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1797,21 +1567,17 @@ export const xeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsEndpo
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpoint", options);
+export const nodeAuthStatusQueryKey = (options?: Options<NodeAuthStatusData>) => createQueryKey("nodeAuthStatus", options);
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointData>,
-) =>
+export const nodeAuthStatusOptions = (options?: Options<NodeAuthStatusData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointResponse,
+		NodeAuthStatusResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointQueryKey>
+		NodeAuthStatusResponse,
+		ReturnType<typeof nodeAuthStatusQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpoint({
+			const { data } = await nodeAuthStatus({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1819,23 +1585,15 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointOptions =
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusEndpointQueryKey(options),
+		queryKey: nodeAuthStatusQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointData>
-	> = {
+export const nodeSetupMutation = (
+	options?: Partial<Options<NodeSetupData>>,
+): UseMutationOptions<NodeSetupResponse, AxiosError<NodeSetupError>, Options<NodeSetupData>> => {
+	const mutationOptions: UseMutationOptions<NodeSetupResponse, AxiosError<NodeSetupError>, Options<NodeSetupData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpoint({
+			const { data } = await nodeSetup({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1846,20 +1604,12 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeSetupEndpointMutation = (
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointData>
-	> = {
+export const nodeLoginMutation = (
+	options?: Partial<Options<NodeLoginData>>,
+): UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> => {
+	const mutationOptions: UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpoint({
+			const { data } = await nodeLogin({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1870,20 +1620,12 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeLoginEndpointMutation = (
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointData>
-	> = {
+export const nodeRefreshMutation = (
+	options?: Partial<Options<NodeRefreshData>>,
+): UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> => {
+	const mutationOptions: UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpoint({
+			const { data } = await nodeRefresh({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1894,20 +1636,12 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeRefreshEndpointMutation = (
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointData>
-	> = {
+export const nodeLogoutMutation = (
+	options?: Partial<Options<NodeLogoutData>>,
+): UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> => {
+	const mutationOptions: UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpoint({
+			const { data } = await nodeLogout({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1918,20 +1652,16 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeLogoutEndpointMutation = (
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointData>
-> => {
+export const nodeChangePasswordMutation = (
+	options?: Partial<Options<NodeChangePasswordData>>,
+): UseMutationOptions<NodeChangePasswordResponse, AxiosError<NodeChangePasswordError>, Options<NodeChangePasswordData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointData>
+		NodeChangePasswordResponse,
+		AxiosError<NodeChangePasswordError>,
+		Options<NodeChangePasswordData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpoint({
+			const { data } = await nodeChangePassword({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1942,21 +1672,12 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordEndpointMutat
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpoint", options);
+export const nodeMeQueryKey = (options?: Options<NodeMeData>) => createQueryKey("nodeMe", options);
 
-export const xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointData>,
-) =>
-	queryOptions<
-		XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointResponse,
-		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointQueryKey>
-	>({
+export const nodeMeOptions = (options?: Options<NodeMeData>) =>
+	queryOptions<NodeMeResponse, AxiosError<DefaultError>, NodeMeResponse, ReturnType<typeof nodeMeQueryKey>>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpoint({
+			const { data } = await nodeMe({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1964,23 +1685,23 @@ export const xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointOptions = (
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAuthV1NodeMeEndpointQueryKey(options),
+		queryKey: nodeMeQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointData>>,
+export const validationProblemProbeMutation = (
+	options?: Partial<Options<ValidationProblemProbeData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointResponse,
-	AxiosError<XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointError>,
-	Options<XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointData>
+	ValidationProblemProbeResponse,
+	AxiosError<ValidationProblemProbeError>,
+	Options<ValidationProblemProbeData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointResponse,
-		AxiosError<XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointError>,
-		Options<XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpointData>
+		ValidationProblemProbeResponse,
+		AxiosError<ValidationProblemProbeError>,
+		Options<ValidationProblemProbeData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeEndpoint({
+			const { data } = await validationProblemProbe({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1991,20 +1712,32 @@ export const xeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbe
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointData>
-> => {
+export const analyzePlaybookMutation = (
+	options?: Partial<Options<AnalyzePlaybookData>>,
+): UseMutationOptions<AnalyzePlaybookResponse, AxiosError<DefaultError>, Options<AnalyzePlaybookData>> => {
+	const mutationOptions: UseMutationOptions<AnalyzePlaybookResponse, AxiosError<DefaultError>, Options<AnalyzePlaybookData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzePlaybook({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const approveGoldenConversationMutation = (
+	options?: Partial<Options<ApproveGoldenConversationData>>,
+): UseMutationOptions<ApproveGoldenConversationResponse, AxiosError<DefaultError>, Options<ApproveGoldenConversationData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointResponse,
+		ApproveGoldenConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointData>
+		Options<ApproveGoldenConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpoint({
+			const { data } = await approveGoldenConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2015,45 +1748,18 @@ export const xeLocalAiEngineClientEndpointsAgentsV1AnalyzePlaybookEndpointMutati
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointResponse,
-		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpointData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationEndpoint({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
+export const listAgentDefinitionsQueryKey = (options?: Options<ListAgentDefinitionsData>) =>
+	createQueryKey("listAgentDefinitions", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpoint", options);
-
-export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointData>,
-) =>
+export const listAgentDefinitionsOptions = (options?: Options<ListAgentDefinitionsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointResponse,
+		ListAgentDefinitionsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointQueryKey>
+		ListAgentDefinitionsResponse,
+		ReturnType<typeof listAgentDefinitionsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpoint({
+			const { data } = await listAgentDefinitions({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2061,23 +1767,19 @@ export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointO
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsEndpointQueryKey(options),
+		queryKey: listAgentDefinitionsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointData>
-> => {
+export const createAgentDefinitionMutation = (
+	options?: Partial<Options<CreateAgentDefinitionData>>,
+): UseMutationOptions<CreateAgentDefinitionResponse, AxiosError<DefaultError>, Options<CreateAgentDefinitionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointResponse,
+		CreateAgentDefinitionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpointData>
+		Options<CreateAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpoint({
+			const { data } = await createAgentDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2088,21 +1790,18 @@ export const xeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpoint", options);
+export const listGoldenConversationsQueryKey = (options: Options<ListGoldenConversationsData>) =>
+	createQueryKey("listGoldenConversations", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointData>,
-) =>
+export const listGoldenConversationsOptions = (options: Options<ListGoldenConversationsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointResponse,
+		ListGoldenConversationsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointQueryKey>
+		ListGoldenConversationsResponse,
+		ReturnType<typeof listGoldenConversationsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpoint({
+			const { data } = await listGoldenConversations({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2110,23 +1809,19 @@ export const xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpoi
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsEndpointQueryKey(options),
+		queryKey: listGoldenConversationsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointData>
-> => {
+export const createGoldenConversationMutation = (
+	options?: Partial<Options<CreateGoldenConversationData>>,
+): UseMutationOptions<CreateGoldenConversationResponse, AxiosError<DefaultError>, Options<CreateGoldenConversationData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointResponse,
+		CreateGoldenConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpointData>
+		Options<CreateGoldenConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpoint({
+			const { data } = await createGoldenConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2137,21 +1832,18 @@ export const xeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationEndpo
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpoint", options);
+export const listAgentPlaybookActionsQueryKey = (options: Options<ListAgentPlaybookActionsData>) =>
+	createQueryKey("listAgentPlaybookActions", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointData>,
-) =>
+export const listAgentPlaybookActionsOptions = (options: Options<ListAgentPlaybookActionsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointResponse,
+		ListAgentPlaybookActionsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointQueryKey>
+		ListAgentPlaybookActionsResponse,
+		ReturnType<typeof listAgentPlaybookActionsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpoint({
+			const { data } = await listAgentPlaybookActions({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2159,23 +1851,19 @@ export const xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpo
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsEndpointQueryKey(options),
+		queryKey: listAgentPlaybookActionsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointData>
-> => {
+export const createPlaybookActionMutation = (
+	options?: Partial<Options<CreatePlaybookActionData>>,
+): UseMutationOptions<CreatePlaybookActionResponse, AxiosError<DefaultError>, Options<CreatePlaybookActionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointResponse,
+		CreatePlaybookActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointData>
+		Options<CreatePlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpoint({
+			const { data } = await createPlaybookAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2186,20 +1874,16 @@ export const xeLocalAiEngineClientEndpointsAgentsV1CreatePlaybookActionEndpointM
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointData>
-> => {
+export const deleteAgentDefinitionMutation = (
+	options?: Partial<Options<DeleteAgentDefinitionData>>,
+): UseMutationOptions<DeleteAgentDefinitionResponse, AxiosError<DefaultError>, Options<DeleteAgentDefinitionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointResponse,
+		DeleteAgentDefinitionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpointData>
+		Options<DeleteAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpoint({
+			const { data } = await deleteAgentDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2210,21 +1894,18 @@ export const xeLocalAiEngineClientEndpointsAgentsV1DeleteAgentDefinitionEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpoint", options);
+export const getAgentDefinitionQueryKey = (options: Options<GetAgentDefinitionData>) =>
+	createQueryKey("getAgentDefinition", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointData>,
-) =>
+export const getAgentDefinitionOptions = (options: Options<GetAgentDefinitionData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointResponse,
+		GetAgentDefinitionResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointQueryKey>
+		GetAgentDefinitionResponse,
+		ReturnType<typeof getAgentDefinitionQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpoint({
+			const { data } = await getAgentDefinition({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2232,23 +1913,19 @@ export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointOpt
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1GetAgentDefinitionEndpointQueryKey(options),
+		queryKey: getAgentDefinitionQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointData>
-> => {
+export const updateAgentDefinitionMutation = (
+	options?: Partial<Options<UpdateAgentDefinitionData>>,
+): UseMutationOptions<UpdateAgentDefinitionResponse, AxiosError<DefaultError>, Options<UpdateAgentDefinitionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointResponse,
+		UpdateAgentDefinitionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpointData>
+		Options<UpdateAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpoint({
+			const { data } = await updateAgentDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2259,20 +1936,16 @@ export const xeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointData>
-> => {
+export const deleteGoldenConversationMutation = (
+	options?: Partial<Options<DeleteGoldenConversationData>>,
+): UseMutationOptions<DeleteGoldenConversationResponse, AxiosError<DefaultError>, Options<DeleteGoldenConversationData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointResponse,
+		DeleteGoldenConversationResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpointData>
+		Options<DeleteGoldenConversationData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpoint({
+			const { data } = await deleteGoldenConversation({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2283,20 +1956,16 @@ export const xeLocalAiEngineClientEndpointsAgentsV1DeleteGoldenConversationEndpo
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointData>
-> => {
+export const deletePlaybookActionMutation = (
+	options?: Partial<Options<DeletePlaybookActionData>>,
+): UseMutationOptions<DeletePlaybookActionResponse, AxiosError<DefaultError>, Options<DeletePlaybookActionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointResponse,
+		DeletePlaybookActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointData>
+		Options<DeletePlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpoint({
+			const { data } = await deletePlaybookAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2307,20 +1976,16 @@ export const xeLocalAiEngineClientEndpointsAgentsV1DeletePlaybookActionEndpointM
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointData>
-> => {
+export const updatePlaybookActionMutation = (
+	options?: Partial<Options<UpdatePlaybookActionData>>,
+): UseMutationOptions<UpdatePlaybookActionResponse, AxiosError<DefaultError>, Options<UpdatePlaybookActionData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointResponse,
+		UpdatePlaybookActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointData>
+		Options<UpdatePlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpoint({
+			const { data } = await updatePlaybookAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2331,21 +1996,18 @@ export const xeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionEndpointM
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpoint", options);
+export const getAgentFeedbackInsightsQueryKey = (options: Options<GetAgentFeedbackInsightsData>) =>
+	createQueryKey("getAgentFeedbackInsights", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointData>,
-) =>
+export const getAgentFeedbackInsightsOptions = (options: Options<GetAgentFeedbackInsightsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointResponse,
+		GetAgentFeedbackInsightsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointQueryKey>
+		GetAgentFeedbackInsightsResponse,
+		ReturnType<typeof getAgentFeedbackInsightsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpoint({
+			const { data } = await getAgentFeedbackInsights({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2353,24 +2015,21 @@ export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpo
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1GetAgentFeedbackInsightsEndpointQueryKey(options),
+		queryKey: getAgentFeedbackInsightsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointQueryKey = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoint", options);
+export const getAgentPlaybookMonitorQueryKey = (options: Options<GetAgentPlaybookMonitorData>) =>
+	createQueryKey("getAgentPlaybookMonitor", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointOptions = (
-	options: Options<XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointData>,
-) =>
+export const getAgentPlaybookMonitorOptions = (options: Options<GetAgentPlaybookMonitorData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointResponse,
+		GetAgentPlaybookMonitorResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointQueryKey>
+		GetAgentPlaybookMonitorResponse,
+		ReturnType<typeof getAgentPlaybookMonitorQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoint({
+			const { data } = await getAgentPlaybookMonitor({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2378,24 +2037,21 @@ export const xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpoi
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1GetAgentPlaybookMonitorEndpointQueryKey(options),
+		queryKey: getAgentPlaybookMonitorQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointQueryKey = (
-	options?: Options<XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointData>,
-) => createQueryKey("xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpoint", options);
+export const getToolCapableModelsQueryKey = (options?: Options<GetToolCapableModelsData>) =>
+	createQueryKey("getToolCapableModels", options);
 
-export const xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointOptions = (
-	options?: Options<XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointData>,
-) =>
+export const getToolCapableModelsOptions = (options?: Options<GetToolCapableModelsData>) =>
 	queryOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointResponse,
+		GetToolCapableModelsResponse,
 		AxiosError<DefaultError>,
-		XeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointResponse,
-		ReturnType<typeof xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointQueryKey>
+		GetToolCapableModelsResponse,
+		ReturnType<typeof getToolCapableModelsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpoint({
+			const { data } = await getToolCapableModels({
 				...options,
 				...queryKey[0],
 				signal,
@@ -2403,23 +2059,19 @@ export const xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointO
 			});
 			return data;
 		},
-		queryKey: xeLocalAiEngineClientEndpointsAgentsV1GetToolCapableModelsEndpointQueryKey(options),
+		queryKey: getToolCapableModelsQueryKey(options),
 	});
 
-export const xeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointData>
-> => {
+export const harvestGoldenConversationsMutation = (
+	options?: Partial<Options<HarvestGoldenConversationsData>>,
+): UseMutationOptions<HarvestGoldenConversationsResponse, AxiosError<DefaultError>, Options<HarvestGoldenConversationsData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointResponse,
+		HarvestGoldenConversationsResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpointData>
+		Options<HarvestGoldenConversationsData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEndpoint({
+			const { data } = await harvestGoldenConversations({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2430,20 +2082,20 @@ export const xeLocalAiEngineClientEndpointsAgentsV1HarvestGoldenConversationsEnd
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointData>>,
+export const promoteSuggestedPlaybookActionMutation = (
+	options?: Partial<Options<PromoteSuggestedPlaybookActionData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointResponse,
+	PromoteSuggestedPlaybookActionResponse,
 	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointData>
+	Options<PromoteSuggestedPlaybookActionData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointResponse,
+		PromoteSuggestedPlaybookActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpointData>
+		Options<PromoteSuggestedPlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActionEndpoint({
+			const { data } = await promoteSuggestedPlaybookAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2454,20 +2106,20 @@ export const xeLocalAiEngineClientEndpointsAgentsV1PromoteSuggestedPlaybookActio
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointData>>,
+export const rejectSuggestedPlaybookActionMutation = (
+	options?: Partial<Options<RejectSuggestedPlaybookActionData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointResponse,
+	RejectSuggestedPlaybookActionResponse,
 	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointData>
+	Options<RejectSuggestedPlaybookActionData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointResponse,
+		RejectSuggestedPlaybookActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpointData>
+		Options<RejectSuggestedPlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookActionEndpoint({
+			const { data } = await rejectSuggestedPlaybookAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2478,20 +2130,16 @@ export const xeLocalAiEngineClientEndpointsAgentsV1RejectSuggestedPlaybookAction
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointData>>,
-): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointResponse,
-	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointData>
-> => {
+export const runPlaybookActionEvalMutation = (
+	options?: Partial<Options<RunPlaybookActionEvalData>>,
+): UseMutationOptions<RunPlaybookActionEvalResponse, AxiosError<DefaultError>, Options<RunPlaybookActionEvalData>> => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointResponse,
+		RunPlaybookActionEvalResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpointData>
+		Options<RunPlaybookActionEvalData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpoint({
+			const { data } = await runPlaybookActionEval({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2502,20 +2150,20 @@ export const xeLocalAiEngineClientEndpointsAgentsV1RunPlaybookActionEvalEndpoint
 	return mutationOptions;
 };
 
-export const xeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointMutation = (
-	options?: Partial<Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointData>>,
+export const updateSuggestedPlaybookActionMutation = (
+	options?: Partial<Options<UpdateSuggestedPlaybookActionData>>,
 ): UseMutationOptions<
-	XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointResponse,
+	UpdateSuggestedPlaybookActionResponse,
 	AxiosError<DefaultError>,
-	Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointData>
+	Options<UpdateSuggestedPlaybookActionData>
 > => {
 	const mutationOptions: UseMutationOptions<
-		XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointResponse,
+		UpdateSuggestedPlaybookActionResponse,
 		AxiosError<DefaultError>,
-		Options<XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpointData>
+		Options<UpdateSuggestedPlaybookActionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await xeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionEndpoint({
+			const { data } = await updateSuggestedPlaybookAction({
 				...options,
 				...fnOptions,
 				throwOnError: true,

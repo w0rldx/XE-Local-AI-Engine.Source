@@ -112,6 +112,23 @@ try
     app.UseFastEndpoints(static config =>
     {
         config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
+
+        // Single source of truth for OpenAPI operationIds (consumed by the generated hey-api React SDK):
+        // derive a clean, camelCase name from the endpoint class name, e.g. CreateScheduledJobEndpoint ->
+        // "createScheduledJob". Applied globally (not per-endpoint Description(WithName)) so that FastEndpoints'
+        // type-safe Send.CreatedAtAsync<TEndpoint>() Location resolution keeps working — it resolves the target
+        // name through this same generator. Class names are unique across the assembly, so operationIds are unique.
+        config.Endpoints.NameGenerator = static ctx =>
+        {
+            var name = ctx.EndpointType.Name;
+            if (name.EndsWith("Endpoint", StringComparison.Ordinal) && name.Length > "Endpoint".Length)
+            {
+                name = name[..^"Endpoint".Length];
+            }
+
+            return char.ToLowerInvariant(name[0]) + name[1..];
+        };
+
         config.Errors.UseProblemDetails();
         ConfigureServices.ConfigureJsonSerializerOptions(config.Serializer.Options);
     });
