@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://localhost:50799"
+      "url": "https://localhost:50722"
     }
   ],
   "paths": {
@@ -849,6 +849,139 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/recommendations/latest": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint",
+        "parameters": [
+          {
+            "name": "useCase",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "providerName",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1GetLatestRecommendationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/approved-images": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsModelFitV1ListApprovedImagesEndpoint",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ListApprovedImagesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/recommendations/refresh": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint",
+        "requestBody": {
+          "x-name": "RefreshRecommendationsRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/mcp/servers": {
       "post": {
         "tags": [
@@ -1235,6 +1368,105 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/{modelName}/kind": {
+      "delete": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelKindResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "XE_Local_AI_EngineClientEndpointsLocalModelsV1PutModelKindEndpoint",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SetModelKindRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1SetModelKindRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelKindResponse"
                 }
               }
             }
@@ -4081,12 +4313,14 @@
         "x-enumNames": [
           "Cron",
           "OneShot",
-          "SimpleInterval"
+          "SimpleInterval",
+          "Manual"
         ],
         "enum": [
           "Cron",
           "OneShot",
-          "SimpleInterval"
+          "SimpleInterval",
+          "Manual"
         ]
       },
       "XE_Local_AI_EngineClientPersistenceEntitiesSchedulerMisfirePolicy": {
@@ -5037,6 +5271,202 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GetLatestRecommendationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hasCache": {
+            "type": "boolean"
+          },
+          "snapshotId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceImageId": {
+            "type": "string",
+            "nullable": true
+          },
+          "useCase": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastRefreshedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ModelFitRecommendationResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ModelFitRecommendationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "providerModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
+          },
+          "fitLevel": {
+            "type": "string",
+            "nullable": true
+          },
+          "runMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "quantization": {
+            "type": "string",
+            "nullable": true
+          },
+          "estimatedTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "requiredRamMb": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "requiredVramMb": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "isInstalled": {
+            "type": "boolean"
+          },
+          "pullModelName": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GetLatestRecommendationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ListApprovedImagesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ApprovedImageResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ApprovedImageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "approvedImageId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "purpose": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "imageReference": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "upstreamVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "deprecatedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "replacementApprovedImageId": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastUsedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "lastSuccessfulRunAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "diagnostics": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scheduledJobId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scheduledJobId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsMcpV1McpServerResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -5308,6 +5738,34 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1ModelKindResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "detectedKind": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isOverridden": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1ResetModelKindRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1LocalModelDetailsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -5396,6 +5854,21 @@
           },
           "isSelected": {
             "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "detectedKind": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isOverridden": {
+            "type": "boolean"
           }
         }
       },
@@ -5433,6 +5906,16 @@
             "maxLength": 100,
             "minLength": 0,
             "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1SetModelKindRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

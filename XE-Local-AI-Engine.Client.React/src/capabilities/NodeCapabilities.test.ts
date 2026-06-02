@@ -15,6 +15,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.scheduler).toBe(true);
 	});
 
+	it("enables the model-fit surface by default", () => {
+		expect(nodeCapabilities.modelFit).toBe(true);
+	});
+
 	it("keeps node chat local-first and approval-gated for initial parity", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
@@ -45,6 +49,8 @@ describe("nodeCapabilities", () => {
 			agents: "/agents",
 			mcp: "/mcp",
 			scheduler: "/scheduler",
+			modelRecommendations: "/model-recommendations",
+			approvedImages: "/approved-images",
 		});
 	});
 });

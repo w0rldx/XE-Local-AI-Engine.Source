@@ -201,6 +201,25 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Local API contract type for model-fit (llmfit approved-image recommendations). Cache-first: the latest
+    ///     endpoints read the cached snapshot and never run llmfit; the refresh endpoint delegates to the scheduler
+    ///     trigger and never executes llmfit directly. Benchmark routes are intentionally not exposed yet.
+    /// </summary>
+    public static class ModelFit
+    {
+        // Read-only approved utility image registry projection.
+        public const string ApprovedImages = "model-fit/approved-images";
+
+        // Latest cached recommendation snapshot (query-filtered by useCase/providerName). The literal "latest" segment
+        // follows "recommendations", so it never collides with the "refresh" action below.
+        public const string RecommendationsLatest = "model-fit/recommendations/latest";
+
+        // Manual refresh trigger — a template-guarded facade over the scheduler trigger service. The literal "refresh"
+        // segment follows "recommendations", so it never collides with "latest".
+        public const string RecommendationsRefresh = "model-fit/recommendations/refresh";
+    }
+
+    /// <summary>
     ///     Local API contract type for mcp.
     /// </summary>
     public static class Mcp

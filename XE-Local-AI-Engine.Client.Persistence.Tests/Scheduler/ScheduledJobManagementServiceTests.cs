@@ -321,6 +321,121 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // Manual — durable on-demand job with NO trigger; fired only by TriggerNow
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task ValidateScheduleFields_AcceptsManualWithNoScheduleFields()
+    {
+        // A Manual definition must validate with null cron/interval/repeat/start — CreateJobAsync runs validation
+        // first, so a successful create proves ValidateScheduleFields accepted Manual.
+        var dbPath = GetDatabasePath("manual-validate.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+
+        AssertEx.Equal(ScheduleKind.Manual, record.ScheduleKind);
+        AssertEx.Null(record.CronExpression, "A Manual job has no cron expression.");
+        AssertEx.Null(record.IntervalSeconds, "A Manual job has no interval.");
+        AssertEx.Null(record.StartAtUtc, "A Manual job has no start time.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateJobAsync_ManualInput_RegistersDurableJobWithNoTrigger()
+    {
+        var dbPath = GetDatabasePath("manual-durable.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
+
+        // The durable job exists ...
+        AssertEx.True(
+            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+            "A Manual job must be registered as a durable Quartz job.");
+
+        // ... but it has NO trigger (a Manual job never auto-fires).
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Equal(0, triggers.Count, "A Manual job must have no trigger — it never auto-fires.");
+
+        // The job detail is durable, which is what AddJob requires.
+        var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(jobDetail.Durable, "A Manual job detail must be stored durably.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task TriggerNowAsync_OnManualJob_Succeeds()
+    {
+        var dbPath = GetDatabasePath("manual-trigger.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
+
+        // TriggerNowAsync must SUCCEED for a durable Manual job that has no trigger: it passes the CheckExists guard and
+        // calls Quartz TriggerJob without throwing. We intentionally do NOT start a firing worker here — firing the real
+        // dispatch job would write run history through EF to the SAME SQLite file the Quartz ADO job store uses, and the
+        // single-writer contention between the Quartz worker thread and the store deadlocks the test. The end-to-end fire
+        // (dispatcher → handler → snapshot) is covered deterministically by ModelRecommendationCheckSchedulerPathTests
+        // (Marker 3). Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
+        await service.TriggerNowAsync(record.Id).ConfigureAwait(false);
+
+        AssertEx.True(
+            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+            "The durable Manual job must remain registered and triggerable after TriggerNowAsync.");
+    }
+
+    [Test]
+    public async Task SetEnabledAsync_WhenDisablingManualJob_RemovesDurableJob()
+    {
+        var dbPath = GetDatabasePath("manual-disable.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
+
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+            "Manual job must be registered before disabling.");
+
+        var disabled = await service.SetEnabledAsync(record.Id, false).ConfigureAwait(false);
+        AssertEx.NotNull(disabled, "SetEnabledAsync must return the updated record.");
+        AssertEx.Equal(false, disabled!.Enabled);
+
+        AssertEx.False(
+            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+            "Disabling a Manual job must remove the durable Quartz job.");
+
+        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Update — re-maps schedule; definition updated in store + Quartz
     // ──────────────────────────────────────────────────────────────────────
 
@@ -722,7 +837,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     private static ServiceProvider BuildEnabledProvider(
         string dbPath,
         IScheduledJobHandler? extraHandler = null,
-        ISchedulerEventPublisher? eventPublisher = null)
+        ISchedulerEventPublisher? eventPublisher = null,
+        TestEchoScheduledJobHandler? echoHandler = null)
     {
         var services = new ServiceCollection();
         // Use NullLoggerFactory (static singleton) so Quartz's static LogProvider does not cache a reference to a
@@ -731,7 +847,18 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-        services.AddSingleton<IScheduledJobHandler, TestEchoScheduledJobHandler>();
+        // Register the test.echo handler. A test that observes invocations passes its own instance (registered as the
+        // single test.echo handler); otherwise a fresh default instance is used. The registry keys handlers by template
+        // id, so there must be exactly one test.echo handler.
+        if (echoHandler is not null)
+        {
+            services.AddSingleton<IScheduledJobHandler>(echoHandler);
+        }
+        else
+        {
+            services.AddSingleton<IScheduledJobHandler, TestEchoScheduledJobHandler>();
+        }
+
         if (extraHandler is not null)
         {
             services.AddSingleton<IScheduledJobHandler>(_ => extraHandler);
@@ -806,6 +933,27 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: maxRuntimeSeconds,
             Parameters: null);
 
+    // Valid Manual input using the test.echo template (supports Manual). A Manual job carries no schedule fields.
+    private static ScheduledJobManagementInput ManualInput(
+        string displayName = "Test Manual Job",
+        bool preventOverlap = false) =>
+        new(
+            TemplateId: TestEchoScheduledJobHandler.Id,
+            DisplayName: displayName,
+            Description: null,
+            ScheduleKind: ScheduleKind.Manual,
+            CronExpression: null,
+            IntervalSeconds: null,
+            RepeatCount: null,
+            StartAtUtc: null,
+            EndAtUtc: null,
+            TimeZoneId: "UTC",
+            MisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
+            PreventOverlap: preventOverlap,
+            MaxRuntimeSeconds: null,
+            Parameters: null);
+
+    // Polls a condition for up to ~5 s (Quartz fires off the trigger asynchronously). Returns true once it holds.
     /// <summary>
     ///     Minimal <see cref="IHostApplicationBuilder" /> shim that satisfies the extension method's
     ///     <c>builder.Services</c> and <c>builder.Configuration</c> needs without spinning up a full host.

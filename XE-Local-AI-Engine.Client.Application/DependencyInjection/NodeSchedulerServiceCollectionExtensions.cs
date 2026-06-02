@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Quartz;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 /// <summary>
@@ -55,6 +56,11 @@ public static class NodeSchedulerServiceCollectionExtensions
         builder.Services.AddTransient<NonOverlappingSchedulerDispatchJob>();
         builder.Services.AddSingleton<IScheduledJobTemplateRegistry, ScheduledJobTemplateRegistry>();
         builder.Services.AddScoped<IScheduledJobManagementService, ScheduledJobManagementService>();
+
+        // Marker 3 model-fit template handler. Registered as a Singleton because the registry captures every handler in
+        // a FrozenDictionary at construction; the handler resolves the Scoped IModelFitRefreshService through an
+        // IServiceScopeFactory scope per fire.
+        builder.Services.AddSingleton<IScheduledJobHandler, ModelRecommendationCheckHandler>();
 
         // Default no-op publisher so the dispatcher/management service resolve a publisher in Application-only and test
         // hosts. The Client host registers a hub-backed publisher (ConfigureServices) that supersedes this.

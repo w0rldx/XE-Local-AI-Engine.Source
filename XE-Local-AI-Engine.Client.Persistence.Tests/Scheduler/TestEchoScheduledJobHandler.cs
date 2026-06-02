@@ -21,7 +21,7 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
         Description: "No-op test handler that records invocations.",
         ParameterSchema: null,
         DefaultParameters: null,
-        SupportedScheduleKinds: [ScheduleKind.OneShot, ScheduleKind.Cron],
+        SupportedScheduleKinds: [ScheduleKind.OneShot, ScheduleKind.Cron, ScheduleKind.Manual],
         DefaultScheduleKind: ScheduleKind.OneShot,
         DefaultMisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
         DefaultMaxRuntimeSeconds: null,

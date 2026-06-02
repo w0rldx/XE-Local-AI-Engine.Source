@@ -378,6 +378,11 @@ public sealed class ScheduledJobManagementService(
 
                 break;
 
+            case ScheduleKind.Manual:
+                // A Manual job is an on-demand durable job with no trigger — it requires none of the cron/interval/
+                // repeat/start-at fields, so there is nothing to validate here.
+                break;
+
             default:
                 throw new ScheduledJobValidationException($"Schedule kind '{input.ScheduleKind}' is not supported.");
         }
@@ -428,6 +433,16 @@ public sealed class ScheduledJobManagementService(
         _ = await scheduler.DeleteJob(BuildJobKey(record.Id), cancellationToken).ConfigureAwait(false);
 
         var jobDetail = BuildJobDetail(record);
+
+        if (record.ScheduleKind == ScheduleKind.Manual)
+        {
+            // A Manual job is a durable on-demand job with NO trigger — it never auto-fires, only TriggerNowAsync fires
+            // it. AddJob requires the detail to be durable (BuildJobDetail already calls StoreDurably), so it registers
+            // a trigger-less job. Do not build a trigger for Manual.
+            await scheduler.AddJob(jobDetail, replace: true, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         var trigger = BuildTrigger(record, _timeProvider); // pass TimeProvider for SimpleInterval StartAt default
 
         _ = await scheduler.ScheduleJob(jobDetail, trigger, cancellationToken).ConfigureAwait(false);

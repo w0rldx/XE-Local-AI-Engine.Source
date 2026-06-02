@@ -188,6 +188,10 @@ public static class ConfigureServices
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
         builder.Services.AddHostedService<RetentionSweeperService>();
         builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
+        // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
+        // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
+        // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
+        builder.Services.AddHostedService<Services.ModelFit.ModelRecommendationScheduleSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])

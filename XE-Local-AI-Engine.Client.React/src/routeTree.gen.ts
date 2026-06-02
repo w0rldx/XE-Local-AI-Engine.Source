@@ -18,12 +18,14 @@ import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
 import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
 import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
+import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
 import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
 import { Route as LayoutManagerRouteImport } from './routes/_layout/manager'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
+import { Route as LayoutApprovedImagesRouteImport } from './routes/_layout/approved-images'
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
 
 const SetupRoute = SetupRouteImport.update({
@@ -70,6 +72,12 @@ const LayoutModelsRoute = LayoutModelsRouteImport.update({
   path: '/models',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutModelRecommendationsRoute =
+  LayoutModelRecommendationsRouteImport.update({
+    id: '/model-recommendations',
+    path: '/model-recommendations',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 const LayoutMcpRoute = LayoutMcpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
@@ -100,6 +108,11 @@ const LayoutChatRoute = LayoutChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutApprovedImagesRoute = LayoutApprovedImagesRouteImport.update({
+  id: '/approved-images',
+  path: '/approved-images',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutAgentsRoute = LayoutAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
@@ -111,12 +124,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/agents': typeof LayoutAgentsRoute
+  '/approved-images': typeof LayoutApprovedImagesRoute
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/manager': typeof LayoutManagerRoute
   '/mcp': typeof LayoutMcpRoute
+  '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
@@ -127,12 +142,14 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/agents': typeof LayoutAgentsRoute
+  '/approved-images': typeof LayoutApprovedImagesRoute
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/manager': typeof LayoutManagerRoute
   '/mcp': typeof LayoutMcpRoute
+  '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
@@ -146,12 +163,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/_layout/agents': typeof LayoutAgentsRoute
+  '/_layout/approved-images': typeof LayoutApprovedImagesRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/manager': typeof LayoutManagerRoute
   '/_layout/mcp': typeof LayoutMcpRoute
+  '/_layout/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/_layout/models': typeof LayoutModelsRoute
   '/_layout/node-binding': typeof LayoutNodeBindingRoute
   '/_layout/node-settings': typeof LayoutNodeSettingsRoute
@@ -166,12 +185,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/agents'
+    | '/approved-images'
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
     | '/invocations'
     | '/manager'
     | '/mcp'
+    | '/model-recommendations'
     | '/models'
     | '/node-binding'
     | '/node-settings'
@@ -182,12 +203,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/agents'
+    | '/approved-images'
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
     | '/invocations'
     | '/manager'
     | '/mcp'
+    | '/model-recommendations'
     | '/models'
     | '/node-binding'
     | '/node-settings'
@@ -200,12 +223,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/_layout/agents'
+    | '/_layout/approved-images'
     | '/_layout/chat'
     | '/_layout/cloud-settings'
     | '/_layout/dashboard'
     | '/_layout/invocations'
     | '/_layout/manager'
     | '/_layout/mcp'
+    | '/_layout/model-recommendations'
     | '/_layout/models'
     | '/_layout/node-binding'
     | '/_layout/node-settings'
@@ -285,6 +310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutModelsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/model-recommendations': {
+      id: '/_layout/model-recommendations'
+      path: '/model-recommendations'
+      fullPath: '/model-recommendations'
+      preLoaderRoute: typeof LayoutModelRecommendationsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/mcp': {
       id: '/_layout/mcp'
       path: '/mcp'
@@ -327,6 +359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutChatRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/approved-images': {
+      id: '/_layout/approved-images'
+      path: '/approved-images'
+      fullPath: '/approved-images'
+      preLoaderRoute: typeof LayoutApprovedImagesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/agents': {
       id: '/_layout/agents'
       path: '/agents'
@@ -339,12 +378,14 @@ declare module '@tanstack/react-router' {
 
 interface LayoutRouteChildren {
   LayoutAgentsRoute: typeof LayoutAgentsRoute
+  LayoutApprovedImagesRoute: typeof LayoutApprovedImagesRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutManagerRoute: typeof LayoutManagerRoute
   LayoutMcpRoute: typeof LayoutMcpRoute
+  LayoutModelRecommendationsRoute: typeof LayoutModelRecommendationsRoute
   LayoutModelsRoute: typeof LayoutModelsRoute
   LayoutNodeBindingRoute: typeof LayoutNodeBindingRoute
   LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
@@ -355,12 +396,14 @@ interface LayoutRouteChildren {
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAgentsRoute: LayoutAgentsRoute,
+  LayoutApprovedImagesRoute: LayoutApprovedImagesRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutManagerRoute: LayoutManagerRoute,
   LayoutMcpRoute: LayoutMcpRoute,
+  LayoutModelRecommendationsRoute: LayoutModelRecommendationsRoute,
   LayoutModelsRoute: LayoutModelsRoute,
   LayoutNodeBindingRoute: LayoutNodeBindingRoute,
   LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,

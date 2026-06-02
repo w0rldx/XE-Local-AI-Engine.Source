@@ -44,6 +44,14 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ScheduledJobRunEvent> ScheduledJobRunEvents => Set<ScheduledJobRunEvent>();
 
+    internal DbSet<ApprovedUtilityImage> ApprovedUtilityImages => Set<ApprovedUtilityImage>();
+
+    internal DbSet<ModelFitSnapshot> ModelFitSnapshots => Set<ModelFitSnapshot>();
+
+    internal DbSet<ModelFitRecommendation> ModelFitRecommendations => Set<ModelFitRecommendation>();
+
+    internal DbSet<ModelFitBenchmark> ModelFitBenchmarks => Set<ModelFitBenchmark>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -64,6 +72,10 @@ public sealed class NodeChatDbContext : DbContext
         ConfigureScheduledJobDefinition(modelBuilder.Entity<ScheduledJobDefinition>());
         ConfigureScheduledJobRun(modelBuilder.Entity<ScheduledJobRun>());
         ConfigureScheduledJobRunEvent(modelBuilder.Entity<ScheduledJobRunEvent>());
+        ConfigureApprovedUtilityImage(modelBuilder.Entity<ApprovedUtilityImage>());
+        ConfigureModelFitSnapshot(modelBuilder.Entity<ModelFitSnapshot>());
+        ConfigureModelFitRecommendation(modelBuilder.Entity<ModelFitRecommendation>());
+        ConfigureModelFitBenchmark(modelBuilder.Entity<ModelFitBenchmark>());
     }
 
     private static void ConfigureConversation(EntityTypeBuilder<NodeConversation> builder)
@@ -699,6 +711,232 @@ public sealed class NodeChatDbContext : DbContext
         builder.HasOne<ScheduledJobRun>()
                .WithMany()
                .HasForeignKey(entity => entity.RunId)
+               .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureApprovedUtilityImage(EntityTypeBuilder<ApprovedUtilityImage> builder)
+    {
+        builder.ToTable("approved_utility_images");
+        builder.HasKey(entity => entity.ApprovedImageId);
+
+        builder.Property(entity => entity.ApprovedImageId)
+               .HasColumnName("approved_image_id")
+               // Case-insensitive collation so the descriptor id primary key and lookups treat ids differing only in
+               // case as the same descriptor, matching the application-layer case-insensitive handling.
+               .UseCollation("NOCASE");
+
+        builder.Property(entity => entity.DisplayName)
+               .HasColumnName("display_name");
+
+        builder.Property(entity => entity.Description)
+               .HasColumnName("description");
+
+        builder.Property(entity => entity.Purpose)
+               .HasColumnName("purpose");
+
+        builder.Property(entity => entity.ImageReference)
+               .HasColumnName("image_reference");
+
+        builder.Property(entity => entity.SourceUrl)
+               .HasColumnName("source_url");
+
+        builder.Property(entity => entity.UpstreamVersion)
+               .HasColumnName("upstream_version");
+
+        builder.Property(entity => entity.Enabled)
+               .HasColumnName("enabled");
+
+        builder.Property(entity => entity.DeprecatedAtUtc)
+               .HasColumnName("deprecated_at_utc");
+
+        builder.Property(entity => entity.ReplacementApprovedImageId)
+               .HasColumnName("replacement_approved_image_id");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.UpdatedAtUtc)
+               .HasColumnName("updated_at_utc");
+
+        builder.Property(entity => entity.LastUsedAtUtc)
+               .HasColumnName("last_used_at_utc");
+
+        builder.Property(entity => entity.LastSuccessfulRunAtUtc)
+               .HasColumnName("last_successful_run_at_utc");
+
+        builder.Property(entity => entity.DiagnosticsJson)
+               .HasColumnName("diagnostics_json");
+    }
+
+    private static void ConfigureModelFitSnapshot(EntityTypeBuilder<ModelFitSnapshot> builder)
+    {
+        builder.ToTable("model_fit_snapshots");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.ApprovedImageId)
+               .HasColumnName("approved_image_id");
+
+        builder.Property(entity => entity.Operation)
+               .HasColumnName("operation");
+
+        builder.Property(entity => entity.UseCase)
+               .HasColumnName("use_case");
+
+        builder.Property(entity => entity.ProviderName)
+               .HasColumnName("provider_name");
+
+        builder.Property(entity => entity.ModelName)
+               .HasColumnName("model_name");
+
+        builder.Property(entity => entity.Status)
+               .HasColumnName("status");
+
+        builder.Property(entity => entity.StartedAtUtc)
+               .HasColumnName("started_at_utc");
+
+        builder.Property(entity => entity.CompletedAtUtc)
+               .HasColumnName("completed_at_utc");
+
+        builder.Property(entity => entity.DurationMs)
+               .HasColumnName("duration_ms");
+
+        builder.Property(entity => entity.ExitCode)
+               .HasColumnName("exit_code");
+
+        builder.Property(entity => entity.RawJson)
+               .HasColumnName("raw_json");
+
+        builder.Property(entity => entity.StderrExcerpt)
+               .HasColumnName("stderr_excerpt");
+
+        builder.Property(entity => entity.DiagnosticsJson)
+               .HasColumnName("diagnostics_json");
+
+        builder.Property(entity => entity.IsLatestSuccessful)
+               .HasColumnName("is_latest_successful");
+
+        builder.Property(entity => entity.CreatedByRunId)
+               .HasColumnName("created_by_run_id");
+
+        builder.Property(entity => entity.CreatedAtUtc)
+               .HasColumnName("created_at_utc");
+
+        // Supports the latest-successful lookup keyed on (operation, use_case, provider_name, model_name) filtered to
+        // is_latest_successful.
+        builder.HasIndex(entity => new { entity.Operation, entity.UseCase, entity.ProviderName, entity.ModelName, entity.IsLatestSuccessful });
+
+        // A snapshot intentionally has NO enforced FK to its scheduler run (created_by_run_id): runs outlive
+        // definitions — same intentional no-FK precedent as scheduled_job_runs -> definition.
+    }
+
+    private static void ConfigureModelFitRecommendation(EntityTypeBuilder<ModelFitRecommendation> builder)
+    {
+        builder.ToTable("model_fit_recommendations");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.SnapshotId)
+               .HasColumnName("snapshot_id");
+
+        builder.Property(entity => entity.Rank)
+               .HasColumnName("rank");
+
+        builder.Property(entity => entity.ModelName)
+               .HasColumnName("model_name");
+
+        builder.Property(entity => entity.ProviderModelName)
+               .HasColumnName("provider_model_name");
+
+        builder.Property(entity => entity.Score)
+               .HasColumnName("score");
+
+        builder.Property(entity => entity.FitLevel)
+               .HasColumnName("fit_level");
+
+        builder.Property(entity => entity.RunMode)
+               .HasColumnName("run_mode");
+
+        builder.Property(entity => entity.Quantization)
+               .HasColumnName("quantization");
+
+        builder.Property(entity => entity.EstimatedTokensPerSecond)
+               .HasColumnName("estimated_tokens_per_second");
+
+        builder.Property(entity => entity.RequiredRamMb)
+               .HasColumnName("required_ram_mb");
+
+        builder.Property(entity => entity.RequiredVramMb)
+               .HasColumnName("required_vram_mb");
+
+        builder.Property(entity => entity.ContextTokens)
+               .HasColumnName("context_tokens");
+
+        builder.Property(entity => entity.IsInstalled)
+               .HasColumnName("is_installed");
+
+        builder.Property(entity => entity.PullModelName)
+               .HasColumnName("pull_model_name");
+
+        builder.Property(entity => entity.DiagnosticsJson)
+               .HasColumnName("diagnostics_json");
+
+        builder.HasIndex(entity => new { entity.SnapshotId, entity.Rank });
+
+        // A recommendation row is meaningless without its parent snapshot, so the FK cascades: deleting a snapshot
+        // removes its recommendation rows.
+        builder.HasOne<ModelFitSnapshot>()
+               .WithMany()
+               .HasForeignKey(entity => entity.SnapshotId)
+               .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    private static void ConfigureModelFitBenchmark(EntityTypeBuilder<ModelFitBenchmark> builder)
+    {
+        builder.ToTable("model_fit_benchmarks");
+        builder.HasKey(entity => entity.Id);
+
+        builder.Property(entity => entity.Id)
+               .HasColumnName("id");
+
+        builder.Property(entity => entity.SnapshotId)
+               .HasColumnName("snapshot_id");
+
+        builder.Property(entity => entity.ModelName)
+               .HasColumnName("model_name");
+
+        builder.Property(entity => entity.ProviderName)
+               .HasColumnName("provider_name");
+
+        builder.Property(entity => entity.TokensPerSecond)
+               .HasColumnName("tokens_per_second");
+
+        builder.Property(entity => entity.TtftMs)
+               .HasColumnName("ttft_ms");
+
+        builder.Property(entity => entity.TotalLatencyMs)
+               .HasColumnName("total_latency_ms");
+
+        builder.Property(entity => entity.Runs)
+               .HasColumnName("runs");
+
+        builder.Property(entity => entity.RawJson)
+               .HasColumnName("raw_json");
+
+        builder.Property(entity => entity.DiagnosticsJson)
+               .HasColumnName("diagnostics_json");
+
+        builder.HasIndex(entity => entity.SnapshotId);
+
+        // A benchmark row is meaningless without its parent snapshot, so the FK cascades: deleting a snapshot removes
+        // its benchmark rows.
+        builder.HasOne<ModelFitSnapshot>()
+               .WithMany()
+               .HasForeignKey(entity => entity.SnapshotId)
                .OnDelete(DeleteBehavior.Cascade);
     }
 }

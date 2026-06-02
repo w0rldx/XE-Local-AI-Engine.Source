@@ -9,7 +9,7 @@ describe("navigationLinks", () => {
 		vi.doUnmock("@/capabilities/NodeCapabilities");
 	});
 
-	it("lists the node shell routes including the agents, mcp, and scheduler links when their capabilities are on", () => {
+	it("lists the node shell routes including the agents, mcp, scheduler, and model-fit links when their capabilities are on", () => {
 		expect(navigationLinks.map((link) => [link.id, link.to])).toEqual([
 			["home", nodeRoutePaths.home],
 			["dashboard", nodeRoutePaths.dashboard],
@@ -24,6 +24,8 @@ describe("navigationLinks", () => {
 			["agents", nodeRoutePaths.agents],
 			["mcp", nodeRoutePaths.mcp],
 			["scheduler", nodeRoutePaths.scheduler],
+			["model-recommendations", nodeRoutePaths.modelRecommendations],
+			["approved-images", nodeRoutePaths.approvedImages],
 		]);
 	});
 
@@ -73,5 +75,22 @@ describe("navigationLinks", () => {
 
 		const { navigationLinks: gatedLinks } = await import("@/data/navigation/NavigationMenuData");
 		expect(gatedLinks.some((link) => link.id === "scheduler")).toBe(false);
+	});
+
+	it("hides both model-fit links when modelFit is off", async () => {
+		vi.resetModules();
+		vi.doMock("@/capabilities/NodeCapabilities", async () => {
+			const actual = await vi.importActual<typeof import("@/capabilities/NodeCapabilities")>(
+				"@/capabilities/NodeCapabilities",
+			);
+			return {
+				...actual,
+				nodeCapabilities: { ...actual.nodeCapabilities, modelFit: false },
+			};
+		});
+
+		const { navigationLinks: gatedLinks } = await import("@/data/navigation/NavigationMenuData");
+		expect(gatedLinks.some((link) => link.id === "model-recommendations")).toBe(false);
+		expect(gatedLinks.some((link) => link.id === "approved-images")).toBe(false);
 	});
 });

@@ -474,6 +474,233 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
             cancellationToken);
     }
 
+    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner, plan Marker 2) ---
+
+    /// <summary>The Docker label stamped on every utility container so orphans can be reconciled on startup.</summary>
+    public const string UtilityLabelKey = "xe.modelfit.utility";
+
+    private const string UtilityLabelValue = "1";
+
+    public async Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentException.ThrowIfNullOrWhiteSpace(spec.Image);
+
+        var startedAt = TimeProvider.System.GetTimestamp();
+
+        // The image is digest-pinned; pull it if it is not already present (mirrors PullImageAsync).
+        var image = DockerImageReference.Parse(spec.Image);
+        await PullImageAsync(image, cancellationToken).ConfigureAwait(false);
+
+        var networkName = string.IsNullOrWhiteSpace(spec.NetworkName) ? null : spec.NetworkName;
+
+        var createParameters = new CreateContainerParameters
+        {
+            // Run by canonical digest form so the started container is byte-identical to the validated reference.
+            Image = image.CanonicalReference,
+            Cmd = spec.Arguments.ToList(),
+            User = spec.User,
+            Env = spec.Environment.Select(static pair => $"{pair.Key}={pair.Value}").ToList(),
+            Labels = new Dictionary<string, string>(StringComparer.Ordinal) { [UtilityLabelKey] = UtilityLabelValue },
+            HostConfig = BuildUtilityHostConfig(spec, networkName)
+        };
+
+        if (networkName is not null)
+        {
+            // Attach to the managed runtime network so the provider DNS name (e.g. http://ollama:11434) resolves —
+            // mirrors EnsureContainerAsync's NetworkingConfig endpoint registration.
+            createParameters.NetworkingConfig = new NetworkingConfig
+            {
+                EndpointsConfig = new Dictionary<string, EndpointSettings>
+                {
+                    [networkName] = new()
+                }
+            };
+        }
+
+        var created = await _client.Containers.CreateContainerAsync(createParameters, cancellationToken).ConfigureAwait(false);
+        var containerId = created.ID;
+
+        // A timeout-linked CTS combined with the caller's token; cancelling either tears down the wait (mirrors
+        // ExecInContainerAsync's D9 pattern). No explicit timeout means wait until exit or caller cancel.
+        using var timeoutCts = new CancellationTokenSource();
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var runToken = linkedCts.Token;
+
+        var completed = true;
+        var exitCode = -1;
+        var removed = false;
+
+        try
+        {
+            await _client.Containers.StartContainerAsync(containerId, new ContainerStartParameters(), runToken).ConfigureAwait(false);
+
+            var wait = await _client.Containers.WaitContainerAsync(containerId, runToken).ConfigureAwait(false);
+            exitCode = (int)wait.StatusCode;
+
+            using var stdout = new MemoryStream();
+            using var stderr = new MemoryStream();
+            using (var logStream = await _client.Containers.GetContainerLogsAsync(containerId,
+                       new ContainerLogsParameters
+                       {
+                           Follow = false,
+                           ShowStdout = true,
+                           ShowStderr = true
+                       },
+                       runToken).ConfigureAwait(false))
+            {
+                await logStream.CopyOutputToAsync(Stream.Null, stdout, stderr, runToken).ConfigureAwait(false);
+            }
+
+            var duration = TimeProvider.System.GetElapsedTime(startedAt);
+            var standardOutput = DecodeUtf8(stdout);
+            var standardError = DecodeUtf8(stderr);
+
+            // Remove the container on the normal path unless it failed and debug retention asked us to keep it.
+            if (!(exitCode != 0 && spec.RetainOnFailure))
+            {
+                await RemoveUtilityContainerQuietlyAsync(containerId, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            removed = true;
+
+            return new UtilityContainerRunResult
+            {
+                ExitCode = exitCode,
+                StandardOutput = standardOutput,
+                StandardError = standardError,
+                Completed = true,
+                Duration = duration
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation or timeout: stop/kill and remove the container (unless debug retention is enabled), then
+            // report a non-completed result the service maps onto CANCELLED/TIMED_OUT.
+            completed = false;
+            await StopUtilityContainerQuietlyAsync(containerId, CancellationToken.None).ConfigureAwait(false);
+            if (!spec.RetainOnFailure)
+            {
+                await RemoveUtilityContainerQuietlyAsync(containerId, CancellationToken.None).ConfigureAwait(false);
+            }
+
+            removed = true;
+
+            return new UtilityContainerRunResult
+            {
+                ExitCode = -1,
+                Completed = false,
+                Duration = TimeProvider.System.GetElapsedTime(startedAt)
+            };
+        }
+        finally
+        {
+            // Defense in depth: if an unexpected exception escaped before either path removed the container, force-remove
+            // it so a created-but-orphaned container never lingers (retention only applies to a known-failed run).
+            if (!removed && !(!completed && spec.RetainOnFailure))
+            {
+                await RemoveUtilityContainerQuietlyAsync(containerId, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+    }
+
+    public async Task<int> RemoveOrphanedUtilityContainersAsync(CancellationToken cancellationToken)
+    {
+        var containers = await _client.Containers.ListContainersAsync(new ContainersListParameters
+            {
+                All = true,
+                Filters = new Dictionary<string, IDictionary<string, bool>>
+                {
+                    ["label"] = new Dictionary<string, bool> { [$"{UtilityLabelKey}={UtilityLabelValue}"] = true }
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        var removed = 0;
+        foreach (var containerId in containers.Select(static container => container.ID))
+        {
+            await StopUtilityContainerQuietlyAsync(containerId, cancellationToken).ConfigureAwait(false);
+            if (await RemoveUtilityContainerQuietlyAsync(containerId, cancellationToken).ConfigureAwait(false))
+            {
+                removed++;
+            }
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    ///     Builds the hardened <see cref="HostConfig" /> for a utility container: the same least-privilege posture as
+    ///     <see cref="BuildSandboxHostConfig" /> (no-new-privileges, all capabilities dropped, no socket, no binds,
+    ///     AutoRemove off) plus the run's resource ceilings. The only difference is the network: <c>"none"</c> when no
+    ///     runtime network is requested, otherwise the named managed runtime network. Exposed so the mapping can be
+    ///     asserted without a Docker daemon.
+    /// </summary>
+    public static HostConfig BuildUtilityHostConfig(UtilityContainerRunSpec spec, string? networkName)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var hostConfig = new HostConfig
+        {
+            NetworkMode = string.IsNullOrWhiteSpace(networkName) ? "none" : networkName,
+            SecurityOpt = ["no-new-privileges"],
+            CapDrop = ["ALL"],
+            ReadonlyRootfs = false,
+            AutoRemove = false
+        };
+
+        if (spec.MemoryMb is { } memoryMb && memoryMb > 0)
+        {
+            hostConfig.Memory = memoryMb * BytesPerMegabyte;
+        }
+
+        if (spec.CpuCount is { } cpuCount && cpuCount > 0)
+        {
+            hostConfig.NanoCPUs = (long)(cpuCount * 1_000_000_000d);
+        }
+
+        if (spec.PidsLimit is { } pidsLimit && pidsLimit > 0)
+        {
+            hostConfig.PidsLimit = pidsLimit;
+        }
+
+        return hostConfig;
+    }
+
+    private async Task StopUtilityContainerQuietlyAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _client.Containers.StopContainerAsync(containerId,
+                new ContainerStopParameters { WaitBeforeKillSeconds = 1 },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DockerApiException)
+        {
+            // Already stopped / gone — removal below is the authoritative cleanup.
+        }
+    }
+
+    private async Task<bool> RemoveUtilityContainerQuietlyAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _client.Containers.RemoveContainerAsync(containerId,
+                new ContainerRemoveParameters { Force = true },
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return false;
+        }
+        catch (DockerApiException)
+        {
+            // Best-effort cleanup: a removal failure must not mask the run result. The startup reconciler retries.
+            return false;
+        }
+    }
+
     private static string DecodeUtf8(MemoryStream stream)
     {
         return Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);

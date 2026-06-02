@@ -47,6 +47,8 @@
 		"agents": "Agents",
 		"mcp": "MCP",
 		"scheduler": "Scheduler",
+		"modelRecommendations": "Model Recommendations",
+		"approvedImages": "Approved Images",
 		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
@@ -1262,10 +1264,12 @@
 				},
 				"scheduleKind": {
 					"label": "Schedule kind",
+					"manualNote": "Runs only when triggered manually.",
 					"options": {
 						"Cron": "Cron",
 						"OneShot": "One-off",
-						"SimpleInterval": "Interval"
+						"SimpleInterval": "Interval",
+						"Manual": "On demand"
 					}
 				},
 				"cronExpression": {
@@ -1363,6 +1367,86 @@
 				"enable": "Could not change the job state.",
 				"trigger": "Could not trigger the job.",
 				"cancel": "Could not cancel the run."
+			}
+		},
+		"modelFit": {
+			"eyebrow": "Worker Node",
+			"recommendations": {
+				"title": "Model recommendations",
+				"subtitle": "Hardware-aware local model guidance for this node. Results are cached — use Refresh now to run a new recommendation check through the scheduler.",
+				"refreshButton": "Refresh now",
+				"schedulerLink": "Scheduler",
+				"modelsLink": "Model management",
+				"openScheduler": "Open Scheduler",
+				"noJobGuidance": "No model-recommendation-check schedule exists yet. Create one in the Scheduler to enable refreshing.",
+				"useCaseLabel": "Use case",
+				"lastRefreshed": "Last refreshed: {{time}}",
+				"loading": "Loading recommendations…",
+				"noCache": "No cached recommendation snapshot for this use case yet. Run a recommendation check from the scheduler, or use Refresh now if a schedule exists.",
+				"emptyList": "The latest snapshot returned no recommendations.",
+				"installed": "Installed",
+				"pullable": "Pullable",
+				"useCases": {
+					"general": "General",
+					"coding": "Coding",
+					"reasoning": "Reasoning",
+					"chat": "Chat",
+					"multimodal": "Multimodal",
+					"embedding": "Embedding"
+				},
+				"snapshot": {
+					"status": "Status",
+					"useCase": "Use case",
+					"provider": "Provider",
+					"sourceImage": "Source image"
+				},
+				"columns": {
+					"rank": "Rank",
+					"model": "Model",
+					"score": "Score",
+					"fit": "Fit",
+					"runMode": "Run mode",
+					"tps": "Est. TPS",
+					"context": "Context",
+					"quantization": "Quant",
+					"memory": "Memory",
+					"installed": "Installed"
+				},
+				"errors": {
+					"load": "Could not load recommendations.",
+					"refresh": "Could not start a refresh."
+				}
+			},
+			"approvedImages": {
+				"title": "Approved reference images",
+				"subtitle": "Approved, digest-pinned llmfit utility images used by the recommendation checker. This list is read-only — image references are managed in code.",
+				"loading": "Loading approved images…",
+				"empty": "No approved images are registered.",
+				"sourceLink": "Open",
+				"purpose": {
+					"ModelRecommendation": "Recommendation",
+					"ModelBenchmark": "Benchmark"
+				},
+				"state": {
+					"enabled": "Enabled",
+					"disabled": "Disabled",
+					"deprecated": "Deprecated"
+				},
+				"columns": {
+					"id": "Image ID",
+					"name": "Name",
+					"purpose": "Purpose",
+					"reference": "Pinned reference",
+					"version": "Version",
+					"source": "Source",
+					"state": "State",
+					"lastUsed": "Last used",
+					"lastSuccessful": "Last successful",
+					"diagnostics": "Diagnostics"
+				},
+				"errors": {
+					"load": "Could not load approved images."
+				}
 			}
 		},
 		"schedule": {

@@ -163,6 +163,9 @@ import type {
 	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointErrors,
 	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponses,
 	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointErrors,
 	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponses,
@@ -172,6 +175,9 @@ import type {
 	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointErrors,
 	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponses,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointErrors,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponses,
 	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointErrors,
 	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponses,
@@ -199,6 +205,15 @@ import type {
 	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData,
 	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointErrors,
 	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponses,
+	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData,
+	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointErrors,
+	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponses,
+	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData,
+	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointErrors,
+	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponses,
+	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData,
+	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointErrors,
+	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponses,
 	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData,
 	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointErrors,
 	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponses,
@@ -621,6 +636,61 @@ export const xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint
 		...options,
 	});
 
+export const xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponses,
+		XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/recommendations/latest",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint = <ThrowOnError extends boolean = false>(
+	options?: Options<XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<
+		XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponses,
+		XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/approved-images",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<
+		XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponses,
+		XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/recommendations/refresh",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint = <ThrowOnError extends boolean = false>(
 	options?: Options<XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData, ThrowOnError>,
 ) =>
@@ -783,6 +853,44 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint
 		],
 		url: "/api/local/v1/models/{modelName}",
 		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<
+		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/kind",
+		...options,
+	});
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpoint = <ThrowOnError extends boolean = false>(
+	options: Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<
+		XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponses,
+		XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointErrors,
+		ThrowOnError
+	>({
+		responseType: "json",
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/kind",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint = <ThrowOnError extends boolean = false>(

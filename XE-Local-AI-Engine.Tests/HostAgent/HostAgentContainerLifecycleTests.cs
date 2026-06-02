@@ -588,6 +588,16 @@ public sealed class HostAgentContainerLifecycleTests
             throw new NotSupportedException();
         }
 
+        public Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<int> RemoveOrphanedUtilityContainersAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(0);
+        }
+
         private void UpdateContainerRunningState(string containerName, bool isRunning)
         {
             var index = Containers.FindIndex(container => string.Equals(container.Name, containerName, StringComparison.Ordinal));

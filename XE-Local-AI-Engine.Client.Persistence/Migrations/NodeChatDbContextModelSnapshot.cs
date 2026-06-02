@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 #nullable disable
 
-namespace XE_Local_AI_Engine.Client.Persistence.Migrations
+namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
     partial class NodeChatDbContextModelSnapshot : ModelSnapshot
@@ -89,6 +89,76 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("agent_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ApprovedUtilityImage", b =>
+                {
+                    b.Property<string>("ApprovedImageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_image_id")
+                        .UseCollation("NOCASE");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<long?>("DeprecatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("deprecated_at_utc");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DiagnosticsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("diagnostics_json");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_name");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("ImageReference")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("image_reference");
+
+                    b.Property<long?>("LastSuccessfulRunAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_successful_run_at_utc");
+
+                    b.Property<long?>("LastUsedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_used_at_utc");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("ReplacementApprovedImageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("replacement_approved_image_id");
+
+                    b.Property<string>("SourceUrl")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_url");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<string>("UpstreamVersion")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("upstream_version");
+
+                    b.HasKey("ApprovedImageId");
+
+                    b.ToTable("approved_utility_images", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GoldenConversation", b =>
@@ -254,6 +324,213 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasKey("ModelName");
 
                     b.ToTable("model_classifications", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitBenchmark", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("DiagnosticsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("diagnostics_json");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider_name");
+
+                    b.Property<byte[]>("RawJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("raw_json");
+
+                    b.Property<int?>("Runs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("runs");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("snapshot_id");
+
+                    b.Property<double?>("TokensPerSecond")
+                        .HasColumnType("REAL")
+                        .HasColumnName("tokens_per_second");
+
+                    b.Property<double?>("TotalLatencyMs")
+                        .HasColumnType("REAL")
+                        .HasColumnName("total_latency_ms");
+
+                    b.Property<double?>("TtftMs")
+                        .HasColumnType("REAL")
+                        .HasColumnName("ttft_ms");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId");
+
+                    b.ToTable("model_fit_benchmarks", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitRecommendation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("ContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("context_tokens");
+
+                    b.Property<string>("DiagnosticsJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("diagnostics_json");
+
+                    b.Property<double?>("EstimatedTokensPerSecond")
+                        .HasColumnType("REAL")
+                        .HasColumnName("estimated_tokens_per_second");
+
+                    b.Property<string>("FitLevel")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fit_level");
+
+                    b.Property<bool>("IsInstalled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_installed");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<string>("ProviderModelName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider_model_name");
+
+                    b.Property<string>("PullModelName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_model_name");
+
+                    b.Property<string>("Quantization")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("quantization");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("rank");
+
+                    b.Property<double?>("RequiredRamMb")
+                        .HasColumnType("REAL")
+                        .HasColumnName("required_ram_mb");
+
+                    b.Property<double?>("RequiredVramMb")
+                        .HasColumnType("REAL")
+                        .HasColumnName("required_vram_mb");
+
+                    b.Property<string>("RunMode")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_mode");
+
+                    b.Property<double>("Score")
+                        .HasColumnType("REAL")
+                        .HasColumnName("score");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("snapshot_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SnapshotId", "Rank");
+
+                    b.ToTable("model_fit_recommendations", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApprovedImageId")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_image_id");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid?>("CreatedByRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by_run_id");
+
+                    b.Property<byte[]>("DiagnosticsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("diagnostics_json");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("exit_code");
+
+                    b.Property<bool>("IsLatestSuccessful")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_latest_successful");
+
+                    b.Property<string>("ModelName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider_name");
+
+                    b.Property<byte[]>("RawJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("raw_json");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<byte[]>("StderrExcerpt")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("stderr_excerpt");
+
+                    b.Property<string>("UseCase")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("use_case");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Operation", "UseCase", "ProviderName", "ModelName", "IsLatestSuccessful");
+
+                    b.ToTable("model_fit_snapshots", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", b =>
@@ -825,6 +1102,24 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", null)
                         .WithMany()
                         .HasForeignKey("AgentDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitBenchmark", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitRecommendation", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.ModelFitSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("SnapshotId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

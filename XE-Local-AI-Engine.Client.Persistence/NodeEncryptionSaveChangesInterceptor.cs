@@ -142,6 +142,24 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DataJson), Guid.Empty, entry.Entity.Id, "data_json", trackedProperties);
         }
 
+        // Model-fit snapshots are node-scoped, so the AAD binds the empty conversation id to the snapshot's own id plus
+        // the column name. The raw utility output, stderr excerpt and detailed diagnostics are sensitive and optional.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ModelFitSnapshot>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.RawJson), Guid.Empty, entry.Entity.Id, "raw_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.StderrExcerpt), Guid.Empty, entry.Entity.Id, "stderr_excerpt", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DiagnosticsJson), Guid.Empty, entry.Entity.Id, "diagnostics_json", trackedProperties);
+        }
+
+        // Model-fit benchmark rows are node-scoped, so the AAD binds the empty conversation id to the row's own id plus
+        // the column name. Distinct AAD column names (bench_*) avoid cross-entity collision with the snapshot columns.
+        // The raw benchmark output and diagnostics are sensitive and optional.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ModelFitBenchmark>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.RawJson), Guid.Empty, entry.Entity.Id, "bench_raw_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DiagnosticsJson), Guid.Empty, entry.Entity.Id, "bench_diagnostics_json", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

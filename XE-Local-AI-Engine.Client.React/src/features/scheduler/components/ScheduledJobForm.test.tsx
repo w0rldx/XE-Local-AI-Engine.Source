@@ -143,6 +143,26 @@ describe("ScheduledJobForm", () => {
 		expect(screen.getByTestId("scheduler-form-start-at")).toBeTruthy();
 	});
 
+	it("hides the cron/interval/start-at inputs for the manual schedule kind", () => {
+		renderForm({ initialValues: { ...emptyValues(), scheduleKind: "Manual" } });
+
+		expect(screen.queryByTestId("scheduler-form-cron")).toBeNull();
+		expect(screen.queryByTestId("scheduler-form-interval")).toBeNull();
+		expect(screen.queryByTestId("scheduler-form-repeat-count")).toBeNull();
+		expect(screen.queryByTestId("scheduler-form-start-at")).toBeNull();
+		expect(screen.getByTestId("scheduler-form-manual-note")).toBeTruthy();
+	});
+
+	it("submits a manual job without schedule fields", () => {
+		const { onSubmit } = renderForm({
+			initialValues: { ...emptyValues(), templateId: "cleanup", displayName: "On demand", scheduleKind: "Manual" },
+		});
+
+		fireEvent.click(screen.getByTestId("scheduler-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+	});
+
 	it("disables the template picker when editing", () => {
 		renderForm({ isEditing: true, initialValues: { ...emptyValues(), templateId: "cleanup", displayName: "Cleanup" } });
 

@@ -93,6 +93,11 @@ describe("scheduledJobFormSchema", () => {
 		expect(issuePaths(form)).toEqual([]);
 	});
 
+	it("accepts a manual job with no schedule fields", () => {
+		const form = baseForm({ scheduleKind: "Manual", cronExpression: "", intervalSeconds: "", startAtUtc: "" });
+		expect(issuePaths(form)).toEqual([]);
+	});
+
 	it("rejects an empty display name", () => {
 		expect(issuePaths(baseForm({ displayName: "  " }))).toContain("displayName");
 	});

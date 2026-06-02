@@ -47,6 +47,8 @@
 		"agents": "Agenten",
 		"mcp": "MCP",
 		"scheduler": "Planer",
+		"modelRecommendations": "Modellempfehlungen",
+		"approvedImages": "Freigegebene Images",
 		"manager": "Manager",
 		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
@@ -1262,10 +1264,12 @@
 				},
 				"scheduleKind": {
 					"label": "Zeitplanart",
+					"manualNote": "Wird nur bei manueller Auslösung ausgeführt.",
 					"options": {
 						"Cron": "Cron",
 						"OneShot": "Einmalig",
-						"SimpleInterval": "Intervall"
+						"SimpleInterval": "Intervall",
+						"Manual": "Bei Bedarf"
 					}
 				},
 				"cronExpression": {
@@ -1363,6 +1367,86 @@
 				"enable": "Der Aufgabenstatus konnte nicht geändert werden.",
 				"trigger": "Die Aufgabe konnte nicht ausgelöst werden.",
 				"cancel": "Die Ausführung konnte nicht abgebrochen werden."
+			}
+		},
+		"modelFit": {
+			"eyebrow": "Worker Node",
+			"recommendations": {
+				"title": "Modellempfehlungen",
+				"subtitle": "Hardwarebewusste Empfehlungen für lokale Modelle auf diesem Node. Ergebnisse werden zwischengespeichert — mit Jetzt aktualisieren wird über den Planer eine neue Empfehlungsprüfung gestartet.",
+				"refreshButton": "Jetzt aktualisieren",
+				"schedulerLink": "Planer",
+				"modelsLink": "Modellverwaltung",
+				"openScheduler": "Planer öffnen",
+				"noJobGuidance": "Es existiert noch kein model-recommendation-check-Zeitplan. Erstellen Sie einen im Planer, um die Aktualisierung zu aktivieren.",
+				"useCaseLabel": "Anwendungsfall",
+				"lastRefreshed": "Zuletzt aktualisiert: {{time}}",
+				"loading": "Empfehlungen werden geladen…",
+				"noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeichertes Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie Jetzt aktualisieren, falls ein Zeitplan existiert.",
+				"emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
+				"installed": "Installiert",
+				"pullable": "Verfügbar",
+				"useCases": {
+					"general": "Allgemein",
+					"coding": "Programmierung",
+					"reasoning": "Schlussfolgern",
+					"chat": "Chat",
+					"multimodal": "Multimodal",
+					"embedding": "Embedding"
+				},
+				"snapshot": {
+					"status": "Status",
+					"useCase": "Anwendungsfall",
+					"provider": "Anbieter",
+					"sourceImage": "Quell-Image"
+				},
+				"columns": {
+					"rank": "Rang",
+					"model": "Modell",
+					"score": "Punktzahl",
+					"fit": "Eignung",
+					"runMode": "Ausführungsmodus",
+					"tps": "Gesch. TPS",
+					"context": "Kontext",
+					"quantization": "Quant",
+					"memory": "Speicher",
+					"installed": "Installiert"
+				},
+				"errors": {
+					"load": "Empfehlungen konnten nicht geladen werden.",
+					"refresh": "Die Aktualisierung konnte nicht gestartet werden."
+				}
+			},
+			"approvedImages": {
+				"title": "Freigegebene Referenz-Images",
+				"subtitle": "Freigegebene, Digest-gepinnte llmfit-Hilfs-Images, die vom Empfehlungsprüfer verwendet werden. Diese Liste ist schreibgeschützt — Image-Referenzen werden im Code verwaltet.",
+				"loading": "Freigegebene Images werden geladen…",
+				"empty": "Es sind keine freigegebenen Images registriert.",
+				"sourceLink": "Öffnen",
+				"purpose": {
+					"ModelRecommendation": "Empfehlung",
+					"ModelBenchmark": "Benchmark"
+				},
+				"state": {
+					"enabled": "Aktiviert",
+					"disabled": "Deaktiviert",
+					"deprecated": "Veraltet"
+				},
+				"columns": {
+					"id": "Image-ID",
+					"name": "Name",
+					"purpose": "Zweck",
+					"reference": "Gepinnte Referenz",
+					"version": "Version",
+					"source": "Quelle",
+					"state": "Status",
+					"lastUsed": "Zuletzt verwendet",
+					"lastSuccessful": "Letzte erfolgreiche",
+					"diagnostics": "Diagnose"
+				},
+				"errors": {
+					"load": "Freigegebene Images konnten nicht geladen werden."
+				}
 			}
 		},
 		"schedule": {

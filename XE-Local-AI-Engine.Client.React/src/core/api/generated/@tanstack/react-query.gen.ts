@@ -60,9 +60,11 @@ import {
 	xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackEndpoint,
 	xeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathEndpoint,
 	xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint,
+	xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint,
 	xeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpoint,
 	xeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsEndpoint,
 	xeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpoint,
+	xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpoint,
 	xeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpoint,
 	xeLocalAiEngineClientEndpointsMcpV1CreateMcpServerEndpoint,
 	xeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerEndpoint,
@@ -72,6 +74,9 @@ import {
 	xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint,
 	xeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpoint,
 	xeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpoint,
+	xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint,
+	xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint,
+	xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint,
 	xeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpoint,
 	xeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpoint,
 	xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint,
@@ -213,6 +218,8 @@ import type {
 	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointError,
 	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpointResponse,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponse,
 	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointError,
 	XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsEndpointResponse,
@@ -221,6 +228,8 @@ import type {
 	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointError,
 	XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelEndpointResponse,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData,
+	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponse,
 	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointData,
 	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointError,
 	XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelEndpointResponse,
@@ -240,6 +249,12 @@ import type {
 	XeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledEndpointResponse,
 	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointData,
 	XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerEndpointResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData,
+	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData,
+	XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData,
+	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponse,
 	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointData,
 	XeLocalAiEngineClientEndpointsNodeBindingV1CancelNodeBindingEndpointResponse,
 	XeLocalAiEngineClientEndpointsNodeBindingV1PollNodeBindingEndpointData,
@@ -783,6 +798,80 @@ export const xeLocalAiEngineClientEndpointsNodeBindingV1StartNodeBindingEndpoint
 	return mutationOptions;
 };
 
+export const xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointQueryKey = (
+	options: Options<XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData>,
+) => createQueryKey("xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint", options);
+
+export const xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointOptions = (
+	options: Options<XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointData>,
+) =>
+	queryOptions<
+		XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponse,
+		AxiosError<DefaultError>,
+		XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointResponse,
+		ReturnType<typeof xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpoint({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: xeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsEndpointQueryKey(options),
+	});
+
+export const xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointQueryKey = (
+	options?: Options<XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData>,
+) => createQueryKey("xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint", options);
+
+export const xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointOptions = (
+	options?: Options<XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointData>,
+) =>
+	queryOptions<
+		XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponse,
+		AxiosError<DefaultError>,
+		XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointResponse,
+		ReturnType<typeof xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpoint({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: xeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesEndpointQueryKey(options),
+	});
+
+export const xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointMutation = (
+	options?: Partial<Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData>>,
+): UseMutationOptions<
+	XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponse,
+	AxiosError<DefaultError>,
+	Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointResponse,
+		AxiosError<DefaultError>,
+		Options<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpointData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await xeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsEndpoint({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointQueryKey = (
 	options?: Options<XeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpointData>,
 ) => createQueryKey("xeLocalAiEngineClientEndpointsMcpV1ListMcpServersEndpoint", options);
@@ -993,6 +1082,54 @@ export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelEndpoint({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointMutation = (
+	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData>>,
+): UseMutationOptions<
+	XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponse,
+	AxiosError<DefaultError>,
+	Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointResponse,
+		AxiosError<DefaultError>,
+		Options<XeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpointData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1DeleteModelKindEndpoint({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointMutation = (
+	options?: Partial<Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData>>,
+): UseMutationOptions<
+	XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponse,
+	AxiosError<DefaultError>,
+	Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointResponse,
+		AxiosError<DefaultError>,
+		Options<XeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpointData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await xeLocalAiEngineClientEndpointsLocalModelsV1PutModelKindEndpoint({
 				...options,
 				...fnOptions,
 				throwOnError: true,
