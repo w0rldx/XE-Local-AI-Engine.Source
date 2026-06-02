@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatRuntimeBoolean, formatRuntimeBytes, formatRuntimeLogLine, formatRuntimeText, formatRuntimeTimestamp, getComponentHealthColor, getRuntimeStatusColor, manifestSummary, runtimeContainerActionLabel, sortRuntimeComponents } from "@/features/runtime-manager/models/RuntimeManagerModel";
-import type { RuntimeComponentStatusDto, RuntimeManifestDto } from "@/features/runtime-manager/api/RuntimeManagerApi";
+import { formatRuntimeBoolean, formatRuntimeBytes, formatRuntimeLogLine, formatRuntimeText, formatRuntimeTimestamp, getComponentHealthColor, getRuntimeStatusColor, manifestSummary, type RuntimeComponentStatusDto, type RuntimeManifestDto, runtimeContainerActionLabel, sortRuntimeComponents } from "@/features/runtime-manager/models/RuntimeManagerModel";
 
 describe("RuntimeManagerModel", () => {
 	it("formats status values for display", () => {
