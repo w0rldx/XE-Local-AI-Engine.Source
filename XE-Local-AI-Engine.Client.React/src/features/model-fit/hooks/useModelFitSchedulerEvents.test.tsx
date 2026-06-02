@@ -5,8 +5,6 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { modelFitQueryKeys } from "@/features/model-fit/queries/ModelFitQueryKeys";
-
 // Captured event handlers keyed by the SignalR client-method name the hook subscribes to.
 const handlers = new Map<string, (...args: unknown[]) => void>();
 
@@ -39,10 +37,17 @@ vi.mock("@microsoft/signalr", () => ({
 
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
+import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
 
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"];
 
 const MODEL_FIT_TEMPLATE_ID = "model-recommendation-check";
+
+// The §7.6 bridge: the hub invalidates the generated latest-recommendations key, a single-element array
+// `[{ _id: "getLatestRecommendations", ... }]`. Invalidation is by the `_id` partial object (TanStack
+// partial-object matching), so it matches every cached (useCase, providerName) variant. Built via the same
+// production helper the hook uses.
+const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
 
 const invalidatedKeys: unknown[] = [];
 
@@ -61,6 +66,25 @@ function renderHub() {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
 	return renderHook(() => useModelFitSchedulerEvents(), { wrapper: Wrapper });
+}
+
+// Seeds a real query whose key matches the generated full-key shape `[{ _id, ..., query }]`, then drives an event
+// and asserts TanStack actually marked it stale — proving the hub's partial `_id` invalidation reaches a live
+// query keyed off the full generated options object (not just that invalidateQueries was called with a key).
+function renderHubWithSeededQuery(fullQueryKey: readonly unknown[]) {
+	handlers.clear();
+	signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
+		handlers.set(name, handler);
+	});
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
+	});
+	queryClient.setQueryData(fullQueryKey as unknown[], { hasCache: false, recommendations: [] });
+	function Wrapper({ children }: { children: ReactNode }) {
+		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+	}
+	renderHook(() => useModelFitSchedulerEvents(), { wrapper: Wrapper });
+	return queryClient;
 }
 
 describe("useModelFitSchedulerEvents", () => {
@@ -102,12 +126,12 @@ describe("useModelFitSchedulerEvents", () => {
 		expect(signalRMock.connection.on).not.toHaveBeenCalledWith("scheduler.runProgress", expect.any(Function));
 	});
 
-	it("invalidates the latest cache on a terminal model-recommendation-check run", () => {
+	it("invalidates the generated latest key on a terminal model-recommendation-check run", () => {
 		renderHub();
 
 		handlers.get("scheduler.runCompleted")?.({ templateId: MODEL_FIT_TEMPLATE_ID });
 
-		expect(invalidatedKeys).toContainEqual(modelFitQueryKeys.latestRoot());
+		expect(invalidatedKeys).toContainEqual(LATEST_KEY);
 	});
 
 	it("ignores terminal runs for other templates", () => {
@@ -115,7 +139,7 @@ describe("useModelFitSchedulerEvents", () => {
 
 		handlers.get("scheduler.runCompleted")?.({ templateId: "some-other-template" });
 
-		expect(invalidatedKeys).not.toContainEqual(modelFitQueryKeys.latestRoot());
+		expect(invalidatedKeys).not.toContainEqual(LATEST_KEY);
 	});
 
 	it("ignores a run event with no payload", () => {
@@ -123,7 +147,25 @@ describe("useModelFitSchedulerEvents", () => {
 
 		handlers.get("scheduler.runFailed")?.(undefined);
 
-		expect(invalidatedKeys).not.toContainEqual(modelFitQueryKeys.latestRoot());
+		expect(invalidatedKeys).not.toContainEqual(LATEST_KEY);
+	});
+
+	it("marks a seeded latest query stale via the partial `_id` match (the §7.6 bridge end-to-end)", () => {
+		// A real query keyed off the FULL generated key shape `[{ _id, baseURL, query }]` (createQueryKey bakes in
+		// the pinned baseURL: "" too) — the partial `_id` invalidation must still reach it.
+		const fullLatestKey = [
+			{
+				// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+				_id: "getLatestRecommendations",
+				baseURL: "",
+				query: { useCase: "coding", providerName: "ollama" },
+			},
+		];
+		const queryClient = renderHubWithSeededQuery(fullLatestKey);
+
+		handlers.get("scheduler.runCompleted")?.({ templateId: MODEL_FIT_TEMPLATE_ID });
+
+		expect(queryClient.getQueryState(fullLatestKey)?.isInvalidated).toBe(true);
 	});
 
 	it("unsubscribes and stops the connection on unmount", () => {
