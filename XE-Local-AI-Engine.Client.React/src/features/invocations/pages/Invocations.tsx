@@ -3,11 +3,10 @@ import { IconAlertTriangle, IconHistory, IconPlayerPlay, IconRefresh } from "@ta
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import {
-	getInvocationMonitor,
-	type InvocationCurrentDto,
-	type InvocationHistoryDto,
-} from "@/features/invocations/api/InvocationsApi";
+import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toInvocationMonitor } from "@/features/invocations/models/InvocationMonitorMappers";
+import type { InvocationCurrentDto, InvocationHistoryDto } from "@/features/invocations/models/InvocationMonitorModel";
 import {
 	formatInvocationDuration,
 	formatInvocationText,
@@ -16,7 +15,6 @@ import {
 	isInvocationActive,
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
-import { invocationsQueryKeys } from "@/features/invocations/queries/InvocationsQueryKeys";
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Invocation monitor data could not be loaded.";
@@ -102,9 +100,9 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 
 export function Invocations() {
 	const monitorQuery = useQuery({
-		queryKey: invocationsQueryKeys.monitor(),
-		queryFn: ({ signal }) => getInvocationMonitor({ signal }),
+		...withResponseValidation(getInvocationMonitorOptions()),
 		refetchInterval: 5000,
+		select: toInvocationMonitor,
 	});
 	const monitor = monitorQuery.data;
 	const history = useMemo(() => sortInvocationHistory(monitor?.history ?? []), [monitor]);
