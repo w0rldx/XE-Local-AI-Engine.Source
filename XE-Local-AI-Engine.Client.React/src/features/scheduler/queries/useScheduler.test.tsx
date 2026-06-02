@@ -5,10 +5,11 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { schedulerQueryKeys } from "@/features/scheduler/queries/SchedulerQueryKeys";
-
-const { apiMock } = vi.hoisted(() => ({
-	apiMock: {
+// Mock the generated hey-api TanStack mutation factories. Each returns an object carrying a `mutationFn` the hook
+// spreads (after withResponseValidation) into useMutation; the hooks layer their own onSuccess/onSettled
+// invalidation on top. The factory mocks let a test assert the variable shape the hook forwarded to the wire.
+const { mutationFns } = vi.hoisted(() => ({
+	mutationFns: {
 		createScheduledJob: vi.fn(),
 		updateScheduledJob: vi.fn(),
 		deleteScheduledJob: vi.fn(),
@@ -19,23 +20,35 @@ const { apiMock } = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("@/features/scheduler/api/SchedulerApi", () => ({
-	createScheduledJob: apiMock.createScheduledJob,
-	updateScheduledJob: apiMock.updateScheduledJob,
-	deleteScheduledJob: apiMock.deleteScheduledJob,
-	enableScheduledJob: apiMock.enableScheduledJob,
-	disableScheduledJob: apiMock.disableScheduledJob,
-	triggerScheduledJob: apiMock.triggerScheduledJob,
-	cancelScheduledJobRun: apiMock.cancelScheduledJobRun,
-	// Read functions are imported by the module but unused in these mutation tests.
-	getScheduledJob: vi.fn(),
-	getScheduledJobRun: vi.fn(),
-	listScheduledJobRuns: vi.fn(),
-	listScheduledJobs: vi.fn(),
-	listScheduledJobTemplates: vi.fn(),
+// Builds the single-element generated query key shape the read-side factory mocks return. Centralizes the `_id`
+// discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
+function fakeQueryKey(operationId: string): unknown {
+	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+	return [{ _id: operationId }];
+}
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
+	createScheduledJobMutation: () => ({ mutationFn: mutationFns.createScheduledJob }),
+	updateScheduledJobMutation: () => ({ mutationFn: mutationFns.updateScheduledJob }),
+	deleteScheduledJobMutation: () => ({ mutationFn: mutationFns.deleteScheduledJob }),
+	enableScheduledJobMutation: () => ({ mutationFn: mutationFns.enableScheduledJob }),
+	disableScheduledJobMutation: () => ({ mutationFn: mutationFns.disableScheduledJob }),
+	triggerScheduledJobMutation: () => ({ mutationFn: mutationFns.triggerScheduledJob }),
+	cancelScheduledJobRunMutation: () => ({ mutationFn: mutationFns.cancelScheduledJobRun }),
+	// Read-side factories are imported by the module under test but unused in these mutation tests.
+	getScheduledJobOptions: vi.fn(() => ({ queryKey: fakeQueryKey("getScheduledJob"), queryFn: vi.fn() })),
+	getScheduledJobRunOptions: vi.fn(() => ({ queryKey: fakeQueryKey("getScheduledJobRun"), queryFn: vi.fn() })),
+	listScheduledJobRunsOptions: vi.fn(() => ({ queryKey: fakeQueryKey("listScheduledJobRuns"), queryFn: vi.fn() })),
+	listScheduledJobsOptions: vi.fn(() => ({ queryKey: fakeQueryKey("listScheduledJobs"), queryFn: vi.fn() })),
+	listScheduledJobTemplatesOptions: vi.fn(() => ({
+		queryKey: fakeQueryKey("listScheduledJobTemplates"),
+		queryFn: vi.fn(),
+	})),
 }));
 
 import {
+	schedulerInvalidationKey,
+	schedulerQueryIds,
 	useCancelScheduledJobRun,
 	useCreateScheduledJob,
 	useDeleteScheduledJob,
@@ -44,7 +57,7 @@ import {
 	useUpdateScheduledJob,
 } from "@/features/scheduler/queries/useScheduler";
 
-const sampleRequest = {
+const sampleBody = {
 	templateId: "cleanup",
 	displayName: "Nightly cleanup",
 	description: null,
@@ -60,6 +73,13 @@ const sampleRequest = {
 	maxRuntimeSeconds: null,
 	parameters: null,
 };
+
+// Generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. The hooks invalidate by the
+// `_id` partial object, so these are the keys a test expects each mutation to have invalidated (built via the same
+// production helper the hooks use).
+const jobsKey = schedulerInvalidationKey(schedulerQueryIds.listJobs);
+const runsKey = schedulerInvalidationKey(schedulerQueryIds.listRuns);
+const runKey = schedulerInvalidationKey(schedulerQueryIds.getRun);
 
 // Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
@@ -81,50 +101,57 @@ function makeWrapper() {
 
 describe("useScheduler mutations", () => {
 	beforeEach(() => {
-		apiMock.createScheduledJob.mockResolvedValue({ id: "job-1" });
-		apiMock.updateScheduledJob.mockResolvedValue({ id: "job-1" });
-		apiMock.deleteScheduledJob.mockResolvedValue(undefined);
-		apiMock.enableScheduledJob.mockResolvedValue(undefined);
-		apiMock.disableScheduledJob.mockResolvedValue(undefined);
-		apiMock.triggerScheduledJob.mockResolvedValue(undefined);
-		apiMock.cancelScheduledJobRun.mockResolvedValue({ outcome: "Requested", cancellationRequestedAtUtc: 123 });
+		mutationFns.createScheduledJob.mockResolvedValue({ id: "job-1" });
+		mutationFns.updateScheduledJob.mockResolvedValue({ id: "job-1" });
+		mutationFns.deleteScheduledJob.mockResolvedValue(undefined);
+		mutationFns.enableScheduledJob.mockResolvedValue(undefined);
+		mutationFns.disableScheduledJob.mockResolvedValue(undefined);
+		mutationFns.triggerScheduledJob.mockResolvedValue(undefined);
+		mutationFns.cancelScheduledJobRun.mockResolvedValue({ outcome: "Requested", cancellationRequestedAtUtc: 123 });
 	});
 
 	afterEach(() => {
 		vi.clearAllMocks();
 	});
 
-	it("create invalidates the jobs list", async () => {
+	it("create forwards the body and invalidates the jobs list", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useCreateScheduledJob(), { wrapper: Wrapper });
 
-		result.current.mutate(sampleRequest);
+		result.current.mutate({ body: sampleBody });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.jobsRoot());
+		// TanStack v5 passes (variables, context) — assert the first arg.
+		expect(mutationFns.createScheduledJob.mock.calls[0]?.[0]).toEqual({ body: sampleBody });
+		expect(invalidatedKeys).toContainEqual(jobsKey);
 	});
 
-	it("update invalidates the jobs list", async () => {
+	it("update forwards path + body and invalidates the jobs list", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useUpdateScheduledJob(), { wrapper: Wrapper });
 
-		result.current.mutate({ id: "job-1", request: sampleRequest });
+		result.current.mutate({ path: { scheduledJobId: "job-1" }, body: sampleBody });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.jobsRoot());
+		expect(mutationFns.updateScheduledJob.mock.calls[0]?.[0]).toEqual({
+			path: { scheduledJobId: "job-1" },
+			body: sampleBody,
+		});
+		expect(invalidatedKeys).toContainEqual(jobsKey);
 	});
 
-	it("delete invalidates the jobs list", async () => {
+	it("delete forwards the path and invalidates the jobs list", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useDeleteScheduledJob(), { wrapper: Wrapper });
 
-		result.current.mutate("job-1");
+		result.current.mutate({ path: { scheduledJobId: "job-1" } });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.jobsRoot());
+		expect(mutationFns.deleteScheduledJob.mock.calls[0]?.[0]).toEqual({ path: { scheduledJobId: "job-1" } });
+		expect(invalidatedKeys).toContainEqual(jobsKey);
 	});
 
 	it("enable calls the enable endpoint and invalidates the jobs list", async () => {
@@ -135,9 +162,9 @@ describe("useScheduler mutations", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(apiMock.enableScheduledJob).toHaveBeenCalledWith("job-1");
-		expect(apiMock.disableScheduledJob).not.toHaveBeenCalled();
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.jobsRoot());
+		expect(mutationFns.enableScheduledJob.mock.calls[0]?.[0]).toEqual({ path: { scheduledJobId: "job-1" } });
+		expect(mutationFns.disableScheduledJob).not.toHaveBeenCalled();
+		expect(invalidatedKeys).toContainEqual(jobsKey);
 	});
 
 	it("disable calls the disable endpoint", async () => {
@@ -148,46 +175,48 @@ describe("useScheduler mutations", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(apiMock.disableScheduledJob).toHaveBeenCalledWith("job-1");
-		expect(apiMock.enableScheduledJob).not.toHaveBeenCalled();
+		expect(mutationFns.disableScheduledJob.mock.calls[0]?.[0]).toEqual({ path: { scheduledJobId: "job-1" } });
+		expect(mutationFns.enableScheduledJob).not.toHaveBeenCalled();
 	});
 
-	it("trigger invalidates the run history", async () => {
+	it("trigger forwards the path and invalidates the run history", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useTriggerScheduledJob(), { wrapper: Wrapper });
 
-		result.current.mutate("job-1");
+		result.current.mutate({ path: { scheduledJobId: "job-1" } });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runsRoot());
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runRoot());
+		expect(mutationFns.triggerScheduledJob.mock.calls[0]?.[0]).toEqual({ path: { scheduledJobId: "job-1" } });
+		expect(invalidatedKeys).toContainEqual(runsKey);
+		expect(invalidatedKeys).toContainEqual(runKey);
 	});
 
-	it("cancel invalidates the run history and per-run detail", async () => {
+	it("cancel forwards the run path and invalidates the run history and per-run detail", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useCancelScheduledJobRun(), { wrapper: Wrapper });
 
-		result.current.mutate("run-1");
+		result.current.mutate({ path: { runId: "run-1" } });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runsRoot());
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runRoot());
+		expect(mutationFns.cancelScheduledJobRun.mock.calls[0]?.[0]).toEqual({ path: { runId: "run-1" } });
+		expect(invalidatedKeys).toContainEqual(runsKey);
+		expect(invalidatedKeys).toContainEqual(runKey);
 	});
 
 	it("cancel still refreshes the run history when the run is already terminal (409 rejects)", async () => {
 		// The run finished between render and click → backend 409 → axios rejects. onSettled must still invalidate so
 		// the stale "active" row is replaced with the terminal state.
-		apiMock.cancelScheduledJobRun.mockRejectedValue(new Error("Request failed with status code 409"));
+		mutationFns.cancelScheduledJobRun.mockRejectedValue(new Error("Request failed with status code 409"));
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useCancelScheduledJobRun(), { wrapper: Wrapper });
 
-		result.current.mutate("run-1");
+		result.current.mutate({ path: { runId: "run-1" } });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runsRoot());
-		expect(invalidatedKeys).toContainEqual(schedulerQueryKeys.runRoot());
+		expect(invalidatedKeys).toContainEqual(runsKey);
+		expect(invalidatedKeys).toContainEqual(runKey);
 	});
 });

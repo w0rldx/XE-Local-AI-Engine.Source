@@ -4,7 +4,12 @@ import { useEffect } from "react";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { schedulerQueryKeys } from "@/features/scheduler/queries/SchedulerQueryKeys";
+import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
+
+// The data layer is the generated hey-api TanStack query layer, whose query keys are single-element arrays
+// `[{ _id: "<operationId>", ... }]`. Invalidating with the `_id` partial object (via schedulerInvalidationKey)
+// matches every cached variant of that endpoint (TanStack partial-object matching) — the realtime analogue of the
+// old prefix invalidation.
 
 // Server-pushed scheduler events. The hub is notification-only: a push tells the client that state changed but
 // carries no authoritative payload to render directly, so each handler simply invalidates the matching TanStack
@@ -39,12 +44,18 @@ export function useSchedulerHub(): void {
 			.build();
 
 		const invalidateJobs = (): void => {
-			queryClient.invalidateQueries({ queryKey: schedulerQueryKeys.jobsRoot() }).catch(() => undefined);
+			queryClient
+				.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) })
+				.catch(() => undefined);
 		};
 
 		const invalidateRuns = (): void => {
-			queryClient.invalidateQueries({ queryKey: schedulerQueryKeys.runsRoot() }).catch(() => undefined);
-			queryClient.invalidateQueries({ queryKey: schedulerQueryKeys.runRoot() }).catch(() => undefined);
+			queryClient
+				.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listRuns) })
+				.catch(() => undefined);
+			queryClient
+				.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) })
+				.catch(() => undefined);
 		};
 
 		connection.on(JOB_DEFINITION_CHANGED, invalidateJobs);

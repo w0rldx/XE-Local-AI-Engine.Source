@@ -4,12 +4,12 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { toSaveScheduledJobRequest } from "@/features/scheduler/api/SchedulerApi";
 import { ScheduledJobForm } from "@/features/scheduler/components/ScheduledJobForm";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import { ScheduledJobRunDetail } from "@/features/scheduler/components/ScheduledJobRunDetail";
 import { ScheduledJobRunHistoryPanel } from "@/features/scheduler/components/ScheduledJobRunHistoryPanel";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
+import { toSaveScheduledJobRequest } from "@/features/scheduler/models/SchedulerMappers";
 import type {
 	ScheduledJob,
 	ScheduledJobFormValues,
@@ -143,14 +143,17 @@ export function SchedulerPage() {
 
 	const handleSubmit = useCallback(
 		(values: ScheduledJobFormValues) => {
-			const request = toSaveScheduledJobRequest(values);
+			const body = toSaveScheduledJobRequest(values);
 
 			if (editorTarget?.mode === "edit") {
-				updateMutation.mutate({ id: editorTarget.id, request }, { onSuccess: () => closeEditor() });
+				updateMutation.mutate(
+					{ path: { scheduledJobId: editorTarget.id }, body },
+					{ onSuccess: () => closeEditor() },
+				);
 				return;
 			}
 
-			createMutation.mutate(request, { onSuccess: () => closeEditor() });
+			createMutation.mutate({ body }, { onSuccess: () => closeEditor() });
 		},
 		[closeEditor, createMutation, editorTarget, updateMutation],
 	);
@@ -167,7 +170,7 @@ export function SchedulerPage() {
 			});
 
 			if (confirmed) {
-				deleteMutation.mutate(job.id);
+				deleteMutation.mutate({ path: { scheduledJobId: job.id } });
 			}
 		},
 		[confirm, deleteMutation, t],
@@ -175,7 +178,7 @@ export function SchedulerPage() {
 
 	const handleTrigger = useCallback(
 		(job: ScheduledJob) => {
-			triggerMutation.mutate(job.id);
+			triggerMutation.mutate({ path: { scheduledJobId: job.id } });
 		},
 		[triggerMutation],
 	);
@@ -189,7 +192,7 @@ export function SchedulerPage() {
 
 	const handleCancelRun = useCallback(
 		(run: ScheduledJobRun) => {
-			cancelMutation.mutate(run.id);
+			cancelMutation.mutate({ path: { runId: run.id } });
 		},
 		[cancelMutation],
 	);
