@@ -16,14 +16,19 @@ import { IconAlertTriangle, IconCloud, IconDeviceFloppy, IconRefresh, IconTrash 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
+import type { ClearCloudSettingsResponse, SaveCloudSettingsResponse } from "@/core/api/generated";
 import {
-	type CloudSettingsDto,
-	clearCloudSettings,
-	getCloudSettings,
-	saveCloudSettings,
-} from "@/features/cloud-settings/api/CloudSettingsApi";
+	clearCloudSettingsMutation,
+	getCloudSettingsOptions,
+	getCloudSettingsQueryKey,
+	saveCloudSettingsMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { type CloudSettingsFormValues, validateCloudSettingsForm } from "@/features/cloud-settings/models/CloudSettingsModel";
-import { cloudSettingsQueryKeys } from "@/features/cloud-settings/queries/CloudSettingsQueryKeys";
+
+// The generated cloud-settings responses share one shape, so both the save and clear mutations resolve the same
+// view; this alias keeps the onSuccess handlers readable.
+type CloudSettings = SaveCloudSettingsResponse;
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected cloud settings error";
@@ -37,10 +42,7 @@ const emptyFormValues: CloudSettingsFormValues = {
 
 export function CloudSettings() {
 	const queryClient = useQueryClient();
-	const settingsQuery = useQuery({
-		queryKey: cloudSettingsQueryKeys.settings(),
-		queryFn: ({ signal }) => getCloudSettings({ signal }),
-	});
+	const settingsQuery = useQuery(withResponseValidation(getCloudSettingsOptions()));
 	const [formValues, setFormValues] = useState<CloudSettingsFormValues>(emptyFormValues);
 	const [message, setMessage] = useState<string | undefined>();
 	const [touchedFields, setTouchedFields] = useState<Partial<Record<keyof CloudSettingsFormValues, true>>>({});
@@ -73,46 +75,37 @@ export function CloudSettings() {
 	);
 
 	const saveMutation = useMutation({
-		mutationFn: () => {
-			setSubmitted(true);
-			return saveCloudSettings({
-				providerName: "AzureFoundry",
-				endpoint: formValues.endpoint.trim(),
-				apiKey: formValues.apiKey.trim(),
-				deploymentName: formValues.deploymentName.trim(),
-			});
-		},
-		onSuccess: async (settings: CloudSettingsDto) => {
-			setMessage(
-				settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
-			);
-			setFormValues({
-				endpoint: settings.endpoint ?? "",
-				apiKey: "",
-				deploymentName: settings.deploymentName ?? "",
-			});
+		...withResponseValidation(saveCloudSettingsMutation()),
+		onSuccess: async (settings: SaveCloudSettingsResponse) => {
+			applySettingsResult(settings);
 			setTouchedFields({});
 			setSubmitted(false);
-			queryClient.setQueryData(cloudSettingsQueryKeys.settings(), settings);
-			await queryClient.invalidateQueries({ queryKey: cloudSettingsQueryKeys.settings() });
+			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
+			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
 	});
 
 	const clearMutation = useMutation({
-		mutationFn: () => clearCloudSettings(),
-		onSuccess: async (settings: CloudSettingsDto) => {
-			setMessage(
-				settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
-			);
-			setFormValues({
-				endpoint: settings.endpoint ?? "",
-				apiKey: "",
-				deploymentName: settings.deploymentName ?? "",
-			});
-			queryClient.setQueryData(cloudSettingsQueryKeys.settings(), settings);
-			await queryClient.invalidateQueries({ queryKey: cloudSettingsQueryKeys.settings() });
+		...withResponseValidation(clearCloudSettingsMutation()),
+		onSuccess: async (settings: ClearCloudSettingsResponse) => {
+			applySettingsResult(settings);
+			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
+			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
 	});
+
+	// Save and clear return the same view; both reset the form to the stored (redacted) values and surface the
+	// matching message. The API key is never echoed back, so it always resets to empty.
+	function applySettingsResult(settings: CloudSettings): void {
+		setMessage(
+			settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
+		);
+		setFormValues({
+			endpoint: settings.endpoint ?? "",
+			apiKey: "",
+			deploymentName: settings.deploymentName ?? "",
+		});
+	}
 	const actionError = saveMutation.error ?? clearMutation.error;
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
 	const settings = settingsQuery.data;
@@ -194,7 +187,17 @@ export function CloudSettings() {
 						<Group>
 							<Button
 								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={() => saveMutation.mutate()}
+								onClick={() => {
+									setSubmitted(true);
+									saveMutation.mutate({
+										body: {
+											providerName: "AzureFoundry",
+											endpoint: formValues.endpoint.trim(),
+											apiKey: formValues.apiKey.trim(),
+											deploymentName: formValues.deploymentName.trim(),
+										},
+									});
+								}}
 								loading={saveMutation.isPending}
 								disabled={hasErrors || isActionPending}
 							>
@@ -204,7 +207,7 @@ export function CloudSettings() {
 								variant="outline"
 								color="red"
 								leftSection={<IconTrash size={16} />}
-								onClick={() => clearMutation.mutate()}
+								onClick={() => clearMutation.mutate({})}
 								loading={clearMutation.isPending}
 								disabled={!settings?.hasStoredApiKey || isActionPending}
 							>
