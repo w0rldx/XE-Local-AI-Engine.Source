@@ -1,14 +1,15 @@
 import { Alert, Anchor, Button, Card, Container, Group, List, Stack, Table, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconExternalLink, IconInfoCircle } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { PollNodeBindingResponse, StartNodeBindingResponse } from "@/core/api/generated";
 import {
-	cancelNodeBinding,
-	type NodeBindingSessionDto,
-	pollNodeBinding,
-	startNodeBinding,
-} from "@/features/binding/api/NodeBindingApi";
+	cancelNodeBindingMutation,
+	pollNodeBindingMutation,
+	startNodeBindingMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 function statusColor(status: string): "blue" | "green" | "orange" | "red" {
 	const normalized = status.toLowerCase();
@@ -36,25 +37,47 @@ function formatDate(value: string): string {
 export function NodeBinding() {
 	const queryClient = useQueryClient();
 	const pollAbortController = useRef<AbortController | null>(null);
-	const [session, setSession] = useState<NodeBindingSessionDto | undefined>();
+	const [session, setSession] = useState<StartNodeBindingResponse | undefined>();
 	const [status, setStatus] = useState("not-started");
 	const [message, setMessage] = useState<string | undefined>();
 	const [error, setError] = useState<string | undefined>();
 
 	useEffect(() => () => pollAbortController.current?.abort(), []);
 
+	const pollGenerated = useMemo(() => withResponseValidation(pollNodeBindingMutation()), []);
+	const startGenerated = useMemo(() => withResponseValidation(startNodeBindingMutation()), []);
+	const cancelGenerated = useMemo(() => withResponseValidation(cancelNodeBindingMutation()), []);
+
 	const pollMutation = useMutation({
-		mutationFn: async (activeSession: NodeBindingSessionDto) => {
+		// The session is polled with a locally-owned AbortController so cancel/unmount can abort the in-flight
+		// request; the controller's signal rides the generated mutation's axios passthrough. The poll body mirrors
+		// the started session (the backend echoes the device-flow handshake fields back on each poll).
+		mutationFn: async (activeSession: StartNodeBindingResponse): Promise<PollNodeBindingResponse> => {
 			const abortController = new AbortController();
 			pollAbortController.current = abortController;
-			return pollNodeBinding(activeSession, { signal: abortController.signal });
+			const result = await pollGenerated.mutationFn?.(
+				{
+					body: {
+						deviceCode: activeSession.deviceCode,
+						userCode: activeSession.userCode,
+						verificationUri: activeSession.verificationUri,
+						verificationUriComplete: activeSession.verificationUriComplete,
+						expiresAt: activeSession.expiresAt,
+						intervalSeconds: activeSession.intervalSeconds,
+					},
+					signal: abortController.signal,
+				},
+				undefined as never,
+			);
+			return result ?? {};
 		},
 		onSuccess: (result) => {
-			setStatus(result.status);
+			const resultStatus = result.status ?? "";
+			setStatus(resultStatus);
 			setMessage(
-				result.status.toLowerCase() === "approved"
+				resultStatus.toLowerCase() === "approved"
 					? "Binding approved. Worker credentials were stored securely."
-					: `Binding ended with status '${result.status}'.`,
+					: `Binding ended with status '${resultStatus}'.`,
 			);
 		},
 		onError: (pollError) => {
@@ -70,8 +93,8 @@ export function NodeBinding() {
 	});
 
 	const startMutation = useMutation({
-		mutationFn: () => startNodeBinding(),
-		onSuccess: async (startedSession) => {
+		...startGenerated,
+		onSuccess: async (startedSession: StartNodeBindingResponse) => {
 			setSession(startedSession);
 			setStatus("pending");
 			setMessage("Binding started. Approve this worker in the Central Platform.");
@@ -83,7 +106,7 @@ export function NodeBinding() {
 	});
 
 	const cancelMutation = useMutation({
-		mutationFn: () => cancelNodeBinding(),
+		...cancelGenerated,
 		onSettled: async () => {
 			pollAbortController.current?.abort();
 			setStatus("cancelled");
@@ -95,11 +118,11 @@ export function NodeBinding() {
 	const handleStart = useCallback(() => {
 		setMessage(undefined);
 		setError(undefined);
-		startMutation.mutate();
+		startMutation.mutate({});
 	}, [startMutation]);
 
 	const handleCancel = useCallback(() => {
-		cancelMutation.mutate();
+		cancelMutation.mutate({});
 	}, [cancelMutation]);
 
 	const isWorking = startMutation.isPending || pollMutation.isPending;
@@ -159,7 +182,7 @@ export function NodeBinding() {
 											</Table.Tr>
 											<Table.Tr>
 												<Table.Th>Expires</Table.Th>
-												<Table.Td>{formatDate(session.expiresAt)}</Table.Td>
+												<Table.Td>{formatDate(session.expiresAt ?? "")}</Table.Td>
 											</Table.Tr>
 										</Table.Tbody>
 									</Table>
