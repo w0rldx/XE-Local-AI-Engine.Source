@@ -4,8 +4,10 @@ import { z } from "zod";
 // the expected-good signal used to score a candidate playbook action: a deterministic assertion (required /
 // forbidden phrases) and/or a judge rubric (≥1 of the two is required). The eval runner replays the case against
 // the baseline and candidate prompts and gates promotion on no-regression. Free text is encrypted at rest on the
-// node; the wire shape here is the decrypted camelCase view. The boundary is validated with Zod `safeParse` so a
-// malformed payload surfaces as a thrown error rather than a silently-wrong panel.
+// node; the domain shapes here are the decrypted camelCase view. Response-shape validation is owned by the generated
+// zod validator (`validator: true`) + the withResponseValidation bridge at the hook; the mappers in
+// GoldenConversationMappers.ts project the validated wire shape into these immutable domain types. The only zod left
+// in this file is FORM validation (the create-request caps) and the 409 promote-conflict body parser.
 
 // One turn of the input conversation up to the eval point.
 export interface GoldenTurn {
@@ -53,6 +55,16 @@ export interface CreateGoldenConversationRequestDto {
 	enabled?: boolean;
 }
 
+// Counts returned by POST /agents/{id}/golden-conversations/harvest: how many thumbs-up assistant turns were
+// scanned, how many new harvested candidates were staged (inert), how many were skipped as already-harvested
+// duplicates, and how many were skipped for another reason (e.g. no prior user turn). Surfaced in a success toast.
+export interface GoldenHarvestResult {
+	readonly thumbsUpScanned: number;
+	readonly createdCount: number;
+	readonly duplicateCount: number;
+	readonly skippedCount: number;
+}
+
 // Boundary length caps mirroring the backend GoldenConversationService — the title is a short label, the serialized
 // turns can be larger (multi-turn conversations), and the rubric/serialized phrases hold scoring text. The turns and
 // phrases are capped on their serialized JSON length (what the backend stores/encrypts), matching the server check.
@@ -71,121 +83,16 @@ const goldenAssertionSchema = z.object({
 	forbiddenPhrases: z.array(z.string()),
 });
 
-// Boundary schema for a single golden case on the wire. `assertion`/`rubric` are nullable; an absent/garbage
-// assertion degrades to null rather than failing the whole parse. `source` is a lowercase discriminator that
-// degrades to "manual" (`.catch`) when missing/garbage so an older payload without provenance still parses.
-const goldenConversationSchema = z.object({
-	id: z.string(),
-	agentDefinitionId: z.string(),
-	title: z.string(),
-	inputTurns: z.array(goldenTurnSchema),
-	assertion: goldenAssertionSchema.nullish(),
-	rubric: z.string().nullish(),
-	enabled: z.boolean(),
-	source: z.enum(["manual", "harvested"]).catch("manual"),
-	sourceMessageId: z.string().nullish(),
-	sourceConversationId: z.string().nullish(),
-	createdAtUtc: z.number(),
-	updatedAtUtc: z.number(),
-});
-
-// Boundary schema for the GET /agents/{id}/golden-conversations response envelope.
-export const listGoldenConversationsResponseSchema = z.object({
-	items: z.array(goldenConversationSchema),
-});
-
-// The validated wire shapes (camelCase). Kept separate from the readonly domain view-models so the boundary owns
-// parsing and the rest of the feature consumes the immutable shape.
-export type GoldenConversationDto = z.infer<typeof goldenConversationSchema>;
-
-// Validate + deserialize a single golden case at the boundary. Normalizes the nullish assertion/rubric to a
-// strict null so the panel never branches on undefined.
-export function toGoldenConversation(dto: GoldenConversationDto): GoldenConversation {
-	return {
-		id: dto.id,
-		agentDefinitionId: dto.agentDefinitionId,
-		title: dto.title,
-		inputTurns: dto.inputTurns.map((turn) => ({ ...turn })),
-		assertion: dto.assertion
-			? {
-					requiredPhrases: [...dto.assertion.requiredPhrases],
-					forbiddenPhrases: [...dto.assertion.forbiddenPhrases],
-				}
-			: null,
-		rubric: dto.rubric ?? null,
-		enabled: dto.enabled,
-		source: dto.source,
-		sourceMessageId: dto.sourceMessageId ?? null,
-		sourceConversationId: dto.sourceConversationId ?? null,
-		createdAtUtc: dto.createdAtUtc,
-		updatedAtUtc: dto.updatedAtUtc,
-	};
-}
-
-// Validate + deserialize the list envelope at the boundary with safeParse. A malformed payload throws a
-// descriptive error (caught by the TanStack Query error path) rather than rendering partial/wrong data.
-export function toGoldenConversations(payload: unknown): GoldenConversation[] {
-	const parsed = listGoldenConversationsResponseSchema.safeParse(payload);
-	if (!parsed.success) {
-		throw new Error(`Invalid golden conversations payload: ${parsed.error.message}`);
-	}
-	return parsed.data.items.map(toGoldenConversation);
-}
-
-// Validate + deserialize a single created golden case (the POST response is the bare case, not an envelope). The
-// approve endpoint returns the same bare shape, so it reuses this parser.
-export function toCreatedGoldenConversation(payload: unknown): GoldenConversation {
-	const parsed = goldenConversationSchema.safeParse(payload);
-	if (!parsed.success) {
-		throw new Error(`Invalid golden conversation payload: ${parsed.error.message}`);
-	}
-	return toGoldenConversation(parsed.data);
-}
-
-// Counts returned by POST /agents/{id}/golden-conversations/harvest: how many thumbs-up assistant turns were
-// scanned, how many new harvested candidates were staged (inert), how many were skipped as already-harvested
-// duplicates, and how many were skipped for another reason (e.g. no prior user turn). Surfaced in a success toast.
-export interface GoldenHarvestResult {
-	readonly thumbsUpScanned: number;
-	readonly createdCount: number;
-	readonly duplicateCount: number;
-	readonly skippedCount: number;
-}
-
-// Boundary schema for the harvest counts response — four non-negative integers on the wire.
-const goldenHarvestResultSchema = z.object({
-	thumbsUpScanned: z.number(),
-	createdCount: z.number(),
-	duplicateCount: z.number(),
-	skippedCount: z.number(),
-});
-
-// Validate + deserialize the harvest result at the boundary with safeParse, mirroring toCreatedGoldenConversation:
-// a malformed payload throws a descriptive error (caught by the TanStack Query error path) rather than surfacing
-// wrong counts in the toast.
-export function toGoldenHarvestResult(payload: unknown): GoldenHarvestResult {
-	const parsed = goldenHarvestResultSchema.safeParse(payload);
-	if (!parsed.success) {
-		throw new Error(`Invalid golden harvest payload: ${parsed.error.message}`);
-	}
-	return {
-		thumbsUpScanned: parsed.data.thumbsUpScanned,
-		createdCount: parsed.data.createdCount,
-		duplicateCount: parsed.data.duplicateCount,
-		skippedCount: parsed.data.skippedCount,
-	};
-}
-
-// Create-request boundary schema enforcing the same length caps as the backend before the POST. The turns and the
-// assertion are capped on their serialized JSON length (what the server stores), so the FE rejects the same over-long
-// input the server would and the form can surface a precise field message instead of a generic 400.
+// Create-request FORM boundary schema enforcing the same length caps as the backend before the POST. The turns and
+// the assertion are capped on their serialized JSON length (what the server stores), so the FE rejects the same
+// over-long input the server would and the form can surface a precise field message instead of a generic 400. This
+// is form validation (request shape the operator authors), NOT response validation — the latter is owned by the
+// generated zod validator + the withResponseValidation bridge at the hook.
 const createGoldenConversationRequestSchema = z.object({
 	title: z.string().max(GOLDEN_TITLE_MAX),
-	inputTurns: z
-		.array(goldenTurnSchema)
-		.refine((turns) => JSON.stringify(turns).length <= GOLDEN_INPUT_TURNS_MAX, {
-			path: ["inputTurns"],
-		}),
+	inputTurns: z.array(goldenTurnSchema).refine((turns) => JSON.stringify(turns).length <= GOLDEN_INPUT_TURNS_MAX, {
+		path: ["inputTurns"],
+	}),
 	assertion: goldenAssertionSchema
 		.refine((assertion) => JSON.stringify(assertion).length <= GOLDEN_ASSERTION_MAX, {
 			path: ["assertion"],
@@ -212,6 +119,8 @@ export function findGoldenFieldOverLimit(request: CreateGoldenConversationReques
 // reason. `EvalRequired` = no eval has run; `EvalRegressed` = the latest eval failed (a prior-good case broke);
 // `EvalStale` = the action was edited since the last passing eval; `CapReached` (Playbook P5) = the agent is
 // already at its MaxEnabledActions bound, so the operator must archive/disable an Enabled action before promoting.
+// Consumed by PlaybookActionMappers (the promote flow), not the golden CRUD — kept here with the golden governance
+// types it co-evolved with.
 export type PromoteConflictStatus = "EvalRequired" | "EvalRegressed" | "EvalStale" | "CapReached";
 
 export interface PromoteConflictBody {
