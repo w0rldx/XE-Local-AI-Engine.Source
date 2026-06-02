@@ -34,3 +34,37 @@ jobs:
 
       - name: Run worker node tests
         run: dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build
+
+  client-react:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: XE-Local-AI-Engine.Client.React
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Drift gate: regenerate the hey-api client from the committed OpenAPI spec and fail if the
+      # generated output differs from what is committed. Deterministic; needs no running host.
+      - name: Check generated OpenAPI client is up to date
+        run: pnpm run openapi:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm run test

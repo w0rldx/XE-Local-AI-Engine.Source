@@ -12,7 +12,12 @@ export default defineConfig({
 			runtimeConfigPath: "./src/core/api/Generated.runtime.ts",
 		},
 		"@hey-api/typescript",
-		"@hey-api/sdk",
+		// Runtime response schemas (zod v4). Paired with @hey-api/sdk validator below so generated
+		// SDK calls validate the response shape at the transport boundary.
+		"zod",
+		// validator: true makes each generated SDK fn run its zod response schema as the client
+		// `responseValidator`. A thrown ZodError is remapped to ApiError centrally (see Generated.runtime.ts).
+		{ name: "@hey-api/sdk", validator: true },
 		{
 			name: "@tanstack/react-query",
 			queryOptions: true,
