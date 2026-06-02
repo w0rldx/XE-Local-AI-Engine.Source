@@ -6,20 +6,48 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiMock, confirmMock } = vi.hoisted(() => ({
-	apiMock: {
-		deleteLocalModel: vi.fn(),
-		getLocalModelDetails: vi.fn(),
+// Mock the generated hey-api TanStack layer. The read factories return `{ queryKey, queryFn }` (the queryFn is the
+// data source the page renders from); the mutation factories return `{ mutationFn }` the page spreads into
+// useMutation. The page wraps every factory result in the real withResponseValidation (not mocked), then layers its
+// own onSuccess invalidation. The factory mocks let a test assert the variable shape the page forwarded to the wire.
+// Each *QueryKey factory returns a stable single-element key keyed by the operationId so the page's invalidation
+// (which calls the same factories) refetches the live query — proving the post-override list refetch.
+const { queryFns, mutationFns } = vi.hoisted(() => ({
+	queryFns: {
 		listLocalModels: vi.fn(),
-		pullLocalModel: vi.fn(),
-		selectLocalModel: vi.fn(),
-		setLocalModelKind: vi.fn(),
-		resetLocalModelKind: vi.fn(),
+		getLocalModelDetails: vi.fn(),
 	},
-	confirmMock: vi.fn(),
+	mutationFns: {
+		selectLocalModel: vi.fn(),
+		pullLocalModel: vi.fn(),
+		deleteLocalModel: vi.fn(),
+		putModelKind: vi.fn(),
+		deleteModelKind: vi.fn(),
+	},
 }));
 
-vi.mock("@/features/models/api/LocalModelsApi", () => apiMock);
+// Centralizes the `_id` discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
+function fakeQueryKey(operationId: string): unknown {
+	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+	return [{ _id: operationId }];
+}
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
+	listLocalModelsQueryKey: () => fakeQueryKey("listLocalModels"),
+	listLocalModelsOptions: () => ({ queryKey: fakeQueryKey("listLocalModels"), queryFn: queryFns.listLocalModels }),
+	getLocalModelDetailsQueryKey: () => fakeQueryKey("getLocalModelDetails"),
+	getLocalModelDetailsOptions: () => ({
+		queryKey: fakeQueryKey("getLocalModelDetails"),
+		queryFn: queryFns.getLocalModelDetails,
+	}),
+	selectLocalModelMutation: () => ({ mutationFn: mutationFns.selectLocalModel }),
+	pullLocalModelMutation: () => ({ mutationFn: mutationFns.pullLocalModel }),
+	deleteLocalModelMutation: () => ({ mutationFn: mutationFns.deleteLocalModel }),
+	putModelKindMutation: () => ({ mutationFn: mutationFns.putModelKind }),
+	deleteModelKindMutation: () => ({ mutationFn: mutationFns.deleteModelKind }),
+}));
+
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
@@ -62,7 +90,7 @@ describe("ModelManagement", () => {
 		// jsdom does not implement scrollIntoView; Mantine's Combobox calls it when the override Select dropdown opens,
 		// which would otherwise surface as an unhandled rejection from a deferred timer.
 		Element.prototype.scrollIntoView = vi.fn();
-		apiMock.listLocalModels.mockResolvedValue({
+		queryFns.listLocalModels.mockResolvedValue({
 			isAvailable: true,
 			selectedModelName: "llama3:8b",
 			configuredDefaultModelName: "llama3:8b",
@@ -83,12 +111,12 @@ describe("ModelManagement", () => {
 				},
 			],
 		});
-		apiMock.getLocalModelDetails.mockResolvedValue({ modelName: "llama3:8b", maxContextTokens: 8192, template: "{{ .Prompt }}", system: null, license: "fake" });
-		apiMock.selectLocalModel.mockResolvedValue({ selectedModelName: "llama3:8b" });
-		apiMock.pullLocalModel.mockResolvedValue({ modelName: "orca-mini:latest", status: "success", totalBytes: 100, completedBytes: 100 });
-		apiMock.deleteLocalModel.mockResolvedValue({ modelName: "llama3:8b", deleted: true });
-		apiMock.setLocalModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Embedding", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: true });
-		apiMock.resetLocalModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Chat", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: false });
+		queryFns.getLocalModelDetails.mockResolvedValue({ modelName: "llama3:8b", maxContextTokens: 8192, template: "{{ .Prompt }}", system: null, license: "fake" });
+		mutationFns.selectLocalModel.mockResolvedValue({ selectedModelName: "llama3:8b" });
+		mutationFns.pullLocalModel.mockResolvedValue({ modelName: "orca-mini:latest", status: "success", totalBytes: 100, completedBytes: 100 });
+		mutationFns.deleteLocalModel.mockResolvedValue({ modelName: "llama3:8b", deleted: true });
+		mutationFns.putModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Embedding", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: true });
+		mutationFns.deleteModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Chat", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: false });
 		confirmMock.mockResolvedValue(true);
 	});
 
@@ -106,12 +134,13 @@ describe("ModelManagement", () => {
 		expect(await screen.findByText("Context length: 8,192")).toBeTruthy();
 	});
 
-	it("selects, pulls, and deletes models through mutations", async () => {
+	it("selects, pulls, and deletes models through the generated mutations", async () => {
 		renderWithProviders(<ModelManagement />);
 		await screen.findByLabelText("Set llama3:8b as default");
 
 		fireEvent.click(screen.getByLabelText("Set llama3:8b as default"));
-		await waitFor(() => expect(apiMock.selectLocalModel).toHaveBeenCalledWith({ modelName: "llama3:8b" }));
+		// TanStack v5 passes (variables, context) — assert the first arg carries the generated body shape.
+		await waitFor(() => expect(mutationFns.selectLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "llama3:8b" } }));
 
 		const pullInput = screen.getAllByTestId("pull-model-name-input").find((element) => element.tagName === "INPUT");
 		expect(pullInput).toBeTruthy();
@@ -119,13 +148,13 @@ describe("ModelManagement", () => {
 		const downloadButton = screen.getAllByTestId("download-model-button").find((element) => element.tagName === "BUTTON");
 		expect(downloadButton).toBeTruthy();
 		fireEvent.click(downloadButton!);
-		await waitFor(() => expect(apiMock.pullLocalModel).toHaveBeenCalledWith({ modelName: "orca-mini:latest" }));
+		await waitFor(() => expect(mutationFns.pullLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "orca-mini:latest" } }));
 
 		const deleteButton = screen.getAllByLabelText("Delete llama3:8b").find((element) => element.tagName === "BUTTON");
 		expect(deleteButton).toBeTruthy();
 		fireEvent.click(deleteButton!);
 		await waitFor(() => expect(confirmMock).toHaveBeenCalled());
-		await waitFor(() => expect(apiMock.deleteLocalModel).toHaveBeenCalledWith("llama3:8b"));
+		await waitFor(() => expect(mutationFns.deleteLocalModel.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" } }));
 	});
 
 	it("renders the type column with the effective kind badge and capability badges", async () => {
@@ -155,7 +184,7 @@ describe("ModelManagement", () => {
 			capabilities: ["completion", "tools"],
 			isOverridden: true,
 		};
-		apiMock.listLocalModels
+		queryFns.listLocalModels
 			.mockResolvedValueOnce({ isAvailable: true, selectedModelName: "llama3:8b", configuredDefaultModelName: "llama3:8b", error: null, items: [{ ...overriddenRow, kind: "Chat", isOverridden: false }] })
 			.mockResolvedValue({ isAvailable: true, selectedModelName: "llama3:8b", configuredDefaultModelName: "llama3:8b", error: null, items: [overriddenRow] });
 
@@ -172,16 +201,16 @@ describe("ModelManagement", () => {
 		const option = await screen.findByRole("option", { name: "Embedding" });
 		fireEvent.click(option);
 
-		await waitFor(() => expect(apiMock.setLocalModelKind).toHaveBeenCalledWith("llama3:8b", "Embedding"));
+		await waitFor(() => expect(mutationFns.putModelKind.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" }, body: { kind: "Embedding" } }));
 		// The list is refetched after the override so lazy detection refreshes the row.
-		await waitFor(() => expect(apiMock.listLocalModels).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(queryFns.listLocalModels).toHaveBeenCalledTimes(2));
 		// The badge reflects the refetched overridden row, and the reset affordance now appears.
 		await waitFor(() => expect(screen.getByTestId("model-kind-badge-llama3:8b").textContent).toContain("Embedding"));
 		expect(screen.getByLabelText("Reset llama3:8b type to detected")).toBeTruthy();
 	});
 
-	it("shows a reset-to-detected action only for overridden models and resets through the API", async () => {
-		apiMock.listLocalModels.mockResolvedValue({
+	it("shows a reset-to-detected action only for overridden models and resets through the generated mutation", async () => {
+		queryFns.listLocalModels.mockResolvedValue({
 			isAvailable: true,
 			selectedModelName: "llama3:8b",
 			configuredDefaultModelName: "llama3:8b",
@@ -209,11 +238,11 @@ describe("ModelManagement", () => {
 		const resetButton = await screen.findByLabelText("Reset llama3:8b type to detected");
 		fireEvent.click(resetButton);
 
-		await waitFor(() => expect(apiMock.resetLocalModelKind).toHaveBeenCalledWith("llama3:8b"));
+		await waitFor(() => expect(mutationFns.deleteModelKind.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" } }));
 	});
 
 	it("shows unavailable Ollama state", async () => {
-		apiMock.listLocalModels.mockResolvedValue({ isAvailable: false, selectedModelName: null, configuredDefaultModelName: "llama3:8b", error: "Local model provider is unavailable.", items: [] });
+		queryFns.listLocalModels.mockResolvedValue({ isAvailable: false, selectedModelName: null, configuredDefaultModelName: "llama3:8b", error: "Local model provider is unavailable.", items: [] });
 
 		renderWithProviders(<ModelManagement />);
 

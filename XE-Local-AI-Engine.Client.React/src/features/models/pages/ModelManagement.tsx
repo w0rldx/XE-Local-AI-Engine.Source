@@ -26,18 +26,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import {
-	deleteLocalModel,
-	getLocalModelDetails,
-	listLocalModels,
-	pullLocalModel,
-	resetLocalModelKind,
-	selectLocalModel,
-	setLocalModelKind,
-} from "@/features/models/api/LocalModelsApi";
-import { toLocalModelViewModel, toPullProgressModel } from "@/features/models/models/LocalModelModel";
-import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
+	deleteLocalModelMutation,
+	deleteModelKindMutation,
+	getLocalModelDetailsOptions,
+	getLocalModelDetailsQueryKey,
+	listLocalModelsOptions,
+	listLocalModelsQueryKey,
+	pullLocalModelMutation,
+	putModelKindMutation,
+	selectLocalModelMutation,
+} from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { toLocalModelViewModel, toPullProgressModel } from "@/features/models/models/LocalModelMappers";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates */
 
@@ -87,76 +89,94 @@ export function ModelManagement() {
 	// License + template can both be very long; they live in a modal (not an inline expander) so the details card stays compact.
 	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
 
-	const modelsQuery = useQuery({
-		queryKey: localModelsQueryKeys.list(),
-		queryFn: ({ signal }) => listLocalModels({ signal }),
-	});
+	// Reads run through the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
+	// AbortSignal automatically), wrapped in withResponseValidation so a zod response-shape failure surfaces as an
+	// ApiError. The list query keeps the generated response envelope (isAvailable / selectedModelName / error) and
+	// maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
+	// factories so every cached variant of an endpoint refetches.
+	const modelsQuery = useQuery(withResponseValidation(listLocalModelsOptions()));
 	const modelsResponse = modelsQuery.data;
-	const modelViewModels = useMemo(() => modelsResponse?.items.map(toLocalModelViewModel) ?? [], [modelsResponse]);
+	const modelItems = useMemo(() => modelsResponse?.items ?? [], [modelsResponse]);
+	const modelViewModels = useMemo(() => modelItems.map(toLocalModelViewModel), [modelItems]);
 
 	useEffect(() => {
 		if (!modelsResponse) {
 			return;
 		}
 
-		const preferredModelName = modelsResponse.selectedModelName ?? modelsResponse.items[0]?.modelName;
+		const preferredModelName = modelsResponse.selectedModelName ?? modelItems[0]?.modelName;
 		const selectedStillExists = selectedModelName
-			? modelsResponse.items.some((model) => model.modelName === selectedModelName)
+			? modelItems.some((model) => model.modelName === selectedModelName)
 			: false;
 		if (!selectedStillExists) {
-			setSelectedModelName(preferredModelName);
+			setSelectedModelName(preferredModelName ?? undefined);
 		}
-	}, [modelsResponse, selectedModelName]);
+	}, [modelsResponse, modelItems, selectedModelName]);
 
 	const detailsQuery = useQuery({
-		queryKey: selectedModelName ? localModelsQueryKeys.details(selectedModelName) : localModelsQueryKeys.details(""),
-		queryFn: ({ signal }) => getLocalModelDetails(selectedModelName ?? "", { signal }),
+		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedModelName ?? "" } })),
 		enabled: Boolean(selectedModelName && modelsResponse?.isAvailable),
 	});
 
+	const invalidateList = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: listLocalModelsQueryKey() }),
+		[queryClient],
+	);
+	const invalidateListAndDetails = useCallback(
+		() =>
+			Promise.all([
+				invalidateList(),
+				queryClient.invalidateQueries({
+					queryKey: getLocalModelDetailsQueryKey({ path: { modelName: selectedModelName ?? "" } }),
+				}),
+			]).then(() => undefined),
+		[invalidateList, queryClient, selectedModelName],
+	);
+
 	const selectMutation = useMutation({
-		mutationFn: (modelName: string) => selectLocalModel({ modelName }),
+		...withResponseValidation(selectLocalModelMutation()),
 		onSuccess: async (selection) => {
-			setSelectedModelName(selection.selectedModelName);
-			setMessage(`Default local model set to ${selection.selectedModelName}.`);
-			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.all() });
+			const selectedName = selection.selectedModelName ?? "";
+			setSelectedModelName(selectedName);
+			setMessage(`Default local model set to ${selectedName}.`);
+			await invalidateListAndDetails();
 		},
 	});
 
 	const pullMutation = useMutation({
-		mutationFn: () => pullLocalModel({ modelName: pullModelName.trim() }),
+		...withResponseValidation(pullLocalModelMutation()),
 		onSuccess: async (response) => {
 			const progress = toPullProgressModel(response);
 			setPullProgress(progress.progressPercent);
 			setPullModelName("");
-			setMessage(`Model ${response.modelName} pull finished: ${progress.status}.`);
-			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.all() });
+			setMessage(`Model ${response.modelName ?? ""} pull finished: ${progress.status}.`);
+			await invalidateList();
 		},
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: (modelName: string) => deleteLocalModel(modelName),
+		...withResponseValidation(deleteLocalModelMutation()),
 		onSuccess: async (response) => {
-			setMessage(`Model ${response.modelName} deleted.`);
+			setMessage(`Model ${response.modelName ?? ""} deleted.`);
 			setSelectedModelName(undefined);
-			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.all() });
+			await invalidateListAndDetails();
 		},
 	});
 
 	const setKindMutation = useMutation({
-		mutationFn: ({ modelName, kind }: { modelName: string; kind: string }) => setLocalModelKind(modelName, kind),
+		...withResponseValidation(putModelKindMutation()),
 		// Setting an override does NOT probe Ollama, so the response's detectedKind may still be Unknown. Invalidate
 		// the list so the next refetch runs lazy detection and the row reflects the freshly detected kind, not the
 		// override response.
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.list() });
+			await invalidateList();
 		},
 	});
 
 	const resetKindMutation = useMutation({
-		mutationFn: (modelName: string) => resetLocalModelKind(modelName),
+		...withResponseValidation(deleteModelKindMutation()),
 		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.list() });
+			await invalidateList();
 		},
 	});
 
@@ -208,7 +228,7 @@ export function ModelManagement() {
 			});
 
 			if (confirmed) {
-				deleteMutation.mutate(modelName);
+				deleteMutation.mutate({ path: { modelName } });
 			}
 		},
 		[confirm, deleteMutation],
@@ -317,7 +337,7 @@ export function ModelManagement() {
 																		variant="subtle"
 																		color="gray"
 																		disabled={isActionPending}
-																		onClick={() => resetKindMutation.mutate(model.modelName)}
+																		onClick={() => resetKindMutation.mutate({ path: { modelName: model.modelName } })}
 																	>
 																		<IconArrowBackUp size={16} />
 																	</ActionIcon>
@@ -343,7 +363,7 @@ export function ModelManagement() {
 															comboboxProps={{ withinPortal: false }}
 															onChange={(value) => {
 																if (value && value !== model.kind) {
-																	setKindMutation.mutate({ modelName: model.modelName, kind: value });
+																	setKindMutation.mutate({ path: { modelName: model.modelName }, body: { kind: value } });
 																}
 															}}
 														/>
@@ -361,7 +381,7 @@ export function ModelManagement() {
 																variant="subtle"
 																color="green"
 																disabled={isActionPending}
-																onClick={() => selectMutation.mutate(model.modelName)}
+																onClick={() => selectMutation.mutate({ body: { modelName: model.modelName } })}
 															>
 																<IconCheck size={16} />
 															</ActionIcon>
@@ -472,7 +492,7 @@ export function ModelManagement() {
 								leftSection={<IconCloudDownload size={16} />}
 								disabled={!pullNameToSubmit || isActionPending}
 								loading={pullMutation.isPending}
-								onClick={() => pullMutation.mutate()}
+								onClick={() => pullMutation.mutate({ body: { modelName: pullNameToSubmit } })}
 							>
 								Download model
 							</Button>
