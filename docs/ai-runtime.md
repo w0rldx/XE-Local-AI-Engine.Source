@@ -4,6 +4,17 @@ Last reviewed: 2026-05-31
 
 This page explains the local AI/ML integration seams that future maintainers should understand before changing model providers, agent behavior, tool execution, or embeddings.
 
+## Semantic documentation anchors
+
+For comment cleanup and AI-agent retrieval, use stable runtime terms instead of historical implementation labels. The backend-wide source map is in [Backend commentary map](backend-commentary-map.md). AI-runtime comments should prefer these anchors:
+
+- agent definition resolution;
+- orchestration topology, handoffs, checkpoints, and tool approval;
+- playbook actions, feedback insights, golden conversations, eval gates, relevance retrieval, and cohort monitoring;
+- MCP tool registry and offered-tool resolution;
+- local model/provider seams, embeddings, and provider-neutral chat clients.
+
+
 ## Runtime boundaries
 
 - `XE-Local-AI-Engine.AI.Agent` owns Microsoft Agent Framework wiring: agent construction, orchestration runs, tool registries, and the shared `IChatClient` pipeline.

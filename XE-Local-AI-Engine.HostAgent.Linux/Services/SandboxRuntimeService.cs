@@ -13,9 +13,9 @@ using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using ProtoNetworkMode = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.SandboxNetworkMode;
 
 /// <summary>
-///     Serves the <c>SandboxControl</c> gRPC contract (local-container sandbox plan §4.2) by translating proto requests into
+///     Serves the <c>SandboxControl</c> gRPC contract by translating proto requests into
 ///     <see cref="IDockerRuntimeClient" /> sandbox operations and back. The global HMAC interceptor authenticates
-///     every call (the rpcs are unary by design — plan §2 D2), so this service does no auth wiring. It validates the
+///     every call (the rpcs are unary by design), so this service does no auth wiring. It validates the
 ///     attach key against container labels on attach, redacts host paths from error detail, and surfaces failures as
 ///     <see cref="RpcException" /> with a sane <see cref="StatusCode" /> the worker maps back onto SPI exceptions.
 /// </summary>
@@ -25,7 +25,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
 
     // The non-root account the sandbox process runs as. This name MUST exist in the configured DefaultImage —
     // docker/Dockerfile.agent-home-dotnet creates the "agent" user. Setting it here (not relying solely on the
-    // image's baked USER) makes the non-root guarantee explicit and create-time, per the hardening claim (D5).
+    // image's baked USER) makes the non-root guarantee explicit and create-time, for the sandbox hardening guarantee.
     private const string NonRootUser = "agent";
 
     private readonly IDockerRuntimeClient _runtimeClient;
@@ -65,8 +65,8 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
         {
             // Attaching to an existing container by name is not enough: the name only encodes node + a hash of the
             // owner, so a request with the same owner/node but a different runtime_profile or manifest_version would
-            // otherwise reuse a container built under different parameters. Re-validate the reserved labels (§6.2.1
-            // rule 15) and reject a mismatch rather than silently reusing.
+            // otherwise reuse a container built under different parameters. Re-validate the reserved labels and reject
+            // a mismatch rather than silently reusing.
             await ValidateAttachLabelsAsync(containerId, attachKey, context.CancellationToken).ConfigureAwait(false);
         }
 
@@ -82,7 +82,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
         var containerId = await _runtimeClient.FindSandboxContainerAsync(containerName, context.CancellationToken).ConfigureAwait(false)
                           ?? throw new RpcException(new Status(StatusCode.FailedPrecondition, "No live sandbox matches the supplied attach key."));
 
-        // §6.2.1 rule 15: a name match alone does not authorize the attach — the container's labels must match the
+        // A name match alone does not authorize the attach — the container's labels must match the
         // full attach key (owner/node/profile/manifest).
         await ValidateAttachLabelsAsync(containerId, attachKey, context.CancellationToken).ConfigureAwait(false);
 
@@ -261,7 +261,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
         {
             // A name match alone is not authorization: the owner is only hashed into the name, and profile/manifest
             // are not in the name at all, so a same-owner-and-node request with a different profile or manifest would
-            // otherwise attach to a container built under different parameters (§6.2.1 rule 15). Reject it. The detail
+            // otherwise attach to a container built under different parameters. Reject it. The detail
             // is generic — no label values are echoed across the wire.
             throw new RpcException(new Status(StatusCode.FailedPrecondition, "The attach key does not match the existing sandbox's owner, node, runtime profile, or manifest version."));
         }
@@ -274,7 +274,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
             throw Invalid("A sandbox image is required.");
         }
 
-        // observability guard (observability): the create path folds a Restricted request to the no-network default for MVP. Log it
+        // observability guard (observability): the create path folds a Restricted request to the no-network default for the current runtime. Log it
         // once so the degradation is observable rather than silent; the enum is retained for future enforcement.
         if (request.Network == ProtoNetworkMode.Restricted)
         {
@@ -361,7 +361,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
         return new RpcException(new Status(StatusCode.InvalidArgument, clientMessage));
     }
 
-    // §6.2.1 rule 12 / §11: the client-facing detail is a generic message; the underlying failure is logged at
+    // The client-facing detail is a generic message; the underlying failure is logged at
     // Information (type + message only) so host paths and internal exception detail are never leaked across the wire.
     private RpcException Fault(StatusCode statusCode, string clientMessage, string operation, Exception inner)
     {

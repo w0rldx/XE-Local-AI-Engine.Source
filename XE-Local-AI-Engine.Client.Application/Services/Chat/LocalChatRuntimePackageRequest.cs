@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
 
-/// <summary>
-///     Request DTO for local chat runtime package operations.
-/// </summary>
 public sealed record LocalChatRuntimePackageRequest(
     Guid InvocationId,
     Guid ConversationId,

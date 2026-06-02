@@ -19,10 +19,10 @@ public interface IAgentDefinitionResolver
     /// <param name="agentDefinitionId">The conversation's bound definition id, or <c>null</c> for the default persona.</param>
     /// <param name="activeModelId">The model the turn runs on; gates the tool offer (capability-aware).</param>
     /// <param name="retrievalQuery">
-    ///     The incoming user-turn text used to relevance-gate playbook injection (Playbook P5, plan §4.2). When the agent
+    ///     The incoming user-turn text used to relevance-gate playbook injection (relevance retrieval and cohort monitoring, the relevance-retrieval gate). When the agent
     ///     has more than the configured threshold of Enabled actions and this is non-blank, only the top-k most relevant
     ///     actions are injected; otherwise (blank query, or at/below the threshold) the full static prepend is used, so the
-    ///     resolved prompt — and the config hash — stays byte-identical to the pre-P5 path.
+    ///     resolved prompt — and the config hash — stays byte-identical to the pre-retrieval path.
     /// </param>
     Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, CancellationToken cancellationToken = default);
 }

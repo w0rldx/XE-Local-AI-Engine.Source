@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Events;
 
-/// <summary>
-///     FastEndpoints handler for the get invocation monitor local API operation.
-/// </summary>
 public sealed class GetInvocationMonitorEndpoint(
     IWorkerEventDispatcher eventDispatcher,
     IInvocationHistory invocationHistory) : EndpointWithoutRequest<InvocationMonitorResponse>

@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 /// <summary>
 ///     Singleton registry built at startup from all <see cref="IScheduledJobHandler" /> implementations
 ///     discovered via dependency injection. Registered by <c>NodeSchedulerServiceCollectionExtensions</c>
-///     (Marker 2 — Agent A).
+///     .
 /// </summary>
 /// <remarks>
 ///     Template IDs are matched case-sensitively. Registration order (as returned by DI) is preserved in

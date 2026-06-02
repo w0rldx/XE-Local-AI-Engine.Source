@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-/// <summary>
-///     FastEndpoints handler for soft-deleting a scheduled job definition (DELETE scheduler/jobs/{scheduledJobId}).
-/// </summary>
 public sealed class DeleteScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
     : Endpoint<ScheduledJobRouteRequest>
 {

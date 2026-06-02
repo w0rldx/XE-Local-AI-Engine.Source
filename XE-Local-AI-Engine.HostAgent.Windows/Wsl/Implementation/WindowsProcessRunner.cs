@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl.Implementation;
 using System.Diagnostics;
 using System.Text;
 
-/// <summary>
-///     Represents windows process runner.
-/// </summary>
 public sealed class WindowsProcessRunner : IWindowsProcessRunner
 {
     private const int MaxCapturedCharacters = 64 * 1024;

@@ -102,7 +102,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
     /// <summary>
     ///     Every command passed to <see cref="ExecuteAsync" />, in order. Lets a test assert that the workspace git
-    ///     baseline (workspace copy) and later patch export (patch export) issued the expected command sequence.
+    ///     baseline and patch export issued the expected command sequence.
     /// </summary>
     public IReadOnlyList<SandboxCommandRequest> ExecutedCommands
     {

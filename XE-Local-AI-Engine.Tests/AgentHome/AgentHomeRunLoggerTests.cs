@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker K run-logger coverage. Proves that JSONL log files are created under the host-side
+///     Run-logger coverage. Proves that JSONL log files are created under the host-side
 ///     <c>logs/</c> directory, that every record carries the run-id/NodeId/OwnerUserId/providerName
 ///     correlation envelope, and that argument summaries never leak raw host paths or secrets.
 ///     Tests run against <see cref="AgentHomeRunLogger" /> directly — no sandbox, no Docker, no Ollama.
@@ -39,7 +39,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         }
     }
 
-    // ── OpenAsync ────────────────────────────────────────────────────────────
 
     [Test]
     public async Task OpenAsync_CreatesEventsJsonlWithStartedRecord()
@@ -68,7 +67,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         AssertEx.Equal(FixedNow, ts);
     }
 
-    // ── AppendEventAsync ─────────────────────────────────────────────────────
 
     [Test]
     public async Task AppendEventAsync_AppendsToEventsJsonlWithCorrelation()
@@ -101,7 +99,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         AssertEx.Equal(4, lines.Count); // started + 3 more
     }
 
-    // ── AppendCommandAsync ───────────────────────────────────────────────────
 
     [Test]
     public async Task AppendCommandAsync_CreatesCommandsJsonlWithRecord()
@@ -160,7 +157,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             "commands.jsonl must not contain the raw host log directory path");
     }
 
-    // ── AppendToolCallAsync ──────────────────────────────────────────────────
 
     [Test]
     public async Task AppendToolCallAsync_CreatesToolCallsJsonlWithRecord()
@@ -242,7 +238,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         AssertEx.Equal(ctx.RunId, record.GetProperty("runId").GetString());
     }
 
-    // ── correlation guard (run-id, NodeId, OwnerUserId, providerName) ────────
 
     [Test]
     public async Task AllLogFiles_ContainFullCorrelationEnvelope()
@@ -283,7 +278,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         }
     }
 
-    // ── error guard ──────────────────────────────────────────────────────────
 
     [Test]
     public async Task AppendEventAsync_BeforeOpen_Throws()
@@ -294,7 +288,6 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             logger.AppendEventAsync("run_completed"));
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
 
     private (AgentHomeRunLogger Logger, AgentHomeRunLogContext Context) CreateLogger()
     {

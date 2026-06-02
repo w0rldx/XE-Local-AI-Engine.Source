@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-/// <summary>
-///     Value object carrying stored node settings data.
-/// </summary>
 public sealed record StoredNodeSettings
 {
     public const int DefaultMaxMessageRequestTimeoutSeconds = 300;

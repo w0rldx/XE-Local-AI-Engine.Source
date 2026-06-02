@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Monitoring;
 
 /// <summary>
-///     Read-only cohort monitoring for an agent's Enabled playbook actions (Playbook P5). Computes the before/after
+///     Read-only cohort monitoring for an agent's Enabled playbook actions (relevance retrieval and cohort monitoring). Computes the before/after
 ///     down-vote signal on read from the node-local message feedback — no writes, so no mutation guard. The monitor
 ///     service does not 404, so this endpoint resolves the agent itself and returns 404 when it does not exist. The
 ///     <c>retrieval</c> block carries the current relevance-gating thresholds for the panel banner. Operator-gated.

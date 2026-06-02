@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Describes a dedicated AgentHome sandbox container to create (local-container sandbox plan §4.1, D5). This is a
+///     Describes a dedicated AgentHome sandbox container to create. This is a
 ///     hardened create path distinct from <see cref="IDockerRuntimeClient.EnsureContainerAsync" /> (the managed
 ///     runtime path): it carries resource ceilings, the network posture, the non-root user, and attach-validation
 ///     labels (owner/node/profile/manifest) applied to the container's <c>HostConfig</c> and labels.
@@ -11,7 +11,7 @@ public sealed record SandboxContainerSpec
     /// <summary>Deterministic container name (the provider derives it from node + owner hash).</summary>
     public required string Name { get; init; }
 
-    /// <summary>The local sandbox image to run (a tag-only local image is accepted — D6, not routed through the strict managed-runtime <c>DockerImageReference</c>).</summary>
+    /// <summary>The local sandbox image to run (a tag-only local image is accepted — not routed through the strict managed-runtime <c>DockerImageReference</c>).</summary>
     public required string Image { get; init; }
 
     /// <summary>Maximum CPU cores; mapped to <c>NanoCPUs</c>. <see langword="null" /> leaves the limit unset.</summary>

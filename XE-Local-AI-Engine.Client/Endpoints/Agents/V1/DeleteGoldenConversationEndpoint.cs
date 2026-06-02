@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Playbook P4: deletes a golden conversation case (ownership-guarded — the service only deletes a case owned by the
-///     agent named on the route, so one agent's route cannot touch another agent's case). 204 on delete; 404 when the
+///     Deletes a golden conversation case (ownership-guarded — the service only deletes a case owned by the agent named
+///     on the route, so one agent's route cannot touch another agent's case). 204 on delete; 404 when the
 ///     case is missing or belongs to another agent. Operator-gated.
 /// </summary>
 public sealed class DeleteGoldenConversationEndpoint(IGoldenConversationService goldenConversationService)

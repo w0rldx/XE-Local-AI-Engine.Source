@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Shared Quartz identity constants for scheduled-job dispatch. The management service (Marker 3) builds every
+///     Shared Quartz identity constants for scheduled-job dispatch. The management service  builds every
 ///     <c>JobKey</c> in the <see cref="Group" /> group and stamps the definition id into the <c>JobDataMap</c> under
 ///     <see cref="ScheduledJobIdKey" />; the dispatch jobs read it back at fire time.
 /// </summary>

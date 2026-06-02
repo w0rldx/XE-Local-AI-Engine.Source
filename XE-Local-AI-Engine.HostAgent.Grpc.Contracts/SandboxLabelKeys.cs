@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 
 /// <summary>
-///     The reserved Docker label keys an AgentHome sandbox container is stamped with (local-container sandbox plan §4.2,
-///     §6.2.1 rule 15). Defined once here so both the worker-side <c>LocalContainerSandboxProvider</c> and the
+///     The reserved Docker label keys an AgentHome sandbox container is stamped with for attach validation. Defined
+///     once here so both the worker-side <c>LocalContainerSandboxProvider</c> and the
 ///     HostAgent-side <c>SandboxRuntimeService</c> reference the same strings — a single spelling avoids the two
 ///     containers carrying divergent label sets. The service is authoritative: it rebuilds these labels from the
 ///     attach-key message on create and re-reads them on attach to validate that owner/node/profile/manifest match.

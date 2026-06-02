@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     One agent in a handoff orchestration, MAF-agnostic. Built by the resolver (Lane B) from a participant
-///     <c>AgentDefinition</c> projected through the same P3 contract the single-agent path uses: the
+///     One agent in a handoff orchestration, MAF-agnostic. Built by the resolver from a participant
+///     <c>AgentDefinition</c> projected through the same tool-offer contract the single-agent path uses: the
 ///     <see cref="Tools" /> list is the already-projected, capability-gated offer list rendered as bridged
 ///     <see cref="AITool" />s (ApiSide tools as real bridges, ClientLocal tools as name-only offer placeholders the
 ///     orchestration factory swaps for registry executables — Option A/B/C — before the agent runs). The factory

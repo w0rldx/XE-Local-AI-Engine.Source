@@ -4,9 +4,6 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 
-/// <summary>
-///     Represents host agent linux admin endpoints.
-/// </summary>
 public static class HostAgentLinuxAdminEndpoints
 {
     public static void UseLocalAdminRequestGuards(this WebApplication app)
@@ -145,7 +142,4 @@ public static class HostAgentLinuxAdminEndpoints
     }
 }
 
-/// <summary>
-///     Value object carrying host agent linux log tail data.
-/// </summary>
 public sealed record HostAgentLinuxLogTail(IReadOnlyList<string> Lines);

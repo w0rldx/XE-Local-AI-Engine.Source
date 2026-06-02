@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.HostAgent;
 
-/// <summary>
-///     Configuration options for host agent startup gate behavior.
-/// </summary>
 public sealed record HostAgentStartupGateOptions
 {
     public const string SectionName = "HostAgent:StartupGate";

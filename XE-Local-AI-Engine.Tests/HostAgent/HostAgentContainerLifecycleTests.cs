@@ -552,7 +552,7 @@ public sealed class HostAgentContainerLifecycleTests
             yield break;
         }
 
-        // Sandbox operations (Marker J-local) are not exercised by these container-lifecycle tests.
+        // Sandbox runtime operations are not exercised by these container-lifecycle tests.
         public Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();

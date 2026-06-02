@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Application-layer orchestration over <see cref="IGoldenConversationStore" /> for the Playbook P4 golden set
-///     (manual authoring) plus the harvest follow-up's staging path (D3). Validates the supplied fields (non-blank
+///     Application-layer orchestration over <see cref="IGoldenConversationStore" /> for the golden set (manual
+///     authoring) plus harvested-candidate staging. Validates the supplied fields (non-blank
 ///     Title, existing owning agent, non-empty InputTurns, at least one of {Assertion, Rubric}) and delegates
 ///     persistence to the store. The manual create path pins <see cref="GoldenConversationSource.Manual" />; the
 ///     harvested create path pins <see cref="GoldenConversationSource.Harvested" /> and stages the case inert
@@ -36,14 +36,14 @@ public interface IGoldenConversationService
     ///     Promotes a staged harvested candidate into the active golden set: enables the case with <paramref name="id" />
     ///     only when it belongs to <paramref name="agentDefinitionId" />, is <see cref="GoldenConversationSource.Harvested" />
     ///     and currently disabled. Returns the updated record, or <c>null</c> when no such case exists (the endpoint maps
-    ///     <c>null</c> to 404) — the same ownership guard as the P1/P3 review paths.
+    ///     <c>null</c> to 404) — the same ownership guard as the manual-authoring and analysis-review paths.
     /// </summary>
     Task<GoldenConversationRecord?> ApproveHarvestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Removes the golden case with <paramref name="id" /> only when it belongs to <paramref name="agentDefinitionId" />
     ///     (the agent named on the route). Returns <c>true</c> when a row was deleted, <c>false</c> when no case has that
-    ///     id or it belongs to a different agent — the same ownership guard as the P1/P3 review paths.
+    ///     id or it belongs to a different agent — the same ownership guard as the manual-authoring and analysis-review paths.
     /// </summary>
     Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 }

@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>
-///     FastEndpoints handler for the get node chat conversation local API operation.
-/// </summary>
 public sealed class GetNodeChatConversationEndpoint(INodeChatPersistenceService chatPersistence)
     : Endpoint<GetNodeChatConversationRequest, NodeChatConversationResponse>
 {

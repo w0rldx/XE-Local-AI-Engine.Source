@@ -6,7 +6,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint integration tests for the Marker 3 scheduler management API.
+///     Endpoint integration tests for the scheduler management API.
 ///     Covers: 401 on every route without a bearer token; reachability with operator token;
 ///     validation→400 response on bad input; redaction (no raw parameters in job response;
 ///     no raw details/error_details in run response).

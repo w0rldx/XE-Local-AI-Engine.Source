@@ -111,9 +111,6 @@ public sealed class CreateNodeChatMessageRevisionEndpoint(
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the list node chat message revisions local API operation.
-/// </summary>
 public sealed class ListNodeChatMessageRevisionsEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<ListNodeChatMessageRevisionsRequest, NodeChatMessageRevisionsResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
@@ -228,9 +225,6 @@ public sealed class SetNodeChatSelectedPathEndpoint(
     }
 }
 
-/// <summary>
-///     FastEndpoints handler for the get node chat message feedback local API operation.
-/// </summary>
 public sealed class GetNodeChatMessageFeedbackEndpoint(INodeChatPersistenceService chatPersistence) : Endpoint<GetNodeChatMessageFeedbackRequest, NodeChatMessageFeedbackResponse>
 {
     private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));

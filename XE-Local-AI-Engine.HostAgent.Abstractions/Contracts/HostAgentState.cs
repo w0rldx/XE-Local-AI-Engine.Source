@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 
-/// <summary>
-///     Enumerates supported host agent state values.
-/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<HostAgentState>))]
 public enum HostAgentState
 {

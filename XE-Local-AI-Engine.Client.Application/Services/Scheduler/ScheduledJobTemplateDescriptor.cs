@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Controls how much detail the scheduler records per job run in <c>scheduled_job_run_events</c>. The
-///     management API (Marker 3) exposes this to the UI so operators can tune verbosity per template.
+///     management API exposes this to the UI so operators can tune verbosity per template.
 /// </summary>
 public enum HistoryDetailLevel
 {
@@ -20,7 +20,7 @@ public enum HistoryDetailLevel
 
 /// <summary>
 ///     Immutable descriptor that a <see cref="IScheduledJobHandler" /> publishes to describe its template.
-///     Consumed by <see cref="IScheduledJobTemplateRegistry" /> and surfaced to the management API (Marker 3)
+///     Consumed by <see cref="IScheduledJobTemplateRegistry" /> and surfaced to the management API
 ///     and the React template-picker UI.
 /// </summary>
 /// <param name="TemplateId">
@@ -38,8 +38,8 @@ public enum HistoryDetailLevel
 ///     <see langword="null" /> when there are no defaults.
 /// </param>
 /// <param name="SupportedScheduleKinds">
-///     One or more <see cref="ScheduleKind" /> values that this template supports. The management API
-///     (Marker 3) filters the schedule-kind picker to this list.
+///     One or more <see cref="ScheduleKind" /> values that this template supports. The management API filters the
+///     schedule-kind picker to this list.
 /// </param>
 /// <param name="DefaultScheduleKind">
 ///     The pre-selected schedule kind when creating a new job definition from this template.
@@ -54,7 +54,7 @@ public enum HistoryDetailLevel
 ///     node-level <c>SchedulerOptions.DefaultMaxRuntimeMinutes</c>.
 /// </param>
 /// <param name="AllowManualTrigger">
-///     Whether operators may fire this template manually from the management UI (Marker 3).
+///     Whether operators may fire this template manually from the management UI.
 /// </param>
 /// <param name="AllowAgentCreation">
 ///     Whether the AI agent is permitted to create new job definitions from this template.

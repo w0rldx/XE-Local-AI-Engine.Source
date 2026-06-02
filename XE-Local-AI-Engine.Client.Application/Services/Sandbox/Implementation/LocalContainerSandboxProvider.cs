@@ -20,10 +20,10 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 /// <summary>
 ///     The local-container sandbox <see cref="ISandboxRuntimeProvider" />: a thin gRPC client to HostAgent's
 ///     <c>SandboxControl</c> service over the same Unix socket and HMAC scheme the lifecycle client uses (AgentHome
-///     plan §5.2). It owns no Docker — the privileged container work runs in HostAgent.Linux. The provider only
+///     copy policy. It owns no Docker — the privileged container work runs in HostAgent.Linux. The provider only
 ///     translates the provider-neutral SPI DTOs to/from the proto messages, attaches per-call HMAC metadata, and (in
 ///     <see cref="CopyIntoAsync" />) reads the host file under the no-follow / byte-recheck guards that the fake could
-///     not model. Copy carries bytes, never host paths (D3), so HostAgent never touches a
+///     not model. Copy carries bytes, never host paths, so HostAgent never touches a
 ///     selected folder.
 /// </summary>
 public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDisposable
@@ -40,7 +40,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     private const string CancelCommandMethodName = "/xe.hostagent.v1.SandboxControl/CancelCommand";
     private const string KillSandboxMethodName = "/xe.hostagent.v1.SandboxControl/KillSandbox";
 
-    // Whole-file copy-into (D4) plus protocol headroom: the channel must accept a message larger than the per-file cap.
+    // Whole-file copy-into plus protocol headroom: the channel must accept a message larger than the per-file cap.
     private const int CopyMessageHeadroomBytes = 4 * 1024 * 1024;
 
     // The default copy-into file mode (rw-r--r--); HostAgent reapplies the non-root sandbox owner on extract.
@@ -73,7 +73,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
             ConnectCallback = async (_, cancellationToken) => await ConnectAsync(endPoint, cancellationToken).ConfigureAwait(false)
         };
 
-        // A whole-file copy-into message (D4) can approach the per-file cap, so the channel limits must clear it plus
+        // A whole-file copy-into message can approach the per-file cap, so the channel limits must clear it plus
         // protocol framing headroom; the same ceiling bounds copy-out / read-file replies.
         var maxMessageSize = checked((int)Math.Min(_options.MaxCopyFileBytes + CopyMessageHeadroomBytes, int.MaxValue));
         _channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
@@ -201,8 +201,8 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         var content = ReadHostFileUnderGuard(request.SourcePath);
         if (content is null)
         {
-            // Blocked on re-read (§7.1.2): the file is over the per-file cap or grew after the pass-1 sizing. Skip and
-            // log — never copy a truncated or over-budget file (D4).
+            // Blocked on re-read: the file is over the per-file cap or grew after the pass-1 sizing. Skip and
+            // log — never copy a truncated or over-budget file.
             _logger.LogWarning(
                 "Copy-into skipped: a selected file exceeded the {Cap}-byte per-file cap or grew after sizing on re-read.",
                 _options.MaxCopyFileBytes);
@@ -343,7 +343,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
                 read += chunk;
             }
 
-            // Growth-after-sizing check (§7.1.2): the buffer was sized from the pass-1 length. If even one byte remains
+            // Growth-after-sizing check: the buffer was sized from the pass-1 length. If even one byte remains
             // past it, the file grew between the length read and the copy. Block (return null) rather than silently
             // truncate to the stale size — parity with the over-cap branch. A single probe byte is enough to detect it.
             Span<byte> probe = stackalloc byte[1];
@@ -359,7 +359,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     /// <summary>
     ///     Opens the host file refusing a symlink at the final component. On Linux this is an atomic <c>open(2)</c> with
     ///     <c>O_NOFOLLOW</c> (the kernel fails with <c>ELOOP</c> if the leaf is a symlink), which closes the
-    ///     check-then-open race a managed <c>lstat</c> + open would leave. On a non-Linux host the J-local provider is
+    ///     check-then-open race a managed <c>lstat</c> + open would leave. On a non-Linux host this provider is
     ///     not the target runtime, so it falls back to a plain open and relies on the canonicalized pass-1 ancestor walk
     ///     plus the byte re-check. Throws <see cref="AgentHomeRequestRejectedException" /> when the leaf is a symlink or
     ///     the open otherwise fails — a swap-after-walk attack signal.

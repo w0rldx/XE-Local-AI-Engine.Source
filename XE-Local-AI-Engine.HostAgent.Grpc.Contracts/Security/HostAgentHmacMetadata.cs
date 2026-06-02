@@ -6,9 +6,6 @@ using System.Text;
 using global::Grpc.Core;
 using Google.Protobuf;
 
-/// <summary>
-///     Shared contract for host agent hmac metadata.
-/// </summary>
 public static class HostAgentHmacMetadata
 {
     public const string RequestIdHeader = "x-request-id";

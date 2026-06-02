@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Default <see cref="IPlaybookEvalService" /> (Playbook P4 eval gate). Re-runs the real agent loop over the
+///     Default <see cref="IPlaybookEvalService" />. Re-runs the real agent loop over the
 ///     agent's golden conversation set with the candidate prompt (baseline + the Suggested action) vs the current
 ///     baseline, scores each case (assertion or node-local judge), and persists a plaintext
 ///     <see cref="PlaybookEvalResult" /> on the action so the promote gate can decide. Resolves ONE node-local

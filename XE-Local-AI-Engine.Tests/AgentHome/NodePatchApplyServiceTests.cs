@@ -14,8 +14,8 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker L host patch apply coverage (AgentHome plan §9.2). Uses REAL host <c>git</c> (no Docker, no Ollama) to
-///     generate true Marker-G-shaped patches (rooted at a temp <c>selected/&lt;alias&gt;/</c> repo, G's exact diff
+///     Host patch apply coverage. Uses REAL host <c>git</c> (no Docker, no Ollama) to
+///     generate patch-export-shaped patches (rooted at a temp <c>selected/&lt;alias&gt;/</c> repo, with the exact diff
 ///     flags) and applies them through <see cref="NodePatchApplyService" /> to temp host folders mapped by a fake
 ///     <see cref="ISelectedFolderResolver" />. Proves the traversal/alias guards, binary-reject default, the gate on
 ///     <c>changes.patch</c> presence (never <c>changed-files.json</c>), folder-relative logging, and host-path redaction.
@@ -446,7 +446,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     public async Task PreviewAndApply_WithTraversingModeOnlyBlock_RejectsWithoutTouchingHost()
     {
         // FIX N-1: a synthetic mode-only block (no unified-diff body lines) whose header path contains ".."
-        // must be rejected by our own guard before git ever runs. The block is hand-crafted because G's
+        // must be rejected by our own guard before git ever runs. The block is hand-crafted because the patch-export
         // baseline uses core.filemode false so real git never emits mode-change blocks.
         var harness = NewHarness();
         harness.AddFolder("repo-01");
@@ -491,7 +491,6 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "a clean mode-only block must not be rejected for path-guard reasons");
     }
 
-    // ---------- harness ----------
 
     private TestHarness NewHarness(bool allowBinary = false)
     {
@@ -522,12 +521,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         return new TestHarness(service, resolver, agentHomeRoot, () => NewTempDir());
     }
 
-    // ---------- real-git patch generation (G's exact flags) ----------
 
     /// <summary>
-    ///     Generates a Marker-G-shaped patch for a single alias by building a temp <c>selected/&lt;alias&gt;/</c> repo
+    ///     Generates a patch-export-shaped patch for a single alias by building a temp <c>selected/&lt;alias&gt;/</c> repo
     ///     seeded with each file's BEFORE content, committing the baseline, applying each AFTER edit (null = delete),
-    ///     then running G's exact diff. The same BEFORE content is also seeded into <paramref name="hostRoot" /> so the
+    ///     then running the patch-export exact diff. The same BEFORE content is also seeded into <paramref name="hostRoot" /> so the
     ///     patch applies cleanly on the host.
     /// </summary>
     private async Task<string> GenerateGPatchAsync(string alias, string hostRoot, params (string Relative, string Before, string? After)[] files)

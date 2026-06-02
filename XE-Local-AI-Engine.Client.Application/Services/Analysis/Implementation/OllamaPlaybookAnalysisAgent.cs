@@ -74,7 +74,7 @@ internal sealed class OllamaPlaybookAnalysisAgent(
     private static object ToPromptModel(FeedbackInsightsResult aggregate)
     {
         // Hand the model only what it needs to reason + cite: the counts, the per-tool facet, and each exemplar with
-        // its id (already capped/truncated by the P2 service — no raw store read here).
+        // its id (already capped/truncated by the feedback-insights service — no raw store read here).
         return new
         {
             aggregate.AgentName,

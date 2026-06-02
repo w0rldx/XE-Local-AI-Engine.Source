@@ -7,10 +7,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
-/// <summary>
-///     FastEndpoints handler for clearing the operator override of a local model's classification, reverting the
-///     effective kind to the detected one.
-/// </summary>
 public sealed class DeleteModelKindEndpoint(
     IModelClassificationService classificationService,
     ModelNameValidator modelNameValidator) : Endpoint<ResetModelKindRequest, ModelKindResponse>

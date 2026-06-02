@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     Application-layer orchestration over <see cref="IPlaybookActionStore" />: validates the supplied fields and
 ///     delegates persistence. The store owns id/version/timestamp stamping and the config-affecting version-bump rule;
 ///     this service never re-implements versioning. Validation rejects a blank Behavior, an unknown owning agent, and
-///     the lifecycle/provenance states reserved for later phases (P1 accepts only <c>Enabled</c>/<c>Disabled</c> and
-///     forces <c>Source = Manual</c>).
+///     the lifecycle/provenance states reserved for analysis review (manual authoring accepts only
+///     <c>Enabled</c>/<c>Disabled</c> and forces <c>Source = Manual</c>).
 /// </summary>
 public interface IPlaybookActionService
 {
@@ -36,8 +36,8 @@ public interface IPlaybookActionService
     Task<IReadOnlyList<PlaybookActionRecord>> ListByAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Playbook P3 analysis write path (separate from the manual <see cref="CreateAsync" /> so the manual route stays
-    ///     pinned to <c>Manual</c>/<c>Enabled</c>/<c>Disabled</c>). Persists a new action in state <c>Suggested</c> /
+    ///     Analysis-staging write path, separate from the manual <see cref="CreateAsync" /> route that stays pinned to
+    ///     <c>Manual</c>/<c>Enabled</c>/<c>Disabled</c>. Persists a new action in state <c>Suggested</c> /
     ///     source <c>Analysis</c> with its evidence (<c>SourceFeedbackIds</c>) and <c>Confidence</c>. Validates a
     ///     non-blank Behavior, an existing owning agent, non-empty evidence, and a confidence in [0,1]. A
     ///     <c>Suggested</c> action is inert by construction — the resolver injects only <c>Enabled</c> actions.
@@ -46,18 +46,18 @@ public interface IPlaybookActionService
 
     /// <summary>
     ///     Promotes a <c>Suggested</c>/<c>Analysis</c> action owned by <paramref name="agentDefinitionId" /> to
-    ///     <c>Enabled</c> (human review — staging ≠ active), gated by the Playbook P4 eval result. Returns a
+    ///     <c>Enabled</c> (human review — staging ≠ active), gated by the golden conversation eval result. Returns a
     ///     <see cref="PlaybookPromotionResult" /> whose <see cref="PlaybookPromotionResult.Status" /> is
     ///     <c>NotFound</c> when the action is missing/cross-agent/not a pending suggestion, <c>EvalRequired</c> when no
     ///     eval has run since authoring/edit, <c>EvalStale</c> when the recorded eval is for an older content snapshot,
-    ///     <c>EvalRegressed</c> when the latest eval failed, <c>CapReached</c> when the agent is already at the Enabled-action
-    ///     cap (Playbook P5, plan §5 — checked after the eval gate, no store write), and <c>Promoted</c> (with the updated
-    ///     record) only when the latest eval passed, is current, and the cap is not reached.
+    ///     <c>EvalRegressed</c> when the latest eval failed, <c>CapReached</c> when the agent is already at the
+    ///     enabled-action cap, and <c>Promoted</c> (with the updated record) only when the latest eval passed, is
+    ///     current, and the cap is not reached.
     /// </summary>
     Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Records the Playbook P4 eval result JSON on the pending <c>Suggested</c>/<c>Analysis</c> action owned by
+    ///     Records the golden conversation eval result JSON on the pending <c>Suggested</c>/<c>Analysis</c> action owned by
     ///     <paramref name="agentDefinitionId" />. The action stays <c>Suggested</c>/<c>Analysis</c> with all injected
     ///     fields (Behavior/Priority/State) unchanged, so recording an eval never bumps <c>Version</c> (the store
     ///     excludes <c>EvalResult</c> from its config-affecting rule). Same ownership/state guard and <c>null</c>
@@ -68,7 +68,7 @@ public interface IPlaybookActionService
     /// <summary>
     ///     Loads the pending suggestion owned by <paramref name="agentDefinitionId" /> after the same ownership +
     ///     <c>Suggested</c> + <c>Analysis</c> guard the review paths apply, or <c>null</c> when no such pending
-    ///     suggestion exists. Exposed so the eval gate can load the candidate snapshot without re-implementing the guard.
+    ///     suggestion exists. Exposed so evaluation can load the candidate snapshot without re-implementing the guard.
     /// </summary>
     Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
@@ -98,8 +98,8 @@ public enum PlaybookPromotionStatus
     EvalStale,
 
     /// <summary>
-    ///     The agent is already at <c>MaxEnabledActions</c> (Playbook P5 hard cap, plan §5). The promote is blocked with no
-    ///     store write; the operator must archive/disable an Enabled action before promoting another. Maps to 409.
+    ///     The agent is already at <c>MaxEnabledActions</c>. The promote is blocked with no store write; the operator
+    ///     must archive/disable an Enabled action before promoting another. Maps to 409.
     /// </summary>
     CapReached
 }
@@ -111,7 +111,7 @@ public enum PlaybookPromotionStatus
 /// </summary>
 public sealed record PlaybookPromotionResult(PlaybookPromotionStatus Status, PlaybookActionRecord? Record);
 
-/// <summary>Input for the P3 analysis write path — provenance + confidence are required; state/source are pinned by the service.</summary>
+/// <summary>Input for the analysis-staging write path — provenance + confidence are required; state/source are pinned by the service.</summary>
 public sealed record PlaybookAnalysisSuggestionInput(
     Guid AgentDefinitionId,
     string Behavior,

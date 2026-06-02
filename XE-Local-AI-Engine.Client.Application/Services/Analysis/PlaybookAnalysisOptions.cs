@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Analysis;
 
 /// <summary>
-///     Options for the Playbook P3 analysis agent. <see cref="ModelName" /> names the node-local model used to read
+///     Options for the analysis staging analysis agent. <see cref="ModelName" /> names the node-local model used to read
 ///     feedback (defaulted in composition to the node's configured chat model, so analysis never silently picks a
 ///     cloud model); <see cref="MaxProposals" /> caps how many actions a single run may propose.
 /// </summary>

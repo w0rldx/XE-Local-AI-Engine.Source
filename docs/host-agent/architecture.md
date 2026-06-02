@@ -45,6 +45,18 @@ The bootstrap model (`qwen3:0.6b` by default) is pulled before the Node Web Serv
 ## External references used
 
 - Avalonia desktop/tray docs: classic desktop lifetime and `TrayIcon`/`NativeMenu` patterns.
-- Microsoft WSL docs: `wsl --install`, `wsl --import`, and command execution semantics.
-- systemd user-unit docs: `systemctl --user` and per-user units.
-- Docker rootless docs: rootless daemon under a user namespace and `XDG_RUNTIME_DIR` socket behavior.
+  - <https://docs.avaloniaui.net/docs/fundamentals/application-lifetimes>
+  - <https://docs.avaloniaui.net/controls/navigation/trayicon>
+  - <https://docs.avaloniaui.net/controls/menus/nativemenu>
+- Microsoft WSL docs: `wsl --install`, `wsl --import`, command execution, and termination semantics.
+  - <https://learn.microsoft.com/en-us/windows/wsl/install>
+  - <https://learn.microsoft.com/en-us/windows/wsl/basic-commands>
+- systemd user-unit docs: `systemctl --user`, user managers, and per-user unit locations.
+  - <https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html>
+  - <https://www.freedesktop.org/software/systemd/man/user%40.service.html>
+- Docker rootless docs: rootless daemon under a user namespace and `$XDG_RUNTIME_DIR` socket behavior.
+  - <https://docs.docker.com/engine/security/rootless/>
+  - <https://docs.docker.com/engine/security/rootless/tips/>
+- freedesktop desktop-entry and autostart specs: desktop launchers are expected, while XDG Autostart entries remain out of scope for this lifecycle contract.
+  - <https://specifications.freedesktop.org/desktop-entry/latest-single/>
+  - <https://www.freedesktop.org/wiki/Specifications/autostart-spec/>

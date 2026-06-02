@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///     fire. Guards every fire — missing / disabled / soft-deleted definition, or a template with no registered handler —
 ///     by logging a sanitized skip and returning <em>without</em> writing a run row; raw parameters are never logged.
 ///     <para>
-///         <b>Marker 4 — run history.</b> Once a fire passes the guards it is recorded: an idempotent
+///         <b>Run history.</b> Once a fire passes the guards it is recorded: an idempotent
 ///         <see cref="IScheduledJobRunStore.UpsertByFireInstanceAsync" /> (keyed on the Quartz fire-instance id) opens a
 ///         <see cref="ScheduledRunStatus.Running" /> row, the handler runs with a live progress callback that appends
 ///         <see cref="ScheduledRunEventLevel.Progress" /> events, and a terminal lifecycle update records the outcome:
@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 ///         because the run is ending precisely <em>because</em> its own token was cancelled.
 ///     </para>
 ///     <para>
-///         <b>Marker 5 — realtime.</b> Each lifecycle transition (started / progress / completed / failed / cancelled)
+///         <b>Realtime events.</b> Each lifecycle transition (started / progress / completed / failed / cancelled)
 ///         is published through <see cref="ISchedulerEventPublisher" /> as a sanitized DTO. Publishing is best-effort:
 ///         failures are logged and swallowed so a broken notification never corrupts run handling or masks a cancellation.
 ///     </para>

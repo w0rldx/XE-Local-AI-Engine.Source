@@ -5,7 +5,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-///     Raw-SQL cohort monitor over the node-local chat database (Playbook P5). Mirrors
+///     Raw-SQL cohort monitor over the node-local chat database. Mirrors
 ///     <see cref="FeedbackInsightsStore" />: parameterized ADO over the scoped <see cref="NodeChatDbContext" />
 ///     connection rather than EF entity materialization, because the aggregate touches only plaintext columns and
 ///     spans every conversation for the agent — the per-conversation write key on the persistence writer is irrelevant

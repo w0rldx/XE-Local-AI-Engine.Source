@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 using FastEndpoints;
 using FluentValidation;
 
-/// <summary>
-///     Startup/options validator for node setup request settings.
-/// </summary>
 public sealed class NodeSetupRequestValidator : Validator<NodeSetupRequest>
 {
     public NodeSetupRequestValidator()
@@ -22,9 +19,6 @@ public sealed class NodeSetupRequestValidator : Validator<NodeSetupRequest>
     }
 }
 
-/// <summary>
-///     Startup/options validator for node login request settings.
-/// </summary>
 public sealed class NodeLoginRequestValidator : Validator<NodeLoginRequest>
 {
     public NodeLoginRequestValidator()
@@ -40,9 +34,6 @@ public sealed class NodeLoginRequestValidator : Validator<NodeLoginRequest>
     }
 }
 
-/// <summary>
-///     Startup/options validator for node change password request settings.
-/// </summary>
 public sealed class NodeChangePasswordRequestValidator : Validator<NodeChangePasswordRequest>
 {
     public NodeChangePasswordRequestValidator()

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Default <see cref="IScheduledJobManagementService" />. Validates the requested schedule, persists the definition
-///     through the M1 stores first, then reconciles the live Quartz job/trigger to match the stored state
+///     through the scheduled-job stores first, then reconciles the live Quartz job/trigger to match the stored state
 ///     (delete-and-recreate is the simplest correct path for an update). All logging is sanitized — definition ids,
 ///     template ids, schedule kinds, and enabled state are safe to log; raw parameters and run details are never logged.
 /// </summary>

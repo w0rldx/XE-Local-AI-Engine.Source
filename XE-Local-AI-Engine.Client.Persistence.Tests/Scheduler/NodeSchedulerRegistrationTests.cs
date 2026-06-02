@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 /// <summary>
 ///     Integration tests for <see cref="NodeSchedulerServiceCollectionExtensions.AddNodeScheduler" />.
 ///     Verifies DI resolution and Quartz startup against a fully-migrated temporary SQLite database
-///     (QRTZ_ tables present via the Marker 1 migration).
+///     (QRTZ_ tables present via the scheduler migration).
 /// </summary>
 public sealed class NodeSchedulerRegistrationTests : IDisposable
 {

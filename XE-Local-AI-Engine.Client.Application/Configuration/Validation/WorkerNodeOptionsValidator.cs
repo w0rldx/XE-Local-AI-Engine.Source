@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Startup/options validator for worker node options settings.
-/// </summary>
 public sealed class WorkerNodeOptionsValidator : IValidateOptions<WorkerNodeOptions>
 {
     public ValidateOptionsResult Validate(string? name, WorkerNodeOptions options)

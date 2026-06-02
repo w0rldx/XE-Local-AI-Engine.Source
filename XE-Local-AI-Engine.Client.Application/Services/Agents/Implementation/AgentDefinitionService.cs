@@ -110,7 +110,7 @@ internal sealed class AgentDefinitionService(
     }
 
     /// <summary>
-    ///     Validates the loop-P5 orchestration topology at authoring time. A <c>Kind=Orchestrator</c> definition must
+    ///     Validates the orchestration topology at authoring time. A <c>Kind=Orchestrator</c> definition must
     ///     carry a parseable v1 topology naming at least the triage plus one specialist, with the triage and every
     ///     handoff endpoint drawn from the participant set; a participant id that no longer exists is a warning (the
     ///     runtime resolver degrades), never a hard failure (mirrors the no-FK tolerance + the unknown-tool warning). A

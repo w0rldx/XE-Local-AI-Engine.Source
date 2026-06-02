@@ -1,16 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     run logger run-scoped logger. Appends structured JSONL records to the host-side
+///     Run-scoped logger for AgentHome execution artifacts. Appends structured JSONL records to the host-side
 ///     <c>runs/&lt;run-id&gt;/logs/</c> directory (the host-side root, NOT the in-sandbox
-///     <c>/agent-home</c> — see AgentHome plan two-roots split). Every record is correlated with the
+///     <c>/agent-home</c> — see the two-root host/sandbox split). Every record is correlated with the
 ///     run-id, NodeId, and OwnerUserId. Raw host paths and secrets are NEVER written; argument summaries
-///     are caller-supplied model-safe objects (run-relative paths only, §11).
+///     are caller-supplied model-safe objects (run-relative paths only).
 /// </summary>
 /// <remarks>
-///     OTel meters/counters and the list-runs endpoint are explicitly deferred (see run logger item 6/8).
-///     Tool-correlation hooks (item 3/4) are wired by the run gateway (AgentHome gateway); this service owns only the
-///     file-write primitives and the redaction contract so the run gateway can inject it without modifying this type.
+///     Telemetry and list-runs projections are separate AgentHome surfaces. Tool-correlation hooks are wired by the
+///     AgentHome gateway; this service owns only the file-write primitives and the redaction contract so the gateway can
+///     inject it without modifying this type.
 /// </remarks>
 internal interface IAgentHomeRunLogger
 {
@@ -34,7 +34,7 @@ internal interface IAgentHomeRunLogger
 
     /// <summary>
     ///     Appends a tool-call lifecycle record to <c>tool-calls.jsonl</c>. The argument summary
-    ///     is a caller-supplied model-safe object; secrets and host paths are never written (§11).
+    ///     is a caller-supplied model-safe object; secrets and host paths are never written.
     /// </summary>
     Task AppendToolCallAsync(AgentHomeToolCallLogRecord record, CancellationToken cancellationToken = default);
 }
@@ -94,7 +94,7 @@ internal sealed record AgentHomeCommandLogRecord
 
 /// <summary>
 ///     Record appended to <c>tool-calls.jsonl</c> for each tool-call lifecycle event.
-///     Shape matches the draft in AgentHome plan § run logger.
+///     Carries one model-safe AgentHome run-log entry.
 /// </summary>
 internal sealed record AgentHomeToolCallLogRecord
 {
@@ -118,7 +118,7 @@ internal sealed record AgentHomeToolCallLogRecord
 
     /// <summary>
     ///     Caller-supplied model-safe argument summary. Host paths and secrets are redacted by the caller
-    ///     before this object is constructed (§11). May be <see langword="null" /> when not applicable.
+    ///     before this object is constructed. May be <see langword="null" /> when not applicable.
     /// </summary>
     public object? ArgumentSummary { get; init; }
 

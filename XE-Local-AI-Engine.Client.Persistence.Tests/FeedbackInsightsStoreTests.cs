@@ -35,14 +35,14 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         var agentB = await SeedAgentAsync(context, "Agent B");
         var connection = await OpenConnectionAsync(context);
 
-        // Agent A: one active conversation, one archived (still counted), one purged (excluded).
+        // Primary agent: one active conversation, one archived (still counted), one purged (excluded).
         var cA1 = Guid.NewGuid();
         var cA2 = Guid.NewGuid();
         var cAPurged = Guid.NewGuid();
         await InsertConversationAsync(connection, cA1, agentA, purged: false, archived: false);
         await InsertConversationAsync(connection, cA2, agentA, purged: false, archived: true);
         await InsertConversationAsync(connection, cAPurged, agentA, purged: true, archived: false);
-        // Agent B + an unbound conversation: their feedback must NOT leak into Agent A's aggregate.
+        // Other-agent and unbound conversations: their feedback must not leak into the primary agent's aggregate.
         var cB = Guid.NewGuid();
         var cUnbound = Guid.NewGuid();
         await InsertConversationAsync(connection, cB, agentB, purged: false, archived: false);
@@ -74,7 +74,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         var aggregate = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentA, exemplarCap: 5), "Existing agent should aggregate.");
 
         AssertEx.Equal("Agent A", aggregate.AgentName);
-        // Only Agent A's non-purged feedback: cA1 (1 up, 2 down) + cA2 (1 up). Purged/other-agent/unbound excluded.
+        // Only the primary agent's non-purged feedback is counted: cA1 (1 up, 2 down) + cA2 (1 up). Purged/other-agent/unbound excluded.
         AssertEx.Equal(2, aggregate.UpCount);
         AssertEx.Equal(2, aggregate.DownCount);
 

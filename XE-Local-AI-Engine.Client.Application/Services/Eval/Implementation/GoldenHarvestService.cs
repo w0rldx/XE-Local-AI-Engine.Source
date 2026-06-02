@@ -9,10 +9,10 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents;
 
 /// <summary>
-///     Default <see cref="IGoldenHarvestService" /> (deterministic, no model — D1). Reads an agent's most-recent
+///     Default <see cref="IGoldenHarvestService" /> (deterministic, no model). Reads an agent's most-recent
 ///     thumbs-up sources via <see cref="IGoldenHarvestSourceStore" />, dedups against already-harvested source messages,
 ///     and stages each fresh candidate inert through <see cref="IGoldenConversationService.CreateHarvestedAsync" /> (so
-///     the same validation/caps/encryption apply). The seeded rubric is the operator-approved answer (D2); the input
+///     the same validation/caps/encryption apply). The seeded rubric is the operator-approved answer (judge path); the input
 ///     turns are the lead-up conversation serialized as camelCase {role,text} to match the eval runner's parse. No turn
 ///     or answer text is ever logged — only counts and ids.
 /// </summary>
@@ -24,7 +24,7 @@ internal sealed class GoldenHarvestService(
     IOptions<GoldenHarvestOptions> options,
     ILogger<GoldenHarvestService> logger) : IGoldenHarvestService
 {
-    // Title prefix marking a harvested candidate + the rubric seed template (D2: the approved answer is the scoring
+    // Title prefix marking a harvested candidate + the rubric seed template (judge path: the approved answer is the scoring
     // signal). The title cap mirrors GoldenConversationService.MaxTitleLength; the rubric cap mirrors MaxRubricLength.
     private const string TitlePrefix = "Harvested: ";
     private const string RubricSeed = "The response should be consistent with this operator-approved answer:\n\n";
@@ -61,7 +61,7 @@ internal sealed class GoldenHarvestService(
         {
             if (existing.Contains(source.MessageId))
             {
-                // Already harvested (D5): re-running harvest never double-proposes the same thumbs-up.
+                // Already harvested: re-running harvest never double-proposes the same thumbs-up.
                 duplicate++;
                 continue;
             }
@@ -69,7 +69,7 @@ internal sealed class GoldenHarvestService(
             var firstUserTurn = source.PriorTurns.FirstOrDefault(turn => string.Equals(turn.Role, "user", StringComparison.OrdinalIgnoreCase));
             if (firstUserTurn is null)
             {
-                // No lead-up user turn (D6): the thumbs-up is unusable as an input conversation, so skip it.
+                // No lead-up user turn: the thumbs-up is unusable as an input conversation, so skip it.
                 skipped++;
                 continue;
             }

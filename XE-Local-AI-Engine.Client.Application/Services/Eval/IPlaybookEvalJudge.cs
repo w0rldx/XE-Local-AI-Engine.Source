@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Scores a single candidate/baseline agent output against one golden case (Playbook P4, D2 hybrid scoring). The
+///     Scores a single candidate/baseline agent output against one golden case (hybrid deterministic/model scoring). The
 ///     deterministic <em>assertion</em> path runs in plain code with no model call; the <em>judge</em> path uses the
 ///     case's rubric and the SUPPLIED node-local chat client (the service owns the per-run client and passes it in — the
 ///     judge never resolves a shared/cloud client). A case with neither an assertion nor a rubric is invalid and scores

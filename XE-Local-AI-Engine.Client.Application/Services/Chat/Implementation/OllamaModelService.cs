@@ -4,9 +4,6 @@ using System.Runtime.CompilerServices;
 using OllamaSharp;
 using OllamaSharp.Models;
 
-/// <summary>
-///     Application service for ollama model behavior.
-/// </summary>
 public sealed class OllamaModelService : IOllamaModelService, IDisposable
 {
     private readonly IOllamaApiClient _ollamaClient;

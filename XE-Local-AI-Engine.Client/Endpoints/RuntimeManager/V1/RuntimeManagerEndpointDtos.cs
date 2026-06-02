@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.RuntimeManager.V1;
 
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
-/// <summary>
-///     Response DTO for runtime manager status operations.
-/// </summary>
 public sealed class RuntimeManagerStatusResponse
 {
     public required HostAgentStatusDto Status { get; init; }
@@ -20,9 +17,6 @@ public sealed class RuntimeManagerStatusResponse
     public required RuntimeManifestResponse Manifest { get; init; }
 }
 
-/// <summary>
-///     Request DTO for runtime container action operations.
-/// </summary>
 public sealed class RuntimeContainerActionRequest
 {
     public string? ContainerName { get; init; }
@@ -32,9 +26,6 @@ public sealed class RuntimeContainerActionRequest
     public int? DrainTimeoutSeconds { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime container action operations.
-/// </summary>
 public sealed class RuntimeContainerActionResponse
 {
     public required string ContainerName { get; init; }
@@ -52,9 +43,6 @@ public sealed class RuntimeContainerActionResponse
     public required IReadOnlyList<string> Diagnostics { get; init; }
 }
 
-/// <summary>
-///     Request DTO for runtime logs operations.
-/// </summary>
 public sealed class RuntimeLogsRequest
 {
     public string? ContainerName { get; init; }
@@ -64,9 +52,6 @@ public sealed class RuntimeLogsRequest
     public bool Follow { get; init; } = true;
 }
 
-/// <summary>
-///     Response DTO for runtime log line operations.
-/// </summary>
 public sealed class RuntimeLogLineResponse
 {
     public required string ContainerName { get; init; }
@@ -78,9 +63,6 @@ public sealed class RuntimeLogLineResponse
     public required DateTimeOffset ObservedAt { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime model provider health operations.
-/// </summary>
 public sealed class RuntimeModelProviderHealthResponse
 {
     public required string ProviderName { get; init; }
@@ -92,9 +74,6 @@ public sealed class RuntimeModelProviderHealthResponse
     public required IReadOnlyList<string> Diagnostics { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime local model operations.
-/// </summary>
 public sealed class RuntimeLocalModelResponse
 {
     public required string ModelName { get; init; }
@@ -110,9 +89,6 @@ public sealed class RuntimeLocalModelResponse
     public int? MaxContextTokens { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime manifest operations.
-/// </summary>
 public sealed class RuntimeManifestResponse
 {
     public required bool Available { get; init; }
@@ -134,9 +110,6 @@ public sealed class RuntimeManifestResponse
     public required IReadOnlyList<string> Diagnostics { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime manifest container operations.
-/// </summary>
 public sealed class RuntimeManifestContainerResponse
 {
     public required string Name { get; init; }
@@ -150,9 +123,6 @@ public sealed class RuntimeManifestContainerResponse
     public required IReadOnlyList<RuntimeManifestVolumeResponse> Volumes { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime manifest environment operations.
-/// </summary>
 public sealed class RuntimeManifestEnvironmentResponse
 {
     public required string Name { get; init; }
@@ -160,9 +130,6 @@ public sealed class RuntimeManifestEnvironmentResponse
     public required string Value { get; init; }
 }
 
-/// <summary>
-///     Response DTO for runtime manifest volume operations.
-/// </summary>
 public sealed class RuntimeManifestVolumeResponse
 {
     public required string Source { get; init; }

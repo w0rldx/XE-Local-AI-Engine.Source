@@ -4,9 +4,6 @@ using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Configuration;
 
-/// <summary>
-///     Startup/options validator for save cloud settings request settings.
-/// </summary>
 public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSettingsRequest>
 {
     public SaveCloudSettingsRequestValidator()

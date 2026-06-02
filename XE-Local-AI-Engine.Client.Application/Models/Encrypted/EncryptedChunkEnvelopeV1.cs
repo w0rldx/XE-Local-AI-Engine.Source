@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models.Encrypted;
 
-/// <summary>
-///     Value object carrying encrypted chunk envelope v1 data.
-/// </summary>
 public sealed record EncryptedChunkEnvelopeV1
 {
     public const string ContentKind = "content";

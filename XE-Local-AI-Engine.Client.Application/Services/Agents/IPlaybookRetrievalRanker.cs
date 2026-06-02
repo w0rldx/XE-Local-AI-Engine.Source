@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
 ///     Selects the most relevant subset of already-Enabled playbook actions for a single send, given the incoming
-///     user-turn text. This is the Playbook P5 relevance-retrieval seam: the lexical implementation is a
+///     user-turn text. This is the relevance retrieval and cohort monitoring relevance-retrieval seam: the lexical implementation is a
 ///     deterministic, model-free default, and an embedding-backed ranker can drop in behind the same interface later.
 ///     The ranker never widens scope — it only filters and orders a caller-supplied candidate list of Enabled actions.
 /// </summary>

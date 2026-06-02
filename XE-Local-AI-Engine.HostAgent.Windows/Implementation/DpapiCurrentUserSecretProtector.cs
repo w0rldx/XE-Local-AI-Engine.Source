@@ -4,9 +4,6 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 
-/// <summary>
-///     Represents dpapi current user secret protector.
-/// </summary>
 public sealed class DpapiCurrentUserSecretProtector : IHostAgentSecretProtector
 {
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("XE-Local-AI-Engine.HostAgent.Windows.SecretStore.v1");

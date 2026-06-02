@@ -48,25 +48,16 @@ public sealed class UpdateMcpServerRequest
     public string? Url { get; init; }
 }
 
-/// <summary>
-///     Request DTO for get mcp server operations.
-/// </summary>
 public sealed class GetMcpServerRequest
 {
     public Guid McpServerId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for delete mcp server operations.
-/// </summary>
 public sealed class DeleteMcpServerRequest
 {
     public Guid McpServerId { get; init; }
 }
 
-/// <summary>
-///     Request DTO for get mcp server tools operations.
-/// </summary>
 public sealed class GetMcpServerToolsRequest
 {
     public Guid McpServerId { get; init; }
@@ -114,9 +105,6 @@ public sealed class McpServerResponse
     public required long UpdatedAtUtc { get; init; }
 }
 
-/// <summary>
-///     Response DTO for list mcp servers operations.
-/// </summary>
 public sealed class ListMcpServersResponse
 {
     public required IReadOnlyList<McpServerResponse> Items { get; init; }
@@ -137,9 +125,6 @@ public sealed class McpServerToolsResponse
     public required IReadOnlyList<McpDiscoveredToolResponse> Tools { get; init; }
 }
 
-/// <summary>
-///     Response DTO for mcp discovered tool operations.
-/// </summary>
 public sealed class McpDiscoveredToolResponse
 {
     public required string Name { get; init; }
@@ -159,9 +144,6 @@ public sealed class ToolCatalogResponse
     public required IReadOnlyList<ToolCatalogEntryResponse> Tools { get; init; }
 }
 
-/// <summary>
-///     Response DTO for tool catalog entry operations.
-/// </summary>
 public sealed class ToolCatalogEntryResponse
 {
     public required string Name { get; init; }

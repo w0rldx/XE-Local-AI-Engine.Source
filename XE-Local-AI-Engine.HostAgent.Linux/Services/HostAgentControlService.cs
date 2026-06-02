@@ -8,9 +8,6 @@ using XE_Local_AI_Engine.HostAgent.Linux.Lifecycle;
 using XE_Local_AI_Engine.HostAgent.Linux.Logs;
 using XE_Local_AI_Engine.HostAgent.Linux.Models;
 
-/// <summary>
-///     Application service for host agent control behavior.
-/// </summary>
 public sealed class HostAgentControlService : HostAgentControl.HostAgentControlBase
 {
     private readonly BootstrapModelReadinessService _bootstrapModelReadinessService;

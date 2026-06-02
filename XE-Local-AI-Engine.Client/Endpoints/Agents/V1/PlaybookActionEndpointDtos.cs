@@ -48,9 +48,6 @@ public sealed class UpdatePlaybookActionRequest
     public int Priority { get; init; }
 }
 
-/// <summary>
-///     Request DTO for delete playbook action operations.
-/// </summary>
 public sealed class DeletePlaybookActionRequest
 {
     public Guid AgentDefinitionId { get; init; }
@@ -86,14 +83,14 @@ public sealed class PlaybookActionResponse
 
     public required long UpdatedAtUtc { get; init; }
 
-    /// <summary>Playbook P3: provenance for an analysis-proposed action — the feedback ids that drove it. Null for manual actions.</summary>
+    /// <summary>Analysis-staging provenance for an analysis-proposed action — the feedback ids that drove it. Null for manual actions.</summary>
     public IReadOnlyList<Guid>? SourceFeedbackIds { get; init; }
 
-    /// <summary>Playbook P3: analysis-agent confidence in [0,1]. Null for manual actions.</summary>
+    /// <summary>Analysis-agent confidence in [0,1]. Null for manual actions.</summary>
     public double? Confidence { get; init; }
 
     /// <summary>
-    ///     Playbook P4: the latest eval-gate outcome (pass/fail + counts + per-case results). Null until an eval has run
+    ///     Latest golden-conversation eval outcome (pass/fail + counts + per-case results). Null until an eval has run
     ///     and after the action is edited (a stale pass is cleared). The promote gate enables the action only when this
     ///     is present, passed and current.
     /// </summary>
@@ -101,7 +98,7 @@ public sealed class PlaybookActionResponse
 }
 
 /// <summary>
-///     Wire projection of <c>PlaybookAction.EvalResult</c> (Playbook P4): ids + pass/fail flags + counts only (no
+///     Wire projection of <c>PlaybookAction.EvalResult</c>: ids + pass/fail flags + counts only (no
 ///     transcripts). Field names match the persisted camelCase JSON so the React Zod schema parses the same shape.
 /// </summary>
 public sealed record PlaybookEvalResultResponse(
@@ -117,7 +114,7 @@ public sealed record PlaybookEvalResultResponse(
     int ImprovedCaseCount,
     IReadOnlyList<PlaybookEvalCaseResultResponse> Cases);
 
-/// <summary>Per-case outcome inside a <see cref="PlaybookEvalResultResponse" /> (Playbook P4).</summary>
+/// <summary>Per-case outcome inside a <see cref="PlaybookEvalResultResponse" />.</summary>
 public sealed record PlaybookEvalCaseResultResponse(
     Guid GoldenCaseId,
     string ScoredBy,
@@ -126,21 +123,18 @@ public sealed record PlaybookEvalCaseResultResponse(
     bool Regressed);
 
 /// <summary>
-///     409 body when the eval gate blocks a promote (Playbook P4): <see cref="Status" /> is the
+///     409 body when golden-conversation evaluation blocks a promote: <see cref="Status" /> is the
 ///     <c>PlaybookPromotionStatus</c> enum name (<c>EvalRequired</c> / <c>EvalRegressed</c> / <c>EvalStale</c>),
 ///     <see cref="Reason" /> is a short human message the panel renders.
 /// </summary>
 public sealed record PlaybookPromotionConflictResponse(string Status, string Reason);
 
-/// <summary>
-///     Response DTO for list playbook actions operations.
-/// </summary>
 public sealed class ListPlaybookActionsResponse
 {
     public required IReadOnlyList<PlaybookActionResponse> Items { get; init; }
 }
 
-/// <summary>Route request for running analysis over one agent's feedback (Playbook P3). The agent id travels in the route.</summary>
+/// <summary>Route request for running analysis over one agent's feedback. The agent id travels in the route.</summary>
 public sealed class AnalyzePlaybookRequest
 {
     public Guid AgentDefinitionId { get; init; }
@@ -157,7 +151,7 @@ public sealed class SuggestedPlaybookActionRouteRequest
     public Guid ActionId { get; init; }
 }
 
-/// <summary>Edit request for a pending Suggested action (Playbook P3). It stays Suggested/Analysis and keeps its evidence.</summary>
+/// <summary>Edit request for a pending Suggested action. It stays Suggested/Analysis and keeps its evidence.</summary>
 public sealed class UpdateSuggestedPlaybookActionRequest
 {
     public Guid AgentDefinitionId { get; init; }

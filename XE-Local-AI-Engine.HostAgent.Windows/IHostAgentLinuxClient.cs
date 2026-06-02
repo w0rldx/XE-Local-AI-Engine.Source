@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 
 /// <summary>
-///     Client boundary for i host agent linux operations.
+///     Windows-side client boundary for Linux HostAgent lifecycle operations.
 /// </summary>
 public interface IHostAgentLinuxClient
 {

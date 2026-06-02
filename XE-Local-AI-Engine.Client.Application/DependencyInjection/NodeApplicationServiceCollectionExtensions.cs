@@ -75,7 +75,7 @@ using XE_Local_AI_Engine.Providers.Ollama;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
-///     Represents node application service collection extensions.
+///     Registers the node-local application services, persistence boundaries, model providers, and host-agent clients.
 /// </summary>
 public static class NodeApplicationServiceCollectionExtensions
 {
@@ -181,55 +181,42 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         builder.Services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         builder.Services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
-        // selected-folder selected-folder store plus the safe resolver. The store persists folders in node SQLite with the
-        // host path encrypted at rest by the node encryption interceptors. The resolver owns alias normalization, host
-        // path validation, and exposes only the opaque id and alias to the model. Registration stays reachable even
-        // when AgentHome is disabled; workspace copy (workspace copy) and the tool (AgentHome gateway) consume it.
+        // Selected-folder store plus safe resolver. The host path is encrypted at rest; the model-facing surface sees
+        // only opaque folder ids and aliases. Registration stays available while AgentHome is disabled because the
+        // workspace-copy and AgentHome gateway paths both depend on it.
         builder.Services.AddScoped<INodeSelectedFolderStore, NodeSelectedFolderStore>();
         builder.Services.AddScoped<ISelectedFolderResolver, SelectedFolderResolver>();
-        // Loop P3 agent-definition store. Persists node-local agent definitions with Instructions/Description
-        // encrypted at rest by the node encryption interceptors; the application-layer resolver/service (Lane 2/3)
-        // consumes it to project a bound definition into the existing runtime package envelope.
+        // Node-local agent definitions. Instructions and descriptions are encrypted at rest; the resolver/service
+        // projects a bound definition into runtime-package inputs.
         builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();
-        // Playbook P1 action store. Persists node-local playbook actions bound to an agent definition with the injected
-        // Behavior + the advisory TriggerCondition encrypted at rest by the node encryption interceptors; the resolver
-        // (Lane 2) folds enabled actions into the agent's system prompt, and the CRUD service (Lane 3) orchestrates
-        // authoring. Scoped to match the scoped, DbContext-backed store.
+        // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
+        // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
-        // Loop P4 MCP server registration store. Persists node-local MCP server registrations with the secret-bearing
-        // args/env/description columns encrypted at rest by the node encryption interceptors; the connection manager
-        // (Lane 2) reads only enabled rows, and the CRUD service (Lane 3) orchestrates registration. Scoped to match
-        // the scoped, DbContext-backed store.
+        // Node-local MCP registrations. Secret-bearing args/env/description columns are encrypted at rest; the
+        // connection manager reads enabled rows and the CRUD service owns registration changes.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
         // Model-type classification store. Persists the digest-keyed detection cache and the operator override, keyed by
         // model name (NOCASE). Unencrypted — model names/digests/capabilities/kinds are not secrets. The classification
         // service reads/writes through it to resolve the effective kind that filters the chat picker. Scoped to match
         // the scoped, DbContext-backed store.
         builder.Services.AddScoped<IModelClassificationStore, ModelClassificationStore>();
-        // Playbook P2 feedback-insights read store. Read-only aggregate over the node-local message_feedback rows
-        // (joined to conversations.agent_definition_id + tool_events) — pure analytics, touches only plaintext
-        // columns, writes nothing. Scoped to match the scoped, DbContext-backed store.
+        // Feedback-insights read store. Pure analytics over node-local feedback/tool-event rows; it reads only
+        // plaintext columns and writes nothing.
         builder.Services.AddScoped<IFeedbackInsightsStore, FeedbackInsightsStore>();
-        // Loop P3 application layer over the store: the resolver projects a conversation's bound definition into the
-        // loopback runtime-package inputs (consumed by the stream/regeneration paths), and the service validates +
-        // orchestrates CRUD for the management endpoints. Both are scoped to match the scoped, DbContext-backed store.
+        // Agent-definition application layer: the resolver projects a conversation's bound definition into loopback
+        // runtime-package inputs, and the service validates/orchestrates management CRUD.
         builder.Services.AddScoped<IAgentDefinitionResolver, AgentDefinitionResolver>();
-        // Loop P5 orchestration resolver: a sibling of IAgentDefinitionResolver that compiles a Kind=Orchestrator
-        // definition + its topology into the loopback orchestration spec (consumed by the stream/regeneration paths).
-        // Scoped to match the scoped, DbContext-backed store it reads participants from.
+        // Orchestration resolver: compiles an orchestrator definition and topology into the loopback orchestration spec.
         builder.Services.AddScoped<IOrchestrationResolver, OrchestrationResolver>();
         builder.Services.AddScoped<IAgentDefinitionService, AgentDefinitionService>();
-        // Playbook P1 application service: validates manual playbook authoring (Behavior required, owning agent must
-        // exist, P1-only Enabled/Disabled + Manual) and delegates persistence/versioning to the store. Scoped to match
-        // the scoped, DbContext-backed stores it composes. The resolver below folds the enabled actions into the prompt.
+        // Playbook action service: validates manual authoring, owns agent existence checks, and delegates
+        // persistence/versioning to the store. The resolver folds enabled actions into the prompt.
         builder.Services.AddScoped<IPlaybookActionService, PlaybookActionService>();
-        // Playbook P2 feedback-insights application service: shapes the raw store aggregate into the operator read
-        // model (derived down-rate, the never-act-on-n=1 threshold flag, privacy-capped/truncated exemplars).
-        // Read-only analytics; scoped to match the scoped, DbContext-backed store it reads.
+        // Feedback-insights service: shapes raw aggregates into the operator read model, including derived down-rate,
+        // single-sample guard flags, and privacy-capped exemplars.
         builder.Services.AddScoped<IFeedbackInsightsService, FeedbackInsightsService>();
-        // Playbook P3 analysis options: the node-local model used to read feedback comments. Defaults to the node's
-        // configured chat model when unset, so analysis never silently picks the cloud chat client (the comments stay
-        // on-node — §7 privacy).
+        // Analysis model options. Defaults to the node-local chat model so feedback comments are never sent to the
+        // cloud chat client by fallback.
         builder.Services.AddOptions<PlaybookAnalysisOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookAnalysisOptions.Section))
                .PostConfigure(analysisOptions =>
@@ -241,24 +228,18 @@ public static class NodeApplicationServiceCollectionExtensions
                                                    ?? string.Empty;
                    }
                });
-        // Playbook P3 analysis agent (the AI surface): proposes Suggested actions from the P2 aggregate using a
-        // node-local model only. Singleton — it holds no scoped state and resolves a fresh per-run chat client.
+        // Analysis agent: proposes suggested actions from feedback aggregates using a node-local model only. Singleton
+        // because it holds no scoped state and receives a fresh per-run chat client.
         builder.Services.AddSingleton<IPlaybookAnalysisAgent, OllamaPlaybookAnalysisAgent>();
-        // Playbook P3 analysis orchestration: reads the P2 aggregate, gates on the occurrence threshold, validates
-        // each proposal's evidence, dedupes, and writes Suggested actions for human review. Scoped to match the
-        // scoped services it composes.
+        // Analysis orchestration: gates on the occurrence threshold, validates proposal evidence, dedupes, and writes
+        // suggested actions for human review.
         builder.Services.AddScoped<IPlaybookAnalysisService, PlaybookAnalysisService>();
-        // Playbook P4 golden conversation store. Persists node-local golden cases bound to an agent definition with the
-        // InputTurns/Assertion/Rubric free text encrypted at rest by the node encryption interceptors; the eval runner
-        // reads enabled rows, and the CRUD service (below) orchestrates manual authoring. Scoped to match the scoped,
-        // DbContext-backed store.
+        // Golden conversation store. Free-text input turns, assertions, and rubrics are encrypted at rest; the eval
+        // runner reads enabled rows and the CRUD service owns manual authoring.
         builder.Services.AddScoped<IGoldenConversationStore, GoldenConversationStore>();
-        // Playbook P4 golden CRUD service: validates manual authoring (non-blank Title, existing owning agent, non-empty
-        // InputTurns, at least one of {Assertion, Rubric}) and ownership-guards delete. Scoped to match the scoped store.
+        // Golden conversation CRUD service: validates manual authoring and ownership-guards deletes.
         builder.Services.AddScoped<IGoldenConversationService, GoldenConversationService>();
-        // Playbook P4 eval options: the node-local model used to re-run the agent loop + score judge-path cases. Defaults
-        // to the node's configured chat model when unset, so the eval never silently picks the cloud chat client (golden
-        // text + agent output stay on-node — §9 privacy).
+        // Eval model options. Defaults to the node-local chat model so golden text and agent output stay on-node.
         builder.Services.AddOptions<PlaybookEvalOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookEvalOptions.Section))
                .PostConfigure(evalOptions =>
@@ -270,28 +251,26 @@ public static class NodeApplicationServiceCollectionExtensions
                                                ?? string.Empty;
                    }
                });
-        // Playbook P4 eval judge (the scoring surface): deterministic assertion path + node-local judge path. Singleton
-        // like the analysis agent — it holds no scoped state and receives the per-run node-local client as a parameter.
+        // Eval judge: deterministic assertion path plus node-local judge path. Singleton because it holds no scoped
+        // state and receives the per-run node-local client as a parameter.
         builder.Services.AddSingleton<IPlaybookEvalJudge, OllamaPlaybookEvalJudge>();
-        // Playbook P4 eval orchestration (the gate's evidence): re-runs the real agent loop over the golden set with the
-        // candidate vs baseline prompt, scores each case, and persists the plaintext EvalResult the promote gate reads.
-        // Scoped to match the scoped stores/services it composes. The .AI.Agent runner is registered in the agent runtime.
+        // Eval orchestration: re-runs the real agent loop over the golden set, scores candidate-vs-baseline output, and
+        // persists the plaintext EvalResult consumed by the promotion gate.
         builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
         // Golden harvest read boundary: reconstructs harvest candidates from an agent's thumbs-up assistant turns
         // (plaintext thumbs-up scan via parameterized raw ADO, decrypted turn content via NodeChatDbContext). Scoped to
         // match the scoped, DbContext-backed store.
         builder.Services.AddScoped<IGoldenHarvestSourceStore, GoldenHarvestSourceStore>();
         // Golden harvest options: server-side caps on candidates persisted per run and most-recent thumbs-up sources
-        // scanned. No model name — harvest invokes no LLM (deterministic, D1), so nothing is defaulted at composition.
+        // scanned. No model name — harvest is deterministic and invokes no LLM, so nothing is defaulted at composition.
         builder.Services.AddOptions<GoldenHarvestOptions>()
                .Bind(builder.Configuration.GetSection(GoldenHarvestOptions.Section));
-        // Golden harvest orchestration (deterministic, no model — D1): scans thumbs-up sources, dedups against already-
-        // harvested messages, and stages each fresh candidate inert via the golden CRUD service (same validation/caps/
-        // encryption). Scoped to match the scoped stores/service it composes.
+        // Golden harvest orchestration: deterministically scans thumbs-up sources, dedups against already-harvested
+        // messages, and stages each fresh candidate inert via the golden CRUD service (same validation/caps/encryption).
+        // Scoped to match the scoped stores/service it composes.
         builder.Services.AddScoped<IGoldenHarvestService, GoldenHarvestService>();
-        // Marker 1 scheduler persistence stores. Persist node-local job definitions, run history, and per-run events
-        // with ParameterJson/DetailsJson/DataJson encrypted at rest by the node encryption interceptors. Scoped to
-        // match the scoped, DbContext-backed stores that compose them. No Quartz NuGet package until Marker 2.
+        // Scheduler persistence stores. Job definitions, run history, and per-run event payloads are node-local, scoped
+        // to the DbContext, and encrypted at rest where the store exposes JSON payload fields.
         builder.Services.AddScoped<IScheduledJobDefinitionStore, ScheduledJobDefinitionStore>();
         builder.Services.AddScoped<IScheduledJobRunStore, ScheduledJobRunStore>();
         builder.Services.AddScoped<IScheduledJobRunEventStore, ScheduledJobRunEventStore>();
@@ -324,7 +303,7 @@ public static class NodeApplicationServiceCollectionExtensions
         // llmfit itself. Both are Scoped because they compose the Scoped, DbContext-backed stores / scheduler service.
         builder.Services.AddScoped<IModelFitQueryService, ModelFitQueryService>();
         builder.Services.AddScoped<IModelFitRefreshTrigger, ModelFitRefreshTrigger>();
-        // Playbook P5 relevance-retrieval ranker: the resolver/orchestration paths consult it only when an agent's
+        // Playbook relevance-retrieval ranker: the resolver/orchestration paths consult it only when an agent's
         // Enabled set exceeds the retrieval threshold and the send carries a non-blank query; below that the full static
         // prepend is used (byte-identical). The lexical ranker (deterministic, model-free, stateless) is registered
         // concretely as the fallback/disabled path; the embedding ranker is the IPlaybookRetrievalRanker — it resolves
@@ -355,8 +334,8 @@ public static class NodeApplicationServiceCollectionExtensions
                        retrievalOptions.EmbeddingCacheMaxEntries = 1;
                    }
                });
-        // Playbook P5 bounded-store options: the hard cap on Enabled actions per agent. PostConfigure floors the cap at
-        // 1 so a misconfigured non-positive value cannot wedge every promote/manual-enable.
+        // Bounded playbook-store options: floor the enabled-action cap at 1 so a misconfigured non-positive value cannot
+        // wedge every promote/manual-enable.
         builder.Services.AddOptions<PlaybookActionOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookActionOptions.Section))
                .PostConfigure(static actionOptions =>
@@ -366,13 +345,11 @@ public static class NodeApplicationServiceCollectionExtensions
                        actionOptions.MaxEnabledActions = 1;
                    }
                });
-        // Playbook P5 cohort-monitor read store: windowed feedback counts over the node-local message_feedback rows
-        // (joined to conversations.agent_definition_id + tool_events for the facet) — pure analytics, computed on read,
-        // writes nothing. Scoped to match the scoped, DbContext-backed store, like FeedbackInsightsStore.
+        // Cohort-monitor read store: windowed feedback counts over node-local message_feedback/tool-event rows. Pure
+        // analytics, computed on read, and writes nothing.
         builder.Services.AddScoped<IPlaybookMonitorStore, PlaybookMonitorStore>();
-        // Playbook P5 cohort-monitor application service: classifies each Enabled action's before/after down-rate against
-        // the epsilon + minimum-sample floor and flags Flat/Regressed for human review (never auto-disable). Invoked off
-        // the hot path by the monitor endpoint only. Scoped to match the scoped store it composes.
+        // Cohort-monitor service: classifies enabled actions against the epsilon/sample floor and flags flat/regressed
+        // actions for human review. It never auto-disables actions and runs only from the monitor endpoint.
         builder.Services.AddScoped<IPlaybookMonitorService, PlaybookMonitorService>();
         builder.Services.AddOptions<PlaybookMonitorOptions>()
                .Bind(builder.Configuration.GetSection(PlaybookMonitorOptions.Section))
@@ -402,18 +379,15 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddScoped<IModelClassificationService, ModelClassificationService>();
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
         builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
-        // Loop P4 MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the
-        // dynamic tool snapshot into the MCP tool registry that the offer provider reads, where that registry is wired
-        // in AddLocalAiAgentRuntime. The startup connector triggers an initial refresh off the hot path. Both are
-        // singletons because the manager holds long-lived connections, and the CRUD service refreshes after any
-        // change to the enabled set.
+        // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic
+        // tool snapshot into the registry consumed by offered-tool resolution. The startup connector triggers an
+        // initial refresh off the hot path; the manager stays singleton because it owns long-lived connections.
         builder.Services.AddOptions<McpOptions>()
                .Bind(configuration.GetSection(McpOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<McpOptions>, McpOptionsValidator>();
-        // Marker 1 scheduler options. Controls whether the Quartz scheduler is active, concurrency, history retention,
-        // and the embedded QRTZ table prefix. Validated on start; the Quartz hosted service (Marker 2) reads Enabled
-        // before starting so a disabled scheduler never fires jobs.
+        // Scheduler options: controls Quartz activation, concurrency, history retention, and QRTZ table prefix. The
+        // hosted service reads Enabled before starting so a disabled scheduler never fires jobs.
         builder.Services.AddOptions<SchedulerOptions>()
                .Bind(configuration.GetSection(SchedulerOptions.Section))
                .ValidateOnStart();
@@ -428,48 +402,39 @@ public static class NodeApplicationServiceCollectionExtensions
         // registry (preserving the operator Enabled toggle). Hosted so it runs once off the hot path.
         builder.Services.AddSingleton<ApprovedImageReferenceValidator>();
         builder.Services.AddHostedService<ApprovedUtilityImageSeeder>();
-        // Lane 3 application layer over the store: validates registrations (transport-specific fields, loopback URL,
-        // unique Name) and re-publishes the live tool snapshot via the connection manager after any change to the
-        // enabled set. Scoped to match the scoped, DbContext-backed store.
+        // MCP registration service: validates transport fields, loopback URL, and unique names, then republishes the
+        // live tool snapshot after enabled-set changes.
         builder.Services.AddScoped<IMcpServerService, McpServerService>();
-        // ClientLocal tool run_in_agent_home. AgentHome gateway replaces the pending placeholder with the real
-        // fake-backed gateway: the handler still flag-gates and §7-validates, then delegates through the gateway to
-        // IAgentHomeService, which drives the manifest initializer, the sandbox provider (the fake by default), and
-        // the selected-folder resolver. The tool stays off the distributed wire (server seed inactive) until the AgentHome gateway is enabled.
+        // ClientLocal run_in_agent_home tool. The handler flag-gates and validates requests before delegating through
+        // the AgentHome gateway to the manifest initializer, sandbox provider, and selected-folder resolver. The tool
+        // stays off the distributed wire until AgentHome is enabled.
         builder.Services.AddSingleton<IAgentHomeIdentityProvider, AgentHomeIdentityProvider>();
-        // workspace copy workspace copy: PrepareAsync delegates the selected-folder copy (exclusions, symlink-escape guard,
-        // byte budget, git baseline) to this stateless service.
+        // Workspace copy service: selected-folder copy with exclusions, symlink-escape guard, byte budget, and git baseline.
         builder.Services.AddSingleton<IAgentHomeWorkspaceService, AgentHomeWorkspaceService>();
-        // patch export patch export: RunAsync delegates the post-run diff of the workspace copy baseline (changes.patch +
-        // changed-files.json, MaxPatchBytes budget) to this stateless service.
+        // Patch export service: post-run diff of the workspace-copy baseline with changes.patch, changed-files.json, and budget guard.
         builder.Services.AddSingleton<IAgentHomePatchService, AgentHomePatchService>();
-        // memory-proposal export memory proposal export: RunAsync delegates the gated collect of the agent-written JSONL proposals
-        // (schema validation + secret scan) to this stateless service.
+        // Memory-proposal export service: gated collection of agent-written JSONL proposals with schema validation and secret scan.
         builder.Services.AddSingleton<IAgentHomeMemoryProposalService, AgentHomeMemoryProposalService>();
-        // run logger run-scoped JSONL logger. the run gateway (AgentHome gateway) constructs one per run via the factory; base
-        // JSONL logging + redaction contract is the MVP scope. OTel meters and list-runs endpoint are deferred.
+        // Run-scoped JSONL logger. The AgentHome gateway constructs one per run; the logger owns redacted event output.
         builder.Services.AddTransient<IAgentHomeRunLogger, AgentHomeRunLogger>();
-        // host patch apply host patch apply: a user-driven, approval-gated action that lands exported changes.patch
-        // onto the host selected folders. Scoped because it depends on the Scoped ISelectedFolderResolver.
+        // Host patch-apply service: approval-gated landing of exported changes.patch onto selected host folders.
         builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
-        // sandbox provider abstraction sandbox provider abstraction. Selection is configuration-bound and restart-required (resolved once
-        // as a singleton). The MVP default is the deterministic fake; local-container sandbox adds "local-container".
+        // Sandbox provider selection. The provider is configuration-bound and resolved once; the default is the
+        // deterministic fake, while local-container selects the HostAgent-backed provider.
         builder.Services.AddOptions<SandboxOptions>()
                .Bind(configuration.GetSection(SandboxOptions.SectionName));
-        // local-container sandbox local-container provider options. Bound + validated unconditionally; the validator is
-        // fail-closed, but the running default stays the fake (D8), so invalid LocalContainer config only matters once
-        // the "local-container" provider is selected. The provider is a thin gRPC client and reuses HostAgentClientOptions.
+        // Local-container provider options. Bound and validated unconditionally; the fail-closed validator matters only
+        // when the local-container provider is selected. The provider is a thin gRPC client that reuses HostAgent options.
         builder.Services.AddOptions<LocalContainerOptions>()
                .Bind(configuration.GetSection(LocalContainerOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
         builder.Services.AddSingleton<ISandboxRuntimeProvider>(SandboxProviderSelector.Resolve);
-        // layout initializer AgentHome layout initializer. Materializes the worker-local /agent-home tree (idempotent,
-        // self-healing, owner-mismatch-recovering). Wired but unreached in production until AgentHome gateway swaps the
-        // pending gateway for a fake-backed one; the layout itself can initialize while AgentHome:Enabled=false.
+        // AgentHome layout initializer. Materializes the worker-local /agent-home tree idempotently and can run while
+        // AgentHome itself is disabled.
         builder.Services.AddOptions<AgentHomeOptions>()
                .Bind(configuration.GetSection(AgentHomeOptions.SectionName))
                .ValidateOnStart();

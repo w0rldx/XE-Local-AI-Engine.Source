@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
-///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" />. Registered once as a singleton so a provider change requires a restart. The MVP
+///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" />. Registered once as a singleton so a provider change requires a restart. The current
 ///     default is the deterministic fake; local-container sandbox fills the <c>"local-container"</c> slot with the
 ///     HostAgent-backed <see cref="LocalContainerSandboxProvider" />.
 /// </summary>

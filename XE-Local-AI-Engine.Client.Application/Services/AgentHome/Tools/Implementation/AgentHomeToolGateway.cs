@@ -5,8 +5,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     Thin adapter between the <c>run_in_agent_home</c> tool handler and <see cref="IAgentHomeService" /> (Marker
-///     I-pre, replacing the placeholder). It maps the §7-validated tool request onto the service's
+///     Thin adapter between the <c>run_in_agent_home</c> tool handler and <see cref="IAgentHomeService" />. It maps
+///     the validated tool request onto the service's
 ///     prepare/run phases, renders the run result into a compact model-facing string, and maps the two policy
 ///     rejections raised before any provider call (unknown/invalid selected-folder id, disallowed runtime profile)
 ///     onto a clear rejection message. Cancellation is allowed to propagate as cancellation.

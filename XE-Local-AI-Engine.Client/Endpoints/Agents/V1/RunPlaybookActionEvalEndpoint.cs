@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>
-///     Playbook P4: runs the eval gate over one agent's golden conversation set for a pending Suggested/Analysis action
-///     and persists the resulting <c>EvalResult</c> on the action (the promote gate reads it back). Returns the updated
+///     Runs golden-conversation evaluation over one agent's golden set for a pending Suggested/Analysis action and
+///     persists the resulting <c>EvalResult</c> on the action (the promote route reads it back). Returns the updated
 ///     action (now carrying <c>evalResult</c>); 404 when the action is missing, belongs to another agent, or is not a
 ///     pending suggestion. The route carries the ids so the body is empty <c>{}</c> (FastEndpoints 415s a route-only POST
 ///     with no body). Operator-gated.

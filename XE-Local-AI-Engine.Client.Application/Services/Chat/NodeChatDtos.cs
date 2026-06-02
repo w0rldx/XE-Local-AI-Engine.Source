@@ -40,9 +40,6 @@ public static class NodeChatMessageStatusValues
     };
 }
 
-/// <summary>
-///     Request DTO for node chat create conversation operations.
-/// </summary>
 public sealed record NodeChatCreateConversationRequest(
     string? Title,
     string? UserId,
@@ -50,9 +47,6 @@ public sealed record NodeChatCreateConversationRequest(
     string Origin = NodeChatOriginValues.Local,
     Guid? AgentDefinitionId = null);
 
-/// <summary>
-///     Request DTO for node chat ensure conversation operations.
-/// </summary>
 public sealed record NodeChatEnsureConversationRequest(
     Guid ConversationId,
     string? Title,
@@ -60,9 +54,6 @@ public sealed record NodeChatEnsureConversationRequest(
     long CreatedAtUtc,
     string Origin = NodeChatOriginValues.Local);
 
-/// <summary>
-///     Request DTO for node chat list conversations operations.
-/// </summary>
 public sealed record NodeChatListConversationsRequest(
     bool IncludeArchived = false,
     int? Limit = null);
@@ -100,9 +91,6 @@ public sealed record NodeChatConversationDto(
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
     Guid? AgentDefinitionId = null);
 
-/// <summary>
-///     Request DTO for node chat persist user message operations.
-/// </summary>
 public sealed record NodeChatPersistUserMessageRequest(
     Guid ConversationId,
     Guid MessageId,
@@ -111,9 +99,6 @@ public sealed record NodeChatPersistUserMessageRequest(
     string? MetadataJson = null,
     string Origin = NodeChatOriginValues.Local);
 
-/// <summary>
-///     Request DTO for node chat create assistant placeholder operations.
-/// </summary>
 public sealed record NodeChatCreateAssistantPlaceholderRequest(
     Guid ConversationId,
     Guid MessageId,
@@ -123,17 +108,11 @@ public sealed record NodeChatCreateAssistantPlaceholderRequest(
     string? MetadataJson = null,
     string Origin = NodeChatOriginValues.Local);
 
-/// <summary>
-///     Value object carrying node chat message correlation data.
-/// </summary>
 public sealed record NodeChatMessageCorrelation(
     Guid ConversationId,
     Guid MessageId,
     Guid RequestId);
 
-/// <summary>
-///     Request DTO for node chat partial flush operations.
-/// </summary>
 public sealed record NodeChatPartialFlushRequest(
     NodeChatMessageCorrelation Correlation,
     string Content,
@@ -141,9 +120,6 @@ public sealed record NodeChatPartialFlushRequest(
     long UpdatedAtUtc,
     bool ReplaceContent = true);
 
-/// <summary>
-///     Request DTO for node chat terminalize message operations.
-/// </summary>
 public sealed record NodeChatTerminalizeMessageRequest(
     NodeChatMessageCorrelation Correlation,
     string Status,
@@ -160,40 +136,25 @@ public sealed record NodeChatTerminalizeMessageRequest(
     // untouched; an empty list is a meaningful "no parts" (e.g. a plain-text turn) and overwrites.
     IReadOnlyList<NodeChatMessagePart>? Parts = null);
 
-/// <summary>
-///     Request DTO for node chat cancel operations.
-/// </summary>
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,
     long CancelledAtUtc);
 
-/// <summary>
-///     Request DTO for node chat delete conversation operations.
-/// </summary>
 public sealed record NodeChatDeleteConversationRequest(
     Guid ConversationId,
     long DeletedAtUtc,
     bool PurgeImmediately = false);
 
-/// <summary>
-///     Request DTO for node chat rename conversation operations.
-/// </summary>
 public sealed record NodeChatRenameConversationRequest(
     Guid ConversationId,
     string? Title,
     long UpdatedAtUtc);
 
-/// <summary>
-///     Request DTO for node chat set conversation pinned operations.
-/// </summary>
 public sealed record NodeChatSetConversationPinnedRequest(
     Guid ConversationId,
     bool IsPinned,
     long UpdatedAtUtc);
 
-/// <summary>
-///     Request DTO for node chat set conversation archived operations.
-/// </summary>
 public sealed record NodeChatSetConversationArchivedRequest(
     Guid ConversationId,
     bool Archived,
@@ -357,9 +318,6 @@ public sealed record NodeChatSetSelectedPathRequest(
     IReadOnlyDictionary<Guid, Guid>? SelectedPath,
     long UpdatedAtUtc);
 
-/// <summary>
-///     Request DTO for node chat set message feedback operations.
-/// </summary>
 public sealed record NodeChatSetMessageFeedbackRequest(
     Guid ConversationId,
     Guid MessageId,

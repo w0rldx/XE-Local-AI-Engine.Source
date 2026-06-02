@@ -117,7 +117,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WithApprovalRequiredClientLocalTool_ResolvesApprovalWrappedHandler()
     {
-        // End-to-end (Marker I Test C): a ClientLocal tool offered via the envelope path (an offer placeholder) is
+        // End-to-end: a ClientLocal tool offered via the envelope path (an offer placeholder) is
         // resolved against the REAL ClientLocalToolRegistry, which wraps a RequiresApproval=true handler in an
         // ApprovalRequiredAIFunction. Prove the wrapped handler flows through the offer→resolve path without being
         // dropped, so the agent builds with tools enabled.

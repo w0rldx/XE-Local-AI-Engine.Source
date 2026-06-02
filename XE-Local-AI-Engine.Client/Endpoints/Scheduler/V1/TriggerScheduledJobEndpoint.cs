@@ -5,9 +5,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
-/// <summary>
-///     FastEndpoints handler for manually triggering a scheduled job (POST scheduler/jobs/{scheduledJobId}/trigger).
-/// </summary>
 public sealed class TriggerScheduledJobEndpoint(IScheduledJobManagementService scheduledJobManagementService)
     : Endpoint<ScheduledJobActionRequest>
 {

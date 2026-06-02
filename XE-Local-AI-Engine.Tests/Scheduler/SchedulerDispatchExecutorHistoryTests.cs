@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 4 unit tests for the run-history recording in <see cref="SchedulerDispatchExecutor" />. Substitute stores
+///     Run-history recording tests for <see cref="SchedulerDispatchExecutor" />. Substitute stores
 ///     let each lifecycle outcome be asserted at the executor↔store boundary — including the redaction contract (no
 ///     exception message or stack trace is ever handed to the store) and fire-instance idempotency.
 /// </summary>

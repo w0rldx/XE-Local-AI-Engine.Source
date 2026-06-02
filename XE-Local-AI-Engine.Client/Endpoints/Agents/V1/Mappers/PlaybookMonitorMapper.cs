@@ -12,7 +12,7 @@ internal static class PlaybookMonitorMapper
         ArgumentNullException.ThrowIfNull(views);
         ArgumentNullException.ThrowIfNull(retrievalOptions);
 
-        // An embedding model name turns on the embedding ranker; blank keeps the model-free lexical ranker (plan §9).
+        // An embedding model name turns on the embedding ranker; blank keeps the model-free lexical ranker (the embedding-ranker configuration).
         var embeddingActive = !string.IsNullOrWhiteSpace(retrievalOptions.EmbeddingModelName);
         var ranker = embeddingActive ? "embedding" : "lexical";
         var embeddingModel = embeddingActive ? retrievalOptions.EmbeddingModelName : null;

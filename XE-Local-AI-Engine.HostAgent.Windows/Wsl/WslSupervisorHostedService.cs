@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl;
 
 using Microsoft.Extensions.Options;
 
-/// <summary>
-///     Application service for wsl supervisor hosted behavior.
-/// </summary>
 public sealed class WslSupervisorHostedService : BackgroundService
 {
     private readonly DesiredStateStore _desiredStateStore;

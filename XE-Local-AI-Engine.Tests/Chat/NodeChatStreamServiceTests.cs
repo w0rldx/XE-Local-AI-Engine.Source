@@ -504,7 +504,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent binding must carry no orchestration spec.");
-        // Playbook P5: the just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
+        // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
@@ -512,7 +512,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenBoundToOrchestrator_CarriesOrchestrationSpecOnPackage()
     {
-        // Loop P5 hydration: a conversation bound to a Kind=Orchestrator definition whose orchestration resolver
+        // Orchestrator hydration: a conversation bound to a Kind=Orchestrator definition whose orchestration resolver
         // returns a spec must carry that spec on the runtime package so the runner branches to the handoff workflow.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -716,7 +716,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     // The default (unbound) resolver: ResolveAsync returns null, so the service keeps today's literals — these tests
-    // exercise the default chat persona. P3 binding behaviour is covered by the dedicated bound-conversation tests.
+    // exercise the default chat persona. Bound-agent behavior is covered by the dedicated bound-conversation tests.
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();
@@ -725,7 +725,7 @@ public sealed class NodeChatStreamServiceTests
     }
 
     // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
-    // orchestration resolver — the package carries no spec and the single-agent path is byte-identical (loop P5).
+    // orchestration resolver — the package carries no spec and the single-agent path is byte-identical.
     private static IAgentDefinitionStore CreateAgentDefinitionStore()
     {
         var store = Substitute.For<IAgentDefinitionStore>();

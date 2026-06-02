@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Security;
 using global::Grpc.Core;
 using global::Grpc.Core.Interceptors;
 
-/// <summary>
-///     Represents hmac authentication interceptor.
-/// </summary>
 public sealed class HmacAuthenticationInterceptor : Interceptor
 {
     private readonly HmacRequestValidator _validator;

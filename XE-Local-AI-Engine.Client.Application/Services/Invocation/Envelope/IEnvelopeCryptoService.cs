@@ -3,9 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 
-/// <summary>
-///     Application service for i envelope crypto behavior.
-/// </summary>
 public interface IEnvelopeCryptoService
 {
     EnvelopeDecryptionResult DecryptRuntimePackage(EncryptedRuntimePackageDto package, Key nodePrivateKey);

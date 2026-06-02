@@ -322,7 +322,7 @@ public sealed class AgentDefinitionServiceTests
     }
 
     // Serializes a topology through the SHARED parser's canonical shape so these tests stay coupled to the real wire
-    // contract (Lane B's OrchestrationTopologyJson) rather than a hand-rolled JSON string that could drift from it.
+    // contract (<c>OrchestrationTopologyJson</c>) rather than a hand-rolled JSON string that could drift from it.
     private static string TopologyJson(Guid triage, IReadOnlyList<Guid> participants, IReadOnlyList<OrchestrationHandoff>? handoffs = null)
     {
         return OrchestrationTopologyJson.Serialize(new OrchestrationTopology

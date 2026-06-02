@@ -7,8 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
-///     patch export <see cref="IAgentHomePatchService" />. Runs two in-sandbox <c>git diff</c> commands against the workspace copy
-///     baseline (a full <c>--binary</c> patch and a <c>--name-status</c> summary) with the §9.1 byte-stabilizing flags,
+///     Patch export implementation for <see cref="IAgentHomePatchService" />. Runs two in-sandbox <c>git diff</c>
+///     commands against the workspace-copy baseline (a full <c>--binary</c> patch and a <c>--name-status</c> summary)
+///     with the byte-stabilizing git flags,
 ///     captures their standard output (the sandbox SPI is shell-neutral, so the worker — not a shell redirection — owns
 ///     the file write), then writes <c>changes.patch</c> and <c>changed-files.json</c> under the host-side
 ///     <c>runs/&lt;run-id&gt;/patches/</c> directory. A patch over <see cref="AgentHomeOptions.MaxPatchBytes" /> is
@@ -46,7 +47,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         var commandTimeout = TimeSpan.FromSeconds(_options.CommandTimeoutSeconds);
 
-        // Full binary-aware patch (§9.1). Captured from standard output; the worker writes the file, since the SPI
+        // Full binary-aware patch. Captured from standard output; the worker writes the file, since the SPI
         // carries no shell redirection.
         var patchResult = await _provider.ExecuteAsync(
             handle,
@@ -100,7 +101,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         var patchBytes = Encoding.UTF8.GetByteCount(patchText);
         if (patchBytes > _options.MaxPatchBytes)
         {
-            // Over budget: keep the changed-file metadata, drop the oversized patch (§9.1 / §13).
+            // Over budget: keep the changed-file metadata, drop the oversized patch.
             _logger.LogWarning(
                 "Patch for run {RunId} is {Bytes} byte(s), over the {Budget}-byte budget; changes.patch not written.",
                 request.RunId,

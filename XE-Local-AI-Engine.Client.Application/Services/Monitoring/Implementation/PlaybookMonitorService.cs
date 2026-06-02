@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Default <see cref="IPlaybookMonitorService" /> (Playbook P5, plan §3.2). For every Enabled action of the agent
+///     Default <see cref="IPlaybookMonitorService" /> (relevance retrieval and cohort monitoring, the cohort-monitor verdict rules). For every Enabled action of the agent
 ///     that carries an <c>EnabledAtUtc</c> clock, it reads the agent's before/after feedback cohort from
 ///     <see cref="IPlaybookMonitorStore" /> (faceted by the action's tool scope when set), derives the before/after
 ///     down-vote rates, and classifies the change against the configured epsilon and minimum sample size. The verdict is
@@ -28,7 +28,7 @@ public sealed class PlaybookMonitorService(
         foreach (var action in enabled)
         {
             // An action with no enable clock has no before/after split to measure, for instance a row whose stamp
-            // predates Playbook P5, so skip it rather than fabricate a cohort.
+            // predates relevance retrieval and cohort monitoring, so skip it rather than fabricate a cohort.
             if (action.EnabledAtUtc is not { } enabledAtUtc)
             {
                 continue;

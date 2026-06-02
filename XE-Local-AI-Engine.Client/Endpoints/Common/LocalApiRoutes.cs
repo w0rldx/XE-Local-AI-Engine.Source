@@ -1,14 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 
 /// <summary>
-///     Local API contract type for local api routes.
+///     Route constants for the node-local HTTP and hub API surface.
 /// </summary>
 public static class LocalApiRoutes
 {
     public const string Prefix = "api/local/v1";
 
     /// <summary>
-    ///     Local API contract type for api foundation.
+    ///     Diagnostic and framework-probe endpoints.
     /// </summary>
     public static class ApiFoundation
     {
@@ -16,7 +16,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for auth.
+    ///     Node-operator authentication endpoints.
     /// </summary>
     public static class Auth
     {
@@ -30,7 +30,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for local chat.
+    ///     Local chat conversation and streaming routes.
     /// </summary>
     public static class LocalChat
     {
@@ -48,7 +48,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for node binding.
+    ///     Worker-node binding routes.
     /// </summary>
     public static class NodeBinding
     {
@@ -58,7 +58,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for connection.
+    ///     Central-platform connection control routes.
     /// </summary>
     public static class Connection
     {
@@ -70,7 +70,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for node settings.
+    ///     Node settings routes.
     /// </summary>
     public static class NodeSettings
     {
@@ -78,7 +78,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for cloud settings.
+    ///     Cloud-provider settings routes.
     /// </summary>
     public static class CloudSettings
     {
@@ -86,7 +86,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for local models.
+    ///     Local model management routes.
     /// </summary>
     public static class LocalModels
     {
@@ -96,13 +96,12 @@ public static class LocalApiRoutes
         public const string Select = "models/select";
         public const string Pull = "models/pull";
 
-        // Operator override of a model's classification. The literal "kind" segment follows the {modelName} param, so
-        // FastEndpoints prioritises it over ModelByName's bare param route (same literal-vs-param rule as ModelDetails).
+        // Operator override of model classification. The literal "kind" segment keeps this distinct from ModelByName.
         public const string ModelKind = "models/{modelName}/kind";
     }
 
     /// <summary>
-    ///     Local API contract type for runtime manager.
+    ///     Runtime manager routes and hub path.
     /// </summary>
     public static class RuntimeManager
     {
@@ -112,7 +111,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for invocations.
+    ///     Invocation monitor routes.
     /// </summary>
     public static class Invocations
     {
@@ -120,79 +119,67 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for agents.
+    ///     Agent definition, playbook, evaluation, and monitoring routes.
     /// </summary>
     public static class Agents
     {
         public const string Definitions = "agents";
         public const string DefinitionById = "agents/{agentDefinitionId}";
 
-        // A distinct literal segment under the agents surface; FastEndpoints prioritises the literal over the
-        // {agentDefinitionId} route param so this never collides with DefinitionById.
+        // Distinct literal segment under the agents surface so it cannot collide with DefinitionById.
         public const string ToolCapableModels = "agents/tool-capable-models";
 
-        // Playbook P1: per-agent playbook actions nested under the agent. The literal "playbook" segment follows the
-        // {agentDefinitionId} param, so it never collides with DefinitionById (which has no trailing segment).
+        // Per-agent playbook actions nested under the agent definition.
         public const string Playbook = "agents/{agentDefinitionId}/playbook";
         public const string PlaybookActionById = "agents/{agentDefinitionId}/playbook/{actionId}";
 
-        // Playbook P3: analysis-agent staging. "analyze" is a literal segment after "playbook", so FastEndpoints
-        // prioritises it over PlaybookActionById's {actionId} param (same literal-vs-param rule as ToolCapableModels).
-        // promote/reject/suggested are literal segments after {actionId}, so they never collide with PlaybookActionById.
+        // Analysis and review actions use literal segments so they remain distinct from action-id routes.
         public const string PlaybookAnalyze = "agents/{agentDefinitionId}/playbook/analyze";
         public const string PlaybookActionPromote = "agents/{agentDefinitionId}/playbook/{actionId}/promote";
         public const string PlaybookActionReject = "agents/{agentDefinitionId}/playbook/{actionId}/reject";
         public const string PlaybookActionSuggested = "agents/{agentDefinitionId}/playbook/{actionId}/suggested";
 
-        // Playbook P4: eval gate. "eval" is a literal segment after {actionId}, so it never collides with
-        // PlaybookActionById (same literal-vs-param rule as promote/reject above).
+        // Golden-conversation evaluation for a specific suggested playbook action.
         public const string PlaybookActionEval = "agents/{agentDefinitionId}/playbook/{actionId}/eval";
 
-        // Playbook P4: per-agent golden conversation set (manual authoring). The literal "golden-conversations"
-        // segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
+        // Per-agent golden conversation set for manual authoring.
         public const string GoldenConversations = "agents/{agentDefinitionId}/golden-conversations";
         public const string GoldenConversation = "agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}";
 
-        // Harvest follow-up: on-demand thumbs-up harvest + per-candidate approve. The literal "harvest" segment follows
-        // "golden-conversations", so FastEndpoints prioritises it over the {goldenConversationId} param (same literal-vs-param
-        // rule as ToolCapableModels); "approve" is a literal segment after {goldenConversationId}, so it never collides with
-        // GoldenConversation's bare param route (the DELETE / GET-by-id surface).
+        // On-demand thumbs-up harvest and per-candidate approval. Literal action segments keep collection actions
+        // distinct from golden-conversation id routes.
         public const string GoldenConversationsHarvest = "agents/{agentDefinitionId}/golden-conversations/harvest";
         public const string GoldenConversationApprove = "agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve";
 
-        // Playbook P2: read-only per-agent feedback insights (aggregate over message_feedback). The literal
-        // "feedback-insights" segment follows the {agentDefinitionId} param, so it never collides with DefinitionById.
+        // Read-only per-agent feedback insights over message feedback aggregates.
         public const string FeedbackInsights = "agents/{agentDefinitionId}/feedback-insights";
 
-        // Playbook P5: read-only cohort monitoring for an agent's Enabled playbook actions. The literal "monitor"
-        // segment follows the literal "playbook" segment, so it never collides with PlaybookActionById's {actionId}
-        // param (same literal-vs-param rule as PlaybookAnalyze).
+        // Read-only cohort monitoring for enabled playbook actions.
         public const string PlaybookMonitor = "agents/{agentDefinitionId}/playbook/monitor";
     }
 
     /// <summary>
-    ///     Local API contract type for scheduler.
+    ///     Scheduler management, run history, cancellation, and hub routes.
     /// </summary>
     public static class Scheduler
     {
-        // Flat template catalog — a distinct literal so it never collides with the {scheduledJobId} param on Jobs.
+        // Flat template catalog. Kept separate from job-id routes so templates cannot be parsed as ids.
         public const string Templates = "scheduler/templates";
 
         // Job collection (GET list, POST create) and individual job resource (GET, PUT, DELETE).
         public const string Jobs = "scheduler/jobs";
         public const string JobById = "scheduler/jobs/{scheduledJobId}";
 
-        // Lifecycle actions — literal segments after the {scheduledJobId} param; FastEndpoints prioritises literals
-        // over route params so these never collide with JobById (same pattern as playbook promote/reject).
+        // Lifecycle actions use literal segments after the job id, keeping action names distinct from JobById.
         public const string JobEnable = "scheduler/jobs/{scheduledJobId}/enable";
         public const string JobDisable = "scheduler/jobs/{scheduledJobId}/disable";
         public const string JobTrigger = "scheduler/jobs/{scheduledJobId}/trigger";
 
-        // Run history — flat collection (query-filtered) and individual run.
+        // Run history uses a flat query-filtered collection plus an individual run resource.
         public const string Runs = "scheduler/runs";
         public const string RunById = "scheduler/runs/{runId}";
 
-        // Cancel a running job run — literal segment after the {runId} param (literals prioritised over route params).
+        // Cancellation is run-scoped rather than job-scoped; the management service maps it to a Quartz interrupt.
         public const string RunCancel = "scheduler/runs/{runId}/cancel";
 
         // SignalR push hub for scheduler lifecycle events. Full path (mapped via MapHub, not the FastEndpoints prefix),
@@ -220,7 +207,7 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for mcp.
+    ///     MCP server registration and tool-catalog routes.
     /// </summary>
     public static class Mcp
     {

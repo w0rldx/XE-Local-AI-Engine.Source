@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 
 /// <summary>
 ///     Worker-side constants for the <c>run_in_agent_home</c> tool. These mirror the server
-///     <c>ToolDefinition</c> seed (name / description / parameter schema) authored from the AgentHome plan §7, so
+///     <c>ToolDefinition</c> seed (name / description / parameter schema) authored from the AgentHome tool contract, so
 ///     the model-visible schema the worker advertises can never drift from the server's discoverability/approval
-///     record. Both are authored from the same §7 source.
+///     record. Both are authored from the same schema source.
 /// </summary>
 internal static class AgentHomeToolDefinition
 {
@@ -13,7 +13,7 @@ internal static class AgentHomeToolDefinition
     public const string Description =
         "Run an agent task inside the node-scoped AgentHome sandbox over selected folders.";
 
-    /// <summary>The AgentHome plan §7 parameter schema. Kept byte-for-byte aligned with the server seed.</summary>
+    /// <summary>The AgentHome tool parameter schema. Kept byte-for-byte aligned with the server seed.</summary>
     public const string ParameterSchema = """
         {
           "type": "object",

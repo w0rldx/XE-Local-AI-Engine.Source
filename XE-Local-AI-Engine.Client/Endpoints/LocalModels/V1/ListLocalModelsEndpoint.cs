@@ -9,9 +9,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-/// <summary>
-///     FastEndpoints handler for the list local models local API operation.
-/// </summary>
 public sealed class ListLocalModelsEndpoint(
     IOllamaModelService modelService,
     IModelClassificationService classificationService,

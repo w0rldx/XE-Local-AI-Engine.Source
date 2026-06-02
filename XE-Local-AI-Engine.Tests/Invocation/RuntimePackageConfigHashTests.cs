@@ -267,7 +267,7 @@ public sealed class RuntimePackageConfigHashTests
         AssertEx.NotEqual(firstDigest, secondDigest);
     }
 
-    // Playbook P1: the playbook reaches the config hash ONLY through resolvedSystemPrompt (the composed prompt). The
+    // The playbook reaches the config hash only through resolvedSystemPrompt (the composed prompt). The
     // following tests pin that the composer's output flows into the digest as expected. The byte-identical guard — an
     // empty playbook leaving resolvedSystemPrompt unchanged — is the central regression invariant.
 

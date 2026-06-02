@@ -11,7 +11,7 @@ public sealed class OrchestrationConfigHashTests
     [Test]
     public void Compute_WhenSpecIsNull_IsByteIdenticalToPreP5Vector()
     {
-        // The cross-repo round-trip guard: a null orchestration spec MUST yield the exact pre-P5 canonical JSON and
+        // The cross-repo round-trip guard: a null orchestration spec MUST yield the exact legacy canonical JSON and
         // digest the server MixedEnvelopeConfigHashService reproduces. If this drifts, every encrypted invocation
         // fails runtime-package-config-hash-mismatch.
         var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
@@ -53,7 +53,7 @@ public sealed class OrchestrationConfigHashTests
             orchestrationSpec: null);
 
         // Byte-identical to RuntimePackageConfigHashTests.Compute_WhenUsingSharedVector_ReturnsExpectedDigest: the
-        // orchestration field is omitted entirely when null, so the JSON ends at "timeouts" exactly as before P5.
+        // orchestration field is omitted entirely when null, so the JSON ends at "timeouts" exactly as in the legacy vector.
         AssertEx.Equal(
             "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"You are a helpful local AI assistant.\",\"allowedTools\":[{\"name\":\"open_url\",\"description\":\"Open a URL in the worker browser\",\"schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"url\\\":{\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"url\\\"]}\",\"location\":0,\"requiresApproval\":false}],\"modelProfile\":null,\"reasoningEffort\":null,\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
             canonicalJson);

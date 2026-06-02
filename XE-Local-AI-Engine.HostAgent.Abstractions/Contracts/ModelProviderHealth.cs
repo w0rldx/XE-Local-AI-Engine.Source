@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 
-/// <summary>
-///     Value object carrying model provider health data.
-/// </summary>
 public sealed record ModelProviderHealth
 {
     [JsonRequired]

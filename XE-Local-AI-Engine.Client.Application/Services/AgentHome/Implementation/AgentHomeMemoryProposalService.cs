@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 /// <summary>
 ///     memory-proposal export <see cref="IAgentHomeMemoryProposalService" />. Reads the agent-written JSONL files from
-///     <c>runs/&lt;run-id&gt;/memory/proposals/</c>, validates each line against the §10 MVP schema, applies the
+///     <c>runs/&lt;run-id&gt;/memory/proposals/</c>, validates each line against the proposal schema, applies the
 ///     <see cref="MemoryProposalSecretScanner" /> per record, and returns surviving proposals together with a rejection
 ///     log. Never mutates real node/platform memory — caller is responsible for later user/platform review.
 /// </summary>
@@ -13,7 +13,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
 {
     private static readonly JsonDocumentOptions JsonDocOptions = new() { AllowTrailingCommas = false };
 
-    // Valid closed-enum values (§10 MVP schema).
+    // Valid closed-enum values for the proposal schema.
     private static readonly HashSet<string> ValidTypes = new(StringComparer.Ordinal)
     {
         "node_memory_proposal",
@@ -64,7 +64,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         var proposals = new List<MemoryProposalRecord>();
         var rejections = new List<MemoryProposalRejection>();
 
-        // Only the two canonical file names are collected (§10); other files in the directory are ignored.
+        // Only the two canonical file names are collected; other files in the directory are ignored.
         var candidateFiles = new[]
         {
             "node-memory.proposals.jsonl",
@@ -191,7 +191,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, "missing or non-string 'confidence' field");
         }
 
-        // evidence is required but may be an empty array (§10).
+        // Evidence is required but may be an empty array.
         if (!TryGetStringArray(obj, "evidence", out var evidence))
         {
             return Reject(fileName, lineIndex, "missing or invalid 'evidence' field (must be a string array)");
@@ -219,7 +219,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             return Reject(fileName, lineIndex, $"'content' length {content.Length} is outside the allowed range [{MinContentLength}, {MaxContentLength}]");
         }
 
-        // ── 5. Evidence path prefix validation (§10/§11: must reference sandbox paths, never host paths) ──
+        // ── 5. Evidence path prefix validation: must reference sandbox paths, never host paths ──
         if (evidence.Any(path => path.Contains("..", StringComparison.Ordinal)))
         {
             return Reject(fileName, lineIndex, "evidence path contains a path-traversal segment '..'");
@@ -227,7 +227,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
 
         // Reject absolute/rooted HOST paths (Path.IsPathRooted, leading '/' or '\\', or an 'X:' drive). The only
         // allowed rooted form is the in-sandbox workspace root; any other absolute path is a worker-host path that must
-        // not land in MemoryProposalRecord.Evidence (§11). Relative paths are allowed.
+        // not land in MemoryProposalRecord.Evidence. Relative paths are allowed.
         if (evidence.Any(IsDisallowedEvidencePath))
         {
             return Reject(fileName, lineIndex, "evidence path is an absolute host path; only sandbox-relative or workspace-rooted paths are allowed");
@@ -258,7 +258,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
 
     /// <summary>
     ///     <see langword="true" /> when an evidence path is an absolute/rooted HOST path that must not be persisted
-    ///     (§11). A path is disallowed when it is rooted (<see cref="Path.IsPathRooted(string)" />), starts with a
+    ///     A path is disallowed when it is rooted (<see cref="Path.IsPathRooted(string)" />), starts with a
     ///     directory separator, or carries a Windows drive prefix — UNLESS it is under the in-sandbox workspace root,
     ///     which is the only legitimate rooted form for evidence. Relative paths are always allowed.
     /// </summary>

@@ -38,9 +38,6 @@ public interface ITokenStore
     event EventHandler? TokensChanged;
 }
 
-/// <summary>
-///     Value object carrying token store metadata data.
-/// </summary>
 public sealed record TokenStoreMetadata
 {
     public string? BindingMethod { get; init; }

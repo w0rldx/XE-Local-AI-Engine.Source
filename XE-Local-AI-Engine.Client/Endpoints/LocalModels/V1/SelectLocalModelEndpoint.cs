@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
-/// <summary>
-///     FastEndpoints handler for the select local model local API operation.
-/// </summary>
 public sealed class SelectLocalModelEndpoint(
     INodeSettingsStore nodeSettingsStore,
     ModelNameValidator modelNameValidator) : Endpoint<SelectLocalModelRequest, SelectLocalModelResponse>

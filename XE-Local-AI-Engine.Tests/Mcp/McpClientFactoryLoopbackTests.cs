@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Security guard for the HTTP MCP loopback allowlist (P4 §4 / locked decision 1). The factory rejects any HTTP URL
+///     Security guard for the HTTP MCP loopback allowlist. The factory rejects any HTTP URL
 ///     whose host is not in the explicit loopback allowlist BEFORE attempting any connection, so a registration that
 ///     somehow carries a non-loopback or host-confusion URL can never cause an outbound request to a remote server. The
 ///     allowlist is strict (exact-string, fail-closed) by design; these cases pin that no SSRF/parser-confusion vector

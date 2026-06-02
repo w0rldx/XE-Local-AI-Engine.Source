@@ -22,7 +22,7 @@ using ContainerHealthDto = XE_Local_AI_Engine.HostAgent.Abstractions.Contracts.C
 using ContainerHealthReply = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.ContainerHealth;
 
 /// <summary>
-///     Client boundary for grpc host agent operations.
+///     gRPC client boundary for HostAgent lifecycle, capability, container, and log operations.
 /// </summary>
 public sealed class GrpcHostAgentClient : IHostAgentClient, IDisposable
 {

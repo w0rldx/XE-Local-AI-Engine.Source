@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 /// <summary>
-///     Playbook P3: rejects a pending Suggested/Analysis action by archiving it (provenance preserved). 404 when the
+///     analysis staging: rejects a pending Suggested/Analysis action by archiving it (provenance preserved). 404 when the
 ///     action is missing, belongs to another agent, or is not a pending suggestion. Operator-gated.
 /// </summary>
 public sealed class RejectSuggestedPlaybookActionEndpoint(IPlaybookActionService playbookActionService)

@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     A single command to exec inside a sandbox container (local-container sandbox plan §4.1). Provider-neutral — the
+///     A single command to exec inside a sandbox container. Provider-neutral — the
 ///     executable and arguments are passed as an argv list, never a shell string. <see cref="ExecutionId" /> lets an
 ///     in-flight exec be targeted by <see cref="IDockerRuntimeClient.ExecInContainerAsync" />'s cancellation
-///     bookkeeping (D9): cancelling the read-loop is best-effort and does not hard-kill the process.
+///     bookkeeping: cancelling the read-loop is best-effort and does not hard-kill the process.
 /// </summary>
 public sealed record DockerExecRequest
 {

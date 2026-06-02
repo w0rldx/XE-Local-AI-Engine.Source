@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Configuration;
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>
-///     Configuration options for node auth behavior.
-/// </summary>
 public sealed class NodeAuthOptions
 {
     public const string SectionName = "NodeAuth";
@@ -15,9 +12,6 @@ public sealed class NodeAuthOptions
     public int RefreshTokenDays { get; set; } = 14;
 }
 
-/// <summary>
-///     Configuration options for node jwt behavior.
-/// </summary>
 public sealed class NodeJwtOptions
 {
     [Required]

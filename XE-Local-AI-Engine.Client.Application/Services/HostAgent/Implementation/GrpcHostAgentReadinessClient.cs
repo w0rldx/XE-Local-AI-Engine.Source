@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 
 /// <summary>
-///     Client boundary for grpc host agent readiness operations.
+///     gRPC readiness client for HostAgent bootstrap model checks.
 /// </summary>
 public sealed class GrpcHostAgentReadinessClient : IHostAgentReadinessClient, IDisposable
 {

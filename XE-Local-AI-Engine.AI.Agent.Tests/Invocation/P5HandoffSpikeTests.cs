@@ -1,4 +1,4 @@
-// P5 handoff + workflow-approval spike (Microsoft.Agents.AI.Workflows 1.8.0). Fully deterministic — a
+// Handoff + workflow-approval probe (Microsoft.Agents.AI.Workflows 1.8.0). Fully deterministic — a
 // scripted IChatClient stands in for the model (NO Ollama, NO network). Proves the exact API shapes the
 // production handoff orchestration + IOrchestrationRunSession.RespondToApprovalAsync will copy:
 //   (A) 2-agent handoff routing via AgentWorkflowBuilder.CreateHandoffBuilderWith + InProcessExecution.
@@ -17,7 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic spike for the MAF 1.8.0 handoff workflow + in-workflow tool approval.
+///     Deterministic probe for the MAF 1.8.0 handoff workflow + in-workflow tool approval.
 /// </summary>
 public sealed class P5HandoffSpikeTests
 {
@@ -251,7 +251,7 @@ public sealed class P5HandoffSpikeTests
                         sawTerminalOutput = true;
                     }
 
-                    // Stop once the terminal output is observed AND the marker reflects the expected state, so
+                    // Stop once the terminal output is observed and the sentinel file reflects the expected state, so
                     // the approved path waits for the tool to actually run before we leave the loop.
                     if (sawTerminalOutput && (executed > 0 || !approve))
                     {

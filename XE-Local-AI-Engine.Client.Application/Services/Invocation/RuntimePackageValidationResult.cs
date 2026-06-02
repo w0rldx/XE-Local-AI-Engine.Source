@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation;
 
-/// <summary>
-///     Value object carrying runtime package validation result data.
-/// </summary>
 public sealed record RuntimePackageValidationResult
 {
     public RuntimePackageValidationResult(bool isValid, IReadOnlyList<string> errors)

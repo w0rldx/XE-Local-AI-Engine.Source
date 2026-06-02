@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
-/// <summary>Inputs for <see cref="IAgentHomeService.PrepareAsync" /> (already §7-validated by the tool handler).</summary>
+/// <summary>Inputs for <see cref="IAgentHomeService.PrepareAsync" /> (already validated by the tool handler).</summary>
 internal sealed record AgentHomePrepareRequest
 {
     /// <summary>The selected-folder ids the model referenced; each is resolved (existence-checked), not copied, in AgentHome gateway.</summary>
@@ -41,7 +41,7 @@ internal sealed record AgentHomeRunRequest
     /// <summary>The completed preparation result.</summary>
     public required AgentHomePrepareResult Prepared { get; init; }
 
-    /// <summary>The model-supplied goal (carried for logging/agent execution in later markers).</summary>
+    /// <summary>The model-supplied goal (carried for logging and agent execution).</summary>
     public required string Goal { get; init; }
 
     /// <summary>The validated <c>allowedActions</c> the run is permitted (enforced fully in AgentHome gateway).</summary>
@@ -106,7 +106,7 @@ internal sealed record AgentHomeRunResult
 }
 
 /// <summary>
-///     Model-safe outcome of the patch export patch export. Paths are run-relative (<c>runs/&lt;run-id&gt;/patches/…</c>),
+///     Model-safe outcome of patch export. Paths are run-relative (<c>runs/&lt;run-id&gt;/patches/…</c>),
 ///     never the worker-host root.
 /// </summary>
 internal sealed record AgentHomePatchExport
@@ -160,7 +160,7 @@ internal sealed class AgentHomeRequestRejectedException : InvalidOperationExcept
 
 /// <summary>
 ///     Thrown when a second AgentHome run is requested for the same owner-node while one is already in flight (AgentHome
-///     plan §6.6 rule 5). The run-level single-flight guard rejects rather than queues; the gateway maps it to a compact
+///     The run-level single-flight guard rejects rather than queues; the gateway maps it to a compact
 ///     model-facing "already in progress" rejection.
 /// </summary>
 internal sealed class AgentHomeBusyException : InvalidOperationException

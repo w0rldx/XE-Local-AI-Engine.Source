@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Capabilities;
 
-/// <summary>
-///     Configuration options for host agent capability behavior.
-/// </summary>
 public sealed class HostAgentCapabilityOptions
 {
     public string RuntimeDataPath { get; set; } = "/var/lib/xe-host-agent";

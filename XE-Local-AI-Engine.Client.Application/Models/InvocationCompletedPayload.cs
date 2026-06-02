@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
-/// <summary>
-///     Value object carrying invocation completed payload data.
-/// </summary>
 public sealed record InvocationCompletedPayload
 {
     public required Guid InvocationId { get; init; }

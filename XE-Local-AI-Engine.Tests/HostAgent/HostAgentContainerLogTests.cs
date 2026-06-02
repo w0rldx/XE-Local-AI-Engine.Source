@@ -199,7 +199,7 @@ public sealed class HostAgentContainerLogTests
             await Task.CompletedTask;
         }
 
-        // Sandbox operations (Marker J-local) are not exercised by these container-log tests.
+        // Sandbox runtime operations are not exercised by these container-log tests.
         public Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();

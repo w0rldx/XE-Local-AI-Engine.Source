@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker I-pre gateway-adapter coverage: the <see cref="AgentHomeToolGateway" /> renders a successful run into a
+///     Gateway-adapter coverage: the <see cref="AgentHomeToolGateway" /> renders a successful run into a
 ///     compact model-facing string and maps the two pre-provider policy rejections (unknown folder id, disallowed
 ///     runtime profile) onto a clear rejection, while letting cancellation propagate. The service is faked.
 /// </summary>

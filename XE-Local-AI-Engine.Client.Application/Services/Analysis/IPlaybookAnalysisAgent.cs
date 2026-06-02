@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Analysis;
 using XE_Local_AI_Engine.Client.Services.Insights;
 
 /// <summary>
-///     The Playbook P3 analysis agent (the AI surface). Reads the per-agent feedback aggregate (Playbook P2) and
+///     The analysis staging analysis agent (the AI surface). Reads the per-agent feedback aggregate (feedback insights) and
 ///     proposes structured playbook actions, each forced to cite which feedback drove it (<see
 ///     cref="ProposedPlaybookAction.SourceFeedbackIds" />) and how confident it is. The agent only PROPOSES — it
 ///     persists nothing and decides nothing; the service validates the evidence and writes <c>Suggested</c> actions for

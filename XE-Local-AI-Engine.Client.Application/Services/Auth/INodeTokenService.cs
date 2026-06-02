@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>
-///     Application service for i node token behavior.
-/// </summary>
 public interface INodeTokenService
 {
     (string AccessToken, DateTime ExpiresAtUtc) CreateAccessToken(NodeUser user, IEnumerable<string> roles);

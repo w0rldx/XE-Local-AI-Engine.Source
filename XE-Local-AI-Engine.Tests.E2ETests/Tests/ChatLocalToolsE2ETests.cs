@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the local-tools RC feature (Lane C2 / plan §D6).
+///     Browser-driven E2E for the local-tools send path and tool-call flow.
 ///     Verifies the full send-path tool-call flow:
 ///     <list type="bullet">
 ///         <item>Enable the local-tools toggle in the chat input area.</item>

@@ -13,7 +13,7 @@ public sealed record NodePatchApplyRequest
 
 /// <summary>
 ///     Result of <see cref="INodePatchApplyService.PreviewAsync" /> — a non-mutating dry-run plan. All paths are
-///     folder-relative (<c>&lt;alias&gt;/&lt;rel&gt;</c>); rejection strings carry no host path (§11).
+///     folder-relative (<c>&lt;alias&gt;/&lt;rel&gt;</c>); rejection strings carry no host path.
 /// </summary>
 public sealed record NodePatchApplyPreview
 {
@@ -35,7 +35,7 @@ public sealed record NodePatchApplyPreview
 
 /// <summary>
 ///     Result of <see cref="INodePatchApplyService.ApplyApprovedAsync" />. All paths are folder-relative; rejection
-///     strings carry no host path (§11).
+///     strings carry no host path.
 /// </summary>
 public sealed record NodePatchApplyResult
 {
@@ -55,7 +55,7 @@ public sealed record NodePatchApplyResult
     public bool PartiallyApplied { get; init; }
 }
 
-/// <summary>A single changed file in a patch apply preview/result. Carries no alias prefix and no host path (§11).</summary>
+/// <summary>A single changed file in a patch apply preview/result. Carries no alias prefix and no host path.</summary>
 public sealed record PatchApplyFileEntry
 {
     /// <summary>The selected-folder alias the file belongs to.</summary>

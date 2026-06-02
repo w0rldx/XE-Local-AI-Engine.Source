@@ -6,9 +6,6 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
-/// <summary>
-///     Startup/options validator for runtime package settings.
-/// </summary>
 public sealed class RuntimePackageValidator : IRuntimePackageValidator
 {
     private readonly ModelNameValidator _modelNameValidator;

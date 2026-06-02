@@ -7,8 +7,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic CI guard for the §4 decision (no Ollama, no network). Locks in the live finding from
-///     <see cref="P0ApprovalSpikeTests" />: the framework-native approval gate
+///     Deterministic CI guard for framework approval behavior (no Ollama, no network). Locks in the live finding from
+///     the approval-gate probe: the framework-native approval gate
 ///     (<see cref="ApprovalRequiredAIFunction" /> + <c>UseFunctionInvocation</c>) PAUSES — run#1 surfaces a
 ///     <see cref="ToolApprovalRequestContent" /> and does NOT execute the tool — and a THREADLESS resume
 ///     (replay history + the approval response, <c>AgentSession = null</c>) executes the tool only when

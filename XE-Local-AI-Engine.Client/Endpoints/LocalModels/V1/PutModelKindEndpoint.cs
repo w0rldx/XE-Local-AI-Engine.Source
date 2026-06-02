@@ -8,9 +8,6 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
-/// <summary>
-///     FastEndpoints handler for setting the operator override of a local model's classification.
-/// </summary>
 public sealed class PutModelKindEndpoint(
     IModelClassificationService classificationService,
     ModelNameValidator modelNameValidator) : Endpoint<SetModelKindRequest, ModelKindResponse>

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Insights;
 
 /// <summary>
-///     Application-layer read model over the per-agent feedback aggregate (Playbook P2). Shapes the raw store counts
+///     Application-layer read model over the per-agent feedback aggregate. Shapes the raw store counts
 ///     into operator-facing analytics: derived totals/down-rate, the "never act on n=1" threshold flag, and
 ///     privacy-capped/truncated comment exemplars. Pure analytics — no generation, no playbook writes.
 /// </summary>
@@ -30,5 +30,5 @@ public sealed record OverallFeedback(int Total, int Up, int Down, double DownRat
 /// <summary>Per-tool feedback breakdown (conversation-level attribution — see the store contract).</summary>
 public sealed record ToolFeedbackBreakdown(string ToolName, int Total, int Up, int Down, double DownRate, bool MeetsThreshold);
 
-/// <summary>A capped/truncated comment exemplar. <see cref="MessageId" />/<see cref="ConversationId" /> are the evidence refs the deferred analysis phase (P3) will cite.</summary>
+/// <summary>A capped/truncated comment exemplar. <see cref="MessageId" />/<see cref="ConversationId" /> identify the feedback evidence used by analysis suggestions.</summary>
 public sealed record FeedbackExemplarView(string Rating, string Comment, Guid MessageId, Guid ConversationId, long CreatedAtUtc, bool Truncated);

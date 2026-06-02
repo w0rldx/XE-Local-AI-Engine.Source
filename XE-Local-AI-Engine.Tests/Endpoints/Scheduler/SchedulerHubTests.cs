@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 5 tests for <c>SchedulerHub</c>: the negotiate endpoint requires the operator token like the other local
+///     SchedulerHub tests: the negotiate endpoint requires the operator token like the other local
 ///     hubs, and a sanitized event published through <see cref="ISchedulerEventPublisher" /> reaches an authorized
 ///     connected client (proving the hub bridge end-to-end).
 /// </summary>

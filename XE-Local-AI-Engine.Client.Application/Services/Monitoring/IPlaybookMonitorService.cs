@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Monitoring;
 
 /// <summary>
-///     Cohort-monitoring verdict for a single Enabled playbook action (Playbook P5, plan §3.2). The signal is coarse and
-///     agent-level (injection is not per-message attributable, plan §10), so it is advisory only: <see cref="Regressed" />
+///     Cohort-monitoring verdict for a single Enabled playbook action (relevance retrieval and cohort monitoring, the cohort-monitor verdict rules). The signal is coarse and
+///     agent-level (injection is not per-message attributable, the aggregate-feedback attribution rule), so it is advisory only: <see cref="Regressed" />
 ///     and <see cref="Flat" /> flag an action for human review, never an automatic disable.
 /// </summary>
 public enum PlaybookMonitorStatus
@@ -37,7 +37,7 @@ public sealed record PlaybookActionMonitorView(
 
 /// <summary>
 ///     Computes the cohort-monitoring view for every Enabled action of an agent. Invoked off the hot path (the monitor
-///     GET endpoint / batch only), never during a send. The implementation is supplied in Playbook P5 Wave 2 (it depends
+///     GET endpoint / batch only), never during a send. The implementation is supplied in relevance retrieval and cohort monitoring background implementation (it depends
 ///     on the monitor store); this contract is pinned up front so the host endpoint and React signal can build against it.
 /// </summary>
 public interface IPlaybookMonitorService

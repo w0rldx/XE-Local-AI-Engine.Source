@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-/// <summary>
-///     Response DTO for node settings operations.
-/// </summary>
 public sealed record NodeSettingsResponse
 {
     public int MaxMessageRequestTimeoutSeconds { get; init; }
@@ -16,9 +13,6 @@ public sealed record NodeSettingsResponse
     public int MaxAllowedMessageRequestTimeoutSeconds { get; init; }
 }
 
-/// <summary>
-///     Request DTO for save node settings operations.
-/// </summary>
 public sealed record SaveNodeSettingsRequest
 {
     public int MaxMessageRequestTimeoutSeconds { get; init; }

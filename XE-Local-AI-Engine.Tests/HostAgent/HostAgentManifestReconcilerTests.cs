@@ -186,7 +186,7 @@ public sealed class HostAgentManifestReconcilerTests
             yield break;
         }
 
-        // Sandbox operations (Marker J-local) are not exercised by these manifest-reconciler tests.
+        // Sandbox runtime operations are not exercised by these manifest-reconciler tests.
         public Task<string> CreateSandboxContainerAsync(SandboxContainerSpec spec, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
