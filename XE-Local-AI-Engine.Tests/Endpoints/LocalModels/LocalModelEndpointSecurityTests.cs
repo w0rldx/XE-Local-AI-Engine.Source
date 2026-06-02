@@ -30,12 +30,19 @@ public sealed class LocalModelEndpointSecurityTests
             ModelName = "llama3:8b"
         }).ConfigureAwait(false);
         using var deleteResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b").ConfigureAwait(false);
+        using var setKindResponse = await client.PutAsJsonAsync("/api/local/v1/models/llama3:8b/kind", new SetModelKindRequest
+        {
+            Kind = "Chat"
+        }).ConfigureAwait(false);
+        using var resetKindResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b/kind").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, detailsResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, selectResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, pullResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, setKindResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, resetKindResponse.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().ListLocalModelsAsync(Arg.Any<CancellationToken>());
         modelService.DidNotReceiveWithAnyArgs().PullModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }

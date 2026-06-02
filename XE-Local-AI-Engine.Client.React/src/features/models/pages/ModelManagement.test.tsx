@@ -13,6 +13,8 @@ const { apiMock, confirmMock } = vi.hoisted(() => ({
 		listLocalModels: vi.fn(),
 		pullLocalModel: vi.fn(),
 		selectLocalModel: vi.fn(),
+		setLocalModelKind: vi.fn(),
+		resetLocalModelKind: vi.fn(),
 	},
 	confirmMock: vi.fn(),
 }));
@@ -57,6 +59,9 @@ describe("ModelManagement", () => {
 				disconnect = vi.fn();
 			},
 		});
+		// jsdom does not implement scrollIntoView; Mantine's Combobox calls it when the override Select dropdown opens,
+		// which would otherwise surface as an unhandled rejection from a deferred timer.
+		Element.prototype.scrollIntoView = vi.fn();
 		apiMock.listLocalModels.mockResolvedValue({
 			isAvailable: true,
 			selectedModelName: "llama3:8b",
@@ -71,6 +76,10 @@ describe("ModelManagement", () => {
 					parameterSize: "8B",
 					quantizationLevel: "Q4_0",
 					isSelected: true,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: ["completion", "tools"],
+					isOverridden: false,
 				},
 			],
 		});
@@ -78,6 +87,8 @@ describe("ModelManagement", () => {
 		apiMock.selectLocalModel.mockResolvedValue({ selectedModelName: "llama3:8b" });
 		apiMock.pullLocalModel.mockResolvedValue({ modelName: "orca-mini:latest", status: "success", totalBytes: 100, completedBytes: 100 });
 		apiMock.deleteLocalModel.mockResolvedValue({ modelName: "llama3:8b", deleted: true });
+		apiMock.setLocalModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Embedding", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: true });
+		apiMock.resetLocalModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Chat", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: false });
 		confirmMock.mockResolvedValue(true);
 	});
 
@@ -115,6 +126,90 @@ describe("ModelManagement", () => {
 		fireEvent.click(deleteButton!);
 		await waitFor(() => expect(confirmMock).toHaveBeenCalled());
 		await waitFor(() => expect(apiMock.deleteLocalModel).toHaveBeenCalledWith("llama3:8b"));
+	});
+
+	it("renders the type column with the effective kind badge and capability badges", async () => {
+		renderWithProviders(<ModelManagement />);
+
+		const kindBadge = await screen.findByTestId("model-kind-badge-llama3:8b");
+		expect(kindBadge.textContent).toContain("Chat");
+		// Raw Ollama capabilities surface as read-only badges.
+		expect(screen.getByText("Tools")).toBeTruthy();
+		// A non-overridden model shows no "reset to detected" affordance.
+		expect(screen.queryByLabelText("Reset llama3:8b type to detected")).toBeNull();
+	});
+
+	it("overrides a model kind through the select and reflects the refetched (overridden) row", async () => {
+		// First list shows the detected Chat kind. The post-override refetch returns the OVERRIDDEN row, so the badge
+		// must update from the refetch — not from the mutation response (which the page intentionally does not trust).
+		const overriddenRow = {
+			modelName: "llama3:8b",
+			sizeBytes: 1_073_741_824,
+			modifiedAtUtc: Date.UTC(2026, 4, 24),
+			family: "llama",
+			parameterSize: "8B",
+			quantizationLevel: "Q4_0",
+			isSelected: true,
+			kind: "Embedding",
+			detectedKind: "Chat",
+			capabilities: ["completion", "tools"],
+			isOverridden: true,
+		};
+		apiMock.listLocalModels
+			.mockResolvedValueOnce({ isAvailable: true, selectedModelName: "llama3:8b", configuredDefaultModelName: "llama3:8b", error: null, items: [{ ...overriddenRow, kind: "Chat", isOverridden: false }] })
+			.mockResolvedValue({ isAvailable: true, selectedModelName: "llama3:8b", configuredDefaultModelName: "llama3:8b", error: null, items: [overriddenRow] });
+
+		renderWithProviders(<ModelManagement />);
+
+		const initialBadge = await screen.findByTestId("model-kind-badge-llama3:8b");
+		expect(initialBadge.textContent).toContain("Chat");
+
+		// Open the override Select and choose Embedding. Mantine's Select associates the aria-label with more than one
+		// node, so target the input element explicitly (mirrors the pull-input lookup above).
+		const select = screen.getAllByLabelText("Override type for llama3:8b").find((element) => element.tagName === "INPUT");
+		expect(select).toBeTruthy();
+		fireEvent.click(select!);
+		const option = await screen.findByRole("option", { name: "Embedding" });
+		fireEvent.click(option);
+
+		await waitFor(() => expect(apiMock.setLocalModelKind).toHaveBeenCalledWith("llama3:8b", "Embedding"));
+		// The list is refetched after the override so lazy detection refreshes the row.
+		await waitFor(() => expect(apiMock.listLocalModels).toHaveBeenCalledTimes(2));
+		// The badge reflects the refetched overridden row, and the reset affordance now appears.
+		await waitFor(() => expect(screen.getByTestId("model-kind-badge-llama3:8b").textContent).toContain("Embedding"));
+		expect(screen.getByLabelText("Reset llama3:8b type to detected")).toBeTruthy();
+	});
+
+	it("shows a reset-to-detected action only for overridden models and resets through the API", async () => {
+		apiMock.listLocalModels.mockResolvedValue({
+			isAvailable: true,
+			selectedModelName: "llama3:8b",
+			configuredDefaultModelName: "llama3:8b",
+			error: null,
+			items: [
+				{
+					modelName: "llama3:8b",
+					sizeBytes: 1_073_741_824,
+					modifiedAtUtc: Date.UTC(2026, 4, 24),
+					family: "llama",
+					parameterSize: "8B",
+					quantizationLevel: "Q4_0",
+					isSelected: true,
+					// Operator overrode this chat model to Embedding — effective kind differs from detected.
+					kind: "Embedding",
+					detectedKind: "Chat",
+					capabilities: ["completion", "tools"],
+					isOverridden: true,
+				},
+			],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		const resetButton = await screen.findByLabelText("Reset llama3:8b type to detected");
+		fireEvent.click(resetButton);
+
+		await waitFor(() => expect(apiMock.resetLocalModelKind).toHaveBeenCalledWith("llama3:8b"));
 	});
 
 	it("shows unavailable Ollama state", async () => {

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { cx, display } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
+import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 import classes from "./ModelSelectorCard.module.css";
 
 interface ModelSelectorCardProps {
@@ -107,6 +108,9 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 	const hasOptions = modelOptions.length > 0;
 	const isDisabled = disabled || !hasOptions;
 	const showSearch = modelOptions.length > 5;
+	// The chat picker is strictly filtered to chat-capable models (locked decision D3), so a node whose only installed
+	// models are embedding/unknown shows just the local-default option. Detect that to explain the otherwise-bare list.
+	const hasNoChatModels = modelOptions.every((option) => option.value === localDefaultModelValue);
 	const reasoningLabel = t("pages.chat.reasoningLabel", "Reasoning");
 	const statusFallback = (option: ModelOption): string =>
 		option.isAvailable ? t("pages.chat.modelAvailable", "Available") : t("pages.chat.modelUnavailable", "Unavailable");
@@ -225,6 +229,11 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 								{filtered.length === 0 ? (
 									<Text size="sm" c="dimmed" px="sm" py="xs" ta="center">
 										{t("pages.chat.modelSelector.noResults", "No models found")}
+									</Text>
+								) : null}
+								{hasNoChatModels && searchQuery.trim().length === 0 ? (
+									<Text size="sm" c="dimmed" px="sm" py="xs" ta="center" data-testid="chat-model-selector-no-chat-models">
+										{t("pages.chat.modelSelector.noChatModels", "No chat-capable models")}
 									</Text>
 								) : null}
 							</Stack>

@@ -5,6 +5,7 @@ const { axiosInstanceMock, buildLocalApiUrlMock } = vi.hoisted(() => ({
     delete: vi.fn(),
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
   },
   buildLocalApiUrlMock: vi.fn((path: string) => `/local/${path}`),
 }));
@@ -17,7 +18,15 @@ vi.mock("@/core/api/utils/LocalApiUrl", () => ({
   buildLocalApiUrl: buildLocalApiUrlMock,
 }));
 
-import { deleteLocalModel, getLocalModelDetails, listLocalModels, pullLocalModel, selectLocalModel } from "@/features/models/api/LocalModelsApi";
+import {
+  deleteLocalModel,
+  getLocalModelDetails,
+  listLocalModels,
+  pullLocalModel,
+  resetLocalModelKind,
+  selectLocalModel,
+  setLocalModelKind,
+} from "@/features/models/api/LocalModelsApi";
 
 describe("local models API", () => {
   it("lists local models and forwards request config", async () => {
@@ -61,5 +70,21 @@ describe("local models API", () => {
 
     await expect(deleteLocalModel("orca-mini:latest")).resolves.toBe(response);
     expect(axiosInstanceMock.delete).toHaveBeenCalledWith("/local/models/orca-mini%3Alatest", undefined);
+  });
+
+  it("sets a model kind override through PUT with an encoded route segment", async () => {
+    const response = { modelName: "llama3:8b", kind: "Embedding", detectedKind: "Chat", capabilities: ["completion"], isOverridden: true };
+    axiosInstanceMock.put.mockResolvedValue({ data: response });
+
+    await expect(setLocalModelKind("llama3:8b", "Embedding")).resolves.toBe(response);
+    expect(axiosInstanceMock.put).toHaveBeenCalledWith("/local/models/llama3%3A8b/kind", { kind: "Embedding" }, undefined);
+  });
+
+  it("resets a model kind override through DELETE with an encoded route segment", async () => {
+    const response = { modelName: "llama3:8b", kind: "Chat", detectedKind: "Chat", capabilities: ["completion"], isOverridden: false };
+    axiosInstanceMock.delete.mockResolvedValue({ data: response });
+
+    await expect(resetLocalModelKind("llama3:8b")).resolves.toBe(response);
+    expect(axiosInstanceMock.delete).toHaveBeenCalledWith("/local/models/llama3%3A8b/kind", undefined);
   });
 });

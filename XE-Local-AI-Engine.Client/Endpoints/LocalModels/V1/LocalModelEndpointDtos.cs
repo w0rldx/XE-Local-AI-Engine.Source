@@ -66,6 +66,54 @@ public sealed class LocalModelResponse
     public string? QuantizationLevel { get; init; }
 
     public required bool IsSelected { get; init; }
+
+    /// <summary>Effective classification (<c>override ?? detected</c>) as a <c>ModelKind</c> string.</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>Machine-detected classification as a <c>ModelKind</c> string (drives the "reset to detected" affordance).</summary>
+    public required string DetectedKind { get; init; }
+
+    /// <summary>Raw Ollama capability strings for read-only badges (e.g. <c>tools</c>, <c>vision</c>, <c>thinking</c>).</summary>
+    public required IReadOnlyList<string> Capabilities { get; init; }
+
+    /// <summary>True when an operator override is set, so the effective kind differs from the detected one.</summary>
+    public required bool IsOverridden { get; init; }
+}
+
+/// <summary>
+///     Request DTO for set local model kind operations. <see cref="ModelName" /> is bound from the route; <see cref="Kind" />
+///     is the desired <c>ModelKind</c> value (case-insensitive).
+/// </summary>
+public sealed class SetModelKindRequest
+{
+    public string? ModelName { get; init; }
+
+    public string? Kind { get; init; }
+}
+
+/// <summary>
+///     Request DTO for reset local model kind operations (clears the operator override). <see cref="ModelName" /> is
+///     bound from the route.
+/// </summary>
+public sealed class ResetModelKindRequest
+{
+    public string? ModelName { get; init; }
+}
+
+/// <summary>
+///     Response DTO for local model classification (override set/reset) operations.
+/// </summary>
+public sealed class ModelKindResponse
+{
+    public required string ModelName { get; init; }
+
+    public required string Kind { get; init; }
+
+    public required string DetectedKind { get; init; }
+
+    public required IReadOnlyList<string> Capabilities { get; init; }
+
+    public required bool IsOverridden { get; init; }
 }
 
 /// <summary>

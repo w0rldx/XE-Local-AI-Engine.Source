@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+
+import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import type { LocalModelDto } from "@/features/models/api/LocalModelsApi";
+
+function model(modelName: string, kind: string): LocalModelDto {
+	return {
+		modelName,
+		sizeBytes: null,
+		modifiedAtUtc: null,
+		family: null,
+		parameterSize: null,
+		quantizationLevel: null,
+		isSelected: false,
+		kind,
+		detectedKind: kind,
+		capabilities: [],
+		isOverridden: false,
+	};
+}
+
+describe("chat model picker filter", () => {
+	it("keeps only chat-capable models and hides embedding and unknown ones (locked decision D3)", () => {
+		const models = [
+			model("llama3:8b", "Chat"),
+			model("nomic-embed-text", "Embedding"),
+			model("mystery-model", "Unknown"),
+			model("mistral", "Chat"),
+		];
+
+		const options = toChatModelOptions(models, true);
+
+		expect(options.map((option) => option.value)).toEqual(["llama3:8b", "mistral"]);
+	});
+
+	it("returns no options when every model is non-chat", () => {
+		const options = toChatModelOptions([model("nomic-embed-text", "Embedding"), model("mystery", "Unknown")], true);
+
+		expect(options).toHaveLength(0);
+	});
+
+	it("propagates node availability onto each chat option", () => {
+		const options = toChatModelOptions([model("llama3:8b", "Chat")], false);
+
+		expect(options[0]?.isAvailable).toBe(false);
+	});
+});

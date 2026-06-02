@@ -8,6 +8,10 @@ export interface LocalModelViewModel {
   parameterSizeLabel: string;
   quantizationLabel: string;
   isSelected: boolean;
+  kind: string;
+  detectedKind: string;
+  capabilities: string[];
+  isOverridden: boolean;
 }
 
 export interface PullProgressModel {
@@ -50,6 +54,10 @@ export function toLocalModelViewModel(model: LocalModelDto): LocalModelViewModel
     parameterSizeLabel: model.parameterSize?.trim() || emptyModelValue,
     quantizationLabel: model.quantizationLevel?.trim() || emptyModelValue,
     isSelected: model.isSelected,
+    kind: model.kind,
+    detectedKind: model.detectedKind,
+    capabilities: model.capabilities,
+    isOverridden: model.isOverridden,
   };
 }
 

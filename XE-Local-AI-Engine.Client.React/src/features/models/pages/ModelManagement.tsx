@@ -11,6 +11,7 @@ import {
 	Modal,
 	Progress,
 	ScrollArea,
+	Select,
 	SimpleGrid,
 	Stack,
 	Table,
@@ -20,9 +21,10 @@ import {
 	Tooltip,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconCheck, IconCloudDownload, IconFileText, IconRefresh, IconRobot, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconArrowBackUp, IconCheck, IconCloudDownload, IconFileText, IconRefresh, IconRobot, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import {
@@ -30,7 +32,9 @@ import {
 	getLocalModelDetails,
 	listLocalModels,
 	pullLocalModel,
+	resetLocalModelKind,
 	selectLocalModel,
+	setLocalModelKind,
 } from "@/features/models/api/LocalModelsApi";
 import { toLocalModelViewModel, toPullProgressModel } from "@/features/models/models/LocalModelModel";
 import { localModelsQueryKeys } from "@/features/models/queries/LocalModelsQueryKeys";
@@ -41,7 +45,39 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected local model error";
 }
 
+// Effective-kind badge color: chat-capable models stand out (blue), embedding models are visually distinct (grape),
+// and an unclassified/unknown model is muted (gray).
+function kindBadgeColor(kind: string): string {
+	switch (kind) {
+		case "Chat":
+			return "blue";
+		case "Embedding":
+			return "grape";
+		default:
+			return "gray";
+	}
+}
+
+// Localized label for a raw Ollama capability string, falling back to the raw value for capabilities without a label.
+function capabilityLabel(t: (key: string, fallback: string) => string, capability: string): string {
+	switch (capability) {
+		case "tools":
+			return t("pages.models.type.capability.tools", "Tools");
+		case "vision":
+			return t("pages.models.type.capability.vision", "Vision");
+		case "thinking":
+			return t("pages.models.type.capability.thinking", "Thinking");
+		default:
+			return capability;
+	}
+}
+
+// The three classifications the operator can pick from when overriding a model's kind (locked decision D1). Mirrors
+// the persisted ModelKind enum names — the value is sent verbatim to the override endpoint.
+const overridableKinds = ["Chat", "Embedding", "Unknown"] as const;
+
 export function ModelManagement() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const { confirm } = useConfirm();
 	const [selectedModelName, setSelectedModelName] = useState<string | undefined>();
@@ -107,10 +143,60 @@ export function ModelManagement() {
 		},
 	});
 
-	const actionError = selectMutation.error ?? pullMutation.error ?? deleteMutation.error;
-	const isActionPending = selectMutation.isPending || pullMutation.isPending || deleteMutation.isPending;
+	const setKindMutation = useMutation({
+		mutationFn: ({ modelName, kind }: { modelName: string; kind: string }) => setLocalModelKind(modelName, kind),
+		// Setting an override does NOT probe Ollama, so the response's detectedKind may still be Unknown. Invalidate
+		// the list so the next refetch runs lazy detection and the row reflects the freshly detected kind, not the
+		// override response.
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.list() });
+		},
+	});
+
+	const resetKindMutation = useMutation({
+		mutationFn: (modelName: string) => resetLocalModelKind(modelName),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: localModelsQueryKeys.list() });
+		},
+	});
+
+	const actionError = selectMutation.error ?? pullMutation.error ?? deleteMutation.error ?? setKindMutation.error ?? resetKindMutation.error;
+	const isActionPending =
+		selectMutation.isPending ||
+		pullMutation.isPending ||
+		deleteMutation.isPending ||
+		setKindMutation.isPending ||
+		resetKindMutation.isPending;
 	const selectedModel = modelViewModels.find((model) => model.modelName === selectedModelName);
 	const pullNameToSubmit = pullModelName.trim();
+
+	// Localized label for a ModelKind enum string. Falls back to the raw value for any unexpected/future kind.
+	const kindLabel = useCallback(
+		(kind: string): string => {
+			switch (kind) {
+				case "Chat":
+					return t("pages.models.type.kind.chat", "Chat");
+				case "Embedding":
+					return t("pages.models.type.kind.embedding", "Embedding");
+				case "Unknown":
+					return t("pages.models.type.kind.unknown", "Unknown");
+				default:
+					return kind;
+			}
+		},
+		[t],
+	);
+
+	// Override options for a given model: the fixed overridable kinds, plus the model's current effective kind when it
+	// is not already in the list. This keeps the Select's value (the effective model.kind) always matching an option, so
+	// a future effective kind (e.g. Vision/Reranker) renders as a real, selectable entry instead of a blank Select.
+	const kindSelectFor = useCallback(
+		(currentKind: string): { value: string; label: string }[] => {
+			const kinds = overridableKinds.some((kind) => kind === currentKind) ? overridableKinds : [...overridableKinds, currentKind];
+			return kinds.map((kind) => ({ value: kind, label: kindLabel(kind) }));
+		},
+		[kindLabel],
+	);
 
 	const confirmDelete = useCallback(
 		async (modelName: string) => {
@@ -193,6 +279,7 @@ export function ModelManagement() {
 									<Table.Thead>
 										<Table.Tr>
 											<Table.Th>Name</Table.Th>
+											<Table.Th>{t("pages.models.type.columnHeader", "Type")}</Table.Th>
 											<Table.Th>Size</Table.Th>
 											<Table.Th>Modified</Table.Th>
 											<Table.Th>Family</Table.Th>
@@ -212,6 +299,55 @@ export function ModelManagement() {
 															Default
 														</Badge>
 													) : null}
+												</Table.Td>
+												<Table.Td>
+													<Stack gap={6}>
+														<Group gap={6} align="center">
+															<Badge
+																color={kindBadgeColor(model.kind)}
+																variant="light"
+																data-testid={`model-kind-badge-${model.modelName}`}
+															>
+																{kindLabel(model.kind)}
+															</Badge>
+															{model.isOverridden ? (
+																<Tooltip label={t("pages.models.type.reset", "Reset to detected")} withArrow={true}>
+																	<ActionIcon
+																		aria-label={`Reset ${model.modelName} type to detected`}
+																		variant="subtle"
+																		color="gray"
+																		disabled={isActionPending}
+																		onClick={() => resetKindMutation.mutate(model.modelName)}
+																	>
+																		<IconArrowBackUp size={16} />
+																	</ActionIcon>
+																</Tooltip>
+															) : null}
+														</Group>
+														{model.capabilities.length > 0 ? (
+															<Group gap={4}>
+																{model.capabilities.map((capability) => (
+																	<Badge key={capability} size="xs" variant="outline" color="gray">
+																		{capabilityLabel(t, capability)}
+																	</Badge>
+																))}
+															</Group>
+														) : null}
+														<Select
+															aria-label={`Override type for ${model.modelName}`}
+															data={kindSelectFor(model.kind)}
+															value={model.kind}
+															allowDeselect={false}
+															disabled={isActionPending}
+															size="xs"
+															comboboxProps={{ withinPortal: false }}
+															onChange={(value) => {
+																if (value && value !== model.kind) {
+																	setKindMutation.mutate({ modelName: model.modelName, kind: value });
+																}
+															}}
+														/>
+													</Stack>
 												</Table.Td>
 												<Table.Td>{model.sizeLabel}</Table.Td>
 												<Table.Td>{model.modifiedDateLabel}</Table.Td>

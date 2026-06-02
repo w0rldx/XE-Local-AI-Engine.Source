@@ -95,6 +95,10 @@ public static class LocalApiRoutes
         public const string ModelDetails = "models/{modelName}/details";
         public const string Select = "models/select";
         public const string Pull = "models/pull";
+
+        // Operator override of a model's classification. The literal "kind" segment follows the {modelName} param, so
+        // FastEndpoints prioritises it over ModelByName's bare param route (same literal-vs-param rule as ModelDetails).
+        public const string ModelKind = "models/{modelName}/kind";
     }
 
     /// <summary>

@@ -44,6 +44,131 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
+    public async Task ListLocalModels_WhenAvailable_EnrichesItemsWithClassification()
+    {
+        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
+
+        // FakeOllama /api/show reports ["completion","embedding"], so the detector classifies the model as Chat.
+        AssertEx.Equal("Chat", model.Kind);
+        AssertEx.Equal("Chat", model.DetectedKind);
+        AssertEx.False(model.IsOverridden);
+        AssertEx.Contains(model.Capabilities, "completion");
+        AssertEx.Contains(model.Capabilities, "embedding");
+    }
+
+    [Test]
+    public async Task SetModelKind_WhenValid_PersistsOverrideAndReportsEffectiveKind()
+    {
+        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        using var client = context.Factory.CreateClient();
+
+        using var putRequest = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
+        putRequest.Content = JsonContent.Create(new SetModelKindRequest
+        {
+            Kind = "Embedding"
+        });
+        using var putResponse = await client.SendAsync(putRequest).ConfigureAwait(false);
+        var put = await ReadJsonAsync<ModelKindResponse>(putResponse).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        AssertEx.Equal("llama3:8b", put.ModelName);
+        AssertEx.Equal("Embedding", put.Kind);
+        // Setting an override does not probe /api/show, so detection has not yet run.
+        AssertEx.Equal("Unknown", put.DetectedKind);
+        AssertEx.True(put.IsOverridden);
+
+        // The override survives and surfaces through the list endpoint as the effective kind; the list call lazily detects,
+        // so the detected kind now resolves to Chat while the override keeps the effective kind on Embedding.
+        using var listRequest = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
+        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse).ConfigureAwait(false);
+        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
+        AssertEx.Equal("Embedding", model.Kind);
+        AssertEx.Equal("Chat", model.DetectedKind);
+        AssertEx.True(model.IsOverridden);
+    }
+
+    [Test]
+    public async Task ResetModelKind_WhenOverridden_ClearsOverrideAndRevertsToDetected()
+    {
+        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        using var client = context.Factory.CreateClient();
+
+        using var putRequest = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
+        putRequest.Content = JsonContent.Create(new SetModelKindRequest
+        {
+            Kind = "Embedding"
+        });
+        using var putResponse = await client.SendAsync(putRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b/kind");
+        using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
+        var deleted = await ReadJsonAsync<ModelKindResponse>(deleteResponse).ConfigureAwait(false);
+
+        // Reset clears the override but does NOT eagerly probe /api/show (the override-only row carries a null digest, so
+        // probing now would cache a stale digest and force a redundant re-probe on the next list). Detection is deferred to
+        // the next list, so the DELETE response reports Unknown with the override cleared.
+        AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+        AssertEx.Equal("llama3:8b", deleted.ModelName);
+        AssertEx.Equal("Unknown", deleted.Kind);
+        AssertEx.Equal("Unknown", deleted.DetectedKind);
+        AssertEx.False(deleted.IsOverridden);
+
+        // The next list lazily detects with the real digest, so the effective kind reverts to the detected Chat.
+        using var listRequest = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models");
+        using var listResponse = await client.SendAsync(listRequest).ConfigureAwait(false);
+        var models = await ReadJsonAsync<ListLocalModelsResponse>(listResponse).ConfigureAwait(false);
+        var model = models.Items.Single(item => item.ModelName == "llama3:8b");
+        AssertEx.Equal("Chat", model.Kind);
+        AssertEx.Equal("Chat", model.DetectedKind);
+        AssertEx.False(model.IsOverridden);
+    }
+
+    [Test]
+    public async Task SetModelKind_WhenKindIsInvalid_ReturnsValidationProblem()
+    {
+        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/llama3:8b/kind");
+        request.Content = JsonContent.Create(new SetModelKindRequest
+        {
+            Kind = "Banana"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task SetModelKind_WhenModelNameIsUnsafe_ReturnsValidationProblem()
+    {
+        var modelService = Substitute.For<IOllamaModelService>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        using var client = context.Factory.CreateClient();
+
+        // %2E%2E decodes to ".." in the bound route value, which ModelNameValidator rejects as path traversal.
+        using var request = CreateRequest(context.Factory, HttpMethod.Put, "/api/local/v1/models/%2E%2Esecret/kind");
+        request.Content = JsonContent.Create(new SetModelKindRequest
+        {
+            Kind = "Chat"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ListLocalModels_WhenProviderUnavailable_ReturnsSafeUnavailableResponse()
     {
         var modelService = Substitute.For<IOllamaModelService>();
