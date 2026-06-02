@@ -5,11 +5,13 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mcpServersQueryKeys } from "@/features/mcp/queries/McpServersQueryKeys";
 import { toolCatalogQueryKeys } from "@/features/tools/queries/ToolCatalogQueryKeys";
 
-const { apiMock } = vi.hoisted(() => ({
-	apiMock: {
+// Mock the generated hey-api TanStack mutation factories. Each returns an object carrying a `mutationFn` the hook
+// spreads (after withResponseValidation) into useMutation; the hooks layer their own onSuccess invalidation on top.
+// The factory mocks let a test assert the variable shape the hook forwarded to the wire.
+const { mutationFns } = vi.hoisted(() => ({
+	mutationFns: {
 		createMcpServer: vi.fn(),
 		updateMcpServer: vi.fn(),
 		deleteMcpServer: vi.fn(),
@@ -17,14 +19,26 @@ const { apiMock } = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("@/features/mcp/api/McpServersApi", () => ({
-	createMcpServer: apiMock.createMcpServer,
-	updateMcpServer: apiMock.updateMcpServer,
-	deleteMcpServer: apiMock.deleteMcpServer,
-	setMcpServerEnabled: apiMock.setMcpServerEnabled,
-	// listMcpServers / getMcpServerTools are imported by the module but unused in these mutation tests.
-	listMcpServers: vi.fn(),
-	getMcpServerTools: vi.fn(),
+// Builds the single-element generated query key shape `listMcpServersQueryKey()` returns. Centralizes the `_id`
+// discriminator literal (which trips biome's naming-convention rule) in one suppressed spot.
+function fakeListKey(): unknown {
+	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+	return [{ _id: "listMcpServers" }];
+}
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
+	createMcpServerMutation: () => ({ mutationFn: mutationFns.createMcpServer }),
+	updateMcpServerMutation: () => ({ mutationFn: mutationFns.updateMcpServer }),
+	deleteMcpServerMutation: () => ({ mutationFn: mutationFns.deleteMcpServer }),
+	setMcpServerEnabledMutation: () => ({ mutationFn: mutationFns.setMcpServerEnabled }),
+	listMcpServersQueryKey: () => fakeListKey(),
+	// Read-side factories are imported by the module under test but unused in these mutation tests.
+	listMcpServersOptions: vi.fn(() => ({ queryKey: fakeListKey(), queryFn: vi.fn() })),
+	getMcpServerToolsOptions: vi.fn(() => ({
+		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+		queryKey: [{ _id: "getMcpServerTools" }],
+		queryFn: vi.fn(),
+	})),
 }));
 
 import {
@@ -34,7 +48,7 @@ import {
 	useUpdateMcpServer,
 } from "@/features/mcp/queries/useMcpServers";
 
-const sampleRequest = {
+const sampleBody = {
 	name: "Server",
 	description: null,
 	transportKind: "Stdio" as const,
@@ -44,6 +58,9 @@ const sampleRequest = {
 	env: {},
 	url: null,
 };
+
+// The list invalidation key the hooks build via the generated `listMcpServersQueryKey()` (the `_id` partial object).
+const listKey = fakeListKey();
 
 // Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.
 const invalidatedKeys: unknown[] = [];
@@ -65,53 +82,60 @@ function makeWrapper() {
 
 describe("useMcpServers mutations", () => {
 	beforeEach(() => {
-		apiMock.createMcpServer.mockResolvedValue({ id: "mcp-1" });
-		apiMock.updateMcpServer.mockResolvedValue({ id: "mcp-1" });
-		apiMock.deleteMcpServer.mockResolvedValue(undefined);
-		apiMock.setMcpServerEnabled.mockResolvedValue({ id: "mcp-1", enabled: true });
+		mutationFns.createMcpServer.mockResolvedValue({ id: "mcp-1" });
+		mutationFns.updateMcpServer.mockResolvedValue({ id: "mcp-1" });
+		mutationFns.deleteMcpServer.mockResolvedValue(undefined);
+		mutationFns.setMcpServerEnabled.mockResolvedValue({ id: "mcp-1", enabled: true });
 	});
 
 	afterEach(() => {
 		vi.clearAllMocks();
 	});
 
-	it("create invalidates ONLY the servers list, never the tool catalog (server persists disabled)", async () => {
+	it("create forwards the body and invalidates ONLY the servers list, never the tool catalog (server persists disabled)", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useCreateMcpServer(), { wrapper: Wrapper });
 
-		result.current.mutate(sampleRequest);
+		result.current.mutate({ body: sampleBody });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(mcpServersQueryKeys.all());
+		// TanStack v5 passes (variables, context) — assert the first arg.
+		expect(mutationFns.createMcpServer.mock.calls[0]?.[0]).toEqual({ body: sampleBody });
+		expect(invalidatedKeys).toContainEqual(listKey);
 		expect(invalidatedKeys).not.toContainEqual(toolCatalogQueryKeys.all());
 	});
 
-	it("update invalidates both the servers list and the tool catalog", async () => {
+	it("update forwards path + body and invalidates both the servers list and the tool catalog", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useUpdateMcpServer(), { wrapper: Wrapper });
 
-		result.current.mutate({ id: "mcp-1", request: sampleRequest });
+		result.current.mutate({ path: { mcpServerId: "mcp-1" }, body: sampleBody });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(mcpServersQueryKeys.all());
+		expect(mutationFns.updateMcpServer.mock.calls[0]?.[0]).toEqual({
+			path: { mcpServerId: "mcp-1" },
+			body: sampleBody,
+		});
+		expect(invalidatedKeys).toContainEqual(listKey);
 		expect(invalidatedKeys).toContainEqual(toolCatalogQueryKeys.all());
 	});
 
-	it("delete invalidates both the servers list and the tool catalog", async () => {
+	it("delete forwards the path and invalidates both the servers list and the tool catalog", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useDeleteMcpServer(), { wrapper: Wrapper });
 
-		result.current.mutate("mcp-1");
+		result.current.mutate({ path: { mcpServerId: "mcp-1" } });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(mcpServersQueryKeys.all());
+		expect(mutationFns.deleteMcpServer.mock.calls[0]?.[0]).toEqual({ path: { mcpServerId: "mcp-1" } });
+		expect(invalidatedKeys).toContainEqual(listKey);
 		expect(invalidatedKeys).toContainEqual(toolCatalogQueryKeys.all());
 	});
 
-	it("enable toggle invalidates both the servers list and the tool catalog", async () => {
+	it("enable toggle forwards path + body and invalidates both the servers list and the tool catalog", async () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useSetMcpServerEnabled(), { wrapper: Wrapper });
 
@@ -119,7 +143,25 @@ describe("useMcpServers mutations", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(invalidatedKeys).toContainEqual(mcpServersQueryKeys.all());
+		expect(mutationFns.setMcpServerEnabled.mock.calls[0]?.[0]).toEqual({
+			path: { mcpServerId: "mcp-1" },
+			body: { enabled: true },
+		});
+		expect(invalidatedKeys).toContainEqual(listKey);
 		expect(invalidatedKeys).toContainEqual(toolCatalogQueryKeys.all());
+	});
+
+	it("disable toggle forwards enabled=false through the same PATCH", async () => {
+		const { Wrapper } = makeWrapper();
+		const { result } = renderHook(() => useSetMcpServerEnabled(), { wrapper: Wrapper });
+
+		result.current.mutate({ id: "mcp-1", enabled: false });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		expect(mutationFns.setMcpServerEnabled.mock.calls[0]?.[0]).toEqual({
+			path: { mcpServerId: "mcp-1" },
+			body: { enabled: false },
+		});
 	});
 });
