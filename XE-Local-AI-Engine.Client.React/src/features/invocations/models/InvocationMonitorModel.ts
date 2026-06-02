@@ -1,4 +1,47 @@
-import type { InvocationHistoryDto, InvocationStatusDto } from "@/features/invocations/api/InvocationsApi";
+// Domain view-models for the invocation monitor. The generated OpenAPI responses are the single source of truth
+// for the wire shape; their fields are all optional. These stricter types (every field required) are what the
+// page and the pure helpers below depend on — the mappers in InvocationMonitorMappers.ts coalesce each optional
+// generated field to a required value. InvocationStatus mirrors the generated InvocationStatus enum (a string
+// union with the same values); FailureCategory surfaces as a plain string so display degrades gracefully.
+export type InvocationStatusDto = "Pending" | "Assigned" | "Running" | "Completed" | "Failed" | "Cancelled";
+
+export type InvocationFailureCategoryDto = string | null;
+
+export interface InvocationCurrentDto {
+	invocationId: string;
+	conversationId: string;
+	status: InvocationStatusDto;
+	modelUsed: string | null;
+	startedAt: string;
+	lastUpdatedAt: string;
+	completedAt: string | null;
+	error: string | null;
+	failureCategory: InvocationFailureCategoryDto;
+	streamedChunkCount: number;
+	streamedThinkingChunkCount: number;
+	pendingToolCallCount: number;
+	hasPendingApproval: boolean;
+}
+
+export interface InvocationHistoryDto {
+	invocationId: string;
+	conversationId: string;
+	status: InvocationStatusDto;
+	modelUsed: string | null;
+	startedAt: string;
+	completedAt: string;
+	durationMs: number;
+	error: string | null;
+	failureCategory: InvocationFailureCategoryDto;
+	streamedChunkCount: number;
+	streamedThinkingChunkCount: number;
+}
+
+export interface InvocationMonitorDto {
+	current: InvocationCurrentDto | null;
+	history: InvocationHistoryDto[];
+	historyCapacity: number;
+}
 
 export const invocationEmptyValue = "—";
 
