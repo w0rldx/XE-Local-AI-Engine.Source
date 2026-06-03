@@ -39,8 +39,7 @@ export function ChatDisplayShell({
 	agentModeEnabled = false,
 	selectedAgentId = "",
 	agentOptions = [],
-	onToggleAgentMode,
-	onAgentChange,
+	onSelectAgent,
 	onSend,
 	onCancel,
 	onRegenerate,
@@ -171,8 +170,7 @@ export function ChatDisplayShell({
 					onModelChange={onModelChange}
 					onReasoningEffortChange={onReasoningEffortChange}
 					onToggleTools={onToggleTools}
-					onToggleAgentMode={onToggleAgentMode}
-					onAgentChange={onAgentChange}
+					onSelectAgent={onSelectAgent}
 					onSend={onSend}
 				/>
 			</Stack>

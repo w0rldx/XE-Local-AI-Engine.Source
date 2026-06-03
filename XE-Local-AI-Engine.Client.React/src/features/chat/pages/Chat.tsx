@@ -141,7 +141,7 @@ export function Chat() {
 		toggleTools,
 		setSelectedConversationId: setRequestedConversationId,
 		toggleSidebar,
-		toggleAgentMode,
+		setAgentModeEnabled,
 		setSelectedAgentId,
 	} = useNodeChatPreferencesStore((state) => state.actions);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
@@ -207,6 +207,20 @@ export function Chat() {
 	}, [agentDefinitionsQuery.data]);
 	// agentControlsAvailable: capability gate AND at least one agent in the live list.
 	const agentControlsAvailable = chatUiCapabilities.showAgentControls && agentOptions.length > 0;
+	// Single merged agent control wiring: picking an agent enables agent mode and stamps it; picking the Default
+	// Assistant row (empty id) disables agent mode and clears the selection. Replaces the old separate toggle.
+	const handleSelectAgent = useCallback(
+		(agentId: string) => {
+			if (agentId) {
+				setSelectedAgentId(agentId);
+				setAgentModeEnabled(true);
+			} else {
+				setAgentModeEnabled(false);
+				setSelectedAgentId("");
+			}
+		},
+		[setAgentModeEnabled, setSelectedAgentId],
+	);
 	// Reconcile a persisted model selection against the live list: once the models query has resolved, a
 	// stored model that no longer exists (renamed/removed on the node) falls back to the local default so the
 	// composer never points at a phantom model. Guarded on loaded data so the initial default-only list
@@ -964,8 +978,7 @@ export function Chat() {
 				agentModeEnabled={agentModeEnabled}
 				selectedAgentId={selectedAgentId}
 				agentOptions={agentOptions}
-				onToggleAgentMode={toggleAgentMode}
-				onAgentChange={setSelectedAgentId}
+				onSelectAgent={handleSelectAgent}
 				onSend={(content, effort, model) => {
 					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}

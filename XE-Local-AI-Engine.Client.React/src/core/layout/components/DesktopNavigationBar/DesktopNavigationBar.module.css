@@ -107,6 +107,16 @@
 	white-space: nowrap;
 }
 
+/* Mantine <Text> (.mantine-Text-root) resets white-space to normal, overriding the nowrap above.
+   Force the label child to a single line in BOTH states: while collapsed it would otherwise wrap at
+   width:0 and inflate the button height (uneven buttons); during the collapse↔expand width animation a
+   reflowing label wraps at narrow intermediate widths and snaps back, causing a height jump. A stable
+   single-line label keeps every nav button the same height and makes the reveal smooth. A label wider
+   than the expanded slot is clipped by the nav's overflow rather than wrapping to a second line. */
+.control-label-motion > * {
+	white-space: nowrap;
+}
+
 .link {
 	font-weight: 500;
 	display: block;

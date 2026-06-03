@@ -12,6 +12,10 @@ interface AgentTemplateGalleryProps {
 	onClose: () => void;
 }
 
+// Pulls the body padding token out so the sticky footer's negative margins exactly cancel Modal.Body's padding and
+// the border/background bleed to the dialog edges. Falls back to spacing-md (Mantine's default modal padding).
+const MODAL_PADDING = "var(--mb-padding, var(--mantine-spacing-md))";
+
 function errorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error ? error.message : fallback;
 }
@@ -37,6 +41,11 @@ function groupByDivision(templates: readonly AgentTemplateSummary[]): [string, A
 // budget — cloud-tuned prompts can be heavy for local small models. Import success clears the selection and toasts a
 // summary; the hook invalidates both the definitions and templates lists so the new agents appear and the disabled
 // state refreshes.
+//
+// Layout: plain Modal (Mantine centers and owns the scroll region — the content box scrolls when the list is tall).
+// The action footer is position:sticky bottom:0 so it stays visible without scrolling; its negative margins cancel
+// Modal.Body's padding so the border spans edge-to-edge. The token Badge is flex-shrink:0 and the Checkbox column
+// takes the slack (flex:1 minWidth:0) so long descriptions wrap instead of squeezing the badge into an ellipsis.
 export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryProps) {
 	const { t } = useTranslation();
 
@@ -76,7 +85,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 		<Modal
 			opened={opened}
 			onClose={onClose}
-			size="lg"
+			size="56rem"
 			title={t("pages.agents.templates.title", "Add starter agents")}
 			data-testid="agent-template-gallery"
 		>
@@ -128,6 +137,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 								<Badge
 									variant={overBudget ? "filled" : "light"}
 									color={overBudget ? "yellow" : "gray"}
+									style={{ flexShrink: 0 }}
 									data-testid={`agent-template-token-${slug}`}
 								>
 									{tokenLabel}
@@ -147,6 +157,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 										disabled={alreadyImported || importMutation.isPending}
 										onChange={(event) => toggle(slug, event.currentTarget.checked)}
 										data-testid={`agent-template-checkbox-${slug}`}
+										style={{ flex: 1, minWidth: 0 }}
 										label={
 											<Stack gap={2}>
 												<Group gap="xs" align="center">
@@ -185,7 +196,18 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 					</Stack>
 				))}
 
-				<Group justify="flex-end">
+				<Group
+					justify="flex-end"
+					pos="sticky"
+					bottom={0}
+					bg="var(--mantine-color-body)"
+					px="md"
+					py="md"
+					mt="xs"
+					mx={`calc(${MODAL_PADDING} * -1)`}
+					mb={`calc(${MODAL_PADDING} * -1)`}
+					style={{ borderTop: "1px solid var(--mantine-color-default-border)", zIndex: 2 }}
+				>
 					<Button variant="default" onClick={onClose}>
 						{t("common.cancel", "Cancel")}
 					</Button>

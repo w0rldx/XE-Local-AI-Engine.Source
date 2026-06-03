@@ -27,10 +27,10 @@
 		"openapi:check:live": "pnpm run openapi && git diff --exit-code -- openapi src/core/api/generated"
 	},
 	"dependencies": {
-		"@mantine/colors-generator": "^9.2.1",
-		"@mantine/core": "^9.2.1",
-		"@mantine/hooks": "^9.2.1",
-		"@mantine/notifications": "^9.2.1",
+		"@mantine/colors-generator": "^9.3.0",
+		"@mantine/core": "^9.3.0",
+		"@mantine/hooks": "^9.3.0",
+		"@mantine/notifications": "^9.3.0",
 		"@microsoft/signalr": "^10.0.0",
 		"@t3-oss/env-core": "^0.13.11",
 		"@tabler/icons-react": "^3.43.0",
