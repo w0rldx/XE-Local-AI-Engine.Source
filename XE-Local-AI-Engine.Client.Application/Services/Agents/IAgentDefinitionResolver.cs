@@ -28,12 +28,17 @@ public interface IAgentDefinitionResolver
 }
 
 /// <summary>
-///     The runtime projection of a bound agent definition. Every field maps 1:1 onto a
-///     <c>LocalChatRuntimePackageRequest</c> input so the existing builder/config-hash plumbing is reused verbatim.
+///     The runtime projection of a bound agent definition. The first five fields map 1:1 onto a
+///     <c>LocalChatRuntimePackageRequest</c> input so the existing builder/config-hash plumbing is reused verbatim;
+///     <see cref="AgentDefinitionId" /> and <see cref="AgentName" /> carry the resolved agent's provenance + display-name
+///     snapshot so the stream service stamps per-response attribution without a second fetch. The attribution members are
+///     trailing (with defaults) so they never participate in the config hash and never affect positional construction.
 /// </summary>
 public sealed record ResolvedAgentRuntime(
     string ResolvedSystemPrompt,
     IReadOnlyList<AllowedToolDto> AllowedTools,
     string? ModelProfile,
     string? ReasoningEffort,
-    int AgentDefinitionVersion);
+    int AgentDefinitionVersion,
+    Guid AgentDefinitionId = default,
+    string AgentName = "");

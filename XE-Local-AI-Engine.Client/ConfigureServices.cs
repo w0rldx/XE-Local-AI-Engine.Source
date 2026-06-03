@@ -199,6 +199,9 @@ public static class ConfigureServices
         // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
         // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
         builder.Services.AddHostedService<Services.ModelFit.ModelRecommendationScheduleSeeder>();
+        // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
+        // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
+        builder.Services.AddHostedService<Services.Agents.Implementation.DefaultAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])

@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class AgentDefinitionResolverTests
@@ -60,6 +59,63 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.Equal("qwen3:8b", resolved.ModelProfile);
         AssertEx.Equal("high", resolved.ReasoningEffort);
         AssertEx.Equal(4, resolved.AgentDefinitionVersion);
+    }
+
+    [Test]
+    public async Task ResolveAsync_ReturnsAgentIdAndName()
+    {
+        // The runtime projection carries the resolved agent's id + display-name snapshot so the stream service can stamp
+        // per-response attribution without a second fetch.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(name: "Backend Buddy", allowedTools: ["GetCurrentTime"]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(definition.Id, resolved!.AgentDefinitionId);
+        AssertEx.Equal("Backend Buddy", resolved.AgentName);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenDefaultAssistantSlug_UsesFullToolOffer()
+    {
+        // The seeded Default Assistant (mode-off persona) gets the FULL capability-gated offer, NOT the intersected
+        // allowed set — even though its AllowedToolNames is empty, both offered tools survive (reproduces today's chat).
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
+        var defaultAssistant = CreateDefinition(name: AgentDefaults.DefaultAgentName, allowedTools: []) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(2, resolved!.AllowedTools.Count);
+        AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == "GetCurrentTime");
+        AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == "Calculate");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenSeededSlugButNotDefaultAssistant_StaysIntersected()
+    {
+        // The full-offer branch is keyed strictly on the default-assistant slug: any other seeded row stays intersected,
+        // so a starter-pack persona can never claim the full offer.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
+        var seededPersona = CreateDefinition(name: "Seeded persona", allowedTools: ["GetCurrentTime"]) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = "some-other-pack-agent"
+        };
+        store.GetByIdAsync(seededPersona.Id, Arg.Any<CancellationToken>()).Returns(seededPersona);
+
+        var resolved = await resolver.ResolveAsync(seededPersona.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(1, resolved!.AllowedTools.Count);
+        AssertEx.Equal("GetCurrentTime", resolved.AllowedTools[0].Name);
     }
 
     [Test]

@@ -24,6 +24,7 @@ public sealed class NodeChatStreamService(
     ILocalToolOfferProvider localToolOfferProvider,
     IAgentDefinitionResolver agentDefinitionResolver,
     IAgentDefinitionStore agentDefinitionStore,
+    IDefaultAgentProvider defaultAgentProvider,
     IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
     TimeProvider timeProvider,
@@ -70,11 +71,20 @@ public sealed class NodeChatStreamService(
             cancellationToken).ConfigureAwait(false);
         yield return ToMessageEvent(ChatStreamEventTypes.UserMessagePersisted, correlation, userMessage, sequence.Next());
 
+        // Resolve the active model and the bound/selected agent BEFORE minting the assistant placeholder, because the
+        // placeholder is stamped with the resolved agent's id + display-name snapshot (per-response attribution). The
+        // resolve has no dependency on the placeholder (it reads conversation, trimmedContent, selectedPath), so the
+        // hoist is safe; the emitted SSE order below is unchanged: UserMessagePersisted -> AssistantPending ->
+        // AssistantQueued.
+        var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken).ConfigureAwait(false);
+
         var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
                 assistantMessageId,
                 requestId,
                 NowUnixMilliseconds(),
-                request.Model),
+                request.Model,
+                AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
+                AgentName: resolution.Resolved?.AgentName),
             cancellationToken).ConfigureAwait(false);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
@@ -137,31 +147,12 @@ public sealed class NodeChatStreamService(
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
-        // Resolve the offer-time active model with the SAME precedence the model list/selection uses
-        // (ListLocalModelsEndpoint): an explicit request model first, then the operator's node-default selection
-        // (StoredNodeSettings.DefaultModelName), then the static config fallback. Without the node-default step a
-        // "Local default" send (request.Model is null) would resolve the static fallback instead of the model the
-        // operator set as the node default, so a tool-capable node default would never satisfy the capability gate
-        // and run_in_agent_home would be withheld even with a tool-capable model selected.
-        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        var activeModel = request.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
-
-        // Resolve the conversation's bound agent definition (if any). A null result — no binding, or a binding whose
-        // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
-        // offer, and agent version 1. When bound, the definition supplies the system prompt, the intersected tool
-        // offer (already approval-overridden), the pinned model profile, the reasoning effort, and the version that
-        // feeds the config hash. The builder and config-hash plumbing are unchanged either way.
-        // The just-sent user turn is the relevance-retrieval query. The resolver injects only the most
-        // relevant Enabled playbook actions when the bound agent's Enabled set exceeds the retrieval threshold; below
-        // it (or with no binding) the query is inert and the prompt stays byte-identical to the pre-P5 path.
-        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
-
-        // When the bound definition is a tool-capable orchestrator, resolve a compiled orchestration spec to
-        // carry on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
-        // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent
-        // (the orchestrator-as-lone-agent fallback), keeping the unbound/single-agent path byte-identical. The same
-        // user turn drives per-participant playbook retrieval.
-        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
+        // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
+        // front (ResolveTurnAsync) so the placeholder could be stamped with the resolved agent's attribution; reuse
+        // those results here unchanged.
+        var activeModel = resolution.ActiveModel;
+        var resolved = resolution.Resolved;
+        var orchestration = resolution.Orchestration;
 
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
         // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
@@ -423,6 +414,64 @@ public sealed class NodeChatStreamService(
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
+
+    /// <summary>
+    ///     Computes the offer-time active model and resolves the effective per-turn agent (definition + orchestration)
+    ///     up front so the assistant placeholder can be stamped with the resolved agent's attribution. The effective-agent
+    ///     precedence is <c>request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant
+    ///     id</c>; resolving the Default Assistant on a cold conversation must NOT throw — a missing seed yields a null id,
+    ///     the resolver returns null, and the caller keeps the embedded default persona + full offer + the client
+    ///     "Default Assistant" label.
+    /// </summary>
+    private async Task<ResolvedTurn> ResolveTurnAsync(NodeChatStreamRequest request,
+        NodeChatConversationDto conversation,
+        string? activeModelOverride,
+        string trimmedContent,
+        CancellationToken cancellationToken)
+    {
+        // Resolve the offer-time active model with the SAME precedence the model list/selection uses
+        // (ListLocalModelsEndpoint): an explicit request model first, then the operator's node-default selection
+        // (StoredNodeSettings.DefaultModelName), then the static config fallback. Without the node-default step a
+        // "Local default" send (request.Model is null) would resolve the static fallback instead of the model the
+        // operator set as the node default, so a tool-capable node default would never satisfy the capability gate
+        // and run_in_agent_home would be withheld even with a tool-capable model selected.
+        string activeModel;
+        if (activeModelOverride is not null)
+        {
+            activeModel = activeModelOverride;
+        }
+        else
+        {
+            var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+            activeModel = request.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
+        }
+
+        // Effective-agent precedence: the just-clicked per-send selection wins, then the legacy conversation binding,
+        // then the seeded Default Assistant (mode-off persona). The default id is memoized for the process lifetime so
+        // the mode-off hot path avoids a DB round-trip per send.
+        var effectiveAgentId = request.AgentDefinitionId
+                               ?? conversation.AgentDefinitionId
+                               ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken).ConfigureAwait(false);
+
+        // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
+        // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
+        // offer, and agent version 1. When resolved, the definition supplies the system prompt, the tool offer (full for
+        // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
+        // that feeds the config hash, AND the attribution snapshot (id + display name). The just-sent user turn is the
+        // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
+
+        // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
+        // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
+        // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
+        // keeping the unbound/single-agent path byte-identical. The same user turn drives per-participant retrieval.
+        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
+
+        return new ResolvedTurn(activeModel, resolved, orchestration);
+    }
+
+    /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
+    private sealed record ResolvedTurn(string ActiveModel, ResolvedAgentRuntime? Resolved, ResolvedOrchestration? Orchestration);
 
     /// <summary>
     ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or <c>null</c> to run

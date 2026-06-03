@@ -61,6 +61,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -140,6 +141,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
             resolver,
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -162,6 +164,79 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal(1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent regenerate must carry no orchestration spec.");
+    }
+
+    [Test]
+    public async Task Regenerate_ReusesOriginalTurnAgent()
+    {
+        // The regenerate reuses the ORIGINAL turn's recorded agent, NOT the conversation binding. The conversation is
+        // bound to one agent; the original assistant turn was produced by a DIFFERENT agent (stamped on its metadata).
+        // The resolver must be consulted with the original's agent id, and the variant must be stamped with the
+        // re-resolved agent's name.
+        await using var provider = await BuildProviderAsync("regeneration-reuses-original-agent.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var conversationAgentId = Guid.NewGuid();
+        var originalTurnAgentId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(
+            new NodeChatCreateConversationRequest("Reuse original agent", "node", 10, AgentDefinitionId: conversationAgentId)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        // The original assistant turn carries its own agent attribution (stamped at its send time).
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
+                originalId,
+                originalCorrelation.RequestId,
+                12,
+                "model-x",
+                AgentDefinitionId: originalTurnAgentId,
+                AgentName: "Original Agent"))
+            .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        // The agent was renamed since the original turn — the re-resolve picks up the fresh name.
+        resolver.ResolveAsync(originalTurnAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Original persona.", [], "model-x", null, 5, originalTurnAgentId, "Renamed Original Agent"));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var newVariantId = Guid.Empty;
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantPending)
+            {
+                newVariantId = streamEvent.MessageId;
+            }
+        }
+
+        // The original turn's agent drove the resolve, NOT the conversation binding.
+        await resolver.Received().ResolveAsync(originalTurnAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+
+        // The regenerated variant is stamped with the FRESH (re-resolved) agent name + the agent id.
+        var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var variant = loaded.Messages.Single(message => message.MessageId == newVariantId);
+        AssertEx.Equal(originalTurnAgentId, variant.AgentDefinitionId);
+        AssertEx.Equal("Renamed Original Agent", variant.AgentName);
     }
 
     [Test]
@@ -204,6 +279,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             store,
+            CreateDefaultAgentProvider(),
             orchestrationResolver,
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -256,6 +332,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             resolver,
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -302,6 +379,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -366,6 +444,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             offerProvider,
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -421,6 +500,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             offerProvider,
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -467,6 +547,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -531,6 +612,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -574,6 +656,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -611,6 +694,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -669,6 +753,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
+    }
+
+    // The default-agent provider: returns null so the effective-agent precedence falls through to a null id (no seeded
+    // Default Assistant in these unit tests), keeping the default-persona contract on the rerun.
+    private static IDefaultAgentProvider CreateDefaultAgentProvider(Guid? defaultAgentId = null)
+    {
+        var provider = Substitute.For<IDefaultAgentProvider>();
+        provider.GetDefaultAgentIdAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(defaultAgentId));
+        return provider;
     }
 
     // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
