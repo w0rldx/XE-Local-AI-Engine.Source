@@ -35,6 +35,17 @@ vi.mock("@microsoft/signalr", () => ({
 	LogLevel: { Warning: 3 },
 }));
 
+// Mock the toast helper so the hook's feedback is asserted at the call boundary (no real Mantine DOM toasts).
+vi.mock("@/core/ui/notifications/Toast", () => ({
+	toast: { error: vi.fn(), success: vi.fn(), warn: vi.fn() },
+}));
+
+// Deterministic i18n: t echoes the key so toast assertions are stable without an i18n provider.
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+import { toast } from "@/core/ui/notifications/Toast";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
@@ -166,6 +177,53 @@ describe("useModelFitSchedulerEvents", () => {
 		handlers.get("scheduler.runCompleted")?.({ templateId: MODEL_FIT_TEMPLATE_ID });
 
 		expect(queryClient.getQueryState(fullLatestKey)?.isInvalidated).toBe(true);
+	});
+
+	it("shows a sticky error toast carrying the sanitized reason on a model-fit runFailed", () => {
+		renderHub();
+
+		handlers.get("scheduler.runFailed")?.({
+			templateId: MODEL_FIT_TEMPLATE_ID,
+			errorMessage: "The approved image is disabled.",
+			runId: "run-1",
+		});
+
+		expect(toast.error).toHaveBeenCalledWith(
+			"The approved image is disabled.",
+			expect.objectContaining({ autoClose: false, title: "pages.modelFit.recommendations.toasts.failTitle" }),
+		);
+	});
+
+	it("shows a brief success toast on a model-fit runCompleted", () => {
+		renderHub();
+
+		handlers.get("scheduler.runCompleted")?.({ templateId: MODEL_FIT_TEMPLATE_ID, runId: "run-2" });
+
+		expect(toast.success).toHaveBeenCalledWith(
+			"pages.modelFit.recommendations.toasts.success",
+			expect.objectContaining({ autoClose: 5000 }),
+		);
+	});
+
+	it("raises no toast for a terminal run of another template", () => {
+		renderHub();
+
+		handlers.get("scheduler.runFailed")?.({ templateId: "some-other-template", errorMessage: "boom" });
+
+		expect(toast.error).not.toHaveBeenCalled();
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(toast.warn).not.toHaveBeenCalled();
+	});
+
+	it("falls back to the i18n body when runFailed carries no errorMessage, still sticky", () => {
+		renderHub();
+
+		handlers.get("scheduler.runFailed")?.({ templateId: MODEL_FIT_TEMPLATE_ID, runId: "run-3" });
+
+		expect(toast.error).toHaveBeenCalledWith(
+			"pages.modelFit.recommendations.toasts.failFallback",
+			expect.objectContaining({ autoClose: false }),
+		);
 	});
 
 	it("unsubscribes and stops the connection on unmount", () => {

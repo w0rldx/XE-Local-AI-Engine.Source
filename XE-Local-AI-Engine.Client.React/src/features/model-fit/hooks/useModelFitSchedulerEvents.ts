@@ -1,18 +1,21 @@
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { toast } from "@/core/ui/notifications/Toast";
 import { modelRecommendationCheckTemplateId } from "@/features/model-fit/models/ModelFitModels";
 import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
 
-// Realtime authoritative refetch for the model-fit pages. Reuses the SAME scheduler SignalR hub and event-name
-// conventions as useSchedulerHub (no second hub server) — but where useSchedulerHub invalidates only scheduler
-// caches and ignores the payload, this hook reads the run event's templateId and reacts only to the reserved
-// model-recommendation-check template. A model-fit refresh runs asynchronously through the scheduler, so when a
-// run for that template reaches a terminal status the cached recommendation snapshot may have changed; we
-// invalidate the latest-recommendations query and let TanStack Query refetch the canonical state.
+// Realtime authoritative refetch + operator feedback for the model-fit pages. Reuses the SAME scheduler SignalR hub
+// and event-name conventions as useSchedulerHub (no second hub server) — but where useSchedulerHub invalidates only
+// scheduler caches and ignores the payload, this hook reads the run event's templateId and reacts only to the reserved
+// model-recommendation-check template. A model-fit refresh runs asynchronously through the scheduler, so when a run for
+// that template reaches a terminal status the cached recommendation snapshot may have changed; we invalidate the
+// latest-recommendations query and let TanStack Query refetch the canonical state, AND raise a transient toast so the
+// operator gets immediate, actionable feedback (the POST that fired the run already returned 200).
 //
 // The data layer is the generated hey-api TanStack query layer, whose query keys are single-element arrays
 // `[{ _id: "<operationId>", ... }]`. Invalidating with the `_id` partial object (via modelFitInvalidationKey)
@@ -23,10 +26,16 @@ import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/
 // RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly.
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"] as const;
 
-// Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubEvent). Only templateId is needed
-// here to decide whether the event concerns model-fit.
+// Stable base id so a hub auto-reconnect / duplicate broadcast for the same run replaces the toast instead of stacking.
+const REFRESH_TOAST_ID = "model-fit-refresh";
+
+// Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubEvent). The event NAME discriminates the
+// outcome, so `status` is intentionally NOT typed — its C# enum wire-casing is unverified. errorMessage/runId are the
+// only extra fields read, and they are narrowed defensively because the payload is untrusted wire data.
 interface SchedulerRunEventPayload {
 	templateId?: string;
+	errorMessage?: string | null;
+	runId?: string;
 }
 
 function isModelRecommendationRun(payload: unknown): boolean {
@@ -37,12 +46,26 @@ function isModelRecommendationRun(payload: unknown): boolean {
 	);
 }
 
-// Subscribes to the scheduler hub for the lifetime of the mounting component and invalidates the model-fit
-// latest-recommendations cache when a model-recommendation-check run terminates. Connection failures are
-// tolerated silently (logged to console.warn) so a flaky hub never breaks the page — the queries still serve
-// their last good data and the user can refresh manually.
+// Defensive narrowing of the two extra wire fields. Anything not a string becomes undefined so the toast layer never
+// renders non-text data (the body is shown verbatim, no HTML).
+function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: string } {
+	if (typeof payload !== "object" || payload === null) {
+		return {};
+	}
+	const candidate = payload as SchedulerRunEventPayload;
+	return {
+		errorMessage: typeof candidate.errorMessage === "string" ? candidate.errorMessage : undefined,
+		runId: typeof candidate.runId === "string" ? candidate.runId : undefined,
+	};
+}
+
+// Subscribes to the scheduler hub for the lifetime of the mounting component and, when a model-recommendation-check run
+// terminates, invalidates the model-fit latest-recommendations cache AND raises a toast (sticky red on failure carrying
+// the sanitized reason, brief green on success, brief warn on cancel). Connection failures are tolerated silently
+// (logged to console.warn) so a flaky hub never breaks the page — the queries still serve their last good data.
 export function useModelFitSchedulerEvents(): void {
 	const queryClient = useQueryClient();
+	const { t } = useTranslation();
 
 	useEffect(() => {
 		const connection = new HubConnectionBuilder()
@@ -55,32 +78,67 @@ export function useModelFitSchedulerEvents(): void {
 			.configureLogging(LogLevel.Warning)
 			.build();
 
-		const invalidateLatest = (payload: unknown): void => {
+		const handleTerminalRun = (eventName: (typeof TERMINAL_RUN_EVENTS)[number], payload: unknown): void => {
 			if (!isModelRecommendationRun(payload)) {
 				return;
 			}
-			queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }).catch(() => undefined);
+
+			// Authoritative state path (unchanged): TanStack Query refetches the canonical snapshot.
+			queryClient
+				.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) })
+				.catch(() => undefined);
+
+			// Best-effort UI feedback. Stable id per run so a reconnect/duplicate broadcast replaces rather than stacks.
+			const { errorMessage, runId } = readRefreshFields(payload);
+			const toastId = runId ? `${REFRESH_TOAST_ID}-${runId}` : REFRESH_TOAST_ID;
+
+			switch (eventName) {
+				case "scheduler.runFailed":
+					toast.error(errorMessage?.trim() || t("pages.modelFit.recommendations.toasts.failFallback"), {
+						title: t("pages.modelFit.recommendations.toasts.failTitle"),
+						autoClose: false,
+						id: toastId,
+					});
+					break;
+				case "scheduler.runCompleted":
+					toast.success(t("pages.modelFit.recommendations.toasts.success"), {
+						title: t("pages.modelFit.recommendations.toasts.successTitle"),
+						autoClose: 5000,
+						id: toastId,
+					});
+					break;
+				case "scheduler.runCancelled":
+					toast.warn(t("pages.modelFit.recommendations.toasts.cancelled"), {
+						autoClose: 5000,
+						id: toastId,
+					});
+					break;
+				default:
+					break;
+			}
 		};
 
-		for (const eventName of TERMINAL_RUN_EVENTS) {
-			connection.on(eventName, invalidateLatest);
-		}
+		const handlers = TERMINAL_RUN_EVENTS.map((eventName) => {
+			const handler = (payload: unknown): void => handleTerminalRun(eventName, payload);
+			connection.on(eventName, handler);
+			return [eventName, handler] as const;
+		});
 
 		connection.start().catch((error: unknown) => {
 			// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
-			// best-effort live invalidation, so a connection failure is surfaced only to the console, never the user.
+			// best-effort live invalidation + feedback, so a connection failure is surfaced only to the console.
 			// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
 			console.warn("model-fit scheduler hub failed to start", error);
 		});
 
 		return () => {
-			for (const eventName of TERMINAL_RUN_EVENTS) {
-				connection.off(eventName, invalidateLatest);
+			for (const [eventName, handler] of handlers) {
+				connection.off(eventName, handler);
 			}
 			connection.stop().catch((error: unknown) => {
 				// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
 				console.warn("model-fit scheduler hub failed to stop", error);
 			});
 		};
-	}, [queryClient]);
+	}, [queryClient, t]);
 }

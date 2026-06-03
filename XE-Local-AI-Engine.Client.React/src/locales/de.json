@@ -1449,6 +1449,13 @@
         "errors": {
           "load": "Empfehlungen konnten nicht geladen werden.",
           "refresh": "Die Aktualisierung konnte nicht gestartet werden."
+        },
+        "toasts": {
+          "failTitle": "Aktualisierung fehlgeschlagen",
+          "failFallback": "Die Modellempfehlungs-Aktualisierung war nicht erfolgreich.",
+          "successTitle": "Empfehlungen aktualisiert",
+          "success": "Die neuesten Modellempfehlungen sind verfügbar.",
+          "cancelled": "Die Aktualisierung wurde abgebrochen."
         }
       },
       "approvedImages": {
