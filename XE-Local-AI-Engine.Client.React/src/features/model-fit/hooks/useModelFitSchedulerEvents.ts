@@ -1,6 +1,6 @@
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
@@ -67,6 +67,13 @@ export function useModelFitSchedulerEvents(): void {
 	const queryClient = useQueryClient();
 	const { t } = useTranslation();
 
+	// Hold the latest `t` in a ref so toast text uses the current language WITHOUT making `t` an effect dependency.
+	// react-i18next hands back a NEW `t` on the ready transition / language change (and React StrictMode double-invokes
+	// the effect); if `t` were a dep, each change would tear down and rebuild the SignalR connection mid-negotiation,
+	// aborting it ("stopped during negotiation") so the hub never stays connected and no run events ever arrive.
+	const tRef = useRef(t);
+	tRef.current = t;
+
 	useEffect(() => {
 		const connection = new HubConnectionBuilder()
 			.withUrl(buildLocalApiUrl("scheduler/hub"), {
@@ -94,21 +101,21 @@ export function useModelFitSchedulerEvents(): void {
 
 			switch (eventName) {
 				case "scheduler.runFailed":
-					toast.error(errorMessage?.trim() || t("pages.modelFit.recommendations.toasts.failFallback"), {
-						title: t("pages.modelFit.recommendations.toasts.failTitle"),
+					toast.error(errorMessage?.trim() || tRef.current("pages.modelFit.recommendations.toasts.failFallback"), {
+						title: tRef.current("pages.modelFit.recommendations.toasts.failTitle"),
 						autoClose: false,
 						id: toastId,
 					});
 					break;
 				case "scheduler.runCompleted":
-					toast.success(t("pages.modelFit.recommendations.toasts.success"), {
-						title: t("pages.modelFit.recommendations.toasts.successTitle"),
+					toast.success(tRef.current("pages.modelFit.recommendations.toasts.success"), {
+						title: tRef.current("pages.modelFit.recommendations.toasts.successTitle"),
 						autoClose: 5000,
 						id: toastId,
 					});
 					break;
 				case "scheduler.runCancelled":
-					toast.warn(t("pages.modelFit.recommendations.toasts.cancelled"), {
+					toast.warn(tRef.current("pages.modelFit.recommendations.toasts.cancelled"), {
 						autoClose: 5000,
 						id: toastId,
 					});
@@ -124,7 +131,12 @@ export function useModelFitSchedulerEvents(): void {
 			return [eventName, handler] as const;
 		});
 
-		connection.start().catch((error: unknown) => {
+		let disposed = false;
+		const startPromise = connection.start().catch((error: unknown) => {
+			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
+			if (disposed) {
+				return;
+			}
 			// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
 			// best-effort live invalidation + feedback, so a connection failure is surfaced only to the console.
 			// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
@@ -132,13 +144,20 @@ export function useModelFitSchedulerEvents(): void {
 		});
 
 		return () => {
+			disposed = true;
 			for (const [eventName, handler] of handlers) {
 				connection.off(eventName, handler);
 			}
-			connection.stop().catch((error: unknown) => {
-				// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
-				console.warn("model-fit scheduler hub failed to stop", error);
+			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
+			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
+			startPromise.finally(() => {
+				connection.stop().catch((error: unknown) => {
+					// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
+					console.warn("model-fit scheduler hub failed to stop", error);
+				});
 			});
 		};
-	}, [queryClient, t]);
+		// `t` is intentionally NOT a dependency — it is read via tRef so a new `t` reference never rebuilds the
+		// connection mid-negotiation. Matches the stable-deps lifetime of useSchedulerHub. queryClient is stable.
+	}, [queryClient]);
 }

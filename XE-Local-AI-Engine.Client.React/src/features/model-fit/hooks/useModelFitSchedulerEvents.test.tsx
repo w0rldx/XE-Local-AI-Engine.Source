@@ -226,7 +226,7 @@ describe("useModelFitSchedulerEvents", () => {
 		);
 	});
 
-	it("unsubscribes and stops the connection on unmount", () => {
+	it("unsubscribes and stops the connection on unmount", async () => {
 		const { unmount } = renderHub();
 
 		unmount();
@@ -234,6 +234,21 @@ describe("useModelFitSchedulerEvents", () => {
 		for (const eventName of TERMINAL_RUN_EVENTS) {
 			expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
 		}
-		expect(signalRMock.connection.stop).toHaveBeenCalled();
+		// stop() is deferred until start() settles (so cleanup never aborts an in-flight negotiation), so it runs on a
+		// microtask after unmount rather than synchronously.
+		await vi.waitFor(() => expect(signalRMock.connection.stop).toHaveBeenCalled());
+	});
+
+	it("does not rebuild the connection on re-render (t is read via ref, not an effect dependency)", () => {
+		// Regression guard: if `t` (or any unstable value) became an effect dependency, every react-i18next re-render
+		// would tear down and rebuild the SignalR connection mid-negotiation ("stopped during negotiation"), leaving the
+		// hub permanently disconnected so no run events arrive. The mocked useTranslation returns a fresh `t` each render.
+		const { rerender } = renderHub();
+		const startCallsAfterMount = signalRMock.connection.start.mock.calls.length;
+
+		rerender();
+		rerender();
+
+		expect(signalRMock.connection.start.mock.calls.length).toBe(startCallsAfterMount);
 	});
 });
