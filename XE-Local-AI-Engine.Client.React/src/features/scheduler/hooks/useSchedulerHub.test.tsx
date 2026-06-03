@@ -170,7 +170,7 @@ describe("useSchedulerHub", () => {
 		expect(queryClient.getQueryState(fullRunsKey)?.isInvalidated).toBe(true);
 	});
 
-	it("unsubscribes and stops the connection on unmount", () => {
+	it("unsubscribes and stops the connection on unmount", async () => {
 		const { unmount } = renderHub();
 
 		unmount();
@@ -179,6 +179,8 @@ describe("useSchedulerHub", () => {
 		for (const eventName of RUN_EVENTS) {
 			expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
 		}
-		expect(signalRMock.connection.stop).toHaveBeenCalled();
+		// stop() is deferred until start() settles (so cleanup never aborts an in-flight negotiation), so it runs on a
+		// microtask after unmount rather than synchronously.
+		await vi.waitFor(() => expect(signalRMock.connection.stop).toHaveBeenCalled());
 	});
 });
