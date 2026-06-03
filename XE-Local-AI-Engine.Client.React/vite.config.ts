@@ -80,8 +80,11 @@ export default defineConfig(({ command, mode }) => {
 		server: proxyTarget
 			? {
 					proxy: {
+						// SignalR hubs need the WebSocket upgrade proxied (ws: true); each more-specific hub path MUST come
+						// before the generic "/api" entry or Vite matches "/api" first and the upgrade falls through as plain HTTP.
 						"/api/local/v1/chat/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/runtime/hub": localProxy(proxyTarget, true),
+						"/api/local/v1/scheduler/hub": localProxy(proxyTarget, true),
 						"/api": localProxy(proxyTarget),
 						"/openapi": {
 							target: proxyTarget,
