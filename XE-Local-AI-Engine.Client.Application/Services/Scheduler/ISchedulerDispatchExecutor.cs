@@ -18,10 +18,17 @@ public interface ISchedulerDispatchExecutor
     /// <param name="scheduledFireTimeUtc">When the trigger was scheduled to fire, or <c>null</c> for an immediate fire.</param>
     /// <param name="actualFireTimeUtc">When the trigger actually fired.</param>
     /// <param name="cancellationToken">Cancelled on job interrupt / scheduler shutdown; flows to the handler.</param>
+    /// <param name="parameterOverrides">
+    ///     Optional per-fire override values read from the firing trigger's <c>JobDataMap</c>. The dispatcher applies only
+    ///     the keys it explicitly whitelists (today: the model-fit use-case) over the definition's stored parameters before
+    ///     building the context — the stored definition is never mutated and no other key can override a stored parameter.
+    ///     <c>null</c> (the recurring/cron path) leaves the stored parameters untouched.
+    /// </param>
     Task DispatchAsync(
         Guid scheduledJobId,
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? parameterOverrides = null);
 }

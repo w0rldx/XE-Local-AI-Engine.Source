@@ -1,15 +1,15 @@
-import { Alert, Button, Group, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
-import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { Alert, Group, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import { AgentToolSelector } from "@/features/agents/components/AgentToolSelector";
 import { OrchestrationTopologyEditor } from "@/features/agents/components/OrchestrationTopologyEditor";
 import {
 	type AgentDefinition,
-	agentDefinitionFormSchema,
 	type AgentDefinitionFormValues,
 	type AgentDefinitionKind,
+	agentDefinitionFormSchema,
 	agentDefinitionKinds,
 	agentReasoningEfforts,
 } from "@/features/agents/models/AgentDefinitionModels";
@@ -22,6 +22,12 @@ export interface AgentModelOption {
 	label: string;
 }
 
+// Imperative handle exposing submit() so a host (the dialog footer's Save button) can trigger the form's own
+// validate-then-submit. The footer button calls submit(); validation stays in the form.
+export interface AgentDefinitionFormHandle {
+	submit: () => void;
+}
+
 interface AgentDefinitionFormProps {
 	initialValues: AgentDefinitionFormValues;
 	modelOptions: readonly AgentModelOption[];
@@ -31,10 +37,14 @@ interface AgentDefinitionFormProps {
 	allDefinitions: readonly AgentDefinition[];
 	// The editing definition's id (self / triage). Empty string when creating a new definition.
 	selfId: string;
-	isSubmitting: boolean;
 	submitError?: string;
 	onSubmit: (values: AgentDefinitionFormValues) => void;
-	onCancel: () => void;
+	// Reports whether the form has unsaved edits (current values differ from initialValues). The page wires this to the
+	// dialog close-guard and the route nav-guard. The form no longer renders its own Save/Cancel — those live in the
+	// dialog footer and drive submission via the imperative handle.
+	onDirtyChange?: (isDirty: boolean) => void;
+	/** Imperative handle exposing submit() so the host dialog footer can drive submission. */
+	ref?: Ref<AgentDefinitionFormHandle>;
 }
 
 const NODE_DEFAULT_MODEL_VALUE = "__node-default__";
@@ -48,16 +58,25 @@ export function AgentDefinitionForm({
 	toolCapableModels,
 	allDefinitions,
 	selfId,
-	isSubmitting,
 	submitError,
 	onSubmit,
-	onCancel,
+	onDirtyChange,
+	ref,
 }: AgentDefinitionFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<AgentDefinitionFormValues>(initialValues);
 	const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AgentDefinitionFormValues, string>>>({});
 	// Error specific to the orchestration participants field, derived from the Zod result on submit.
 	const [participantsError, setParticipantsError] = useState<string | undefined>(undefined);
+
+	// Dirty when the current values diverge from the snapshot passed in at mount. The page keys this component by
+	// editor target, so initialValues is stable for the lifetime of a given editor session — a JSON compare is
+	// sufficient (the value shape is plain data) and far simpler than tracking each field's touched state.
+	const isDirty = useMemo(() => JSON.stringify(values) !== JSON.stringify(initialValues), [values, initialValues]);
+
+	useEffect(() => {
+		onDirtyChange?.(isDirty);
+	}, [isDirty, onDirtyChange]);
 
 	const toolCapable = useMemo(
 		() => isModelToolCapable(values.modelProfile, toolCapableModels),
@@ -136,6 +155,10 @@ export function AgentDefinitionForm({
 		setValues((current) => ({ ...current, orchestration }));
 	}, []);
 
+	const handleInstructionsChange = useCallback((value: string) => {
+		setValues((current) => ({ ...current, instructions: value }));
+	}, []);
+
 	const handleSubmit = useCallback(() => {
 		const result = agentDefinitionFormSchema.safeParse(values);
 		if (!result.success) {
@@ -160,11 +183,11 @@ export function AgentDefinitionForm({
 		setParticipantsError(undefined);
 		// When the model is not tool-capable, never persist tools — strip them defensively so a stale selection
 		// from before the model was changed cannot leak through.
-		const sanitized: AgentDefinitionFormValues = toolCapable
-			? values
-			: { ...values, allowedToolNames: [], toolApprovals: {} };
+		const sanitized: AgentDefinitionFormValues = toolCapable ? values : { ...values, allowedToolNames: [], toolApprovals: {} };
 		onSubmit(sanitized);
 	}, [onSubmit, toolCapable, values]);
+
+	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
 	return (
 		<Stack gap="md" data-testid="agent-definition-form">
@@ -174,7 +197,10 @@ export function AgentDefinitionForm({
 				value={values.name}
 				required={true}
 				error={fieldErrors.name ? t("pages.agents.form.name.required", "Name is required") : undefined}
-				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, name: value })); }}
+				onChange={(event) => {
+					const value = event.currentTarget.value;
+					setValues((current) => ({ ...current, name: value }));
+				}}
 				data-testid="agent-form-name"
 			/>
 			<Textarea
@@ -183,26 +209,21 @@ export function AgentDefinitionForm({
 				value={values.description}
 				autosize={true}
 				minRows={2}
-				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, description: value })); }}
+				onChange={(event) => {
+					const value = event.currentTarget.value;
+					setValues((current) => ({ ...current, description: value }));
+				}}
 				data-testid="agent-form-description"
 			/>
-			<Textarea
+			<MarkdownEditorField
 				label={t("pages.agents.form.instructions.label", "Instructions")}
-				description={t(
-					"pages.agents.form.instructions.description",
-					"System prompt that defines how this agent behaves.",
-				)}
+				description={t("pages.agents.form.instructions.description", "System prompt that defines how this agent behaves.")}
 				placeholder={t("pages.agents.form.instructions.placeholder", "You are a helpful assistant that…")}
 				value={values.instructions}
 				required={true}
-				autosize={true}
 				minRows={4}
-				error={
-					fieldErrors.instructions
-						? t("pages.agents.form.instructions.required", "Instructions are required")
-						: undefined
-				}
-				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, instructions: value })); }}
+				error={fieldErrors.instructions ? t("pages.agents.form.instructions.required", "Instructions are required") : undefined}
+				onChange={handleInstructionsChange}
 				data-testid="agent-form-instructions"
 			/>
 			<Group grow={true} align="flex-start">
@@ -238,7 +259,10 @@ export function AgentDefinitionForm({
 					"Append this agent's enabled playbook actions to its instructions at run time.",
 				)}
 				checked={values.playbookEnabled}
-				onChange={(event) => { const checked = event.currentTarget.checked; setValues((current) => ({ ...current, playbookEnabled: checked })); }}
+				onChange={(event) => {
+					const checked = event.currentTarget.checked;
+					setValues((current) => ({ ...current, playbookEnabled: checked }));
+				}}
 				data-testid="agent-form-playbook-enabled"
 			/>
 			{values.kind === "Orchestrator" ? (
@@ -265,25 +289,6 @@ export function AgentDefinitionForm({
 					{submitError}
 				</Alert>
 			) : null}
-			<Group justify="flex-end">
-				<Button
-					variant="subtle"
-					leftSection={<IconX size={16} />}
-					onClick={onCancel}
-					disabled={isSubmitting}
-					data-testid="agent-form-cancel"
-				>
-					{t("common.cancel", "Cancel")}
-				</Button>
-				<Button
-					leftSection={<IconDeviceFloppy size={16} />}
-					onClick={handleSubmit}
-					loading={isSubmitting}
-					data-testid="agent-form-submit"
-				>
-					{t("common.save", "Save")}
-				</Button>
-			</Group>
 		</Stack>
 	);
 }

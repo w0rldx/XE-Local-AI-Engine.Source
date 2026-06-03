@@ -1,15 +1,21 @@
 import { ActionIcon, Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
 	type McpEnvEntry,
-	mcpServerFormSchema,
 	type McpServerFormValues,
 	type McpTransportKind,
+	mcpServerFormSchema,
 	mcpTransportKinds,
 } from "@/features/mcp/models/McpServerModels";
+
+// Imperative handle so the host dialog can place Save in its sticky footer (outside the form body) yet still
+// trigger the form's own validate-then-submit. The footer button calls submit(); validation stays in the form.
+export interface McpServerFormHandle {
+	submit: () => void;
+}
 
 interface McpServerFormProps {
 	initialValues: McpServerFormValues;
@@ -17,6 +23,12 @@ interface McpServerFormProps {
 	submitError?: string;
 	onSubmit: (values: McpServerFormValues) => void;
 	onCancel: () => void;
+	/** Imperative handle exposing submit() so a host footer can drive submission. */
+	ref?: Ref<McpServerFormHandle>;
+	/** Hides the form's own Cancel/Save buttons when the host (DialogShell footer) renders them instead. */
+	hideActions?: boolean;
+	/** Reports whether the current values differ from initialValues so the host can guard close/navigation. */
+	onDirtyChange?: (isDirty: boolean) => void;
 }
 
 // Form-local env row. Carries a stable client id so React can key rows across add/remove without using the
@@ -57,13 +69,33 @@ function fieldError(errors: Record<string, string>, key: string): string | undef
 // schema on submit. The transport select toggles between stdio fields (command/args/env/cwd) and the http
 // field (loopback url). The enabled flag is NOT edited here — registering never auto-connects; enabling is a
 // separate, deliberate row action on the list (the strict default gate).
-export function McpServerForm({ initialValues, isSubmitting, submitError, onSubmit, onCancel }: McpServerFormProps) {
+export function McpServerForm({
+	initialValues,
+	isSubmitting,
+	submitError,
+	onSubmit,
+	onCancel,
+	ref,
+	hideActions = false,
+	onDirtyChange,
+}: McpServerFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<McpServerFormValues>(initialValues);
 	// Env rows are held separately from `values` so each row can carry a stable id for React keys (the index
 	// would shift on remove). They are projected back into McpEnvEntry[] for validation and submit.
 	const [envRows, setEnvRows] = useState<McpEnvRow[]>(() => toEnvRows(initialValues.env));
 	const [errors, setErrors] = useState<Record<string, string>>({});
+
+	// Dirty = current values (with env projected back) differ from the initial snapshot. A JSON compare matches
+	// the plan's shallow/JSON dirty-detection contract; the host uses this to guard close + navigation.
+	const isDirty = useMemo(() => {
+		const candidate: McpServerFormValues = { ...values, env: toEnvEntries(envRows) };
+		return JSON.stringify(candidate) !== JSON.stringify(initialValues);
+	}, [values, envRows, initialValues]);
+
+	useEffect(() => {
+		onDirtyChange?.(isDirty);
+	}, [isDirty, onDirtyChange]);
 
 	const transportData = useMemo(
 		() =>
@@ -120,6 +152,8 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 		onSubmit(candidate);
 	}, [envRows, onSubmit, values]);
 
+	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
+
 	// Arguments are presented as a textarea (one per line) so the editor stays simple; the model carries them
 	// as a string[] and the API layer drops blanks.
 	const argumentsText = useMemo(() => values.arguments.join("\n"), [values.arguments]);
@@ -132,7 +166,10 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 				value={values.name}
 				required={true}
 				error={fieldError(errors, "name") ? t("pages.mcp.form.name.required", "Name is required") : undefined}
-				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, name: value })); }}
+				onChange={(event) => {
+					const value = event.currentTarget.value;
+					setValues((current) => ({ ...current, name: value }));
+				}}
 				data-testid="mcp-form-name"
 			/>
 			<Textarea
@@ -141,7 +178,10 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 				value={values.description}
 				autosize={true}
 				minRows={2}
-				onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, description: value })); }}
+				onChange={(event) => {
+					const value = event.currentTarget.value;
+					setValues((current) => ({ ...current, description: value }));
+				}}
 				data-testid="mcp-form-description"
 			/>
 			<Select
@@ -165,7 +205,10 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 						value={values.command}
 						required={true}
 						error={fieldError(errors, "command")}
-						onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, command: value })); }}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							setValues((current) => ({ ...current, command: value }));
+						}}
 						data-testid="mcp-form-command"
 					/>
 					<Textarea
@@ -182,7 +225,10 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 						label={t("pages.mcp.form.workingDirectory.label", "Working directory")}
 						placeholder={t("pages.mcp.form.workingDirectory.placeholder", "/optional/cwd")}
 						value={values.workingDirectory}
-						onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, workingDirectory: value })); }}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							setValues((current) => ({ ...current, workingDirectory: value }));
+						}}
 						data-testid="mcp-form-working-directory"
 					/>
 					<McpEnvEditor
@@ -202,7 +248,10 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 					value={values.url}
 					required={true}
 					error={fieldError(errors, "url")}
-					onChange={(event) => { const value = event.currentTarget.value; setValues((current) => ({ ...current, url: value })); }}
+					onChange={(event) => {
+						const value = event.currentTarget.value;
+						setValues((current) => ({ ...current, url: value }));
+					}}
 					data-testid="mcp-form-url"
 				/>
 			)}
@@ -212,25 +261,27 @@ export function McpServerForm({ initialValues, isSubmitting, submitError, onSubm
 					{submitError}
 				</Alert>
 			) : null}
-			<Group justify="flex-end">
-				<Button
-					variant="subtle"
-					leftSection={<IconX size={16} />}
-					onClick={onCancel}
-					disabled={isSubmitting}
-					data-testid="mcp-form-cancel"
-				>
-					{t("common.cancel", "Cancel")}
-				</Button>
-				<Button
-					leftSection={<IconDeviceFloppy size={16} />}
-					onClick={handleSubmit}
-					loading={isSubmitting}
-					data-testid="mcp-form-submit"
-				>
-					{t("common.save", "Save")}
-				</Button>
-			</Group>
+			{hideActions ? null : (
+				<Group justify="flex-end">
+					<Button
+						variant="subtle"
+						leftSection={<IconX size={16} />}
+						onClick={onCancel}
+						disabled={isSubmitting}
+						data-testid="mcp-form-cancel"
+					>
+						{t("common.cancel", "Cancel")}
+					</Button>
+					<Button
+						leftSection={<IconDeviceFloppy size={16} />}
+						onClick={handleSubmit}
+						loading={isSubmitting}
+						data-testid="mcp-form-submit"
+					>
+						{t("common.save", "Save")}
+					</Button>
+				</Group>
+			)}
 		</Stack>
 	);
 }
@@ -257,13 +308,7 @@ function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemov
 				<Text size="sm" fw={500}>
 					{t("pages.mcp.form.env.label", "Environment variables")}
 				</Text>
-				<Button
-					size="xs"
-					variant="subtle"
-					leftSection={<IconPlus size={14} />}
-					onClick={onAdd}
-					data-testid="mcp-form-env-add"
-				>
+				<Button size="xs" variant="subtle" leftSection={<IconPlus size={14} />} onClick={onAdd} data-testid="mcp-form-env-add">
 					{t("pages.mcp.form.env.add", "Add variable")}
 				</Button>
 			</Group>

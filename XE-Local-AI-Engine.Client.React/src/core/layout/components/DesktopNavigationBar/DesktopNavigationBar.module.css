@@ -249,6 +249,43 @@
 	border-radius: var(--mantine-radius-md);
 }
 
+/* ── Group chevron ──────────────────────────────────────────────────────── */
+
+/* Pushed to the trailing edge of the expanded control; rotates from ▶ to ▼ when the group is open. */
+
+.chevron-slot {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	margin-left: auto;
+}
+
+.chevron {
+	transition: transform 150ms ease-out;
+}
+
+.chevron-open {
+	transform: rotate(90deg);
+}
+
+/* ── Active route highlight ─────────────────────────────────────────────── */
+
+/* Applied to a flat item on its own route, and to a group parent whose active child route is open.
+   Uses the theme primary "light" pair so it tracks the active accent in both colour schemes. */
+
+.control-active,
+.control-active:hover {
+	background-color: var(--mantine-primary-color-light);
+	color: var(--mantine-primary-color-light-color);
+}
+
+.link-active,
+.link-active:hover {
+	background-color: var(--mantine-primary-color-light);
+	color: var(--mantine-primary-color-light-color);
+	border-left-color: var(--mantine-primary-color-filled);
+}
+
 /* ── Nested sub-links container ─────────────────────────────────────────── */
 
 /* height/opacity are animated by framer-motion; overflow:hidden is required  */

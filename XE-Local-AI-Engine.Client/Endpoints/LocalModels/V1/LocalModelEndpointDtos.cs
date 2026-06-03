@@ -130,3 +130,16 @@ public sealed class DeleteLocalModelResponse
 
     public required bool Deleted { get; init; }
 }
+
+/// <summary>
+///     A single sanitized progress event emitted by <c>POST models/pull/stream</c>.  Contains only the three safe
+///     fields — no paths, tokens, or raw Ollama payloads are forwarded to the client.
+/// </summary>
+public sealed class PullStreamProgressEvent
+{
+    public required string Status { get; init; }
+
+    public long? CompletedBytes { get; init; }
+
+    public long? TotalBytes { get; init; }
+}

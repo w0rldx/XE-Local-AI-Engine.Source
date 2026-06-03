@@ -23,9 +23,15 @@ vi.mock("react-i18next", () => ({
 }));
 
 const navigateMock = vi.fn();
-vi.mock("@tanstack/react-router", () => ({
-	useNavigate: () => navigateMock,
-}));
+// Keep the real router exports (the page's useModelPull import chain transitively pulls in routeTree.gen, which calls
+// createRootRouteWithContext at module-eval time); override only useNavigate so navigation is observable.
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+	return {
+		...actual,
+		useNavigate: () => navigateMock,
+	};
+});
 
 const { hooksMock, schedulerMock, hubMock } = vi.hoisted(() => ({
 	hooksMock: {
@@ -220,7 +226,21 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(button);
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith("job-mf");
+		// Refresh now forwards the currently-selected use case (default "coding") alongside the job id.
+		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "coding" });
+	});
+
+	it("sends the selected use case (general) when Refresh now is clicked after switching the dropdown", () => {
+		const refreshMutation = makeRefreshMutation();
+		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
+		// Operator switched the use-case dropdown to general (the store drives both the query and the refresh override).
+		useModelFitManagementStore.setState({ useCase: "general" });
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
+
+		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "general" });
 	});
 
 	it("disables Refresh now and shows guidance when no model-recommendation-check job exists", () => {
@@ -244,7 +264,7 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith("job-enabled");
+		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-enabled", useCase: "coding" });
 	});
 
 	it("ignores scheduler jobs of other templates when gating refresh", () => {

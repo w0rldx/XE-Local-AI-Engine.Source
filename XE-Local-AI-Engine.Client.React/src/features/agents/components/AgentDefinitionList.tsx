@@ -59,7 +59,7 @@ export function AgentDefinitionList({ definitions, isMutating, onEdit, onDelete 
 							<Table.Td>{definition.allowedToolNames.length}</Table.Td>
 							<Table.Td>{definition.version}</Table.Td>
 							<Table.Td>
-								<Group gap="xs">
+								<Group gap="xs" wrap="nowrap">
 									<ActionIcon
 										aria-label={t("pages.agents.list.editAria", "Edit {{name}}", {
 											name: definition.name,

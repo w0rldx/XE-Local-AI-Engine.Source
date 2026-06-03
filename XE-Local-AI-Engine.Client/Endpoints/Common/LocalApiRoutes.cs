@@ -96,6 +96,11 @@ public static class LocalApiRoutes
         public const string Select = "models/select";
         public const string Pull = "models/pull";
 
+        // Streaming pull-progress endpoint. Uses the literal "stream" segment after "pull" to keep it distinct from
+        // the blocking Pull route, and to prevent the segment from being parsed as a model name route param.
+        // Hand-wired on the React client (not in the generated OpenAPI typed client) — mirrors the chat SSE pattern.
+        public const string PullStream = "models/pull/stream";
+
         // Operator override of model classification. The literal "kind" segment keeps this distinct from ModelByName.
         public const string ModelKind = "models/{modelName}/kind";
     }

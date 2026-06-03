@@ -131,13 +131,22 @@ public sealed class GetLatestRecommendationsResponse
 // ---------------------------------------------------------------------------
 
 /// <summary>
-///     Body for <c>POST model-fit/recommendations/refresh</c>. Carries ONLY the id of an existing scheduled job to fire —
+///     Body for <c>POST model-fit/recommendations/refresh</c>. Carries the id of an existing scheduled job to fire —
 ///     never an image reference, command line or template id. The service self-guards that the job is a
 ///     <c>model-recommendation-check</c> job, so this endpoint can never fire an arbitrary scheduled job.
+///     <para>
+///         <see cref="UseCase" /> is an OPTIONAL per-run use-case override so the manual refresh runs (and populates) the
+///         currently-selected use-case instead of the definition's baked one. It is validated against the fixed six-value
+///         llmfit allowlist (rejected with a 400 before anything fires); a <c>null</c>/empty value fires the definition's
+///         stored use-case unchanged. Only the use-case is widened — no free text reaches the run.
+///     </para>
 /// </summary>
 public sealed class RefreshRecommendationsRequest
 {
     public Guid ScheduledJobId { get; init; }
+
+    /// <summary>Optional use-case override (one of <c>general|coding|reasoning|chat|multimodal|embedding</c>); null/empty uses the definition's baked use-case.</summary>
+    public string? UseCase { get; init; }
 }
 
 /// <summary>

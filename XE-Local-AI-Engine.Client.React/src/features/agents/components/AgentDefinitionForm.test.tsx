@@ -3,6 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
+import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
@@ -29,7 +30,7 @@ vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: useToolCatalogMock,
 }));
 
-import { AgentDefinitionForm } from "@/features/agents/components/AgentDefinitionForm";
+import { AgentDefinitionForm, type AgentDefinitionFormHandle } from "@/features/agents/components/AgentDefinitionForm";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 
@@ -121,21 +122,33 @@ function renderForm(overrides: {
 	onSubmit?: (values: AgentDefinitionFormValues) => void;
 }) {
 	const onSubmit = overrides.onSubmit ?? vi.fn();
-	renderWithProviders(
-		<AgentDefinitionForm
-			initialValues={{ ...baseValues, ...overrides.initialValues }}
-			modelOptions={[
-				{ value: "qwen3:8b", label: "qwen3:8b" },
-				{ value: "llama3:8b", label: "llama3:8b" },
-			]}
-			toolCapableModels={overrides.toolCapableModels ?? []}
-			allDefinitions={overrides.allDefinitions ?? []}
-			selfId={overrides.selfId ?? ""}
-			isSubmitting={false}
-			onSubmit={onSubmit}
-			onCancel={vi.fn()}
-		/>,
-	);
+
+	// The form no longer renders its own Save button — submission is driven imperatively via the handle, exactly as the
+	// dialog footer does in AgentsPage. Mirror that with a ref + a test-only Save button so the submit path is exercised.
+	function FormHarness() {
+		const ref = useRef<AgentDefinitionFormHandle>(null);
+		return (
+			<>
+				<AgentDefinitionForm
+					ref={ref}
+					initialValues={{ ...baseValues, ...overrides.initialValues }}
+					modelOptions={[
+						{ value: "qwen3:8b", label: "qwen3:8b" },
+						{ value: "llama3:8b", label: "llama3:8b" },
+					]}
+					toolCapableModels={overrides.toolCapableModels ?? []}
+					allDefinitions={overrides.allDefinitions ?? []}
+					selfId={overrides.selfId ?? ""}
+					onSubmit={onSubmit}
+				/>
+				<button type="button" onClick={() => ref.current?.submit()} data-testid="agent-form-submit">
+					Save
+				</button>
+			</>
+		);
+	}
+
+	renderWithProviders(<FormHarness />);
 	return { onSubmit };
 }
 
@@ -167,7 +180,8 @@ describe("AgentDefinitionForm", () => {
 	it("accepts typed input into the multiline instructions field without crashing", () => {
 		const { onSubmit } = renderForm({ initialValues: { name: "Helper" } });
 
-		const instructions = screen.getByTestId("agent-form-instructions") as HTMLTextAreaElement;
+		// Instructions is now a MarkdownEditorField; its inner textarea is suffixed "-textarea".
+		const instructions = screen.getByTestId("agent-form-instructions-textarea") as HTMLTextAreaElement;
 		fireEvent.change(instructions, { target: { value: "You are a careful assistant." } });
 
 		expect(instructions.value).toBe("You are a careful assistant.");
@@ -236,9 +250,7 @@ describe("AgentDefinitionForm", () => {
 
 		fireEvent.click(screen.getByTestId("agent-form-submit"));
 
-		expect(onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ allowedToolNames: [], toolApprovals: {} }),
-		);
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ allowedToolNames: [], toolApprovals: {} }));
 	});
 
 	it("submits playbookEnabled true when the playbook toggle is switched on", () => {

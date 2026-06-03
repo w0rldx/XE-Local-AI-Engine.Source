@@ -12,7 +12,6 @@ import {
 	getLocalModelDetailsQueryKey,
 	listLocalModelsOptions,
 	listLocalModelsQueryKey,
-	pullLocalModelMutation,
 	putModelKindMutation,
 	selectLocalModelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -21,7 +20,8 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { InstalledModelsTable } from "@/features/models/components/InstalledModelsTable";
 import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDialog";
 import { PullModelDialog } from "@/features/models/components/PullModelDialog";
-import { toLocalModelViewModel, toPullProgressModel } from "@/features/models/models/LocalModelMappers";
+import { useModelPull } from "@/features/models/hooks/useModelPull";
+import { toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates */
 
@@ -36,9 +36,11 @@ export function ModelManagement() {
 	const [detailsModelName, setDetailsModelName] = useState<string | undefined>();
 	const [pullModelName, setPullModelName] = useState("");
 	const [message, setMessage] = useState<string | undefined>();
-	const [pullProgress, setPullProgress] = useState<number | undefined>();
 	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
 	const [pullModalOpened, { open: openPullModal, close: closePullModal }] = useDisclosure(false);
+	// Shared single pull engine (invariant §3.3): the dialog's submit + live progress run through this hook, the same
+	// one the recommendation Pull button uses. It owns the progress toast and installed-list invalidation.
+	const modelPull = useModelPull();
 
 	// Reads run through the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
 	// AbortSignal automatically), wrapped in withResponseValidation so a zod response-shape failure surfaces as an
@@ -76,17 +78,6 @@ export function ModelManagement() {
 		},
 	});
 
-	const pullMutation = useMutation({
-		...withResponseValidation(pullLocalModelMutation()),
-		onSuccess: async (response) => {
-			const progress = toPullProgressModel(response);
-			setPullProgress(progress.progressPercent);
-			setPullModelName("");
-			setMessage(`Model ${response.modelName ?? ""} pull finished: ${progress.status}.`);
-			await invalidateList();
-		},
-	});
-
 	const deleteMutation = useMutation({
 		...withResponseValidation(deleteLocalModelMutation()),
 		onSuccess: async (response) => {
@@ -114,11 +105,11 @@ export function ModelManagement() {
 		},
 	});
 
-	const actionError =
-		selectMutation.error ?? pullMutation.error ?? deleteMutation.error ?? setKindMutation.error ?? resetKindMutation.error;
+	// Pull errors now surface through the shared hook's progress toast (not this banner), so pull is excluded here.
+	const actionError = selectMutation.error ?? deleteMutation.error ?? setKindMutation.error ?? resetKindMutation.error;
 	const isActionPending =
 		selectMutation.isPending ||
-		pullMutation.isPending ||
+		modelPull.isPulling ||
 		deleteMutation.isPending ||
 		setKindMutation.isPending ||
 		resetKindMutation.isPending;
@@ -242,10 +233,19 @@ export function ModelManagement() {
 				onClose={closePullModal}
 				pullModelName={pullModelName}
 				onPullModelNameChange={setPullModelName}
-				onSubmit={() => pullMutation.mutate({ body: { modelName: pullModelName.trim() } })}
-				isPulling={pullMutation.isPending}
+				onSubmit={() =>
+					modelPull.pull(pullModelName, {
+						// On a finished download, clear the typed name and close the dialog so reopening starts blank
+						// (the close button is hidden mid-pull; an error keeps the dialog open with the value for retry).
+						onSuccess: () => {
+							setPullModelName("");
+							closePullModal();
+						},
+					})
+				}
+				isPulling={modelPull.isPulling}
 				isActionPending={isActionPending}
-				progress={pullProgress}
+				progress={modelPull.progressPercent}
 			/>
 		</Container>
 	);

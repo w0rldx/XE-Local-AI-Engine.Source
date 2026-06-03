@@ -572,6 +572,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResp
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = z.object({
 	scheduledJobId: z.guid().optional(),
+	useCase: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);

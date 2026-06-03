@@ -1,17 +1,22 @@
-import { Alert, Button, Group, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
-import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { Alert, Group, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
 	type ScheduledJobFormValues,
-	scheduledJobFormSchema,
 	type ScheduledJobTemplate,
 	type ScheduleKind,
-	scheduleKinds,
 	type SchedulerMisfirePolicy,
+	scheduledJobFormSchema,
+	scheduleKinds,
 	schedulerMisfirePolicies,
 } from "@/features/scheduler/models/SchedulerModels";
+
+/** Imperative handle exposed to the parent (e.g. DialogShell footer Save button). */
+export interface ScheduledJobFormHandle {
+	/** Runs Zod validation; calls onSubmit only when valid. */
+	submit(): void;
+}
 
 interface ScheduledJobFormProps {
 	initialValues: ScheduledJobFormValues;
@@ -21,6 +26,11 @@ interface ScheduledJobFormProps {
 	submitError?: string;
 	onSubmit: (values: ScheduledJobFormValues) => void;
 	onCancel: () => void;
+	/**
+	 * Called whenever the form's dirty state changes. The parent uses this to
+	 * drive the close-guard and route-guard.
+	 */
+	onDirtyChange?: (isDirty: boolean) => void;
 }
 
 // Flatten a Zod issue path to a stable string key so per-field errors can be looked up by the input that owns
@@ -35,22 +45,39 @@ function fieldError(errors: Record<string, string>, key: string): string | undef
 	return errors[key];
 }
 
+// Shallow dirty check: compare each top-level key of current values to initialValues.
+function computeIsDirty(current: ScheduledJobFormValues, initial: ScheduledJobFormValues): boolean {
+	return (Object.keys(current) as Array<keyof ScheduledJobFormValues>).some((key) => current[key] !== initial[key]);
+}
+
 // Create/edit form for a scheduled job. The template picker constrains which schedule kinds are offered and
 // supplies the defaults the form pre-fills on a fresh template selection. Fields are shown conditionally per the
 // chosen schedule kind. The enabled flag is NOT edited here — a job is created disabled and enabling is a
 // separate, deliberate row action. parameters is a write-only plaintext-JSON textarea; the backend re-validates.
-export function ScheduledJobForm({
-	initialValues,
-	templates,
-	isEditing,
-	isSubmitting,
-	submitError,
-	onSubmit,
-	onCancel,
-}: ScheduledJobFormProps) {
+export const ScheduledJobForm = forwardRef<ScheduledJobFormHandle, ScheduledJobFormProps>(function ScheduledJobForm(
+	{
+		initialValues,
+		templates,
+		isEditing,
+		// isSubmitting and onCancel are kept in the interface for callers that render
+		// the form standalone (outside a DialogShell footer), but the dialog variant
+		// drives these from the footer — mark as unused here with underscore prefix.
+		isSubmitting: _isSubmitting,
+		submitError,
+		onSubmit,
+		onCancel: _onCancel,
+		onDirtyChange,
+	},
+	ref,
+) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<ScheduledJobFormValues>(initialValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
+
+	// Notify the parent whenever the dirty state changes.
+	useEffect(() => {
+		onDirtyChange?.(computeIsDirty(values, initialValues));
+	}, [values, initialValues, onDirtyChange]);
 
 	const templateData = useMemo(
 		() => templates.map((template) => ({ value: template.templateId, label: template.displayName })),
@@ -132,6 +159,10 @@ export function ScheduledJobForm({
 		setErrors({});
 		onSubmit(values);
 	}, [onSubmit, values]);
+
+	// Expose submit() so the DialogShell footer's Save button can trigger validation
+	// without coupling the footer to internal form state.
+	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
 	const isCron = values.scheduleKind === "Cron";
 	const isInterval = values.scheduleKind === "SimpleInterval";
@@ -327,25 +358,6 @@ export function ScheduledJobForm({
 					{submitError}
 				</Alert>
 			) : null}
-			<Group justify="flex-end">
-				<Button
-					variant="subtle"
-					leftSection={<IconX size={16} />}
-					onClick={onCancel}
-					disabled={isSubmitting}
-					data-testid="scheduler-form-cancel"
-				>
-					{t("common.cancel", "Cancel")}
-				</Button>
-				<Button
-					leftSection={<IconDeviceFloppy size={16} />}
-					onClick={handleSubmit}
-					loading={isSubmitting}
-					data-testid="scheduler-form-submit"
-				>
-					{t("common.save", "Save")}
-				</Button>
-			</Group>
 		</Stack>
 	);
-}
+});

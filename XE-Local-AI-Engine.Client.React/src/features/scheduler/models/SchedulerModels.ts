@@ -15,14 +15,7 @@ export type SchedulerMisfirePolicy = "Smart" | "SkipMissed" | "FireOnceNow";
 export const schedulerMisfirePolicies: readonly SchedulerMisfirePolicy[] = ["Smart", "SkipMissed", "FireOnceNow"];
 
 // Lifecycle status of one run. Active = Queued | Running (cancellable); the rest are terminal.
-export type ScheduledRunStatus =
-	| "Queued"
-	| "Running"
-	| "Succeeded"
-	| "Failed"
-	| "Cancelled"
-	| "TimedOut"
-	| "Skipped";
+export type ScheduledRunStatus = "Queued" | "Running" | "Succeeded" | "Failed" | "Cancelled" | "TimedOut" | "Skipped";
 
 export const scheduledRunStatuses: readonly ScheduledRunStatus[] = [
 	"Queued",

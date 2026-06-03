@@ -19,12 +19,18 @@
     "search": "Search",
     "filters": "Filters",
     "save": "Save",
+    "discard": "Discard",
+    "keepEditing": "Keep editing",
     "noData": "No records found",
     "entries": "entries",
     "error": "Error",
     "fetchError": "There was a problem loading table data.",
     "providers": {
       "cloudflareAccess": "Cloudflare Access"
+    },
+    "pagination": {
+      "rowsPerPage": "Rows per page",
+      "showingRange": "Showing {{from}}–{{to}} of {{total}}"
     }
   },
   "theme": {
@@ -42,7 +48,12 @@
     "binding": "Node Binding",
     "nodeSettings": "Node Settings",
     "cloudSettings": "Cloud Settings",
+    "settingsGroup": "Settings",
+    "automationGroup": "Automation",
     "models": "Models",
+    "modelsInstalled": "Installed",
+    "recommendations": "Recommendations",
+    "overview": "Overview",
     "tools": "Tools",
     "agents": "Agents",
     "mcp": "MCP",
@@ -808,6 +819,24 @@
         },
         "overrideLabel": "Override type",
         "reset": "Reset to detected"
+      },
+      "pull": {
+        "title": "Pull new model",
+        "guidance": "Enter an Ollama-compatible model tag. Browse available models in the Ollama library.",
+        "libraryLink": "Open the Ollama library (ollama.com/library)",
+        "warning": "A manual pull downloads arbitrary, unvetted model weights and can be very large. Prefer the recommended models for this node.",
+        "recommendationsLink": "See recommended models for this node",
+        "inputLabel": "Model name to pull",
+        "downloadButton": "Download model",
+        "inProgress": "Download in progress — keep this dialog open until it finishes.",
+        "toast": {
+          "title": "Pulling {{model}}",
+          "preparing": "Preparing download…",
+          "successTitle": "Model pulled",
+          "success": "{{model}} is ready.",
+          "errorTitle": "Pull failed",
+          "error": "Could not pull {{model}}."
+        }
       }
     },
     "manager": {
@@ -1414,6 +1443,8 @@
         "emptyList": "The latest snapshot returned no recommendations.",
         "installed": "Installed",
         "pullable": "Pullable",
+        "pull": "Pull",
+        "pulling": "Pulling…",
         "useCases": {
           "general": "General",
           "coding": "Coding",
@@ -1438,7 +1469,8 @@
           "context": "Context",
           "quantization": "Quant",
           "memory": "Memory",
-          "installed": "Installed"
+          "installed": "Installed",
+          "action": "Action"
         },
         "errors": {
           "load": "Could not load recommendations.",
@@ -1775,6 +1807,16 @@
       "tooltip": {
         "close": "Close"
       }
+    },
+    "dialogShell": {
+      "fullscreen": "Fullscreen",
+      "exitFullscreen": "Exit fullscreen",
+      "unsavedTitle": "Discard unsaved changes?",
+      "unsavedDescription": "You have unsaved changes. If you leave now, they will be lost."
+    },
+    "markdownEditor": {
+      "edit": "Edit",
+      "preview": "Preview"
     },
     "userDeviceSessions": {
       "deviceSessions": "Device Sessions",

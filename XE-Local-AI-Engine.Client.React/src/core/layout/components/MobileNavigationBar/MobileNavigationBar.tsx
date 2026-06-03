@@ -2,7 +2,7 @@ import "./MobileNavigationBar.css";
 
 import { ActionIcon, Divider, Drawer } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { LogoCombined } from "@/components/Logo/LogoCombined";
@@ -13,13 +13,14 @@ import { MobileNavigationThemeMenu } from "@/core/layout/components/MobileNaviga
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
-import { navigationLinks } from "@/data/navigation/NavigationMenuData";
+import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
 
 export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNavigationBarProperties) {
 	const { width } = useWindowDimensions();
 	const theme = useTheme();
 	const { t } = useTranslation();
 	const navigate = useNavigate();
+	const pathname = useRouterState({ select: (state) => state.location.pathname });
 
 	const menuItemStyle: MenuItemStyles = {
 		root: {
@@ -53,14 +54,15 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 						icon: <link.icon size={24} />,
 						label: t(link.translationKey),
 						onClick: link.to ? () => navigate({ to: link.to }) : undefined,
-						active: false,
+						// A group is highlighted when the active route lives under one of its children.
+						active: link.links.some((nestedLink) => matchesNavRoute(pathname, nestedLink.to)),
 					},
 					drawerTitle: t(link.translationKey),
 					links: link.links.map((nestedLink) => ({
 						label: t(nestedLink.translationKey),
 						to: nestedLink.to,
 						onClick: nestedLink.onClick,
-						active: false,
+						active: matchesNavRoute(pathname, nestedLink.to),
 					})),
 				});
 			} else if (link.to || link.onClick) {
@@ -69,7 +71,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 					menuItem: {
 						icon: <link.icon size={24} />,
 						label: t(link.translationKey),
-						active: false,
+						active: matchesNavRoute(pathname, link.to),
 						onClick: link.onClick ?? (link.to ? () => navigate({ to: link.to }) : undefined),
 					},
 				});

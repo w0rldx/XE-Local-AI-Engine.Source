@@ -49,11 +49,6 @@ export const userInfoVariants: Variants = {
 	},
 };
 
-export const nestedLinksVariants: Variants = {
-	expanded: { opacity: 1, height: "auto" },
-	collapsed: { opacity: 0, height: 0 },
-};
-
 export const logoMarkVariants: Variants = {
 	expanded: { x: 0 },
 	collapsed: { x: 0 },

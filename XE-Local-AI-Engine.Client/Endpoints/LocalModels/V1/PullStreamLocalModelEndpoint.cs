@@ -1,0 +1,105 @@
+namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
+
+using System.Text.Json;
+using FastEndpoints;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Validation;
+
+/// <summary>
+///     Streams live pull-download progress as NDJSON (<c>application/x-ndjson</c>).  Each line is a sanitized JSON object
+///     carrying only <c>{ status, completedBytes, totalBytes }</c> — no paths, tokens, or raw Ollama payloads.
+/// </summary>
+/// <remarks>
+///     Hand-wired on the React client; intentionally excluded from the generated OpenAPI typed client (mirrors the chat
+///     SSE pattern).  Uses the same <see cref="ModelNameValidator" /> and <c>Operator</c> policy as the blocking pull
+///     endpoint.  The streaming response is scoped to the requesting caller — no broadcast.
+/// </remarks>
+public sealed class PullStreamLocalModelEndpoint(
+    IOllamaModelService modelService,
+    ModelNameValidator modelNameValidator) : Endpoint<PullLocalModelRequest>
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    ///     Minimum gap between progress lines while the status is unchanged. Ollama emits many "downloading" updates
+    ///     per second; coalescing same-status updates to one per second keeps the wire (and the React client) from
+    ///     being flooded. A status change always flushes immediately, and the final update is always flushed.
+    /// </summary>
+    private const long ProgressThrottleMs = 1000;
+
+    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.LocalModels.PullStream);
+        Policies(NodeAuthorizationPolicies.Operator);
+        // Hand-wired on the React client — intentionally excluded from the generated OpenAPI/NSwag document so a
+        // regen cycle does not emit a typed client entry for this streaming transport.
+        Options(x => x.ExcludeFromDescription());
+    }
+
+    public override async Task HandleAsync(PullLocalModelRequest req, CancellationToken ct)
+    {
+        var validationError = _modelNameValidator.GetValidationError(req.ModelName);
+        if (validationError is not null)
+        {
+            AddError(validationError);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var modelName = req.ModelName!.Trim();
+
+        HttpContext.Response.ContentType = "application/x-ndjson";
+        HttpContext.Response.StatusCode = 200;
+
+        string? lastStatus = null;
+        var lastWriteMs = 0L;
+        PullStreamProgressEvent? pending = null;
+
+        await foreach (var progress in _modelService.PullModelAsync(modelName, ct).ConfigureAwait(false))
+        {
+            // Sanitize: emit only the three safe fields — never raw Ollama payloads, paths, or tokens.
+            var sanitized = new PullStreamProgressEvent
+            {
+                Status = string.IsNullOrWhiteSpace(progress.Status) ? string.Empty : progress.Status,
+                CompletedBytes = progress.Completed,
+                TotalBytes = progress.Total
+            };
+
+            // Coalesce same-status updates to at most one per ProgressThrottleMs; a status (phase) change always
+            // flushes immediately. Anything skipped is held as `pending` so the most recent update is never lost.
+            var statusChanged = !string.Equals(sanitized.Status, lastStatus, StringComparison.Ordinal);
+            var now = Environment.TickCount64;
+            if (statusChanged || now - lastWriteMs >= ProgressThrottleMs)
+            {
+                await WriteEventAsync(sanitized, ct).ConfigureAwait(false);
+                lastStatus = sanitized.Status;
+                lastWriteMs = now;
+                pending = null;
+            }
+            else
+            {
+                pending = sanitized;
+            }
+        }
+
+        // Always flush the final update (e.g. the terminal "success" line / final 100% byte count) even if it fell
+        // inside the throttle window, so the client's progress bar and completion handling see the true last state.
+        if (pending is not null)
+        {
+            await WriteEventAsync(pending, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task WriteEventAsync(PullStreamProgressEvent sanitized, CancellationToken ct)
+    {
+        var line = JsonSerializer.Serialize(sanitized, SerializerOptions);
+        await HttpContext.Response.WriteAsync(line, ct).ConfigureAwait(false);
+        await HttpContext.Response.WriteAsync("\n", ct).ConfigureAwait(false);
+        await HttpContext.Response.Body.FlushAsync(ct).ConfigureAwait(false);
+    }
+}

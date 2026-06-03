@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
@@ -60,7 +62,8 @@ internal sealed class SchedulerDispatchExecutor(
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? parameterOverrides = null)
     {
         var definition = await _definitionStore.GetByIdAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
         if (definition is null)
@@ -93,7 +96,7 @@ internal sealed class SchedulerDispatchExecutor(
             return;
         }
 
-        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, cancellationToken)
+        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -103,6 +106,7 @@ internal sealed class SchedulerDispatchExecutor(
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
+        IReadOnlyDictionary<string, string>? parameterOverrides,
         CancellationToken cancellationToken)
     {
         var actualFireMs = actualFireTimeUtc.ToUnixTimeMilliseconds();
@@ -132,12 +136,17 @@ internal sealed class SchedulerDispatchExecutor(
 
         await SafePublishRunAsync(run, SchedulerHubEvents.RunStarted).ConfigureAwait(false);
 
+        // The stored definition is NEVER mutated. A per-fire override (manual refresh) is merged onto a copy of the
+        // parameters that the handler sees — only the whitelisted use-case key. A cron/no-override fire passes the stored
+        // parameters through unchanged.
+        var effectiveParameters = ApplyParameterOverrides(definition.ParameterJson, parameterOverrides);
+
         var context = new ScheduledJobExecutionContext
         {
             ScheduledJobId = definition.Id,
             TemplateId = definition.TemplateId,
             DisplayName = definition.DisplayName,
-            Parameters = definition.ParameterJson,
+            Parameters = effectiveParameters,
             FireInstanceId = fireInstanceId,
             ScheduledFireTimeUtc = scheduledFireTimeUtc,
             ActualFireTimeUtc = actualFireTimeUtc,
@@ -217,6 +226,58 @@ internal sealed class SchedulerDispatchExecutor(
 
             await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunFailed).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     The single whitelisted parameter key a per-fire override may replace. Compared case-insensitively against the
+    ///     stored JSON's property names; the stored key's original casing is preserved when it already exists.
+    /// </summary>
+    private const string OverridableUseCaseProperty = "useCase";
+
+    /// <summary>
+    ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted use-case property replaced by the
+    ///     per-fire override, leaving every other property untouched. The stored definition is never mutated — this works
+    ///     on a parsed copy. No override, no use-case key in the override, or unparseable/empty stored JSON returns the
+    ///     stored JSON verbatim (the handler then validates it exactly as it would a normal fire), so an override can never
+    ///     fabricate parameters or override anything other than the use-case.
+    /// </summary>
+    private static string? ApplyParameterOverrides(
+        string? storedParametersJson,
+        IReadOnlyDictionary<string, string>? parameterOverrides)
+    {
+        if (parameterOverrides is null
+            || !parameterOverrides.TryGetValue(SchedulerJobKeys.ModelFitUseCaseOverrideKey, out var useCaseOverride)
+            || string.IsNullOrWhiteSpace(useCaseOverride)
+            || string.IsNullOrWhiteSpace(storedParametersJson))
+        {
+            return storedParametersJson;
+        }
+
+        JsonObject? parametersObject;
+        try
+        {
+            parametersObject = JsonNode.Parse(storedParametersJson) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            // Leave malformed stored JSON untouched; the handler raises the same validation error it does today.
+            return storedParametersJson;
+        }
+
+        if (parametersObject is null)
+        {
+            return storedParametersJson;
+        }
+
+        // Replace the existing use-case property in place (preserving its original casing) or add a camelCase one when
+        // the stored JSON has none. Either way ONLY the use-case is changed.
+        var existingKey = parametersObject
+            .Select(pair => pair.Key)
+            .FirstOrDefault(key => string.Equals(key, OverridableUseCaseProperty, StringComparison.OrdinalIgnoreCase));
+
+        parametersObject[existingKey ?? OverridableUseCaseProperty] = useCaseOverride;
+
+        return parametersObject.ToJsonString();
     }
 
     private Func<string, int?, CancellationToken, Task> BuildProgressReporter(Guid runId, Guid scheduledJobId)

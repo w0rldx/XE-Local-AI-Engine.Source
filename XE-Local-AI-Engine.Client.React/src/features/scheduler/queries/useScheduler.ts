@@ -1,8 +1,6 @@
-import type {
-	CancelScheduledJobRunResponse,
-	CreateScheduledJobResponse,
-	UpdateScheduledJobResponse,
-} from "@/core/api/generated";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import type { CancelScheduledJobRunResponse, CreateScheduledJobResponse, UpdateScheduledJobResponse } from "@/core/api/generated";
 import {
 	cancelScheduledJobRunMutation,
 	createScheduledJobMutation,
@@ -18,13 +16,8 @@ import {
 	updateScheduledJobMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import {
-	toScheduledJob,
-	toScheduledJobRun,
-	toScheduledJobTemplate,
-} from "@/features/scheduler/models/SchedulerMappers";
+import { toScheduledJob, toScheduledJobRun, toScheduledJobTemplate } from "@/features/scheduler/models/SchedulerMappers";
 import type { ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Server state for the scheduler management surface. Reads use the generated hey-api `*Options()` (which wire the
 // shared axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the
@@ -164,9 +157,7 @@ export function useSetScheduledJobEnabled() {
 
 	return useMutation({
 		mutationFn: async ({ id, enabled }: SetScheduledJobEnabledVariables): Promise<void> => {
-			const options = withResponseValidation(
-				enabled ? enableScheduledJobMutation() : disableScheduledJobMutation(),
-			);
+			const options = withResponseValidation(enabled ? enableScheduledJobMutation() : disableScheduledJobMutation());
 			await options.mutationFn?.({ path: { scheduledJobId: id } }, undefined as never);
 		},
 		onSuccess: () => invalidateJobs(queryClient),

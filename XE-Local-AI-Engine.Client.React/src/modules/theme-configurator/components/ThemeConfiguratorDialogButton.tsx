@@ -1,9 +1,9 @@
-import { ActionIcon, Modal, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Text, Tooltip } from "@mantine/core";
 import { IconPalette } from "@tabler/icons-react";
 import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { DialogTextTitleBar } from "@/core/ui/components/DialogTextTitleBar/DialogTextTitleBar";
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 
 const ThemeConfigurator = lazy(async () => {
 	const module = await import("@/modules/theme-configurator/components/ThemeConfigurator");
@@ -28,24 +28,20 @@ export function ThemeConfiguratorDialogButton() {
 				</ActionIcon>
 			</Tooltip>
 
-			<Modal
+			<DialogShell
 				opened={open}
-				onClose={() => {
-					setOpen(false);
-				}}
+				onClose={() => setOpen(false)}
+				title={t("pages.userSettings.themeConfigurator.title")}
 				size="70rem"
-				withCloseButton={false}
+				showCloseButton={true}
 				closeOnClickOutside={false}
 			>
-				<div className="flex flex-col gap-3">
-					<DialogTextTitleBar title={t("pages.userSettings.themeConfigurator.title")} handleClose={() => setOpen(false)} />
-					<div className="px-4 pb-4">
-						<Suspense fallback={<Text size="sm">{t("common.loading")}</Text>}>
-							<ThemeConfigurator />
-						</Suspense>
-					</div>
+				<div className="px-4 pb-4">
+					<Suspense fallback={<Text size="sm">{t("common.loading")}</Text>}>
+						<ThemeConfigurator />
+					</Suspense>
 				</div>
-			</Modal>
+			</DialogShell>
 		</>
 	);
 }

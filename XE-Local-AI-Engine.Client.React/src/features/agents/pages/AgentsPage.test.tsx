@@ -2,7 +2,7 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
@@ -49,6 +49,14 @@ vi.mock("@/features/agents/queries/useAgentDefinitions", () => hooksMock);
 vi.mock("@/features/agents/queries/usePlaybookActions", () => playbookHooksMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
+}));
+// The page now arms useUnsavedChangesGuard, which calls TanStack Router's useBlocker — that requires a Router
+// context the page tests don't provide. Override only useBlocker (idle state) while keeping every other export real
+// (the dependency graph pulls in route helpers like createRootRouteWithContext). The guard's behavior is covered by
+// useUnsavedChangesGuard.test.tsx.
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@tanstack/react-router")>()),
+	useBlocker: () => ({ status: "idle", proceed: undefined, reset: undefined }),
 }));
 // AgentsPage repointed its model dropdown onto the generated SDK (listLocalModelsOptions). Partially mock the
 // generated TanStack module so the page's useQuery(withResponseValidation(listLocalModelsOptions())) resolves an
@@ -174,22 +182,103 @@ describe("AgentsPage", () => {
 		expect(screen.getByTestId("agent-definitions-empty")).toBeTruthy();
 	});
 
-	it("opens the create editor from the new-agent button", () => {
+	it("opens the create editor as a dialog with always-visible Save/Cancel from the new-agent button", async () => {
 		renderPage();
+
+		// Editor is closed initially — no dialog, list shown.
+		expect(screen.queryByRole("dialog")).toBeNull();
 
 		fireEvent.click(screen.getByTestId("agent-create-button"));
 
-		expect(screen.getByTestId("agent-editor-card")).toBeTruthy();
-		expect(screen.getByTestId("agent-definition-form")).toBeTruthy();
+		// Editor now lives inside a dialog; the form and the sticky-footer Save/Cancel are present.
+		const dialog = await screen.findByRole("dialog");
+		const within = (testId: string) => dialog.querySelector(`[data-testid="${testId}"]`);
+		expect(within("agent-editor-card")).toBeTruthy();
+		expect(within("agent-definition-form")).toBeTruthy();
+		expect(screen.getByTestId("agent-form-submit")).toBeTruthy();
+		expect(screen.getByTestId("agent-form-cancel")).toBeTruthy();
+		// The list stays mounted underneath (no page-takeover).
+		expect(screen.getByTestId("agent-definitions-table")).toBeTruthy();
 	});
 
-	it("opens the edit editor pre-filled from a row action", () => {
+	it("opens the edit editor pre-filled from a row action", async () => {
 		renderPage();
 
 		fireEvent.click(screen.getByTestId("agent-definition-edit-agent-1"));
 
-		const nameInput = screen.getByTestId("agent-form-name") as HTMLInputElement;
+		const dialog = await screen.findByRole("dialog");
+		const nameInput = dialog.querySelector('[data-testid="agent-form-name"]') as HTMLInputElement;
 		expect(nameInput.value).toBe("Research assistant");
+	});
+
+	it("prompts to discard when Cancel is clicked with unsaved edits and stays open if the user keeps editing", async () => {
+		// User chooses "Keep editing" → confirm resolves false → editor must NOT close.
+		confirmMock.mockResolvedValue(false);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("agent-create-button"));
+		const dialog = await screen.findByRole("dialog");
+
+		// Make the form dirty (reports up via onDirtyChange → page isEditorDirty).
+		const instructions = dialog.querySelector('[data-testid="agent-form-instructions-textarea"]') as HTMLTextAreaElement;
+		fireEvent.change(instructions, { target: { value: "Some unsaved instructions" } });
+
+		fireEvent.click(screen.getByTestId("agent-form-cancel"));
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		// The discard prompt copy is wired through (keys resolve to their defaults in the i18n mock).
+		expect(confirmMock).toHaveBeenCalledWith(
+			expect.objectContaining({ confirmationText: "Discard", cancellationText: "Keep editing" }),
+		);
+		// Declined → still open.
+		expect(screen.getByRole("dialog")).toBeTruthy();
+	});
+
+	it("closes on Cancel with unsaved edits once the discard is confirmed", async () => {
+		// User chooses "Discard" → confirm resolves true → editor closes.
+		confirmMock.mockResolvedValue(true);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("agent-create-button"));
+		const dialog = await screen.findByRole("dialog");
+
+		const instructions = dialog.querySelector('[data-testid="agent-form-instructions-textarea"]') as HTMLTextAreaElement;
+		fireEvent.change(instructions, { target: { value: "Some unsaved instructions" } });
+
+		fireEvent.click(screen.getByTestId("agent-form-cancel"));
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("closes immediately on Cancel without prompting when there are no unsaved edits", async () => {
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("agent-create-button"));
+		await screen.findByRole("dialog");
+
+		// No edits made → Cancel closes without any confirm.
+		fireEvent.click(screen.getByTestId("agent-form-cancel"));
+
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(confirmMock).not.toHaveBeenCalled();
+	});
+
+	it("resets the editor on unmount so navigating away and back does not reopen it (stuck-bug fix)", () => {
+		// Open the editor, then unmount the page (simulating route navigation away).
+		useAgentManagementStore.setState({ editorTarget: { mode: "create" } });
+		const { unmount } = renderPage();
+		expect(screen.getByRole("dialog")).toBeTruthy();
+
+		unmount();
+
+		// The page's unmount effect must have cleared the singleton store's editorTarget.
+		expect(useAgentManagementStore.getState().editorTarget).toBeNull();
+
+		// Remounting (navigating back) shows the list, not the editor.
+		renderPage();
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(screen.getByTestId("agent-definitions-table")).toBeTruthy();
 	});
 
 	it("surfaces a load error", () => {
