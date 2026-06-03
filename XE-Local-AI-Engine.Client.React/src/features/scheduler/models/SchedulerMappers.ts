@@ -79,9 +79,7 @@ export function toScheduledJob(dto: XeLocalAiEngineClientEndpointsSchedulerV1Sch
 	};
 }
 
-export function toScheduledJobRun(
-	dto: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse,
-): ScheduledJobRun {
+export function toScheduledJobRun(dto: XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse): ScheduledJobRun {
 	return {
 		id: dto.id ?? "",
 		scheduledJobId: dto.scheduledJobId ?? "",

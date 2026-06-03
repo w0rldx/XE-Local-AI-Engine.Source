@@ -1,10 +1,12 @@
 import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconPlug, IconPlus } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { IconAlertTriangle, IconDeviceFloppy, IconPlug, IconPlus, IconX } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { McpServerForm } from "@/features/mcp/components/McpServerForm";
+import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
+import { McpServerForm, type McpServerFormHandle } from "@/features/mcp/components/McpServerForm";
 import { McpServerList } from "@/features/mcp/components/McpServerList";
 import { McpServerToolsPanel } from "@/features/mcp/components/McpServerToolsPanel";
 import { toSaveMcpServerRequest } from "@/features/mcp/models/McpServerMappers";
@@ -58,6 +60,18 @@ export function McpServersPage() {
 	// The server whose discovered-tools panel is expanded (independent of the editor). Null = collapsed.
 	const [expandedToolsId, setExpandedToolsId] = useState<string | null>(null);
 
+	// Whether the editor form has unsaved edits. Reported up by the form; drives the dialog close-guard and the
+	// route/tab-close guard. Reset whenever the editor closes so a stale dirty flag never lingers.
+	const [isDirty, setIsDirty] = useState(false);
+	const formRef = useRef<McpServerFormHandle>(null);
+
+	// Block in-app navigation + tab close while the open editor has unsaved edits.
+	useUnsavedChangesGuard({ isDirty });
+
+	// Reset the transient editor target when the page unmounts so navigating away and back does not reopen the
+	// editor (the "stuck editor" bug — the Zustand store is a module singleton that outlives the route).
+	useEffect(() => closeEditor, [closeEditor]);
+
 	const serversQuery = useMcpServers();
 	const createMutation = useCreateMcpServer();
 	const updateMutation = useUpdateMcpServer();
@@ -73,36 +87,56 @@ export function McpServersPage() {
 		return servers.find((server) => server.id === editorTarget.id);
 	}, [servers, editorTarget]);
 
-	const isMutating =
-		createMutation.isPending ||
-		updateMutation.isPending ||
-		deleteMutation.isPending ||
-		enableMutation.isPending;
+	const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending || enableMutation.isPending;
+
+	// Editor save in flight (create or update); drives the footer Save loading state and disables Cancel.
+	const isSaving = createMutation.isPending || updateMutation.isPending;
 
 	const submitError =
 		createMutation.error || updateMutation.error
-			? errorMessage(
-					createMutation.error ?? updateMutation.error,
-					t("pages.mcp.errors.save", "Could not save the MCP server."),
-				)
+			? errorMessage(createMutation.error ?? updateMutation.error, t("pages.mcp.errors.save", "Could not save the MCP server."))
 			: undefined;
+
+	// Closes the editor and clears the dirty flag. A successful save closes through here so the next open starts
+	// clean; the form is re-keyed per target so its internal state is rebuilt from initialValues.
+	const closeAndResetEditor = useCallback(() => {
+		setIsDirty(false);
+		closeEditor();
+	}, [closeEditor]);
 
 	const handleSubmit = useCallback(
 		(values: McpServerFormValues) => {
 			const body = toSaveMcpServerRequest(values);
 
 			if (editorTarget?.mode === "edit") {
-				updateMutation.mutate(
-					{ path: { mcpServerId: editorTarget.id }, body },
-					{ onSuccess: () => closeEditor() },
-				);
+				updateMutation.mutate({ path: { mcpServerId: editorTarget.id }, body }, { onSuccess: () => closeAndResetEditor() });
 				return;
 			}
 
-			createMutation.mutate({ body }, { onSuccess: () => closeEditor() });
+			createMutation.mutate({ body }, { onSuccess: () => closeAndResetEditor() });
 		},
-		[closeEditor, createMutation, editorTarget, updateMutation],
+		[closeAndResetEditor, createMutation, editorTarget, updateMutation],
 	);
+
+	// Single close path for every dismiss vector (title-bar X, footer Cancel). Confirms a discard first when the
+	// form has unsaved edits; overlay/escape dismissal is disabled while dirty so this is the only way out.
+	const requestCloseEditor = useCallback(async () => {
+		if (isDirty) {
+			const confirmed = await confirm({
+				title: t("components.dialogShell.unsavedTitle", "Discard unsaved changes?"),
+				description: t(
+					"components.dialogShell.unsavedDescription",
+					"You have unsaved changes. If you leave now, they will be lost.",
+				),
+				confirmationText: t("common.discard", "Discard"),
+				cancellationText: t("common.keepEditing", "Keep editing"),
+			});
+			if (!confirmed) {
+				return;
+			}
+		}
+		closeAndResetEditor();
+	}, [closeAndResetEditor, confirm, isDirty, t]);
 
 	const handleDelete = useCallback(
 		async (server: McpServerRegistration) => {
@@ -154,11 +188,9 @@ export function McpServersPage() {
 							)}
 						</Text>
 					</Stack>
-					{!isEditorOpen ? (
-						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="mcp-create-button">
-							{t("pages.mcp.createButton", "Register server")}
-						</Button>
-					) : null}
+					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="mcp-create-button">
+						{t("pages.mcp.createButton", "Register server")}
+					</Button>
 				</Group>
 
 				{deleteMutation.error ? (
@@ -173,60 +205,88 @@ export function McpServersPage() {
 					</Alert>
 				) : null}
 
-				{isEditorOpen ? (
-					<Card withBorder={true} radius="md" p="lg" data-testid="mcp-editor-card">
-						<Stack gap="md">
-							<Title order={3}>
-								{editorTarget?.mode === "edit"
-									? t("pages.mcp.editor.editTitle", "Edit MCP server")
-									: t("pages.mcp.editor.createTitle", "Register MCP server")}
-							</Title>
-							<McpServerForm
-								key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
-								initialValues={formInitialValues}
-								isSubmitting={createMutation.isPending || updateMutation.isPending}
-								submitError={submitError}
-								onSubmit={handleSubmit}
-								onCancel={closeEditor}
-							/>
-						</Stack>
-					</Card>
-				) : (
-					<Card withBorder={true} radius="md" p="lg">
-						<Stack gap="md">
-							{serversQuery.isLoading ? (
-								<Group gap="sm">
-									<Loader size="sm" />
-									<Text c="dimmed">{t("pages.mcp.list.loading", "Loading MCP servers…")}</Text>
-								</Group>
-							) : null}
-							{serversQuery.error ? (
-								<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-list-error">
-									{errorMessage(serversQuery.error, t("pages.mcp.errors.load", "Could not load MCP servers."))}
-								</Alert>
-							) : null}
-							{!serversQuery.isLoading && !serversQuery.error ? (
-								<>
-									<McpServerList
-										servers={servers}
-										isMutating={isMutating}
-										onEdit={openEdit}
-										onDelete={handleDelete}
-										onToggleEnabled={handleToggleEnabled}
-									/>
-									{servers.length > 0 ? (
-										<McpServerToolsSelector
-											servers={servers}
-											expandedToolsId={expandedToolsId}
-											onSelect={setExpandedToolsId}
-										/>
-									) : null}
-								</>
-							) : null}
-						</Stack>
-					</Card>
-				)}
+				<Card withBorder={true} radius="md" p="lg">
+					<Stack gap="md">
+						{serversQuery.isLoading ? (
+							<Group gap="sm">
+								<Loader size="sm" />
+								<Text c="dimmed">{t("pages.mcp.list.loading", "Loading MCP servers…")}</Text>
+							</Group>
+						) : null}
+						{serversQuery.error ? (
+							<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-list-error">
+								{errorMessage(serversQuery.error, t("pages.mcp.errors.load", "Could not load MCP servers."))}
+							</Alert>
+						) : null}
+						{!serversQuery.isLoading && !serversQuery.error ? (
+							<>
+								<McpServerList
+									servers={servers}
+									isMutating={isMutating}
+									onEdit={openEdit}
+									onDelete={handleDelete}
+									onToggleEnabled={handleToggleEnabled}
+								/>
+								{servers.length > 0 ? (
+									<McpServerToolsSelector servers={servers} expandedToolsId={expandedToolsId} onSelect={setExpandedToolsId} />
+								) : null}
+							</>
+						) : null}
+					</Stack>
+				</Card>
 			</Stack>
+
+			<DialogShell
+				opened={isEditorOpen}
+				onClose={requestCloseEditor}
+				title={
+					editorTarget?.mode === "edit"
+						? t("pages.mcp.editor.editTitle", "Edit MCP server")
+						: t("pages.mcp.editor.createTitle", "Register MCP server")
+				}
+				// Explicit stacking contract: the editor sits below ConfirmProvider's zIndex 400 so the
+				// unsaved-changes discard prompt always renders on top of it.
+				zIndex={300}
+				// Dirty edits must not be lost to an accidental overlay/escape dismiss; the only way out is the
+				// guarded close (title-bar X / footer Cancel), which confirms first.
+				closeOnClickOutside={!isDirty}
+				closeOnEscape={!isDirty}
+				footer={
+					<>
+						<Button
+							variant="subtle"
+							leftSection={<IconX size={16} />}
+							onClick={requestCloseEditor}
+							disabled={isSaving}
+							data-testid="mcp-form-cancel"
+						>
+							{t("common.cancel", "Cancel")}
+						</Button>
+						<Button
+							leftSection={<IconDeviceFloppy size={16} />}
+							onClick={() => formRef.current?.submit()}
+							loading={isSaving}
+							data-testid="mcp-form-submit"
+						>
+							{t("common.save", "Save")}
+						</Button>
+					</>
+				}
+			>
+				<Stack gap="md" px="md" pb="md" data-testid="mcp-editor-card">
+					<McpServerForm
+						key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
+						ref={formRef}
+						initialValues={formInitialValues}
+						isSubmitting={isSaving}
+						submitError={submitError}
+						onSubmit={handleSubmit}
+						onCancel={requestCloseEditor}
+						onDirtyChange={setIsDirty}
+						hideActions={true}
+					/>
+				</Stack>
+			</DialogShell>
 		</Container>
 	);
 }

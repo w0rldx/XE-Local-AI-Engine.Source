@@ -57,8 +57,17 @@ public interface IScheduledJobManagementService
     ///     Fires the definition with <paramref name="id" /> immediately via Quartz. Throws
     ///     <see cref="ScheduledJobValidationException" /> when no definition has that id, when it is disabled/deleted, when
     ///     its template forbids manual triggering, or when its Quartz job is not currently scheduled.
+    ///     <para>
+    ///         <paramref name="parameterOverrides" /> is an optional set of per-fire values stamped onto the firing
+    ///         trigger's <c>JobDataMap</c>. They never mutate the stored definition; the dispatcher decides which (if any)
+    ///         of them may override a stored parameter — today only the whitelisted model-fit use-case key. A <c>null</c> or
+    ///         empty map fires the definition exactly as its stored parameters describe (the recurring/cron path).
+    ///     </para>
     /// </summary>
-    Task TriggerNowAsync(Guid id, CancellationToken cancellationToken = default);
+    Task TriggerNowAsync(
+        Guid id,
+        IReadOnlyDictionary<string, string>? parameterOverrides = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Returns run-history records matching the supplied filters (each <c>null</c> filter is ignored), ordered by

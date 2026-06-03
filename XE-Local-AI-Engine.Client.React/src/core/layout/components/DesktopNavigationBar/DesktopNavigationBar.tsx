@@ -1,6 +1,6 @@
-import { Menu, ScrollArea, Text, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { Collapse, Menu, ScrollArea, Text, Tooltip, UnstyledButton } from "@mantine/core";
+import { IconChevronRight, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { m } from "framer-motion";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,8 +11,9 @@ import type {
 	IDesktopNavigationBarProperties,
 	IViewableNavigationLink,
 } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.types";
+import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
-import { navigationLinks } from "@/data/navigation/NavigationMenuData";
+import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
 
 import classes from "./DesktopNavigationBar.module.css";
 import {
@@ -20,12 +21,18 @@ import {
 	logoMarkVariants,
 	MOTION_SPEC,
 	navVariants,
-	nestedLinksVariants,
 } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.animations";
 
 export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: IDesktopNavigationBarProperties) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
+	const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+	// Explicit open/closed state per group id, persisted so the user's choices survive a reload. A group with
+	// no explicit entry falls back to "open when it contains the active route" so the active page is always
+	// revealed without the user expanding it first.
+	const openGroups = useDesktopNavigationBarStore((state) => state.openGroups);
+	const setGroupOpen = useDesktopNavigationBarStore((state) => state.actions.setGroupOpen);
 
 	const viewableNavigationLinks = useMemo(() => {
 		const mapViewableNavigationLinks = (links: readonly INavigationLink[]): IViewableNavigationLink[] => {
@@ -77,8 +84,24 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 		setSideBarCollapsed(!sideBarCollapsed);
 	};
 
+	const isGroupActive = (item: IViewableNavigationLink) =>
+		item.nestedLinks?.some((nestedLink) => matchesNavRoute(pathname, nestedLink.to)) ?? false;
+
+	const isGroupOpen = (item: IViewableNavigationLink) => openGroups[item.id] ?? isGroupActive(item);
+
 	const renderNavigationItem = (item: IViewableNavigationLink) => {
+		const hasNestedLinks = (item.nestedLinks?.length ?? 0) > 0;
+		const groupActive = hasNestedLinks && isGroupActive(item);
+		const itemActive = !hasNestedLinks && matchesNavRoute(pathname, item.to);
+		const open = hasNestedLinks && isGroupOpen(item);
+
 		const handleControlClick = () => {
+			if (hasNestedLinks) {
+				// Group parent is a pure toggle: flip its explicit open state (seeded from the active-aware default).
+				setGroupOpen(item.id, !isGroupOpen(item));
+				return;
+			}
+
 			if (item.onClick) {
 				item.onClick();
 				return;
@@ -89,10 +112,10 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			}
 		};
 
-		const hasNestedLinks = (item.nestedLinks?.length ?? 0) > 0;
+		const controlClassName = `${classes["control"]}${groupActive || itemActive ? ` ${classes["control-active"]}` : ""}`;
 
 		const itemControl = (
-			<UnstyledButton onClick={handleControlClick} className={classes["control"]}>
+			<UnstyledButton onClick={handleControlClick} className={controlClassName} aria-current={itemActive ? "page" : undefined}>
 				<m.div
 					className={classes["control-content"]}
 					animate={{ gap: sideBarCollapsed ? 0 : 12 }}
@@ -107,6 +130,16 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 							{item.label}
 						</Text>
 					</m.div>
+					{/* Chevron is only meaningful for an expandable group in the expanded rail; the collapsed rail
+					    swaps in a flyout menu (below) so children stay reachable without the chevron. */}
+					{hasNestedLinks && !sideBarCollapsed && (
+						<m.div variants={labelVariants} initial={false} className={classes["chevron-slot"]}>
+							<IconChevronRight
+								size={16}
+								className={`${classes["chevron"]}${open ? ` ${classes["chevron-open"]}` : ""}`}
+							/>
+						</m.div>
+					)}
 				</m.div>
 			</UnstyledButton>
 		);
@@ -115,16 +148,22 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 		let buttonWrapper;
 		if (sideBarCollapsed && hasNestedLinks) {
 			buttonWrapper = (
-				<Menu withinPortal={true} position="right-start" shadow="md">
+				<Menu withinPortal={true} position="right-start" shadow="md" trigger="click-hover" openDelay={80}>
 					<Menu.Target>
 						<div className={classes["collapsed-menu-target"]}>{itemControl}</div>
 					</Menu.Target>
 					<Menu.Dropdown>
-						{item.nestedLinks!.map((nestedLink) => (
-							<Menu.Item key={nestedLink.to} onClick={() => handleNavigate(nestedLink.to)}>
-								{nestedLink.label}
-							</Menu.Item>
-						))}
+						<Menu.Label>{item.label}</Menu.Label>
+						{item.nestedLinks!.map((nestedLink) => {
+							const nestedActive = matchesNavRoute(pathname, nestedLink.to);
+							return (
+								<Menu.Item key={nestedLink.to} onClick={() => handleNavigate(nestedLink.to)}>
+									<Text size="sm" fw={nestedActive ? 600 : 400} c={nestedActive ? "var(--mantine-primary-color-light-color)" : undefined}>
+										{nestedLink.label}
+									</Text>
+								</Menu.Item>
+							);
+						})}
 					</Menu.Dropdown>
 				</Menu>
 			);
@@ -138,24 +177,29 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			buttonWrapper = itemControl;
 		}
 
-		// Nested links are always rendered as a motion.div so they animate in/out
-		// rather than appearing/disappearing instantly when the sidebar state changes.
+		// In the expanded rail, nested links sit under their group parent inside a Mantine Collapse. Collapse
+		// measures the content and animates height cleanly (no auto-height jump) and respects reduced motion.
 		return (
 			<div key={item.id}>
 				{buttonWrapper}
-				{hasNestedLinks && (
-					<m.div
-						variants={nestedLinksVariants}
-						initial={false}
-						transition={{ duration: 0.15, ease: "easeOut" }}
-						className={classes["nested-links"]}
-					>
-						{item.nestedLinks!.map((nestedLink) => (
-							<UnstyledButton key={nestedLink.to} onClick={() => handleNavigate(nestedLink.to)} className={classes["link"]}>
-								{nestedLink.label}
-							</UnstyledButton>
-						))}
-					</m.div>
+				{hasNestedLinks && !sideBarCollapsed && (
+					<Collapse expanded={open} transitionDuration={150}>
+						<div className={classes["nested-links"]}>
+							{item.nestedLinks!.map((nestedLink) => {
+								const nestedActive = matchesNavRoute(pathname, nestedLink.to);
+								return (
+									<UnstyledButton
+										key={nestedLink.to}
+										onClick={() => handleNavigate(nestedLink.to)}
+										className={`${classes["link"]}${nestedActive ? ` ${classes["link-active"]}` : ""}`}
+										aria-current={nestedActive ? "page" : undefined}
+									>
+										{nestedLink.label}
+									</UnstyledButton>
+								);
+							})}
+						</div>
+					</Collapse>
 				)}
 			</div>
 		);

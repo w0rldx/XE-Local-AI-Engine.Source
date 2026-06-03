@@ -1,9 +1,10 @@
-import { Alert, Badge, Button, Code, Group, Loader, Modal, ScrollArea, Select, Stack, Tabs, Text } from "@mantine/core";
+import { Alert, Badge, Button, Code, Group, Loader, Select, Stack, Tabs, Text } from "@mantine/core";
 import { IconArrowBackUp } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse } from "@/core/api/generated";
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { ModelFitPanel } from "@/features/models/components/ModelFitPanel";
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
 import { buildKindOptions, capabilityLabel, kindBadgeColor, kindLabel } from "@/features/models/models/ModelKindFormatters";
@@ -175,13 +176,7 @@ export function ModelDetailsDialog({
 	onResetKind,
 }: ModelDetailsDialogProps) {
 	return (
-		<Modal
-			opened={opened}
-			onClose={onClose}
-			title={model?.modelName ?? "Model details"}
-			size="lg"
-			scrollAreaComponent={ScrollArea.Autosize}
-		>
+		<DialogShell opened={opened} onClose={onClose} title={model?.modelName ?? "Model details"} size="lg">
 			{model ? (
 				<ModelDetailsBody
 					key={model.modelName}
@@ -194,6 +189,6 @@ export function ModelDetailsDialog({
 					onResetKind={onResetKind}
 				/>
 			) : null}
-		</Modal>
+		</DialogShell>
 	);
 }

@@ -52,6 +52,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 				title={options.title || t("common.confirmation", "Confirmation")}
 				size="sm"
 				showCloseButton={false}
+				enableFullScreenToggle={false}
 				zIndex={400}
 			>
 				<Stack gap="md">

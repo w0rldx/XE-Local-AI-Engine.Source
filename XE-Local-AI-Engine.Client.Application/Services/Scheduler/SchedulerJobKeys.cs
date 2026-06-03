@@ -18,4 +18,13 @@ public static class SchedulerJobKeys
     ///     within this group keeps persistent identities aligned across restarts.
     /// </summary>
     public const string Group = "scheduled-jobs";
+
+    /// <summary>
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a use-case override for a model-fit recommendation
+    ///     refresh. A manual <c>TriggerNowAsync</c> fire may stamp this onto the trigger's data map so the run produces the
+    ///     selected use-case instead of the definition's baked one. The recurring (cron) fire never sets it, so a scheduled
+    ///     run is unchanged. The dispatcher merges ONLY this whitelisted key over the stored parameters — no other key from
+    ///     the per-fire map can override a stored parameter.
+    /// </summary>
+    public const string ModelFitUseCaseOverrideKey = "modelFitUseCaseOverride";
 }

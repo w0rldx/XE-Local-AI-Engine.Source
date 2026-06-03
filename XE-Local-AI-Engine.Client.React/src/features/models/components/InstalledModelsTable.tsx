@@ -1,5 +1,5 @@
-import { ActionIcon, Badge, Button, Group, Stack, Table, Tooltip } from "@mantine/core";
-import { IconArrowBackUp, IconCheck, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
+import { IconArrowBackUp, IconCheck, IconEye, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import type { LocalModelViewModel } from "@/features/models/models/LocalModelModel";
@@ -46,20 +46,10 @@ export function InstalledModelsTable({
 					{models.map((model) => (
 						<Table.Tr key={model.modelName}>
 							<Table.Td>
-								<Tooltip label="View details" withArrow={true}>
-									<Button
-										variant="subtle"
-										data-testid={`model-details-button-${model.modelName}`}
-										onClick={() => onOpenDetails(model.modelName)}
-									>
-										{model.modelName}
-									</Button>
-								</Tooltip>
-								{model.isSelected ? (
-									<Badge ml="xs" color="green">
-										Default
-									</Badge>
-								) : null}
+								<Group gap="xs" align="center" wrap="nowrap">
+									<Text fw={500}>{model.modelName}</Text>
+									{model.isSelected ? <Badge color="green">Default</Badge> : null}
+								</Group>
 							</Table.Td>
 							<Table.Td>
 								<Stack gap={6}>
@@ -98,6 +88,16 @@ export function InstalledModelsTable({
 							<Table.Td>{model.quantizationLabel}</Table.Td>
 							<Table.Td>
 								<Group gap="xs">
+									<Tooltip label="View details" withArrow={true}>
+										<ActionIcon
+											aria-label={`View ${model.modelName} details`}
+											variant="subtle"
+											data-testid={`model-details-button-${model.modelName}`}
+											onClick={() => onOpenDetails(model.modelName)}
+										>
+											<IconEye size={16} />
+										</ActionIcon>
+									</Tooltip>
 									<Tooltip label="Set as default model" withArrow={true}>
 										<ActionIcon
 											aria-label={`Set ${model.modelName} as default`}

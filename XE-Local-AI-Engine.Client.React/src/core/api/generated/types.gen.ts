@@ -409,6 +409,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRespon
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = {
 	scheduledJobId?: string;
+	useCase?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {

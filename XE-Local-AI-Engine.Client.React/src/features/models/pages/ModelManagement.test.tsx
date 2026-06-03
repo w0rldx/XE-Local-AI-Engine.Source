@@ -3,7 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the generated hey-api TanStack layer. The read factories return `{ queryKey, queryFn }` (the queryFn is the
@@ -62,6 +62,28 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
 
+// PullModelDialog renders a TanStack Router <Link> (inside Anchor component={Link}) for the recommendations
+// link. Stub the router module so the component mounts without a RouterProvider in unit tests.
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+	return {
+		...actual,
+		Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
+			<a href={to} {...props}>
+				{children}
+			</a>
+		),
+	};
+});
+
+// The page pulls through the shared useModelPull hook (which consumes the hand-wired NDJSON stream). Mock the hook
+// so the dialog's submit is asserted at the hook boundary without touching the real stream / network.
+const { pullSpy } = vi.hoisted(() => ({ pullSpy: vi.fn() }));
+vi.mock("@/features/models/hooks/useModelPull", () => ({
+	useModelPull: () => ({ pull: pullSpy, isPulling: false, progressPercent: undefined, pullingModelName: undefined }),
+}));
+
+import { PullModelDialog } from "@/features/models/components/PullModelDialog";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 
 function renderWithProviders(ui: ReactElement) {
@@ -194,8 +216,10 @@ describe("ModelManagement", () => {
 		const downloadButton = screen.getAllByTestId("download-model-button").find((element) => element.tagName === "BUTTON");
 		expect(downloadButton).toBeTruthy();
 		fireEvent.click(downloadButton!);
+		// The dialog now drives the shared useModelPull hook with the model name (not the generated mutation),
+		// plus an onSuccess callback the page uses to auto-close/reset the dialog on a finished download.
 		await waitFor(() =>
-			expect(mutationFns.pullLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "orca-mini:latest" } }),
+			expect(pullSpy).toHaveBeenCalledWith("orca-mini:latest", expect.objectContaining({ onSuccess: expect.any(Function) })),
 		);
 
 		const deleteButton = screen.getAllByLabelText("Delete llama3:8b").find((element) => element.tagName === "BUTTON");
@@ -203,6 +227,25 @@ describe("ModelManagement", () => {
 		fireEvent.click(deleteButton!);
 		await waitFor(() => expect(confirmMock).toHaveBeenCalled());
 		await waitFor(() => expect(mutationFns.deleteLocalModel.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" } }));
+	});
+
+	it("clears the model name and closes the pull dialog when the download finishes", async () => {
+		// Drive the hook's onSuccess synchronously, as it fires after a real successful pull.
+		pullSpy.mockImplementationOnce((_modelName: string, options?: { onSuccess?: () => void }) => options?.onSuccess?.());
+
+		renderWithProviders(<ModelManagement />);
+		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
+		const pullInput = (await screen.findAllByTestId("pull-model-name-input")).find((element) => element.tagName === "INPUT");
+		fireEvent.change(pullInput!, { target: { value: "orca-mini:latest" } });
+		fireEvent.click(screen.getAllByTestId("download-model-button").find((element) => element.tagName === "BUTTON")!);
+
+		// onSuccess ran → the dialog auto-closed (its input is unmounted).
+		await waitFor(() => expect(screen.queryByTestId("pull-model-name-input")).toBeNull());
+
+		// Reopening starts blank — the previous value was cleared, not retained.
+		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
+		const reopened = (await screen.findAllByTestId("pull-model-name-input")).find((element) => element.tagName === "INPUT");
+		expect((reopened as HTMLInputElement).value).toBe("");
 	});
 
 	it("renders the type column with the effective kind badge and capability badges", async () => {
@@ -384,5 +427,51 @@ describe("ModelManagement", () => {
 		const dialog = await screen.findByRole("dialog");
 		expect(within(dialog).getByTestId("pull-model-name-input")).toBeTruthy();
 		expect(within(dialog).getByTestId("download-model-button")).toBeTruthy();
+	});
+
+	it("hides the close button while a pull is in flight", async () => {
+		// Test PullModelDialog's close-guard directly by rendering it with isPulling=true.
+		// The dialog is a controlled component; isPulling is passed from the parent mutation state.
+		// When isPulling=true: showCloseButton=false (the close button is not rendered) and
+		// closeOnEscape=false. When isPulling=false the close button is visible.
+		const { rerender } = renderWithProviders(
+			<PullModelDialog
+				opened={true}
+				onClose={vi.fn()}
+				pullModelName="orca-mini:latest"
+				onPullModelNameChange={vi.fn()}
+				onSubmit={vi.fn()}
+				isPulling={false}
+				isActionPending={false}
+				progress={undefined}
+			/>,
+		);
+
+		const dialog = await screen.findByRole("dialog");
+
+		// Close button is visible when not pulling.
+		expect(within(dialog).getByRole("button", { name: "close" })).toBeTruthy();
+
+		// While pulling the close button is removed entirely — the operator cannot dismiss.
+		rerender(
+			<MantineProvider>
+				<QueryClientProvider
+					client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}
+				>
+					<PullModelDialog
+						opened={true}
+						onClose={vi.fn()}
+						pullModelName="orca-mini:latest"
+						onPullModelNameChange={vi.fn()}
+						onSubmit={vi.fn()}
+						isPulling={true}
+						isActionPending={true}
+						progress={42}
+					/>
+				</QueryClientProvider>
+			</MantineProvider>,
+		);
+
+		await waitFor(() => expect(screen.queryByRole("button", { name: "close" })).toBeNull());
 	});
 });

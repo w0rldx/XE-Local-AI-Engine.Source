@@ -3,6 +3,13 @@ import { IconAlertTriangle, IconEye, IconX } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
+import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
+import {
+	formatRunDuration,
+	formatRunTimestamp,
+	scheduledRunStatusColor,
+} from "@/features/scheduler/components/SchedulerRunFormatters";
 import {
 	isActiveRunStatus,
 	type ScheduledJob,
@@ -11,11 +18,6 @@ import {
 	type ScheduledRunStatus,
 	scheduledRunStatuses,
 } from "@/features/scheduler/models/SchedulerModels";
-import {
-	formatRunDuration,
-	formatRunTimestamp,
-	scheduledRunStatusColor,
-} from "@/features/scheduler/components/SchedulerRunFormatters";
 
 interface ScheduledJobRunHistoryPanelProps {
 	runs: readonly ScheduledJobRun[];
@@ -49,6 +51,11 @@ export function ScheduledJobRunHistoryPanel({
 	onCancelRun,
 }: ScheduledJobRunHistoryPanelProps) {
 	const { t } = useTranslation();
+
+	// Client-side pagination over the full filtered run set. The hook clamps the active page when the filters
+	// narrow the list, so a server refetch never strands the operator on an out-of-range page. The chosen page
+	// size persists across reloads under this storageKey.
+	const pagination = useTablePagination(runs, { storageKey: "scheduler-run-history" });
 
 	const jobData = useMemo(
 		() => [
@@ -119,71 +126,85 @@ export function ScheduledJobRunHistoryPanel({
 			) : null}
 
 			{!isLoading && !error && runs.length > 0 ? (
-				<Table.ScrollContainer minWidth={760}>
-					<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="scheduler-runs-table">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.scheduler.runs.columns.status", "Status")}</Table.Th>
-								<Table.Th>{t("pages.scheduler.runs.columns.trigger", "Trigger")}</Table.Th>
-								<Table.Th>{t("pages.scheduler.runs.columns.fired", "Fired")}</Table.Th>
-								<Table.Th>{t("pages.scheduler.runs.columns.duration", "Duration")}</Table.Th>
-								<Table.Th>{t("pages.scheduler.runs.columns.summary", "Summary")}</Table.Th>
-								<Table.Th>{t("pages.scheduler.runs.columns.actions", "Actions")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{runs.map((run) => {
-								const isActive = isActiveRunStatus(run.status);
-								const isSelected = run.id === selectedRunId;
-								return (
-									<Table.Tr
-										key={run.id}
-										data-testid={`scheduler-run-row-${run.id}`}
-										bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
-									>
-										<Table.Td>
-											<Badge color={scheduledRunStatusColor(run.status)} variant="light">
-												{t(`pages.scheduler.runs.status.${run.status}`, run.status)}
-											</Badge>
-										</Table.Td>
-										<Table.Td>{t(`pages.scheduler.runs.trigger.${run.triggeredBy}`, run.triggeredBy)}</Table.Td>
-										<Table.Td>{formatRunTimestamp(run.actualFireTimeUtc ?? run.scheduledFireTimeUtc)}</Table.Td>
-										<Table.Td>{formatRunDuration(run.durationMs)}</Table.Td>
-										<Table.Td>
-											<Text size="sm" lineClamp={1}>
-												{run.summary ?? "—"}
-											</Text>
-										</Table.Td>
-										<Table.Td>
-											<Group gap="xs">
-												<ActionIcon
-													aria-label={t("pages.scheduler.runs.viewAria", "View run")}
-													variant="subtle"
-													onClick={() => onSelectRun(run.id)}
-													data-testid={`scheduler-run-view-${run.id}`}
-												>
-													<IconEye size={16} />
-												</ActionIcon>
-												{isActive ? (
+				<>
+					<Table.ScrollContainer minWidth={760}>
+						<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="scheduler-runs-table">
+							<Table.Thead>
+								<Table.Tr>
+									<Table.Th>{t("pages.scheduler.runs.columns.status", "Status")}</Table.Th>
+									<Table.Th>{t("pages.scheduler.runs.columns.trigger", "Trigger")}</Table.Th>
+									<Table.Th>{t("pages.scheduler.runs.columns.fired", "Fired")}</Table.Th>
+									<Table.Th>{t("pages.scheduler.runs.columns.duration", "Duration")}</Table.Th>
+									<Table.Th>{t("pages.scheduler.runs.columns.summary", "Summary")}</Table.Th>
+									<Table.Th>{t("pages.scheduler.runs.columns.actions", "Actions")}</Table.Th>
+								</Table.Tr>
+							</Table.Thead>
+							<Table.Tbody>
+								{pagination.pageItems.map((run) => {
+									const isActive = isActiveRunStatus(run.status);
+									const isSelected = run.id === selectedRunId;
+									return (
+										<Table.Tr
+											key={run.id}
+											data-testid={`scheduler-run-row-${run.id}`}
+											bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
+										>
+											<Table.Td>
+												<Badge color={scheduledRunStatusColor(run.status)} variant="light">
+													{t(`pages.scheduler.runs.status.${run.status}`, run.status)}
+												</Badge>
+											</Table.Td>
+											<Table.Td>{t(`pages.scheduler.runs.trigger.${run.triggeredBy}`, run.triggeredBy)}</Table.Td>
+											<Table.Td>{formatRunTimestamp(run.actualFireTimeUtc ?? run.scheduledFireTimeUtc)}</Table.Td>
+											<Table.Td>{formatRunDuration(run.durationMs)}</Table.Td>
+											<Table.Td>
+												<Text size="sm" lineClamp={1}>
+													{run.summary ?? "—"}
+												</Text>
+											</Table.Td>
+											<Table.Td>
+												<Group gap="xs">
 													<ActionIcon
-														aria-label={t("pages.scheduler.runs.cancelAria", "Cancel run")}
+														aria-label={t("pages.scheduler.runs.viewAria", "View run")}
 														variant="subtle"
-														color="red"
-														disabled={isCancelling}
-														onClick={() => onCancelRun(run)}
-														data-testid={`scheduler-run-cancel-${run.id}`}
+														onClick={() => onSelectRun(run.id)}
+														data-testid={`scheduler-run-view-${run.id}`}
 													>
-														<IconX size={16} />
+														<IconEye size={16} />
 													</ActionIcon>
-												) : null}
-											</Group>
-										</Table.Td>
-									</Table.Tr>
-								);
-							})}
-						</Table.Tbody>
-					</Table>
-				</Table.ScrollContainer>
+													{isActive ? (
+														<ActionIcon
+															aria-label={t("pages.scheduler.runs.cancelAria", "Cancel run")}
+															variant="subtle"
+															color="red"
+															disabled={isCancelling}
+															onClick={() => onCancelRun(run)}
+															data-testid={`scheduler-run-cancel-${run.id}`}
+														>
+															<IconX size={16} />
+														</ActionIcon>
+													) : null}
+												</Group>
+											</Table.Td>
+										</Table.Tr>
+									);
+								})}
+							</Table.Tbody>
+						</Table>
+					</Table.ScrollContainer>
+					<TablePaginationFooter
+						page={pagination.page}
+						pageCount={pagination.pageCount}
+						pageSize={pagination.pageSize}
+						totalItems={pagination.totalItems}
+						firstItemIndex={pagination.firstItemIndex}
+						lastItemIndex={pagination.lastItemIndex}
+						pageSizeOptions={pagination.pageSizeOptions}
+						onPageChange={pagination.setPage}
+						onPageSizeChange={pagination.setPageSize}
+						data-testid="scheduler-runs-pagination"
+					/>
+				</>
 			) : null}
 		</Stack>
 	);

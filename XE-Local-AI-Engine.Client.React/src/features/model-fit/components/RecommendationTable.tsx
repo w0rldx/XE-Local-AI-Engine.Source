@@ -1,5 +1,5 @@
-import { Badge, Table, Text } from "@mantine/core";
-import { IconCheck, IconDownload } from "@tabler/icons-react";
+import { Badge, Button, Table, Text } from "@mantine/core";
+import { IconCheck, IconCloudDownload, IconDownload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -12,14 +12,22 @@ import type { ModelFitRecommendation } from "@/features/model-fit/models/ModelFi
 
 interface RecommendationTableProps {
 	recommendations: readonly ModelFitRecommendation[];
+	// When provided, an action cell renders a Pull button for pullable rows. The parent drives the actual pull (and
+	// progress) through the shared useModelPull hook; the table only signals intent and reflects the in-flight name.
+	onPull?: (recommendation: ModelFitRecommendation) => void;
+	// Model name currently being pulled (the parent's in-flight pull), used to disable that row's button. The
+	// comparison is against pullModelName — the Ollama tag the Pull button actually pulls.
+	pullingModelName?: string | null;
 }
 
 // Pure presentation: renders the ranked recommendation rows for a cached snapshot. The parent owns the data and
 // the empty/diagnostics state — this table is only rendered when there is at least one recommendation. Each row
-// shows rank, model name, score, fit-level + run-mode badges, estimated TPS / context / quantization, and an
-// installed-vs-pullable indicator.
-export function RecommendationTable({ recommendations }: RecommendationTableProps) {
+// shows rank, model name, score, fit-level + run-mode badges, estimated TPS / context / quantization, an
+// installed-vs-pullable indicator, and (when onPull is wired) a Pull action. A Pull button is shown ONLY for a row
+// that is not installed AND carries a non-null pullModelName (llmfit ids are often not Ollama-pullable tags).
+export function RecommendationTable({ recommendations, onPull, pullingModelName }: RecommendationTableProps) {
 	const { t } = useTranslation();
+	const showActions = onPull !== undefined;
 
 	return (
 		<Table.ScrollContainer minWidth={920}>
@@ -36,6 +44,7 @@ export function RecommendationTable({ recommendations }: RecommendationTableProp
 						<Table.Th>{t("pages.modelFit.recommendations.columns.quantization", "Quant")}</Table.Th>
 						<Table.Th>{t("pages.modelFit.recommendations.columns.memory", "Memory")}</Table.Th>
 						<Table.Th>{t("pages.modelFit.recommendations.columns.installed", "Installed")}</Table.Th>
+						{showActions ? <Table.Th>{t("pages.modelFit.recommendations.columns.action", "Action")}</Table.Th> : null}
 					</Table.Tr>
 				</Table.Thead>
 				<Table.Tbody>
@@ -81,6 +90,31 @@ export function RecommendationTable({ recommendations }: RecommendationTableProp
 									</Badge>
 								)}
 							</Table.Td>
+							{showActions ? (
+								<Table.Td>
+									{/* Pull is offered only for a not-installed row that carries a real Ollama tag. llmfit ids that aren't
+									    Ollama-pullable arrive with pullModelName === null, so those rows show nothing actionable. */}
+									{!recommendation.isInstalled && recommendation.pullModelName ? (
+										<Button
+											size="xs"
+											variant="light"
+											leftSection={<IconCloudDownload size={14} />}
+											loading={pullingModelName === recommendation.pullModelName}
+											disabled={pullingModelName === recommendation.pullModelName}
+											onClick={() => onPull?.(recommendation)}
+											data-testid={`model-fit-pull-button-${recommendation.rank}`}
+										>
+											{pullingModelName === recommendation.pullModelName
+												? t("pages.modelFit.recommendations.pulling", "Pulling…")
+												: t("pages.modelFit.recommendations.pull", "Pull")}
+										</Button>
+									) : (
+										<Text size="xs" c="dimmed">
+											—
+										</Text>
+									)}
+								</Table.Td>
+							) : null}
 						</Table.Tr>
 					))}
 				</Table.Tbody>

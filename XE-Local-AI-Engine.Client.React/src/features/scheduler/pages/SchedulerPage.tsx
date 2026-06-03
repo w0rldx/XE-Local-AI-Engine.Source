@@ -1,16 +1,23 @@
-import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconCalendarClock, IconPlus } from "@tabler/icons-react";
-import { useCallback, useMemo, useState } from "react";
+import { Alert, Button, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { IconAlertTriangle, IconCalendarClock, IconDeviceFloppy, IconPlus, IconX } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { ScheduledJobForm } from "@/features/scheduler/components/ScheduledJobForm";
+import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
+import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import { ScheduledJobRunDetail } from "@/features/scheduler/components/ScheduledJobRunDetail";
 import { ScheduledJobRunHistoryPanel } from "@/features/scheduler/components/ScheduledJobRunHistoryPanel";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
 import { toSaveScheduledJobRequest } from "@/features/scheduler/models/SchedulerMappers";
-import type { ScheduledJob, ScheduledJobFormValues, ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
+import type {
+	ScheduledJob,
+	ScheduledJobFormValues,
+	ScheduledJobRun,
+	ScheduledJobRunFilters,
+} from "@/features/scheduler/models/SchedulerModels";
 import { emptySchedulerFormValues, toSchedulerFormValues } from "@/features/scheduler/pages/SchedulerPageFormMappers";
 import {
 	useCancelScheduledJobRun,
@@ -42,7 +49,28 @@ export function SchedulerPage() {
 	const closeEditor = useSchedulerManagementStore((state) => state.actions.closeEditor);
 	const selectRun = useSchedulerManagementStore((state) => state.actions.selectRun);
 
+	// STUCK-BUG FIX: reset both the editor and the selected run on unmount so navigating away and
+	// back does not reopen the editor / run-detail panel from stale Zustand state.
+	useEffect(() => {
+		return () => {
+			closeEditor();
+			selectRun(null);
+		};
+		// Stable store action refs — safe to omit from the dep array per Zustand conventions.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [closeEditor, selectRun]);
+
 	const [runFilters, setRunFilters] = useState<ScheduledJobRunFilters>({});
+
+	// Dirty tracking: the form calls onDirtyChange whenever its internal values differ from initialValues.
+	const [isFormDirty, setIsFormDirty] = useState(false);
+
+	// Block in-app navigation while the form has unsaved edits.
+	useUnsavedChangesGuard({ isDirty: isFormDirty });
+
+	// Ref to the form's imperative handle — used by the footer Save button to drive
+	// validation without coupling the footer to internal form state (MED-3).
+	const formRef = useRef<ScheduledJobFormHandle>(null);
 
 	const templatesQuery = useScheduledJobTemplates();
 	const jobsQuery = useScheduledJobs();
@@ -82,21 +110,26 @@ export function SchedulerPage() {
 				)
 			: undefined;
 
+	// MED-1: close helper that also clears isFormDirty so useUnsavedChangesGuard does
+	// not fire a spurious "unsaved changes" prompt when the operator navigates right
+	// after a successful save.
+	const closeEditorClean = useCallback(() => {
+		setIsFormDirty(false);
+		closeEditor();
+	}, [closeEditor]);
+
 	const handleSubmit = useCallback(
 		(values: ScheduledJobFormValues) => {
 			const body = toSaveScheduledJobRequest(values);
 
 			if (editorTarget?.mode === "edit") {
-				updateMutation.mutate(
-					{ path: { scheduledJobId: editorTarget.id }, body },
-					{ onSuccess: () => closeEditor() },
-				);
+				updateMutation.mutate({ path: { scheduledJobId: editorTarget.id }, body }, { onSuccess: () => closeEditorClean() });
 				return;
 			}
 
-			createMutation.mutate({ body }, { onSuccess: () => closeEditor() });
+			createMutation.mutate({ body }, { onSuccess: () => closeEditorClean() });
 		},
-		[closeEditor, createMutation, editorTarget, updateMutation],
+		[closeEditorClean, createMutation, editorTarget, updateMutation],
 	);
 
 	const handleDelete = useCallback(
@@ -141,6 +174,55 @@ export function SchedulerPage() {
 	const isEditorOpen = editorTarget !== null;
 	const formInitialValues = editingJob ? toSchedulerFormValues(editingJob) : emptySchedulerFormValues;
 
+	const editorTitle =
+		editorTarget?.mode === "edit"
+			? t("pages.scheduler.editor.editTitle", "Edit scheduled job")
+			: t("pages.scheduler.editor.createTitle", "Create scheduled job");
+
+	const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
+	// Unified close path: both the title-bar X and the footer Cancel route through here.
+	// When the form is dirty a confirmation is required; when clean (or after a confirmed
+	// discard) the editor closes immediately via closeEditorClean.
+	const requestCloseEditor = useCallback(async () => {
+		if (!isFormDirty) {
+			closeEditorClean();
+			return;
+		}
+		const shouldDiscard = await confirm({
+			title: t("components.dialogShell.unsavedTitle", "Unsaved changes"),
+			description: t("components.dialogShell.unsavedDescription", "You have unsaved changes. Discard them and leave?"),
+			confirmationText: t("common.discard", "Discard"),
+			cancellationText: t("common.keepEditing", "Keep editing"),
+		});
+		if (shouldDiscard) {
+			closeEditorClean();
+		}
+	}, [isFormDirty, closeEditorClean, confirm, t]);
+
+	// Footer for the editor dialog: Cancel + Save always visible regardless of form length.
+	const editorFooter = (
+		<>
+			<Button
+				variant="subtle"
+				leftSection={<IconX size={16} />}
+				onClick={requestCloseEditor}
+				disabled={isSubmitting}
+				data-testid="scheduler-form-cancel"
+			>
+				{t("common.cancel", "Cancel")}
+			</Button>
+			<Button
+				leftSection={<IconDeviceFloppy size={16} />}
+				onClick={() => formRef.current?.submit()}
+				loading={isSubmitting}
+				data-testid="scheduler-form-submit"
+			>
+				{t("common.save", "Save")}
+			</Button>
+		</>
+	);
+
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
@@ -160,11 +242,9 @@ export function SchedulerPage() {
 							)}
 						</Text>
 					</Stack>
-					{!isEditorOpen ? (
-						<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="scheduler-create-button">
-							{t("pages.scheduler.createButton", "Create job")}
-						</Button>
-					) : null}
+					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="scheduler-create-button">
+						{t("pages.scheduler.createButton", "Create job")}
+					</Button>
 				</Group>
 
 				{deleteMutation.error ? (
@@ -191,55 +271,61 @@ export function SchedulerPage() {
 					</Alert>
 				) : null}
 
-				{isEditorOpen ? (
-					<Card withBorder={true} radius="md" p="lg" data-testid="scheduler-editor-card">
-						<Stack gap="md">
-							<Title order={3}>
-								{editorTarget?.mode === "edit"
-									? t("pages.scheduler.editor.editTitle", "Edit scheduled job")
-									: t("pages.scheduler.editor.createTitle", "Create scheduled job")}
-							</Title>
-							<ScheduledJobForm
-								key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
-								initialValues={formInitialValues}
-								templates={templates}
-								isEditing={editorTarget?.mode === "edit"}
-								isSubmitting={createMutation.isPending || updateMutation.isPending}
-								submitError={submitError}
-								onSubmit={handleSubmit}
-								onCancel={closeEditor}
-							/>
-						</Stack>
-					</Card>
-				) : (
-					<Card withBorder={true} radius="md" p="lg">
-						<Stack gap="md">
-							{jobsQuery.isLoading ? (
-								<Group gap="sm">
-									<Loader size="sm" />
-									<Text c="dimmed">{t("pages.scheduler.list.loading", "Loading scheduled jobs…")}</Text>
-								</Group>
-							) : null}
-							{jobsQuery.error ? (
-								<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-list-error">
-									{errorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))}
-								</Alert>
-							) : null}
-							{!jobsQuery.isLoading && !jobsQuery.error ? (
-								<ScheduledJobList
-									jobs={jobs}
-									isMutating={isMutating}
-									onEdit={openEdit}
-									onDelete={handleDelete}
-									onTrigger={handleTrigger}
-									onToggleEnabled={handleToggleEnabled}
-								/>
-							) : null}
-						</Stack>
-					</Card>
-				)}
+				{/* Editor dialog: replaces the inline card. Both the title-bar X and the footer
+				    Cancel route through requestCloseEditor so a dirty-state confirm is shown
+				    consistently from either path. Overlay and escape are disabled while dirty
+				    so accidental dismissal never silently discards work. zIndex 300 sits below
+				    the ConfirmProvider's 400 so confirmation dialogs always render on top. */}
+				<DialogShell
+					title={editorTitle}
+					opened={isEditorOpen}
+					onClose={requestCloseEditor}
+					closeOnClickOutside={!isFormDirty}
+					closeOnEscape={!isFormDirty}
+					footer={editorFooter}
+					zIndex={300}
+					data-testid="scheduler-editor-card"
+				>
+					<ScheduledJobForm
+						ref={formRef}
+						key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
+						initialValues={formInitialValues}
+						templates={templates}
+						isEditing={editorTarget?.mode === "edit"}
+						isSubmitting={isSubmitting}
+						submitError={submitError}
+						onSubmit={handleSubmit}
+						onCancel={requestCloseEditor}
+						onDirtyChange={setIsFormDirty}
+					/>
+				</DialogShell>
 
-				<Card withBorder={true} radius="md" p="lg" data-testid="scheduler-runs-card">
+				{/* Job list — always visible (dialog overlays it). */}
+				<div data-testid="scheduler-list-card">
+					{jobsQuery.isLoading ? (
+						<Group gap="sm">
+							<Loader size="sm" />
+							<Text c="dimmed">{t("pages.scheduler.list.loading", "Loading scheduled jobs…")}</Text>
+						</Group>
+					) : null}
+					{jobsQuery.error ? (
+						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-list-error">
+							{errorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))}
+						</Alert>
+					) : null}
+					{!jobsQuery.isLoading && !jobsQuery.error ? (
+						<ScheduledJobList
+							jobs={jobs}
+							isMutating={isMutating}
+							onEdit={openEdit}
+							onDelete={handleDelete}
+							onTrigger={handleTrigger}
+							onToggleEnabled={handleToggleEnabled}
+						/>
+					) : null}
+				</div>
+
+				<div data-testid="scheduler-runs-card">
 					<Stack gap="md">
 						<Title order={3}>{t("pages.scheduler.runs.title", "Run history")}</Title>
 						<ScheduledJobRunHistoryPanel
@@ -258,21 +344,27 @@ export function SchedulerPage() {
 							onSelectRun={selectRun}
 							onCancelRun={handleCancelRun}
 						/>
-						{selectedRunId ? (
-							<Card withBorder={true} radius="md" p="md" data-testid="scheduler-run-detail-card">
-								<ScheduledJobRunDetail
-									run={runQuery.data}
-									isLoading={runQuery.isLoading}
-									error={
-										runQuery.error
-											? errorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
-											: undefined
-									}
-								/>
-							</Card>
-						) : null}
 					</Stack>
-				</Card>
+				</div>
+
+				{/* Run-detail dialog: read-only, separate from the editor dialog. */}
+				<DialogShell
+					title={t("pages.scheduler.runs.detail.title", "Run detail")}
+					opened={selectedRunId !== null}
+					onClose={() => selectRun(null)}
+					enableFullScreenToggle={false}
+					data-testid="scheduler-run-detail-card"
+				>
+					<ScheduledJobRunDetail
+						run={runQuery.data}
+						isLoading={runQuery.isLoading}
+						error={
+							runQuery.error
+								? errorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
+								: undefined
+						}
+					/>
+				</DialogShell>
 			</Stack>
 		</Container>
 	);

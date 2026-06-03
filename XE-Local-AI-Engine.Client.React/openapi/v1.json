@@ -5545,6 +5545,10 @@
           "scheduledJobId": {
             "type": "string",
             "format": "guid"
+          },
+          "useCase": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

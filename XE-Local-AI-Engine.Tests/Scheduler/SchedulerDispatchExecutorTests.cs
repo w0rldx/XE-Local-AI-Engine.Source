@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Scheduler;
 
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -148,6 +149,70 @@ public sealed class SchedulerDispatchExecutorTests
 
         AssertEx.Equal(1, handler.InvocationCount, "Handler must be invoked exactly once.");
         AssertEx.Null(handler.LastContext?.Parameters, "Null parameters must propagate.");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Per-fire use-case override merge (manual model-fit refresh)
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task Dispatch_WhenOverridePresent_MergesUseCaseIntoParameters()
+    {
+        // A baked model-fit parameter set; the manual refresh should swap ONLY its use-case.
+        const string storedJson =
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+
+        var registry = new ScheduledJobTemplateRegistry([handler]);
+        var executor = CreateExecutor(store, registry);
+
+        var overrides = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [SchedulerJobKeys.ModelFitUseCaseOverrideKey] = "general"
+        };
+
+        await executor.DispatchAsync(
+            JobId,
+            "fire-override",
+            scheduledFireTimeUtc: Now,
+            actualFireTimeUtc: Now,
+            CancellationToken.None,
+            overrides);
+
+        var parameters = AssertEx.NotNull(handler.LastContext?.Parameters);
+        using var document = JsonDocument.Parse(parameters);
+        var root = document.RootElement;
+
+        AssertEx.Equal("general", root.GetProperty("useCase").GetString(), "Only the use-case must be overridden.");
+        AssertEx.Equal("llmfit-recommender-0-9-30", root.GetProperty("approvedImageId").GetString(), "approvedImageId must be untouched.");
+        AssertEx.Equal("Recommend", root.GetProperty("operation").GetString(), "operation must be untouched.");
+        AssertEx.Equal(5, root.GetProperty("limit").GetInt32(), "limit must be untouched.");
+        AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenNoOverride_UsesStoredParameters()
+    {
+        // The cron / no-override path must hand the handler the stored parameters verbatim (baked use-case unchanged).
+        const string storedJson =
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+
+        var registry = new ScheduledJobTemplateRegistry([handler]);
+        var executor = CreateExecutor(store, registry);
+
+        // No parameterOverrides argument → the recurring/cron dispatch behavior.
+        await executor.DispatchAsync(JobId, "fire-no-override", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None);
+
+        AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "Stored parameters must pass through unchanged with no override.");
     }
 
     // ──────────────────────────────────────────────────────────────────────

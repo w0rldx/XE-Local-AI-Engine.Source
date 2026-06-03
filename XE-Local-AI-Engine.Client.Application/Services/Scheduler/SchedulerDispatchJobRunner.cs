@@ -31,11 +31,36 @@ internal static class SchedulerDispatchJobRunner
             return;
         }
 
+        // A manual fire may carry a per-fire use-case override on the firing trigger's data map (merged into
+        // MergedJobDataMap by Quartz). Forward ONLY this whitelisted key to the executor; a cron/no-override fire has no
+        // such entry and dispatches the stored parameters unchanged. The executor decides whether/how to apply it.
+        var parameterOverrides = ExtractParameterOverrides(context);
+
         await dispatchExecutor.DispatchAsync(
             scheduledJobId,
             context.FireInstanceId,
             context.ScheduledFireTimeUtc,
             context.FireTimeUtc,
-            context.CancellationToken).ConfigureAwait(false);
+            context.CancellationToken,
+            parameterOverrides).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Reads the single whitelisted per-fire override key (the model-fit use-case) from the merged data map. Returns
+    ///     <c>null</c> when it is absent or blank so a normal (cron / no-override) fire dispatches the stored parameters
+    ///     unchanged. No other data-map key is ever surfaced as an override.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? ExtractParameterOverrides(IJobExecutionContext context)
+    {
+        var useCaseOverride = context.MergedJobDataMap.GetString(SchedulerJobKeys.ModelFitUseCaseOverrideKey);
+        if (string.IsNullOrWhiteSpace(useCaseOverride))
+        {
+            return null;
+        }
+
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [SchedulerJobKeys.ModelFitUseCaseOverrideKey] = useCaseOverride
+        };
     }
 }

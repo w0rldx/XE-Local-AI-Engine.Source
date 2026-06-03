@@ -26,9 +26,12 @@ public sealed class ModelFitRefreshTriggerTests
         var trigger = new ModelFitRefreshTrigger(management);
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => trigger.TriggerRecommendationRefreshAsync(jobId, CancellationToken.None));
+            () => trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None));
 
-        await management.DidNotReceive().TriggerNowAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await management.DidNotReceive().TriggerNowAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<IReadOnlyDictionary<string, string>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -41,9 +44,12 @@ public sealed class ModelFitRefreshTriggerTests
         var trigger = new ModelFitRefreshTrigger(management);
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => trigger.TriggerRecommendationRefreshAsync(jobId, CancellationToken.None));
+            () => trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None));
 
-        await management.DidNotReceive().TriggerNowAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await management.DidNotReceive().TriggerNowAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<IReadOnlyDictionary<string, string>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -55,9 +61,55 @@ public sealed class ModelFitRefreshTriggerTests
                   .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
         var trigger = new ModelFitRefreshTrigger(management);
 
-        await trigger.TriggerRecommendationRefreshAsync(jobId, CancellationToken.None);
+        await trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None);
 
-        await management.Received(1).TriggerNowAsync(jobId, Arg.Any<CancellationToken>());
+        // No use-case override supplied → the scheduler is fired with a null override map (the definition's baked
+        // use-case is used unchanged), back-compat with the prior single-arg behavior.
+        await management.Received(1).TriggerNowAsync(
+            jobId,
+            Arg.Is<IReadOnlyDictionary<string, string>?>(overrides => overrides == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Refresh_WhenUseCaseSupplied_TriggersWithOverride()
+    {
+        var jobId = Guid.NewGuid();
+        var management = Substitute.For<IScheduledJobManagementService>();
+        management.GetJobAsync(jobId, Arg.Any<CancellationToken>())
+                  .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
+        var trigger = new ModelFitRefreshTrigger(management);
+
+        await trigger.TriggerRecommendationRefreshAsync(jobId, "general", CancellationToken.None);
+
+        // The validated use-case rides the per-fire override map under the whitelisted key — and nothing else.
+        await management.Received(1).TriggerNowAsync(
+            jobId,
+            Arg.Is<IReadOnlyDictionary<string, string>?>(overrides =>
+                overrides != null
+                && overrides.Count == 1
+                && overrides.ContainsKey(SchedulerJobKeys.ModelFitUseCaseOverrideKey)
+                && overrides[SchedulerJobKeys.ModelFitUseCaseOverrideKey] == "general"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Refresh_WhenUseCaseInvalid_RejectsWithoutTrigger()
+    {
+        var jobId = Guid.NewGuid();
+        var management = Substitute.For<IScheduledJobManagementService>();
+        management.GetJobAsync(jobId, Arg.Any<CancellationToken>())
+                  .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
+        var trigger = new ModelFitRefreshTrigger(management);
+
+        // An unknown use-case is rejected by the allowlist guard before the scheduler is ever asked to fire.
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
+            () => trigger.TriggerRecommendationRefreshAsync(jobId, "not-a-use-case", CancellationToken.None));
+
+        await management.DidNotReceive().TriggerNowAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<IReadOnlyDictionary<string, string>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     private static ScheduledJobDefinitionRecord JobWithTemplate(Guid id, string templateId) =>

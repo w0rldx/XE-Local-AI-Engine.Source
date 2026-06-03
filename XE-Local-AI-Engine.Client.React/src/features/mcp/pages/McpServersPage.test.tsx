@@ -39,6 +39,13 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
 
+// The editor dialog wires the navigation guard (useUnsavedChangesGuard → TanStack useBlocker). The page tests
+// render without a real Router, so stub useBlocker to an idle (never-blocked) state — navigation blocking is the
+// hook's own concern and is covered by its dedicated test.
+vi.mock("@tanstack/react-router", () => ({
+	useBlocker: () => ({ status: "idle", proceed: undefined, reset: undefined }),
+}));
+
 import { McpServersPage } from "@/features/mcp/pages/McpServersPage";
 
 const stdioServer: McpServerRegistration = {
@@ -137,25 +144,68 @@ describe("McpServersPage", () => {
 		expect(screen.getByTestId("mcp-servers-empty")).toBeTruthy();
 	});
 
-	it("opens the create editor from the register button", () => {
+	it("opens the create editor as a dialog with Save/Cancel from the register button", async () => {
 		renderPage();
+
+		// No editor dialog until the register button is clicked.
+		expect(screen.queryByRole("dialog")).toBeNull();
 
 		fireEvent.click(screen.getByTestId("mcp-create-button"));
 
-		expect(screen.getByTestId("mcp-editor-card")).toBeTruthy();
-		expect(screen.getByTestId("mcp-server-form")).toBeTruthy();
+		// The Mantine Modal mounts through an open transition, so await its appearance.
+		const dialog = await screen.findByRole("dialog");
+		expect(within(dialog).getByTestId("mcp-editor-card")).toBeTruthy();
+		expect(within(dialog).getByTestId("mcp-server-form")).toBeTruthy();
+		// Save/Cancel live in the dialog footer and are always present regardless of body length.
+		expect(within(dialog).getByTestId("mcp-form-submit")).toBeTruthy();
+		expect(within(dialog).getByTestId("mcp-form-cancel")).toBeTruthy();
 	});
 
-	it("opens the edit editor pre-filled from a row action", () => {
+	it("opens the edit editor pre-filled from a row action", async () => {
 		renderPage();
 
 		fireEvent.click(screen.getByTestId("mcp-server-edit-mcp-1"));
 
-		const nameInput = screen.getByTestId("mcp-form-name") as HTMLInputElement;
+		const dialog = await screen.findByRole("dialog");
+		const nameInput = within(dialog).getByTestId("mcp-form-name") as HTMLInputElement;
 		expect(nameInput.value).toBe("Filesystem tools");
 		// Stdio transport pre-fills the command field.
-		const commandInput = screen.getByTestId("mcp-form-command") as HTMLInputElement;
+		const commandInput = within(dialog).getByTestId("mcp-form-command") as HTMLInputElement;
 		expect(commandInput.value).toBe("/usr/bin/fs-mcp");
+	});
+
+	it("submits the create form through the footer Save button", async () => {
+		const createMutation = makeMutation();
+		hooksMock.useCreateMcpServer.mockReturnValue(createMutation);
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("mcp-create-button"));
+		const dialog = await screen.findByRole("dialog");
+
+		// A minimal valid stdio registration: name + command.
+		fireEvent.change(within(dialog).getByTestId("mcp-form-name"), { target: { value: "FS" } });
+		fireEvent.change(within(dialog).getByTestId("mcp-form-command"), { target: { value: "/bin/fs" } });
+		fireEvent.click(within(dialog).getByTestId("mcp-form-submit"));
+
+		expect(createMutation.mutate).toHaveBeenCalledTimes(1);
+	});
+
+	it("resets the editor target on unmount so it does not reopen on remount (stuck-editor fix)", () => {
+		// Open the editor, then unmount the page while it is still open.
+		useMcpManagementStore.setState({ editorTarget: { mode: "create" } });
+		const { unmount } = renderPage();
+		expect(screen.getByRole("dialog")).toBeTruthy();
+
+		unmount();
+
+		// The module-singleton store must have been cleared by the page's unmount effect.
+		expect(useMcpManagementStore.getState().editorTarget).toBeNull();
+
+		// Remounting shows the list, not a reopened editor.
+		renderPage();
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(screen.getByTestId("mcp-servers-table")).toBeTruthy();
 	});
 
 	it("toggles a server enabled through the row switch", () => {

@@ -19,12 +19,18 @@
     "search": "Suchen",
     "filters": "Filter",
     "save": "Speichern",
+    "discard": "Verwerfen",
+    "keepEditing": "Weiter bearbeiten",
     "noData": "Keine Einträge gefunden",
     "entries": "Einträge",
     "error": "Fehler",
     "fetchError": "Beim Laden der Tabellendaten ist ein Problem aufgetreten.",
     "providers": {
       "cloudflareAccess": "Cloudflare Access"
+    },
+    "pagination": {
+      "rowsPerPage": "Zeilen pro Seite",
+      "showingRange": "{{from}}–{{to}} von {{total}}"
     }
   },
   "theme": {
@@ -42,7 +48,12 @@
     "binding": "Node-Bindung",
     "nodeSettings": "Node-Einstellungen",
     "cloudSettings": "Cloud-Einstellungen",
+    "settingsGroup": "Einstellungen",
+    "automationGroup": "Automatisierung",
     "models": "Modelle",
+    "modelsInstalled": "Installiert",
+    "recommendations": "Empfehlungen",
+    "overview": "Übersicht",
     "tools": "Tools",
     "agents": "Agenten",
     "mcp": "MCP",
@@ -808,6 +819,24 @@
         },
         "overrideLabel": "Typ überschreiben",
         "reset": "Auf erkannt zurücksetzen"
+      },
+      "pull": {
+        "title": "Neues Modell herunterladen",
+        "guidance": "Gib einen Ollama-kompatiblen Modell-Tag ein. Verfügbare Modelle findest du in der Ollama-Bibliothek.",
+        "libraryLink": "Ollama-Bibliothek öffnen (ollama.com/library)",
+        "warning": "Ein manueller Pull lädt beliebige, ungeprüfte Modellgewichte herunter und kann sehr groß sein. Bevorzuge die empfohlenen Modelle für diesen Knoten.",
+        "recommendationsLink": "Empfohlene Modelle für diesen Knoten anzeigen",
+        "inputLabel": "Name des herunterzuladenden Modells",
+        "downloadButton": "Modell herunterladen",
+        "inProgress": "Download läuft — lass diesen Dialog geöffnet, bis er abgeschlossen ist.",
+        "toast": {
+          "title": "{{model}} wird heruntergeladen",
+          "preparing": "Download wird vorbereitet…",
+          "successTitle": "Modell heruntergeladen",
+          "success": "{{model}} ist bereit.",
+          "errorTitle": "Download fehlgeschlagen",
+          "error": "{{model}} konnte nicht heruntergeladen werden."
+        }
       }
     },
     "manager": {
@@ -1414,6 +1443,8 @@
         "emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
         "installed": "Installiert",
         "pullable": "Verfügbar",
+        "pull": "Herunterladen",
+        "pulling": "Wird heruntergeladen…",
         "useCases": {
           "general": "Allgemein",
           "coding": "Programmierung",
@@ -1438,7 +1469,8 @@
           "context": "Kontext",
           "quantization": "Quant",
           "memory": "Speicher",
-          "installed": "Installiert"
+          "installed": "Installiert",
+          "action": "Aktion"
         },
         "errors": {
           "load": "Empfehlungen konnten nicht geladen werden.",
@@ -1775,6 +1807,16 @@
       "tooltip": {
         "close": "Schließen"
       }
+    },
+    "dialogShell": {
+      "fullscreen": "Vollbild",
+      "exitFullscreen": "Vollbild beenden",
+      "unsavedTitle": "Nicht gespeicherte Änderungen verwerfen?",
+      "unsavedDescription": "Es gibt nicht gespeicherte Änderungen. Wenn Sie jetzt verlassen, gehen sie verloren."
+    },
+    "markdownEditor": {
+      "edit": "Bearbeiten",
+      "preview": "Vorschau"
     },
     "userDeviceSessions": {
       "deviceSessions": "Gerätesitzungen",

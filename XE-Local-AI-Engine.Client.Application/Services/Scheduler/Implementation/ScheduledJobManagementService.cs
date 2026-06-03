@@ -179,7 +179,10 @@ public sealed class ScheduledJobManagementService(
         return deleted;
     }
 
-    public async Task TriggerNowAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task TriggerNowAsync(
+        Guid id,
+        IReadOnlyDictionary<string, string>? parameterOverrides = null,
+        CancellationToken cancellationToken = default)
     {
         var definition = await _definitionStore.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
         if (definition is null || definition.DeletedAtUtc is not null)
@@ -211,14 +214,30 @@ public sealed class ScheduledJobManagementService(
             throw new ScheduledJobValidationException("This job is not currently scheduled and cannot be triggered.");
         }
 
+        // Per-fire overrides ride the firing trigger's JobDataMap (never the stored definition). The dispatcher decides
+        // which keys may override stored parameters; an empty/absent map fires the stored definition unchanged.
         // Quartz honors [DisallowConcurrentExecution] on the non-overlapping dispatch job, so an overlapping manual fire
         // of a prevent-overlap definition is serialized by Quartz rather than rejected here.
-        await scheduler.TriggerJob(jobKey, cancellationToken).ConfigureAwait(false);
+        if (parameterOverrides is { Count: > 0 })
+        {
+            var fireDataMap = new JobDataMap();
+            foreach (var (key, value) in parameterOverrides)
+            {
+                fireDataMap[key] = value;
+            }
+
+            await scheduler.TriggerJob(jobKey, fireDataMap, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await scheduler.TriggerJob(jobKey, cancellationToken).ConfigureAwait(false);
+        }
 
         _logger.LogInformation(
-            "Manually triggered scheduled job {ScheduledJobId} (template {TemplateId}).",
+            "Manually triggered scheduled job {ScheduledJobId} (template {TemplateId}, overrides={OverrideCount}).",
             definition.Id,
-            definition.TemplateId);
+            definition.TemplateId,
+            parameterOverrides?.Count ?? 0);
     }
 
     public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(

@@ -44,18 +44,12 @@ export function useSchedulerHub(): void {
 			.build();
 
 		const invalidateJobs = (): void => {
-			queryClient
-				.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) })
-				.catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) }).catch(() => undefined);
 		};
 
 		const invalidateRuns = (): void => {
-			queryClient
-				.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listRuns) })
-				.catch(() => undefined);
-			queryClient
-				.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) })
-				.catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listRuns) }).catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) }).catch(() => undefined);
 		};
 
 		connection.on(JOB_DEFINITION_CHANGED, invalidateJobs);

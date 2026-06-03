@@ -22,6 +22,16 @@ public interface IModelFitRefreshTrigger
     ///     <c>model-recommendation-check</c>; otherwise delegates to the scheduler's
     ///     <see cref="IScheduledJobManagementService.TriggerNowAsync" /> (which itself throws
     ///     <see cref="ScheduledJobValidationException" /> for a disabled/deleted/forbidden/unscheduled job).
+    ///     <para>
+    ///         <paramref name="useCaseOverride" /> optionally runs the refresh for a specific use-case instead of the
+    ///         definition's baked one. It is validated against the fixed six-value llmfit allowlist before it reaches the
+    ///         run; an unknown value throws <see cref="ScheduledJobValidationException" /> and nothing fires. A
+    ///         <c>null</c>/empty value fires the definition's stored use-case unchanged (back-compat). Only the use-case is
+    ///         widened — never an image reference, command line, or any other parameter.
+    ///     </para>
     /// </summary>
-    Task TriggerRecommendationRefreshAsync(Guid scheduledJobId, CancellationToken cancellationToken = default);
+    Task TriggerRecommendationRefreshAsync(
+        Guid scheduledJobId,
+        string? useCaseOverride = null,
+        CancellationToken cancellationToken = default);
 }

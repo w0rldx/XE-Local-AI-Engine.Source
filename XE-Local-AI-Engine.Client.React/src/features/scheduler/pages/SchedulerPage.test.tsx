@@ -2,9 +2,10 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 import { useSchedulerManagementStore } from "@/features/scheduler/stores/SchedulerManagementStore";
 
@@ -20,6 +21,12 @@ vi.mock("react-i18next", () => ({
 			return text;
 		},
 	}),
+}));
+
+// useUnsavedChangesGuard wraps useBlocker which requires a TanStack Router context.
+// In page-level unit tests we render without a full router, so stub the hook to a no-op.
+vi.mock("@/core/ui/hooks/useUnsavedChangesGuard", () => ({
+	useUnsavedChangesGuard: () => undefined,
 }));
 
 const { hooksMock, confirmMock, hubMock } = vi.hoisted(() => ({
@@ -113,9 +120,11 @@ function renderPage() {
 	});
 	return render(
 		<MantineProvider>
-			<QueryClientProvider client={queryClient}>
-				<SchedulerPage />
-			</QueryClientProvider>
+			<ConfirmProvider>
+				<QueryClientProvider client={queryClient}>
+					<SchedulerPage />
+				</QueryClientProvider>
+			</ConfirmProvider>
 		</MantineProvider>,
 	);
 }
@@ -169,20 +178,36 @@ describe("SchedulerPage", () => {
 		expect(screen.getByTestId("scheduler-jobs-empty")).toBeTruthy();
 	});
 
-	it("opens the create editor from the create button", () => {
+	it("opens the create editor dialog from the create button", async () => {
 		renderPage();
 
 		fireEvent.click(screen.getByTestId("scheduler-create-button"));
 
-		expect(screen.getByTestId("scheduler-editor-card")).toBeTruthy();
-		expect(screen.getByTestId("scheduled-job-form")).toBeTruthy();
+		// Mantine Modal portals content asynchronously — waitFor covers the async mount.
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduled-job-form")).toBeTruthy();
+		});
 	});
 
-	it("opens the edit editor pre-filled from a row action", () => {
+	it("Save and Cancel buttons are present in the editor dialog footer", async () => {
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("scheduler-create-button"));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduler-form-submit")).toBeTruthy();
+		});
+		expect(screen.getByTestId("scheduler-form-cancel")).toBeTruthy();
+	});
+
+	it("opens the edit editor pre-filled from a row action", async () => {
 		renderPage();
 
 		fireEvent.click(screen.getByTestId("scheduler-job-edit-job-1"));
 
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduler-form-name")).toBeTruthy();
+		});
 		const nameInput = screen.getByTestId("scheduler-form-name") as HTMLInputElement;
 		expect(nameInput.value).toBe("Nightly cleanup");
 		const cronInput = screen.getByTestId("scheduler-form-cron") as HTMLInputElement;
@@ -217,5 +242,112 @@ describe("SchedulerPage", () => {
 		renderPage();
 
 		expect(screen.getByTestId("scheduler-list-error")).toBeTruthy();
+	});
+
+	it("closing the editor dialog (clean form) resets editorTarget immediately", async () => {
+		renderPage();
+
+		// Open the editor
+		fireEvent.click(screen.getByTestId("scheduler-create-button"));
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduler-form-cancel")).toBeTruthy();
+		});
+
+		// Click cancel — form is clean so no confirm, closes immediately
+		fireEvent.click(screen.getByTestId("scheduler-form-cancel"));
+
+		// editorTarget is null — the store was reset
+		expect(useSchedulerManagementStore.getState().editorTarget).toBeNull();
+	});
+
+	it("Cancel while dirty prompts for confirmation before closing", async () => {
+		// Resolve to true = user chose Discard
+		confirmMock.mockResolvedValueOnce(true);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("scheduler-create-button"));
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduler-form-name")).toBeTruthy();
+		});
+
+		// Dirty the form
+		fireEvent.change(screen.getByTestId("scheduler-form-name"), { target: { value: "Edited name" } });
+
+		fireEvent.click(screen.getByTestId("scheduler-form-cancel"));
+
+		// requestCloseEditor awaits confirm; after discard the editor closes
+		await waitFor(() => {
+			expect(confirmMock).toHaveBeenCalledTimes(1);
+		});
+		await waitFor(() => {
+			expect(useSchedulerManagementStore.getState().editorTarget).toBeNull();
+		});
+	});
+
+	it("Cancel while dirty keeps the editor open when user chooses keep-editing", async () => {
+		// Resolve to false = user chose Keep editing
+		confirmMock.mockResolvedValueOnce(false);
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("scheduler-create-button"));
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduler-form-name")).toBeTruthy();
+		});
+
+		// Dirty the form
+		fireEvent.change(screen.getByTestId("scheduler-form-name"), { target: { value: "Edited name" } });
+
+		fireEvent.click(screen.getByTestId("scheduler-form-cancel"));
+
+		await waitFor(() => {
+			expect(confirmMock).toHaveBeenCalledTimes(1);
+		});
+		// Editor should remain open — editorTarget is not null
+		expect(useSchedulerManagementStore.getState().editorTarget).not.toBeNull();
+	});
+
+	it("resets editorTarget on unmount (stuck-bug fix)", () => {
+		// Start with an open editor
+		useSchedulerManagementStore.setState({ editorTarget: { mode: "create" }, selectedRunId: null });
+
+		const { unmount } = renderPage();
+
+		// Unmounting the page should clear the store
+		unmount();
+
+		expect(useSchedulerManagementStore.getState().editorTarget).toBeNull();
+		expect(useSchedulerManagementStore.getState().selectedRunId).toBeNull();
+	});
+
+	it("successful save clears isFormDirty so no spurious nav guard fires afterwards", async () => {
+		// Wire update mutation to call onSuccess immediately — simulates a successful save.
+		const updateMutation = {
+			mutate: vi.fn((_vars: unknown, opts: { onSuccess?: () => void }) => opts.onSuccess?.()),
+			isPending: false,
+			error: null,
+		};
+		hooksMock.useUpdateScheduledJob.mockReturnValue(updateMutation);
+
+		// Open the editor pre-filled with the existing cronJob (all required fields valid).
+		useSchedulerManagementStore.setState({ editorTarget: { mode: "edit", id: "job-1" }, selectedRunId: null });
+		renderPage();
+
+		// Wait for the form to appear in the dialog portal
+		await waitFor(() => {
+			expect(screen.getByTestId("scheduler-form-name")).toBeTruthy();
+		});
+
+		// Dirty the form — isFormDirty becomes true
+		fireEvent.change(screen.getByTestId("scheduler-form-name"), { target: { value: "Updated name" } });
+
+		// Click the footer Save — formRef.current.submit() → Zod validates (all fields valid) → handleSubmit → mutate → onSuccess → closeEditorClean
+		fireEvent.click(screen.getByTestId("scheduler-form-submit"));
+
+		// After successful save: editor is closed and no confirm prompt was shown
+		await waitFor(() => {
+			expect(useSchedulerManagementStore.getState().editorTarget).toBeNull();
+		});
+		// closeEditorClean cleared isFormDirty — confirm was never called
+		expect(confirmMock).not.toHaveBeenCalled();
 	});
 });

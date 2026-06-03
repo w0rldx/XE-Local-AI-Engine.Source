@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
@@ -26,9 +27,20 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
 
     public override async Task HandleAsync(RefreshRecommendationsRequest req, CancellationToken ct)
     {
+        // Reject an unsupported use-case override with a 400 BEFORE anything fires. The override is widened to a
+        // validated enum only (the same six llmfit-supported values the run validator enforces) — never free text. An
+        // empty/null UseCase is a no-override refresh (back-compat). The trigger re-checks this as a defense-in-depth
+        // boundary, but failing fast here keeps an invalid request from reaching the scheduler at all.
+        if (!string.IsNullOrWhiteSpace(req.UseCase) && !ModelFitRequestValidator.AllowedUseCases.Contains(req.UseCase))
+        {
+            AddError("Use case is not supported.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
-            await _modelFitRefreshTrigger.TriggerRecommendationRefreshAsync(req.ScheduledJobId, ct).ConfigureAwait(false);
+            await _modelFitRefreshTrigger.TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, ct).ConfigureAwait(false);
             await Send.OkAsync(new RefreshRecommendationsResponse
                 {
                     ScheduledJobId = req.ScheduledJobId

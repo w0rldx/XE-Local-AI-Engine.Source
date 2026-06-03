@@ -20,7 +20,7 @@ public sealed class TriggerScheduledJobEndpoint(IScheduledJobManagementService s
     {
         try
         {
-            await _scheduledJobManagementService.TriggerNowAsync(req.ScheduledJobId, ct).ConfigureAwait(false);
+            await _scheduledJobManagementService.TriggerNowAsync(req.ScheduledJobId, parameterOverrides: null, ct).ConfigureAwait(false);
             await Send.NoContentAsync(ct).ConfigureAwait(false);
         }
         catch (ScheduledJobValidationException exception)

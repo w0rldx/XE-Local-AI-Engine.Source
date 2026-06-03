@@ -1,29 +1,28 @@
 import type { IconProps } from "@tabler/icons-react";
 import {
-	IconCalendarClock,
-	IconChartBar,
-	IconCloudCog,
 	IconCpu,
 	IconDashboard,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
-	IconPhotoShield,
-	IconPlug,
 	IconPlugConnected,
 	IconRobot,
 	IconServerCog,
 	IconSettings,
-	IconTools,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
+// Capability flags that gate individual navigation entries (top-level or nested). A link with no
+// capability is always shown; a link with a capability is shown only when that node capability is on.
+type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit";
+
 interface INavigationNestedLink {
 	translationKey: string;
 	to: string;
 	onClick?: () => void;
+	capability?: NavigationCapabilityKey;
 }
 
 export interface INavigationLink {
@@ -31,13 +30,15 @@ export interface INavigationLink {
 	icon: ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>;
 	translationKey: string;
 	to?: string;
-	collapseIdentifier?: string;
 	links?: INavigationNestedLink[];
 	onClick?: () => void;
+	capability?: NavigationCapabilityKey;
 }
 
-// Full link set including the capability-gated agents entry. The exported navigationLinks below is this
-// list filtered by the active node capabilities — see the filter at the bottom of this file.
+// Full link set with the related node pages collapsed into groups (Models / Settings / Automation). A group
+// entry has no `to` of its own — it is a pure expand/collapse toggle whose children carry the routes. The
+// exported navigationLinks below is this list with capability-gated children removed (and any group left
+// empty dropped) — see the filter at the bottom of this file. The nav bars stay capability-unaware.
 const allNavigationLinks: INavigationLink[] = [
 	{ id: "home", icon: IconHome, translationKey: "navigation.home", to: nodeRoutePaths.home },
 	{
@@ -58,29 +59,50 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.binding",
 		to: nodeRoutePaths.binding,
 	},
-	{
-		id: "node-settings",
-		icon: IconSettings,
-		translationKey: "navigation.nodeSettings",
-		to: nodeRoutePaths.nodeSettings,
-	},
-	{
-		id: "cloud-settings",
-		icon: IconCloudCog,
-		translationKey: "navigation.cloudSettings",
-		to: nodeRoutePaths.cloudSettings,
-	},
+	// Models group: installed models (always) plus the model-fit recommendations page, which is gated on the
+	// static modelFit capability. With modelFit off the group keeps just Installed.
 	{
 		id: "models",
 		icon: IconCpu,
 		translationKey: "navigation.models",
-		to: nodeRoutePaths.models,
+		links: [
+			{ translationKey: "navigation.modelsInstalled", to: nodeRoutePaths.models },
+			{ translationKey: "navigation.recommendations", to: nodeRoutePaths.modelRecommendations, capability: "modelFit" },
+		],
 	},
+	// Settings group: node + cloud settings. Neither child is capability-gated, so the group always renders.
+	{
+		id: "settings",
+		icon: IconSettings,
+		translationKey: "navigation.settingsGroup",
+		links: [
+			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings },
+			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings },
+		],
+	},
+	// Automation group: agents / MCP servers / scheduler are each gated on their own capability; tools is
+	// always available, so the group never collapses to empty.
+	{
+		id: "automation",
+		icon: IconRobot,
+		translationKey: "navigation.automationGroup",
+		links: [
+			{ translationKey: "navigation.agents", to: nodeRoutePaths.agents, capability: "agentManagement" },
+			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },
+			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler" },
+			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
+		],
+	},
+	// Manager group: runtime overview (always) plus the approved-images page, which is gated on the static
+	// modelFit capability. With modelFit off the group keeps just Overview.
 	{
 		id: "manager",
 		icon: IconServerCog,
 		translationKey: "navigation.manager",
-		to: nodeRoutePaths.manager,
+		links: [
+			{ translationKey: "navigation.overview", to: nodeRoutePaths.manager },
+			{ translationKey: "navigation.approvedImages", to: nodeRoutePaths.approvedImages, capability: "modelFit" },
+		],
 	},
 	{
 		id: "invocations",
@@ -88,67 +110,32 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.invocations",
 		to: nodeRoutePaths.invocations,
 	},
-	{
-		id: "tools",
-		icon: IconTools,
-		translationKey: "navigation.tools",
-		to: nodeRoutePaths.tools,
-	},
-	// Agent management link is gated on the static agentManagement capability (agent-management). Filtered out of
-	// the rendered menu below when the capability is off, so the nav bars stay capability-unaware.
-	{
-		id: "agents",
-		icon: IconRobot,
-		translationKey: "navigation.agents",
-		to: nodeRoutePaths.agents,
-	},
-	// MCP server management link is gated on the static mcpServers capability (dynamic tool-catalog). Filtered out of
-	// the rendered menu below when the capability is off, mirroring the agents entry.
-	{
-		id: "mcp",
-		icon: IconPlug,
-		translationKey: "navigation.mcp",
-		to: nodeRoutePaths.mcp,
-	},
-	// Scheduler management link is gated on the static scheduler capability (Quartz scheduler). Filtered out of the
-	// rendered menu below when the capability is off, mirroring the agents/mcp entries.
-	{
-		id: "scheduler",
-		icon: IconCalendarClock,
-		translationKey: "navigation.scheduler",
-		to: nodeRoutePaths.scheduler,
-	},
-	// Model-fit links (llmfit recommendations + read-only approved images) are gated on the static modelFit
-	// capability. Filtered out of the rendered menu below when the capability is off, mirroring the entries above.
-	{
-		id: "model-recommendations",
-		icon: IconChartBar,
-		translationKey: "navigation.modelRecommendations",
-		to: nodeRoutePaths.modelRecommendations,
-	},
-	{
-		id: "approved-images",
-		icon: IconPhotoShield,
-		translationKey: "navigation.approvedImages",
-		to: nodeRoutePaths.approvedImages,
-	},
 ];
 
-// Capability-gated navigation links: identity for everything except the agents/mcp entries, which are hidden
-// when their respective node capability (agentManagement / mcpServers) is off. The nav bars render this
+// A nav target is active when the current path equals it, or is a sub-path of it (so /models/123 still
+// highlights the Models → Installed entry). The home route ("/") only matches exactly. Shared by both nav
+// bars so the active-route rule stays in one place.
+export function matchesNavRoute(pathname: string, to: string | undefined): boolean {
+	if (!to) {
+		return false;
+	}
+
+	if (to === "/") {
+		return pathname === "/";
+	}
+
+	return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+const isCapabilityEnabled = (capability?: NavigationCapabilityKey): boolean =>
+	capability ? nodeCapabilities[capability] : true;
+
+// Capability-gated navigation links: drop any top-level entry whose capability is off, filter each group's
+// children by their capability, then drop a group that ends up with no children. The nav bars render this
 // filtered list so they never need to reason about capabilities themselves.
-export const navigationLinks: INavigationLink[] = allNavigationLinks.filter((link) => {
-	if (link.id === "agents") {
-		return nodeCapabilities.agentManagement;
-	}
-	if (link.id === "mcp") {
-		return nodeCapabilities.mcpServers;
-	}
-	if (link.id === "scheduler") {
-		return nodeCapabilities.scheduler;
-	}
-	if (link.id === "model-recommendations" || link.id === "approved-images") {
-		return nodeCapabilities.modelFit;
-	}
-	return true;
-});
+export const navigationLinks: INavigationLink[] = allNavigationLinks
+	.filter((link) => isCapabilityEnabled(link.capability))
+	.map((link) =>
+		link.links ? { ...link, links: link.links.filter((nestedLink) => isCapabilityEnabled(nestedLink.capability)) } : link,
+	)
+	.filter((link) => !link.links || link.links.length > 0);

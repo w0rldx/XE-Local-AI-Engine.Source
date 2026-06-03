@@ -10,12 +10,14 @@ import { RecommendationTable } from "@/features/model-fit/components/Recommendat
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
 	defaultModelFitProviderName,
+	type ModelFitRecommendation,
 	type ModelFitUseCase,
 	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 } from "@/features/model-fit/models/ModelFitModels";
 import { useLatestRecommendations, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
+import { useModelPull } from "@/features/models/hooks/useModelPull";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -35,6 +37,8 @@ export function ModelRecommendationsPage() {
 	// endpoint fires an EXISTING job; it never creates one — so refresh is gated on such a job being present.
 	const jobsQuery = useScheduledJobs();
 	const refreshMutation = useRefreshRecommendations();
+	// Shared single pull engine (invariant §3.3) — the same hook the ModelManagement dialog uses.
+	const modelPull = useModelPull();
 
 	const latest = latestQuery.data;
 
@@ -57,12 +61,22 @@ export function ModelRecommendationsPage() {
 		if (refreshJob === undefined) {
 			return;
 		}
-		refreshMutation.mutate(refreshJob.id);
+		// Send the currently-selected use case so the run targets what the operator is viewing (server validates it
+		// against the fixed allowlist), instead of the use case baked into the job definition.
+		refreshMutation.mutate({ scheduledJobId: refreshJob.id, useCase });
 	};
 
 	const handleUseCaseChange = (value: string | null): void => {
 		if (value !== null) {
 			setUseCase(value as ModelFitUseCase);
+		}
+	};
+
+	// The table only renders a Pull button for rows with a non-null pullModelName, but guard here too — the hook
+	// pulls the Ollama tag (pullModelName), not the llmfit display name.
+	const handlePull = (recommendation: ModelFitRecommendation): void => {
+		if (recommendation.pullModelName) {
+			modelPull.pull(recommendation.pullModelName);
 		}
 	};
 
@@ -221,7 +235,11 @@ export function ModelRecommendationsPage() {
 								</Group>
 
 								{latest.recommendations.length > 0 ? (
-									<RecommendationTable recommendations={latest.recommendations} />
+									<RecommendationTable
+										recommendations={latest.recommendations}
+										onPull={handlePull}
+										pullingModelName={modelPull.pullingModelName}
+									/>
 								) : (
 									<Text c="dimmed" data-testid="model-fit-recommendations-empty-list">
 										{t("pages.modelFit.recommendations.emptyList", "The latest snapshot returned no recommendations.")}

@@ -55,14 +55,25 @@ describe("useRefreshRecommendations", () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
 
-		result.current.mutate("job-1");
+		result.current.mutate({ scheduledJobId: "job-1" });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
 		// TanStack v5 calls mutationFn(variables, context) — assert the variables via the first call arg only
-		// (a toHaveBeenCalledWith({...}) would fail on the 2nd context argument).
-		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1" } });
+		// (a toHaveBeenCalledWith({...}) would fail on the 2nd context argument). With no override, useCase is undefined.
+		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1", useCase: undefined } });
 		expect(invalidatedKeys).toContainEqual(LATEST_KEY);
+	});
+
+	it("forwards a use-case override into the generated mutation body", async () => {
+		const { Wrapper } = makeWrapper();
+		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
+
+		result.current.mutate({ scheduledJobId: "job-1", useCase: "general" });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1", useCase: "general" } });
 	});
 
 	it("surfaces a refresh error and does not invalidate", async () => {
@@ -70,7 +81,7 @@ describe("useRefreshRecommendations", () => {
 		const { Wrapper } = makeWrapper();
 		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
 
-		result.current.mutate("bad-job");
+		result.current.mutate({ scheduledJobId: "bad-job" });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 

@@ -7,7 +7,11 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toApprovedImage, toLatestRecommendations } from "@/features/model-fit/models/ModelFitMappers";
-import { defaultModelFitProviderName, type ModelFitRecommendationFilters } from "@/features/model-fit/models/ModelFitModels";
+import {
+	defaultModelFitProviderName,
+	type ModelFitRecommendationFilters,
+	type ModelFitUseCase,
+} from "@/features/model-fit/models/ModelFitModels";
 
 // Server state for the model-fit surface. Reads use the generated hey-api `*Options()` (which wire the shared
 // axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the optional-field
@@ -58,19 +62,28 @@ function invalidateLatest(queryClient: ReturnType<typeof useQueryClient>): Promi
 	return queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) });
 }
 
+// Variables for a refresh: the existing model-recommendation-check job id, plus an optional use-case override. When
+// `useCase` is supplied the scheduler fires that job with a per-fire use-case override (validated server-side against
+// the fixed six-value allowlist) so the run targets the use case the operator is viewing — instead of the use case
+// baked into the job definition. Omitting it preserves the prior baked-use-case behavior.
+export interface RefreshRecommendationsVariables {
+	scheduledJobId: string;
+	useCase?: ModelFitUseCase;
+}
+
 // Refresh enqueues an async scheduler run, so it invalidates the latest-recommendations cache (the run may not have
-// produced new data yet — useModelFitSchedulerEvents refetches again on completion). The page-facing variable stays
-// the domain `scheduledJobId` string (the existing model-recommendation-check job id); the hook dispatches it to
-// the generated mutationFn's `{ body: { scheduledJobId } }` shape so callers never touch the wire envelope.
+// produced new data yet — useModelFitSchedulerEvents refetches again on completion). The page-facing variables stay
+// domain-shaped (`scheduledJobId` + optional `useCase`); the hook dispatches them to the generated mutationFn's
+// `{ body: { scheduledJobId, useCase } }` shape so callers never touch the wire envelope.
 export function useRefreshRecommendations() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async (scheduledJobId: string): Promise<void> => {
-			// Adapt the domain id to the generated `{ body }` envelope and dispatch to the generated mutationFn. The
-			// response body (the echoed job id) is unused by the page, so this resolves to void.
+		mutationFn: async ({ scheduledJobId, useCase }: RefreshRecommendationsVariables): Promise<void> => {
+			// Adapt the domain variables to the generated `{ body }` envelope and dispatch to the generated mutationFn.
+			// The response body (the echoed job id) is unused by the page, so this resolves to void.
 			const options = withResponseValidation(refreshRecommendationsMutation());
-			await options.mutationFn?.({ body: { scheduledJobId } }, undefined as never);
+			await options.mutationFn?.({ body: { scheduledJobId, useCase } }, undefined as never);
 		},
 		onSuccess: () => invalidateLatest(queryClient),
 	});
