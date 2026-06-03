@@ -8,10 +8,6 @@
 	border-color: var(--mantine-color-gray-4);
 }
 
-.trigger-paper-selected {
-	border-color: var(--mantine-primary-color-light-hover);
-}
-
 .compact-trigger {
 	/* Flex-basis only: in the composer's nowrap control row the trigger shrinks below this floor (min-width:0 +
 	   flex-shrink) so the row never wraps the send button to a second line on mobile; caps at 220px on roomy layouts. */

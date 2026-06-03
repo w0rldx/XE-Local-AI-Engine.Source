@@ -166,7 +166,7 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 				<Paper
 					radius="md"
 					data-testid="chat-model-selector-selected"
-					className={cx(classes["trigger-paper"], selected && classes["trigger-paper-selected"], classes["compact-trigger"], classes["compact-paper"])}
+					className={cx(classes["trigger-paper"], classes["compact-trigger"], classes["compact-paper"])}
 				>
 					<UnstyledButton
 						type="button"

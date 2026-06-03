@@ -425,20 +425,14 @@
       },
       "streaming": "Receiving response",
       "defaultAgentName": "Default Assistant",
-      "agentMode": {
-        "enabled": "Agent mode enabled",
-        "disabled": "Agent mode disabled",
-        "toggleLabel": "Agent mode",
-        "noAgentHint": "No agent selected"
-      },
       "agentSelector": {
-        "placeholder": "Select agent",
         "search": "Search agents...",
         "hint": "Choose an agent defined on this node.",
         "noResults": "No agents found",
         "orchestratorBadge": "Orchestrator",
         "pinnedModelHint": "Uses model: {{model}}",
-        "triggerLabel": "Agent"
+        "triggerLabel": "Agent",
+        "offOptionHint": "No agent — uses the node default"
       },
       "nodeReply": "Node reply"
     },

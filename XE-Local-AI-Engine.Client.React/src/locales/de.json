@@ -425,20 +425,14 @@
       },
       "streaming": "Antwort wird empfangen",
       "defaultAgentName": "Standard-Assistent",
-      "agentMode": {
-        "enabled": "Agentenmodus aktiviert",
-        "disabled": "Agentenmodus deaktiviert",
-        "toggleLabel": "Agentenmodus",
-        "noAgentHint": "Kein Agent ausgewählt"
-      },
       "agentSelector": {
-        "placeholder": "Agent auswählen",
         "search": "Agenten suchen...",
         "hint": "Einen auf diesem Knoten definierten Agenten auswählen.",
         "noResults": "Keine Agenten gefunden",
         "orchestratorBadge": "Orchestrator",
         "pinnedModelHint": "Verwendet Modell: {{model}}",
-        "triggerLabel": "Agent"
+        "triggerLabel": "Agent",
+        "offOptionHint": "Kein Agent — verwendet die Knoten-Standardeinstellung"
       },
       "nodeReply": "Knoten-Antwort"
     },

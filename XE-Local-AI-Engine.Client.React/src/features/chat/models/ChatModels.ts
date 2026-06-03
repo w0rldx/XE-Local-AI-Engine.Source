@@ -261,8 +261,8 @@ export interface ChatDisplayShellProps {
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;
 	agentOptions?: readonly AgentOption[];
-	onToggleAgentMode?: () => void;
-	onAgentChange?: (agentId: string) => void;
+	// Single merged agent control: "" => Default Assistant (agent mode off); any other id => enable mode + stamp it.
+	onSelectAgent?: (agentId: string) => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 	onCancel: () => void;
 	onRegenerate?: (messageId: string) => void;
