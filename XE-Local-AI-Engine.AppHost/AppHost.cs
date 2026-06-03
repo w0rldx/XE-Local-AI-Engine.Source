@@ -139,6 +139,16 @@ if (hostAgentLinux is not null && hostAgentHmacSecret is not null)
        .WithEnvironment("HostAgent__StartupGate__SocketPath", hostAgentSocketPath)
        .WithEnvironment("HostAgent__StartupGate__Secret", hostAgentHmacSecret)
        .WaitFor(hostAgentLinux);
+
+    if (enableHostAgentRuntimeFidelity)
+    {
+        // Real-llmfit-in-dev (Plans/2026-06-03-aspire-production-fidelity-selfhosted-overview.md, "Minimal increment"):
+        // only in runtime-fidelity, where the HostAgent Docker driver is REAL, route the node's model-fit runner through
+        // the local-container (gRPC -> HostAgent -> docker) path instead of the in-memory fake, and auto-enable the
+        // approved llmfit image so a "Refresh now" actually runs the recommender and produces real recommendation rows.
+        app.WithEnvironment("AgentHome__Sandbox__Provider", "local-container")
+           .WithEnvironment("ModelFit__DevAutoEnableApprovedImages", "true");
+    }
 }
 
 await builder.Build().RunAsync();

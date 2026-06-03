@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
@@ -15,17 +16,27 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 /// </summary>
 public sealed class ApprovedUtilityImageSeeder : IHostedService
 {
+    /// <summary>
+    ///     Dev-only config flag: when true, the seeder force-enables each seeded approved image after the toggle-preserving
+    ///     upsert. The AppHost sets this ONLY in runtime-fidelity so a model-fit "Refresh now" can run the real llmfit
+    ///     recommender in dev (the catalog ships every image disabled by design). Never set in production.
+    /// </summary>
+    private const string DevAutoEnableConfigKey = "ModelFit:DevAutoEnableApprovedImages";
+
     private readonly ApprovedImageReferenceValidator _referenceValidator;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<ApprovedUtilityImageSeeder> _logger;
 
     public ApprovedUtilityImageSeeder(
         IServiceScopeFactory scopeFactory,
         ApprovedImageReferenceValidator referenceValidator,
+        IConfiguration configuration,
         ILogger<ApprovedUtilityImageSeeder> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _referenceValidator = referenceValidator ?? throw new ArgumentNullException(nameof(referenceValidator));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -35,6 +46,8 @@ public sealed class ApprovedUtilityImageSeeder : IHostedService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IApprovedUtilityImageStore>();
+
+            var devAutoEnable = _configuration.GetValue<bool>(DevAutoEnableConfigKey);
 
             foreach (var descriptor in ApprovedUtilityImageCatalog.Descriptors)
             {
@@ -52,6 +65,17 @@ public sealed class ApprovedUtilityImageSeeder : IHostedService
 
                 _ = await store.UpsertSeedAsync(descriptor, cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Seeded approved utility image descriptor {ApprovedImageId}.", descriptor.ApprovedImageId);
+
+                if (devAutoEnable)
+                {
+                    // DEV ONLY: the upsert preserves the operator toggle (every image ships disabled), so force-enable here
+                    // so a model-fit refresh can run the real llmfit recommender in the runtime-fidelity dev stack.
+                    _ = await store.SetEnabledAsync(descriptor.ApprovedImageId, true, cancellationToken).ConfigureAwait(false);
+                    _logger.LogWarning(
+                        "DEV: force-enabled approved utility image {ApprovedImageId} via {ConfigKey}. Never set this in production.",
+                        descriptor.ApprovedImageId,
+                        DevAutoEnableConfigKey);
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
