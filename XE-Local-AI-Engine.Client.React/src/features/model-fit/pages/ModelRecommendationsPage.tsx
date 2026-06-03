@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
-import { useModelFitRefreshFeedback } from "@/features/model-fit/hooks/useModelFitRefreshFeedback";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
 	defaultModelFitProviderName,
@@ -15,7 +14,7 @@ import {
 	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 } from "@/features/model-fit/models/ModelFitModels";
-import { useLatestRecommendations } from "@/features/model-fit/queries/useModelFit";
+import { useLatestRecommendations, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
 
@@ -27,9 +26,6 @@ export function ModelRecommendationsPage() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 
-	// Live invalidation: when a model-recommendation-check scheduler run terminates, the latest query refetches.
-	useModelFitSchedulerEvents();
-
 	const useCase = useModelFitManagementStore((state) => state.useCase);
 	const setUseCase = useModelFitManagementStore((state) => state.actions.setUseCase);
 
@@ -38,7 +34,7 @@ export function ModelRecommendationsPage() {
 	// Reuse the scheduler job-list query to discover an existing model-recommendation-check job. The refresh
 	// endpoint fires an EXISTING job; it never creates one — so refresh is gated on such a job being present.
 	const jobsQuery = useScheduledJobs();
-	const refreshFeedback = useModelFitRefreshFeedback();
+	const refreshMutation = useRefreshRecommendations();
 
 	const latest = latestQuery.data;
 
@@ -51,13 +47,17 @@ export function ModelRecommendationsPage() {
 		return matching.find((job) => job.enabled) ?? matching[0];
 	}, [jobsQuery.data]);
 
-	const canRefresh = refreshJob !== undefined && !refreshFeedback.isPending;
+	// Live invalidation + the SignalR-push toast, with a one-shot on-(re)connect REST catch-up keyed to the discovered
+	// job so a result that fired before the hub connected (or during a reconnect gap) still surfaces — no polling.
+	useModelFitSchedulerEvents(refreshJob?.id);
+
+	const canRefresh = refreshJob !== undefined && !refreshMutation.isPending;
 
 	const handleRefresh = (): void => {
 		if (refreshJob === undefined) {
 			return;
 		}
-		refreshFeedback.refresh(refreshJob.id);
+		refreshMutation.mutate(refreshJob.id);
 	};
 
 	const handleUseCaseChange = (value: string | null): void => {
@@ -111,7 +111,7 @@ export function ModelRecommendationsPage() {
 						</Button>
 						<Button
 							leftSection={<IconRefresh size={16} />}
-							loading={refreshFeedback.isPending}
+							loading={refreshMutation.isPending}
 							disabled={!canRefresh}
 							onClick={handleRefresh}
 							data-testid="model-fit-refresh-button"
@@ -142,10 +142,10 @@ export function ModelRecommendationsPage() {
 					</Alert>
 				) : null}
 
-				{refreshFeedback.error ? (
+				{refreshMutation.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-refresh-error">
 						{errorMessage(
-							refreshFeedback.error,
+							refreshMutation.error,
 							t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."),
 						)}
 					</Alert>
