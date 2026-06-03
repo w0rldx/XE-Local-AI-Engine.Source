@@ -45,7 +45,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 
 	const [selected, setSelected] = useState<readonly string[]>([]);
 
-	const templates = templatesQuery.data ?? [];
+	const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data]);
 	const grouped = useMemo(() => groupByDivision(templates), [templates]);
 
 	const toggle = useCallback((slug: string, checked: boolean) => {

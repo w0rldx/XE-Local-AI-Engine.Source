@@ -81,7 +81,7 @@ export function AgentsPage() {
 	const updateMutation = useUpdateAgentDefinition();
 	const deleteMutation = useDeleteAgentDefinition();
 
-	const definitions = definitionsQuery.data ?? [];
+	const definitions = useMemo(() => definitionsQuery.data ?? [], [definitionsQuery.data]);
 	const toolCapableModels = toolCapableModelsQuery.data ?? [];
 
 	const modelOptions = useMemo<AgentModelOption[]>(

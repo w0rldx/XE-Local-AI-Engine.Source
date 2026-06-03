@@ -64,7 +64,7 @@ export function McpServersPage() {
 	const deleteMutation = useDeleteMcpServer();
 	const enableMutation = useSetMcpServerEnabled();
 
-	const servers = serversQuery.data ?? [];
+	const servers = useMemo(() => serversQuery.data ?? [], [serversQuery.data]);
 
 	const editingServer = useMemo(() => {
 		if (editorTarget?.mode !== "edit") {
