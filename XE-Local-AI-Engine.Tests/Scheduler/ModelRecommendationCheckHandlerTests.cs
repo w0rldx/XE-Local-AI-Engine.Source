@@ -75,16 +75,29 @@ public sealed class ModelRecommendationCheckHandlerTests
     }
 
     [Test]
-    public async Task ExecuteAsync_WhenRefreshDoesNotSucceed_ThrowsSoDispatcherRecordsFailed()
+    public async Task ExecuteAsync_WhenRefreshFailed_ThrowsScheduledJobExecutionExceptionWithSanitizedError()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, "Recommendation JSON parse failed.");
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, "The approved image is disabled.");
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(
             () => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
-        // The thrown message is generic and carries no sanitized detail / secret.
-        AssertEx.False(exception.Message.Contains("parse", StringComparison.OrdinalIgnoreCase), "the handler message must be generic.");
+        // The operator-safe SanitizedError is surfaced verbatim so the run row / toast is actionable.
+        AssertEx.Equal("The approved image is disabled.", exception.Message);
+        AssertEx.Equal(1, refresh.CallCount);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenRefreshFailedWithNullSanitizedError_ThrowsStaticFallbackMessage()
+    {
+        var (handler, refresh) = CreateHandler();
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, null);
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(
+            () => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
+
+        AssertEx.Equal("The model recommendation refresh did not succeed.", exception.Message);
         AssertEx.Equal(1, refresh.CallCount);
     }
 
