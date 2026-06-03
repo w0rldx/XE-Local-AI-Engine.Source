@@ -100,7 +100,11 @@ internal static class LocalChatMapper
             FeedbackComment = message.FeedbackComment,
             // Surface the persisted ordered interleave verbatim; null for legacy messages (client synthesizes from
             // Reasoning). The DTO part records carry no transport-specific shape, so they pass through unchanged.
-            Parts = message.Parts
+            Parts = message.Parts,
+            // Per-response agent attribution snapshot (null for legacy turns + user messages; the client renders the
+            // localized "Default Assistant" fallback when AgentName is null).
+            AgentDefinitionId = message.AgentDefinitionId,
+            AgentName = message.AgentName
         };
     }
 }

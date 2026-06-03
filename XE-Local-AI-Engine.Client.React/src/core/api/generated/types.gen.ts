@@ -632,6 +632,8 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	feedbackRating?: string | null;
 	feedbackComment?: string | null;
 	parts?: Array<XeLocalAiEngineClientServicesChatNodeChatMessagePart> | null;
+	agentDefinitionId?: string | null;
+	agentName?: string | null;
 };
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {

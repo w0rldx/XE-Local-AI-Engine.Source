@@ -208,6 +208,19 @@ public sealed class NodeChatMessageResponse
     ///     <see cref="Reasoning" /> in that case.
     /// </summary>
     public IReadOnlyList<NodeChatMessagePart>? Parts { get; init; }
+
+    /// <summary>
+    ///     The provenance of the agent that produced this assistant turn (per-response attribution). Null for legacy
+    ///     turns persisted before agent mode existed and for user messages.
+    /// </summary>
+    public Guid? AgentDefinitionId { get; init; }
+
+    /// <summary>
+    ///     The display-name snapshot of the agent that produced this assistant turn (survives a later agent
+    ///     rename/delete). Null for legacy turns and user messages; the client renders the localized "Default
+    ///     Assistant" fallback label in that case.
+    /// </summary>
+    public string? AgentName { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse
