@@ -115,7 +115,7 @@ export function SchedulerPage() {
 	const triggerMutation = useTriggerScheduledJob();
 	const cancelMutation = useCancelScheduledJobRun();
 
-	const jobs = jobsQuery.data ?? [];
+	const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
 	const templates = templatesQuery.data ?? [];
 	const runs = runsQuery.data ?? [];
 
