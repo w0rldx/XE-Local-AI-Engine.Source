@@ -35,10 +35,7 @@ export function ApprovedImagesTable({ images }: ApprovedImagesTableProps) {
 				</Table.Thead>
 				<Table.Tbody>
 					{images.map((image) => (
-						<Table.Tr
-							key={image.approvedImageId}
-							data-testid={`model-fit-approved-image-row-${image.approvedImageId}`}
-						>
+						<Table.Tr key={image.approvedImageId} data-testid={`model-fit-approved-image-row-${image.approvedImageId}`}>
 							<Table.Td>
 								<Text size="sm" ff="monospace">
 									{image.approvedImageId}
@@ -68,9 +65,7 @@ export function ApprovedImagesTable({ images }: ApprovedImagesTableProps) {
 								</Group>
 							</Table.Td>
 							<Table.Td>
-								<Code data-testid={`model-fit-approved-image-reference-${image.approvedImageId}`}>
-									{image.imageReference}
-								</Code>
+								<Code data-testid={`model-fit-approved-image-reference-${image.approvedImageId}`}>{image.imageReference}</Code>
 							</Table.Td>
 							<Table.Td>{image.upstreamVersion ?? "—"}</Table.Td>
 							<Table.Td>

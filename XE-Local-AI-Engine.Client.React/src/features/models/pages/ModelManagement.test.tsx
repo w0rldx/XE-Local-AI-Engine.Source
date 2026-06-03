@@ -11,11 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // useMutation. The page wraps every factory result in the real withResponseValidation (not mocked), then layers its
 // own onSuccess invalidation. The factory mocks let a test assert the variable shape the page forwarded to the wire.
 // Each *QueryKey factory returns a stable single-element key keyed by the operationId so the page's invalidation
-// (which calls the same factories) refetches the live query — proving the post-override list refetch.
+// (which calls the same factories) refetches the live query — proving the post-override list refetch. The model-fit
+// `getLatestRecommendations` factory is mocked too because the details dialog's Fit tab joins the installed model
+// into the latest cached llmfit snapshot.
 const { queryFns, mutationFns } = vi.hoisted(() => ({
 	queryFns: {
 		listLocalModels: vi.fn(),
 		getLocalModelDetails: vi.fn(),
+		getLatestRecommendations: vi.fn(),
 	},
 	mutationFns: {
 		selectLocalModel: vi.fn(),
@@ -45,6 +48,13 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	deleteLocalModelMutation: () => ({ mutationFn: mutationFns.deleteLocalModel }),
 	putModelKindMutation: () => ({ mutationFn: mutationFns.putModelKind }),
 	deleteModelKindMutation: () => ({ mutationFn: mutationFns.deleteModelKind }),
+	// Model-fit factories consumed transitively by the Fit tab (useLatestRecommendations).
+	getLatestRecommendationsOptions: () => ({
+		queryKey: fakeQueryKey("getLatestRecommendations"),
+		queryFn: queryFns.getLatestRecommendations,
+	}),
+	listApprovedImagesOptions: () => ({ queryKey: fakeQueryKey("listApprovedImages"), queryFn: vi.fn() }),
+	refreshRecommendationsMutation: () => ({ mutationFn: vi.fn() }),
 }));
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
@@ -61,6 +71,12 @@ function renderWithProviders(ui: ReactElement) {
 			<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
 		</MantineProvider>,
 	);
+}
+
+// Opens the per-model details dialog by clicking the model-name button in the table, then returns the dialog element.
+async function openDetailsDialog(modelName: string): Promise<HTMLElement> {
+	fireEvent.click(await screen.findByTestId(`model-details-button-${modelName}`));
+	return screen.findByRole("dialog");
 }
 
 describe("ModelManagement", () => {
@@ -111,12 +127,36 @@ describe("ModelManagement", () => {
 				},
 			],
 		});
-		queryFns.getLocalModelDetails.mockResolvedValue({ modelName: "llama3:8b", maxContextTokens: 8192, template: "{{ .Prompt }}", system: null, license: "fake" });
+		queryFns.getLocalModelDetails.mockResolvedValue({
+			modelName: "llama3:8b",
+			maxContextTokens: 8192,
+			template: "{{ .Prompt }}",
+			system: null,
+			license: "fake",
+		});
+		queryFns.getLatestRecommendations.mockResolvedValue({ hasCache: false, recommendations: [] });
 		mutationFns.selectLocalModel.mockResolvedValue({ selectedModelName: "llama3:8b" });
-		mutationFns.pullLocalModel.mockResolvedValue({ modelName: "orca-mini:latest", status: "success", totalBytes: 100, completedBytes: 100 });
+		mutationFns.pullLocalModel.mockResolvedValue({
+			modelName: "orca-mini:latest",
+			status: "success",
+			totalBytes: 100,
+			completedBytes: 100,
+		});
 		mutationFns.deleteLocalModel.mockResolvedValue({ modelName: "llama3:8b", deleted: true });
-		mutationFns.putModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Embedding", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: true });
-		mutationFns.deleteModelKind.mockResolvedValue({ modelName: "llama3:8b", kind: "Chat", detectedKind: "Chat", capabilities: ["completion", "tools"], isOverridden: false });
+		mutationFns.putModelKind.mockResolvedValue({
+			modelName: "llama3:8b",
+			kind: "Embedding",
+			detectedKind: "Chat",
+			capabilities: ["completion", "tools"],
+			isOverridden: true,
+		});
+		mutationFns.deleteModelKind.mockResolvedValue({
+			modelName: "llama3:8b",
+			kind: "Chat",
+			detectedKind: "Chat",
+			capabilities: ["completion", "tools"],
+			isOverridden: false,
+		});
 		confirmMock.mockResolvedValue(true);
 	});
 
@@ -124,14 +164,18 @@ describe("ModelManagement", () => {
 		cleanup();
 	});
 
-	it("renders local models and details", async () => {
+	it("renders local models in the table and shows details in the dialog", async () => {
 		renderWithProviders(<ModelManagement />);
 
-		// "llama3:8b" appears both as the table row button and the details-card title, so match the set, not one node.
+		// The table row carries the name, size, and the default badge.
 		expect((await screen.findAllByText("llama3:8b")).length).toBeGreaterThan(0);
 		expect(screen.getByText("1.0 GB")).toBeTruthy();
 		expect(screen.getByText("Default")).toBeTruthy();
-		expect(await screen.findByText("Context length: 8,192")).toBeTruthy();
+
+		// Details (context length) live in the dialog's Overview tab, not on the page.
+		expect(screen.queryByText("Context length: 8,192")).toBeNull();
+		const dialog = await openDetailsDialog("llama3:8b");
+		expect(await within(dialog).findByText("Context length: 8,192")).toBeTruthy();
 	});
 
 	it("selects, pulls, and deletes models through the generated mutations", async () => {
@@ -142,13 +186,17 @@ describe("ModelManagement", () => {
 		// TanStack v5 passes (variables, context) — assert the first arg carries the generated body shape.
 		await waitFor(() => expect(mutationFns.selectLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "llama3:8b" } }));
 
-		const pullInput = screen.getAllByTestId("pull-model-name-input").find((element) => element.tagName === "INPUT");
+		// Pull now lives in a dialog opened from the header button.
+		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
+		const pullInput = (await screen.findAllByTestId("pull-model-name-input")).find((element) => element.tagName === "INPUT");
 		expect(pullInput).toBeTruthy();
 		fireEvent.change(pullInput!, { target: { value: "orca-mini:latest" } });
 		const downloadButton = screen.getAllByTestId("download-model-button").find((element) => element.tagName === "BUTTON");
 		expect(downloadButton).toBeTruthy();
 		fireEvent.click(downloadButton!);
-		await waitFor(() => expect(mutationFns.pullLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "orca-mini:latest" } }));
+		await waitFor(() =>
+			expect(mutationFns.pullLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "orca-mini:latest" } }),
+		);
 
 		const deleteButton = screen.getAllByLabelText("Delete llama3:8b").find((element) => element.tagName === "BUTTON");
 		expect(deleteButton).toBeTruthy();
@@ -162,13 +210,15 @@ describe("ModelManagement", () => {
 
 		const kindBadge = await screen.findByTestId("model-kind-badge-llama3:8b");
 		expect(kindBadge.textContent).toContain("Chat");
-		// Raw Ollama capabilities surface as read-only badges.
+		// Raw Ollama capabilities surface as read-only badges in the table.
 		expect(screen.getByText("Tools")).toBeTruthy();
-		// A non-overridden model shows no "reset to detected" affordance.
+		// A non-overridden model shows no "reset to detected" affordance, and the table no longer carries the override
+		// Select (it moved into the details dialog).
 		expect(screen.queryByLabelText("Reset llama3:8b type to detected")).toBeNull();
+		expect(screen.queryByLabelText("Override type for llama3:8b")).toBeNull();
 	});
 
-	it("overrides a model kind through the select and reflects the refetched (overridden) row", async () => {
+	it("overrides a model kind through the dialog Type tab and reflects the refetched (overridden) row", async () => {
 		// First list shows the detected Chat kind. The post-override refetch returns the OVERRIDDEN row, so the badge
 		// must update from the refetch — not from the mutation response (which the page intentionally does not trust).
 		const overriddenRow = {
@@ -185,28 +235,46 @@ describe("ModelManagement", () => {
 			isOverridden: true,
 		};
 		queryFns.listLocalModels
-			.mockResolvedValueOnce({ isAvailable: true, selectedModelName: "llama3:8b", configuredDefaultModelName: "llama3:8b", error: null, items: [{ ...overriddenRow, kind: "Chat", isOverridden: false }] })
-			.mockResolvedValue({ isAvailable: true, selectedModelName: "llama3:8b", configuredDefaultModelName: "llama3:8b", error: null, items: [overriddenRow] });
+			.mockResolvedValueOnce({
+				isAvailable: true,
+				selectedModelName: "llama3:8b",
+				configuredDefaultModelName: "llama3:8b",
+				error: null,
+				items: [{ ...overriddenRow, kind: "Chat", isOverridden: false }],
+			})
+			.mockResolvedValue({
+				isAvailable: true,
+				selectedModelName: "llama3:8b",
+				configuredDefaultModelName: "llama3:8b",
+				error: null,
+				items: [overriddenRow],
+			});
 
 		renderWithProviders(<ModelManagement />);
 
-		const initialBadge = await screen.findByTestId("model-kind-badge-llama3:8b");
-		expect(initialBadge.textContent).toContain("Chat");
+		const dialog = await openDetailsDialog("llama3:8b");
+		fireEvent.click(within(dialog).getByRole("tab", { name: "Type" }));
 
-		// Open the override Select and choose Embedding. Mantine's Select associates the aria-label with more than one
-		// node, so target the input element explicitly (mirrors the pull-input lookup above).
-		const select = screen.getAllByLabelText("Override type for llama3:8b").find((element) => element.tagName === "INPUT");
+		// Open the override Select (now inside the dialog Type tab) and choose Embedding. Mantine's Select associates the
+		// aria-label with more than one node, so target the input element explicitly.
+		const select = within(dialog)
+			.getAllByLabelText("Override type for llama3:8b")
+			.find((element) => element.tagName === "INPUT");
 		expect(select).toBeTruthy();
 		fireEvent.click(select!);
-		const option = await screen.findByRole("option", { name: "Embedding" });
-		fireEvent.click(option);
+		fireEvent.click(await screen.findByRole("option", { name: "Embedding" }));
 
-		await waitFor(() => expect(mutationFns.putModelKind.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" }, body: { kind: "Embedding" } }));
+		await waitFor(() =>
+			expect(mutationFns.putModelKind.mock.calls[0]?.[0]).toEqual({
+				path: { modelName: "llama3:8b" },
+				body: { kind: "Embedding" },
+			}),
+		);
 		// The list is refetched after the override so lazy detection refreshes the row.
 		await waitFor(() => expect(queryFns.listLocalModels).toHaveBeenCalledTimes(2));
-		// The badge reflects the refetched overridden row, and the reset affordance now appears.
-		await waitFor(() => expect(screen.getByTestId("model-kind-badge-llama3:8b").textContent).toContain("Embedding"));
-		expect(screen.getByLabelText("Reset llama3:8b type to detected")).toBeTruthy();
+		// The dialog badge reflects the refetched overridden row, and the reset affordance now appears.
+		await waitFor(() => expect(within(dialog).getByTestId("model-kind-badge-llama3:8b").textContent).toContain("Embedding"));
+		expect(within(dialog).getByLabelText("Reset llama3:8b type to detected")).toBeTruthy();
 	});
 
 	it("shows a reset-to-detected action only for overridden models and resets through the generated mutation", async () => {
@@ -235,6 +303,7 @@ describe("ModelManagement", () => {
 
 		renderWithProviders(<ModelManagement />);
 
+		// Overridden models keep a quick reset affordance directly in the table row.
 		const resetButton = await screen.findByLabelText("Reset llama3:8b type to detected");
 		fireEvent.click(resetButton);
 
@@ -242,7 +311,13 @@ describe("ModelManagement", () => {
 	});
 
 	it("shows unavailable Ollama state", async () => {
-		queryFns.listLocalModels.mockResolvedValue({ isAvailable: false, selectedModelName: null, configuredDefaultModelName: "llama3:8b", error: "Local model provider is unavailable.", items: [] });
+		queryFns.listLocalModels.mockResolvedValue({
+			isAvailable: false,
+			selectedModelName: null,
+			configuredDefaultModelName: "llama3:8b",
+			error: "Local model provider is unavailable.",
+			items: [],
+		});
 
 		renderWithProviders(<ModelManagement />);
 
@@ -250,18 +325,64 @@ describe("ModelManagement", () => {
 		expect(screen.getByText("Ollama offline")).toBeTruthy();
 	});
 
-	it("shows license and template in a dialog rather than an inline expander", async () => {
+	it("shows license and template in the dialog License tab", async () => {
 		renderWithProviders(<ModelManagement />);
 
-		// The trigger is a button — no inline "Show full / Show less" expander — and no dialog is open initially.
-		const trigger = await screen.findByTestId("model-license-template-button");
-		expect(screen.queryByRole("button", { name: /show full/i })).toBeNull();
+		// No dialog is open initially, and there is no inline "Show full / Show less" expander.
 		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(screen.queryByRole("button", { name: /show full/i })).toBeNull();
 
-		// Clicking opens a dialog containing BOTH the template and the license.
-		fireEvent.click(trigger);
-		const dialog = await screen.findByRole("dialog");
+		const dialog = await openDetailsDialog("llama3:8b");
+		fireEvent.click(within(dialog).getByRole("tab", { name: /license/i }));
+
+		// The License tab carries BOTH the template and the license.
 		expect(within(dialog).getByTestId("model-template-content").textContent).toContain("{{ .Prompt }}");
 		expect(within(dialog).getByTestId("model-license-content").textContent).toContain("fake");
+	});
+
+	it("joins the installed model into the latest llmfit snapshot in the Fit tab", async () => {
+		queryFns.getLatestRecommendations.mockResolvedValue({
+			hasCache: true,
+			lastRefreshedAtUtc: Date.UTC(2026, 4, 24),
+			recommendations: [
+				{
+					rank: 1,
+					modelName: "llama3:8b",
+					providerModelName: "llama3:8b",
+					pullModelName: "llama3:8b",
+					score: 8.4,
+					fitLevel: "Good",
+					runMode: "gpu",
+					estimatedTokensPerSecond: 42,
+					requiredRamMb: 6144,
+					requiredVramMb: 4096,
+					contextTokens: 8192,
+					quantization: "Q4_0",
+					isInstalled: true,
+				},
+			],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		const dialog = await openDetailsDialog("llama3:8b");
+		fireEvent.click(within(dialog).getByRole("tab", { name: "Fit" }));
+
+		const result = await within(dialog).findByTestId("model-fit-result");
+		expect(result.textContent).toContain("8.4");
+		expect(within(dialog).getByText("Good")).toBeTruthy();
+	});
+
+	it("opens the pull dialog from the header without an inline pull form on the page", async () => {
+		renderWithProviders(<ModelManagement />);
+		await screen.findByTestId("open-pull-dialog-button");
+
+		// The pull form is not rendered on the page until the dialog is opened.
+		expect(screen.queryByTestId("pull-model-name-input")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
+		const dialog = await screen.findByRole("dialog");
+		expect(within(dialog).getByTestId("pull-model-name-input")).toBeTruthy();
+		expect(within(dialog).getByTestId("download-model-button")).toBeTruthy();
 	});
 });

@@ -101,9 +101,9 @@ describe("ApprovedImagesPage", () => {
 		expect(screen.getByTestId("model-fit-approved-images-table")).toBeTruthy();
 		const row = screen.getByTestId("model-fit-approved-image-row-llmfit-recommender-0-9-30");
 		expect(within(row).getByText("llmfit recommender")).toBeTruthy();
-		expect(
-			screen.getByTestId("model-fit-approved-image-reference-llmfit-recommender-0-9-30").textContent,
-		).toBe("ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a519");
+		expect(screen.getByTestId("model-fit-approved-image-reference-llmfit-recommender-0-9-30").textContent).toBe(
+			"ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a519",
+		);
 	});
 
 	it("renders no editing controls (read-only)", () => {

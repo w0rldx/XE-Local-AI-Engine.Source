@@ -5,8 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
+import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -237,10 +237,7 @@ describe("ModelRecommendationsPage", () => {
 		const refreshMutation = makeMutation();
 		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
 		schedulerMock.useScheduledJobs.mockReturnValue(
-			makeQuery([
-				modelFitJob({ id: "job-disabled", enabled: false }),
-				modelFitJob({ id: "job-enabled", enabled: true }),
-			]),
+			makeQuery([modelFitJob({ id: "job-disabled", enabled: false }), modelFitJob({ id: "job-enabled", enabled: true })]),
 		);
 
 		renderPage();
@@ -251,9 +248,7 @@ describe("ModelRecommendationsPage", () => {
 	});
 
 	it("ignores scheduler jobs of other templates when gating refresh", () => {
-		schedulerMock.useScheduledJobs.mockReturnValue(
-			makeQuery([modelFitJob({ id: "other", templateId: "agent-cleanup" })]),
-		);
+		schedulerMock.useScheduledJobs.mockReturnValue(makeQuery([modelFitJob({ id: "other", templateId: "agent-cleanup" })]));
 
 		renderPage();
 

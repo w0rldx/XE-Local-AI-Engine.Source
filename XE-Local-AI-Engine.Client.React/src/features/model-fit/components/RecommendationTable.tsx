@@ -65,13 +65,7 @@ export function RecommendationTable({ recommendations }: RecommendationTableProp
 									"—"
 								)}
 							</Table.Td>
-							<Table.Td>
-								{recommendation.runMode ? (
-									<Badge variant="outline">{recommendation.runMode}</Badge>
-								) : (
-									"—"
-								)}
-							</Table.Td>
+							<Table.Td>{recommendation.runMode ? <Badge variant="outline">{recommendation.runMode}</Badge> : "—"}</Table.Td>
 							<Table.Td>{formatModelFitMetric(recommendation.estimatedTokensPerSecond, "", 1)}</Table.Td>
 							<Table.Td>{formatContextTokens(recommendation.contextTokens)}</Table.Td>
 							<Table.Td>{recommendation.quantization ?? "—"}</Table.Td>

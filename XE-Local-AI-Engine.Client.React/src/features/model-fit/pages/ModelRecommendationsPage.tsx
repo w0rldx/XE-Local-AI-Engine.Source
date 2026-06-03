@@ -5,8 +5,8 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
-import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
+import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
 	defaultModelFitProviderName,
@@ -200,9 +200,7 @@ export function ModelRecommendationsPage() {
 											{t("pages.modelFit.recommendations.snapshot.useCase", "Use case")}
 										</Text>
 										<Text size="sm">
-											{latest.useCase
-												? t(`pages.modelFit.recommendations.useCases.${latest.useCase}`, latest.useCase)
-												: "—"}
+											{latest.useCase ? t(`pages.modelFit.recommendations.useCases.${latest.useCase}`, latest.useCase) : "—"}
 										</Text>
 									</Stack>
 									<Stack gap={0}>
@@ -225,10 +223,7 @@ export function ModelRecommendationsPage() {
 									<RecommendationTable recommendations={latest.recommendations} />
 								) : (
 									<Text c="dimmed" data-testid="model-fit-recommendations-empty-list">
-										{t(
-											"pages.modelFit.recommendations.emptyList",
-											"The latest snapshot returned no recommendations.",
-										)}
+										{t("pages.modelFit.recommendations.emptyList", "The latest snapshot returned no recommendations.")}
 									</Text>
 								)}
 							</Stack>

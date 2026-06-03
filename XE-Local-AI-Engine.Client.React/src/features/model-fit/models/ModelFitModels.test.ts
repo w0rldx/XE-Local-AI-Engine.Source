@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
 	defaultModelFitProviderName,
 	defaultModelFitUseCase,
-	modelFitUseCases,
 	modelFitUseCaseSchema,
+	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 } from "@/features/model-fit/models/ModelFitModels";
 
