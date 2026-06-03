@@ -7,6 +7,8 @@ const REASONING_EFFORT_STORAGE_KEY = "xe-node-chat-reasoning-effort";
 const TOOLS_ENABLED_STORAGE_KEY = "xe-node-chat-tools-enabled";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "xe-node-chat-sidebar-collapsed";
 const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
+const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
+const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 
 // The store reads localStorage once at module-init, so each test seeds storage then re-imports the module
 // with a fresh registry to exercise the init path.
@@ -107,5 +109,57 @@ describe("NodeChatPreferencesStore", () => {
 		useStore.getState().actions.setSelectedConversationId("");
 		expect(useStore.getState().selectedConversationId).toBe("");
 		expect(localStorage.getItem(SELECTED_CONVERSATION_STORAGE_KEY)).toBe("");
+	});
+
+	it("defaults agent mode to off and selected agent to empty", async () => {
+		const useStore = await loadStore();
+		const state = useStore.getState();
+
+		expect(state.agentModeEnabled).toBe(false);
+		expect(state.selectedAgentId).toBe("");
+	});
+
+	it("hydrates agent mode and selected agent from localStorage on init", async () => {
+		const useStore = await loadStore({
+			[AGENT_MODE_ENABLED_STORAGE_KEY]: "true",
+			[SELECTED_AGENT_STORAGE_KEY]: "agent-abc",
+		});
+		const state = useStore.getState();
+
+		expect(state.agentModeEnabled).toBe(true);
+		expect(state.selectedAgentId).toBe("agent-abc");
+	});
+
+	it("persists agent mode when set", async () => {
+		const useStore = await loadStore();
+
+		useStore.getState().actions.setAgentModeEnabled(true);
+		expect(useStore.getState().agentModeEnabled).toBe(true);
+		expect(localStorage.getItem(AGENT_MODE_ENABLED_STORAGE_KEY)).toBe("true");
+
+		useStore.getState().actions.setAgentModeEnabled(false);
+		expect(useStore.getState().agentModeEnabled).toBe(false);
+		expect(localStorage.getItem(AGENT_MODE_ENABLED_STORAGE_KEY)).toBe("false");
+	});
+
+	it("toggles agent mode and persists the flipped value", async () => {
+		const useStore = await loadStore({ [AGENT_MODE_ENABLED_STORAGE_KEY]: "false" });
+
+		useStore.getState().actions.toggleAgentMode();
+
+		expect(useStore.getState().agentModeEnabled).toBe(true);
+		expect(localStorage.getItem(AGENT_MODE_ENABLED_STORAGE_KEY)).toBe("true");
+	});
+
+	it("persists the selected agent id when set", async () => {
+		const useStore = await loadStore();
+
+		useStore.getState().actions.setSelectedAgentId("agent-xyz");
+		expect(useStore.getState().selectedAgentId).toBe("agent-xyz");
+		expect(localStorage.getItem(SELECTED_AGENT_STORAGE_KEY)).toBe("agent-xyz");
+
+		useStore.getState().actions.setSelectedAgentId("");
+		expect(useStore.getState().selectedAgentId).toBe("");
+		expect(localStorage.getItem(SELECTED_AGENT_STORAGE_KEY)).toBe("");
 	});
 });

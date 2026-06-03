@@ -88,6 +88,11 @@ export interface ChatMessageModel {
 	// no feedback has been recorded; presence drives the feedback control's active state.
 	feedbackRating?: ChatFeedbackRating;
 	feedbackComment?: string;
+	// Agent attribution fields stamped at send time (ride metadata_json blob, no migration — §6 of the plan).
+	// Absent for legacy turns and user messages. ChatMessage shows agentName ?? t("defaultAgentName") for
+	// assistant turns so every response carries a visible attribution even without a persisted name.
+	agentName?: string;
+	agentDefinitionId?: string;
 }
 
 export type ChatFeedbackRating = "up" | "down";
@@ -201,6 +206,22 @@ export interface ChatInputStatus {
 	sendDisabled?: boolean;
 }
 
+// Shared agent option type used by Chat.tsx (derivation), ChatDisplayShellProps, ChatInputArea, and AgentSelectorCard.
+// The single derivation site is Chat.tsx; all downstream components receive it as a prop.
+export interface AgentOption {
+	readonly id: string;
+	readonly name: string;
+	readonly description: string;
+	readonly kind: "Single" | "Orchestrator";
+	readonly modelProfile: string | null;
+}
+
+// Matches the backend AgentDefaults.DefaultAgentName seeded slug. Used to exclude the Default Assistant from
+// the agent picker so the user never selects it explicitly (mode-off reproduces it transparently).
+// Note: a provenance-based filter (slug or source field) is a deferred follow-up; for now the name comparison
+// is the single exclusion site.
+export const DEFAULT_ASSISTANT_NAME = "Default Assistant";
+
 export interface ChatUiCapabilities {
 	readonly showLocalToolControls: boolean;
 	readonly showToolApprovalControls: boolean;
@@ -209,6 +230,9 @@ export interface ChatUiCapabilities {
 	readonly showClientNodeRoutingControls: boolean;
 	readonly showFileAttachmentControls: boolean;
 	readonly showImageAttachmentControls: boolean;
+	// When true the chat composer renders the agent-mode toggle + agent picker. Derived from the node's
+	// agentManagement surface capability (see ChatCapabilityGates.buildChatUiCapabilities).
+	readonly showAgentControls: boolean;
 }
 
 export interface ChatDisplayShellProps {
@@ -233,6 +257,12 @@ export interface ChatDisplayShellProps {
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	onToggleTools?: () => void;
+	agentControlsAvailable?: boolean;
+	agentModeEnabled?: boolean;
+	selectedAgentId?: string;
+	agentOptions?: readonly AgentOption[];
+	onToggleAgentMode?: () => void;
+	onAgentChange?: (agentId: string) => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 	onCancel: () => void;
 	onRegenerate?: (messageId: string) => void;

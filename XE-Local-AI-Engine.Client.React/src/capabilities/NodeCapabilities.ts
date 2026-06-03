@@ -9,6 +9,10 @@ export interface ChatCapabilities {
 	readonly clientNodeRouting: boolean;
 	readonly fileAttachments: boolean;
 	readonly imageAttachments: boolean;
+	// When true the chat composer shows the agent-mode toggle + agent picker. Derives from the node's
+	// agentManagement surface capability — same flag, surfaced here so ChatCapabilityGates can derive
+	// showAgentControls without reaching outside the chat capabilities bag.
+	readonly agentManagement?: boolean;
 }
 
 export interface NodeCapabilityConfig {
@@ -40,6 +44,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		clientNodeRouting: false,
 		fileAttachments: false,
 		imageAttachments: false,
+		// Agent management is on by default (CRUD, playbook, templates, eval, resolver all built) — mirrors
+		// nodeCapabilities.agentManagement. Repeated here so ChatCapabilityGates derives showAgentControls
+		// without a cross-capability dependency.
+		agentManagement: true,
 	},
 	binding: true,
 	dashboard: true,

@@ -1,12 +1,13 @@
-import { ActionIcon, Box, Button, Group, Menu, Paper, Textarea, Tooltip } from "@mantine/core";
-import { IconBrain, IconDeviceDesktop, IconPaperclip, IconPhoto, IconPlayerStopFilled, IconSend } from "@tabler/icons-react";
+import { ActionIcon, Box, Button, Group, Menu, Paper, Text, Textarea, Tooltip } from "@mantine/core";
+import { IconBrain, IconDeviceDesktop, IconPaperclip, IconPhoto, IconPlayerStopFilled, IconSend, IconUserBolt } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatUiCapabilities, ContextUsageModel, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type { AgentOption, ChatUiCapabilities, ContextUsageModel, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 interface ChatInputAreaProps {
 	availableReasoningEfforts: ReasoningEffort[];
@@ -20,10 +21,16 @@ interface ChatInputAreaProps {
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
 	toolsEnabled?: boolean;
+	agentControlsAvailable?: boolean;
+	agentModeEnabled?: boolean;
+	selectedAgentId?: string;
+	agentOptions?: readonly AgentOption[];
 	onCancel: () => void;
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	onToggleTools?: () => void;
+	onToggleAgentMode?: () => void;
+	onAgentChange?: (agentId: string) => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 }
 
@@ -43,10 +50,16 @@ export function ChatInputArea({
 	selectedModel,
 	reasoningEffort,
 	toolsEnabled = false,
+	agentControlsAvailable = false,
+	agentModeEnabled = false,
+	selectedAgentId = "",
+	agentOptions = [],
 	onCancel,
 	onModelChange,
 	onReasoningEffortChange,
 	onToggleTools,
+	onToggleAgentMode,
+	onAgentChange,
 	onSend,
 }: ChatInputAreaProps) {
 	const { t } = useTranslation();
@@ -55,6 +68,10 @@ export function ChatInputArea({
 	const reasoningEnabled = reasoningEffort !== "none";
 	const reasoningMenuDisabled = disabled || isSending || availableReasoningEfforts.length <= 1;
 	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed;
+	// Agent selector is disabled while sending or when there are no agents to pick from.
+	const agentSelectorDisabled = disabled || isSending || agentOptions.length === 0;
+	// Show a subtle hint when agent mode is on but no agent has been selected yet. Does NOT block send.
+	const showNoAgentHint = agentModeEnabled && !selectedAgentId;
 
 	const submit = (): void => {
 		if (!trimmed) {
@@ -134,6 +151,41 @@ export function ChatInputArea({
 									<IconDeviceDesktop size={15} />
 								</ActionIcon>
 							</Tooltip>
+						) : null}
+						{agentControlsAvailable ? (
+							<Tooltip
+								label={
+									agentModeEnabled
+										? t("pages.chat.agentMode.enabled", "Agent mode enabled")
+										: t("pages.chat.agentMode.disabled", "Agent mode disabled")
+								}
+							>
+								<ActionIcon
+									size={36}
+									variant={agentModeEnabled ? "light" : "subtle"}
+									color={agentModeEnabled ? "primary" : "gray"}
+									disabled={disabled || isSending || !onToggleAgentMode}
+									onClick={onToggleAgentMode}
+									aria-label={t("pages.chat.agentMode.toggleLabel", "Agent mode")}
+									aria-pressed={agentModeEnabled}
+									data-testid="chat-agent-mode-toggle"
+								>
+									<IconUserBolt size={15} />
+								</ActionIcon>
+							</Tooltip>
+						) : null}
+						{agentControlsAvailable && agentModeEnabled ? (
+							<AgentSelectorCard
+								agentOptions={agentOptions}
+								selectedAgentId={selectedAgentId}
+								disabled={agentSelectorDisabled}
+								onAgentChange={onAgentChange ?? (() => undefined)}
+							/>
+						) : null}
+						{agentControlsAvailable && showNoAgentHint ? (
+							<Text size="xs" c="dimmed" style={{ alignSelf: "center" }}>
+								{t("pages.chat.agentMode.noAgentHint", "No agent selected")}
+							</Text>
 						) : null}
 						{capabilities.showFileAttachmentControls ? (
 							<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>

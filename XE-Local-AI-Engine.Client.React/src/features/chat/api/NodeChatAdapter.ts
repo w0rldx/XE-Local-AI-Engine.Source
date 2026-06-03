@@ -62,6 +62,10 @@ export interface SendMessageRequest {
 	useLocalTools?: boolean;
 	reasoningEffort?: string;
 	selectedPath?: Record<string, string>;
+	// Agent to resolve for this turn. Absent → Default Assistant (today's built-in chat path). Only included when
+	// agent mode is enabled, a valid agent is selected, and the agent still exists in the live list (stale/deleted
+	// ids are dropped by Chat.tsx before the send — see §7.11 of the plan).
+	agentDefinitionId?: string;
 }
 
 export interface NodeChatAdapter {
@@ -113,6 +117,7 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		useLocalTools: request.useLocalTools,
 		reasoningEffort: request.reasoningEffort,
 		selectedPath: request.selectedPath,
+		agentDefinitionId: request.agentDefinitionId,
 	};
 }
 

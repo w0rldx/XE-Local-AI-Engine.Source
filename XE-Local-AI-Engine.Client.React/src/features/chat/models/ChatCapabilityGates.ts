@@ -16,6 +16,7 @@ export const defaultChatUiCapabilities: ChatUiCapabilities = {
 	showClientNodeRoutingControls: false,
 	showFileAttachmentControls: false,
 	showImageAttachmentControls: false,
+	showAgentControls: false,
 };
 
 export function buildChatUiCapabilities(capabilities: ChatCapabilities): ChatUiCapabilities {
@@ -27,6 +28,9 @@ export function buildChatUiCapabilities(capabilities: ChatCapabilities): ChatUiC
 		showClientNodeRoutingControls: capabilities.clientNodeRouting,
 		showFileAttachmentControls: capabilities.fileAttachments,
 		showImageAttachmentControls: capabilities.imageAttachments,
+		// Agent controls are shown when agent management is available (node-local CRUD backed). The
+		// capability derives from nodeCapabilities.agentManagement at the call site in Chat.tsx.
+		showAgentControls: capabilities.agentManagement ?? false,
 	};
 }
 
