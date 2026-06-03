@@ -206,6 +206,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // Agent-definition application layer: the resolver projects a conversation's bound definition into loopback
         // runtime-package inputs, and the service validates/orchestrates management CRUD.
         builder.Services.AddScoped<IAgentDefinitionResolver, AgentDefinitionResolver>();
+        // Default-agent id memoization: resolves the seeded "Default Assistant" id once and caches it for the process
+        // lifetime so the mode-off chat send/regenerate hot paths avoid a GetBySeedSlugAsync round-trip per send.
+        // Singleton (it owns the cache + a fresh scope per first lookup of the scoped store).
+        builder.Services.AddSingleton<IDefaultAgentProvider, DefaultAgentProvider>();
         // Orchestration resolver: compiles an orchestrator definition and topology into the loopback orchestration spec.
         builder.Services.AddScoped<IOrchestrationResolver, OrchestrationResolver>();
         builder.Services.AddScoped<IAgentDefinitionService, AgentDefinitionService>();

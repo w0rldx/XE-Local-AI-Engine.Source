@@ -106,7 +106,12 @@ public sealed record NodeChatCreateAssistantPlaceholderRequest(
     long CreatedAtUtc,
     string? Model = null,
     string? MetadataJson = null,
-    string Origin = NodeChatOriginValues.Local);
+    string Origin = NodeChatOriginValues.Local,
+    // Per-response agent attribution stamped at send time. Threaded into the metadata blob (no DB column) so the
+    // pending placeholder already carries the agent name; null on cold/fallback paths (client renders the localized
+    // "Default Assistant" label).
+    Guid? AgentDefinitionId = null,
+    string? AgentName = null);
 
 public sealed record NodeChatMessageCorrelation(
     Guid ConversationId,
@@ -235,7 +240,12 @@ public sealed record NodeChatPersistedMessageDto(
     Guid? VariantGroupId = null,
     string? FeedbackRating = null,
     string? FeedbackComment = null,
-    IReadOnlyList<NodeChatMessagePart>? Parts = null) : ISelectedPathMessage;
+    IReadOnlyList<NodeChatMessagePart>? Parts = null,
+    // Per-response agent attribution snapshot, surfaced from the metadata blob (no DB column). AgentDefinitionId is the
+    // provenance of the agent that produced the turn; AgentName is its display-name snapshot at send time (survives a
+    // later rename/delete). Both are null for legacy turns persisted before agent mode existed.
+    Guid? AgentDefinitionId = null,
+    string? AgentName = null) : ISelectedPathMessage;
 
 /// <summary>
 ///     Transport DTO for node chat cancel result data.
@@ -299,7 +309,12 @@ public sealed record NodeChatCreateMessageVariantRequest(
     Guid RequestId,
     long CreatedAtUtc,
     string? Model = null,
-    string? MetadataJson = null);
+    string? MetadataJson = null,
+    // Per-response agent attribution for the regenerated variant, stamped at mint time (re-resolved → picks up a
+    // rename; falls back to the original's stored name when the agent was deleted). Same metadata-blob path as the
+    // send placeholder; trailing optional so existing callers are unaffected.
+    Guid? AgentDefinitionId = null,
+    string? AgentName = null);
 
 /// <summary>
 ///     Transport DTO for node chat message variant data.

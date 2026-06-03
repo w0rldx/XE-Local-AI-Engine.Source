@@ -188,6 +188,18 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         return slugs.ToHashSet(StringComparer.Ordinal);
     }
 
+    public async Task<AgentDefinitionRecord?> GetBySeedSlugAsync(string seedSlug, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(seedSlug);
+
+        var entity = await _dbContext.AgentDefinitions
+                                     .AsNoTracking()
+                                     .FirstOrDefaultAsync(definition => definition.Source == (int)AgentDefinitionSource.Seeded && definition.SeedSlug == seedSlug, cancellationToken)
+                                     .ConfigureAwait(false);
+
+        return entity is null ? null : ToRecord(entity);
+    }
+
     private static AgentDefinitionRecord ToRecord(AgentDefinition entity)
     {
         return new AgentDefinitionRecord(

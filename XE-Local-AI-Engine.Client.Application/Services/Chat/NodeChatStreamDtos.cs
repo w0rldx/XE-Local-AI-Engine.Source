@@ -27,7 +27,11 @@ public sealed record NodeChatStreamRequest(
     string? Model = null,
     bool UseLocalTools = false,
     string? ReasoningEffort = null,
-    IReadOnlyDictionary<Guid, Guid>? SelectedPath = null);
+    IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
+    // The per-send selected agent (composer agent mode). Takes precedence over the legacy conversation binding; null
+    // falls back to the conversation binding, then to the seeded Default Assistant (mode-off persona). Trailing
+    // optional so the SignalR hub forwards the record unchanged.
+    Guid? AgentDefinitionId = null);
 
 public sealed record ChatStreamEvent(
     string Type,

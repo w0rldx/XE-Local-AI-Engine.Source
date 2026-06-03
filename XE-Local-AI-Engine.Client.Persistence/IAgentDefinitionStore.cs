@@ -30,6 +30,14 @@ public interface IAgentDefinitionStore
     Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Returns the seeded definition whose <c>SeedSlug</c> equals <paramref name="seedSlug" /> (Ordinal), projected
+    ///     from a <c>Source = Seeded</c> row, or <c>null</c> when no such row exists. Used by the chat send/regenerate
+    ///     paths to resolve the node-local "Default Assistant" id (mode-off persona). Free-text columns are decrypted on
+    ///     materialization like any other record read.
+    /// </summary>
+    Task<AgentDefinitionRecord?> GetBySeedSlugAsync(string seedSlug, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Applies <paramref name="input" /> to the definition identified by <paramref name="id" />, stamping
     ///     <c>UpdatedAtUtc</c> and incrementing <c>Version</c> only when a config-affecting field changed (Instructions,
     ///     tool lists, approvals, ModelProfile, ReasoningEffort, Kind, topology — never Name/Description alone). Returns

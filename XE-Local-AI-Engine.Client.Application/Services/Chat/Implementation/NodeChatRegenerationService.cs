@@ -31,6 +31,7 @@ public sealed class NodeChatRegenerationService(
     ILocalToolOfferProvider localToolOfferProvider,
     IAgentDefinitionResolver agentDefinitionResolver,
     IAgentDefinitionStore agentDefinitionStore,
+    IDefaultAgentProvider defaultAgentProvider,
     IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
     TimeProvider timeProvider,
@@ -78,14 +79,23 @@ public sealed class NodeChatRegenerationService(
         var requestId = Guid.NewGuid();
         var startedAtUtc = NowUnixMilliseconds();
 
+        // Resolve the model and the effective agent BEFORE minting the variant placeholder, because the variant is
+        // stamped with the resolved agent's attribution (id + freshly-snapshotted display name). The resolve reads only
+        // conversation/original/selectedPath, so the hoist is safe and the emitted SSE order (AssistantPending ->
+        // AssistantQueued) is unchanged.
+        var resolution = await ResolveTurnAsync(conversation, original, cancellationToken).ConfigureAwait(false);
+
         // Reuse the backend mint: creates the sibling placeholder (pending, shared variant_group_id, parent copied
-        // from the original) — never an in-place overwrite. We do NOT duplicate mint logic here.
+        // from the original) — never an in-place overwrite. We do NOT duplicate mint logic here. The variant carries
+        // the resolved agent's attribution so the pending variant already shows the agent name.
         var variant = await persistence.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(conversationId,
                               originalMessageId,
                               newMessageId,
                               requestId,
                               startedAtUtc,
-                              original.Model),
+                              original.Model,
+                              AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
+                              AgentName: resolution.Resolved?.AgentName),
                           cancellationToken).ConfigureAwait(false)
                       ?? throw new InvalidOperationException("The assistant message to regenerate was not found.");
 
@@ -146,30 +156,12 @@ public sealed class NodeChatRegenerationService(
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
 
-        // Mirror the send path exactly (NodeChatStreamService): resolve the offer-time active model with the same
-        // precedence as the model list/selection (ListLocalModelsEndpoint) — the original turn's model first, then the
-        // operator's node-default selection (StoredNodeSettings.DefaultModelName), then the static config fallback.
-        // Without the node-default step a regenerate of a "Local default" turn (original.Model is null) would resolve
-        // the static fallback instead of the operator's node default, so a tool-capable node default would never
-        // satisfy the capability gate and run_in_agent_home would be withheld on the rerun.
-        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        var activeModel = original.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
-
-        // Mirror the send path exactly (NodeChatStreamService): resolve the conversation's bound definition so a
-        // regenerated turn reruns with the SAME persona, tools, model, and version a fresh send would — a missed
-        // hydration here would make reruns diverge from sends. A null result keeps the default persona.
-        // A regenerate answers the same question as the original, so the relevance-retrieval query is the
-        // user turn that precedes the turn being regenerated (the same cutoff the regeneration context anchors on). When
-        // that user turn cannot be found the query is null and the resolver falls back to the full static prepend.
-        var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
-
-        var resolved = await agentDefinitionResolver.ResolveAsync(conversation.AgentDefinitionId, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
-
-        // Symmetric with the send path (NodeChatStreamService): when the bound definition is a tool-capable
-        // orchestrator, resolve a compiled orchestration spec so a regenerated turn reruns through the SAME handoff
-        // workflow a fresh send would — a missed hydration here would make reruns diverge from sends. A null result
-        // keeps the single-agent path. The same preceding user turn drives per-participant playbook retrieval.
-        var orchestration = await ResolveOrchestrationAsync(conversation.AgentDefinitionId, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
+        // front (ResolveTurnAsync) so the variant could be stamped with the resolved agent's attribution; reuse those
+        // results here unchanged.
+        var activeModel = resolution.ActiveModel;
+        var resolved = resolution.Resolved;
+        var orchestration = resolution.Orchestration;
 
         // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
         // client asked AND the node has the tool engine enabled. When offered, the catalog's local tools travel in
@@ -448,6 +440,41 @@ public sealed class NodeChatRegenerationService(
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
+
+    /// <summary>
+    ///     Computes the offer-time active model and resolves the effective per-turn agent (definition + orchestration)
+    ///     up front so the regenerated variant can be stamped with the resolved agent's attribution. The effective-agent
+    ///     precedence reuses the ORIGINAL turn's recorded agent so a rerun stays on the same persona:
+    ///     <c>original.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant id</c>. The
+    ///     attribution name is re-resolved (picks up a rename); when the agent was deleted the resolver returns null and
+    ///     the variant falls back to the original's stored name. The relevance-retrieval query is the user turn that
+    ///     precedes the regenerated turn (same cutoff anchor as the regeneration context).
+    /// </summary>
+    private async Task<ResolvedTurn> ResolveTurnAsync(NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto original,
+        CancellationToken cancellationToken)
+    {
+        // Mirror the send path's model precedence (ListLocalModelsEndpoint): the original turn's model first, then the
+        // operator's node-default selection, then the static config fallback.
+        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var activeModel = original.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
+
+        // A regenerate reuses the ORIGINAL turn's agent so the rerun stays on the same persona; fall back to the
+        // conversation binding, then the seeded Default Assistant (process-memoized id).
+        var effectiveAgentId = original.AgentDefinitionId
+                               ?? conversation.AgentDefinitionId
+                               ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken).ConfigureAwait(false);
+
+        var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
+
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
+
+        return new ResolvedTurn(activeModel, resolved, orchestration);
+    }
+
+    /// <summary>The up-front per-turn resolution shared by variant stamping and runtime-package construction.</summary>
+    private sealed record ResolvedTurn(string ActiveModel, ResolvedAgentRuntime? Resolved, ResolvedOrchestration? Orchestration);
 
     /// <summary>
     ///     Mirrors <c>NodeChatStreamService.ResolveOrchestrationAsync</c>: resolves a compiled orchestration spec for a

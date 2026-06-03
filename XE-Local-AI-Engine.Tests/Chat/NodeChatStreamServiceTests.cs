@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -40,6 +41,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -83,6 +85,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -129,6 +132,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -183,6 +187,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -222,6 +227,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -266,6 +272,7 @@ public sealed class NodeChatStreamServiceTests
             offerProvider,
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -317,6 +324,7 @@ public sealed class NodeChatStreamServiceTests
             offerProvider,
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -358,6 +366,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -411,6 +420,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -482,6 +492,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
             resolver,
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -540,6 +551,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             store,
+            CreateDefaultAgentProvider(),
             orchestrationResolver,
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -584,6 +596,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             resolver,
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -602,6 +615,409 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
         await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SendMessage_WhenRequestAgentIdSet_ResolvesThatAgent()
+    {
+        // The per-send selected agent (request.AgentDefinitionId) wins over the conversation binding. The conversation
+        // is bound to a DIFFERENT agent; the resolver must be consulted with the request id, not the conversation id.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var conversationAgentId = Guid.NewGuid();
+        var requestAgentId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, conversationAgentId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", null, 3, requestAgentId, "Selected Agent"));
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           AgentDefinitionId: requestAgentId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SendMessage_WhenNoAgentId_FallsBackToDefaultAssistant()
+    {
+        // No request agent id AND no conversation binding: the effective-agent precedence falls back to the seeded
+        // Default Assistant id, so the resolver is consulted with THAT id (not null).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var defaultAssistantId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Default persona.", [], null, null, 1, defaultAssistantId, "Default Assistant"));
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(defaultAssistantId),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SendMessage_StampsAgentIdAndNameOnAssistantMessage()
+    {
+        // The placeholder is stamped with the resolved agent's id + display-name snapshot (per-response attribution).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        NodeChatCreateAssistantPlaceholderRequest? capturedPlaceholder = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { },
+            placeholderObserver: request => capturedPlaceholder = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, agentId, "Backend Buddy"));
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(agentId),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.NotNull(capturedPlaceholder);
+        AssertEx.Equal(agentId, capturedPlaceholder!.AgentDefinitionId);
+        AssertEx.Equal("Backend Buddy", capturedPlaceholder.AgentName);
+    }
+
+    [Test]
+    public async Task SendMessage_PendingMessageCarriesAgentName()
+    {
+        // Locks the §7.4 hoist: the resolve happens BEFORE the placeholder is minted, so the placeholder request (the
+        // AssistantPending source) already carries the agent name — not just the terminal.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentId = Guid.NewGuid();
+        NodeChatCreateAssistantPlaceholderRequest? capturedPlaceholder = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { },
+            placeholderObserver: request => capturedPlaceholder = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, agentId, "Pending Persona"));
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(agentId),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        // The placeholder (AssistantPending source) already carried the agent name when it was created.
+        AssertEx.NotNull(capturedPlaceholder);
+        AssertEx.Equal("Pending Persona", capturedPlaceholder!.AgentName);
+        // SSE order is unchanged by the hoist.
+        var pendingIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPending);
+        var queuedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued);
+        var streamingIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming);
+        AssertEx.True(pendingIndex >= 0 && queuedIndex > pendingIndex && streamingIndex > queuedIndex,
+            "SSE order must stay UserMessagePersisted -> AssistantPending -> AssistantQueued -> AssistantStreaming after the hoist.");
+    }
+
+    [Test]
+    public async Task SendMessage_WhenModeOffUneditedDefault_ConfigHashByteIdenticalToLegacy()
+    {
+        // Byte-identical mode-off: resolving through an UNEDITED seeded Default Assistant (embedded prompt + full offer
+        // + null model/reasoning + version 1) must produce the SAME runtime-package config hash as the pre-change null
+        // path (LoadResolvedSystemPrompt + full offer + version 1).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var defaultAssistantId = Guid.NewGuid();
+        var offeredTool = CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}");
+        var embeddedPrompt = LoadEmbeddedChatPrompt();
+
+        // The real resolver over a store whose Default Assistant is the seeded, unedited embedded prompt (version 1,
+        // empty allowed set → full offer per the default-slug branch).
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var defaultAssistant = new AgentDefinitionRecord(defaultAssistantId,
+            "Default Assistant",
+            null,
+            embeddedPrompt,
+            null,
+            null,
+            AgentDefinitionKind.Single,
+            [],
+            new Dictionary<string, bool>(),
+            null,
+            1,
+            10,
+            10,
+            PlaybookEnabled: false,
+            Source: AgentDefinitionSource.Seeded,
+            SeedSlug: "default-assistant");
+        store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+        var offerProvider = CreateOfferProvider(offeredTool);
+        var resolver = new AgentDefinitionResolver(store,
+            CreateEmptyPlaybookStore(),
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            NullLogger<AgentDefinitionResolver>.Instance);
+
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            resolver,
+            store,
+            CreateDefaultAgentProvider(defaultAssistantId),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(embeddedPrompt, runner.LastSystemPrompt);
+        AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
+
+        // Hand-build the legacy null-path package (embedded prompt + full offer + version 1) and compare config hashes.
+        var builder = new LocalChatRuntimePackageBuilder();
+        var legacyPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            conversationId,
+            embeddedPrompt,
+            [],
+            new LocalChatAgentOptions().DefaultModel,
+            1,
+            AllowedTools: [offeredTool]));
+        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            conversationId,
+            runner.LastSystemPrompt!,
+            [],
+            new LocalChatAgentOptions().DefaultModel,
+            runner.LastAgentDefinitionVersion,
+            AllowedTools: runner.LastAllowedTools));
+
+        AssertEx.Equal(legacyPackage.ConfigHash, resolvedPackage.ConfigHash);
+    }
+
+    [Test]
+    public async Task SendMessage_WhenDefaultAssistantEdited_ConfigHashDiffers()
+    {
+        // Negative guard: editing the Default Assistant bumps its Version (AgentDefinitionStore.cs:131), so the resolved
+        // package's config hash differs from the unedited (version 1) legacy package — mode-off is NOT frozen to the
+        // embedded prompt once the operator edits the default (documented as intended, §15).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var defaultAssistantId = Guid.NewGuid();
+        var offeredTool = CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}");
+        var embeddedPrompt = LoadEmbeddedChatPrompt();
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        // An EDITED Default Assistant: a changed prompt and a bumped version (2).
+        var editedDefault = new AgentDefinitionRecord(defaultAssistantId,
+            "Default Assistant",
+            null,
+            embeddedPrompt + "\n\nExtra operator guidance.",
+            null,
+            null,
+            AgentDefinitionKind.Single,
+            [],
+            new Dictionary<string, bool>(),
+            null,
+            2,
+            10,
+            20,
+            PlaybookEnabled: false,
+            Source: AgentDefinitionSource.Seeded,
+            SeedSlug: "default-assistant");
+        store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(editedDefault);
+        var offerProvider = CreateOfferProvider(offeredTool);
+        var resolver = new AgentDefinitionResolver(store,
+            CreateEmptyPlaybookStore(),
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            NullLogger<AgentDefinitionResolver>.Instance);
+
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            resolver,
+            store,
+            CreateDefaultAgentProvider(defaultAssistantId),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        var builder = new LocalChatRuntimePackageBuilder();
+        var legacyPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            conversationId,
+            embeddedPrompt,
+            [],
+            new LocalChatAgentOptions().DefaultModel,
+            1,
+            AllowedTools: [offeredTool]));
+        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            conversationId,
+            runner.LastSystemPrompt!,
+            [],
+            new LocalChatAgentOptions().DefaultModel,
+            runner.LastAgentDefinitionVersion,
+            AllowedTools: runner.LastAllowedTools));
+
+        AssertEx.True(legacyPackage.ConfigHash != resolvedPackage.ConfigHash,
+            "Editing the Default Assistant (prompt + version bump) must change the mode-off config hash.");
+    }
+
+    private static IPlaybookActionStore CreateEmptyPlaybookStore()
+    {
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        return playbookStore;
+    }
+
+    private static string LoadEmbeddedChatPrompt()
+    {
+        var assembly = typeof(LocalChatAgentOptions).Assembly;
+        var resourceName = new LocalChatAgentOptions().InstructionsResource;
+        using var stream = assembly.GetManifestResourceStream(resourceName)
+                           ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     [Test]
@@ -633,6 +1049,7 @@ public sealed class NodeChatStreamServiceTests
             offerProvider,
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore("qwen3:8b"),
             TimeProvider.System,
@@ -680,6 +1097,7 @@ public sealed class NodeChatStreamServiceTests
             offerProvider,
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -722,6 +1140,16 @@ public sealed class NodeChatStreamServiceTests
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
+    }
+
+    // The default-agent provider: returns null so the effective-agent precedence falls through to a null id (no seeded
+    // Default Assistant in these unit tests), keeping the default-persona contract — the resolver is consulted with a
+    // null binding exactly as before. The dedicated default-fallback test supplies a non-null id.
+    private static IDefaultAgentProvider CreateDefaultAgentProvider(Guid? defaultAgentId = null)
+    {
+        var provider = Substitute.For<IDefaultAgentProvider>();
+        provider.GetDefaultAgentIdAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(defaultAgentId));
+        return provider;
     }
 
     // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
@@ -894,6 +1322,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
             CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             TimeProvider.System,
@@ -1020,7 +1449,8 @@ public sealed class NodeChatStreamServiceTests
         Guid assistantMessageId,
         Guid requestId,
         Action<NodeChatTerminalizeMessageRequest> terminalized,
-        Guid? agentDefinitionId = null)
+        Guid? agentDefinitionId = null,
+        Action<NodeChatCreateAssistantPlaceholderRequest>? placeholderObserver = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
         var conversation = new NodeChatConversationDto(conversationId,
@@ -1064,7 +1494,18 @@ public sealed class NodeChatStreamServiceTests
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>())
                    .Returns(userMessage);
         persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>())
-                   .Returns(assistantPending);
+                   .Returns(callInfo =>
+                   {
+                       var request = callInfo.ArgAt<NodeChatCreateAssistantPlaceholderRequest>(0);
+                       placeholderObserver?.Invoke(request);
+                       // Reflect the stamped attribution into the returned pending DTO so the AssistantPending event
+                       // carries the agent name a real placeholder would.
+                       return assistantPending with
+                       {
+                           AgentDefinitionId = request.AgentDefinitionId,
+                           AgentName = request.AgentName
+                       };
+                   });
         persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
                    .Returns(assistantQueued);
         persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())

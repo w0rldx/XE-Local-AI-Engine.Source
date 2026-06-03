@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -271,6 +270,39 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         AssertEx.True(await store.DeleteAsync(added.Id), "Delete should report a removed row.");
         AssertEx.Null(await store.GetByIdAsync(added.Id), "Deleted definition should no longer be found.");
         AssertEx.False(await store.DeleteAsync(added.Id), "Deleting a missing id should report no removal.");
+    }
+
+    [Test]
+    public async Task GetBySeedSlugAsync_ReturnsSeededRow()
+    {
+        const string seedSlug = "default-assistant";
+        var databasePath = GetDatabasePath("seed-slug.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        Guid seededId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var store = new AgentDefinitionStore(context, TimeProvider.System);
+            // A manual row plus the seeded row: the projection must select the seeded row by slug, never the manual one.
+            _ = await store.AddAsync(CreateInput() with { Name = "Manual" });
+            var seeded = await store.AddSeededAsync(CreateInput() with { Name = "Default Assistant" }, seedSlug);
+            seededId = seeded.Id;
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var readStore = new AgentDefinitionStore(readContext, TimeProvider.System);
+
+        var found = AssertEx.NotNull(await readStore.GetBySeedSlugAsync(seedSlug), "The seeded row should be found by slug.");
+        AssertEx.Equal(seededId, found.Id);
+        AssertEx.Equal(AgentDefinitionSource.Seeded, found.Source);
+        AssertEx.Equal(seedSlug, found.SeedSlug);
+        AssertEx.Equal("Default Assistant", found.Name);
+        AssertEx.Equal(Instructions, found.Instructions);
+
+        var missing = await readStore.GetBySeedSlugAsync("not-a-known-slug");
+        AssertEx.Null(missing, "An unknown slug should return null.");
     }
 
     [Test]

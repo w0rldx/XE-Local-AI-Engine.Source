@@ -149,6 +149,68 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Metadata_RoundTripsAgentIdAndName()
+    {
+        await using var provider = await BuildProviderAsync("agent-attribution-roundtrip.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Attribution", "node", 3000)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var agentDefinitionId = Guid.NewGuid();
+
+        // The placeholder is stamped with the per-response agent attribution at send time; it must survive the
+        // streaming/terminalize updates (which preserve it from current) and reload off the metadata blob.
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
+                assistantMessageId,
+                correlation.RequestId,
+                3001,
+                "model-x",
+                AgentDefinitionId: agentDefinitionId,
+                AgentName: "Backend Buddy"))
+            .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, 3002).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                3003,
+                "the answer",
+                "thinking",
+                Model: "model-x"))
+            .ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Equal(agentDefinitionId, assistant.AgentDefinitionId);
+        AssertEx.Equal("Backend Buddy", assistant.AgentName);
+        // The terminalize update must NOT drop the attribution while it rewrites the rest of the blob.
+        AssertEx.Equal("the answer", assistant.Content);
+        AssertEx.Equal("thinking", assistant.Reasoning);
+    }
+
+    [Test]
+    public async Task Metadata_LegacyBlobWithoutAgentFields_DeserializesNull()
+    {
+        await using var provider = await BuildProviderAsync("agent-attribution-legacy.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy attribution", "node", 3100)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3101)).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3102, "legacy answer", "legacy reasoning")).ConfigureAwait(false);
+
+        // Simulate a blob written before agent mode existed: the AgentDefinitionId/AgentName keys are absent entirely
+        // (no migration), so they must deserialize to null without error.
+        await OverwriteMetadataJsonAsync(provider, assistantMessageId, "{\"Reasoning\":\"legacy reasoning\",\"Model\":null}").ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Null(assistant.AgentDefinitionId);
+        AssertEx.Null(assistant.AgentName);
+        AssertEx.Equal("legacy reasoning", assistant.Reasoning);
+    }
+
+    [Test]
     public async Task CancelMessageAsync_TerminalizesOnlyMatchingCorrelation()
     {
         await using var provider = await BuildProviderAsync("cancel.sqlite").ConfigureAwait(false);
