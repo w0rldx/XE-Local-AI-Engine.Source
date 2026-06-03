@@ -10,12 +10,8 @@ import { ScheduledJobRunDetail } from "@/features/scheduler/components/Scheduled
 import { ScheduledJobRunHistoryPanel } from "@/features/scheduler/components/ScheduledJobRunHistoryPanel";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
 import { toSaveScheduledJobRequest } from "@/features/scheduler/models/SchedulerMappers";
-import type {
-	ScheduledJob,
-	ScheduledJobFormValues,
-	ScheduledJobRun,
-	ScheduledJobRunFilters,
-} from "@/features/scheduler/models/SchedulerModels";
+import type { ScheduledJob, ScheduledJobFormValues, ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
+import { emptySchedulerFormValues, toSchedulerFormValues } from "@/features/scheduler/pages/SchedulerPageFormMappers";
 import {
 	useCancelScheduledJobRun,
 	useCreateScheduledJob,
@@ -30,62 +26,7 @@ import {
 } from "@/features/scheduler/queries/useScheduler";
 import { useSchedulerManagementStore } from "@/features/scheduler/stores/SchedulerManagementStore";
 
-function errorMessage(error: unknown, fallback: string): string {
-	return error instanceof Error ? error.message : fallback;
-}
-
-const emptyFormValues: ScheduledJobFormValues = {
-	templateId: "",
-	displayName: "",
-	description: "",
-	scheduleKind: "Cron",
-	cronExpression: "",
-	intervalSeconds: "",
-	repeatCount: "",
-	startAtUtc: "",
-	endAtUtc: "",
-	timeZoneId: "UTC",
-	misfirePolicy: "Smart",
-	preventOverlap: true,
-	maxRuntimeSeconds: "",
-	parameters: "",
-};
-
-// Converts an epoch-millis timestamp to the datetime-local input string ("YYYY-MM-DDTHH:mm") in local time.
-function toDateTimeLocal(value: number | null): string {
-	if (value === null) {
-		return "";
-	}
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) {
-		return "";
-	}
-	// Shift to local time then slice off the seconds/zone so the value matches the input's expected format.
-	const offset = date.getTimezoneOffset() * 60000;
-	return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
-// Maps a persisted job to editable form values. parameters is intentionally blank: the wire never returns the
-// raw value (only hasParameters), so editing starts from an empty box and only overwrites parameters if the
-// operator types a new value.
-function toFormValues(job: ScheduledJob): ScheduledJobFormValues {
-	return {
-		templateId: job.templateId,
-		displayName: job.displayName,
-		description: job.description,
-		scheduleKind: job.scheduleKind,
-		cronExpression: job.cronExpression ?? "",
-		intervalSeconds: job.intervalSeconds !== null ? String(job.intervalSeconds) : "",
-		repeatCount: job.repeatCount !== null ? String(job.repeatCount) : "",
-		startAtUtc: toDateTimeLocal(job.startAtUtc),
-		endAtUtc: toDateTimeLocal(job.endAtUtc),
-		timeZoneId: job.timeZoneId,
-		misfirePolicy: job.misfirePolicy,
-		preventOverlap: job.preventOverlap,
-		maxRuntimeSeconds: job.maxRuntimeSeconds !== null ? String(job.maxRuntimeSeconds) : "",
-		parameters: "",
-	};
-}
+const errorMessage = (error: unknown, fallback: string): string => (error instanceof Error ? error.message : fallback);
 
 export function SchedulerPage() {
 	const { t } = useTranslation();
@@ -105,7 +46,7 @@ export function SchedulerPage() {
 
 	const templatesQuery = useScheduledJobTemplates();
 	const jobsQuery = useScheduledJobs();
-	const runsQuery = useScheduledJobRuns(runFilters);
+	const runsQuery = useScheduledJobRuns(runFilters, { refetchInterval: 5000 });
 	const runQuery = useScheduledJobRun(selectedRunId);
 
 	const createMutation = useCreateScheduledJob();
@@ -198,7 +139,7 @@ export function SchedulerPage() {
 	);
 
 	const isEditorOpen = editorTarget !== null;
-	const formInitialValues = editingJob ? toFormValues(editingJob) : emptyFormValues;
+	const formInitialValues = editingJob ? toSchedulerFormValues(editingJob) : emptySchedulerFormValues;
 
 	return (
 		<Container fluid={true} py="lg">

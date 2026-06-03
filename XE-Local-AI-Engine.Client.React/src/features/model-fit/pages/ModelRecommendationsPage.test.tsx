@@ -27,21 +27,24 @@ vi.mock("@tanstack/react-router", () => ({
 	useNavigate: () => navigateMock,
 }));
 
-const { hooksMock, schedulerMock, hubMock } = vi.hoisted(() => ({
+const { hooksMock, schedulerMock, hubMock, feedbackMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useLatestRecommendations: vi.fn(),
 		useApprovedImages: vi.fn(),
-		useRefreshRecommendations: vi.fn(),
 	},
 	schedulerMock: {
 		useScheduledJobs: vi.fn(),
 	},
 	hubMock: vi.fn(),
+	feedbackMock: vi.fn(),
 }));
 
 vi.mock("@/features/model-fit/queries/useModelFit", () => hooksMock);
 vi.mock("@/features/scheduler/queries/useScheduler", () => schedulerMock);
 vi.mock("@/features/model-fit/hooks/useModelFitSchedulerEvents", () => ({ useModelFitSchedulerEvents: hubMock }));
+vi.mock("@/features/model-fit/hooks/useModelFitRefreshFeedback", () => ({
+	useModelFitRefreshFeedback: feedbackMock,
+}));
 
 import { ModelRecommendationsPage } from "@/features/model-fit/pages/ModelRecommendationsPage";
 
@@ -72,8 +75,8 @@ function modelFitJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {
 	};
 }
 
-function makeMutation() {
-	return { mutate: vi.fn(), isPending: false, error: null };
+function makeFeedback() {
+	return { refresh: vi.fn(), isPending: false, error: null };
 }
 
 function makeQuery<T>(data: T) {
@@ -165,7 +168,7 @@ describe("ModelRecommendationsPage", () => {
 		useModelFitManagementStore.setState({ useCase: "coding" });
 		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(noCacheView));
 		hooksMock.useApprovedImages.mockReturnValue(makeQuery([]));
-		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation());
+		feedbackMock.mockReturnValue(makeFeedback());
 		schedulerMock.useScheduledJobs.mockReturnValue(makeQuery([modelFitJob()]));
 	});
 
@@ -210,8 +213,8 @@ describe("ModelRecommendationsPage", () => {
 	});
 
 	it("fires the existing model-recommendation-check job when Refresh now is clicked", () => {
-		const refreshMutation = makeMutation();
-		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
+		const refreshFeedback = makeFeedback();
+		feedbackMock.mockReturnValue(refreshFeedback);
 
 		renderPage();
 
@@ -220,7 +223,7 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(button);
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith("job-mf");
+		expect(refreshFeedback.refresh).toHaveBeenCalledWith("job-mf");
 	});
 
 	it("disables Refresh now and shows guidance when no model-recommendation-check job exists", () => {
@@ -234,8 +237,8 @@ describe("ModelRecommendationsPage", () => {
 	});
 
 	it("prefers an enabled model-recommendation-check job over a disabled one", () => {
-		const refreshMutation = makeMutation();
-		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
+		const refreshFeedback = makeFeedback();
+		feedbackMock.mockReturnValue(refreshFeedback);
 		schedulerMock.useScheduledJobs.mockReturnValue(
 			makeQuery([modelFitJob({ id: "job-disabled", enabled: false }), modelFitJob({ id: "job-enabled", enabled: true })]),
 		);
@@ -244,7 +247,7 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith("job-enabled");
+		expect(refreshFeedback.refresh).toHaveBeenCalledWith("job-enabled");
 	});
 
 	it("ignores scheduler jobs of other templates when gating refresh", () => {

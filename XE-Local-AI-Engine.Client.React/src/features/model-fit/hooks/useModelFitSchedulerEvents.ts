@@ -5,8 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { toast } from "@/core/ui/notifications/Toast";
 import { modelRecommendationCheckTemplateId } from "@/features/model-fit/models/ModelFitModels";
+import { notifyModelFitRefreshEvent } from "@/features/model-fit/notifications/ModelFitRefreshNotifications";
 import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
 
 // Realtime authoritative refetch + operator feedback for the model-fit pages. Reuses the SAME scheduler SignalR hub
@@ -25,9 +25,6 @@ import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/
 // Terminal events only: RunCompleted/RunFailed/RunCancelled change the stored snapshot (or its diagnostics).
 // RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly.
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"] as const;
-
-// Stable base id so a hub auto-reconnect / duplicate broadcast for the same run replaces the toast instead of stacking.
-const REFRESH_TOAST_ID = "model-fit-refresh";
 
 // Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubEvent). The event NAME discriminates the
 // outcome, so `status` is intentionally NOT typed — its C# enum wire-casing is unverified. errorMessage/runId are the
@@ -97,32 +94,7 @@ export function useModelFitSchedulerEvents(): void {
 
 			// Best-effort UI feedback. Stable id per run so a reconnect/duplicate broadcast replaces rather than stacks.
 			const { errorMessage, runId } = readRefreshFields(payload);
-			const toastId = runId ? `${REFRESH_TOAST_ID}-${runId}` : REFRESH_TOAST_ID;
-
-			switch (eventName) {
-				case "scheduler.runFailed":
-					toast.error(errorMessage?.trim() || tRef.current("pages.modelFit.recommendations.toasts.failFallback"), {
-						title: tRef.current("pages.modelFit.recommendations.toasts.failTitle"),
-						autoClose: false,
-						id: toastId,
-					});
-					break;
-				case "scheduler.runCompleted":
-					toast.success(tRef.current("pages.modelFit.recommendations.toasts.success"), {
-						title: tRef.current("pages.modelFit.recommendations.toasts.successTitle"),
-						autoClose: 5000,
-						id: toastId,
-					});
-					break;
-				case "scheduler.runCancelled":
-					toast.warn(tRef.current("pages.modelFit.recommendations.toasts.cancelled"), {
-						autoClose: 5000,
-						id: toastId,
-					});
-					break;
-				default:
-					break;
-			}
+			notifyModelFitRefreshEvent(eventName, { errorMessage, runId }, tRef.current);
 		};
 
 		const handlers = TERMINAL_RUN_EVENTS.map((eventName) => {
