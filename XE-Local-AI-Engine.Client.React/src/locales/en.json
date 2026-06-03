@@ -1449,6 +1449,13 @@
         "errors": {
           "load": "Could not load recommendations.",
           "refresh": "Could not start a refresh."
+        },
+        "toasts": {
+          "failTitle": "Refresh failed",
+          "failFallback": "The model recommendation refresh did not succeed.",
+          "successTitle": "Recommendations refreshed",
+          "success": "The latest model recommendations are ready.",
+          "cancelled": "The refresh was cancelled."
         }
       },
       "approvedImages": {
