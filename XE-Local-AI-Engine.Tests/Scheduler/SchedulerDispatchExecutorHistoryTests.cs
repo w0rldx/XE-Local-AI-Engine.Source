@@ -73,6 +73,55 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // Handler throws the sanitized marker exception → its message is recorded verbatim
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task DispatchAsync_WhenHandlerThrowsScheduledJobExecutionException_RecordsSanitizedMessageVerbatim()
+    {
+        const string sanitized = "The approved image is disabled.";
+        var handler = new ConfigurableHandler((_, _) => throw new ScheduledJobExecutionException(sanitized));
+        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-sanitized", Now, Now, CancellationToken.None);
+
+        await runStore.Received(1).UpdateLifecycleAsync(
+            RunId,
+            ScheduledRunStatus.Failed,
+            Arg.Any<long?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Is<string?>(message => message == sanitized),
+            Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Any other exception type → the generic constant is still recorded (no regression)
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task DispatchAsync_WhenHandlerThrowsGenericException_StillRecordsGenericMessage()
+    {
+        var handler = new ConfigurableHandler((_, _) => throw new InvalidOperationException("raw internal detail"));
+        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-generic", Now, Now, CancellationToken.None);
+
+        await runStore.Received(1).UpdateLifecycleAsync(
+            RunId,
+            ScheduledRunStatus.Failed,
+            Arg.Any<long?>(),
+            Arg.Any<long?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Is<string?>(message => message == "The scheduled job failed during execution."),
+            Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Cancellation: token tripped + cancel was requested → Cancelled, re-thrown
     // ──────────────────────────────────────────────────────────────────────
 

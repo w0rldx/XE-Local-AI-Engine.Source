@@ -21,8 +21,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 ///         <b>Owns no scheduler state.</b> It never creates/updates scheduler run rows and never publishes SignalR — the
 ///         dispatcher owns those. It forwards <see cref="ScheduledJobExecutionContext.ReportProgressAsync" /> to the
 ///         refresh service, lets <see cref="OperationCanceledException" /> propagate (so the dispatcher records a
-///         Cancelled run), and throws a generic <see cref="InvalidOperationException" /> on a non-success refresh so the
-///         dispatcher records a Failed run. The refresh service is invoked ONLY here — there is no bypass path.
+///         Cancelled run), and throws a <see cref="ScheduledJobExecutionException" /> carrying the refresh result's
+///         contractually-sanitized <see cref="ModelFitRefreshResult.SanitizedError" /> on a non-success refresh so the
+///         dispatcher records a Failed run with an actionable reason. The refresh service is invoked ONLY here — there is no bypass path.
 ///     </para>
 /// </summary>
 public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
@@ -102,14 +103,16 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
         if (result.Status != ModelFitRunStatus.Succeeded)
         {
-            // Generic, secret-free message — the snapshot row and the server log carry the sanitized detail. Throwing
-            // makes the dispatcher record a Failed scheduler run rather than a spurious success.
+            // SanitizedError is operator-safe by the IModelFitRefreshService contract (never secrets / raw output), so
+            // it is surfaced via ScheduledJobExecutionException — the dispatcher records a Failed run carrying this exact
+            // reason. Throwing (rather than returning) prevents a spurious success record.
             _logger.LogWarning(
                 "Model recommendation check did not succeed (template {TemplateId}, status {Status}).",
                 TemplateIdValue,
                 result.Status);
 
-            throw new InvalidOperationException("model recommendation refresh did not succeed");
+            throw new ScheduledJobExecutionException(
+                result.SanitizedError ?? "The model recommendation refresh did not succeed.");
         }
     }
 
