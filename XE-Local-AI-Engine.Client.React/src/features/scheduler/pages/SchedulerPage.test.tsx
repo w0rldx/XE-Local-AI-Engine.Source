@@ -147,6 +147,12 @@ describe("SchedulerPage", () => {
 		expect(hubMock).toHaveBeenCalled();
 	});
 
+	it("polls run history as a REST fallback when scheduler hub events are missed", () => {
+		renderPage();
+
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 5000 });
+	});
+
 	it("renders the list of scheduled jobs", () => {
 		renderPage();
 

@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
+import { useModelFitRefreshFeedback } from "@/features/model-fit/hooks/useModelFitRefreshFeedback";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
 	defaultModelFitProviderName,
@@ -14,7 +15,7 @@ import {
 	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 } from "@/features/model-fit/models/ModelFitModels";
-import { useLatestRecommendations, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
+import { useLatestRecommendations } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
 
@@ -37,7 +38,7 @@ export function ModelRecommendationsPage() {
 	// Reuse the scheduler job-list query to discover an existing model-recommendation-check job. The refresh
 	// endpoint fires an EXISTING job; it never creates one — so refresh is gated on such a job being present.
 	const jobsQuery = useScheduledJobs();
-	const refreshMutation = useRefreshRecommendations();
+	const refreshFeedback = useModelFitRefreshFeedback();
 
 	const latest = latestQuery.data;
 
@@ -50,13 +51,13 @@ export function ModelRecommendationsPage() {
 		return matching.find((job) => job.enabled) ?? matching[0];
 	}, [jobsQuery.data]);
 
-	const canRefresh = refreshJob !== undefined && !refreshMutation.isPending;
+	const canRefresh = refreshJob !== undefined && !refreshFeedback.isPending;
 
 	const handleRefresh = (): void => {
 		if (refreshJob === undefined) {
 			return;
 		}
-		refreshMutation.mutate(refreshJob.id);
+		refreshFeedback.refresh(refreshJob.id);
 	};
 
 	const handleUseCaseChange = (value: string | null): void => {
@@ -110,7 +111,7 @@ export function ModelRecommendationsPage() {
 						</Button>
 						<Button
 							leftSection={<IconRefresh size={16} />}
-							loading={refreshMutation.isPending}
+							loading={refreshFeedback.isPending}
 							disabled={!canRefresh}
 							onClick={handleRefresh}
 							data-testid="model-fit-refresh-button"
@@ -141,10 +142,10 @@ export function ModelRecommendationsPage() {
 					</Alert>
 				) : null}
 
-				{refreshMutation.error ? (
+				{refreshFeedback.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-refresh-error">
 						{errorMessage(
-							refreshMutation.error,
+							refreshFeedback.error,
 							t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."),
 						)}
 					</Alert>

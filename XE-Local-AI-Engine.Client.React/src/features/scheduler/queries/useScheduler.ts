@@ -73,7 +73,12 @@ export function useScheduledJob(id: string | null) {
 	});
 }
 
-export function useScheduledJobRuns(filters: ScheduledJobRunFilters = {}) {
+interface ScheduledJobRunsQueryOptions {
+	readonly enabled?: boolean;
+	readonly refetchInterval?: number | false;
+}
+
+export function useScheduledJobRuns(filters: ScheduledJobRunFilters = {}, options: ScheduledJobRunsQueryOptions = {}) {
 	return useQuery({
 		...withResponseValidation(
 			listScheduledJobRunsOptions({
@@ -86,6 +91,8 @@ export function useScheduledJobRuns(filters: ScheduledJobRunFilters = {}) {
 				},
 			}),
 		),
+		enabled: options.enabled ?? true,
+		refetchInterval: options.refetchInterval,
 		select: (data) => (data.items ?? []).map(toScheduledJobRun),
 	});
 }
