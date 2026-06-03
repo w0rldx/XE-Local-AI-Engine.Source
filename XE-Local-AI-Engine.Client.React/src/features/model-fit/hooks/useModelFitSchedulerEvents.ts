@@ -6,8 +6,13 @@ import { useTranslation } from "react-i18next";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { modelRecommendationCheckTemplateId } from "@/features/model-fit/models/ModelFitModels";
-import { notifyModelFitRefreshEvent } from "@/features/model-fit/notifications/ModelFitRefreshNotifications";
+import {
+	isTerminalRefreshRunStatus,
+	notifyModelFitRefreshEvent,
+	notifyModelFitRefreshRun,
+} from "@/features/model-fit/notifications/ModelFitRefreshNotifications";
 import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
+import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler";
 
 // Realtime authoritative refetch + operator feedback for the model-fit pages. Reuses the SAME scheduler SignalR hub
 // and event-name conventions as useSchedulerHub (no second hub server) — but where useSchedulerHub invalidates only
@@ -25,6 +30,10 @@ import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/
 // Terminal events only: RunCompleted/RunFailed/RunCancelled change the stored snapshot (or its diagnostics).
 // RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly.
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"] as const;
+
+// Tolerance when comparing the client-side "started watching" timestamp against the server-stamped run fire time,
+// to absorb client/server clock skew in the on-connect catch-up.
+const CLOCK_SKEW_TOLERANCE_MS = 1000;
 
 // Sanitized run-lifecycle payload (camelCase wire shape of SchedulerRunHubEvent). The event NAME discriminates the
 // outcome, so `status` is intentionally NOT typed — its C# enum wire-casing is unverified. errorMessage/runId are the
@@ -60,7 +69,14 @@ function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: s
 // terminates, invalidates the model-fit latest-recommendations cache AND raises a toast (sticky red on failure carrying
 // the sanitized reason, brief green on success, brief warn on cancel). Connection failures are tolerated silently
 // (logged to console.warn) so a flaky hub never breaks the page — the queries still serve their last good data.
-export function useModelFitSchedulerEvents(): void {
+//
+// SignalR push is the PRIMARY, instant delivery path. Because a push fired before the hub finishes its initial
+// negotiation (the disabled-image run fails in ~30ms) — or during a reconnect gap — reaches no client and is never
+// replayed, this hook ALSO runs a one-shot REST catch-up each time the connection establishes/reconnects: it fetches
+// the watched job's recent runs once and surfaces the latest terminal run (deduped against the push by run id). There
+// is NO interval polling — the catch-up fires only on connection-established events, so steady state is push-only.
+// Pass the model-recommendation-check job id to enable the catch-up; without it only the push path runs.
+export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 	const queryClient = useQueryClient();
 	const { t } = useTranslation();
 
@@ -70,6 +86,13 @@ export function useModelFitSchedulerEvents(): void {
 	// aborting it ("stopped during negotiation") so the hub never stays connected and no run events ever arrive.
 	const tRef = useRef(t);
 	tRef.current = t;
+
+	// `scheduledJobId` is likewise read via a ref so it never rebuilds the connection (it resolves from a separate
+	// jobs query a tick after mount). The watermark fixes "now" at mount so the catch-up never surfaces a run that
+	// predates this page visit.
+	const jobIdRef = useRef(scheduledJobId);
+	jobIdRef.current = scheduledJobId;
+	const watermarkUtcRef = useRef(Date.now());
 
 	useEffect(() => {
 		const connection = new HubConnectionBuilder()
@@ -103,17 +126,53 @@ export function useModelFitSchedulerEvents(): void {
 			return [eventName, handler] as const;
 		});
 
-		let disposed = false;
-		const startPromise = connection.start().catch((error: unknown) => {
-			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-			if (disposed) {
+		// One-shot reconciliation: on every (re)connect, fetch the watched job's recent runs once and surface the latest
+		// terminal run (deduped against any push by run id). Covers the connect-race / reconnect-gap WITHOUT polling.
+		const runCatchUp = async (): Promise<void> => {
+			const jobId = jobIdRef.current;
+			if (jobId === undefined) {
 				return;
 			}
-			// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
-			// best-effort live invalidation + feedback, so a connection failure is surfaced only to the console.
-			// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
-			console.warn("model-fit scheduler hub failed to start", error);
+			const sinceUtc = Math.max(0, watermarkUtcRef.current - CLOCK_SKEW_TOLERANCE_MS);
+			try {
+				const runs = await fetchScheduledJobRuns(queryClient, { scheduledJobId: jobId, fromUtc: sinceUtc });
+				// Most-recent terminal run since the watermark — order-independent (don't assume the API's sort order).
+				const terminalRun = runs
+					.filter(
+						(run) =>
+							run.actualFireTimeUtc !== null && run.actualFireTimeUtc >= sinceUtc && isTerminalRefreshRunStatus(run.status),
+					)
+					.sort((a, b) => (b.actualFireTimeUtc ?? 0) - (a.actualFireTimeUtc ?? 0))[0];
+				if (terminalRun !== undefined) {
+					notifyModelFitRefreshRun(terminalRun, tRef.current);
+				}
+			} catch {
+				// Best-effort reconciliation — the push path stays primary and the cache still serves last-good state.
+			}
+		};
+
+		connection.onreconnected(() => {
+			runCatchUp().catch(() => undefined);
 		});
+
+		let disposed = false;
+		const startPromise = connection.start().then(
+			() => {
+				if (!disposed) {
+					runCatchUp().catch(() => undefined);
+				}
+			},
+			(error: unknown) => {
+				// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
+				if (disposed) {
+					return;
+				}
+				// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
+				// best-effort live invalidation + feedback, so a connection failure is surfaced only to the console.
+				// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
+				console.warn("model-fit scheduler hub failed to start", error);
+			},
+		);
 
 		return () => {
 			disposed = true;

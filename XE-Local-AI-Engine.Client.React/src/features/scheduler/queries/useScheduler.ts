@@ -23,8 +23,8 @@ import {
 	toScheduledJobRun,
 	toScheduledJobTemplate,
 } from "@/features/scheduler/models/SchedulerMappers";
-import type { ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ScheduledJobRun, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Server state for the scheduler management surface. Reads use the generated hey-api `*Options()` (which wire the
 // shared axios instance + TanStack Query AbortSignal automatically) and a TanStack `select` that maps the
@@ -78,23 +78,39 @@ interface ScheduledJobRunsQueryOptions {
 	readonly refetchInterval?: number | false;
 }
 
+// Shared run-history query options (validated). Only the active filters ride the query string; an absent filter is
+// left undefined. Reused by the hook and by the imperative one-shot fetch so both build the key/validation identically.
+function scheduledJobRunsQueryOptions(filters: ScheduledJobRunFilters) {
+	return withResponseValidation(
+		listScheduledJobRunsOptions({
+			query: {
+				...(filters.status !== undefined ? { status: filters.status } : {}),
+				...(filters.fromUtc !== undefined ? { fromUtc: filters.fromUtc } : {}),
+				...(filters.toUtc !== undefined ? { toUtc: filters.toUtc } : {}),
+				...(filters.scheduledJobId !== undefined ? { scheduledJobId: filters.scheduledJobId } : {}),
+			},
+		}),
+	);
+}
+
 export function useScheduledJobRuns(filters: ScheduledJobRunFilters = {}, options: ScheduledJobRunsQueryOptions = {}) {
 	return useQuery({
-		...withResponseValidation(
-			listScheduledJobRunsOptions({
-				// Only the active filters ride the query string; an absent filter is left undefined.
-				query: {
-					...(filters.status !== undefined ? { status: filters.status } : {}),
-					...(filters.fromUtc !== undefined ? { fromUtc: filters.fromUtc } : {}),
-					...(filters.toUtc !== undefined ? { toUtc: filters.toUtc } : {}),
-					...(filters.scheduledJobId !== undefined ? { scheduledJobId: filters.scheduledJobId } : {}),
-				},
-			}),
-		),
+		...scheduledJobRunsQueryOptions(filters),
 		enabled: options.enabled ?? true,
 		refetchInterval: options.refetchInterval,
 		select: (data) => (data.items ?? []).map(toScheduledJobRun),
 	});
+}
+
+// Imperative one-shot fetch of run history (mapped to the domain view-model) for callers that reconcile OUTSIDE the
+// React Query hook lifecycle — e.g. a SignalR catch-up after the model-fit hub (re)connects. staleTime:0 forces a
+// fresh read each call so the reconciliation never sees cached data.
+export async function fetchScheduledJobRuns(
+	queryClient: QueryClient,
+	filters: ScheduledJobRunFilters = {},
+): Promise<ScheduledJobRun[]> {
+	const data = await queryClient.fetchQuery({ ...scheduledJobRunsQueryOptions(filters), staleTime: 0 });
+	return (data.items ?? []).map(toScheduledJobRun);
 }
 
 // One run's detail. Disabled until a run id is supplied so the detail query only fires when a run is selected.

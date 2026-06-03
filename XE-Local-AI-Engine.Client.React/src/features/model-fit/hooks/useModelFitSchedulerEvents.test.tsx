@@ -12,6 +12,7 @@ const signalRMock = vi.hoisted(() => {
 	const connection = {
 		on: vi.fn(),
 		off: vi.fn(),
+		onreconnected: vi.fn(),
 		start: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 		stop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 	};
@@ -45,10 +46,17 @@ vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+// Mock the imperative run-history fetch the on-connect catch-up uses (no real network).
+vi.mock("@/features/scheduler/queries/useScheduler", () => ({
+	fetchScheduledJobRuns: vi.fn().mockResolvedValue([]),
+}));
+
+import type { ScheduledJobRun } from "@/features/scheduler/models/SchedulerModels";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import { modelFitInvalidationKey, modelFitQueryIds } from "@/features/model-fit/queries/useModelFit";
+import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler";
 
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"];
 
@@ -62,7 +70,7 @@ const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
 
 const invalidatedKeys: unknown[] = [];
 
-function renderHub() {
+function renderHub(scheduledJobId?: string) {
 	invalidatedKeys.length = 0;
 	handlers.clear();
 	signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
@@ -76,7 +84,7 @@ function renderHub() {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return renderHook(() => useModelFitSchedulerEvents(), { wrapper: Wrapper });
+	return renderHook(() => useModelFitSchedulerEvents(scheduledJobId), { wrapper: Wrapper });
 }
 
 // Seeds a real query whose key matches the generated full-key shape `[{ _id, ..., query }]`, then drives an event
@@ -108,6 +116,7 @@ describe("useModelFitSchedulerEvents", () => {
 		signalRMock.builder.build.mockReturnValue(signalRMock.connection);
 		signalRMock.connection.start.mockResolvedValue(undefined);
 		signalRMock.connection.stop.mockResolvedValue(undefined);
+		vi.mocked(fetchScheduledJobRuns).mockResolvedValue([]);
 	});
 
 	afterEach(() => {
@@ -250,5 +259,40 @@ describe("useModelFitSchedulerEvents", () => {
 		rerender();
 
 		expect(signalRMock.connection.start.mock.calls.length).toBe(startCallsAfterMount);
+	});
+
+	it("on connect, catches up a missed terminal run via a single REST fetch and toasts it (no polling)", async () => {
+		const missedRun = {
+			id: "run-catchup-1",
+			status: "Failed",
+			actualFireTimeUtc: 1_900_000_000_000,
+			errorMessage: "The approved image is disabled.",
+		} as unknown as ScheduledJobRun;
+		vi.mocked(fetchScheduledJobRuns).mockResolvedValueOnce([missedRun]);
+
+		renderHub("job-mf");
+
+		// start() resolving = the hub connected; the hook runs ONE catch-up fetch (no interval) and toasts the result.
+		await vi.waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith(
+				"The approved image is disabled.",
+				expect.objectContaining({ autoClose: false }),
+			),
+		);
+		expect(vi.mocked(fetchScheduledJobRuns)).toHaveBeenCalledTimes(1);
+		expect(vi.mocked(fetchScheduledJobRuns)).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ scheduledJobId: "job-mf" }),
+		);
+	});
+
+	it("does not run the catch-up fetch when no job id is supplied (push-only)", async () => {
+		renderHub();
+
+		// Let start()'s resolution + the catch-up's early-return microtasks flush.
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(vi.mocked(fetchScheduledJobRuns)).not.toHaveBeenCalled();
 	});
 });
