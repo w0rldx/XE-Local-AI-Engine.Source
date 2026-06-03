@@ -63,7 +63,12 @@ export function useSchedulerHub(): void {
 			connection.on(eventName, invalidateRuns);
 		}
 
-		connection.start().catch((error: unknown) => {
+		let disposed = false;
+		const startPromise = connection.start().catch((error: unknown) => {
+			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
+			if (disposed) {
+				return;
+			}
 			// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
 			// best-effort live invalidation, so a connection failure is surfaced only to the console, never the user.
 			// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
@@ -71,13 +76,18 @@ export function useSchedulerHub(): void {
 		});
 
 		return () => {
+			disposed = true;
 			connection.off(JOB_DEFINITION_CHANGED, invalidateJobs);
 			for (const eventName of RUN_EVENTS) {
 				connection.off(eventName, invalidateRuns);
 			}
-			connection.stop().catch((error: unknown) => {
-				// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
-				console.warn("scheduler hub failed to stop", error);
+			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
+			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
+			startPromise.finally(() => {
+				connection.stop().catch((error: unknown) => {
+					// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
+					console.warn("scheduler hub failed to stop", error);
+				});
 			});
 		};
 	}, [queryClient]);
