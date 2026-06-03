@@ -60,9 +60,7 @@ export function ApprovedImagesPage() {
 							</Text>
 						) : null}
 
-						{!imagesQuery.isLoading && !imagesQuery.error && images.length > 0 ? (
-							<ApprovedImagesTable images={images} />
-						) : null}
+						{!imagesQuery.isLoading && !imagesQuery.error && images.length > 0 ? <ApprovedImagesTable images={images} /> : null}
 					</Stack>
 				</Card>
 			</Stack>

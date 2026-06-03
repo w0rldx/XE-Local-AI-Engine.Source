@@ -5,14 +5,7 @@ import { z } from "zod";
 // string literal union so the selector and query key stay type-safe.
 export type ModelFitUseCase = "general" | "coding" | "reasoning" | "chat" | "multimodal" | "embedding";
 
-export const modelFitUseCases: readonly ModelFitUseCase[] = [
-	"general",
-	"coding",
-	"reasoning",
-	"chat",
-	"multimodal",
-	"embedding",
-];
+export const modelFitUseCases: readonly ModelFitUseCase[] = ["general", "coding", "reasoning", "chat", "multimodal", "embedding"];
 
 // Default use case the page opens on (matches the scheduler template default). The backend defaults providerName
 // to "ollama"; the page only ever queries the single supported provider, so it is a constant here.

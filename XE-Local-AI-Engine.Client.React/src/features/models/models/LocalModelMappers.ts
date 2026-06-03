@@ -16,9 +16,7 @@ import {
 // redacts is reconstructed here — only the fields the API returns surface.
 
 // Projects a generated local-model item into the display view-model (formatted size/date labels, em-dash fallbacks).
-export function toLocalModelViewModel(
-	dto: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse,
-): LocalModelViewModel {
+export function toLocalModelViewModel(dto: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse): LocalModelViewModel {
 	return {
 		modelName: dto.modelName ?? "",
 		sizeLabel: formatModelSize(dto.sizeBytes),
@@ -35,9 +33,7 @@ export function toLocalModelViewModel(
 }
 
 // Derives the pull-progress view-model (status + clamped percent) from the generated pull response.
-export function toPullProgressModel(
-	dto: XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelResponse,
-): PullProgressModel {
+export function toPullProgressModel(dto: XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelResponse): PullProgressModel {
 	const totalBytes = dto.totalBytes ?? null;
 	const completedBytes = dto.completedBytes ?? null;
 	const progressPercent =
