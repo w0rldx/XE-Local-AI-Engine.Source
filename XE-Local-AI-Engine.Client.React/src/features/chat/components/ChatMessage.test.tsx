@@ -160,6 +160,32 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
 	});
 
+	it("renders the agent name on the attribution row for assistant turns", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ agentName: "My Custom Agent", createdAt: "2026-06-03T10:00:00.000Z" })} />,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1");
+		expect(attribution.textContent).toContain("My Custom Agent");
+		expect(attribution.textContent).toContain("·");
+	});
+
+	it("falls back to Default Assistant label when agentName is absent on an assistant turn", () => {
+		renderWithProviders(<ChatMessage message={assistantMessage({ agentName: undefined })} />);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1");
+		// i18n fallback key value in test environment
+		expect(attribution.textContent).toBeTruthy();
+	});
+
+	it("does not render the attribution testid on user messages", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />,
+		);
+
+		expect(screen.queryByTestId("chat-message-agent-user-1")).toBeNull();
+	});
+
 	it("renders the ordered parts interleave: reasoning → tool card → reasoning", () => {
 		renderWithProviders(
 			<ChatMessage

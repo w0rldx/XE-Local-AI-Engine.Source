@@ -31,6 +31,7 @@ describe("nodeCapabilities", () => {
 			clientNodeRouting: false,
 			fileAttachments: false,
 			imageAttachments: false,
+			agentManagement: true,
 		});
 	});
 

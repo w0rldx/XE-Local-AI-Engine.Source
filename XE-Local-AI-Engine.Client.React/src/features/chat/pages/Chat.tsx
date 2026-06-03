@@ -8,6 +8,7 @@ import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict } from "@/features/chat/api/NodeChatConflict";
 import { StreamWatchdogError } from "@/features/chat/api/NodeChatStreamGuard";
@@ -20,7 +21,9 @@ import {
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
+import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import type {
+	AgentOption,
 	ChatConversationModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
@@ -130,12 +133,16 @@ export function Chat() {
 	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
 	const requestedConversationId = useNodeChatPreferencesStore((state) => state.selectedConversationId);
 	const collapsed = useNodeChatPreferencesStore((state) => state.sidebarCollapsed);
+	const agentModeEnabled = useNodeChatPreferencesStore((state) => state.agentModeEnabled);
+	const selectedAgentId = useNodeChatPreferencesStore((state) => state.selectedAgentId);
 	const {
 		setSelectedModel,
 		setReasoningEffort,
 		toggleTools,
 		setSelectedConversationId: setRequestedConversationId,
 		toggleSidebar,
+		toggleAgentMode,
+		setSelectedAgentId,
 	} = useNodeChatPreferencesStore((state) => state.actions);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
@@ -179,6 +186,27 @@ export function Chat() {
 		() => modelOptions.find((option) => option.value === selectedModel),
 		[modelOptions, selectedModel],
 	);
+
+	const agentDefinitionsQuery = useAgentDefinitions();
+	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
+	// Single derivation site — AgentSelectorCard receives this as a prop (no internal query call).
+	// Chat.tsx uses this list to gate send: a stale/deleted selectedAgentId that no longer appears here is
+	// silently dropped → the send falls back to Default Assistant (mode-off behavior).
+	const agentOptions = useMemo<AgentOption[]>(() => {
+		const definitions = agentDefinitionsQuery.data ?? [];
+		return definitions
+			.filter((agent) => agent.name.toLowerCase() !== DEFAULT_ASSISTANT_NAME.toLowerCase())
+			.map((agent) => ({
+				id: agent.id,
+				name: agent.name,
+				description: agent.description,
+				kind: agent.kind,
+				modelProfile: agent.modelProfile,
+			}))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	}, [agentDefinitionsQuery.data]);
+	// agentControlsAvailable: capability gate AND at least one agent in the live list.
+	const agentControlsAvailable = chatUiCapabilities.showAgentControls && agentOptions.length > 0;
 	// Reconcile a persisted model selection against the live list: once the models query has resolved, a
 	// stored model that no longer exists (renamed/removed on the node) falls back to the local default so the
 	// composer never points at a phantom model. Guarded on loaded data so the initial default-only list
@@ -374,7 +402,23 @@ export function Chat() {
 			};
 			const requestModel = toNodeChatRequestModel(model);
 			const startedAt = new Date().toISOString();
-			const optimisticConversation = appendOptimisticNodeChatSend(conversation, ids, content, startedAt, requestModel);
+			// Compute effective agentDefinitionId: only stamp when mode is on, an agent is selected, AND the
+			// selected agent still exists in the live list (stale/deleted ids fall back to Default Assistant).
+			const effectiveAgentId =
+				agentModeEnabled && selectedAgentId && agentOptions.some((a) => a.id === selectedAgentId)
+					? selectedAgentId
+					: undefined;
+			const effectiveAgentName = effectiveAgentId
+				? (agentOptions.find((a) => a.id === effectiveAgentId)?.name ?? undefined)
+				: undefined;
+			const optimisticConversation = appendOptimisticNodeChatSend(
+				conversation,
+				ids,
+				content,
+				startedAt,
+				requestModel,
+				effectiveAgentName,
+			);
 			const abortController = new AbortController();
 
 			cacheConversation(optimisticConversation);
@@ -406,6 +450,7 @@ export function Chat() {
 						// Send the active conversation-tree path so the server assembles context from the selected
 						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
 						selectedPath: Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
+						agentDefinitionId: effectiveAgentId,
 					},
 					abortController.signal,
 				)) {
@@ -453,7 +498,17 @@ export function Chat() {
 				}
 			}
 		},
-		[activeRevisionByGroup, cacheConversation, queryClient, refreshConversation, resolveSendConversation, toolsEnabled],
+		[
+			activeRevisionByGroup,
+			agentModeEnabled,
+			agentOptions,
+			cacheConversation,
+			queryClient,
+			refreshConversation,
+			resolveSendConversation,
+			selectedAgentId,
+			toolsEnabled,
+		],
 	);
 
 	const regenerate = useCallback(
@@ -905,6 +960,12 @@ export function Chat() {
 				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}
 				onToggleTools={toggleTools}
+				agentControlsAvailable={agentControlsAvailable}
+				agentModeEnabled={agentModeEnabled}
+				selectedAgentId={selectedAgentId}
+				agentOptions={agentOptions}
+				onToggleAgentMode={toggleAgentMode}
+				onAgentChange={setSelectedAgentId}
 				onSend={(content, effort, model) => {
 					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}

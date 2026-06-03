@@ -35,6 +35,12 @@ export function ChatDisplayShell({
 	onModelChange,
 	onReasoningEffortChange,
 	onToggleTools,
+	agentControlsAvailable = false,
+	agentModeEnabled = false,
+	selectedAgentId = "",
+	agentOptions = [],
+	onToggleAgentMode,
+	onAgentChange,
 	onSend,
 	onCancel,
 	onRegenerate,
@@ -157,10 +163,16 @@ export function ChatDisplayShell({
 					selectedModel={selectedModel}
 					reasoningEffort={reasoningEffort}
 					toolsEnabled={toolsEnabled}
+					agentControlsAvailable={agentControlsAvailable}
+					agentModeEnabled={agentModeEnabled}
+					selectedAgentId={selectedAgentId}
+					agentOptions={agentOptions}
 					onCancel={onCancel}
 					onModelChange={onModelChange}
 					onReasoningEffortChange={onReasoningEffortChange}
 					onToggleTools={onToggleTools}
+					onToggleAgentMode={onToggleAgentMode}
+					onAgentChange={onAgentChange}
 					onSend={onSend}
 				/>
 			</Stack>

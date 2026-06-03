@@ -15,6 +15,9 @@ export interface NodeChatStreamRequestDto {
 	// Selected-path map {variantGroupId -> selectedMessageId} for the just-clicked conversation tree path. The
 	// server persists it and assembles context from the selected branch only; absent falls back to the stored map.
 	selectedPath?: Record<string, string>;
+	// Agent to resolve for this turn. Absent/null → Default Assistant (today's built-in chat path). This is a
+	// HAND-TYPED SSE DTO field (not generated), so it is safe to add here without touching NodeChatMapper.ts.
+	agentDefinitionId?: string;
 }
 
 export interface NodeChatStreamEventDto {

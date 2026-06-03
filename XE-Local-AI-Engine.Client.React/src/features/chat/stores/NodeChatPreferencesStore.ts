@@ -12,6 +12,8 @@ const REASONING_EFFORT_STORAGE_KEY = "xe-node-chat-reasoning-effort";
 const TOOLS_ENABLED_STORAGE_KEY = "xe-node-chat-tools-enabled";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "xe-node-chat-sidebar-collapsed";
 const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
+const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
+const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 
 // Single source of truth for the selectable reasoning efforts: the hydrate-validation set here and the
 // composer's availableReasoningEfforts prop both read from this list.
@@ -23,6 +25,11 @@ interface NodeChatPreferencesStore {
 	toolsEnabled: boolean;
 	sidebarCollapsed: boolean;
 	selectedConversationId: string;
+	// Agent mode: when enabled the composer shows the agent picker and stamps the selected agent on each send.
+	// agentModeEnabled persists the toggle; selectedAgentId persists the last-chosen agent (may be stale if the
+	// agent was deleted — Chat.tsx validates against the live list on read and drops stale ids).
+	agentModeEnabled: boolean;
+	selectedAgentId: string;
 	actions: {
 		setSelectedModel: (value: string) => void;
 		setReasoningEffort: (value: ReasoningEffort) => void;
@@ -31,6 +38,9 @@ interface NodeChatPreferencesStore {
 		setSidebarCollapsed: (value: boolean) => void;
 		toggleSidebar: () => void;
 		setSelectedConversationId: (value: string) => void;
+		setAgentModeEnabled: (value: boolean) => void;
+		toggleAgentMode: () => void;
+		setSelectedAgentId: (value: string) => void;
 	};
 }
 
@@ -72,12 +82,22 @@ function readStoredSelectedConversationId(): string {
 	return readStoredString(SELECTED_CONVERSATION_STORAGE_KEY) ?? "";
 }
 
+function readStoredAgentModeEnabled(): boolean {
+	return readStoredString(AGENT_MODE_ENABLED_STORAGE_KEY) === "true";
+}
+
+function readStoredSelectedAgentId(): string {
+	return readStoredString(SELECTED_AGENT_STORAGE_KEY) ?? "";
+}
+
 export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((set) => ({
 	selectedModel: readStoredModel(),
 	reasoningEffort: readStoredReasoningEffort(),
 	toolsEnabled: readStoredToolsEnabled(),
 	sidebarCollapsed: readStoredSidebarCollapsed(),
 	selectedConversationId: readStoredSelectedConversationId(),
+	agentModeEnabled: readStoredAgentModeEnabled(),
+	selectedAgentId: readStoredSelectedAgentId(),
 	actions: {
 		setSelectedModel: (value) => {
 			writeStoredValue(SELECTED_MODEL_STORAGE_KEY, value);
@@ -114,6 +134,22 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 		setSelectedConversationId: (value) => {
 			writeStoredValue(SELECTED_CONVERSATION_STORAGE_KEY, value);
 			set({ selectedConversationId: value });
+		},
+		setAgentModeEnabled: (value) => {
+			writeStoredValue(AGENT_MODE_ENABLED_STORAGE_KEY, String(value));
+			set({ agentModeEnabled: value });
+		},
+		toggleAgentMode: () => {
+			set((state) => {
+				const nextValue = !state.agentModeEnabled;
+				writeStoredValue(AGENT_MODE_ENABLED_STORAGE_KEY, String(nextValue));
+
+				return { agentModeEnabled: nextValue };
+			});
+		},
+		setSelectedAgentId: (value) => {
+			writeStoredValue(SELECTED_AGENT_STORAGE_KEY, value);
+			set({ selectedAgentId: value });
 		},
 	},
 }));

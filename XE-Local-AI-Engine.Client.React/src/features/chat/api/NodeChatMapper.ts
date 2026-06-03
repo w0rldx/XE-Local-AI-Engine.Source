@@ -156,6 +156,10 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		// control stays neutral instead of defaulting to a thumbs-up. Comment is dropped when there is no rating.
 		feedbackRating: dto.feedbackRating != null ? toRating(dto.feedbackRating) : undefined,
 		feedbackComment: dto.feedbackRating != null ? (dto.feedbackComment ?? undefined) : undefined,
+		// Agent attribution fields stamped at send time (ride metadata_json blob, trailing members — §6 of the plan).
+		// Absent for legacy turns (null on the wire → undefined here); ChatMessage falls back to "Default Assistant".
+		agentName: dto.agentName ?? undefined,
+		agentDefinitionId: dto.agentDefinitionId ?? undefined,
 	};
 }
 

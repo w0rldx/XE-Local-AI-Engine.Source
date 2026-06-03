@@ -1,4 +1,4 @@
-import { ActionIcon, Avatar, Badge, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Avatar, Badge, Box, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
 import {
 	IconCheck,
 	IconChevronLeft,
@@ -105,6 +105,13 @@ export function ChatMessage({
 	const assistantMessage = message.role === "assistant";
 	const content = message.content.trim().length > 0 ? message.content : placeholder;
 	const time = timeText(message.updatedAt ?? message.createdAt);
+	// Agent attribution: falls back to "Default Assistant" so every assistant turn shows a name.
+	// During streaming, message.agentName is undefined (live attribution = locally-selected agent name is
+	// stamped optimistically at send time — see appendOptimisticNodeChatSend). The fallback ensures legacy
+	// turns and streaming turns without a name still display the default label.
+	const agentDisplayName = assistantMessage
+		? (message.agentName ?? t("pages.chat.defaultAgentName", "Default Assistant"))
+		: undefined;
 	const hasContentStarted = message.content.trim().length > 0;
 	const parts = assistantMessage ? resolveParts(message, streamingParts) : EMPTY_PARTS;
 	const canCopy = hasContentStarted && !isStreaming;
@@ -247,11 +254,6 @@ export function ChatMessage({
 					<Text size="sm" fw={600} data-testid={`chat-message-role-${message.id}`}>
 						{assistantMessage ? t("pages.chat.nodeReply", "Node reply") : label}
 					</Text>
-					{time ? (
-						<Text size="xs" c="dimmed">
-							· {time}
-						</Text>
-					) : null}
 					{assistantMessage && isStreaming ? (
 						<Badge
 							variant="light"
@@ -300,7 +302,23 @@ export function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
-				{actions}
+				{assistantMessage && (agentDisplayName || time) ? (
+					// Attribution row: left side holds action icons (real empty Box when null, so space-between pins
+					// right side even during streaming when actions is null). Right side = agentName · time.
+					<Group justify="space-between" align="center" wrap="nowrap" gap={4}>
+						<Box>{actions}</Box>
+						<Text
+							size="xs"
+							c="dimmed"
+							data-testid={`chat-message-agent-${message.id}`}
+							style={{ flexShrink: 0 }}
+						>
+							{[agentDisplayName, time].filter(Boolean).join(" · ")}
+						</Text>
+					</Group>
+				) : (
+					actions
+				)}
 				{footer}
 			</Stack>
 		</Group>

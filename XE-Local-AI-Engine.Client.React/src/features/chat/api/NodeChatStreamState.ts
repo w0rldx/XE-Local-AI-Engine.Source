@@ -306,6 +306,7 @@ export function appendOptimisticNodeChatSend(
 	content: string,
 	nowIso: string,
 	model?: string,
+	agentName?: string,
 ): ChatConversationModel {
 	const nextSortOrder = maxSortOrder(conversation.messages) + 1;
 	const userMessage: ChatMessageModel = {
@@ -328,6 +329,9 @@ export function appendOptimisticNodeChatSend(
 		updatedAt: nowIso,
 		sortOrder: nextSortOrder + 1,
 		model,
+		// Optimistically stamp the agent name so the attribution row is visible during streaming.
+		// The persisted name (from metadata_json) replaces this on the post-stream refetch.
+		agentName,
 	};
 
 	return {
