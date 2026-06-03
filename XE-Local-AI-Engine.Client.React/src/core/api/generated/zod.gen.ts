@@ -836,6 +836,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	feedbackRating: z.string().nullish(),
 	feedbackComment: z.string().nullish(),
 	parts: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessagePart).nullish(),
+	agentDefinitionId: z.guid().nullish(),
+	agentName: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({

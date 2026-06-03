@@ -6231,6 +6231,15 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatMessagePart"
             }
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "agentName": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
