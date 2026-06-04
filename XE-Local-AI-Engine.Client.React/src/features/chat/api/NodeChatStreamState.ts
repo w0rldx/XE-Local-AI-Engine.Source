@@ -432,6 +432,11 @@ export function applyNodeChatStreamEvent(
 		updatedAt: eventTime,
 		sortOrder: existing?.sortOrder ?? maxSortOrder(conversation.messages) + 1,
 		model: event.model ?? existing?.model,
+		// Stream events carry no agent attribution, so always carry it forward from the optimistic message
+		// (stamped in appendOptimisticNodeChatSend) — otherwise the rebuild drops it and the attribution row
+		// falls back to "Default Assistant" until the post-stream refetch reloads the persisted name.
+		agentName: existing?.agentName,
+		agentDefinitionId: existing?.agentDefinitionId,
 		error: event.error ?? undefined,
 		inputTokens: event.inputTokens ?? existing?.inputTokens,
 		outputTokens: event.outputTokens ?? existing?.outputTokens,
@@ -489,6 +494,9 @@ export function markNodeChatStreamTerminated(
 		updatedAt: nowIso,
 		sortOrder: existing?.sortOrder ?? maxSortOrder(conversation.messages) + 1,
 		model: existing?.model,
+		// Carry agent attribution forward so a cancelled/failed/interrupted terminal state keeps the agent name.
+		agentName: existing?.agentName,
+		agentDefinitionId: existing?.agentDefinitionId,
 		error,
 		inputTokens: existing?.inputTokens,
 		outputTokens: existing?.outputTokens,

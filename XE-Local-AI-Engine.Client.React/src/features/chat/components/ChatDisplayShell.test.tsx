@@ -137,4 +137,43 @@ describe("ChatDisplayShell tool-call parts pass-through", () => {
 		expect(screen.getByText("No messages yet.")).toBeTruthy();
 		expect(screen.queryByText("Loading messages…")).toBeNull();
 	});
+
+	it("surfaces the optimistically-stamped agent name on a live streaming turn before any content arrives", () => {
+		// The optimistic assistant row carries the selected agent but has empty content, so it is filtered out of
+		// the persisted message list — the synthesized streaming turn must still read its agentName, otherwise the
+		// live turn falls back to "Default Assistant" until the post-stream refetch (the regression we are guarding).
+		const streamingConversation: ChatConversationModel = {
+			...conversation,
+			messages: [
+				{
+					id: "assistant-stream",
+					conversationId: "conversation-1",
+					role: "assistant",
+					content: "",
+					status: "pending",
+					createdAt: "2026-05-24T00:00:03.000Z",
+					sortOrder: 2,
+					agentName: "Code Reviewer",
+					agentDefinitionId: "agent-code-reviewer",
+				},
+			],
+		};
+
+		renderWithProviders(
+			<ChatDisplayShell
+				{...shellProps({
+					conversations: [streamingConversation],
+					streamingMessage: {
+						conversationId: "conversation-1",
+						messageId: "assistant-stream",
+						content: "",
+						isActive: true,
+					},
+				})}
+			/>,
+		);
+
+		expect(screen.getByText(/Code Reviewer/)).toBeTruthy();
+		expect(screen.queryByText(/Default Assistant/)).toBeNull();
+	});
 });

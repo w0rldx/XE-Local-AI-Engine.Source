@@ -79,6 +79,9 @@ describe("PullModelDialog", () => {
 			"https://ollama.com/library",
 		);
 
+		// The Hugging Face GGUF syntax hint tells operators they can also pull hf.co/<org>/<repo>:<quant>.
+		expect(within(guidance).getByTestId("pull-model-huggingface-hint").textContent).toMatch(/hf\.co/i);
+
 		// The deliberate unvetted-weights warning is present.
 		const warning = within(dialog).getByTestId("pull-model-warning");
 		expect(warning.textContent).toMatch(/unvetted/i);

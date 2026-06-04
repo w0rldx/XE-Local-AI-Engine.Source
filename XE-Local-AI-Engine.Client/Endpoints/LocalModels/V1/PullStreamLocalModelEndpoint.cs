@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -20,7 +21,12 @@ public sealed class PullStreamLocalModelEndpoint(
     IOllamaModelService modelService,
     ModelNameValidator modelNameValidator) : Endpoint<PullLocalModelRequest>
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    // Omit null properties so the optional `error` field is written only on the terminal failure line — the
+    // success/progress lines stay the exact `{status, completedBytes, totalBytes}` shape (sanitization invariant).
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     /// <summary>
     ///     Minimum gap between progress lines while the status is unchanged. Ollama emits many "downloading" updates
@@ -60,31 +66,48 @@ public sealed class PullStreamLocalModelEndpoint(
         var lastWriteMs = 0L;
         PullStreamProgressEvent? pending = null;
 
-        await foreach (var progress in _modelService.PullModelAsync(modelName, ct).ConfigureAwait(false))
+        try
         {
-            // Sanitize: emit only the three safe fields — never raw Ollama payloads, paths, or tokens.
-            var sanitized = new PullStreamProgressEvent
+            await foreach (var progress in _modelService.PullModelAsync(modelName, ct).ConfigureAwait(false))
             {
-                Status = string.IsNullOrWhiteSpace(progress.Status) ? string.Empty : progress.Status,
-                CompletedBytes = progress.Completed,
-                TotalBytes = progress.Total
-            };
+                // Sanitize: emit only the three safe fields — never raw Ollama payloads, paths, or tokens.
+                var sanitized = new PullStreamProgressEvent
+                {
+                    Status = string.IsNullOrWhiteSpace(progress.Status) ? string.Empty : progress.Status,
+                    CompletedBytes = progress.Completed,
+                    TotalBytes = progress.Total
+                };
 
-            // Coalesce same-status updates to at most one per ProgressThrottleMs; a status (phase) change always
-            // flushes immediately. Anything skipped is held as `pending` so the most recent update is never lost.
-            var statusChanged = !string.Equals(sanitized.Status, lastStatus, StringComparison.Ordinal);
-            var now = Environment.TickCount64;
-            if (statusChanged || now - lastWriteMs >= ProgressThrottleMs)
-            {
-                await WriteEventAsync(sanitized, ct).ConfigureAwait(false);
-                lastStatus = sanitized.Status;
-                lastWriteMs = now;
-                pending = null;
+                // Coalesce same-status updates to at most one per ProgressThrottleMs; a status (phase) change always
+                // flushes immediately. Anything skipped is held as `pending` so the most recent update is never lost.
+                var statusChanged = !string.Equals(sanitized.Status, lastStatus, StringComparison.Ordinal);
+                var now = Environment.TickCount64;
+                if (statusChanged || now - lastWriteMs >= ProgressThrottleMs)
+                {
+                    await WriteEventAsync(sanitized, ct).ConfigureAwait(false);
+                    lastStatus = sanitized.Status;
+                    lastWriteMs = now;
+                    pending = null;
+                }
+                else
+                {
+                    pending = sanitized;
+                }
             }
-            else
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // OllamaSharp can throw mid-enumeration (e.g. a non-existent model -> "pull model manifest: file does not
+            // exist"). By this point the 200 + content-type are already committed, so rethrowing would tear the stream
+            // (Kestrel: "response has already started") and leave the client's reader hanging with no terminal line.
+            // Instead emit ONE sanitized terminal error line and return — the client surfaces it as a failure toast.
+            var terminal = new PullStreamProgressEvent
             {
-                pending = sanitized;
-            }
+                Status = "error",
+                Error = SanitizePullError(ex)
+            };
+            await WriteEventAsync(terminal, ct).ConfigureAwait(false);
+            return;
         }
 
         // Always flush the final update (e.g. the terminal "success" line / final 100% byte count) even if it fell
@@ -93,6 +116,20 @@ public sealed class PullStreamLocalModelEndpoint(
         {
             await WriteEventAsync(pending, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     Maps an exception thrown during the pull enumeration to a short, stable, sanitized reason. Never forwards the
+    ///     raw exception message (it can carry filesystem paths, tokens, or other Ollama internals): a manifest /
+    ///     not-found / file-does-not-exist failure becomes <c>"Model not found"</c>, everything else <c>"Pull failed"</c>.
+    /// </summary>
+    private static string SanitizePullError(Exception ex)
+    {
+        var message = ex.Message ?? string.Empty;
+        var notFound = message.Contains("file does not exist", StringComparison.OrdinalIgnoreCase)
+                       || message.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                       || message.Contains("manifest", StringComparison.OrdinalIgnoreCase);
+        return notFound ? "Model not found" : "Pull failed";
     }
 
     private async Task WriteEventAsync(PullStreamProgressEvent sanitized, CancellationToken ct)

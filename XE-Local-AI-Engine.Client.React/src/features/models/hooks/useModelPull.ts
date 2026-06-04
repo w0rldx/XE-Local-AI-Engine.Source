@@ -89,7 +89,18 @@ export function useModelPull(): UseModelPullResult {
 					// React/Mantine with hundreds of re-renders per second.
 					let lastStatus: string | undefined;
 					let lastEmitMs = 0;
+					// Track the terminal state so we never report success on a torn/aborted stream. Ollama's final
+					// line is status "success"; the backend emits status "error" (with an `error` reason) when the
+					// pull fails mid-stream. If the loop ends without either, the stream was torn -> treat as failure.
+					let sawSuccess = false;
 					for await (const event of streamModelPull(trimmed, controller.signal)) {
+						// A terminal error line from the backend (sanitized reason) -> fail via the catch path below.
+						if (event.status === "error" || event.error !== undefined) {
+							throw new Error(event.error ?? "pull failed");
+						}
+						if (event.status === "success") {
+							sawSuccess = true;
+						}
 						const statusChanged = event.status !== lastStatus;
 						const now = Date.now();
 						if (!statusChanged && now - lastEmitMs < PROGRESS_THROTTLE_MS) {
@@ -100,6 +111,13 @@ export function useModelPull(): UseModelPullResult {
 						const percent = toPercent(event.completedBytes, event.totalBytes);
 						setProgressPercent(percent);
 						toast.progress({ id: toastId, title, message: event.status, percent });
+					}
+
+					// Guard against a connection torn mid-stream (Kestrel "response already started" tear): the loop
+					// ends cleanly but no "success" line ever arrived. Treat that as a failure rather than a silent
+					// success toast, so the dialog/toast surface the error and the dialog becomes closable.
+					if (!sawSuccess) {
+						throw new Error("pull stream ended without success");
 					}
 
 					toast.success(translate("pages.models.pull.toast.success", "{{model}} is ready.", { model: trimmed }), {

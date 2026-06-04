@@ -99,6 +99,57 @@ public sealed class PullStreamEndpointTests
         modelService.DidNotReceiveWithAnyArgs().PullModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task PullStream_WhenProviderThrowsMidStream_Ends200WithSanitizedTerminalErrorLine()
+    {
+        // Arrange — a non-existent model: Ollama emits one "pulling manifest" line (which commits the 200 response)
+        // then OllamaSharp throws inside the enumeration. The endpoint must NOT rethrow (that tears the stream) — it
+        // emits ONE terminal error line and ends 200 so the client's reader sees a clean terminal failure.
+        var modelService = Substitute.For<IOllamaModelService>();
+        modelService.PullModelAsync("ghost:latest", Arg.Any<CancellationToken>())
+                    .Returns(BuildThrowingSequence());
+
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IOllamaModelService>();
+                services.AddSingleton(modelService);
+            }
+        };
+
+        using var client = factory.CreateClient();
+        using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/models/pull/stream");
+        request.Content = JsonContent.Create(new PullLocalModelRequest { ModelName = "ghost:latest" });
+
+        // Act
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+
+        // Assert — the response still completes 200 (no tear) and ends with a sanitized error line.
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // First the committed "pulling manifest" line, then the terminal error line.
+        AssertEx.Equal(2, lines.Length);
+        AssertEx.Equal("pulling manifest", ParseEvent(lines[0]).Status);
+
+        var terminal = ParseEvent(lines[^1]);
+        AssertEx.Equal("error", terminal.Status);
+        // The "file does not exist" message maps to the stable short reason; the raw message must NOT leak.
+        AssertEx.Equal("Model not found", terminal.Error);
+
+        // Sanitization invariant: only {status, completedBytes, totalBytes, error} ever go on the wire.
+        foreach (var line in lines)
+        {
+            using var doc = JsonDocument.Parse(line);
+            var props = doc.RootElement.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            AssertEx.True(props.IsSubsetOf(["status", "completedBytes", "totalBytes", "error"]),
+                "Sanitized event must contain only {status, completedBytes, totalBytes, error}.");
+        }
+    }
+
     private static async IAsyncEnumerable<PullModelResponse> BuildProgressSequence()
     {
         // Ollama sends 0 (not null) when there is no byte-progress data for a line.
@@ -107,6 +158,16 @@ public sealed class PullStreamEndpointTests
         yield return new PullModelResponse { Status = "success", Total = 0L, Completed = 0L };
 
         await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    private static async IAsyncEnumerable<PullModelResponse> BuildThrowingSequence()
+    {
+        // First a real line that commits the 200 response, then a throw mid-enumeration (mirrors OllamaSharp's
+        // ResponseError "pull model manifest: file does not exist" for a non-existent model).
+        yield return new PullModelResponse { Status = "pulling manifest", Total = 0L, Completed = 0L };
+
+        await Task.Yield();
+        throw new InvalidOperationException("pull model manifest: file does not exist");
     }
 
     private static PullStreamProgressEvent ParseEvent(string line)

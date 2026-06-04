@@ -106,9 +106,9 @@ export function ChatMessage({
 	const content = message.content.trim().length > 0 ? message.content : placeholder;
 	const time = timeText(message.updatedAt ?? message.createdAt);
 	// Agent attribution: falls back to "Default Assistant" so every assistant turn shows a name.
-	// During streaming, message.agentName is undefined (live attribution = locally-selected agent name is
-	// stamped optimistically at send time — see appendOptimisticNodeChatSend). The fallback ensures legacy
-	// turns and streaming turns without a name still display the default label.
+	// During streaming, message.agentName is the locally-selected agent name stamped optimistically at send
+	// time (see appendOptimisticNodeChatSend) and carried through every stream-state rebuild, so the correct
+	// agent shows live. The fallback only covers legacy turns and turns sent with no agent selected.
 	const agentDisplayName = assistantMessage
 		? (message.agentName ?? t("pages.chat.defaultAgentName", "Default Assistant"))
 		: undefined;
