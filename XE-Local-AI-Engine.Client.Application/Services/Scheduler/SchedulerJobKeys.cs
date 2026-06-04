@@ -27,4 +27,13 @@ public static class SchedulerJobKeys
     ///     the per-fire map can override a stored parameter.
     /// </summary>
     public const string ModelFitUseCaseOverrideKey = "modelFitUseCaseOverride";
+
+    /// <summary>
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a recommendation breadth (<c>--limit</c>) override for
+    ///     a model-fit recommendation refresh. Like <see cref="ModelFitUseCaseOverrideKey" /> it is set only on a manual
+    ///     <c>TriggerNowAsync</c> fire (never on the recurring cron fire) and the dispatcher merges ONLY this whitelisted
+    ///     key over the stored parameters — written back as a JSON number so the handler's numeric <c>limit</c> parse is
+    ///     unchanged. The value is validated to the supported <c>1..50</c> range before it is stamped.
+    /// </summary>
+    public const string ModelFitLimitOverrideKey = "modelFitLimitOverride";
 }

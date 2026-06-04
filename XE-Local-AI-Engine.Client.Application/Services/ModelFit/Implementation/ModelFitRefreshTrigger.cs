@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
@@ -16,6 +17,7 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
     public async Task TriggerRecommendationRefreshAsync(
         Guid scheduledJobId,
         string? useCaseOverride = null,
+        int? limitOverride = null,
         CancellationToken cancellationToken = default)
     {
         var definition = await _scheduledJobManagementService.GetJobAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
@@ -28,11 +30,12 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
             throw new ScheduledJobValidationException("The scheduled job is not a model-recommendation-check job.");
         }
 
-        // Widen the run to the selected use-case ONLY when supplied, and ONLY after allowlisting it against the same six
-        // llmfit-supported values the validator enforces — never free text into the run. An empty/null override fires the
-        // definition's baked use-case unchanged (back-compat). The override rides the per-fire JobDataMap; the dispatcher
-        // merges only this whitelisted key over the stored parameters.
-        IReadOnlyDictionary<string, string>? parameterOverrides = null;
+        // Widen the run ONLY by the whitelisted keys, each validated exactly as the run validator would BEFORE anything
+        // fires — never free text into the run. Empty/null overrides fire the definition's baked values unchanged
+        // (back-compat). The overrides ride the per-fire JobDataMap; the dispatcher merges only these whitelisted keys
+        // over the stored parameters.
+        var parameterOverrides = new Dictionary<string, string>(StringComparer.Ordinal);
+
         if (!string.IsNullOrWhiteSpace(useCaseOverride))
         {
             if (!ModelFitRequestValidator.AllowedUseCases.Contains(useCaseOverride))
@@ -40,14 +43,25 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
                 throw new ScheduledJobValidationException("Use case is not supported.");
             }
 
-            parameterOverrides = new Dictionary<string, string>(StringComparer.Ordinal)
+            parameterOverrides[SchedulerJobKeys.ModelFitUseCaseOverrideKey] = useCaseOverride;
+        }
+
+        if (limitOverride is { } limit)
+        {
+            if (limit is < ModelFitRequestValidator.MinLimit or > ModelFitRequestValidator.MaxLimit)
             {
-                [SchedulerJobKeys.ModelFitUseCaseOverrideKey] = useCaseOverride
-            };
+                throw new ScheduledJobValidationException("Limit is out of range.");
+            }
+
+            parameterOverrides[SchedulerJobKeys.ModelFitLimitOverrideKey] = limit.ToString(CultureInfo.InvariantCulture);
         }
 
         // Delegate to the scheduler; it performs its own enabled/deleted/forbidden/unscheduled validation and fires the
-        // existing definition. The dispatcher → Marker 3 handler does the work and owns the run history.
-        await _scheduledJobManagementService.TriggerNowAsync(scheduledJobId, parameterOverrides, cancellationToken).ConfigureAwait(false);
+        // existing definition. No override supplied → pass null so the dispatcher takes the unchanged cron/back-compat
+        // path. The dispatcher → Marker 3 handler does the work and owns the run history.
+        await _scheduledJobManagementService.TriggerNowAsync(
+            scheduledJobId,
+            parameterOverrides.Count == 0 ? null : parameterOverrides,
+            cancellationToken).ConfigureAwait(false);
     }
 }

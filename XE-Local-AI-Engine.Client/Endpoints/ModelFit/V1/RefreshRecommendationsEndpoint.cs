@@ -38,9 +38,18 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
             return;
         }
 
+        // Reject an out-of-range breadth override with a 400 BEFORE anything fires. Like the use-case, the limit is the
+        // only other widened parameter and is bounded to the same 1..50 the run validator enforces. Null = baked limit.
+        if (req.Limit is { } limit && limit is < ModelFitRequestValidator.MinLimit or > ModelFitRequestValidator.MaxLimit)
+        {
+            AddError("Limit is out of range.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
-            await _modelFitRefreshTrigger.TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, ct).ConfigureAwait(false);
+            await _modelFitRefreshTrigger.TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, ct).ConfigureAwait(false);
             await Send.OkAsync(new RefreshRecommendationsResponse
                 {
                     ScheduledJobId = req.ScheduledJobId

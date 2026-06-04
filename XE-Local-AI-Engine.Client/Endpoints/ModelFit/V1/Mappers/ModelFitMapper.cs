@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
@@ -86,8 +87,36 @@ internal static class ModelFitMapper
             RequiredVramMb = record.RequiredVramMb,
             ContextTokens = record.ContextTokens,
             IsInstalled = record.IsInstalled,
-            PullModelName = record.PullModelName
+            PullModelName = record.PullModelName,
+            ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson)
         };
+
+    /// <summary>
+    ///     Pulls ONLY the <c>release_date</c> string out of the persisted diagnostics blob (the rest stays server-side, so
+    ///     the row projection remains sanitized). Tolerant: a null/blank/malformed blob, a non-object root, or a missing /
+    ///     non-string <c>release_date</c> all yield <c>null</c>.
+    /// </summary>
+    private static string? ExtractReleaseDate(string? diagnosticsJson)
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("release_date", out var releaseDate)
+                   && releaseDate.ValueKind == JsonValueKind.String
+                ? releaseDate.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static IReadOnlyList<string> MapPurpose(UtilityImagePurpose purpose)
     {

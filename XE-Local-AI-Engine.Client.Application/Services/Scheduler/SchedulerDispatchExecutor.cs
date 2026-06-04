@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -229,26 +230,46 @@ internal sealed class SchedulerDispatchExecutor(
     }
 
     /// <summary>
-    ///     The single whitelisted parameter key a per-fire override may replace. Compared case-insensitively against the
-    ///     stored JSON's property names; the stored key's original casing is preserved when it already exists.
+    ///     The whitelisted parameter keys a per-fire override may replace. Compared case-insensitively against the stored
+    ///     JSON's property names; the stored key's original casing is preserved when it already exists.
     /// </summary>
     private const string OverridableUseCaseProperty = "useCase";
 
+    private const string OverridableLimitProperty = "limit";
+
     /// <summary>
-    ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted use-case property replaced by the
-    ///     per-fire override, leaving every other property untouched. The stored definition is never mutated — this works
-    ///     on a parsed copy. No override, no use-case key in the override, or unparseable/empty stored JSON returns the
-    ///     stored JSON verbatim (the handler then validates it exactly as it would a normal fire), so an override can never
-    ///     fabricate parameters or override anything other than the use-case.
+    ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted <c>useCase</c> and/or <c>limit</c>
+    ///     properties replaced by the per-fire override, leaving every other property untouched. The stored definition is
+    ///     never mutated — this works on a parsed copy. No override, no whitelisted key in the override, or
+    ///     unparseable/empty stored JSON returns the stored JSON verbatim (the handler then validates it exactly as it
+    ///     would a normal fire), so an override can never fabricate parameters or override anything other than the two
+    ///     whitelisted keys. The <c>limit</c> override is written back as a JSON number (the stored shape), so the
+    ///     handler's numeric parse is unchanged.
     /// </summary>
     private static string? ApplyParameterOverrides(
         string? storedParametersJson,
         IReadOnlyDictionary<string, string>? parameterOverrides)
     {
-        if (parameterOverrides is null
-            || !parameterOverrides.TryGetValue(SchedulerJobKeys.ModelFitUseCaseOverrideKey, out var useCaseOverride)
-            || string.IsNullOrWhiteSpace(useCaseOverride)
-            || string.IsNullOrWhiteSpace(storedParametersJson))
+        if (parameterOverrides is null || string.IsNullOrWhiteSpace(storedParametersJson))
+        {
+            return storedParametersJson;
+        }
+
+        string? useCaseOverride = null;
+        if (parameterOverrides.TryGetValue(SchedulerJobKeys.ModelFitUseCaseOverrideKey, out var useCaseValue)
+            && !string.IsNullOrWhiteSpace(useCaseValue))
+        {
+            useCaseOverride = useCaseValue;
+        }
+
+        int? limitOverride = null;
+        if (parameterOverrides.TryGetValue(SchedulerJobKeys.ModelFitLimitOverrideKey, out var limitValue)
+            && int.TryParse(limitValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLimit))
+        {
+            limitOverride = parsedLimit;
+        }
+
+        if (useCaseOverride is null && limitOverride is null)
         {
             return storedParametersJson;
         }
@@ -269,15 +290,32 @@ internal sealed class SchedulerDispatchExecutor(
             return storedParametersJson;
         }
 
-        // Replace the existing use-case property in place (preserving its original casing) or add a camelCase one when
-        // the stored JSON has none. Either way ONLY the use-case is changed.
-        var existingKey = parametersObject
-            .Select(pair => pair.Key)
-            .FirstOrDefault(key => string.Equals(key, OverridableUseCaseProperty, StringComparison.OrdinalIgnoreCase));
+        if (useCaseOverride is not null)
+        {
+            SetWhitelistedProperty(parametersObject, OverridableUseCaseProperty, JsonValue.Create(useCaseOverride));
+        }
 
-        parametersObject[existingKey ?? OverridableUseCaseProperty] = useCaseOverride;
+        if (limitOverride is { } limit)
+        {
+            // The stored `limit` is a JSON number; write the override as a number so the handler's int parse still works.
+            SetWhitelistedProperty(parametersObject, OverridableLimitProperty, JsonValue.Create(limit));
+        }
 
         return parametersObject.ToJsonString();
+    }
+
+    /// <summary>
+    ///     Sets <paramref name="property" /> on <paramref name="parametersObject" /> to <paramref name="value" />,
+    ///     replacing an existing property in place (preserving its original casing) or adding a camelCase one when absent.
+    ///     ONLY the named whitelisted property is touched; every other stored parameter is left untouched.
+    /// </summary>
+    private static void SetWhitelistedProperty(JsonObject parametersObject, string property, JsonNode? value)
+    {
+        var existingKey = parametersObject
+            .Select(pair => pair.Key)
+            .FirstOrDefault(key => string.Equals(key, property, StringComparison.OrdinalIgnoreCase));
+
+        parametersObject[existingKey ?? property] = value;
     }
 
     private Func<string, int?, CancellationToken, Task> BuildProgressReporter(Guid runId, Guid scheduledJobId)

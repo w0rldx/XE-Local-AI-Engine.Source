@@ -62,6 +62,7 @@ export function toModelFitRecommendation(
 		contextTokens: dto.contextTokens ?? null,
 		isInstalled: dto.isInstalled ?? false,
 		pullModelName: dto.pullModelName ?? null,
+		releaseDate: dto.releaseDate ?? null,
 	};
 }
 

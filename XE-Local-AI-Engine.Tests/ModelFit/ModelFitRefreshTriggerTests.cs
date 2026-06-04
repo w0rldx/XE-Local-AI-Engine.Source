@@ -80,7 +80,7 @@ public sealed class ModelFitRefreshTriggerTests
                   .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
         var trigger = new ModelFitRefreshTrigger(management);
 
-        await trigger.TriggerRecommendationRefreshAsync(jobId, "general", CancellationToken.None);
+        await trigger.TriggerRecommendationRefreshAsync(jobId, "general", cancellationToken: CancellationToken.None);
 
         // The validated use-case rides the per-fire override map under the whitelisted key — and nothing else.
         await management.Received(1).TriggerNowAsync(
@@ -90,6 +90,49 @@ public sealed class ModelFitRefreshTriggerTests
                 && overrides.Count == 1
                 && overrides.ContainsKey(SchedulerJobKeys.ModelFitUseCaseOverrideKey)
                 && overrides[SchedulerJobKeys.ModelFitUseCaseOverrideKey] == "general"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Refresh_WhenLimitSupplied_TriggersWithBoundedLimit()
+    {
+        var jobId = Guid.NewGuid();
+        var management = Substitute.For<IScheduledJobManagementService>();
+        management.GetJobAsync(jobId, Arg.Any<CancellationToken>())
+                  .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
+        var trigger = new ModelFitRefreshTrigger(management);
+
+        await trigger.TriggerRecommendationRefreshAsync(jobId, limitOverride: 20, cancellationToken: CancellationToken.None);
+
+        // The validated limit rides the per-fire override map under its own whitelisted key — and nothing else.
+        await management.Received(1).TriggerNowAsync(
+            jobId,
+            Arg.Is<IReadOnlyDictionary<string, string>?>(overrides =>
+                overrides != null
+                && overrides.Count == 1
+                && overrides.ContainsKey(SchedulerJobKeys.ModelFitLimitOverrideKey)
+                && overrides[SchedulerJobKeys.ModelFitLimitOverrideKey] == "20"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(501)]
+    [Arguments(-1)]
+    public async Task Refresh_WhenLimitOutOfRange_RejectsWithoutTrigger(int limit)
+    {
+        var jobId = Guid.NewGuid();
+        var management = Substitute.For<IScheduledJobManagementService>();
+        management.GetJobAsync(jobId, Arg.Any<CancellationToken>())
+                  .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
+        var trigger = new ModelFitRefreshTrigger(management);
+
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
+            () => trigger.TriggerRecommendationRefreshAsync(jobId, limitOverride: limit, cancellationToken: CancellationToken.None));
+
+        await management.DidNotReceive().TriggerNowAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<IReadOnlyDictionary<string, string>?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -104,7 +147,7 @@ public sealed class ModelFitRefreshTriggerTests
 
         // An unknown use-case is rejected by the allowlist guard before the scheduler is ever asked to fire.
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => trigger.TriggerRecommendationRefreshAsync(jobId, "not-a-use-case", CancellationToken.None));
+            () => trigger.TriggerRecommendationRefreshAsync(jobId, "not-a-use-case", cancellationToken: CancellationToken.None));
 
         await management.DidNotReceive().TriggerNowAsync(
             Arg.Any<Guid>(),

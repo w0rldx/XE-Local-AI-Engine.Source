@@ -5,9 +5,21 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Deterministic i18n: t returns the supplied default string so button labels are readable in assertions.
+// Deterministic i18n: t returns the supplied default string (or a {{var}}-interpolated defaultValue from the options
+// object form) so labels and the hidden-count note are readable in assertions.
 vi.mock("react-i18next", () => ({
-	useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
+	useTranslation: () => ({
+		t: (key: string, fallbackOrOptions?: string | { defaultValue?: string; [param: string]: unknown }) => {
+			if (typeof fallbackOrOptions === "string") {
+				return fallbackOrOptions;
+			}
+			if (fallbackOrOptions && typeof fallbackOrOptions === "object") {
+				const template = fallbackOrOptions.defaultValue ?? key;
+				return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(fallbackOrOptions[name] ?? ""));
+			}
+			return key;
+		},
+	}),
 }));
 
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
@@ -28,6 +40,7 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		contextTokens: 8192,
 		isInstalled: false,
 		pullModelName: null,
+		releaseDate: null,
 		...overrides,
 	};
 }
@@ -69,7 +82,12 @@ describe("RecommendationTable", () => {
 	it("shows a Pull button only for a not-installed row with a pullModelName and calls onPull with that row", () => {
 		const onPull = vi.fn();
 		const pullable = makeRecommendation({ rank: 1, modelName: "pullable", isInstalled: false, pullModelName: "pullable:latest" });
-		const installed = makeRecommendation({ rank: 2, modelName: "installed", isInstalled: true, pullModelName: "installed:latest" });
+		const installed = makeRecommendation({
+			rank: 2,
+			modelName: "installed",
+			isInstalled: true,
+			pullModelName: "installed:latest",
+		});
 		const noTag = makeRecommendation({ rank: 3, modelName: "no-tag", isInstalled: false, pullModelName: null });
 
 		renderTable(<RecommendationTable recommendations={[pullable, installed, noTag]} onPull={onPull} />);
@@ -102,5 +120,44 @@ describe("RecommendationTable", () => {
 		renderTable(<RecommendationTable recommendations={[pullable]} />);
 
 		expect(screen.queryByTestId("model-fit-pull-button-1")).toBeNull();
+	});
+
+	it("shows every row including catalog-only ones (no hiding) and marks the non-pullable ones", () => {
+		const onPull = vi.fn();
+		const pullable = makeRecommendation({ rank: 1, modelName: "pullable", isInstalled: false, pullModelName: "pullable:latest" });
+		const installed = makeRecommendation({ rank: 2, modelName: "installed", isInstalled: true, pullModelName: null });
+		// Neither pullable nor installed — a catalog-only name. It is no longer hidden; it renders with a badge + no action.
+		const catalogOnly = makeRecommendation({ rank: 3, modelName: "catalog-only", isInstalled: false, pullModelName: null });
+
+		renderTable(<RecommendationTable recommendations={[pullable, installed, catalogOnly]} onPull={onPull} />);
+
+		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-recommendation-row-2")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-recommendation-row-3")).toBeTruthy();
+		// The catalog-only row is labelled and carries no Pull button; the legacy hidden-count note is gone.
+		expect(screen.getByText("Catalog only")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-pull-button-3")).toBeNull();
+		expect(screen.queryByTestId("model-fit-hidden-count-note")).toBeNull();
+	});
+
+	it("paginates a large result set to the default page size and renders the pagination footer", () => {
+		const many = Array.from({ length: 30 }, (_, index) =>
+			makeRecommendation({ rank: index + 1, modelName: `model-${index + 1}`, pullModelName: `model-${index + 1}:latest` }),
+		);
+
+		renderTable(<RecommendationTable recommendations={many} />);
+
+		// Default page size is 25 → only the first 25 rows render; row 26 lives on page 2.
+		expect(screen.getAllByTestId(/^model-fit-recommendation-row-/).length).toBe(25);
+		expect(screen.queryByTestId("model-fit-recommendation-row-26")).toBeNull();
+		expect(screen.getByTestId("model-fit-recommendations-pagination")).toBeTruthy();
+	});
+
+	it("renders the release date for a row that has one (Lane H3)", () => {
+		const dated = makeRecommendation({ rank: 1, isInstalled: true, pullModelName: "dated:latest", releaseDate: "2026-01-15" });
+
+		renderTable(<RecommendationTable recommendations={[dated]} />);
+
+		expect(screen.getByText("2026-01-15")).toBeTruthy();
 	});
 });

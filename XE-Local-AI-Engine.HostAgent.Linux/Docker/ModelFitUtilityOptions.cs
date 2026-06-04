@@ -37,6 +37,10 @@ public sealed class ModelFitUtilityOptions
     /// <summary>Development-only: keep a failed utility container instead of removing it, for debugging. Default off.</summary>
     public bool RetainFailedContainersForDebug { get; set; }
 
-    /// <summary>The upper bound the recommend <c>--limit</c> is clamped to HostAgent-side (defense in depth).</summary>
-    public int MaxRecommendLimit { get; set; } = 50;
+    /// <summary>
+    ///     The upper bound the recommend <c>--limit</c> is clamped to HostAgent-side (defense in depth). Aligned with the
+    ///     node-side <c>ModelFitRequestValidator.MaxLimit</c> (500) so the UI can fetch the whole use-case catalog and
+    ///     paginate it; llmfit itself returns at most the catalog size regardless.
+    /// </summary>
+    public int MaxRecommendLimit { get; set; } = 500;
 }
