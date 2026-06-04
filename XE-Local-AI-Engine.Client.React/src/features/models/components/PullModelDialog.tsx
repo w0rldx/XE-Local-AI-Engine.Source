@@ -67,6 +67,12 @@ export function PullModelDialog({
 					<Anchor href="https://ollama.com/library" target="_blank" rel="noreferrer noopener" size="sm">
 						{t("pages.models.pull.libraryLink", "Open the Ollama library (ollama.com/library)")}
 					</Anchor>
+					<Text size="sm" mt="xs" data-testid="pull-model-huggingface-hint">
+						{t(
+							"pages.models.pull.huggingFaceHint",
+							"You can also pull a Hugging Face GGUF model with hf.co/<org>/<repo>:<quant>.",
+						)}
+					</Text>
 				</Alert>
 
 				{/* Deliberate safety surface (operator decision): a manual pull is unvetted and points back to the

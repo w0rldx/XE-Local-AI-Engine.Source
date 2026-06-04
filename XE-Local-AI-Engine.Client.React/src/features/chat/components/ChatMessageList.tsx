@@ -93,14 +93,17 @@ export function ChatMessageList({
 	const hasPersistedStreamingMessage = scopedStreamingMessage
 		? normalizedMessages.some((message) => message.id === scopedStreamingMessage.messageId && message.role === "assistant")
 		: false;
+	// The optimistic assistant row stamped at send time (appendOptimisticNodeChatSend). It carries the agent
+	// attribution but has empty content, so it is filtered out of normalizedMessages — the synthesized streaming
+	// turn below must read agentName/createdAt from it directly, otherwise the live turn falls back to the default
+	// agent label until the post-stream refetch.
+	const streamingAssistantMessage = (conversation?.messages ?? []).find(
+		(message) => message.id === scopedStreamingMessage?.messageId && message.role === "assistant",
+	);
 	// Source the transient placeholder's timestamp from the assistant turn itself: the stream's own
 	// startedAt, or the optimistic assistant row's createdAt — never the conversation's updatedAt,
 	// which tracks the latest mutation (the just-sent user message) and would mislabel the reply.
-	const streamingStartedAt =
-		scopedStreamingMessage?.startedAt ??
-		(conversation?.messages ?? []).find(
-			(message) => message.id === scopedStreamingMessage?.messageId && message.role === "assistant",
-		)?.createdAt;
+	const streamingStartedAt = scopedStreamingMessage?.startedAt ?? streamingAssistantMessage?.createdAt;
 	const scrollKey = `${revisionGroups.length}:${timelineEntries.length}:${streamingContent.length}:${scopedStreamingMessage?.isActive ?? false}`;
 
 	useEffect(() => {
@@ -175,6 +178,10 @@ export function ChatMessageList({
 							status: scopedStreamingMessage.isQueued ? "queued" : scopedStreamingMessage.isActive ? "streaming" : "completed",
 							createdAt: streamingStartedAt ?? conversation.updatedAt,
 							sortOrder: normalizedMessages.length + 1,
+							// Carry the optimistically-stamped agent attribution so the live turn shows the selected agent
+							// immediately (not the "Default Assistant" fallback) — the persisted name replaces it on refetch.
+							agentName: streamingAssistantMessage?.agentName,
+							agentDefinitionId: streamingAssistantMessage?.agentDefinitionId,
 						}}
 						placeholder={streamingPlaceholder}
 						streamingParts={scopedStreamingMessage.parts}

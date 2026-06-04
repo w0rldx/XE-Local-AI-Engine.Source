@@ -824,6 +824,7 @@
         "title": "Neues Modell herunterladen",
         "guidance": "Gib einen Ollama-kompatiblen Modell-Tag ein. Verfügbare Modelle findest du in der Ollama-Bibliothek.",
         "libraryLink": "Ollama-Bibliothek öffnen (ollama.com/library)",
+        "huggingFaceHint": "Du kannst auch ein Hugging-Face-GGUF-Modell mit hf.co/<org>/<repo>:<quant> herunterladen.",
         "warning": "Ein manueller Pull lädt beliebige, ungeprüfte Modellgewichte herunter und kann sehr groß sein. Bevorzuge die empfohlenen Modelle für diesen Knoten.",
         "recommendationsLink": "Empfohlene Modelle für diesen Knoten anzeigen",
         "inputLabel": "Name des herunterzuladenden Modells",
@@ -1445,6 +1446,7 @@
         "pullable": "Verfügbar",
         "pull": "Herunterladen",
         "pulling": "Wird heruntergeladen…",
+        "catalogOnly": "Nur Katalog",
         "useCases": {
           "general": "Allgemein",
           "coding": "Programmierung",
@@ -1469,6 +1471,7 @@
           "context": "Kontext",
           "quantization": "Quant",
           "memory": "Speicher",
+          "released": "Veröffentlicht",
           "installed": "Installiert",
           "action": "Aktion"
         },

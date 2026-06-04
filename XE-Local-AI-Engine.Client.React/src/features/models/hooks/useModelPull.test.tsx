@@ -65,6 +65,7 @@ describe("useModelPull", () => {
 				{ status: "pulling manifest" },
 				{ status: "downloading", completedBytes: 25, totalBytes: 100 },
 				{ status: "downloading", completedBytes: 100, totalBytes: 100 },
+				{ status: "success" },
 			]),
 		);
 
@@ -129,10 +130,62 @@ describe("useModelPull", () => {
 		warnSpy.mockRestore();
 	});
 
+	it("treats a terminal {status:'error'} line as a failure: shows the error toast, does not invalidate, and resets isPulling", async () => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		// The stream completes normally but the backend's last line is a sanitized terminal error (the live bug: a
+		// non-existent model pull writes one "pulling manifest" line then OllamaSharp throws -> terminal error line).
+		streamMock.streamModelPull.mockReturnValue(
+			asStream([{ status: "pulling manifest" }, { status: "error", error: "Model not found" }]),
+		);
+
+		const { result, invalidateSpy } = renderUseModelPull();
+
+		act(() => {
+			result.current.pull("does-not-exist:latest");
+		});
+
+		await waitFor(() => expect(toast.error).toHaveBeenCalled());
+		// The fixed, model-scoped i18n error toast fires (NOT the raw sanitized reason), keyed to the same id.
+		expect(toast.error).toHaveBeenCalledWith(
+			"pages.models.pull.toast.error",
+			expect.objectContaining({ id: "model-pull-does-not-exist:latest", title: "pages.models.pull.toast.errorTitle" }),
+		);
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(invalidateSpy).not.toHaveBeenCalled();
+		// The stuck dialog becomes closable again: isPulling resets to false and pullingModelName clears.
+		await waitFor(() => expect(result.current.isPulling).toBe(false));
+		expect(result.current.pullingModelName).toBeUndefined();
+		warnSpy.mockRestore();
+	});
+
+	it("treats a torn stream that ends WITHOUT a 'success' line as a failure (no silent success toast)", async () => {
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		// The live tear: a 200 response commits ("pulling manifest"), then the connection drops mid-stream so the
+		// reader ends cleanly but no terminal "success" ever arrives. Previously this fell through to toast.success.
+		streamMock.streamModelPull.mockReturnValue(
+			asStream([{ status: "pulling manifest" }, { status: "downloading", completedBytes: 10, totalBytes: 100 }]),
+		);
+
+		const { result, invalidateSpy } = renderUseModelPull();
+
+		act(() => {
+			result.current.pull("torn:latest");
+		});
+
+		await waitFor(() => expect(toast.error).toHaveBeenCalled());
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(invalidateSpy).not.toHaveBeenCalled();
+		await waitFor(() => expect(result.current.isPulling).toBe(false));
+		expect(result.current.pullingModelName).toBeUndefined();
+		warnSpy.mockRestore();
+	});
+
 	it("invokes onSuccess once after a successful pull, and never invokes it when the stream throws", async () => {
 		const onSuccess = vi.fn();
 
-		streamMock.streamModelPull.mockReturnValue(asStream([{ status: "downloading", completedBytes: 100, totalBytes: 100 }]));
+		streamMock.streamModelPull.mockReturnValue(
+			asStream([{ status: "downloading", completedBytes: 100, totalBytes: 100 }, { status: "success" }]),
+		);
 		const ok = renderUseModelPull();
 		act(() => {
 			ok.result.current.pull("orca-mini:latest", { onSuccess });
@@ -169,6 +222,7 @@ describe("useModelPull", () => {
 				{ status: "downloading", completedBytes: 30, totalBytes: 100 },
 				{ status: "downloading", completedBytes: 40, totalBytes: 100 },
 				{ status: "verifying", completedBytes: 100, totalBytes: 100 },
+				{ status: "success" },
 			]),
 		);
 

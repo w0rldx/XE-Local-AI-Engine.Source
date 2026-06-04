@@ -20,6 +20,8 @@ export interface ModelPullProgressEvent {
 	status: string;
 	completedBytes?: number;
 	totalBytes?: number;
+	// Present only on the terminal failure line (status === "error"): a short, sanitized reason from the backend.
+	error?: string;
 }
 
 // Narrows one parsed NDJSON line to a ModelPullProgressEvent, dropping anything that is not an object with a string
@@ -35,10 +37,12 @@ function toProgressEvent(parsed: unknown): ModelPullProgressEvent | undefined {
 	}
 	const rawCompleted = candidate["completedBytes"];
 	const rawTotal = candidate["totalBytes"];
+	const rawError = candidate["error"];
 	return {
 		status: rawStatus,
 		completedBytes: typeof rawCompleted === "number" ? rawCompleted : undefined,
 		totalBytes: typeof rawTotal === "number" ? rawTotal : undefined,
+		error: typeof rawError === "string" ? rawError : undefined,
 	};
 }
 

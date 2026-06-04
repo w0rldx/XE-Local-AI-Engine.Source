@@ -123,6 +123,67 @@ describe("node chat stream state", () => {
 		expect(streaming.conversation.messages.find((message) => message.id === "assistant-1")?.status).toBe("streaming");
 	});
 
+	it("carries agent attribution through streaming events so the live turn shows the selected agent, not Default Assistant", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+			"Code Reviewer",
+		);
+		// appendOptimisticNodeChatSend only takes agentName; stamp the id the way the send flow does so we can
+		// assert it survives the stream-state rebuild too.
+		const withAttribution: ChatConversationModel = {
+			...optimistic,
+			messages: optimistic.messages.map((message) =>
+				message.id === "assistant-1" ? { ...message, agentDefinitionId: "agent-7" } : message,
+			),
+		};
+
+		const queued = applyNodeChatStreamEvent(
+			withAttribution,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantQueued, status: "queued", content: null, delta: null }),
+		);
+		expect(queued.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			agentName: "Code Reviewer",
+			agentDefinitionId: "agent-7",
+		});
+
+		const streaming = applyNodeChatStreamEvent(
+			queued.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantStreaming, status: "streaming", content: "hi", delta: "hi" }),
+		);
+		expect(streaming.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			agentName: "Code Reviewer",
+			agentDefinitionId: "agent-7",
+		});
+	});
+
+	it("keeps agent attribution on a terminal cancellation so a stopped turn still shows the selected agent", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+			"Code Reviewer",
+		);
+		const withAttribution: ChatConversationModel = {
+			...optimistic,
+			messages: optimistic.messages.map((message) =>
+				message.id === "assistant-1" ? { ...message, agentDefinitionId: "agent-7" } : message,
+			),
+		};
+
+		const cancelled = markNodeChatStreamTerminated(withAttribution, "assistant-1", "cancelled");
+		expect(cancelled.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			status: "cancelled",
+			agentName: "Code Reviewer",
+			agentDefinitionId: "agent-7",
+		});
+	});
+
 	it("stamps the streaming state with the assistant turn's own start time, not the conversation update time", () => {
 		// Optimistic assistant turn started at 00:00:01; a later conversation update must not be borrowed.
 		const optimistic = appendOptimisticNodeChatSend(

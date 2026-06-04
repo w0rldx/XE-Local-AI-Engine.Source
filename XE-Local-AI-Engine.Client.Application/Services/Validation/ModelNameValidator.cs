@@ -23,19 +23,17 @@ public sealed class ModelNameValidator
             return null;
         }
 
-        if (modelName.Length > 100)
+        // 150 comfortably fits Hugging Face GGUF references (hf.co/org/repo:quant), which are longer than plain Ollama tags.
+        if (modelName.Length > 150)
         {
             return "Invalid model identifier";
         }
 
+        // Path-traversal / scheme guards run BEFORE the regex so "hf.co/../etc" and "file://x" are rejected even though
+        // the allow pattern now permits the hf.co/huggingface.co two-slash form. The regex governs all other slash placement.
         if (modelName.Contains("..", StringComparison.Ordinal) ||
-            modelName.Contains('/', StringComparison.Ordinal) ||
-            modelName.Contains('\\', StringComparison.Ordinal))
-        {
-            return "Invalid model identifier";
-        }
-
-        if (modelName.Contains("://", StringComparison.Ordinal))
+            modelName.Contains('\\', StringComparison.Ordinal) ||
+            modelName.Contains("://", StringComparison.Ordinal))
         {
             return "Invalid model identifier";
         }
