@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
+using Microsoft.Extensions.Logging.Abstractions;
+using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
@@ -65,6 +68,69 @@ public sealed class ModelFitQueryServiceTests
     }
 
     [Test]
+    public async Task GetLatestRecommendationsAsync_WhenPullModelOnNode_MarksInstalledFromNodeNotLlmfit()
+    {
+        // The node has the tag though the snapshot stored installed:false (offline recommend); a different row stored
+        // installed:true is NOT on the node. Install state must follow the node, not llmfit's offline flag.
+        var harness = Harness.Create(installedModelNames: ["qwen2.5-coder:7b"]);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        harness.RecommendationStore.Seed(snapshotId,
+            new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, null, null, null, null, null, null, 16384, false, "qwen2.5-coder:7b", null),
+            new ModelFitRecommendationInput(2, "deepseek-coder:1.3b", null, 61.0, null, null, null, null, null, null, 16384, true, "deepseek-coder:1.3b", null));
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
+
+        AssertEx.NotNull(view);
+        AssertEx.True(view!.Recommendations[0].IsInstalled, "a row whose tag is installed on the node is Installed despite llmfit's stored false.");
+        AssertEx.False(view.Recommendations[1].IsInstalled, "a row whose tag is absent on the node is not Installed despite llmfit's stored true.");
+    }
+
+    [Test]
+    public async Task GetLatestRecommendationsAsync_WhenPullModelNameNull_IsNotInstalled()
+    {
+        // An HF-only model with no Ollama tag cannot be matched to the install list → not installed (unknown).
+        var harness = Harness.Create(installedModelNames: ["qwen2.5-coder:7b"]);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        harness.RecommendationStore.Seed(snapshotId,
+            new ModelFitRecommendationInput(1, "Some/HF-Only-Model", null, 50.0, null, null, null, null, null, null, null, true, null, null));
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
+
+        AssertEx.NotNull(view);
+        AssertEx.False(view!.Recommendations[0].IsInstalled);
+    }
+
+    [Test]
+    public async Task GetLatestRecommendationsAsync_WhenTagOmitsLatest_MatchesInstalledLatest()
+    {
+        // The recommendation carries the bare name; the node lists the `:latest` form — they must match.
+        var harness = Harness.Create(installedModelNames: ["Mistral:latest"]);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "general");
+        harness.RecommendationStore.Seed(snapshotId,
+            new ModelFitRecommendationInput(1, "mistral", "mistral", 70.0, null, null, null, null, null, null, null, false, "mistral", null));
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("general", ProviderName, CancellationToken.None);
+
+        AssertEx.NotNull(view);
+        AssertEx.True(view!.Recommendations[0].IsInstalled, "a bare name matches the node's :latest tag, case-insensitively.");
+    }
+
+    [Test]
+    public async Task GetLatestRecommendationsAsync_WhenInstallListThrows_FallsBackToStoredFlag()
+    {
+        // Ollama unreachable: the install-state enrichment must not fail the cached read — keep the stored flag.
+        var harness = Harness.Create(throwOnList: true);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        harness.RecommendationStore.Seed(snapshotId,
+            new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, null, null, null, null, null, null, 16384, true, "qwen2.5-coder:7b", null));
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
+
+        AssertEx.NotNull(view);
+        AssertEx.True(view!.Recommendations[0].IsInstalled, "the stored flag is preserved when the node list cannot be read.");
+    }
+
+    [Test]
     public async Task ListApprovedImagesAsync_MapsStoreRecords()
     {
         var harness = Harness.Create();
@@ -83,13 +149,19 @@ public sealed class ModelFitQueryServiceTests
         public required SeedableRecommendationStore RecommendationStore { get; init; }
         public required InMemoryApprovedUtilityImageStore ApprovedImageStore { get; init; }
 
-        public static Harness Create()
+        public static Harness Create(IEnumerable<string>? installedModelNames = null, bool throwOnList = false)
         {
             var snapshotStore = new InMemoryModelFitSnapshotStore();
             var recommendationStore = new SeedableRecommendationStore();
             var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor());
+            var ollamaModelService = new FakeOllamaModelService(installedModelNames, throwOnList);
 
-            var service = new ModelFitQueryService(approvedImageStore, snapshotStore, recommendationStore);
+            var service = new ModelFitQueryService(
+                approvedImageStore,
+                snapshotStore,
+                recommendationStore,
+                ollamaModelService,
+                NullLogger<ModelFitQueryService>.Instance);
 
             return new Harness
             {
@@ -145,5 +217,40 @@ public sealed class ModelFitQueryServiceTests
 
         public Task<IReadOnlyList<ModelFitRecommendationRecord>> ListForSnapshotAsync(Guid snapshotId, CancellationToken cancellationToken = default) =>
             _inner.ListForSnapshotAsync(snapshotId, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Minimal <see cref="IOllamaModelService" /> fake for the install-state join: returns a configured set of
+    ///     installed model tags (or throws, to exercise the best-effort fallback). Only <c>ListLocalModelsAsync</c> is
+    ///     used by the query service; the rest are unsupported.
+    /// </summary>
+    private sealed class FakeOllamaModelService(IEnumerable<string>? installedModelNames, bool throwOnList) : IOllamaModelService
+    {
+        private readonly IReadOnlyList<string> _installed = installedModelNames?.ToList() ?? [];
+
+        public Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+        {
+            if (throwOnList)
+            {
+                throw new InvalidOperationException("Ollama unreachable (test).");
+            }
+
+            return Task.FromResult(_installed.Select(name => new Model { Name = name }));
+        }
+
+        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task DeleteModelAsync(string modelName, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> IsAvailableAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 }

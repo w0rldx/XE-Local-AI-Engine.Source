@@ -515,6 +515,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 		.nullish(),
 	isInstalled: z.boolean().optional(),
 	pullModelName: z.string().nullish(),
+	releaseDate: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({
@@ -573,6 +574,11 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResp
 export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = z.object({
 	scheduledJobId: z.guid().optional(),
 	useCase: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 });
 
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);

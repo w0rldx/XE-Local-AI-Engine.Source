@@ -23,8 +23,12 @@ public sealed class ModelFitRequestValidator
     /// <summary>The inclusive lower bound for the recommend limit.</summary>
     public const int MinLimit = 1;
 
-    /// <summary>The inclusive upper bound for the recommend limit.</summary>
-    public const int MaxLimit = 50;
+    /// <summary>
+    ///     The inclusive upper bound for the recommend limit. Set high enough to fetch the whole use-case catalog (llmfit
+    ///     returns at most the catalog size — ~166 for coding — regardless of a larger limit), so the UI can show the full
+    ///     selection with client-side pagination rather than a hidden subset.
+    /// </summary>
+    public const int MaxLimit = 500;
 
     private readonly ModelNameValidator _modelNameValidator;
 

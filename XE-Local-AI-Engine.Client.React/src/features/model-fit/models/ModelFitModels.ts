@@ -12,6 +12,11 @@ export const modelFitUseCases: readonly ModelFitUseCase[] = ["general", "coding"
 export const defaultModelFitUseCase: ModelFitUseCase = "coding";
 export const defaultModelFitProviderName = "ollama";
 
+// Breadth (--limit) the manual "Refresh now" sends per run. Set high enough to fetch the whole use-case catalog
+// (llmfit caps at the catalog size — ~166 for coding — regardless of a larger value), so the table can show the full
+// selection with client-side pagination. Validated server-side against the 1..500 allowlist (Lane H1).
+export const recommendationRefreshLimit = 500;
+
 // llmfit utility-image purposes (a [Flags] enum on the wire, projected to a string array). An image may serve
 // recommendation, benchmark, or both. Surfaced as purpose badges on the read-only approved-images page.
 export type ModelFitImagePurpose = "ModelRecommendation" | "ModelBenchmark";
@@ -53,6 +58,8 @@ export interface ModelFitRecommendation {
 	readonly contextTokens: number | null;
 	readonly isInstalled: boolean;
 	readonly pullModelName: string | null;
+	// The model's release date (ISO date string) when llmfit reports one; null otherwise. A "newer model" signal.
+	readonly releaseDate: string | null;
 }
 
 // Domain view-model for the latest cached recommendation snapshot. hasCache:false is the explicit empty /

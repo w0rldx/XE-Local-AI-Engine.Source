@@ -76,6 +76,19 @@ describe("useRefreshRecommendations", () => {
 		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1", useCase: "general" } });
 	});
 
+	it("forwards a breadth limit override into the generated mutation body", async () => {
+		const { Wrapper } = makeWrapper();
+		const { result } = renderHook(() => useRefreshRecommendations(), { wrapper: Wrapper });
+
+		result.current.mutate({ scheduledJobId: "job-1", useCase: "general", limit: 20 });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({
+			body: { scheduledJobId: "job-1", useCase: "general", limit: 20 },
+		});
+	});
+
 	it("surfaces a refresh error and does not invalidate", async () => {
 		mutationMock.mutationFn.mockRejectedValue(new Error("Request failed with status code 400"));
 		const { Wrapper } = makeWrapper();

@@ -20,7 +20,7 @@ internal static class SchedulerDispatchJobRunner
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(context);
 
-        var rawScheduledJobId = context.MergedJobDataMap.GetString(SchedulerJobKeys.ScheduledJobIdKey);
+        var rawScheduledJobId = SafeGetString(context, SchedulerJobKeys.ScheduledJobIdKey);
         if (!Guid.TryParse(rawScheduledJobId, out var scheduledJobId))
         {
             logger.LogWarning(
@@ -31,9 +31,9 @@ internal static class SchedulerDispatchJobRunner
             return;
         }
 
-        // A manual fire may carry a per-fire use-case override on the firing trigger's data map (merged into
-        // MergedJobDataMap by Quartz). Forward ONLY this whitelisted key to the executor; a cron/no-override fire has no
-        // such entry and dispatches the stored parameters unchanged. The executor decides whether/how to apply it.
+        // A manual fire may carry per-fire overrides on the firing trigger's data map (merged into MergedJobDataMap by
+        // Quartz). Forward ONLY the whitelisted keys to the executor; a cron/no-override fire has none and dispatches the
+        // stored parameters unchanged. The executor decides whether/how to apply them.
         var parameterOverrides = ExtractParameterOverrides(context);
 
         await dispatchExecutor.DispatchAsync(
@@ -46,21 +46,34 @@ internal static class SchedulerDispatchJobRunner
     }
 
     /// <summary>
-    ///     Reads the single whitelisted per-fire override key (the model-fit use-case) from the merged data map. Returns
-    ///     <c>null</c> when it is absent or blank so a normal (cron / no-override) fire dispatches the stored parameters
-    ///     unchanged. No other data-map key is ever surfaced as an override.
+    ///     Reads the whitelisted per-fire override keys (the model-fit use-case and breadth limit) from the merged data
+    ///     map. Returns <c>null</c> when none are present so a normal (cron / no-override) fire dispatches the stored
+    ///     parameters unchanged. No other data-map key is ever surfaced as an override.
     /// </summary>
     private static IReadOnlyDictionary<string, string>? ExtractParameterOverrides(IJobExecutionContext context)
     {
-        var useCaseOverride = context.MergedJobDataMap.GetString(SchedulerJobKeys.ModelFitUseCaseOverrideKey);
-        if (string.IsNullOrWhiteSpace(useCaseOverride))
+        var overrides = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var useCaseOverride = SafeGetString(context, SchedulerJobKeys.ModelFitUseCaseOverrideKey);
+        if (!string.IsNullOrWhiteSpace(useCaseOverride))
         {
-            return null;
+            overrides[SchedulerJobKeys.ModelFitUseCaseOverrideKey] = useCaseOverride;
         }
 
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        var limitOverride = SafeGetString(context, SchedulerJobKeys.ModelFitLimitOverrideKey);
+        if (!string.IsNullOrWhiteSpace(limitOverride))
         {
-            [SchedulerJobKeys.ModelFitUseCaseOverrideKey] = useCaseOverride
-        };
+            overrides[SchedulerJobKeys.ModelFitLimitOverrideKey] = limitOverride;
+        }
+
+        return overrides.Count == 0 ? null : overrides;
     }
+
+    /// <summary>
+    ///     Reads a string value from the merged data map WITHOUT throwing when the key is absent. Quartz's
+    ///     <see cref="JobDataMap" /> <c>GetString</c> throws <see cref="KeyNotFoundException" /> for a missing key, so a
+    ///     no-override (cron) fire — which carries none of the optional keys — must be read defensively.
+    /// </summary>
+    private static string? SafeGetString(IJobExecutionContext context, string key) =>
+        context.MergedJobDataMap.TryGetValue(key, out var value) ? value as string : null;
 }

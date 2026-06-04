@@ -377,6 +377,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	contextTokens?: number | null;
 	isInstalled?: boolean;
 	pullModelName?: string | null;
+	releaseDate?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
@@ -410,6 +411,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRespon
 export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest = {
 	scheduledJobId?: string;
 	useCase?: string | null;
+	limit?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {

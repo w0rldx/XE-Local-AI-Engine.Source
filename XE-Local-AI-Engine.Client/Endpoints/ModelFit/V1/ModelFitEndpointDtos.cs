@@ -95,6 +95,9 @@ public sealed class ModelFitRecommendationResponse
     public required bool IsInstalled { get; init; }
 
     public string? PullModelName { get; init; }
+
+    /// <summary>The model's release date (ISO date string) when llmfit reports one; null otherwise. A "newer model" signal for sorting/display.</summary>
+    public string? ReleaseDate { get; init; }
 }
 
 /// <summary>
@@ -147,6 +150,13 @@ public sealed class RefreshRecommendationsRequest
 
     /// <summary>Optional use-case override (one of <c>general|coding|reasoning|chat|multimodal|embedding</c>); null/empty uses the definition's baked use-case.</summary>
     public string? UseCase { get; init; }
+
+    /// <summary>
+    ///     Optional recommendation breadth (<c>--limit</c>) override, validated to <c>1..50</c> (rejected with a 400
+    ///     before anything fires); null uses the definition's baked limit. A higher limit surfaces more pullable/installed
+    ///     candidates instead of only the top few. Only the limit is widened — no free text reaches the run.
+    /// </summary>
+    public int? Limit { get; init; }
 }
 
 /// <summary>

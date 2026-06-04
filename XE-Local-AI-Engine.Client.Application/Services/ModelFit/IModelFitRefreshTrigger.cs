@@ -29,9 +29,16 @@ public interface IModelFitRefreshTrigger
     ///         <c>null</c>/empty value fires the definition's stored use-case unchanged (back-compat). Only the use-case is
     ///         widened — never an image reference, command line, or any other parameter.
     ///     </para>
+    ///     <para>
+    ///         <paramref name="limitOverride" /> optionally widens the recommendation breadth (<c>--limit</c>) for this
+    ///         run. It is validated to the supported <c>1..50</c> range before it reaches the run; an out-of-range value
+    ///         throws <see cref="ScheduledJobValidationException" /> and nothing fires. A <c>null</c> value uses the
+    ///         definition's baked limit. Like the use-case, only this single whitelisted parameter is widened.
+    ///     </para>
     /// </summary>
     Task TriggerRecommendationRefreshAsync(
         Guid scheduledJobId,
         string? useCaseOverride = null,
+        int? limitOverride = null,
         CancellationToken cancellationToken = default);
 }

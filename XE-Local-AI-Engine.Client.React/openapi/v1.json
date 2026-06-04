@@ -5450,6 +5450,10 @@
           "pullModelName": {
             "type": "string",
             "nullable": true
+          },
+          "releaseDate": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -5548,6 +5552,11 @@
           },
           "useCase": {
             "type": "string",
+            "nullable": true
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           }
         }

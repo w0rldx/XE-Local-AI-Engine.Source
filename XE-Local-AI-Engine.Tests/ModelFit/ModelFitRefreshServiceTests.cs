@@ -99,10 +99,10 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.Equal(48.2, rows[0].EstimatedTokensPerSecond ?? 0d);
         AssertEx.Equal(6.0 * 1024d, rows[0].RequiredRamMb ?? 0d); // GB → MB.
         AssertEx.Null(rows[0].RequiredVramMb);
-        AssertEx.Equal(16384, rows[0].ContextTokens ?? 0); // effective preferred over raw context_length.
+        AssertEx.Equal(32768, rows[0].ContextTokens ?? 0); // Lane E: the model's real context_length, not the effective/estimation cap.
         AssertEx.True(rows[0].IsInstalled, "first model is installed.");
         AssertEx.Equal(2, rows[1].Rank);
-        AssertEx.Equal(16384, rows[1].ContextTokens ?? 0); // falls back to context_length when effective is absent.
+        AssertEx.Equal(16384, rows[1].ContextTokens ?? 0); // context_length used directly (no effective on this model).
         AssertEx.False(rows[1].IsInstalled, "second model is not installed.");
 
         // Image usage stamped, with a successful-run stamp.

@@ -50,11 +50,21 @@ public sealed class ModelFitRequestValidatorTests
     [Test]
     [Arguments(0)]
     [Arguments(-1)]
-    [Arguments(51)]
+    [Arguments(501)]
     [Arguments(1000)]
     public void Validate_RecommendWithOutOfRangeLimit_IsInvalid(int limit)
     {
         AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", null));
+    }
+
+    [Test]
+    [Arguments(50)]
+    [Arguments(200)]
+    [Arguments(500)]
+    public void Validate_RecommendWithHighButInRangeLimit_IsValid(int limit)
+    {
+        // The upper bound was raised to 500 so the UI can fetch the full use-case catalog (Lane H1 / show-all + paginate).
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", null));
     }
 
     [Test]

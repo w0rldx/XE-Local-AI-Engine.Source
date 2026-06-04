@@ -69,6 +69,9 @@ function invalidateLatest(queryClient: ReturnType<typeof useQueryClient>): Promi
 export interface RefreshRecommendationsVariables {
 	scheduledJobId: string;
 	useCase?: ModelFitUseCase;
+	// Optional per-run breadth (--limit) override; validated server-side to 1..50. Widens how many candidates the run
+	// returns so more pullable/installed models surface than the definition's baked default (Lane H1).
+	limit?: number;
 }
 
 // Refresh enqueues an async scheduler run, so it invalidates the latest-recommendations cache (the run may not have
@@ -79,11 +82,11 @@ export function useRefreshRecommendations() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async ({ scheduledJobId, useCase }: RefreshRecommendationsVariables): Promise<void> => {
+		mutationFn: async ({ scheduledJobId, useCase, limit }: RefreshRecommendationsVariables): Promise<void> => {
 			// Adapt the domain variables to the generated `{ body }` envelope and dispatch to the generated mutationFn.
 			// The response body (the echoed job id) is unused by the page, so this resolves to void.
 			const options = withResponseValidation(refreshRecommendationsMutation());
-			await options.mutationFn?.({ body: { scheduledJobId, useCase } }, undefined as never);
+			await options.mutationFn?.({ body: { scheduledJobId, useCase, limit } }, undefined as never);
 		},
 		onSuccess: () => invalidateLatest(queryClient),
 	});

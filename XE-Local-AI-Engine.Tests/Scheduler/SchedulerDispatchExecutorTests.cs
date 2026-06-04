@@ -195,6 +195,96 @@ public sealed class SchedulerDispatchExecutorTests
     }
 
     [Test]
+    public async Task Dispatch_WhenLimitOverridePresent_MergesLimitAsNumber()
+    {
+        const string storedJson =
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+
+        var registry = new ScheduledJobTemplateRegistry([handler]);
+        var executor = CreateExecutor(store, registry);
+
+        var overrides = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [SchedulerJobKeys.ModelFitLimitOverrideKey] = "20"
+        };
+
+        await executor.DispatchAsync(JobId, "fire-limit", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None, overrides);
+
+        var parameters = AssertEx.NotNull(handler.LastContext?.Parameters);
+        using var document = JsonDocument.Parse(parameters);
+        var root = document.RootElement;
+
+        AssertEx.Equal(JsonValueKind.Number, root.GetProperty("limit").ValueKind, "limit must be written back as a JSON number, not a string.");
+        AssertEx.Equal(20, root.GetProperty("limit").GetInt32(), "Only the limit must be overridden.");
+        AssertEx.Equal("coding", root.GetProperty("useCase").GetString(), "useCase must be untouched when only limit is overridden.");
+        AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenUseCaseAndLimitOverride_MergesBothWhitelistedKeysOnly()
+    {
+        const string storedJson =
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+
+        var registry = new ScheduledJobTemplateRegistry([handler]);
+        var executor = CreateExecutor(store, registry);
+
+        var overrides = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [SchedulerJobKeys.ModelFitUseCaseOverrideKey] = "general",
+            [SchedulerJobKeys.ModelFitLimitOverrideKey] = "15"
+        };
+
+        await executor.DispatchAsync(JobId, "fire-both", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None, overrides);
+
+        var parameters = AssertEx.NotNull(handler.LastContext?.Parameters);
+        using var document = JsonDocument.Parse(parameters);
+        var root = document.RootElement;
+
+        AssertEx.Equal("general", root.GetProperty("useCase").GetString(), "useCase must be overridden.");
+        AssertEx.Equal(15, root.GetProperty("limit").GetInt32(), "limit must be overridden.");
+        AssertEx.Equal("llmfit-recommender-0-9-30", root.GetProperty("approvedImageId").GetString(), "approvedImageId must be untouched.");
+        AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
+    }
+
+    [Test]
+    public async Task Dispatch_WhenOverrideCarriesNonWhitelistedKey_IgnoresItAndPassesStoredThrough()
+    {
+        const string storedJson =
+            """{"approvedImageId":"llmfit-recommender-0-9-30","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}""";
+
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+
+        var registry = new ScheduledJobTemplateRegistry([handler]);
+        var executor = CreateExecutor(store, registry);
+
+        // A per-fire map carrying only a NON-whitelisted key must not override any stored parameter — the stored JSON
+        // passes through verbatim. This is the security boundary: only the two whitelisted keys can ever override.
+        var overrides = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["providerName"] = "evil",
+            ["operation"] = "Benchmark"
+        };
+
+        await executor.DispatchAsync(JobId, "fire-nonwhitelisted", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None, overrides);
+
+        AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "A non-whitelisted override key must leave the stored parameters unchanged.");
+    }
+
+    [Test]
     public async Task Dispatch_WhenNoOverride_UsesStoredParameters()
     {
         // The cron / no-override path must hand the handler the stored parameters verbatim (baked use-case unchanged).

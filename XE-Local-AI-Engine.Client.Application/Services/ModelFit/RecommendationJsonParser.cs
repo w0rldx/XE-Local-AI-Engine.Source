@@ -86,7 +86,10 @@ public static class RecommendationJsonParser
             RequiredRamMb: memoryRequiredGb is { } gb ? gb * 1024d : null,
             // No per-model VRAM field exists separately from memory_required_gb.
             RequiredVramMb: null,
-            ContextTokens: GetInt(model, "effective_context_length") ?? GetInt(model, "context_length"),
+            // Context column = the model's advertised maximum window (context_length). effective_context_length is
+            // llmfit's memory-estimation cap (defaults to 8192 when --max-context / OLLAMA_CONTEXT_LENGTH are unset), so
+            // preferring it showed 8192 for every model; fall back to it only when context_length is absent.
+            ContextTokens: GetInt(model, "context_length") ?? GetInt(model, "effective_context_length"),
             IsInstalled: GetBool(model, "installed") ?? false,
             PullModelName: ollamaName,
             DiagnosticsJson: BuildDiagnostics(model));
@@ -104,6 +107,9 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "score_components", writer);
             wroteAny |= CopyProperty(model, "is_moe", writer);
             wroteAny |= CopyProperty(model, "params_b", writer);
+            // release_date rides the existing (already-persisted) diagnostics blob so the read mapper can surface it as a
+            // "newer model" signal without a new column/migration.
+            wroteAny |= CopyProperty(model, "release_date", writer);
             writer.WriteEndObject();
 
             if (!wroteAny)

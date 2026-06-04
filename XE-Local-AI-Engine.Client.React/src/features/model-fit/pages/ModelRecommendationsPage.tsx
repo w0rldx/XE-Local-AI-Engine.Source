@@ -14,6 +14,7 @@ import {
 	type ModelFitUseCase,
 	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
+	recommendationRefreshLimit,
 } from "@/features/model-fit/models/ModelFitModels";
 import { useLatestRecommendations, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
@@ -62,8 +63,9 @@ export function ModelRecommendationsPage() {
 			return;
 		}
 		// Send the currently-selected use case so the run targets what the operator is viewing (server validates it
-		// against the fixed allowlist), instead of the use case baked into the job definition.
-		refreshMutation.mutate({ scheduledJobId: refreshJob.id, useCase });
+		// against the fixed allowlist), instead of the use case baked into the job definition. Also widen the breadth
+		// (--limit) so more pullable/installed candidates surface than the definition's baked default (Lane H1).
+		refreshMutation.mutate({ scheduledJobId: refreshJob.id, useCase, limit: recommendationRefreshLimit });
 	};
 
 	const handleUseCaseChange = (value: string | null): void => {

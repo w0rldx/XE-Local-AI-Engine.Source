@@ -161,6 +161,7 @@ const populatedView = {
 			contextTokens: 8192,
 			isInstalled: true,
 			pullModelName: null,
+			releaseDate: null,
 		},
 	],
 };
@@ -227,7 +228,7 @@ describe("ModelRecommendationsPage", () => {
 		fireEvent.click(button);
 
 		// Refresh now forwards the currently-selected use case (default "coding") alongside the job id.
-		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "coding" });
+		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "coding", limit: 500 });
 	});
 
 	it("sends the selected use case (general) when Refresh now is clicked after switching the dropdown", () => {
@@ -240,7 +241,7 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "general" });
+		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "general", limit: 500 });
 	});
 
 	it("disables Refresh now and shows guidance when no model-recommendation-check job exists", () => {
@@ -264,7 +265,7 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-enabled", useCase: "coding" });
+		expect(refreshMutation.mutate).toHaveBeenCalledWith({ scheduledJobId: "job-enabled", useCase: "coding", limit: 500 });
 	});
 
 	it("ignores scheduler jobs of other templates when gating refresh", () => {
