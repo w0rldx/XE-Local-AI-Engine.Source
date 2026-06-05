@@ -116,8 +116,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
             // Quartz.NET 3.18.1 ADO job-store schema (QRTZ_* tables), verbatim from the official
             // database/tables/tables_sqlite.sql at git tag v3.18.1. The persistent store reads these
-            // at scheduler startup with PerformSchemaValidation=true and table prefix QRTZ_; see the
-            // scheduler decision record in Plans/2026-06-01-quartz-scheduler-react-management-plan.md.
+            // at scheduler startup with PerformSchemaValidation=true and table prefix QRTZ_.
             // The upstream leading DROP statements are intentionally omitted (this is a tracked,
             // run-once migration on a fresh DB); the DELETE_* triggers emulate ON DELETE CASCADE for
             // the trigger sub-tables on SQLite. Microsoft.Data.Sqlite executes the batched statements.

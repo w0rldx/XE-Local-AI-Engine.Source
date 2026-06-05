@@ -8,7 +8,8 @@ public interface INodeChatPersistenceService
     ///     Idempotent upsert for the caller-supplied conversation id. If a row already exists (any purged state) it
     ///     is returned unchanged — title/origin/timestamps are NOT overwritten. Otherwise a new row is inserted.
     ///     Used by the platform path (which has no pre-existing local conversation row) before persisting the
-    ///     synthesized user + assistant messages. See Plans/schema-contract-sheet.md §3.
+    ///     synthesized user + assistant messages. The conversation id is caller-supplied (reused from the platform's
+    ///     id), never minted here.
     /// </summary>
     Task<NodeChatConversationDto> EnsureConversationAsync(NodeChatEnsureConversationRequest request, CancellationToken cancellationToken = default);
 

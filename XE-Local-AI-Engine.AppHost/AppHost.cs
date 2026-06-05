@@ -145,7 +145,7 @@ if (hostAgentLinux is not null && hostAgentHmacSecret is not null)
 
     if (enableHostAgentRuntimeFidelity)
     {
-        // Real-llmfit-in-dev (Plans/2026-06-03-aspire-production-fidelity-selfhosted-overview.md, "Minimal increment"):
+        // Real-llmfit-in-dev (runtime-fidelity production-parity path):
         // only in runtime-fidelity, where the HostAgent Docker driver is REAL, route the node's model-fit runner through
         // the local-container (gRPC -> HostAgent -> docker) path instead of the in-memory fake, and auto-enable the
         // approved llmfit image so a "Refresh now" actually runs the recommender and produces real recommendation rows.

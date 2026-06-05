@@ -5,8 +5,8 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 ///     <c>Origin=Remote</c> conversation. Remote-origin rows are node-local mirrors of platform-served chats and
 ///     are view-only on the node: they must never sync back, and the node retains no epoch key to re-drive them.
 ///     Applied to ALL content/state mutation entry points (send, rename, pin, archive, branch, revision, feedback,
-///     regenerate). UI hiding is cosmetic; this guard is the source of truth. See
-///     Plans/schema-contract-sheet.md §4.
+///     regenerate). UI hiding is cosmetic; this guard is the source of truth. The guard reads only the plaintext
+///     <c>origin</c> column — it never touches the epoch key registry or retains any epoch key.
 /// </summary>
 public interface INodeChatMutationGuard
 {
