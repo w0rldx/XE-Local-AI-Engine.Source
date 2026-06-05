@@ -2,6 +2,15 @@
 
 This is the standalone React management UI served by `XE-Local-AI-Engine.Client` at the web root. It talks only to the node-local FastEndpoints API under `/api/local/v1` and uses the per-launch local-operator token injected by the host shell.
 
+## Build
+
+Build the client with `pnpm run build` (the same command the Node Web Server README references when it copies the `dist/` output into `wwwroot`):
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run build
+```
+
 ## OpenAPI client generation
 
 The frontend uses `@hey-api/openapi-ts` to generate a typed Axios client from the committed OpenAPI snapshot at `openapi/v1.json`.

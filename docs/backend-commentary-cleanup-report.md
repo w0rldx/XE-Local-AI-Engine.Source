@@ -1,5 +1,7 @@
 # Backend commentary cleanup report
 
+> Point-in-time / superseded — this is a dated 2026-06-02 completion record, not a living document. The living convention is [docs/backend-commentary-map.md](./backend-commentary-map.md); defer to it.
+
 Date: 2026-06-02
 Scope: comment/documentation-only backend commentary cleanup under the approved PRD `.omx/plans/prd-2026-06-02-backend-commentary-cleanup.md`.
 

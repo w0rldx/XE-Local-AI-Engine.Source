@@ -1,5 +1,7 @@
 # Backend commentary cleanup inventory
 
+> Point-in-time / superseded — this is a dated 2026-06-02 snapshot of the cleanup state, not a living document. The living convention is [docs/backend-commentary-map.md](./backend-commentary-map.md); defer to it.
+
 Date: 2026-06-02
 Scope: baseline guardrails for comment/XML-doc/Markdown-only cleanup.
 
