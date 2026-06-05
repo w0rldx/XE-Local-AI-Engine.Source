@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.HostAgent.Linux.Capabilities;
+namespace XE_Local_AI_Engine.HostAgent.Linux.Capabilities.Implementation;
 
 using System.ComponentModel;
 using Microsoft.Extensions.Options;
