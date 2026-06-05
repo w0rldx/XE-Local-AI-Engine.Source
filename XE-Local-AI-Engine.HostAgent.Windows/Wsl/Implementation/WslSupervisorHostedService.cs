@@ -1,6 +1,7 @@
-namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl;
+namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl.Implementation;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 
 public sealed class WslSupervisorHostedService : BackgroundService
 {

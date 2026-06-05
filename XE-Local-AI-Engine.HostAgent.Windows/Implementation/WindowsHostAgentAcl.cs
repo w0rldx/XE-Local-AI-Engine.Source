@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.HostAgent.Windows;
+namespace XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 
 using System.Runtime.Versioning;
 using System.Security.AccessControl;

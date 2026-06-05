@@ -65,7 +65,7 @@ public sealed class HostAgentWindowsScaffoldTests
     public async Task Program_WhenScaffolded_LogsToRotatingFileWithoutConsoleProvider()
     {
         var program = await File.ReadAllTextAsync(GetWindowsProjectPath("Program.cs"));
-        var loggerProvider = await File.ReadAllTextAsync(GetWindowsProjectPath("RotatingFileLoggerProvider.cs"));
+        var loggerProvider = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "RotatingFileLoggerProvider.cs"));
 
         AssertEx.Contains(program, "builder.Logging.ClearProviders()");
         AssertEx.Contains(program, "RotatingFileLoggerProvider");
@@ -97,7 +97,7 @@ public sealed class HostAgentWindowsScaffoldTests
     [Test]
     public async Task SecretStorage_WhenScaffolded_GrantsExpectedWindowsPrincipalsOnly()
     {
-        var acl = await File.ReadAllTextAsync(GetWindowsProjectPath("WindowsHostAgentAcl.cs"));
+        var acl = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "WindowsHostAgentAcl.cs"));
         var identity = await File.ReadAllTextAsync(GetWindowsProjectPath("WindowsHostIdentity.cs"));
         var paths = await File.ReadAllTextAsync(GetWindowsProjectPath("HostAgentWindowsPaths.cs"));
 
@@ -114,8 +114,8 @@ public sealed class HostAgentWindowsScaffoldTests
     [Test]
     public async Task SecretStorage_WhenScaffolded_DoesNotLogTokenMaterial()
     {
-        var secretStore = await File.ReadAllTextAsync(GetWindowsProjectPath("HostAgentSecretStore.cs"));
-        var initializer = await File.ReadAllTextAsync(GetWindowsProjectPath("AdminTokenInitializationHostedService.cs"));
+        var secretStore = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "HostAgentSecretStore.cs"));
+        var initializer = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "AdminTokenInitializationHostedService.cs"));
 
         AssertEx.False(secretStore.Contains("ILogger", StringComparison.Ordinal));
         AssertEx.False(initializer.Contains("{token", StringComparison.OrdinalIgnoreCase));
@@ -125,7 +125,7 @@ public sealed class HostAgentWindowsScaffoldTests
     [Test]
     public async Task WslDriver_WhenScaffolded_UsesAllowlistAndHostOwnedTerminateBoundary()
     {
-        var driver = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Wsl2Driver.cs"));
+        var driver = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "Wsl2Driver.cs"));
         var allowlist = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "WslCommandAllowlist.cs"));
         var runner = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "WindowsProcessRunner.cs"));
         var linuxInstallScript = await File.ReadAllTextAsync(Path.Combine(ProjectRoot,
