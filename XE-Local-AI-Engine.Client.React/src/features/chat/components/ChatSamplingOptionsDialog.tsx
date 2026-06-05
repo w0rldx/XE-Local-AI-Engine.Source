@@ -1,7 +1,10 @@
-import { Button, Divider, NumberInput, Stack, Text, Textarea, Title } from "@mantine/core";
+import { ActionIcon, Button, Divider, Group, NumberInput, Slider, Stack, Text, Textarea, Title, Tooltip } from "@mantine/core";
+import { IconRestore } from "@tabler/icons-react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import type { SamplingFieldMeta } from "@/features/chat/models/ChatSamplingOptions";
 import { clampFieldMax, samplingFieldGroups, toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 
@@ -12,6 +15,95 @@ interface ChatSamplingOptionsDialogProps {
 	maxContextTokens?: number;
 }
 
+interface SamplingFieldRowProps {
+	meta: SamplingFieldMeta;
+	numValue: number | undefined;
+	cappedMax: number;
+	onCommit: (val: number | string) => void;
+	onReset: () => void;
+}
+
+function SamplingFieldRow({ meta, numValue, cappedMax, onCommit, onReset }: SamplingFieldRowProps) {
+	const { t } = useTranslation();
+
+	const resetLabel = t("pages.chat.samplingOptions.resetField", { field: t(meta.labelKey) });
+
+	const numberInput = (
+		<NumberInput
+			style={{ width: meta.slider ? 110 : undefined }}
+			hideControls={meta.slider}
+			label={meta.slider ? undefined : t(meta.labelKey)}
+			description={meta.slider ? undefined : t(meta.descriptionKey)}
+			min={meta.min}
+			max={cappedMax}
+			step={meta.step}
+			decimalScale={meta.decimalScale}
+			allowDecimal={meta.allowDecimal}
+			value={numValue ?? ""}
+			placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
+			onChange={onCommit}
+			data-testid={`chat-sampling-field-${meta.key}`}
+		/>
+	);
+
+	const resetButton = (
+		<Tooltip label={resetLabel} withArrow={true}>
+			<ActionIcon
+				variant="subtle"
+				color="gray"
+				size="sm"
+				disabled={numValue === undefined}
+				onClick={onReset}
+				aria-label={resetLabel}
+				data-testid={`chat-sampling-reset-${meta.key}`}
+			>
+				<IconRestore size={14} />
+			</ActionIcon>
+		</Tooltip>
+	);
+
+	if (meta.slider) {
+		return (
+			<Stack gap={4}>
+				<Group justify="space-between" wrap="nowrap">
+					<Text size="sm" fw={500}>
+						{t(meta.labelKey)}
+					</Text>
+					{resetButton}
+				</Group>
+				<Text size="xs" c="dimmed">
+					{t(meta.descriptionKey)}
+				</Text>
+				<Group wrap="nowrap" align="center" gap="sm">
+					<Slider
+						style={{ flex: 1 }}
+						min={meta.min}
+						max={cappedMax}
+						step={meta.step}
+						value={numValue ?? meta.min}
+						label={(v) => String(v)}
+						marks={[
+							{ value: meta.min, label: String(meta.min) },
+							{ value: cappedMax, label: String(cappedMax) },
+						]}
+						onChange={onCommit}
+						data-testid={`chat-sampling-slider-${meta.key}`}
+					/>
+					{numberInput}
+				</Group>
+			</Stack>
+		);
+	}
+
+	// Non-slider field (seed): label+description inside NumberInput, reset beside it.
+	return (
+		<Group wrap="nowrap" align="flex-end" gap="xs">
+			<div style={{ flex: 1 }}>{numberInput}</div>
+			{resetButton}
+		</Group>
+	);
+}
+
 export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens }: ChatSamplingOptionsDialogProps) {
 	const { t } = useTranslation();
 	const options = useChatSamplingPreferencesStore((state) => state.options);
@@ -19,6 +111,33 @@ export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens }:
 
 	// Derive whether any override is currently set to surface a reset affordance.
 	const hasOverrides = toWireSamplingOptions(options) !== undefined;
+
+	// Mantine's controlled NumberInput/Slider can emit a spurious onChange during initial mount (observed: the
+	// num_ctx field committing its min on open). Ignore commits until after mount so merely opening the dialog never
+	// writes to the store — preserving the byte-identical "no override" invariant. User edits fire well after mount.
+	const ready = useRef(false);
+	useEffect(() => {
+		ready.current = true;
+		return () => {
+			ready.current = false;
+		};
+	}, []);
+
+	// Shared coercion: slider gives number directly; NumberInput gives number | string.
+	// Empty/blank/NaN -> undefined (clear the field); finite number -> set.
+	function commitField(key: SamplingFieldMeta["key"], val: number | string): void {
+		if (!ready.current) {
+			return;
+		}
+
+		const num =
+			typeof val === "number"
+				? val
+				: typeof val === "string" && val.trim() !== ""
+					? Number(val)
+					: Number.NaN;
+		setField(key, Number.isFinite(num) ? (num as never) : (undefined as never));
+	}
 
 	const footer = (
 		<>
@@ -58,30 +177,13 @@ export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens }:
 							const cappedMax = clampFieldMax(meta, maxContextTokens);
 
 							return (
-								<NumberInput
+								<SamplingFieldRow
 									key={meta.key}
-									label={t(meta.labelKey)}
-									description={t(meta.descriptionKey)}
-									min={meta.min}
-									max={cappedMax}
-									step={meta.step}
-									decimalScale={meta.decimalScale}
-									allowDecimal={meta.allowDecimal}
-									value={numValue ?? ""}
-									placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
-									onChange={(val) => {
-										// NumberInput.onChange emits `number | string` — string for partial input
-										// (leading zeros, trailing decimal). Coerce to a real number; clear the
-										// field on empty/non-finite so a string never enters the store or the wire.
-										const num =
-											typeof val === "number"
-												? val
-												: typeof val === "string" && val.trim() !== ""
-													? Number(val)
-													: Number.NaN;
-										setField(meta.key, Number.isFinite(num) ? (num as never) : (undefined as never));
-									}}
-									data-testid={`chat-sampling-field-${meta.key}`}
+									meta={meta}
+									numValue={numValue}
+									cappedMax={cappedMax}
+									onCommit={(val) => commitField(meta.key, val)}
+									onReset={() => setField(meta.key, undefined as never)}
 								/>
 							);
 						})}

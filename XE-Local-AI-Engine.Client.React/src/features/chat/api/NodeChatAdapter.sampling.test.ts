@@ -107,7 +107,7 @@ describe("NodeChatAdapter toStreamRequest sampling forwarding", () => {
 describe("clampFieldMax context-length cap", () => {
 	it("returns the field meta max for non-context-sensitive fields regardless of maxContextTokens", async () => {
 		const { clampFieldMax } = await import("@/features/chat/models/ChatSamplingOptions");
-		const meta = { key: "temperature" as const, labelKey: "", descriptionKey: "", min: 0, max: 2, step: 0.05, allowDecimal: true };
+		const meta = { key: "temperature" as const, labelKey: "", descriptionKey: "", min: 0, max: 2, step: 0.05, allowDecimal: true, slider: true };
 
 		expect(clampFieldMax(meta, 4096)).toBe(2);
 		expect(clampFieldMax(meta, undefined)).toBe(2);
@@ -115,28 +115,28 @@ describe("clampFieldMax context-length cap", () => {
 
 	it("clamps maxOutputTokens to maxContextTokens when context limit is smaller", async () => {
 		const { clampFieldMax } = await import("@/features/chat/models/ChatSamplingOptions");
-		const meta = { key: "maxOutputTokens" as const, labelKey: "", descriptionKey: "", min: 1, max: 131072, step: 128, allowDecimal: false };
+		const meta = { key: "maxOutputTokens" as const, labelKey: "", descriptionKey: "", min: 1, max: 131072, step: 128, allowDecimal: false, slider: true };
 
 		expect(clampFieldMax(meta, 4096)).toBe(4096);
 	});
 
 	it("clamps numCtx to maxContextTokens when context limit is smaller", async () => {
 		const { clampFieldMax } = await import("@/features/chat/models/ChatSamplingOptions");
-		const meta = { key: "numCtx" as const, labelKey: "", descriptionKey: "", min: 512, max: 131072, step: 512, allowDecimal: false };
+		const meta = { key: "numCtx" as const, labelKey: "", descriptionKey: "", min: 512, max: 131072, step: 512, allowDecimal: false, slider: true };
 
 		expect(clampFieldMax(meta, 8192)).toBe(8192);
 	});
 
 	it("does not clamp when maxContextTokens is larger than field meta max", async () => {
 		const { clampFieldMax } = await import("@/features/chat/models/ChatSamplingOptions");
-		const meta = { key: "maxOutputTokens" as const, labelKey: "", descriptionKey: "", min: 1, max: 512, step: 128, allowDecimal: false };
+		const meta = { key: "maxOutputTokens" as const, labelKey: "", descriptionKey: "", min: 1, max: 512, step: 128, allowDecimal: false, slider: true };
 
 		expect(clampFieldMax(meta, 131072)).toBe(512);
 	});
 
 	it("returns field meta max when maxContextTokens is undefined", async () => {
 		const { clampFieldMax } = await import("@/features/chat/models/ChatSamplingOptions");
-		const meta = { key: "maxOutputTokens" as const, labelKey: "", descriptionKey: "", min: 1, max: 131072, step: 128, allowDecimal: false };
+		const meta = { key: "maxOutputTokens" as const, labelKey: "", descriptionKey: "", min: 1, max: 131072, step: 128, allowDecimal: false, slider: true };
 
 		expect(clampFieldMax(meta, undefined)).toBe(131072);
 	});
