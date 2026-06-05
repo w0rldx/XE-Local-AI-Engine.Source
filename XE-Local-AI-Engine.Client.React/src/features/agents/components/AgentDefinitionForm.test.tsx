@@ -176,7 +176,7 @@ describe("AgentDefinitionForm", () => {
 	// → TypeError. Fix: capture into a local const before the updater (e.g. `const v = e.currentTarget.value`).
 	// NOTE: React flushes synchronously in act() so this test cannot reproduce the timing failure; it only guards
 	// that the controlled value flows through correctly. A real-browser E2E test is needed to catch the
-	// null-currentTarget class of bug (see Plans/AGENT-MODE-TEST-RUNBOOK.md — documented gap).
+	// null-currentTarget class of bug (a known, documented coverage gap for this test).
 	it("accepts typed input into the multiline instructions field without crashing", () => {
 		const { onSubmit } = renderForm({ initialValues: { name: "Helper" } });
 

@@ -34,11 +34,11 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	chat: {
 		localRuntime: true,
 		localModelManagement: true,
-		// catalog ships with RC (time/date + calculator); toggle OFF by default, user-toggleable — see Plans/2026-05-27-local-tools-rc-team-plan.md
+		// catalog ships with RC (time/date + calculator); toggle OFF by default, user-toggleable
 		localTools: true,
 		toolApprovals: false,
 		conversationFeedback: true,
-		// server-side SQLite is the source of truth; node has no client Dexie/offline queue — see Plans/chat-capability-gap-rc.md E (N/A-LOCAL)
+		// server-side SQLite is the source of truth; node has no client Dexie/offline queue (offline-first is N/A for the local node)
 		offlineFirst: false,
 		encryptedConversations: false,
 		clientNodeRouting: false,
