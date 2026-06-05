@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 
 /// <summary>
 ///     Represents worker hub connection.

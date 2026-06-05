@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.DeadLetter;
+namespace XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Connection;
 

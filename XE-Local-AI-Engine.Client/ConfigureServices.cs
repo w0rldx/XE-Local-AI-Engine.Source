@@ -198,7 +198,7 @@ public static class ConfigureServices
         // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
         // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
         // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
-        builder.Services.AddHostedService<Services.ModelFit.ModelRecommendationScheduleSeeder>();
+        builder.Services.AddHostedService<Services.ModelFit.Implementation.ModelRecommendationScheduleSeeder>();
         // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
         builder.Services.AddHostedService<Services.Agents.Implementation.DefaultAgentSeeder>();
