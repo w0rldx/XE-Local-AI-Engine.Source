@@ -43,7 +43,10 @@ internal static class ShowEndpoint
             capabilities = new[]
             {
                 "completion",
-                "embedding"
+                "embedding",
+                // The default fake chat model advertises Ollama `tools` so capability-gated UI (the
+                // chat local-tools toggle) renders, mirroring a real tool-capable model (e.g. qwen).
+                "tools"
             },
             modified_at = FakeOllamaEndpointMapper.NowString()
         }, FakeOllamaEndpointMapper.SerializerOptions);

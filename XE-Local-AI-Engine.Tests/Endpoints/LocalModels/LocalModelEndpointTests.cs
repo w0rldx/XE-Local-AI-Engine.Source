@@ -57,7 +57,7 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var model = models.Items.Single(item => item.ModelName == "llama3:8b");
 
-        // FakeOllama /api/show reports ["completion","embedding"], so the detector classifies the model as Chat.
+        // FakeOllama /api/show reports ["completion","embedding","tools"], so the detector classifies the model as Chat.
         AssertEx.Equal("Chat", model.Kind);
         AssertEx.Equal("Chat", model.DetectedKind);
         AssertEx.False(model.IsOverridden);
