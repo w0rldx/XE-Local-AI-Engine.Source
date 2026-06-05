@@ -92,7 +92,12 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 	// predates this page visit.
 	const jobIdRef = useRef(scheduledJobId);
 	jobIdRef.current = scheduledJobId;
-	const watermarkUtcRef = useRef(Date.now());
+	// Lazy-initialized once at mount: useRef ignores all but its first argument, so passing Date.now() directly would
+	// re-evaluate it on every render and throw the result away. Initialize to null and stamp "now" once.
+	const watermarkUtcRef = useRef<number | null>(null);
+	if (watermarkUtcRef.current === null) {
+		watermarkUtcRef.current = Date.now();
+	}
 
 	useEffect(() => {
 		const connection = new HubConnectionBuilder()
@@ -133,16 +138,25 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			if (jobId === undefined) {
 				return;
 			}
-			const sinceUtc = Math.max(0, watermarkUtcRef.current - CLOCK_SKEW_TOLERANCE_MS);
+			// `current` was stamped at mount (see lazy init above); coalesce only to satisfy the number | null type.
+			const sinceUtc = Math.max(0, (watermarkUtcRef.current ?? Date.now()) - CLOCK_SKEW_TOLERANCE_MS);
 			try {
 				const runs = await fetchScheduledJobRuns(queryClient, { scheduledJobId: jobId, fromUtc: sinceUtc });
 				// Most-recent terminal run since the watermark — order-independent (don't assume the API's sort order).
-				const terminalRun = runs
-					.filter(
-						(run) =>
-							run.actualFireTimeUtc !== null && run.actualFireTimeUtc >= sinceUtc && isTerminalRefreshRunStatus(run.status),
-					)
-					.sort((a, b) => (b.actualFireTimeUtc ?? 0) - (a.actualFireTimeUtc ?? 0))[0];
+				// Single pass tracking the running max instead of sorting the whole array just to read its first element.
+				let terminalRun: (typeof runs)[number] | undefined;
+				for (const run of runs) {
+					if (
+						run.actualFireTimeUtc === null ||
+						run.actualFireTimeUtc < sinceUtc ||
+						!isTerminalRefreshRunStatus(run.status)
+					) {
+						continue;
+					}
+					if (terminalRun === undefined || (run.actualFireTimeUtc ?? 0) > (terminalRun.actualFireTimeUtc ?? 0)) {
+						terminalRun = run;
+					}
+				}
 				if (terminalRun !== undefined) {
 					notifyModelFitRefreshRun(terminalRun, tRef.current);
 				}

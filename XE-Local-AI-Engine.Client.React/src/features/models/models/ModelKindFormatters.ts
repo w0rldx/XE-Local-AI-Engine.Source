@@ -47,7 +47,7 @@ export function capabilityLabel(t: Translate, capability: string): string {
 
 // The three classifications the operator can pick from when overriding a model's kind (locked decision D1). Mirrors
 // the persisted ModelKind enum names — the value is sent verbatim to the override endpoint.
-export const overridableKinds = ["Chat", "Embedding", "Unknown"] as const;
+const overridableKinds = ["Chat", "Embedding", "Unknown"] as const;
 
 // Override options for a given model: the fixed overridable kinds, plus the model's current effective kind when it is
 // not already in the list. This keeps the Select's value (the effective model.kind) always matching an option, so a

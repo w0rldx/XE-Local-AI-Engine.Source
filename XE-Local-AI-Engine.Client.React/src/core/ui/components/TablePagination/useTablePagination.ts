@@ -5,7 +5,7 @@ import { useTablePaginationStore } from "@/core/ui/components/TablePagination/us
 // Default rows-per-page and the selectable sizes offered by the footer. Kept here so every table that opts into
 // pagination shares one set of defaults; callers override per-table via UseTablePaginationOptions.
 export const DEFAULT_PAGE_SIZE = 25;
-export const DEFAULT_PAGE_SIZE_OPTIONS: readonly number[] = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE_OPTIONS: readonly number[] = [10, 25, 50, 100];
 
 export interface UseTablePaginationOptions {
 	/** Rows per page on first render. Defaults to {@link DEFAULT_PAGE_SIZE}. */

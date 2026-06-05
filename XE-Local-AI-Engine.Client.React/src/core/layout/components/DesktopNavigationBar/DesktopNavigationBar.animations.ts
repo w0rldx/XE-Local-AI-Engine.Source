@@ -28,27 +28,6 @@ export const labelVariants: Variants = {
 	},
 };
 
-export const userInfoVariants: Variants = {
-	expanded: {
-		opacity: 1,
-		width: "auto",
-		transition: {
-			duration: 0.2,
-			ease: "easeOut",
-			opacity: { delay: 0.12, duration: 0.08, ease: "easeIn" },
-		},
-	},
-	collapsed: {
-		opacity: 0,
-		width: 0,
-		transition: {
-			duration: 0.2,
-			ease: "easeOut",
-			opacity: { duration: 0.06, ease: "easeOut" },
-		},
-	},
-};
-
 export const logoMarkVariants: Variants = {
 	expanded: { x: 0 },
 	collapsed: { x: 0 },

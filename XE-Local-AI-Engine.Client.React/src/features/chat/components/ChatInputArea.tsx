@@ -20,6 +20,10 @@ const composerStyles = {
 	bottomSection: { height: TOOLBAR_HEIGHT },
 } as const;
 
+// Stable empty default for the optional agentOptions prop. A fresh `[]` in the destructuring default allocates a
+// new array reference every render, which would defeat referential-equality checks downstream.
+const EMPTY_AGENT_OPTIONS: readonly AgentOption[] = [];
+
 interface ChatInputAreaProps {
 	availableReasoningEfforts: ReasoningEffort[];
 	capabilities?: ChatUiCapabilities;
@@ -68,7 +72,7 @@ export function ChatInputArea({
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
 	selectedAgentId = "",
-	agentOptions = [],
+	agentOptions = EMPTY_AGENT_OPTIONS,
 	onCancel,
 	onModelChange,
 	onReasoningEffortChange,

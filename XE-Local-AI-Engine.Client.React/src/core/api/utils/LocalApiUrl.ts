@@ -4,7 +4,7 @@ function trimSlashes(path: string): string {
 	return path.replace(/^\/+|\/+$/g, "");
 }
 
-export const localApiBaseUrl = `/api/local/${environment.VITE_API_VERSION}`;
+const localApiBaseUrl = `/api/local/${environment.VITE_API_VERSION}`;
 
 export function buildLocalApiUrl(path: string): string {
 	const normalizedPath = trimSlashes(path);

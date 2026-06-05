@@ -129,7 +129,7 @@ function titleOrFallback(title: string | null | undefined): string {
 	return title?.trim() || "Untitled conversation";
 }
 
-export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
+function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 	const messageId = dto.messageId ?? "";
 	return {
 		id: messageId,

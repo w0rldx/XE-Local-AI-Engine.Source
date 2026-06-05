@@ -7,13 +7,6 @@
 // Connection state for a registered MCP server as seen by the node connection manager.
 export type McpConnectionStatus = "connected" | "disabled" | "error" | "connecting";
 
-export const mcpConnectionStatuses: readonly McpConnectionStatus[] = [
-	"connected",
-	"disabled",
-	"error",
-	"connecting",
-];
-
 // A tool discovered from a connected MCP server. The name is the qualified executable name
 // (mcp__{server}__{tool}); requiresApproval is the catalog default (ON for MCP tools).
 export interface McpDiscoveredTool {

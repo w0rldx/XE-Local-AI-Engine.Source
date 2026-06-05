@@ -43,7 +43,7 @@ export interface InvocationMonitorDto {
 	historyCapacity: number;
 }
 
-export const invocationEmptyValue = "—";
+const invocationEmptyValue = "—";
 
 export function formatInvocationText(value: string | null | undefined): string {
 	return value?.trim() || invocationEmptyValue;

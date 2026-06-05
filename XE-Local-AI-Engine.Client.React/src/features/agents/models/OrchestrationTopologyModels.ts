@@ -7,10 +7,10 @@ import { z } from "zod";
 //     maxTurnsPerAgent, returnToPrevious }
 // The triage is THIS definition's own id and is always included in participantAgentDefinitionIds.
 
-export const ORCHESTRATION_TOPOLOGY_VERSION = 1;
+const ORCHESTRATION_TOPOLOGY_VERSION = 1;
 
 // Conservative default turn cap. Keeps a routing loop from spinning.
-export const DEFAULT_MAX_TURNS_PER_AGENT = 8;
+const DEFAULT_MAX_TURNS_PER_AGENT = 8;
 
 export interface OrchestrationHandoff {
 	fromAgentDefinitionId: string;

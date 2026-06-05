@@ -20,7 +20,12 @@
 		"bracketSpacing": true,
 		"expand": "auto",
 		"useEditorconfig": true,
-		"includes": ["**", "!**/package-lock.json", "!**/pnpm-lock.yaml", "!**/yarn.lock"]
+		"includes": [
+			"**",
+			"!**/package-lock.json",
+			"!**/pnpm-lock.yaml",
+			"!**/yarn.lock"
+		]
 	},
 	"linter": {
 		"enabled": true,
@@ -80,7 +85,9 @@
 				"useFilenamingConvention": {
 					"level": "error",
 					"options": {
-						"filenameCases": ["PascalCase"]
+						"filenameCases": [
+							"PascalCase"
+						]
 					}
 				},
 				"useForOf": "error",
@@ -88,7 +95,8 @@
 				"useNumberNamespace": "error",
 				"useNumericSeparators": "off",
 				"useThrowNewError": "error",
-				"useTrimStartEnd": "error"
+				"useTrimStartEnd": "error",
+				"useImportType": "error"
 			},
 			"suspicious": {
 				"noAssignInExpressions": "error",
@@ -124,7 +132,11 @@
 				"noWith": "error",
 				"useErrorMessage": "error",
 				"useGetterReturn": "error",
-				"useNumberToFixedDigitsArgument": "error"
+				"useNumberToFixedDigitsArgument": "error",
+				"noExplicitAny": "error"
+			},
+			"nursery": {
+				"useExhaustiveSwitchCases": "error"
 			}
 		},
 		"includes": [
@@ -216,7 +228,17 @@
 	},
 	"overrides": [
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -253,7 +275,8 @@
 						"useDefaultParameterLast": "error",
 						"useDefaultSwitchClause": "error",
 						"useGroupedAccessorPairs": "error",
-						"useThrowOnlyError": "error"
+						"useThrowOnlyError": "error",
+						"useImportType": "error"
 					},
 					"suspicious": {
 						"noAlert": "warn",
@@ -270,13 +293,24 @@
 						"useAwait": "off",
 						"useDefaultSwitchClauseLast": "error",
 						"useGuardForIn": "error",
-						"useIterableCallbackReturn": "error"
+						"useIterableCallbackReturn": "error",
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -325,13 +359,27 @@
 						"noTemplateCurlyInString": "error",
 						"noUnsafeNegation": "error",
 						"noUselessRegexBackrefs": "error",
-						"useGetterReturn": "error"
+						"useGetterReturn": "error",
+						"noExplicitAny": "error"
+					},
+					"style": {
+						"useImportType": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"javascript": {
 				"globals": []
 			},
@@ -356,18 +404,30 @@
 						"useConsistentObjectDefinitions": "error",
 						"useConst": "error",
 						"useSymbolDescription": "error",
-						"useTemplate": "error"
+						"useTemplate": "error",
+						"useImportType": "error"
 					},
 					"suspicious": {
 						"noClassAssign": "error",
 						"noDuplicateClassMembers": "error",
-						"noVar": "error"
+						"noVar": "error",
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -382,13 +442,27 @@
 						"useExponentiationOperator": "error",
 						"useObjectSpread": "error",
 						"useShorthandAssign": "error",
-						"useSingleVarDeclarator": "error"
+						"useSingleVarDeclarator": "error",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -466,17 +540,29 @@
 									"print": "Use window.print instead. https://github.com/facebook/create-react-app/blob/HEAD/packages/confusing-browser-globals/README.md"
 								}
 							}
-						}
+						},
+						"useImportType": "error"
 					},
 					"suspicious": {
 						"noLabelVar": "error",
-						"noShadowRestrictedNames": "error"
+						"noShadowRestrictedNames": "error",
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"javascript": {
 				"globals": [
 					"onanimationend",
@@ -604,18 +690,30 @@
 					"style": {
 						"noImplicitBoolean": "error",
 						"useConsistentCurlyBraces": "error",
-						"useFragmentSyntax": "error"
+						"useFragmentSyntax": "error",
+						"useImportType": "error"
 					},
 					"suspicious": {
 						"noArrayIndexKey": "error",
 						"noCommentText": "error",
-						"noDuplicateJsxProps": "error"
+						"noDuplicateJsxProps": "error",
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"javascript": {
 				"globals": []
 			},
@@ -661,12 +759,28 @@
 						"useValidAriaValues": "error",
 						"useValidAutocomplete": "error",
 						"useValidLang": "error"
+					},
+					"style": {
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"javascript": {
 				"globals": []
 			},
@@ -675,22 +789,48 @@
 					"correctness": {
 						"useExhaustiveDependencies": "error",
 						"useHookAtTopLevel": "error"
+					},
+					"style": {
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx",
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"linter": {
 				"rules": {
 					"style": {
-						"useSelfClosingElements": "off"
+						"useSelfClosingElements": "off",
+						"useImportType": "error"
+					},
+					"suspicious": {
+						"noExplicitAny": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"linter": {
 				"rules": {
 					"correctness": {
@@ -713,13 +853,23 @@
 						"noRedeclare": "off",
 						"noUnsafeNegation": "off",
 						"noWith": "off",
-						"useGetterReturn": "off"
+						"useGetterReturn": "off",
+						"noExplicitAny": "error"
+					},
+					"style": {
+						"useImportType": "error"
 					}
 				}
 			}
 		},
 		{
-			"includes": ["**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
+			"includes": [
+				"**/*.ts",
+				"**/*.cts",
+				"**/*.mts",
+				"**/*.tsx",
+				"**/*.d.ts"
+			],
 			"javascript": {
 				"globals": []
 			},
@@ -763,7 +913,7 @@
 						"useEnumInitializers": "off",
 						"useExportType": "off",
 						"useForOf": "off",
-						"useImportType": "off",
+						"useImportType": "error",
 						"useLiteralEnumMembers": "off",
 						"useNamingConvention": {
 							"level": "error",
@@ -775,23 +925,38 @@
 										"selector": {
 											"kind": "function"
 										},
-										"formats": ["camelCase", "PascalCase"]
+										"formats": [
+											"camelCase",
+											"PascalCase"
+										]
 									},
 									{
 										"selector": {
 											"kind": "variable"
 										},
-										"formats": ["camelCase", "PascalCase", "CONSTANT_CASE"]
+										"formats": [
+											"camelCase",
+											"PascalCase",
+											"CONSTANT_CASE"
+										]
 									},
 									{
 										"selector": {
 											"kind": "typeLike"
 										},
-										"formats": ["PascalCase"]
+										"formats": [
+											"PascalCase"
+										]
 									},
 									{
-										"selector": { "kind": "objectLiteralProperty" },
-										"formats": ["camelCase", "snake_case", "PascalCase"]
+										"selector": {
+											"kind": "objectLiteralProperty"
+										},
+										"formats": [
+											"camelCase",
+											"snake_case",
+											"PascalCase"
+										]
 									}
 								]
 							}
@@ -805,7 +970,7 @@
 						"noConfusingVoidType": "off",
 						"noDuplicateClassMembers": "off",
 						"noEmptyBlockStatements": "error",
-						"noExplicitAny": "off",
+						"noExplicitAny": "error",
 						"noExtraNonNullAssertion": "error",
 						"noMisleadingInstantiator": "error",
 						"noNonNullAssertedOptionalChain": "off",
@@ -820,7 +985,12 @@
 			}
 		},
 		{
-			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx"],
+			"includes": [
+				"**/*.js",
+				"**/*.cjs",
+				"**/*.mjs",
+				"**/*.jsx"
+			],
 			"javascript": {
 				"globals": []
 			},
@@ -849,14 +1019,18 @@
 			}
 		},
 		{
-			"includes": ["src/**/use*.{ts,tsx,js,jsx}"],
+			"includes": [
+				"src/**/use*.{ts,tsx,js,jsx}"
+			],
 			"linter": {
 				"rules": {
 					"style": {
 						"useFilenamingConvention": {
 							"level": "error",
 							"options": {
-								"filenameCases": ["camelCase"]
+								"filenameCases": [
+									"camelCase"
+								]
 							}
 						}
 					}
@@ -864,7 +1038,12 @@
 			}
 		},
 		{
-			"includes": ["src/**/routeTree.gen.ts", "src/**/i18n.ts", "src/**/routes/**", "tests/**"],
+			"includes": [
+				"src/**/routeTree.gen.ts",
+				"src/**/i18n.ts",
+				"src/**/routes/**",
+				"tests/**"
+			],
 			"linter": {
 				"rules": {
 					"style": {
@@ -874,7 +1053,12 @@
 			}
 		},
 		{
-			"includes": ["vite.config.*", "vitest.config.*", "eslint.config.*", "vite-plugins/**"],
+			"includes": [
+				"vite.config.*",
+				"vitest.config.*",
+				"eslint.config.*",
+				"vite-plugins/**"
+			],
 			"linter": {
 				"rules": {
 					"style": {
@@ -892,7 +1076,13 @@
 				"organizeImports": {
 					"level": "on",
 					"options": {
-						"groups": [":PACKAGE:", ":BLANK_LINE:", ":ALIAS:", ":BLANK_LINE:", ":PATH:"]
+						"groups": [
+							":PACKAGE:",
+							":BLANK_LINE:",
+							":ALIAS:",
+							":BLANK_LINE:",
+							":PATH:"
+						]
 					}
 				}
 			}
