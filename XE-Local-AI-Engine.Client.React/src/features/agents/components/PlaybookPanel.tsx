@@ -81,7 +81,7 @@ function errorMessage(error: unknown, fallback: string): string {
 // Editor target: "create" a new action or "edit" an existing one by id. null = editor closed.
 type EditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
 
-// Per-agent playbook governance panel (Playbook P1). Lists the agent's playbook actions in injection order
+// Per-agent playbook governance panel. Lists the agent's playbook actions in injection order
 // (ascending Priority), shows each action's provenance (P1 renders source "Manual"), and offers a per-action
 // enable/disable toggle plus add/edit/delete and reorder-by-priority. Capability-gated under agentManagement —
 // when `enabled` is false it renders nothing.
@@ -92,7 +92,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const [editorTarget, setEditorTarget] = useState<EditorTarget>(null);
 
 	const actionsQuery = usePlaybookActions(enabled ? agentDefinitionId : null);
-	// Playbook P5 — read-only cohort-monitoring signals per Enabled action + the relevance-retrieval config. Joined
+	// Read-only cohort-monitoring signals per Enabled action + the relevance-retrieval config. Joined
 	// to the rows below by actionId; the read is independent of the action list (its own loading/error path) so a
 	// monitor failure degrades to "no signal" rather than blanking the governance panel.
 	const monitorQuery = usePlaybookMonitor(enabled ? agentDefinitionId : null);
@@ -134,11 +134,11 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		[orderedActions],
 	);
 
-	// Playbook P5 — the number of currently Enabled actions (the cohort under monitoring + the count the relevance
+	// The number of currently Enabled actions (the cohort under monitoring + the count the relevance
 	// gate / cap indicator reason about). Suggested/Disabled/Archived are excluded.
 	const enabledCount = useMemo(() => orderedActions.filter((action) => action.state === "Enabled").length, [orderedActions]);
 
-	// Playbook P5 — index the monitoring signals by actionId so each Enabled row can join its signal in O(1). An
+	// Index the monitoring signals by actionId so each Enabled row can join its signal in O(1). An
 	// action with no monitor item (no enable clock yet, or the read failed) simply renders the neutral "no signal".
 	const monitorByActionId = useMemo(() => {
 		const map = new Map<string, PlaybookMonitorItem>();
@@ -148,7 +148,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		return map;
 	}, [monitorQuery.data]);
 
-	// Playbook P5 — the relevance-retrieval config. When more actions are Enabled than the threshold, injection is
+	// The relevance-retrieval config. When more actions are Enabled than the threshold, injection is
 	// gated to the top-K most relevant per turn; the banner below surfaces that with the live numbers.
 	const retrieval = monitorQuery.data?.retrieval ?? null;
 	const showRelevanceBanner = retrieval !== null && enabledCount > retrieval.threshold;
@@ -269,7 +269,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 		[promoteMutation, reviewErrorMessage],
 	);
 
-	// Playbook P4 — run the eval gate for a single Suggested action against the agent's golden set. The mutation
+	// Run the eval gate for a single Suggested action against the agent's golden set. The mutation
 	// invalidation refreshes the row's eval badge + the Approve gate (Approve stays disabled until passed).
 	const handleRunEval = useCallback(
 		(action: PlaybookAction) => {
@@ -354,7 +354,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 					) : null}
 				</Group>
 
-				{/* Playbook P5 — bounded-store cap indicator: how many actions are currently Enabled for this agent. The
+				{/* Bounded-store cap indicator: how many actions are currently Enabled for this agent. The
 				    hard cap (MaxEnabledActions) is server-owned and not in this response, so the panel shows only the live
 				    Enabled count; the cap is surfaced via the typed CapReached 409 reason when a promote is blocked. */}
 				<Group gap="xs" align="center" data-testid="playbook-cap-indicator">
@@ -365,7 +365,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 					</Text>
 				</Group>
 
-				{/* Playbook P5 — relevance-gated banner: once more actions are Enabled than the retrieval threshold,
+				{/* Relevance-gated banner: once more actions are Enabled than the retrieval threshold,
 				    only the top-K most relevant are injected per turn (not all of them). Rendered only in that regime so
 				    the operator knows not every Enabled action reaches the model on every turn. The v2 ranker clause
 				    names HOW relevance is scored: node-local embedding similarity (with the model) when the operator
@@ -448,7 +448,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 				{orderedActions.map((action, index) => {
 					const isEnabled = action.state === "Enabled";
-					// Playbook P5 — the cohort-monitoring signal for an Enabled action (joined by id). Disabled actions
+					// The cohort-monitoring signal for an Enabled action (joined by id). Disabled actions
 					// carry no live signal; an Enabled action with no monitor item yet (no enable clock) renders the
 					// neutral placeholder inside MonitorSignal.
 					const monitorItem = isEnabled ? (monitorByActionId.get(action.id) ?? null) : null;
@@ -554,12 +554,12 @@ function toConfidencePercent(confidence: number): string {
 	return `${Math.round(confidence * 100)}%`;
 }
 
-// Playbook P5 — render a down-vote rate fraction (0..1) as a whole-percent string for the before→after signal.
+// Render a down-vote rate fraction (0..1) as a whole-percent string for the before→after signal.
 function toDownRatePercent(rate: number): string {
 	return `${Math.round(rate * 100)}%`;
 }
 
-// Playbook P5 — the Mantine badge color per monitor verdict. Improved is positive (teal), Regressed negative
+// The Mantine badge color per monitor verdict. Improved is positive (teal), Regressed negative
 // (red), Flat/InsufficientData neutral (gray) so the signal reads at a glance.
 const monitorStatusColors: Record<PlaybookMonitorStatus, string> = {
 	Improved: "teal",
@@ -584,7 +584,7 @@ interface MonitorSignalProps {
 	item: PlaybookMonitorItem | null;
 }
 
-// Playbook P5 — the cohort-monitoring signal for one Enabled action: a status badge (Improved / Flat / Regressed /
+// The cohort-monitoring signal for one Enabled action: a status badge (Improved / Flat / Regressed /
 // Insufficient data), a compact before→after down-rate (e.g. "12% → 5%"), and a flag marker for operator review
 // when the action is flagged (dead/harmful — coarse, agent-level signal; the operator decides, never auto-disabled).
 // An action with no monitor item renders a neutral placeholder so the row reads consistently.
@@ -652,7 +652,7 @@ interface SuggestedActionRowProps {
 	onRunEval: () => void;
 }
 
-// Playbook P4 — why the Approve/Promote control is gated, derived from the row's evalResult. Drives both the
+// Why the Approve/Promote control is gated, derived from the row's evalResult. Drives both the
 // disabled state and the tooltip copy: no eval has run, the eval is stale (ran against an older version), the
 // candidate regressed a prior-good case, or the gate is satisfied (passed).
 type PromoteGateReason = "needsEval" | "stale" | "regressed" | "passed";
@@ -681,7 +681,7 @@ function gateReasonFallback(reason: PromoteGateReason): string {
 	return gateReasonFallbacks[reason];
 }
 
-// One analysis-proposed (Suggested) action awaiting human review (Playbook P3). Surfaces the provenance
+// One analysis-proposed (Suggested) action awaiting human review. Surfaces the provenance
 // ("Analysis"), the analysis confidence as a percent, the proposed behavior, and an evidence affordance: a
 // "Based on N feedback items" summary that expands to the cited ids and points the operator to the feedback
 // insights panel mounted on the same page. Carries Approve (→ promote), Edit (→ existing edit form/PUT), and
@@ -693,7 +693,7 @@ function SuggestedActionRow({ action, disabled, isEvaluating, onApprove, onEdit,
 	const feedbackIds = action.sourceFeedbackIds ?? [];
 	const evidenceCount = feedbackIds.length;
 
-	// Playbook P4 — the eval gate. Approve is disabled until the latest eval passed against the action's current
+	// The eval gate. Approve is disabled until the latest eval passed against the action's current
 	// version; the tooltip explains why (no eval yet / regressed / stale).
 	const gateReason = promoteGateReason(action);
 	const canPromote = gateReason === "passed";
@@ -828,7 +828,7 @@ interface EvalResultSummaryProps {
 	evalResult: EvalResult | null;
 }
 
-// Playbook P4 — render the eval-gate outcome for a Suggested action: a pass/fail badge with the
+// Render the eval-gate outcome for a Suggested action: a pass/fail badge with the
 // regressed/golden case counts and an expandable list of the regressed cases (goldenCaseId + how it was scored).
 // Renders nothing until an eval has run (evalResult null) — the gated Approve tooltip already explains "run eval".
 function EvalResultSummary({ actionId, evalResult }: EvalResultSummaryProps) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Playbook P1 — manual playbook actions. Each action carries an injected behavior (the instruction text appended
+// Manual playbook actions. Each action carries an injected behavior (the instruction text appended
 // to the owning agent's system prompt when its playbook is enabled), an enable/disable state, a provenance
 // source (P1 writes "Manual" only — the analysis-proposed "Analysis" source arrives in a later phase), an
 // optional trigger condition + scope tag (advisory/display in P1), and a Priority that orders injection.
@@ -16,7 +16,7 @@ export type PlaybookActionState = "Suggested" | "Enabled" | "Disabled" | "Archiv
 
 export type PlaybookActionSource = "Manual" | "Analysis";
 
-// Playbook P4 — eval gate. How a single golden case was scored: a deterministic required/forbidden-phrase
+// Eval gate. How a single golden case was scored: a deterministic required/forbidden-phrase
 // assertion or a node-local LLM judge against the case rubric.
 export type EvalScoredBy = "assertion" | "judge";
 
@@ -30,7 +30,7 @@ export interface EvalCase {
 	readonly regressed: boolean;
 }
 
-// Playbook P4 — the regression-gate outcome recorded on a Suggested action before it may be promoted. Ids +
+// The regression-gate outcome recorded on a Suggested action before it may be promoted. Ids +
 // pass/fail flags + counts only (no transcripts). `passed` is `goldenCaseCount > 0 && regressedCaseCount === 0`;
 // an empty golden set never passes (you cannot prove no-regression with zero cases). Null until an eval runs;
 // cleared when the action is edited.
@@ -61,7 +61,7 @@ export const editablePlaybookActionStates: readonly Extract<PlaybookActionState,
 
 // Domain view-model for a playbook action. Timestamps are epoch milliseconds (long on the wire).
 //
-// Playbook P3 adds analysis provenance: an analysis-proposed action (source "Analysis", state "Suggested") carries
+// Analysis provenance: an analysis-proposed action (source "Analysis", state "Suggested") carries
 // the feedback ids that drove it (sourceFeedbackIds) and the analysis-agent confidence in [0,1] (confidence).
 // Manual actions leave both null.
 export interface PlaybookAction {
@@ -80,7 +80,7 @@ export interface PlaybookAction {
 	readonly sourceFeedbackIds: readonly string[] | null;
 	// Analysis-agent confidence in [0,1] (null for manual actions).
 	readonly confidence: number | null;
-	// Playbook P4 — the latest regression-gate outcome. Null until an eval has run for this action (and cleared
+	// The latest regression-gate outcome. Null until an eval has run for this action (and cleared
 	// when the action is edited). Gates the Approve/Promote control: promote is blocked until evalResult.passed.
 	readonly evalResult: EvalResult | null;
 }

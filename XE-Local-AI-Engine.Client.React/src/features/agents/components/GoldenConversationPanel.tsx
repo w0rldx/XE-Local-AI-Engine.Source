@@ -65,7 +65,7 @@ function parseTurnLine(line: string): GoldenTurn {
 	return { role: role.length > 0 ? role : "user", text };
 }
 
-// Per-agent golden conversation management (Playbook P4). Lists the agent's golden cases (title + turn count +
+// Per-agent golden conversation management. Lists the agent's golden cases (title + turn count +
 // assertion/rubric presence), offers an add form (title + input turns + required/forbidden phrases and/or rubric),
 // and delete. Capability-gated under agentManagement — when `enabled` is false it renders nothing. The golden set
 // gates promotion: the eval runner replays each case against the candidate playbook action.

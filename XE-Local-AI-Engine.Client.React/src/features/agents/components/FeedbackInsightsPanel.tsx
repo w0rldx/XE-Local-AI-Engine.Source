@@ -23,7 +23,7 @@ function toPercent(fraction: number): string {
 	return `${Math.round(fraction * 100)}%`;
 }
 
-// Per-agent read-only feedback insights panel (Playbook P2). Aggregates the up/down ratings and verbatim
+// Per-agent read-only feedback insights panel. Aggregates the up/down ratings and verbatim
 // comment exemplars already persisted node-locally for this agent: an overall up/down split with a down-rate,
 // a per-tool breakdown table (conversation-level attribution — see the footnote), and a capped list of comment
 // exemplars. Rows below the occurrence threshold carry a de-emphasized "not enough signal" label so an

@@ -295,7 +295,7 @@ export function AgentsPage() {
 							onSubmit={handleSubmit}
 							onDirtyChange={setIsEditorDirty}
 						/>
-						{/* Per-agent playbook governance (Playbook P1). Only meaningful for a persisted agent (has an id);
+						{/* Per-agent playbook governance. Only meaningful for a persisted agent (has an id);
 						    a brand-new agent must be saved first. Capability-gated under agentManagement. */}
 						{editingDefinition ? (
 							<PlaybookPanel
@@ -304,7 +304,7 @@ export function AgentsPage() {
 								enabled={nodeCapabilities.agentManagement}
 							/>
 						) : null}
-						{/* Per-agent read-only feedback insights (Playbook P2). Only meaningful for a persisted
+						{/* Per-agent read-only feedback insights. Only meaningful for a persisted
 						    agent (has an id). Capability-gated under agentManagement; analytics-only, no mutations. */}
 						{editingDefinition ? (
 							<FeedbackInsightsPanel
@@ -313,7 +313,7 @@ export function AgentsPage() {
 								enabled={nodeCapabilities.agentManagement}
 							/>
 						) : null}
-						{/* Per-agent golden conversation set (Playbook P4). The eval gate replays these cases against a
+						{/* Per-agent golden conversation set. The eval gate replays these cases against a
 						    candidate action before promotion. Only meaningful for a persisted agent (has an id).
 						    Capability-gated under agentManagement. */}
 						{editingDefinition ? (

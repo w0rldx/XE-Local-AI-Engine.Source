@@ -6,7 +6,7 @@ Use this map when updating backend comments, XML docs, or AI-agent retrieval not
 
 ## Cleanup rule
 
-Source comments should describe current invariants, ownership, security boundaries, and external-library seams. Do not reintroduce historical delivery labels such as Playbook P*, Loop P*, Marker *, lane numbers, or plan-section references into `.cs` comments. If an old label still captures useful rationale, rewrite it using one of the stable terms below and link to this map or `docs/ai-runtime.md` from Markdown, not from every source hunk.
+Source comments should describe current invariants, ownership, security boundaries, and external-library seams. Do not reintroduce historical delivery labels such as Playbook P*, Loop P*, Marker *, lane numbers, or plan-section references into `.cs` comments. The same ban applies to frontend `.ts`/`.tsx` comments (including JSX `{/* … */}` comments): name the runtime concept (e.g. "playbook governance", "eval gate", "relevance retrieval", "cohort monitoring") and drop the delivery-increment suffix. If an old label still captures useful rationale, rewrite it using one of the stable terms below and link to this map or `docs/ai-runtime.md` from Markdown, not from every source hunk.
 
 ## Stable backend anchors
 
