@@ -32,8 +32,8 @@ public sealed class HostAgentWindowsAdminSourceTests
     public async Task DesiredState_WhenD5Implemented_PersistsStoppedAndSuppressesSupervisorColdStart()
     {
         var paths = await File.ReadAllTextAsync(GetWindowsProjectPath("HostAgentWindowsPaths.cs"));
-        var store = await File.ReadAllTextAsync(GetWindowsProjectPath("DesiredStateStore.cs"));
-        var supervisor = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "WslSupervisorHostedService.cs"));
+        var store = await File.ReadAllTextAsync(GetWindowsProjectPath("Implementation", "DesiredStateStore.cs"));
+        var supervisor = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "WslSupervisorHostedService.cs"));
 
         AssertEx.Contains(paths, "desired-state.json");
         AssertEx.Contains(store, "public const string Running = \"running\"");
@@ -48,7 +48,7 @@ public sealed class HostAgentWindowsAdminSourceTests
     public async Task LifecycleEndpoints_WhenD5Implemented_UseD4ClientAndWslShutdownChoreography()
     {
         var service = await File.ReadAllTextAsync(GetWindowsProjectPath("HostAgentAdminService.cs"));
-        var driver = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Wsl2Driver.cs"));
+        var driver = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "Wsl2Driver.cs"));
 
         AssertEx.Contains(service, "StopAllContainersAsync(DefaultDrainTimeout");
         AssertEx.Contains(service, "StopUserUnitAsync");

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.HostAgent.Windows;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 
 public static class HostAgentAdminEndpoints
 {

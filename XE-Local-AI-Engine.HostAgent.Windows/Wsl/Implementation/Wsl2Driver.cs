@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl;
+namespace XE_Local_AI_Engine.HostAgent.Windows.Wsl.Implementation;
 
 using System.Security.Cryptography;
 using System.Text;

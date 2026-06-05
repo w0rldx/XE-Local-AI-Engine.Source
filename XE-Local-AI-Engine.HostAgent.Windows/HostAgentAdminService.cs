@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.HostAgent.Windows;
 
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
+using XE_Local_AI_Engine.HostAgent.Windows.Implementation;
 using XE_Local_AI_Engine.HostAgent.Windows.Wsl;
+using XE_Local_AI_Engine.HostAgent.Windows.Wsl.Implementation;
 
 public sealed class HostAgentAdminService : IDisposable
 {
