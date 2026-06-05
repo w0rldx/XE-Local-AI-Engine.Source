@@ -172,8 +172,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context, string name)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,
@@ -202,8 +201,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
         await context.SaveChangesAsync();
     }
 
-    private static async Task<Guid> SeedMessageAsync(
-        NodeChatDbContext context,
+    private static async Task<Guid> SeedMessageAsync(NodeChatDbContext context,
         Guid conversationId,
         int sequence,
         string role,

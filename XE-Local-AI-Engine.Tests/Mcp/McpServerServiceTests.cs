@@ -115,10 +115,17 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), enabled: false) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
         store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>())
-             .Returns(existing with { Enabled = true, Version = existing.Version + 1 });
+             .Returns(existing with
+             {
+                 Enabled = true,
+                 Version = existing.Version + 1
+             });
 
         var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
 
@@ -134,7 +141,10 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), enabled: true) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
 
         var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
@@ -163,14 +173,24 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(name: "Filesystem"), enabled: true) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(name: "Filesystem"), enabled: true) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
         store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
-             .Returns(callInfo => existing with { Command = ((McpServerInput)callInfo[1]!).Command, Enabled = ((McpServerInput)callInfo[1]!).Enabled });
+             .Returns(callInfo => existing with
+             {
+                 Command = ((McpServerInput)callInfo[1]!).Command,
+                 Enabled = ((McpServerInput)callInfo[1]!).Enabled
+             });
 
         // The request body carries Enabled = false, but the service must preserve the current enabled (true).
-        var requestInput = CreateStdioInput(name: "Filesystem", command: "npx-new") with { Enabled = false };
+        var requestInput = CreateStdioInput(name: "Filesystem", command: "npx-new") with
+        {
+            Enabled = false
+        };
         var result = await service.UpdateAsync(id, requestInput).ConfigureAwait(false);
 
         AssertEx.True(result!.Enabled, "Update must preserve the current enabled state, not take it from the request body.");
@@ -184,11 +204,17 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(name: "Filesystem"), enabled: false) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(name: "Filesystem"), enabled: false) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
         store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
-             .Returns(callInfo => existing with { Command = ((McpServerInput)callInfo[1]!).Command });
+             .Returns(callInfo => existing with
+             {
+                 Command = ((McpServerInput)callInfo[1]!).Command
+             });
 
         var result = await service.UpdateAsync(id, CreateStdioInput(name: "Filesystem", command: "npx-new")).ConfigureAwait(false);
 
@@ -217,9 +243,15 @@ public sealed class McpServerServiceTests
         // logs, so the caller still sees its successful toggle.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), enabled: false) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
-        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(existing with { Enabled = true });
+        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(existing with
+        {
+            Enabled = true
+        });
         manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new InvalidOperationException("connect failed"));
 
         var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
@@ -234,9 +266,15 @@ public sealed class McpServerServiceTests
         // OperationCanceledException is rethrown (not swallowed) so a caller-cancelled mutation surfaces the cancellation.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), enabled: false) with { Id = id };
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
-        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(existing with { Enabled = true });
+        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(existing with
+        {
+            Enabled = true
+        });
         manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new OperationCanceledException());
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.SetEnabledAsync(id, enabled: true)).ConfigureAwait(false);
@@ -247,7 +285,10 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), enabled: true) with { Id = id });
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), enabled: true) with
+        {
+            Id = id
+        });
         store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(true);
 
         var deleted = await service.DeleteAsync(id).ConfigureAwait(false);
@@ -261,7 +302,10 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), enabled: false) with { Id = id });
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        });
         store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(true);
 
         var deleted = await service.DeleteAsync(id).ConfigureAwait(false);

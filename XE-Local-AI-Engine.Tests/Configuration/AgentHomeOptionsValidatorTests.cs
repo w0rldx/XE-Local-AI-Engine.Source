@@ -19,7 +19,10 @@ public sealed class AgentHomeOptionsValidatorTests
     [Test]
     public void Validate_WhenMaxSelectedFolderBytesNotPositive_ReturnsFailure()
     {
-        var options = new AgentHomeOptions { MaxSelectedFolderBytes = 0 };
+        var options = new AgentHomeOptions
+        {
+            MaxSelectedFolderBytes = 0
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -31,7 +34,10 @@ public sealed class AgentHomeOptionsValidatorTests
     [Test]
     public void Validate_WhenMaxPatchBytesNotPositive_ReturnsFailure()
     {
-        var options = new AgentHomeOptions { MaxPatchBytes = 0 };
+        var options = new AgentHomeOptions
+        {
+            MaxPatchBytes = 0
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -43,7 +49,10 @@ public sealed class AgentHomeOptionsValidatorTests
     [Test]
     public void Validate_WhenPatchApplyTimeoutSecondsNotPositive_ReturnsFailure()
     {
-        var options = new AgentHomeOptions { PatchApplyTimeoutSeconds = 0 };
+        var options = new AgentHomeOptions
+        {
+            PatchApplyTimeoutSeconds = 0
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -55,7 +64,11 @@ public sealed class AgentHomeOptionsValidatorTests
     [Test]
     public void Validate_WhenEnabledAndToolCapableModelsEmpty_ReturnsFailure()
     {
-        var options = new AgentHomeOptions { Enabled = true, ToolCapableModels = [] };
+        var options = new AgentHomeOptions
+        {
+            Enabled = true,
+            ToolCapableModels = []
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -67,7 +80,11 @@ public sealed class AgentHomeOptionsValidatorTests
     public void Validate_WhenDisabledAndToolCapableModelsEmpty_ReturnsSuccess()
     {
         // The capability allow-list is only required when AgentHome is enabled.
-        var options = new AgentHomeOptions { Enabled = false, ToolCapableModels = [] };
+        var options = new AgentHomeOptions
+        {
+            Enabled = false,
+            ToolCapableModels = []
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -77,7 +94,11 @@ public sealed class AgentHomeOptionsValidatorTests
     [Test]
     public void Validate_WhenEnabledAndToolCapableModelsPopulated_ReturnsSuccess()
     {
-        var options = new AgentHomeOptions { Enabled = true, ToolCapableModels = ["qwen3:8b"] };
+        var options = new AgentHomeOptions
+        {
+            Enabled = true,
+            ToolCapableModels = ["qwen3:8b"]
+        };
 
         var result = _validator.Validate(null, options);
 

@@ -254,10 +254,9 @@ public sealed class RuntimePackageConfigHashTests
             },
             reasoningEffort);
 
-        AssertEx.Equal(
-            "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"prompt\",\"allowedTools\":[],\"modelProfile\":null,\"reasoningEffort\":\"" +
-            expectedNormalized +
-            "\",\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
+        AssertEx.Equal("{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"prompt\",\"allowedTools\":[],\"modelProfile\":null,\"reasoningEffort\":\"" +
+                       expectedNormalized +
+                       "\",\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
             canonicalJson);
     }
 

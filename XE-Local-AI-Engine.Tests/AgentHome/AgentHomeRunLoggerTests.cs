@@ -141,7 +141,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             TimestampUtc = FixedNow,
             ExecutionId = "run-001-cmd",
             Executable = "dotnet",
-            Arguments = ["build", "runs/run-001/workspace"],  // run-relative, not a host path
+            Arguments = ["build", "runs/run-001/workspace"], // run-relative, not a host path
             Completed = true,
             ExitCode = 0,
             DurationMs = 100
@@ -152,8 +152,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         var raw = await File.ReadAllTextAsync(Path.Combine(ctx.HostLogDirectory, "commands.jsonl"));
 
         // The host log directory root must not appear in the log file.
-        AssertEx.False(
-            raw.Contains(ctx.HostLogDirectory, StringComparison.Ordinal),
+        AssertEx.False(raw.Contains(ctx.HostLogDirectory, StringComparison.Ordinal),
             "commands.jsonl must not contain the raw host log directory path");
     }
 
@@ -172,7 +171,17 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             Location = "ClientLocal",
             ApprovalId = "approval_abc",
             Status = "started",
-            ArgumentSummary = new { selectedFolderIds = new[] { "folder-123" }, allowedActions = new[] { "read_workspace" } },
+            ArgumentSummary = new
+            {
+                selectedFolderIds = new[]
+                {
+                    "folder-123"
+                },
+                allowedActions = new[]
+                {
+                    "read_workspace"
+                }
+            },
             RedactionApplied = true
         };
 
@@ -204,15 +213,20 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             ToolName = "run_in_agent_home",
             Location = "ClientLocal",
             Status = "succeeded",
-            ArgumentSummary = new { selectedFolderIds = new[] { "folder-123" } },
+            ArgumentSummary = new
+            {
+                selectedFolderIds = new[]
+                {
+                    "folder-123"
+                }
+            },
             RedactionApplied = true
         };
 
         await logger.AppendToolCallAsync(toolRecord);
 
         var raw = await File.ReadAllTextAsync(Path.Combine(ctx.HostLogDirectory, "tool-calls.jsonl"));
-        AssertEx.False(
-            raw.Contains(hostRoot, StringComparison.Ordinal),
+        AssertEx.False(raw.Contains(hostRoot, StringComparison.Ordinal),
             "tool-calls.jsonl must not contain raw host paths");
     }
 
@@ -267,7 +281,12 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         });
 
         var logDir = ctx.HostLogDirectory;
-        foreach (var file in new[] { "events.jsonl", "commands.jsonl", "tool-calls.jsonl" })
+        foreach (var file in new[]
+                 {
+                     "events.jsonl",
+                     "commands.jsonl",
+                     "tool-calls.jsonl"
+                 })
         {
             var lines = NonEmptyLines(await File.ReadAllLinesAsync(Path.Combine(logDir, file)));
             foreach (var line in lines)
@@ -371,6 +390,9 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             _utcNow = utcNow;
         }
 
-        public override DateTimeOffset GetUtcNow() => _utcNow;
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
     }
 }

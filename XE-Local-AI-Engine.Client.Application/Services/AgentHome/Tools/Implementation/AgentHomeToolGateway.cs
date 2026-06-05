@@ -32,8 +32,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         {
             // Single lifecycle entry (AgentHome gateway): the service resolves identity once, acquires the run-level single-flight
             // guard, then runs Prepare + Run under it. The gateway no longer calls Prepare and Run separately.
-            var run = await _service.RunLifecycleAsync(
-                new AgentHomeRunLifecycleRequest
+            var run = await _service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds ?? [],
                     RuntimeProfile = request.RuntimeProfile,
@@ -45,8 +44,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
             // worker content-root structure. The
             // workspace summary carries aliases and counts only — never host paths (workspace copy).
-            return string.Create(
-                CultureInfo.InvariantCulture,
+            return string.Create(CultureInfo.InvariantCulture,
                 $"AgentHome run {run.RunId} {DescribeOutcome(run)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
         }
         catch (AgentHomeBusyException)
@@ -99,8 +97,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 
         if (patch.Blocked)
         {
-            return string.Create(
-                CultureInfo.InvariantCulture,
+            return string.Create(CultureInfo.InvariantCulture,
                 $" Patch: {patch.ChangedFileCount} file(s) changed; patch over size budget (not written), see {patch.ChangedFilesRelativePath}.");
         }
 
@@ -109,8 +106,7 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             return " Patch: no file changes.";
         }
 
-        return string.Create(
-            CultureInfo.InvariantCulture,
+        return string.Create(CultureInfo.InvariantCulture,
             $" Patch: {patch.ChangedFileCount} file(s) changed -> {patch.PatchRelativePath}.");
     }
 }

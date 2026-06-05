@@ -23,13 +23,15 @@ public sealed class AgentHomeToolGatewayTests
     };
 
     private static readonly IOptions<AgentHomeOptions> GatewayOptions =
-        Microsoft.Extensions.Options.Options.Create(new AgentHomeOptions { CommandTimeoutSeconds = 300 });
+        Options.Create(new AgentHomeOptions
+        {
+            CommandTimeoutSeconds = 300
+        });
 
     [Test]
     public async Task ExecuteAsync_WhenRunSucceeds_RendersCompactResult()
     {
-        var gateway = new AgentHomeToolGateway(
-            new StubAgentHomeService(new AgentHomeRunResult
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
             {
                 RunId = "run-123",
                 Completed = true,
@@ -59,8 +61,7 @@ public sealed class AgentHomeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenPatchBlocked_RendersBudgetNoticeWithoutPatchPath()
     {
-        var gateway = new AgentHomeToolGateway(
-            new StubAgentHomeService(new AgentHomeRunResult
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
             {
                 RunId = "run-789",
                 Completed = true,
@@ -88,8 +89,7 @@ public sealed class AgentHomeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenPatchExportFailed_RendersFailureNotice()
     {
-        var gateway = new AgentHomeToolGateway(
-            new StubAgentHomeService(new AgentHomeRunResult
+        var gateway = new AgentHomeToolGateway(new StubAgentHomeService(new AgentHomeRunResult
             {
                 RunId = "run-f",
                 Completed = true,
@@ -115,8 +115,7 @@ public sealed class AgentHomeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenFolderIdUnknown_RendersRejection()
     {
-        var gateway = new AgentHomeToolGateway(
-            StubAgentHomeService.ThatThrows(new SelectedFolderValidationException("Unknown selected folder id.")),
+        var gateway = new AgentHomeToolGateway(StubAgentHomeService.ThatThrows(new SelectedFolderValidationException("Unknown selected folder id.")),
             GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
@@ -128,8 +127,7 @@ public sealed class AgentHomeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenRuntimeProfileRejected_RendersRejection()
     {
-        var gateway = new AgentHomeToolGateway(
-            StubAgentHomeService.ThatThrows(new AgentHomeRequestRejectedException("runtime profile 'x' is not enabled on this node.")),
+        var gateway = new AgentHomeToolGateway(StubAgentHomeService.ThatThrows(new AgentHomeRequestRejectedException("runtime profile 'x' is not enabled on this node.")),
             GatewayOptions);
 
         var result = await gateway.ExecuteAsync(ValidRequest);
@@ -177,11 +175,6 @@ public sealed class AgentHomeToolGatewayTests
             _prepareError = prepareError;
         }
 
-        public static StubAgentHomeService ThatThrows(Exception prepareError)
-        {
-            return new StubAgentHomeService(prepareError);
-        }
-
         public Task<AgentHomePrepareResult> PrepareAsync(AgentHomePrepareRequest request, CancellationToken cancellationToken = default)
         {
             if (_prepareError is not null)
@@ -201,8 +194,7 @@ public sealed class AgentHomeToolGatewayTests
         {
             // Mirror the real lifecycle: a Prepare error (policy rejection) surfaces here, otherwise the stub run result
             // is returned. Routing through PrepareAsync keeps the ThatThrows(...) cases exercising the same path.
-            _ = await PrepareAsync(
-                new AgentHomePrepareRequest
+            _ = await PrepareAsync(new AgentHomePrepareRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds,
                     RuntimeProfile = request.RuntimeProfile
@@ -210,6 +202,11 @@ public sealed class AgentHomeToolGatewayTests
                 cancellationToken).ConfigureAwait(false);
 
             return _runResult!;
+        }
+
+        public static StubAgentHomeService ThatThrows(Exception prepareError)
+        {
+            return new StubAgentHomeService(prepareError);
         }
 
         private static AgentHomePrepareResult BuildPrepareResult()
@@ -237,7 +234,11 @@ public sealed class AgentHomeToolGatewayTests
 
             return new AgentHomePrepareResult
             {
-                Layout = new AgentHomeLayout { RootPath = "/tmp/agent-home", Manifest = manifest },
+                Layout = new AgentHomeLayout
+                {
+                    RootPath = "/tmp/agent-home",
+                    Manifest = manifest
+                },
                 Handle = new SandboxHandle
                 {
                     ProviderName = "fake",

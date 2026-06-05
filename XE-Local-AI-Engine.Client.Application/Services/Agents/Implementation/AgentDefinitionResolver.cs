@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -8,12 +7,12 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
-    private readonly IAgentDefinitionStore _store;
-    private readonly IPlaybookActionStore _playbookActionStore;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
-    private readonly IPlaybookRetrievalRanker _retrievalRanker;
-    private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly ILogger<AgentDefinitionResolver> _logger;
+    private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly PlaybookRetrievalOptions _retrievalOptions;
+    private readonly IPlaybookRetrievalRanker _retrievalRanker;
+    private readonly IAgentDefinitionStore _store;
 
     public AgentDefinitionResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
@@ -31,7 +30,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, CancellationToken cancellationToken = default)
+    public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
+        CancellationToken cancellationToken = default)
     {
         if (agentDefinitionId is not { } definitionId)
         {

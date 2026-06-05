@@ -5,8 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Monitoring;
 
 internal static class PlaybookMonitorMapper
 {
-    public static AgentPlaybookMonitorResponse ToResponse(
-        this IReadOnlyList<PlaybookActionMonitorView> views,
+    public static AgentPlaybookMonitorResponse ToResponse(this IReadOnlyList<PlaybookActionMonitorView> views,
         PlaybookRetrievalOptions retrievalOptions)
     {
         ArgumentNullException.ThrowIfNull(views);
@@ -17,16 +16,16 @@ internal static class PlaybookMonitorMapper
         var ranker = embeddingActive ? "embedding" : "lexical";
         var embeddingModel = embeddingActive ? retrievalOptions.EmbeddingModelName : null;
 
-        return new AgentPlaybookMonitorResponse(
-            [.. views.Select(static view => new PlaybookActionMonitorItemResponse(
-                view.ActionId,
-                view.EnabledAtUtc,
-                view.BeforeDownRate,
-                view.AfterDownRate,
-                view.AfterSampleSize,
-                view.Status,
-                view.Flagged,
-                view.FacetToolName))],
+        return new AgentPlaybookMonitorResponse([
+                .. views.Select(static view => new PlaybookActionMonitorItemResponse(view.ActionId,
+                    view.EnabledAtUtc,
+                    view.BeforeDownRate,
+                    view.AfterDownRate,
+                    view.AfterSampleSize,
+                    view.Status,
+                    view.Flagged,
+                    view.FacetToolName))
+            ],
             new PlaybookRetrievalResponse(retrievalOptions.RetrievalThreshold, retrievalOptions.TopK, ranker, embeddingModel));
     }
 }

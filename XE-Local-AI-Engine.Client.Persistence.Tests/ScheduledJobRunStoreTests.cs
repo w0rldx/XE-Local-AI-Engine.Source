@@ -88,11 +88,20 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var store = new ScheduledJobRunStore(context, clock);
 
         clock.Advance(100);
-        var first = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with { ActualFireTimeUtc = 100 });
+        var first = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with
+        {
+            ActualFireTimeUtc = 100
+        });
         clock.Advance(100);
-        var second = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with { ActualFireTimeUtc = 200 });
+        var second = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with
+        {
+            ActualFireTimeUtc = 200
+        });
         // A run for a different job must be excluded.
-        _ = await store.AddAsync(CreateRunInput(otherJobId, ScheduledRunStatus.Succeeded) with { ActualFireTimeUtc = 300 });
+        _ = await store.AddAsync(CreateRunInput(otherJobId, ScheduledRunStatus.Succeeded) with
+        {
+            ActualFireTimeUtc = 300
+        });
 
         var runs = await store.ListByJobAsync(jobId);
 
@@ -141,9 +150,18 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var jobId = Guid.NewGuid();
         var store = new ScheduledJobRunStore(context, TimeProvider.System);
 
-        var early = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with { ActualFireTimeUtc = 1_000 });
-        var mid = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with { ActualFireTimeUtc = 2_000 });
-        _ = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with { ActualFireTimeUtc = 3_000 });
+        var early = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with
+        {
+            ActualFireTimeUtc = 1_000
+        });
+        var mid = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with
+        {
+            ActualFireTimeUtc = 2_000
+        });
+        _ = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded) with
+        {
+            ActualFireTimeUtc = 3_000
+        });
 
         var result = await store.ListAsync(fromUtc: 1_000, toUtc: 2_000);
 
@@ -191,7 +209,10 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var jobId = Guid.NewGuid();
         var store = new ScheduledJobRunStore(context, TimeProvider.System);
-        var input = CreateRunInput(jobId, ScheduledRunStatus.Queued) with { QuartzFireInstanceId = "fire-123" };
+        var input = CreateRunInput(jobId, ScheduledRunStatus.Queued) with
+        {
+            QuartzFireInstanceId = "fire-123"
+        };
 
         var first = await store.UpsertByFireInstanceAsync(input);
         var second = await store.UpsertByFireInstanceAsync(input);
@@ -214,7 +235,10 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var jobId = Guid.NewGuid();
         var store = new ScheduledJobRunStore(context, TimeProvider.System);
-        var input = CreateRunInput(jobId, ScheduledRunStatus.Queued) with { QuartzFireInstanceId = null };
+        var input = CreateRunInput(jobId, ScheduledRunStatus.Queued) with
+        {
+            QuartzFireInstanceId = null
+        };
 
         var first = await store.UpsertByFireInstanceAsync(input);
         var second = await store.UpsertByFireInstanceAsync(input);
@@ -247,13 +271,11 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             ErrorMessage = null
         });
 
-        var updated = AssertEx.NotNull(
-            await store.UpdateLifecycleAsync(
-                added.Id,
+        var updated = AssertEx.NotNull(await store.UpdateLifecycleAsync(added.Id,
                 ScheduledRunStatus.Running,
                 completedAtUtc: null,
                 durationMs: null,
-                summary: null,   // not supplied → should remain "initial-summary"
+                summary: null, // not supplied → should remain "initial-summary"
                 detailsJson: null,
                 errorMessage: null),
             "UpdateLifecycle should return the updated record.");
@@ -278,9 +300,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var store = new ScheduledJobRunStore(context, TimeProvider.System);
         var added = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
 
-        var updated = AssertEx.NotNull(
-            await store.UpdateLifecycleAsync(
-                added.Id,
+        var updated = AssertEx.NotNull(await store.UpdateLifecycleAsync(added.Id,
                 ScheduledRunStatus.Succeeded,
                 completedAtUtc: 9_999,
                 durationMs: 1_234,
@@ -333,8 +353,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var store = new ScheduledJobRunStore(context, clock);
         var added = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
 
-        var updated = AssertEx.NotNull(
-            await store.RequestCancellationAsync(added.Id, requestedAtUtc: 7_500),
+        var updated = AssertEx.NotNull(await store.RequestCancellationAsync(added.Id, requestedAtUtc: 7_500),
             "RequestCancellation should return the updated record.");
 
         AssertEx.Equal(7_500L, updated.CancellationRequestedAtUtc);
@@ -500,7 +519,10 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
 
             var store = new ScheduledJobRunStore(writeContext, TimeProvider.System);
-            var added = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Queued) with { DetailsJson = detailsJson });
+            var added = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Queued) with
+            {
+                DetailsJson = detailsJson
+            });
             AssertEx.Equal(detailsJson, added.DetailsJson);
             runId = added.Id;
         }
@@ -526,7 +548,10 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
 
             var store = new ScheduledJobRunStore(context, TimeProvider.System);
-            _ = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Queued) with { DetailsJson = detailsJson });
+            _ = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Queued) with
+            {
+                DetailsJson = detailsJson
+            });
         }
 
         var rawBytes = await ReadRawDetailsJsonAsync(databasePath);
@@ -566,8 +591,8 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var events = await eventStore.ListByRunAsync(run.Id);
 
         AssertEx.Equal(2, events.Count);
-        AssertEx.Equal(e2.Id, events[0].Id);   // sequence 1 first
-        AssertEx.Equal(e1.Id, events[1].Id);   // sequence 2 second
+        AssertEx.Equal(e2.Id, events[0].Id); // sequence 1 first
+        AssertEx.Equal(e1.Id, events[1].Id); // sequence 2 second
         AssertEx.Equal(ScheduledRunEventLevel.Warning, events[0].Level);
         AssertEx.Equal("first", events[0].Message);
         AssertEx.True(events[0].OccurredAtUtc > 0, "OccurredAtUtc should be stamped.");
@@ -703,8 +728,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
     private static ScheduledJobRunInput CreateRunInput(Guid scheduledJobId, ScheduledRunStatus status)
     {
-        return new ScheduledJobRunInput(
-            ScheduledJobId: scheduledJobId,
+        return new ScheduledJobRunInput(ScheduledJobId: scheduledJobId,
             TemplateId: "tpl-test",
             QuartzFireInstanceId: null,
             TriggeredBy: ScheduledRunTrigger.Schedule,

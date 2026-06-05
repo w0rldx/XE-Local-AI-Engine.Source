@@ -18,8 +18,8 @@ using System.Diagnostics.CodeAnalysis;
 /// </exception>
 public sealed class ScheduledJobTemplateRegistry : IScheduledJobTemplateRegistry
 {
-    private readonly FrozenDictionary<string, IScheduledJobHandler> _handlers;
     private readonly IReadOnlyList<ScheduledJobTemplateDescriptor> _descriptors;
+    private readonly FrozenDictionary<string, IScheduledJobHandler> _handlers;
 
     /// <summary>
     ///     Initializes the registry from the set of handlers resolved by the DI container.
@@ -37,10 +37,9 @@ public sealed class ScheduledJobTemplateRegistry : IScheduledJobTemplateRegistry
         {
             if (!dict.TryAdd(handler.TemplateId, handler))
             {
-                throw new InvalidOperationException(
-                    $"Duplicate scheduled-job template ID '{handler.TemplateId}' detected. " +
-                    $"Each IScheduledJobHandler must declare a unique TemplateId. " +
-                    $"Conflicting type: '{handler.GetType().FullName}'.");
+                throw new InvalidOperationException($"Duplicate scheduled-job template ID '{handler.TemplateId}' detected. " +
+                                                    $"Each IScheduledJobHandler must declare a unique TemplateId. " +
+                                                    $"Conflicting type: '{handler.GetType().FullName}'.");
             }
 
             descriptors.Add(handler.Descriptor);
@@ -51,13 +50,20 @@ public sealed class ScheduledJobTemplateRegistry : IScheduledJobTemplateRegistry
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<ScheduledJobTemplateDescriptor> ListTemplates() => _descriptors;
+    public IReadOnlyList<ScheduledJobTemplateDescriptor> ListTemplates()
+    {
+        return _descriptors;
+    }
 
     /// <inheritdoc />
-    public ScheduledJobTemplateDescriptor? GetTemplate(string templateId) =>
-        _handlers.TryGetValue(templateId, out var handler) ? handler.Descriptor : null;
+    public ScheduledJobTemplateDescriptor? GetTemplate(string templateId)
+    {
+        return _handlers.TryGetValue(templateId, out var handler) ? handler.Descriptor : null;
+    }
 
     /// <inheritdoc />
-    public bool TryGetHandler(string templateId, [NotNullWhen(true)] out IScheduledJobHandler? handler) =>
-        _handlers.TryGetValue(templateId, out handler);
+    public bool TryGetHandler(string templateId, [NotNullWhen(true)] out IScheduledJobHandler? handler)
+    {
+        return _handlers.TryGetValue(templateId, out handler);
+    }
 }

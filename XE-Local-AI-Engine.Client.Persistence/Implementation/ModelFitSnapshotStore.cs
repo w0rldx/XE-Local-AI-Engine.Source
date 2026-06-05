@@ -46,8 +46,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         return ToSummary(entity);
     }
 
-    public async Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(
-        Guid id,
+    public async Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(Guid id,
         ModelFitRunStatus status,
         int? exitCode,
         long? durationMs,
@@ -115,8 +114,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         return ToSummary(succeeding);
     }
 
-    public async Task<ModelFitSnapshotSummaryRecord?> GetLatestSuccessfulSummaryAsync(
-        ModelFitOperation operation,
+    public async Task<ModelFitSnapshotSummaryRecord?> GetLatestSuccessfulSummaryAsync(ModelFitOperation operation,
         string? useCase,
         string providerName,
         string? modelName,
@@ -139,8 +137,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
         return entity is null ? null : ToSummary(entity);
     }
 
-    public async Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(
-        ModelFitOperation? operation = null,
+    public async Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(ModelFitOperation? operation = null,
         string? providerName = null,
         int limit = 50,
         CancellationToken cancellationToken = default)
@@ -178,15 +175,13 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
             return null;
         }
 
-        return new ModelFitSnapshotRawRecord(
-            entity.Id,
+        return new ModelFitSnapshotRawRecord(entity.Id,
             entity.RawJson is null ? null : Decode(entity.RawJson),
             entity.StderrExcerpt is null ? null : Decode(entity.StderrExcerpt),
             entity.DiagnosticsJson is null ? null : Decode(entity.DiagnosticsJson));
     }
 
-    private static void ApplyTerminalFields(
-        ModelFitSnapshot entity,
+    private static void ApplyTerminalFields(ModelFitSnapshot entity,
         ModelFitRunStatus status,
         int? exitCode,
         long? durationMs,
@@ -206,8 +201,7 @@ public sealed class ModelFitSnapshotStore(NodeChatDbContext dbContext, TimeProvi
 
     private static ModelFitSnapshotSummaryRecord ToSummary(ModelFitSnapshot entity)
     {
-        return new ModelFitSnapshotSummaryRecord(
-            entity.Id,
+        return new ModelFitSnapshotSummaryRecord(entity.Id,
             entity.ApprovedImageId,
             entity.Operation,
             entity.UseCase,

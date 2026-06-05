@@ -24,8 +24,7 @@ public interface ISchedulerDispatchExecutor
     ///     building the context — the stored definition is never mutated and no other key can override a stored parameter.
     ///     <c>null</c> (the recurring/cron path) leaves the stored parameters untouched.
     /// </param>
-    Task DispatchAsync(
-        Guid scheduledJobId,
+    Task DispatchAsync(Guid scheduledJobId,
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,

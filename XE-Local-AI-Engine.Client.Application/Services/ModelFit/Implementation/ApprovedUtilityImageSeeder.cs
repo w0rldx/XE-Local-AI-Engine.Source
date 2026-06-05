@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
@@ -23,13 +21,13 @@ public sealed class ApprovedUtilityImageSeeder : IHostedService
     /// </summary>
     private const string DevAutoEnableConfigKey = "ModelFit:DevAutoEnableApprovedImages";
 
-    private readonly ApprovedImageReferenceValidator _referenceValidator;
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ApprovedUtilityImageSeeder> _logger;
 
-    public ApprovedUtilityImageSeeder(
-        IServiceScopeFactory scopeFactory,
+    private readonly ApprovedImageReferenceValidator _referenceValidator;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public ApprovedUtilityImageSeeder(IServiceScopeFactory scopeFactory,
         ApprovedImageReferenceValidator referenceValidator,
         IConfiguration configuration,
         ILogger<ApprovedUtilityImageSeeder> logger)
@@ -56,8 +54,7 @@ public sealed class ApprovedUtilityImageSeeder : IHostedService
                 {
                     // A bad CODE reference must never seed — skip it loudly. The image reference is not logged (defence
                     // in depth), only the descriptor id and the sanitized reason.
-                    _logger.LogError(
-                        "Skipping approved utility image seed for {ApprovedImageId}: image reference failed validation ({Error}).",
+                    _logger.LogError("Skipping approved utility image seed for {ApprovedImageId}: image reference failed validation ({Error}).",
                         descriptor.ApprovedImageId,
                         validation.Error);
                     continue;
@@ -71,8 +68,7 @@ public sealed class ApprovedUtilityImageSeeder : IHostedService
                     // DEV ONLY: the upsert preserves the operator toggle (every image ships disabled), so force-enable here
                     // so a model-fit refresh can run the real llmfit recommender in the runtime-fidelity dev stack.
                     _ = await store.SetEnabledAsync(descriptor.ApprovedImageId, true, cancellationToken).ConfigureAwait(false);
-                    _logger.LogWarning(
-                        "DEV: force-enabled approved utility image {ApprovedImageId} via {ConfigKey}. Never set this in production.",
+                    _logger.LogWarning("DEV: force-enabled approved utility image {ApprovedImageId} via {ConfigKey}. Never set this in production.",
                         descriptor.ApprovedImageId,
                         DevAutoEnableConfigKey);
                 }

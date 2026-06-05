@@ -14,8 +14,13 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
     private readonly ConcurrentDictionary<string, DockerContainerStatus> _containers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, FakeSandbox> _sandboxes = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ScriptedExec> _scriptedExecs = new(StringComparer.Ordinal);
-    private int _sandboxCounter;
     private readonly TimeProvider _timeProvider;
+
+    // --- Model-fit utility one-shot run (scriptable) ---
+
+    private readonly object _utilitySync = new();
+    private int _sandboxCounter;
+    private ScriptedUtilityRun _scriptedUtilityRun = new(0, string.Empty, string.Empty, false);
 
     public FakeDockerRuntimeClient(TimeProvider timeProvider)
     {
@@ -25,25 +30,17 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         SeedContainer("xe-node-web-server", "ghcr.io/c0re/xe-local-ai-engine:dev@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     }
 
-    /// <summary>Test seam: the spec recorded for a created sandbox container (asserts limits/network/labels mapping).</summary>
-    public SandboxContainerSpec? TryGetRecordedSpec(string containerId)
-    {
-        return _sandboxes.TryGetValue(containerId, out var sandbox) ? sandbox.Spec : null;
-    }
+    /// <summary>Test seam: the spec passed to the last <see cref="RunUtilityContainerAsync" /> call, or <c>null</c> if never called.</summary>
+    public UtilityContainerRunSpec? LastUtilityRunSpec { get; private set; }
 
-    /// <summary>Test seam: scripts an exec result for the given executable+args join (default behavior is an empty echo).</summary>
-    public void ScriptExec(string commandLine, int exitCode, string standardOutput = "", string standardError = "")
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
-        _scriptedExecs[commandLine] = new ScriptedExec(exitCode, standardOutput, standardError, false);
-    }
+    /// <summary>Test seam: whether the utility container created by the last run was removed (cleanup assertion).</summary>
+    public bool LastUtilityContainerRemoved { get; private set; }
 
-    /// <summary>Test seam: makes an exec block until its cancellation token fires, so cancel/timeout paths are testable.</summary>
-    public void ScriptBlockingExec(string commandLine)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
-        _scriptedExecs[commandLine] = new ScriptedExec(0, string.Empty, string.Empty, true);
-    }
+    /// <summary>Test seam: how many times <see cref="RunUtilityContainerAsync" /> was invoked.</summary>
+    public int UtilityRunCount { get; private set; }
+
+    /// <summary>Test seam: how many orphaned utility containers <see cref="RemoveOrphanedUtilityContainersAsync" /> reports.</summary>
+    public int OrphanedUtilityContainerCount { get; set; }
 
     public Task EnsureNetworkAsync(string networkName, CancellationToken cancellationToken)
     {
@@ -169,7 +166,10 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
 
         // Validate the sandbox is alive before running (mirrors the real client's container-not-found behavior).
         _ = GetAliveSandbox(containerId);
-        var commandLine = string.Join(' ', new[] { request.Executable }.Concat(request.Arguments));
+        var commandLine = string.Join(' ', new[]
+        {
+            request.Executable
+        }.Concat(request.Arguments));
         var scripted = _scriptedExecs.TryGetValue(commandLine, out var match)
             ? match
             : new ScriptedExec(0, string.Empty, string.Empty, false);
@@ -244,44 +244,6 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         return Task.CompletedTask;
     }
 
-    // --- Model-fit utility one-shot run (scriptable) ---
-
-    private readonly object _utilitySync = new();
-    private ScriptedUtilityRun _scriptedUtilityRun = new(0, string.Empty, string.Empty, false);
-
-    /// <summary>Test seam: the spec passed to the last <see cref="RunUtilityContainerAsync" /> call, or <c>null</c> if never called.</summary>
-    public UtilityContainerRunSpec? LastUtilityRunSpec { get; private set; }
-
-    /// <summary>Test seam: whether the utility container created by the last run was removed (cleanup assertion).</summary>
-    public bool LastUtilityContainerRemoved { get; private set; }
-
-    /// <summary>Test seam: how many times <see cref="RunUtilityContainerAsync" /> was invoked.</summary>
-    public int UtilityRunCount { get; private set; }
-
-    /// <summary>Test seam: how many orphaned utility containers <see cref="RemoveOrphanedUtilityContainersAsync" /> reports.</summary>
-    public int OrphanedUtilityContainerCount { get; set; }
-
-    /// <summary>Test seam: scripts the result the next utility run returns (default behavior is exit 0, empty output).</summary>
-    public void ScriptUtilityRun(int exitCode, string standardOutput = "", string standardError = "")
-    {
-        ArgumentNullException.ThrowIfNull(standardOutput);
-        ArgumentNullException.ThrowIfNull(standardError);
-
-        lock (_utilitySync)
-        {
-            _scriptedUtilityRun = new ScriptedUtilityRun(exitCode, standardOutput, standardError, false);
-        }
-    }
-
-    /// <summary>Test seam: makes the next utility run block until its cancellation token fires, so cancel/timeout is testable.</summary>
-    public void ScriptBlockingUtilityRun()
-    {
-        lock (_utilitySync)
-        {
-            _scriptedUtilityRun = new ScriptedUtilityRun(0, string.Empty, string.Empty, true);
-        }
-    }
-
     public async Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -337,6 +299,47 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(OrphanedUtilityContainerCount);
+    }
+
+    /// <summary>Test seam: the spec recorded for a created sandbox container (asserts limits/network/labels mapping).</summary>
+    public SandboxContainerSpec? TryGetRecordedSpec(string containerId)
+    {
+        return _sandboxes.TryGetValue(containerId, out var sandbox) ? sandbox.Spec : null;
+    }
+
+    /// <summary>Test seam: scripts an exec result for the given executable+args join (default behavior is an empty echo).</summary>
+    public void ScriptExec(string commandLine, int exitCode, string standardOutput = "", string standardError = "")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        _scriptedExecs[commandLine] = new ScriptedExec(exitCode, standardOutput, standardError, false);
+    }
+
+    /// <summary>Test seam: makes an exec block until its cancellation token fires, so cancel/timeout paths are testable.</summary>
+    public void ScriptBlockingExec(string commandLine)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        _scriptedExecs[commandLine] = new ScriptedExec(0, string.Empty, string.Empty, true);
+    }
+
+    /// <summary>Test seam: scripts the result the next utility run returns (default behavior is exit 0, empty output).</summary>
+    public void ScriptUtilityRun(int exitCode, string standardOutput = "", string standardError = "")
+    {
+        ArgumentNullException.ThrowIfNull(standardOutput);
+        ArgumentNullException.ThrowIfNull(standardError);
+
+        lock (_utilitySync)
+        {
+            _scriptedUtilityRun = new ScriptedUtilityRun(exitCode, standardOutput, standardError, false);
+        }
+    }
+
+    /// <summary>Test seam: makes the next utility run block until its cancellation token fires, so cancel/timeout is testable.</summary>
+    public void ScriptBlockingUtilityRun()
+    {
+        lock (_utilitySync)
+        {
+            _scriptedUtilityRun = new ScriptedUtilityRun(0, string.Empty, string.Empty, true);
+        }
     }
 
     private FakeSandbox GetAliveSandbox(string containerId)

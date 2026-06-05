@@ -9,10 +9,14 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     benchmark path is intentionally GATED everywhere and is never touched here.
 ///     <list type="bullet">
 ///         <item>The page renders (heading + cache-only recommendations snapshot or no-cache notice).</item>
-///         <item>The "Refresh now" button is gated on a <c>model-recommendation-check</c> scheduled job
-///               existing: enabled when one exists, disabled (with the no-job guidance alert) otherwise.</item>
-///         <item>When enabled, clicking it fires the refresh POST
-///               (<c>/api/local/v1/model-fit/recommendations/refresh</c>) — never a benchmark.</item>
+///         <item>
+///             The "Refresh now" button is gated on a <c>model-recommendation-check</c> scheduled job
+///             existing: enabled when one exists, disabled (with the no-job guidance alert) otherwise.
+///         </item>
+///         <item>
+///             When enabled, clicking it fires the refresh POST
+///             (<c>/api/local/v1/model-fit/recommendations/refresh</c>) — never a benchmark.
+///         </item>
 ///         <item>When disabled, clicking it fires NO POST.</item>
 ///     </list>
 ///     <para>
@@ -62,7 +66,10 @@ public sealed class ModelRecommendationsPageE2ETests : XEE2ETestBase
         var snapshot = Page.GetByTestId("model-fit-snapshot");
         var noCache = Page.GetByTestId("model-fit-no-cache");
         await Expect(snapshot.Or(noCache).First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
     }
 
     [Test]
@@ -86,11 +93,13 @@ public sealed class ModelRecommendationsPageE2ETests : XEE2ETestBase
             // POST — the recommend/refresh path, never a benchmark.
             await Expect(Page.GetByTestId("model-fit-no-job-guidance")).ToHaveCountAsync(0);
 
-            var refreshResponse = await Page.RunAndWaitForResponseAsync(
-                async () => await refreshButton.ClickAsync(),
+            var refreshResponse = await Page.RunAndWaitForResponseAsync(async () => await refreshButton.ClickAsync(),
                 response => response.Url.Contains("/model-fit/recommendations/refresh", StringComparison.OrdinalIgnoreCase)
-                           && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-                new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                            && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+                new PageRunAndWaitForResponseOptions
+                {
+                    Timeout = 10_000
+                });
 
             // The refresh trigger is accepted (it triggers the existing scheduler job; the recommend run is
             // cache-driven). Any 2xx proves the recommend/refresh path fired without touching the benchmark.
@@ -108,11 +117,16 @@ public sealed class ModelRecommendationsPageE2ETests : XEE2ETestBase
             var requestFired = false;
             try
             {
-                await Page.RunAndWaitForRequestAsync(
-                    async () => await refreshButton.ClickAsync(new LocatorClickOptions { Force = false }),
+                await Page.RunAndWaitForRequestAsync(async () => await refreshButton.ClickAsync(new LocatorClickOptions
+                    {
+                        Force = false
+                    }),
                     request => request.Url.Contains("/model-fit/recommendations/refresh", StringComparison.OrdinalIgnoreCase)
                                && string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-                    new PageRunAndWaitForRequestOptions { Timeout = 1500 });
+                    new PageRunAndWaitForRequestOptions
+                    {
+                        Timeout = 1500
+                    });
                 requestFired = true;
             }
             catch (TimeoutException)

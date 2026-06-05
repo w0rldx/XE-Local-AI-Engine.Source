@@ -195,16 +195,14 @@ public sealed class ModelClassificationServiceTests
             return Task.FromResult<IReadOnlyList<ModelClassificationRecord>>(_rows.Values.OrderBy(row => row.ModelName, StringComparer.Ordinal).ToArray());
         }
 
-        public Task<ModelClassificationRecord> UpsertDetectedAsync(
-            string modelName,
+        public Task<ModelClassificationRecord> UpsertDetectedAsync(string modelName,
             string? digest,
             ModelKind detectedKind,
             string? capabilitiesJson,
             CancellationToken cancellationToken = default)
         {
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
-            var record = new ModelClassificationRecord(
-                modelName,
+            var record = new ModelClassificationRecord(modelName,
                 digest,
                 detectedKind,
                 capabilitiesJson,
@@ -220,7 +218,11 @@ public sealed class ModelClassificationServiceTests
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
             var record = existing is null
                 ? new ModelClassificationRecord(modelName, Digest: null, ModelKind.Unknown, DetectedCapabilitiesJson: null, overrideKind, DetectedAtUtc: null, UpdatedAtUtc: 1)
-                : existing with { OverrideKind = overrideKind, UpdatedAtUtc = 2 };
+                : existing with
+                {
+                    OverrideKind = overrideKind,
+                    UpdatedAtUtc = 2
+                };
             _rows[modelName] = record;
             return Task.FromResult(record);
         }

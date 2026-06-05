@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
@@ -24,16 +23,17 @@ public sealed class ModelFitQueryService(
     ILogger<ModelFitQueryService> logger) : IModelFitQueryService
 {
     private readonly IApprovedUtilityImageStore _approvedImageStore = approvedImageStore ?? throw new ArgumentNullException(nameof(approvedImageStore));
-    private readonly IModelFitSnapshotStore _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
-    private readonly IModelFitRecommendationStore _recommendationStore = recommendationStore ?? throw new ArgumentNullException(nameof(recommendationStore));
-    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
     private readonly ILogger<ModelFitQueryService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
+    private readonly IModelFitRecommendationStore _recommendationStore = recommendationStore ?? throw new ArgumentNullException(nameof(recommendationStore));
+    private readonly IModelFitSnapshotStore _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
 
-    public Task<IReadOnlyList<ApprovedUtilityImageRecord>> ListApprovedImagesAsync(CancellationToken cancellationToken = default) =>
-        _approvedImageStore.ListAsync(cancellationToken);
+    public Task<IReadOnlyList<ApprovedUtilityImageRecord>> ListApprovedImagesAsync(CancellationToken cancellationToken = default)
+    {
+        return _approvedImageStore.ListAsync(cancellationToken);
+    }
 
-    public async Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(
-        string? useCase,
+    public async Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(string? useCase,
         string providerName,
         CancellationToken cancellationToken = default)
     {
@@ -41,13 +41,12 @@ public sealed class ModelFitQueryService(
 
         // Cache-only: the latest successful recommendation snapshot for this key. A recommendation snapshot has a null
         // model-name (the latest-successful key matches on null), so model-name is fixed to null here.
-        var summary = await _snapshotStore.GetLatestSuccessfulSummaryAsync(
-                ModelFitOperation.Recommend,
-                useCase,
-                providerName,
-                modelName: null,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var summary = await _snapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend,
+                                              useCase,
+                                              providerName,
+                                              modelName: null,
+                                              cancellationToken)
+                                          .ConfigureAwait(false);
 
         if (summary is null)
         {
@@ -58,8 +57,7 @@ public sealed class ModelFitQueryService(
         var recommendations = await _recommendationStore.ListForSnapshotAsync(summary.Id, cancellationToken).ConfigureAwait(false);
         recommendations = await ApplyNodeInstallStateAsync(recommendations, cancellationToken).ConfigureAwait(false);
 
-        return new ModelFitLatestRecommendationsView(
-            summary.Id,
+        return new ModelFitLatestRecommendationsView(summary.Id,
             summary.Status,
             summary.ApprovedImageId,
             summary.UseCase,
@@ -75,8 +73,7 @@ public sealed class ModelFitQueryService(
     ///     its tagged form). Rows with a null <c>PullModelName</c> have no tag to match and are reported not-installed.
     ///     Best-effort: if the install list cannot be read (e.g. Ollama unreachable) the stored flags are returned as-is.
     /// </summary>
-    private async Task<IReadOnlyList<ModelFitRecommendationRecord>> ApplyNodeInstallStateAsync(
-        IReadOnlyList<ModelFitRecommendationRecord> recommendations,
+    private async Task<IReadOnlyList<ModelFitRecommendationRecord>> ApplyNodeInstallStateAsync(IReadOnlyList<ModelFitRecommendationRecord> recommendations,
         CancellationToken cancellationToken)
     {
         if (recommendations.Count == 0)
@@ -89,11 +86,11 @@ public sealed class ModelFitQueryService(
         {
             var installed = await _ollamaModelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
             installedTags = installed
-                .Select(model => model.Name)
-                .OfType<string>()
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Select(NormalizeTag)
-                .ToHashSet(StringComparer.Ordinal);
+                            .Select(model => model.Name)
+                            .OfType<string>()
+                            .Where(name => !string.IsNullOrWhiteSpace(name))
+                            .Select(NormalizeTag)
+                            .ToHashSet(StringComparer.Ordinal);
         }
         catch (Exception exception)
         {
@@ -104,12 +101,17 @@ public sealed class ModelFitQueryService(
         }
 
         return recommendations
-            .Select(recommendation => recommendation with { IsInstalled = IsInstalledOnNode(recommendation.PullModelName, installedTags) })
-            .ToList();
+               .Select(recommendation => recommendation with
+               {
+                   IsInstalled = IsInstalledOnNode(recommendation.PullModelName, installedTags)
+               })
+               .ToList();
     }
 
-    private static bool IsInstalledOnNode(string? pullModelName, HashSet<string> installedTags) =>
-        !string.IsNullOrWhiteSpace(pullModelName) && installedTags.Contains(NormalizeTag(pullModelName));
+    private static bool IsInstalledOnNode(string? pullModelName, HashSet<string> installedTags)
+    {
+        return !string.IsNullOrWhiteSpace(pullModelName) && installedTags.Contains(NormalizeTag(pullModelName));
+    }
 
     /// <summary>
     ///     Canonical Ollama tag for matching: trimmed, lower-cased, with an explicit <c>:latest</c> tag elided so a bare

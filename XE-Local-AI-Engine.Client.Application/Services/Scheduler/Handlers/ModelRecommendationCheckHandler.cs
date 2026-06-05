@@ -5,7 +5,6 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
@@ -56,14 +55,17 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
     private static readonly JsonSerializerOptions ParameterSerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ModelRecommendationCheckHandler> _logger;
 
-    public ModelRecommendationCheckHandler(
-        IServiceScopeFactory scopeFactory,
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public ModelRecommendationCheckHandler(IServiceScopeFactory scopeFactory,
         ILogger<ModelRecommendationCheckHandler> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -72,8 +74,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
     public string TemplateId => TemplateIdValue;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(
-        TemplateId: TemplateIdValue,
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: TemplateIdValue,
         DisplayName: "Model recommendation check",
         Description: "Runs the approved llmfit recommend image and refreshes the cached model recommendation snapshot.",
         ParameterSchema: ParameterSchemaJson,
@@ -107,13 +108,11 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             // SanitizedError is operator-safe by the IModelFitRefreshService contract (never secrets / raw output), so
             // it is surfaced via ScheduledJobExecutionException — the dispatcher records a Failed run carrying this exact
             // reason. Throwing (rather than returning) prevents a spurious success record.
-            _logger.LogWarning(
-                "Model recommendation check did not succeed (template {TemplateId}, status {Status}).",
+            _logger.LogWarning("Model recommendation check did not succeed (template {TemplateId}, status {Status}).",
                 TemplateIdValue,
                 result.Status);
 
-            throw new ScheduledJobExecutionException(
-                result.SanitizedError ?? "The model recommendation refresh did not succeed.");
+            throw new ScheduledJobExecutionException(result.SanitizedError ?? "The model recommendation refresh did not succeed.");
         }
     }
 
@@ -162,8 +161,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
         using var scope = _scopeFactory.CreateScope();
         var validator = scope.ServiceProvider.GetRequiredService<ModelFitRequestValidator>();
-        var validationError = validator.GetValidationError(
-            parameters.Operation,
+        var validationError = validator.GetValidationError(parameters.Operation,
             parameters.UseCase,
             parameters.Limit,
             parameters.ProviderName,
@@ -173,8 +171,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             throw new ScheduledJobValidationException(validationError);
         }
 
-        return new ModelFitRefreshRequest(
-            ApprovedImageId: parameters.ApprovedImageId,
+        return new ModelFitRefreshRequest(ApprovedImageId: parameters.ApprovedImageId,
             Operation: parameters.Operation,
             UseCase: parameters.UseCase,
             Limit: parameters.Limit,
@@ -182,8 +179,9 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             ModelName: null);
     }
 
-    private static string BuildDefaultParameters() =>
-        JsonSerializer.Serialize(new ModelRecommendationCheckParameters
+    private static string BuildDefaultParameters()
+    {
+        return JsonSerializer.Serialize(new ModelRecommendationCheckParameters
         {
             ApprovedImageId = DefaultApprovedImageId,
             Operation = ModelFitOperation.Recommend,
@@ -191,6 +189,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             Limit = 5,
             ProviderName = "ollama"
         }, ParameterSerializerOptions);
+    }
 
     /// <summary>Decrypted-parameter shape for the <c>model-recommendation-check</c> template.</summary>
     private sealed record ModelRecommendationCheckParameters

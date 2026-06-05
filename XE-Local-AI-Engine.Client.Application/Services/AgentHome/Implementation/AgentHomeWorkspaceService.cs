@@ -24,8 +24,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     private readonly AgentHomeOptions _options;
     private readonly ISandboxRuntimeProvider _provider;
 
-    public AgentHomeWorkspaceService(
-        ISandboxRuntimeProvider provider,
+    public AgentHomeWorkspaceService(ISandboxRuntimeProvider provider,
         ISensitiveFileExclusionService exclusionService,
         IOptions<AgentHomeOptions> options,
         ILogger<AgentHomeWorkspaceService> logger)
@@ -37,8 +36,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(
-        SandboxHandle handle,
+    public async Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
         IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
         CancellationToken cancellationToken = default)
     {
@@ -70,20 +68,17 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         return snapshots;
     }
 
-    private async Task<SelectedFolderSnapshot> CopyFolderAsync(
-        SandboxHandle handle,
+    private async Task<SelectedFolderSnapshot> CopyFolderAsync(SandboxHandle handle,
         ResolvedSelectedFolder folder,
         CancellationToken cancellationToken)
     {
         var root = HostPathSafety.TryResolveTrustedRoot(folder.HostPath)
-                   ?? throw new AgentHomeRequestRejectedException(
-                       $"selected folder '{folder.Alias}' could not be resolved to a safe host path.");
+                   ?? throw new AgentHomeRequestRejectedException($"selected folder '{folder.Alias}' could not be resolved to a safe host path.");
 
         if (folder.Mode == SelectedFolderMode.ReadOnlyMount)
         {
             // The current sandbox providers do not support read-only mounts; copy instead.
-            _logger.LogInformation(
-                "Selected folder {Alias} requested a read-only mount; copying instead (no provider mount support).",
+            _logger.LogInformation("Selected folder {Alias} requested a read-only mount; copying instead (no provider mount support).",
                 folder.Alias);
         }
 
@@ -92,8 +87,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
         if (plan.TotalBytes > _options.MaxSelectedFolderBytes)
         {
-            _logger.LogWarning(
-                "Selected folder {Alias} is {Bytes} bytes, over the {Budget}-byte budget; copy blocked.",
+            _logger.LogWarning("Selected folder {Alias} is {Bytes} bytes, over the {Budget}-byte budget; copy blocked.",
                 folder.Alias,
                 plan.TotalBytes,
                 _options.MaxSelectedFolderBytes);
@@ -115,14 +109,16 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var destination = $"{sandboxDestinationRoot}/{file.RelativePosixPath}";
-            await _provider.CopyIntoAsync(
-                handle,
-                new SandboxCopyRequest { SourcePath = file.HostPath, DestinationPath = destination },
+            await _provider.CopyIntoAsync(handle,
+                new SandboxCopyRequest
+                {
+                    SourcePath = file.HostPath,
+                    DestinationPath = destination
+                },
                 cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.LogInformation(
-            "Copied selected folder {Alias}: {CopiedFiles} file(s), {CopiedBytes} byte(s); excluded {ExcludedFiles} file(s) and {ExcludedDirs} directory(ies).",
+        _logger.LogInformation("Copied selected folder {Alias}: {CopiedFiles} file(s), {CopiedBytes} byte(s); excluded {ExcludedFiles} file(s) and {ExcludedDirs} directory(ies).",
             folder.Alias,
             plan.Files.Count,
             plan.TotalBytes,
@@ -217,14 +213,12 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         // already covered by the direct walk, and skipping avoids cycles and duplicate copies.
         if (!HostPathSafety.TryResolveReparseWithinRoot(info, root, out var withinRoot))
         {
-            throw new AgentHomeRequestRejectedException(
-                $"selected folder '{alias}' contains a link that cannot be resolved safely.");
+            throw new AgentHomeRequestRejectedException($"selected folder '{alias}' contains a link that cannot be resolved safely.");
         }
 
         if (!withinRoot)
         {
-            throw new AgentHomeRequestRejectedException(
-                $"selected folder '{alias}' contains a link that escapes the folder.");
+            throw new AgentHomeRequestRejectedException($"selected folder '{alias}' contains a link that escapes the folder.");
         }
     }
 
@@ -244,8 +238,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             BaselineCommand("agent-home-baseline-autocrlf", timeout, AgentHomeGit.Arguments("config", "core.autocrlf", "false")),
             BaselineCommand("agent-home-baseline-filemode", timeout, AgentHomeGit.Arguments("config", "core.filemode", "false")),
             BaselineCommand("agent-home-baseline-add", timeout, AgentHomeGit.Arguments("add", "-A")),
-            BaselineCommand("agent-home-baseline-commit", timeout, AgentHomeGit.Arguments(
-                "-c",
+            BaselineCommand("agent-home-baseline-commit", timeout, AgentHomeGit.Arguments("-c",
                 $"user.email={BaselineUserEmail}",
                 "-c",
                 $"user.name={BaselineUserName}",
@@ -265,8 +258,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 // fail the prepare loudly rather than letting a later export silently report zero changes. The message
                 // carries only the command's execution id and exit code — never a host path. (Real non-zero git exits
                 // arrive with the local-container provider in local-container sandbox.)
-                throw new AgentHomeRequestRejectedException(
-                    $"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
+                throw new AgentHomeRequestRejectedException($"the in-sandbox git baseline command '{command.ExecutionId}' failed (exit code {result.ExitCode}).");
             }
         }
 

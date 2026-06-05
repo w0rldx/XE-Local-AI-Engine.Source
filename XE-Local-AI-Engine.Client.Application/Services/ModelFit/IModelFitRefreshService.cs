@@ -21,8 +21,7 @@ public interface IModelFitRefreshService
     ///     terminal snapshot outcome. Throws <see cref="OperationCanceledException" /> when the node token is cancelled
     ///     mid-run (after recording a Cancelled snapshot).
     /// </summary>
-    Task<ModelFitRefreshResult> RefreshAsync(
-        ModelFitRefreshRequest request,
+    Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,
         Func<string, int?, CancellationToken, Task>? reportProgress,
         CancellationToken cancellationToken);
 }

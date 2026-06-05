@@ -131,7 +131,10 @@ public sealed class OrchestrationResolverTests
         var specialist = CreateDefinition(name: "Specialist",
             modelProfile: ToolCapableModel,
             allowedTools: ["GetCurrentTime", "NotOffered"],
-            toolApprovals: new Dictionary<string, bool> { ["GetCurrentTime"] = true });
+            toolApprovals: new Dictionary<string, bool>
+            {
+                ["GetCurrentTime"] = true
+            });
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime", requiresApproval: false), OfferTool("Calculate"));
         SeedParticipants(store, triage, specialist);
@@ -155,8 +158,7 @@ public sealed class OrchestrationResolverTests
         var resolver = CreateResolver(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
         playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
-                     [
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
                          EnabledAction(specialist.Id, "Stay terse.", priority: 1)
                      ]));
 
@@ -229,8 +231,16 @@ public sealed class OrchestrationResolverTests
             ParticipantAgentDefinitionIds = [triage.Id, specialist.Id, ghost.Id],
             Handoffs =
             [
-                new OrchestrationHandoff { FromAgentDefinitionId = triage.Id, ToAgentDefinitionId = specialist.Id },
-                new OrchestrationHandoff { FromAgentDefinitionId = triage.Id, ToAgentDefinitionId = ghost.Id }
+                new OrchestrationHandoff
+                {
+                    FromAgentDefinitionId = triage.Id,
+                    ToAgentDefinitionId = specialist.Id
+                },
+                new OrchestrationHandoff
+                {
+                    FromAgentDefinitionId = triage.Id,
+                    ToAgentDefinitionId = ghost.Id
+                }
             ]
         };
         var orchestrator = CreateDefinition(kind: AgentDefinitionKind.Orchestrator, modelProfile: ToolCapableModel, topologyJson: OrchestrationTopologyJson.Serialize(topology));
@@ -291,7 +301,10 @@ public sealed class OrchestrationResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
 
-        var options = Options.Create(new AgentHomeOptions { ToolCapableModels = [ToolCapableModel] });
+        var options = Options.Create(new AgentHomeOptions
+        {
+            ToolCapableModels = [ToolCapableModel]
+        });
         var retrievalOptions = Options.Create(new PlaybookRetrievalOptions());
         return new OrchestrationResolver(store,
             playbookStore,
@@ -325,28 +338,16 @@ public sealed class OrchestrationResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
 
-        var options = Options.Create(new AgentHomeOptions { ToolCapableModels = [ToolCapableModel] });
-        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions { RetrievalThreshold = threshold, TopK = topK });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, options, NullLogger<OrchestrationResolver>.Instance);
-    }
-
-    // A fake ranker recording how many times it was consulted and returning a fixed (deliberately out-of-order)
-    // selection, so the test can assert the gate (consulted once, above threshold + non-blank query) and the
-    // selector's re-order of the ranker's output.
-    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
-    {
-        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
-
-        public int CallCount { get; private set; }
-
-        public Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
-            IReadOnlyList<PlaybookActionRecord> candidates,
-            int k,
-            CancellationToken cancellationToken)
+        var options = Options.Create(new AgentHomeOptions
         {
-            CallCount++;
-            return Task.FromResult(_selection ?? candidates);
-        }
+            ToolCapableModels = [ToolCapableModel]
+        });
+        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions
+        {
+            RetrievalThreshold = threshold,
+            TopK = topK
+        });
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, options, NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)
@@ -421,5 +422,24 @@ public sealed class OrchestrationResolverTests
             ParameterSchema = "{\"type\":\"object\"}",
             RequiresApproval = requiresApproval
         };
+    }
+
+    // A fake ranker recording how many times it was consulted and returning a fixed (deliberately out-of-order)
+    // selection, so the test can assert the gate (consulted once, above threshold + non-blank query) and the
+    // selector's re-order of the ranker's output.
+    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    {
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
+            IReadOnlyList<PlaybookActionRecord> candidates,
+            int k,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(_selection ?? candidates);
+        }
     }
 }

@@ -48,8 +48,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
         return entities.Select(ToRecord).ToArray();
     }
 
-    public async Task<IReadOnlyList<ScheduledJobRunRecord>> ListAsync(
-        ScheduledRunStatus? status = null,
+    public async Task<IReadOnlyList<ScheduledJobRunRecord>> ListAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,
         Guid? scheduledJobId = null,
@@ -131,8 +130,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
         return ToRecord(entity);
     }
 
-    public async Task<ScheduledJobRunRecord?> UpdateLifecycleAsync(
-        Guid id,
+    public async Task<ScheduledJobRunRecord?> UpdateLifecycleAsync(Guid id,
         ScheduledRunStatus status,
         long? completedAtUtc = null,
         long? durationMs = null,
@@ -284,8 +282,7 @@ public sealed class ScheduledJobRunStore(NodeChatDbContext dbContext, TimeProvid
 
     private static ScheduledJobRunRecord ToRecord(ScheduledJobRun entity)
     {
-        return new ScheduledJobRunRecord(
-            entity.Id,
+        return new ScheduledJobRunRecord(entity.Id,
             entity.ScheduledJobId,
             entity.TemplateId,
             entity.QuartzFireInstanceId,

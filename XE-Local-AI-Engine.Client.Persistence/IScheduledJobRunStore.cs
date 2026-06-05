@@ -31,8 +31,7 @@ public interface IScheduledJobRunStore
     ///     ActualFireTimeUtc descending. The <paramref name="fromUtc" />/<paramref name="toUtc" /> bounds match against
     ///     ActualFireTimeUtc.
     /// </summary>
-    Task<IReadOnlyList<ScheduledJobRunRecord>> ListAsync(
-        ScheduledRunStatus? status = null,
+    Task<IReadOnlyList<ScheduledJobRunRecord>> ListAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,
         Guid? scheduledJobId = null,
@@ -48,8 +47,7 @@ public interface IScheduledJobRunStore
     ///     Applies a lifecycle transition to the run with <paramref name="id" />: sets <c>Status</c> and the supplied
     ///     non-null fields. Returns the updated record, or <c>null</c> when no run has that id.
     /// </summary>
-    Task<ScheduledJobRunRecord?> UpdateLifecycleAsync(
-        Guid id,
+    Task<ScheduledJobRunRecord?> UpdateLifecycleAsync(Guid id,
         ScheduledRunStatus status,
         long? completedAtUtc = null,
         long? durationMs = null,

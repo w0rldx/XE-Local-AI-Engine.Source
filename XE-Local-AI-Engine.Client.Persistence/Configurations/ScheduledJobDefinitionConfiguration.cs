@@ -77,6 +77,10 @@ internal sealed class ScheduledJobDefinitionConfiguration : IEntityTypeConfigura
         builder.Property(entity => entity.DeletedAtUtc)
                .HasColumnName("deleted_at_utc");
 
-        builder.HasIndex(entity => new { entity.TemplateId, entity.Enabled });
+        builder.HasIndex(entity => new
+        {
+            entity.TemplateId,
+            entity.Enabled
+        });
     }
 }

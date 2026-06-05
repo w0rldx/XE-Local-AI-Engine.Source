@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -11,10 +10,10 @@ internal sealed class McpServerService(
     IOptions<McpOptions> mcpOptions,
     ILogger<McpServerService> logger) : IMcpServerService
 {
-    private readonly IMcpServerStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IMcpServerConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-    private readonly IOptions<McpOptions> _mcpOptions = mcpOptions ?? throw new ArgumentNullException(nameof(mcpOptions));
     private readonly ILogger<McpServerService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IOptions<McpOptions> _mcpOptions = mcpOptions ?? throw new ArgumentNullException(nameof(mcpOptions));
+    private readonly IMcpServerStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<McpServerRecord> CreateAsync(McpServerInput input, CancellationToken cancellationToken = default)
     {
@@ -51,7 +50,10 @@ internal sealed class McpServerService(
 
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag through to the store regardless of what the request body claims.
-        var edit = input with { Enabled = existing.Enabled };
+        var edit = input with
+        {
+            Enabled = existing.Enabled
+        };
 
         McpServerRecord? updated;
         try

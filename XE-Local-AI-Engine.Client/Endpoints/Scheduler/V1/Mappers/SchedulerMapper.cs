@@ -78,8 +78,7 @@ internal static class SchedulerMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new ScheduledJobManagementInput(
-            request.TemplateId,
+        return new ScheduledJobManagementInput(request.TemplateId,
             request.DisplayName,
             request.Description,
             request.ScheduleKind,
@@ -99,8 +98,7 @@ internal static class SchedulerMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new ScheduledJobManagementInput(
-            request.TemplateId,
+        return new ScheduledJobManagementInput(request.TemplateId,
             request.DisplayName,
             request.Description,
             request.ScheduleKind,

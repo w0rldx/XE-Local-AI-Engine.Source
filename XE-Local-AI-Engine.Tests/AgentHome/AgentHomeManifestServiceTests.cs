@@ -19,7 +19,10 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
 
     private static readonly JsonSerializerOptions ManifestSerializerOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
     private readonly List<string> _tempRoots = [];
@@ -54,8 +57,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         AssertEx.Equal(AgentHomeManifest.CurrentVersion, layout.Manifest.Version);
         AssertEx.Equal("owner-a", layout.Manifest.OwnerUserId);
         AssertEx.Equal(FixedNow, layout.Manifest.CreatedAt);
-        AssertEx.True(
-            AgentHomeLayoutMap.Directories.All(directory => Directory.Exists(Path.Combine(layout.RootPath, directory))),
+        AssertEx.True(AgentHomeLayoutMap.Directories.All(directory => Directory.Exists(Path.Combine(layout.RootPath, directory))),
             "every layout directory should exist");
         AssertEx.True(File.Exists(Path.Combine(layout.RootPath, "manifest.json")));
         AssertEx.True(File.Exists(Path.Combine(layout.RootPath, "policy.json")));
@@ -177,7 +179,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         var clock = new MutableTimeProvider(FixedNow);
         using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock));
 
-        var layoutA = await service.InitializeAsync(Key("owner-a"));
+        var layoutA = await service.InitializeAsync(Key());
         var sentinel = Path.Combine(layoutA.RootPath, "workspace", "selected", "data.txt");
         await File.WriteAllTextAsync(sentinel, "secret");
 
@@ -194,16 +196,16 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(clock);
         using var service = CreateService(NewTempRoot(), clock, provider);
 
-        await service.InitializeAsync(Key("owner-a"));
+        await service.InitializeAsync(Key());
         await provider.CreateOrAttachAsync(new SandboxCreateRequest
         {
-            AttachKey = Key("owner-a"),
+            AttachKey = Key(),
             RuntimeProfile = "dotnet-agent-home"
         });
 
         await service.InitializeAsync(Key("owner-b"));
 
-        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ConnectAsync(Key("owner-a")));
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ConnectAsync(Key()));
     }
 
     [Test]
@@ -212,9 +214,14 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         var clock = new MutableTimeProvider(FixedNow);
         var contentRoot = NewTempRoot();
         Directory.CreateDirectory(contentRoot);
-        using var service = new AgentHomeManifestService(
-            new TestHostEnvironment { ContentRootPath = contentRoot },
-            Options.Create(new AgentHomeOptions { RootPath = null }),
+        using var service = new AgentHomeManifestService(new TestHostEnvironment
+            {
+                ContentRootPath = contentRoot
+            },
+            Options.Create(new AgentHomeOptions
+            {
+                RootPath = null
+            }),
             new FakeSandboxRuntimeProvider(clock),
             clock,
             NullLogger<AgentHomeManifestService>.Instance);
@@ -237,7 +244,10 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public void Validate_WhenStaleSecondsNotPositive_Fails()
     {
-        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions { PrepareStaleAfterSeconds = 0 });
+        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions
+        {
+            PrepareStaleAfterSeconds = 0
+        });
 
         AssertEx.True(result.Failed);
     }
@@ -245,19 +255,28 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public void Validate_WhenRootPathBlank_Fails()
     {
-        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions { RootPath = "  " });
+        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions
+        {
+            RootPath = "  "
+        });
 
         AssertEx.True(result.Failed);
     }
 
-    private static AgentHomeManifestService CreateService(
-        string rootPath,
+    private static AgentHomeManifestService CreateService(string rootPath,
         TimeProvider clock,
         ISandboxRuntimeProvider provider,
         int staleSeconds = 1800)
     {
-        var options = Options.Create(new AgentHomeOptions { RootPath = rootPath, PrepareStaleAfterSeconds = staleSeconds });
-        var hostEnvironment = new TestHostEnvironment { ContentRootPath = rootPath };
+        var options = Options.Create(new AgentHomeOptions
+        {
+            RootPath = rootPath,
+            PrepareStaleAfterSeconds = staleSeconds
+        });
+        var hostEnvironment = new TestHostEnvironment
+        {
+            ContentRootPath = rootPath
+        };
         return new AgentHomeManifestService(hostEnvironment, options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
     }
 

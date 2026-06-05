@@ -29,11 +29,24 @@ public sealed class GoldenConversationEndpointTests
         return new
         {
             title = "Cites a source",
-            inputTurns = new[] { new { role = "user", text = "What is the capital of France?" } },
+            inputTurns = new[]
+            {
+                new
+                {
+                    role = "user",
+                    text = "What is the capital of France?"
+                }
+            },
             assertion = new
             {
-                requiredPhrases = new[] { "Paris" },
-                forbiddenPhrases = new[] { "London" }
+                requiredPhrases = new[]
+                {
+                    "Paris"
+                },
+                forbiddenPhrases = new[]
+                {
+                    "London"
+                }
             },
             rubric = (string?)null,
             enabled = true
@@ -124,8 +137,22 @@ public sealed class GoldenConversationEndpointTests
         var body = new
         {
             title = "   ",
-            inputTurns = new[] { new { role = "user", text = "Hi" } },
-            assertion = new { requiredPhrases = new[] { "Paris" }, forbiddenPhrases = Array.Empty<string>() },
+            inputTurns = new[]
+            {
+                new
+                {
+                    role = "user",
+                    text = "Hi"
+                }
+            },
+            assertion = new
+            {
+                requiredPhrases = new[]
+                {
+                    "Paris"
+                },
+                forbiddenPhrases = Array.Empty<string>()
+            },
             rubric = (string?)null,
             enabled = true
         };
@@ -216,8 +243,7 @@ public sealed class GoldenConversationEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,

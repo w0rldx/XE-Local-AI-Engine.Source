@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -16,7 +17,6 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -30,8 +30,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ModelRecommendationCheckSchedulerPathTests
 {
     private const string ApprovedImageId = "llmfit-recommender-0-9-30";
+
     private const string ValidReference =
         "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";
+
     private const string ParametersJson =
         """{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "ollama" }""";
 
@@ -51,8 +53,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         await runStore.Received(1).UpsertByFireInstanceAsync(
             Arg.Is<ScheduledJobRunInput>(i => i.Status == ScheduledRunStatus.Running && i.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue),
             Arg.Any<CancellationToken>());
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.Succeeded,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -71,16 +72,15 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         AssertEx.Equal(ModelRecommendationCheckHandler.TemplateIdValue, handler.TemplateId);
     }
 
-    private static SchedulerDispatchExecutor BuildExecutor(
-        InMemoryModelFitSnapshotStore snapshotStore,
+    private static SchedulerDispatchExecutor BuildExecutor(InMemoryModelFitSnapshotStore snapshotStore,
         out IScheduledJobRunStore runStore,
         out ModelRecommendationCheckHandler handler)
     {
         var runner = new FakeModelFitUtilityRunner();
-        runner.ScriptResult(new ModelFitUtilityRunResult(
-            Status: ModelFitRunStatus.Succeeded,
+        runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Succeeded,
             ExitCode: 0,
-            StandardOutput: """{ "models": [ { "name": "qwen2.5-coder:7b", "score": 80, "fit_level": "Good", "run_mode": "GPU", "best_quant": "Q5_K_M", "estimated_tps": 40, "memory_required_gb": 6, "effective_context_length": 16384, "installed": true } ], "system": { "cpu_cores": 16 } }""",
+            StandardOutput:
+            """{ "models": [ { "name": "qwen2.5-coder:7b", "score": 80, "fit_level": "Good", "run_mode": "GPU", "best_quant": "Q5_K_M", "estimated_tps": 40, "memory_required_gb": 6, "effective_context_length": 16384, "installed": true } ], "system": { "cpu_cores": 16 } }""",
             StandardError: string.Empty,
             Completed: true,
             DurationMs: 100,
@@ -89,9 +89,11 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             SanitizedError: null));
 
         var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor());
-        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$" });
-        var refreshService = new ModelFitRefreshService(
-            new ApprovedImageResolver(approvedImageStore, new ApprovedImageReferenceValidator()),
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
+        });
+        var refreshService = new ModelFitRefreshService(new ApprovedImageResolver(approvedImageStore, new ApprovedImageReferenceValidator()),
             new ModelFitRequestValidator(new ModelNameValidator(securityOptions)),
             new StubCapabilityReporter(),
             runner,
@@ -109,8 +111,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         services.AddSingleton<ModelFitRequestValidator>();
         var provider = services.BuildServiceProvider();
 
-        handler = new ModelRecommendationCheckHandler(
-            provider.GetRequiredService<IServiceScopeFactory>(),
+        handler = new ModelRecommendationCheckHandler(provider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<ModelRecommendationCheckHandler>.Instance);
 
         var definitionStore = Substitute.For<IScheduledJobDefinitionStore>();
@@ -120,8 +121,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         runStore = Substitute.For<IScheduledJobRunStore>();
         runStore.UpsertByFireInstanceAsync(Arg.Any<ScheduledJobRunInput>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(RunRecord(ScheduledRunStatus.Running)));
-        runStore.UpdateLifecycleAsync(
-                    Arg.Any<Guid>(), Arg.Any<ScheduledRunStatus>(), Arg.Any<long?>(), Arg.Any<long?>(),
+        runStore.UpdateLifecycleAsync(Arg.Any<Guid>(), Arg.Any<ScheduledRunStatus>(), Arg.Any<long?>(), Arg.Any<long?>(),
                     Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo => Task.FromResult<ScheduledJobRunRecord?>(RunRecord((ScheduledRunStatus)callInfo[1])));
 
@@ -131,8 +131,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
 
-        return new SchedulerDispatchExecutor(
-            definitionStore,
+        return new SchedulerDispatchExecutor(definitionStore,
             registry,
             runStore,
             eventStore,
@@ -141,9 +140,9 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             NullLogger<SchedulerDispatchExecutor>.Instance);
     }
 
-    private static ApprovedUtilityImageRecord Descriptor() =>
-        new(
-            ApprovedImageId: ApprovedImageId,
+    private static ApprovedUtilityImageRecord Descriptor()
+    {
+        return new ApprovedUtilityImageRecord(ApprovedImageId: ApprovedImageId,
             DisplayName: "llmfit",
             Description: null,
             Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
@@ -158,10 +157,11 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             LastUsedAtUtc: null,
             LastSuccessfulRunAtUtc: null,
             DiagnosticsJson: null);
+    }
 
-    private static ScheduledJobDefinitionRecord DefinitionRecord() =>
-        new(
-            Id: JobId,
+    private static ScheduledJobDefinitionRecord DefinitionRecord()
+    {
+        return new ScheduledJobDefinitionRecord(Id: JobId,
             TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
             DisplayName: "Model recommendation check",
             Description: null,
@@ -182,10 +182,11 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             UpdatedAtUtc: 0L,
             DisabledAtUtc: null,
             DeletedAtUtc: null);
+    }
 
-    private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status) =>
-        new(
-            Id: RunId,
+    private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status)
+    {
+        return new ScheduledJobRunRecord(Id: RunId,
             ScheduledJobId: JobId,
             TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
             QuartzFireInstanceId: "fire-modelfit",
@@ -201,18 +202,33 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             ErrorDetails: null,
             CancellationRequestedAtUtc: null,
             CreatedAtUtc: 1L);
+    }
 
-    private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input) =>
-        new(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, 1L);
+    private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
+    {
+        return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, 1L);
+    }
 
     private sealed class StubCapabilityReporter : ICapabilityReporter
     {
-        public Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ClientCapabilities { RamMb = 32_768, VramMb = 8_192, CudaAvailable = true });
+        public Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ClientCapabilities
+            {
+                RamMb = 32_768,
+                VramMb = 8_192,
+                CudaAvailable = true
+            });
+        }
 
-        public Task ReportToApiAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReportToApiAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
+        public Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
     }
 }

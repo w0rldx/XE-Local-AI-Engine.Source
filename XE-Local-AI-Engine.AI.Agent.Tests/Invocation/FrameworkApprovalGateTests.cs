@@ -25,12 +25,11 @@ public sealed class FrameworkApprovalGateTests
     {
         var executed = 0;
         string? reasonSeen = null;
-        var tool = BuildApprovalTool(
-            reason =>
-            {
-                executed++;
-                reasonSeen = reason;
-            });
+        var tool = BuildApprovalTool(reason =>
+        {
+            executed++;
+            reasonSeen = reason;
+        });
 
         using var scripted = new ScriptedApprovalChatClient(ToolName);
         var chatClient = scripted.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
@@ -80,8 +79,7 @@ public sealed class FrameworkApprovalGateTests
 
     private static ApprovalRequiredAIFunction BuildApprovalTool(Action<string> onExecute)
     {
-        var inner = AIFunctionFactory.Create(
-            (string reason) =>
+        var inner = AIFunctionFactory.Create((string reason) =>
             {
                 onExecute(reason);
                 return "cleanup performed";
@@ -92,20 +90,27 @@ public sealed class FrameworkApprovalGateTests
     }
 
     private static ChatClientAgent BuildAgent(IChatClient chatClient, AITool tool, IServiceProvider sp)
-        => new(chatClient,
+    {
+        return new ChatClientAgent(chatClient,
             "ci-approval-gate",
             "Call the destructive_cleanup tool when asked to perform a cleanup.",
             "Deterministic approval-gate CI guard.",
-            new List<AITool> { tool },
+            new List<AITool>
+            {
+                tool
+            },
             NullLoggerFactory.Instance,
             sp);
+    }
 
     private static List<ChatMessage> BuildSeed()
-        => new()
+    {
+        return new List<ChatMessage>
         {
             new(ChatRole.System, "Call the destructive_cleanup tool when asked to perform a cleanup."),
             new(ChatRole.User, "Perform the destructive cleanup now.")
         };
+    }
 
     /// <summary>
     ///     Scripted stand-in for the model. Before the tool has run it emits a single
@@ -118,7 +123,9 @@ public sealed class FrameworkApprovalGateTests
         private readonly string _toolName;
 
         public ScriptedApprovalChatClient(string toolName)
-            => _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+        {
+            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+        }
 
         public int CallCount { get; private set; }
 
@@ -131,17 +138,29 @@ public sealed class FrameworkApprovalGateTests
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "cleanup complete")));
             }
 
-            var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?> { ["reason"] = "ci-regression" });
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { call })));
+            var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?>
+            {
+                ["reason"] = "ci-regression"
+            });
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                call
+            })));
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException("Approval-gate CI guard exercises the non-streaming RunAsync path only.");
+        {
+            throw new NotSupportedException("Approval-gate CI guard exercises the non-streaming RunAsync path only.");
+        }
 
         public object? GetService(Type serviceType, object? serviceKey = null)
-            => serviceType == typeof(IChatClient) ? this : null;
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
 
         public void Dispose()
-            => GC.SuppressFinalize(this);
+        {
+            GC.SuppressFinalize(this);
+        }
     }
 }

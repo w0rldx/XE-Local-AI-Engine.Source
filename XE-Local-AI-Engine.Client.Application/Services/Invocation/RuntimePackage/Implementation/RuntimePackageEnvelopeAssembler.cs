@@ -6,7 +6,6 @@ using NSec.Cryptography;
 using Org.BouncyCastle.Crypto;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 

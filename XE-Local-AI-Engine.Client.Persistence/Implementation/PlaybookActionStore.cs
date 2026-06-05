@@ -166,8 +166,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
 
     private static PlaybookActionRecord ToRecord(PlaybookAction entity)
     {
-        return new PlaybookActionRecord(
-            entity.Id,
+        return new PlaybookActionRecord(entity.Id,
             entity.AgentDefinitionId,
             (PlaybookActionState)entity.State,
             (PlaybookActionSource)entity.Source,

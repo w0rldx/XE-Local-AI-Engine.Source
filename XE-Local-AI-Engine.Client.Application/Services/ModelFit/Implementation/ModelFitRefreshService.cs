@@ -16,18 +16,18 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <summary>Maximum stderr length persisted; longer excerpts are truncated to bound the at-rest payload.</summary>
     private const int MaxStderrExcerptLength = 4096;
 
-    private readonly IApprovedImageResolver _imageResolver;
-    private readonly ModelFitRequestValidator _requestValidator;
+    private readonly IApprovedUtilityImageStore _approvedImageStore;
     private readonly ICapabilityReporter _capabilityReporter;
+
+    private readonly IApprovedImageResolver _imageResolver;
+    private readonly ILogger<ModelFitRefreshService> _logger;
+    private readonly IModelFitRecommendationStore _recommendationStore;
+    private readonly ModelFitRequestValidator _requestValidator;
     private readonly IModelFitUtilityRunner _runner;
     private readonly IModelFitSnapshotStore _snapshotStore;
-    private readonly IModelFitRecommendationStore _recommendationStore;
-    private readonly IApprovedUtilityImageStore _approvedImageStore;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<ModelFitRefreshService> _logger;
 
-    public ModelFitRefreshService(
-        IApprovedImageResolver imageResolver,
+    public ModelFitRefreshService(IApprovedImageResolver imageResolver,
         ModelFitRequestValidator requestValidator,
         ICapabilityReporter capabilityReporter,
         IModelFitUtilityRunner runner,
@@ -48,8 +48,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ModelFitRefreshResult> RefreshAsync(
-        ModelFitRefreshRequest request,
+    public async Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,
         Func<string, int?, CancellationToken, Task>? reportProgress,
         CancellationToken cancellationToken)
     {
@@ -71,8 +70,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         }
 
         // (2) Pre-run config validation: intent params. Recommend ignores model name (model is null for recommend).
-        var validationError = _requestValidator.GetValidationError(
-            request.Operation,
+        var validationError = _requestValidator.GetValidationError(request.Operation,
             request.UseCase,
             request.Limit,
             request.ProviderName,
@@ -88,9 +86,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         // (4) Open the Running snapshot row.
         var startedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var snapshot = await _snapshotStore.CreateRunningAsync(
-            new ModelFitSnapshotInput(
-                ApprovedImageId: request.ApprovedImageId,
+        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId: request.ApprovedImageId,
                 Operation: request.Operation,
                 UseCase: request.UseCase,
                 ProviderName: request.ProviderName,
@@ -111,9 +107,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         ModelFitUtilityRunResult runResult;
         try
         {
-            runResult = await _runner.RunAsync(
-                new ModelFitUtilityRunRequest(
-                    ImageReference: resolution.ImageReference!,
+            runResult = await _runner.RunAsync(new ModelFitUtilityRunRequest(ImageReference: resolution.ImageReference!,
                     Operation: request.Operation,
                     UseCase: request.UseCase,
                     Limit: request.Limit,
@@ -133,8 +127,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             // the scheduler run cancelled. Terminal write uses CancellationToken.None — the run is ending precisely
             // because its own token was cancelled.
             var cancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _snapshotStore.MarkTerminalAsync(
-                snapshotId,
+            await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Cancelled,
                 exitCode: null,
                 durationMs: cancelledAtUtc - startedAtUtc,
@@ -144,8 +137,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 completedAtUtc: cancelledAtUtc,
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
-            _logger.LogInformation(
-                "Model-fit refresh cancelled for snapshot {SnapshotId} (image {ApprovedImageId}, operation {Operation}).",
+            _logger.LogInformation("Model-fit refresh cancelled for snapshot {SnapshotId} (image {ApprovedImageId}, operation {Operation}).",
                 snapshotId,
                 request.ApprovedImageId,
                 request.Operation);
@@ -168,8 +160,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             ? runResult.Status
             : ModelFitRunStatus.Failed;
 
-        await _snapshotStore.MarkTerminalAsync(
-            snapshotId,
+        await _snapshotStore.MarkTerminalAsync(snapshotId,
             failureStatus,
             exitCode: runResult.ExitCode,
             durationMs: completedAtUtc - startedAtUtc,
@@ -182,8 +173,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         await TouchUsedAsync(request.ApprovedImageId, completedAtUtc, lastSuccessfulRunAtUtc: null, cancellationToken)
             .ConfigureAwait(false);
 
-        _logger.LogWarning(
-            "Model-fit refresh did not succeed for snapshot {SnapshotId} (image {ApprovedImageId}, operation {Operation}, status {Status}).",
+        _logger.LogWarning("Model-fit refresh did not succeed for snapshot {SnapshotId} (image {ApprovedImageId}, operation {Operation}, status {Status}).",
             snapshotId,
             request.ApprovedImageId,
             request.Operation,
@@ -192,8 +182,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         return new ModelFitRefreshResult(snapshotId, failureStatus, RecommendationCount: 0, runResult.SanitizedError);
     }
 
-    private async Task<ModelFitRefreshResult> CompleteSucceededRunAsync(
-        ModelFitRefreshRequest request,
+    private async Task<ModelFitRefreshResult> CompleteSucceededRunAsync(ModelFitRefreshRequest request,
         Guid snapshotId,
         ModelFitUtilityRunResult runResult,
         long completedAtUtc,
@@ -205,8 +194,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         {
             // Tolerant-parse failure: the run exited 0 but the JSON was malformed. Record Failed (raw stored for audit),
             // touch usage without a successful-run stamp, and return failed — NEVER throw out of the service for bad JSON.
-            await _snapshotStore.MarkTerminalAsync(
-                snapshotId,
+            await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Failed,
                 exitCode: runResult.ExitCode,
                 durationMs: completedAtUtc - startedAtUtc,
@@ -219,8 +207,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             await TouchUsedAsync(request.ApprovedImageId, completedAtUtc, lastSuccessfulRunAtUtc: null, cancellationToken)
                 .ConfigureAwait(false);
 
-            _logger.LogWarning(
-                "Model-fit refresh produced unparseable recommendation JSON for snapshot {SnapshotId} (image {ApprovedImageId}).",
+            _logger.LogWarning("Model-fit refresh produced unparseable recommendation JSON for snapshot {SnapshotId} (image {ApprovedImageId}).",
                 snapshotId,
                 request.ApprovedImageId);
 
@@ -228,8 +215,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         }
 
         // Parse OK → mark Succeeded (sets is_latest_successful transactionally), replace normalized rows, touch usage.
-        await _snapshotStore.MarkTerminalAsync(
-            snapshotId,
+        await _snapshotStore.MarkTerminalAsync(snapshotId,
             ModelFitRunStatus.Succeeded,
             exitCode: runResult.ExitCode,
             durationMs: completedAtUtc - startedAtUtc,
@@ -245,8 +231,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         await TouchUsedAsync(request.ApprovedImageId, completedAtUtc, lastSuccessfulRunAtUtc: completedAtUtc, cancellationToken)
             .ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "Model-fit refresh succeeded for snapshot {SnapshotId} (image {ApprovedImageId}, {Count} recommendations).",
+        _logger.LogInformation("Model-fit refresh succeeded for snapshot {SnapshotId} (image {ApprovedImageId}, {Count} recommendations).",
             snapshotId,
             request.ApprovedImageId,
             inserted);
@@ -260,8 +245,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     already detects host cores correctly, only the GPU is hidden. A capability-detection failure proceeds with
     ///     zero overrides rather than failing the refresh.
     /// </summary>
-    private async Task<(int RamOverrideGb, int VramOverrideGb, int CpuCoresOverride)> ComputeHardwareOverridesAsync(
-        CancellationToken cancellationToken)
+    private async Task<(int RamOverrideGb, int VramOverrideGb, int CpuCoresOverride)> ComputeHardwareOverridesAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -277,8 +261,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         }
     }
 
-    private async Task TouchUsedAsync(
-        string approvedImageId,
+    private async Task TouchUsedAsync(string approvedImageId,
         long lastUsedAtUtc,
         long? lastSuccessfulRunAtUtc,
         CancellationToken cancellationToken)
@@ -297,6 +280,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         return value.Length <= MaxStderrExcerptLength ? value : value[..MaxStderrExcerptLength];
     }
 
-    private static ModelFitRefreshResult Failed(Guid? snapshotId, string sanitizedError) =>
-        new(snapshotId, ModelFitRunStatus.Failed, RecommendationCount: 0, sanitizedError);
+    private static ModelFitRefreshResult Failed(Guid? snapshotId, string sanitizedError)
+    {
+        return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, RecommendationCount: 0, sanitizedError);
+    }
 }

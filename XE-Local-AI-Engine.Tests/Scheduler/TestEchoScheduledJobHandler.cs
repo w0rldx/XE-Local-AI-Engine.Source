@@ -13,10 +13,18 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
 
     private readonly List<ScheduledJobExecutionContext> _captured = [];
 
+    /// <summary>Number of times <see cref="ExecuteAsync" /> has been called.</summary>
+    public int InvocationCount => _captured.Count;
+
+    /// <summary>All captured contexts in invocation order.</summary>
+    public IReadOnlyList<ScheduledJobExecutionContext> CapturedContexts => _captured;
+
+    /// <summary>The most-recently captured context, or <see langword="null" /> if never invoked.</summary>
+    public ScheduledJobExecutionContext? LastContext => _captured.Count > 0 ? _captured[^1] : null;
+
     public string TemplateId => Id;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(
-        TemplateId: Id,
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: Id,
         DisplayName: "Echo (test)",
         Description: "No-op test handler that records invocations.",
         ParameterSchema: null,
@@ -27,15 +35,6 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
         DefaultMaxRuntimeSeconds: null,
         AllowManualTrigger: true,
         AllowAgentCreation: false);
-
-    /// <summary>Number of times <see cref="ExecuteAsync" /> has been called.</summary>
-    public int InvocationCount => _captured.Count;
-
-    /// <summary>All captured contexts in invocation order.</summary>
-    public IReadOnlyList<ScheduledJobExecutionContext> CapturedContexts => _captured;
-
-    /// <summary>The most-recently captured context, or <see langword="null" /> if never invoked.</summary>
-    public ScheduledJobExecutionContext? LastContext => _captured.Count > 0 ? _captured[^1] : null;
 
     public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {

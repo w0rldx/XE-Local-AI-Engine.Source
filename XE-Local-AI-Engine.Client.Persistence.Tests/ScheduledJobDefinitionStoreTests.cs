@@ -130,7 +130,10 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         var store = new ScheduledJobDefinitionStore(context, TimeProvider.System);
 
         var enabled = await store.AddAsync(CreateCronInput("tpl-en", "Enabled"));
-        _ = await store.AddAsync(CreateCronInput("tpl-dis", "Disabled") with { Enabled = false });
+        _ = await store.AddAsync(CreateCronInput("tpl-dis", "Disabled") with
+        {
+            Enabled = false
+        });
         var toDelete = await store.AddAsync(CreateCronInput("tpl-del", "Deleted"));
         _ = await store.SoftDeleteAsync(toDelete.Id);
 
@@ -155,7 +158,10 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         var added = await store.AddAsync(CreateCronInput("tpl-upd", "Original Name"));
 
         clock.Advance(500);
-        var updatedInput = CreateCronInput("tpl-upd", "Updated Name") with { Description = "Changed" };
+        var updatedInput = CreateCronInput("tpl-upd", "Updated Name") with
+        {
+            Description = "Changed"
+        };
         var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, updatedInput), "Update should return updated record.");
 
         AssertEx.Equal("Updated Name", updated.DisplayName);
@@ -217,7 +223,10 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
 
         var store = new ScheduledJobDefinitionStore(context, TimeProvider.System);
-        var added = await store.AddAsync(CreateCronInput("tpl-re", "Job") with { Enabled = false });
+        var added = await store.AddAsync(CreateCronInput("tpl-re", "Job") with
+        {
+            Enabled = false
+        });
         _ = await store.SetEnabledAsync(added.Id, false);
 
         var reEnabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true), "Re-enable should return the updated record.");
@@ -300,7 +309,10 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
 
             var store = new ScheduledJobDefinitionStore(writeContext, TimeProvider.System);
-            var added = await store.AddAsync(CreateCronInput("tpl-enc", "Encrypted") with { ParameterJson = paramJson });
+            var added = await store.AddAsync(CreateCronInput("tpl-enc", "Encrypted") with
+            {
+                ParameterJson = paramJson
+            });
             AssertEx.Equal(paramJson, added.ParameterJson);
             defId = added.Id;
         }
@@ -326,7 +338,10 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
 
             var store = new ScheduledJobDefinitionStore(context, TimeProvider.System);
-            _ = await store.AddAsync(CreateCronInput("tpl-cipher", "Job") with { ParameterJson = paramJson });
+            _ = await store.AddAsync(CreateCronInput("tpl-cipher", "Job") with
+            {
+                ParameterJson = paramJson
+            });
         }
 
         var rawBytes = await ReadRawParameterJsonAsync(databasePath);
@@ -348,7 +363,10 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
 
         var store = new ScheduledJobDefinitionStore(context, TimeProvider.System);
-        var added = await store.AddAsync(CreateCronInput("tpl-null", "Job") with { ParameterJson = null });
+        var added = await store.AddAsync(CreateCronInput("tpl-null", "Job") with
+        {
+            ParameterJson = null
+        });
 
         AssertEx.Null(added.ParameterJson, "Null ParameterJson should round-trip as null.");
     }
@@ -382,8 +400,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
     private static ScheduledJobDefinitionInput CreateCronInput(string templateId, string displayName)
     {
-        return new ScheduledJobDefinitionInput(
-            TemplateId: templateId,
+        return new ScheduledJobDefinitionInput(TemplateId: templateId,
             DisplayName: displayName,
             Description: "Runs every hour",
             Enabled: true,

@@ -59,7 +59,11 @@ internal sealed class ModelFitRecommendationConfiguration : IEntityTypeConfigura
         builder.Property(entity => entity.DiagnosticsJson)
                .HasColumnName("diagnostics_json");
 
-        builder.HasIndex(entity => new { entity.SnapshotId, entity.Rank });
+        builder.HasIndex(entity => new
+        {
+            entity.SnapshotId,
+            entity.Rank
+        });
 
         // A recommendation row is meaningless without its parent snapshot, so the FK cascades: deleting a snapshot
         // removes its recommendation rows.

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
@@ -66,8 +65,8 @@ public sealed class SandboxProviderSelectionTests
         }
 
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configurationValues)
-            .Build();
+                            .AddInMemoryCollection(configurationValues)
+                            .Build();
 
         var services = new ServiceCollection();
         services.AddSingleton(TimeProvider.System);
@@ -75,7 +74,11 @@ public sealed class SandboxProviderSelectionTests
         services.AddOptions<SandboxOptions>().Bind(configuration.GetSection(SandboxOptions.SectionName));
         // The local-container provider is a thin gRPC client; constructing it (no connection happens at construction)
         // needs HostAgentClientOptions plus the bound LocalContainerOptions.
-        services.AddSingleton(new HostAgentClientOptions { SocketPath = "/run/host-agent/host-agent.sock", Secret = "selection-test-secret" });
+        services.AddSingleton(new HostAgentClientOptions
+        {
+            SocketPath = "/run/host-agent/host-agent.sock",
+            Secret = "selection-test-secret"
+        });
         services.AddOptions<LocalContainerOptions>().Bind(configuration.GetSection(LocalContainerOptions.SectionName));
         return services.BuildServiceProvider();
     }

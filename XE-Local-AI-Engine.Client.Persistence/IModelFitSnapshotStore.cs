@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-
 /// <summary>
 ///     Node-scoped persistence for model-fit snapshot runs. The raw output, stderr excerpt and detailed diagnostics are
 ///     encrypted at rest by the node encryption interceptors; they are SANITIZED-BY-DEFAULT at this boundary — the
@@ -25,8 +23,7 @@ public interface IModelFitSnapshotStore
     ///     (<c>operation, use_case, provider_name, model_name</c>) and sets it on this row, so two refreshes can never
     ///     leave two rows latest for one key. Returns the updated summary, or <c>null</c> when no run has that id.
     /// </summary>
-    Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(
-        Guid id,
+    Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(Guid id,
         ModelFitRunStatus status,
         int? exitCode,
         long? durationMs,
@@ -41,8 +38,7 @@ public interface IModelFitSnapshotStore
     ///     <paramref name="providerName" />, <paramref name="modelName" />), or <c>null</c> when none exists. The use-case
     ///     and model-name match on null too (null for recommendation snapshots).
     /// </summary>
-    Task<ModelFitSnapshotSummaryRecord?> GetLatestSuccessfulSummaryAsync(
-        ModelFitOperation operation,
+    Task<ModelFitSnapshotSummaryRecord?> GetLatestSuccessfulSummaryAsync(ModelFitOperation operation,
         string? useCase,
         string providerName,
         string? modelName,
@@ -52,8 +48,7 @@ public interface IModelFitSnapshotStore
     ///     Returns the most recent run summaries (newest first by <c>CreatedAtUtc</c>), filtered by the supplied criteria
     ///     (each <c>null</c> filter is ignored) and capped at <paramref name="limit" />.
     /// </summary>
-    Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(
-        ModelFitOperation? operation = null,
+    Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(ModelFitOperation? operation = null,
         string? providerName = null,
         int limit = 50,
         CancellationToken cancellationToken = default);

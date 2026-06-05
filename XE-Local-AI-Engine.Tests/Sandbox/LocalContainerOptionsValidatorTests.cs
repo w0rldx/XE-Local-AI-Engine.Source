@@ -18,7 +18,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithRestrictedNetwork_Succeeds()
     {
-        var result = Validate(new LocalContainerOptions { NetworkMode = "restricted" });
+        var result = Validate(new LocalContainerOptions
+        {
+            NetworkMode = "restricted"
+        });
 
         AssertEx.True(result.Succeeded);
     }
@@ -26,7 +29,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithUnknownNetworkMode_Fails()
     {
-        var result = Validate(new LocalContainerOptions { NetworkMode = "host" });
+        var result = Validate(new LocalContainerOptions
+        {
+            NetworkMode = "host"
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "NetworkMode");
@@ -35,7 +41,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithBlankImage_Fails()
     {
-        var result = Validate(new LocalContainerOptions { DefaultImage = "  " });
+        var result = Validate(new LocalContainerOptions
+        {
+            DefaultImage = "  "
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "DefaultImage");
@@ -44,7 +53,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithBlankContainerNamePrefix_Fails()
     {
-        var result = Validate(new LocalContainerOptions { ContainerNamePrefix = string.Empty });
+        var result = Validate(new LocalContainerOptions
+        {
+            ContainerNamePrefix = string.Empty
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "ContainerNamePrefix");
@@ -53,7 +65,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithNonPositiveCpuLimit_Fails()
     {
-        var result = Validate(new LocalContainerOptions { CpuLimit = 0 });
+        var result = Validate(new LocalContainerOptions
+        {
+            CpuLimit = 0
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "CpuLimit");
@@ -62,7 +77,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithNonPositiveMemoryLimit_Fails()
     {
-        var result = Validate(new LocalContainerOptions { MemoryLimitMb = 0 });
+        var result = Validate(new LocalContainerOptions
+        {
+            MemoryLimitMb = 0
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "MemoryLimitMb");
@@ -71,7 +89,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithNonPositivePidsLimit_Fails()
     {
-        var result = Validate(new LocalContainerOptions { PidsLimit = -1 });
+        var result = Validate(new LocalContainerOptions
+        {
+            PidsLimit = -1
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "PidsLimit");
@@ -80,7 +101,10 @@ public sealed class LocalContainerOptionsValidatorTests
     [Test]
     public void Validate_WithNonPositiveMaxCopyFileBytes_Fails()
     {
-        var result = Validate(new LocalContainerOptions { MaxCopyFileBytes = 0 });
+        var result = Validate(new LocalContainerOptions
+        {
+            MaxCopyFileBytes = 0
+        });
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.FailureMessage, "MaxCopyFileBytes");

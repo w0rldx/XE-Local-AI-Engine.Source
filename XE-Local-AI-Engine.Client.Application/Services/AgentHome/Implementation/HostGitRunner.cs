@@ -30,8 +30,7 @@ internal sealed class HostGitRunner
     ///     exit code and captured streams. A timeout, a missing executable, or a launch failure surfaces as a non-zero
     ///     exit with the failure on stderr rather than throwing past the caller.
     /// </summary>
-    public async Task<HostGitResult> RunAsync(
-        string workingDirectory,
+    public async Task<HostGitResult> RunAsync(string workingDirectory,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
@@ -54,7 +53,10 @@ internal sealed class HostGitRunner
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(_timeoutSeconds));
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
 
         try
         {

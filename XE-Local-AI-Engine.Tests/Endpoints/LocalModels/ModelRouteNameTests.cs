@@ -16,11 +16,9 @@ public sealed class ModelRouteNameTests
     {
         // The bound route value still carries literal %2F (Kestrel leaves encoded slashes encoded by design), while
         // %3A has already been decoded to ':' by route binding — both forms must round-trip to the canonical name.
-        AssertEx.Equal(
-            "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
             ModelRouteName.Decode("hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF:UD-Q4_K_XL"));
-        AssertEx.Equal(
-            "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
             ModelRouteName.Decode("hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL"));
     }
 

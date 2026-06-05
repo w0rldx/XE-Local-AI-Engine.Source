@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+
 /// <summary>
 ///     Node-scoped persistence for golden conversation cases bound to an agent definition. <c>InputTurns</c>,
 ///     <c>Assertion</c> and <c>Rubric</c> are encrypted at rest by the node encryption interceptors; reads return them
@@ -58,7 +60,7 @@ public sealed record GoldenConversationRecord(
     bool Enabled,
     long CreatedAtUtc,
     long UpdatedAtUtc,
-    Entities.GoldenConversationSource Source = Entities.GoldenConversationSource.Manual,
+    GoldenConversationSource Source = GoldenConversationSource.Manual,
     Guid? SourceMessageId = null,
     Guid? SourceConversationId = null);
 
@@ -74,6 +76,6 @@ public sealed record GoldenConversationInput(
     string? Assertion,
     string? Rubric,
     bool Enabled,
-    Entities.GoldenConversationSource Source = Entities.GoldenConversationSource.Manual,
+    GoldenConversationSource Source = GoldenConversationSource.Manual,
     Guid? SourceMessageId = null,
     Guid? SourceConversationId = null);

@@ -29,8 +29,7 @@ public sealed class ModelClassificationStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
 
             var store = new ModelClassificationStore(writeContext, TimeProvider.System);
-            var detected = await store.UpsertDetectedAsync(
-                "llama3.1",
+            var detected = await store.UpsertDetectedAsync("llama3.1",
                 "sha256:abc123",
                 ModelKind.Chat,
                 """["completion","tools"]""");

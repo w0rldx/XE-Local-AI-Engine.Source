@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
+using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -60,7 +61,7 @@ public static class RecommendationJsonParser
             }
 
             var systemDiagnostics = root.TryGetProperty("system", out var systemElement)
-                                     && systemElement.ValueKind == JsonValueKind.Object
+                                    && systemElement.ValueKind == JsonValueKind.Object
                 ? systemElement.GetRawText()
                 : null;
 
@@ -73,8 +74,7 @@ public static class RecommendationJsonParser
         var ollamaName = GetString(model, "ollama_name");
         var memoryRequiredGb = GetDouble(model, "memory_required_gb");
 
-        return new ModelFitRecommendationInput(
-            Rank: rank,
+        return new ModelFitRecommendationInput(Rank: rank,
             ModelName: GetString(model, "name") ?? string.Empty,
             ProviderModelName: ollamaName,
             Score: GetDouble(model, "score") ?? 0d,
@@ -118,7 +118,7 @@ public static class RecommendationJsonParser
             }
         }
 
-        return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     private static bool CopyProperty(JsonElement model, string propertyName, Utf8JsonWriter writer)
@@ -133,29 +133,37 @@ public static class RecommendationJsonParser
         return true;
     }
 
-    private static string? GetString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+    private static string? GetString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+    }
 
-    private static double? GetDouble(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value)
-        && value.ValueKind == JsonValueKind.Number
-        && value.TryGetDouble(out var number)
+    private static double? GetDouble(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value)
+               && value.ValueKind == JsonValueKind.Number
+               && value.TryGetDouble(out var number)
             ? number
             : null;
+    }
 
-    private static int? GetInt(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value)
-        && value.ValueKind == JsonValueKind.Number
-        && value.TryGetInt32(out var number)
+    private static int? GetInt(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value)
+               && value.ValueKind == JsonValueKind.Number
+               && value.TryGetInt32(out var number)
             ? number
             : null;
+    }
 
-    private static bool? GetBool(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+    private static bool? GetBool(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? value.GetBoolean()
             : null;
+    }
 }
 
 /// <summary>
@@ -164,8 +172,7 @@ public static class RecommendationJsonParser
 /// </summary>
 public sealed record RecommendationParseResult
 {
-    private RecommendationParseResult(
-        bool isSuccess,
+    private RecommendationParseResult(bool isSuccess,
         IReadOnlyList<ModelFitRecommendationInput> recommendations,
         string? systemDiagnosticsJson)
     {
@@ -180,11 +187,14 @@ public sealed record RecommendationParseResult
 
     public string? SystemDiagnosticsJson { get; }
 
-    public static RecommendationParseResult Success(
-        IReadOnlyList<ModelFitRecommendationInput> recommendations,
-        string? systemDiagnosticsJson) =>
-        new(true, recommendations, systemDiagnosticsJson);
+    public static RecommendationParseResult Success(IReadOnlyList<ModelFitRecommendationInput> recommendations,
+        string? systemDiagnosticsJson)
+    {
+        return new RecommendationParseResult(true, recommendations, systemDiagnosticsJson);
+    }
 
-    public static RecommendationParseResult Failure() =>
-        new(false, [], null);
+    public static RecommendationParseResult Failure()
+    {
+        return new RecommendationParseResult(false, [], null);
+    }
 }

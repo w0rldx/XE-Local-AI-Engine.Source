@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
@@ -16,13 +15,12 @@ internal sealed class ModelClassificationService(
     ILogger<ModelClassificationService> logger) : IModelClassificationService
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly ILogger<ModelClassificationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
 
     private readonly IModelClassificationStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
-    private readonly ILogger<ModelClassificationService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public async Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(
-        IEnumerable<(string ModelName, string? Digest)> models,
+    public async Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(IEnumerable<(string ModelName, string? Digest)> models,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(models);
@@ -137,8 +135,7 @@ internal sealed class ModelClassificationService(
     private ModelClassificationResult ToResult(ModelClassificationRecord record)
     {
         var effectiveKind = record.OverrideKind ?? record.DetectedKind;
-        return new ModelClassificationResult(
-            record.ModelName,
+        return new ModelClassificationResult(record.ModelName,
             effectiveKind,
             record.DetectedKind,
             DeserializeCapabilities(record.DetectedCapabilitiesJson),
@@ -165,8 +162,7 @@ internal sealed class ModelClassificationService(
 
     private static ModelClassificationRecord UnknownRecord(string modelName, string? digest)
     {
-        return new ModelClassificationRecord(
-            modelName,
+        return new ModelClassificationRecord(modelName,
             digest,
             ModelKind.Unknown,
             DetectedCapabilitiesJson: null,

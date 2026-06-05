@@ -18,6 +18,8 @@ internal sealed class SchedulerDispatchJob(
     private readonly ILogger<SchedulerDispatchJob> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public Task Execute(IJobExecutionContext context) =>
-        SchedulerDispatchJobRunner.RunAsync(_dispatchExecutor, _logger, context);
+    public Task Execute(IJobExecutionContext context)
+    {
+        return SchedulerDispatchJobRunner.RunAsync(_dispatchExecutor, _logger, context);
+    }
 }

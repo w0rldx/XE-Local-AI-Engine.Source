@@ -10,11 +10,10 @@ using global::Docker.DotNet;
 /// </summary>
 public sealed class ModelFitUtilityReconciliationHostedService : IHostedService
 {
-    private readonly IDockerRuntimeClient _runtimeClient;
     private readonly ILogger<ModelFitUtilityReconciliationHostedService> _logger;
+    private readonly IDockerRuntimeClient _runtimeClient;
 
-    public ModelFitUtilityReconciliationHostedService(
-        IDockerRuntimeClient runtimeClient,
+    public ModelFitUtilityReconciliationHostedService(IDockerRuntimeClient runtimeClient,
         ILogger<ModelFitUtilityReconciliationHostedService> logger)
     {
         _runtimeClient = runtimeClient ?? throw new ArgumentNullException(nameof(runtimeClient));

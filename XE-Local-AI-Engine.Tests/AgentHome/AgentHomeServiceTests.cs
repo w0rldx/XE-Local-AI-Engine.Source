@@ -153,8 +153,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         var changedJson = await File.ReadAllTextAsync(changedFilesFile);
         AssertEx.Contains(changedJson, folderId.ToString());
         AssertEx.Contains(changedJson, "README.md");
-        AssertEx.False(
-            changedJson.Contains(prepared.Layout.RootPath, StringComparison.Ordinal),
+        AssertEx.False(changedJson.Contains(prepared.Layout.RootPath, StringComparison.Ordinal),
             "changed-files.json must not leak a host path");
     }
 
@@ -181,11 +180,9 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.Equal(0, run.Patch.ChangedFileCount);
         AssertEx.True(run.Patch.PatchRelativePath is null, "no baseline means no patch path");
         AssertEx.True(run.Patch.ChangedFilesRelativePath is null, "no baseline means no changed-files path");
-        AssertEx.True(
-            provider.ExecutedCommands.All(command => !(command.Executable == "git" && command.Arguments.Contains("diff"))),
+        AssertEx.True(provider.ExecutedCommands.All(command => !(command.Executable == "git" && command.Arguments.Contains("diff"))),
             "no git diff is issued when there is no baseline");
-        AssertEx.False(
-            Directory.Exists(Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches")),
+        AssertEx.False(Directory.Exists(Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches")),
             "no patches directory is created when nothing was exported");
     }
 
@@ -249,8 +246,12 @@ public sealed class AgentHomeServiceTests : IDisposable
         });
 
         using var cancellation = new CancellationTokenSource();
-        var runTask = harness.Service.RunAsync(
-            new AgentHomeRunRequest { Prepared = prepared, Goal = "g", AllowedActions = ["run_commands"] },
+        var runTask = harness.Service.RunAsync(new AgentHomeRunRequest
+            {
+                Prepared = prepared,
+                Goal = "g",
+                AllowedActions = ["run_commands"]
+            },
             cancellation.Token);
 
         await cancellation.CancelAsync();
@@ -270,11 +271,17 @@ public sealed class AgentHomeServiceTests : IDisposable
         var identity = new MutableIdentityProvider("owner-a", "node-1");
         using var harness = CreateHarness(clock, provider, resolver, identity);
 
-        var first = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [folderId.ToString()] });
+        var first = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
         AssertEx.Equal("owner-a", first.Layout.Manifest.OwnerUserId);
 
         identity.OwnerUserId = "owner-b";
-        var second = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [folderId.ToString()] });
+        var second = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
 
         AssertEx.Equal("owner-b", second.Layout.Manifest.OwnerUserId);
     }
@@ -420,7 +427,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver);
 
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [] });
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = []
+        });
         var run = await harness.Service.RunAsync(new AgentHomeRunRequest
         {
             Prepared = prepared,
@@ -450,7 +460,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver);
 
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [folderId.ToString()] });
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
         var run = await harness.Service.RunAsync(new AgentHomeRunRequest
         {
             Prepared = prepared,
@@ -473,7 +486,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver);
 
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [folderId.ToString()] });
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
 
         // Seed a memory proposals file under the run dir BEFORE the run so that, IF collection ran, it would read it.
         // The run id is allocated inside RunAsync, so assert via the log instead: with propose_memory omitted, no
@@ -503,7 +519,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver);
 
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [folderId.ToString()] });
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
         var run = await harness.Service.RunAsync(new AgentHomeRunRequest
         {
             Prepared = prepared,
@@ -528,7 +547,10 @@ public sealed class AgentHomeServiceTests : IDisposable
         var identity = new MutableIdentityProvider("user-subject-42", "node-1");
         using var harness = CreateHarness(clock, provider, resolver, identity);
 
-        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest { SelectedFolderIds = [folderId.ToString()] });
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
 
         AssertEx.Equal("user-subject-42", prepared.Handle.AttachKey.OwnerUserId);
         AssertEx.Equal("node-1", prepared.Handle.AttachKey.NodeId);
@@ -582,9 +604,82 @@ public sealed class AgentHomeServiceTests : IDisposable
         // A command that is still blocking has no completion recorded, so its execution id is in flight. The fake's
         // CancelCommandAsync targets it by id, so collecting the executed ids of blocking probes is sufficient here.
         return provider.ExecutedCommands
-            .Where(command => string.Equals(command.Executable, "dotnet", StringComparison.Ordinal))
-            .Select(command => command.ExecutionId)
-            .ToList();
+                       .Where(command => string.Equals(command.Executable, "dotnet", StringComparison.Ordinal))
+                       .Select(command => command.ExecutionId)
+                       .ToList();
+    }
+
+    private static SandboxAttachKey AnyKey()
+    {
+        return new SandboxAttachKey
+        {
+            OwnerUserId = "owner-a",
+            NodeId = "node-1",
+            ProviderName = "fake",
+            RuntimeProfile = "dotnet-agent-home",
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
+    }
+
+    private string CreateSourceFolder()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "agenthome-src-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "README.md"), "# project");
+        _tempRoots.Add(directory);
+        return directory;
+    }
+
+    private ServiceHarness CreateHarness(TimeProvider clock,
+        ISandboxRuntimeProvider provider,
+        ISelectedFolderResolver resolver,
+        IAgentHomeIdentityProvider? identity = null,
+        int commandTimeoutSeconds = 300)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
+        _tempRoots.Add(root);
+
+        var options = Options.Create(new AgentHomeOptions
+        {
+            RootPath = root,
+            CommandTimeoutSeconds = commandTimeoutSeconds
+        });
+        var hostEnvironment = new TestHostEnvironment
+        {
+            ContentRootPath = root
+        };
+        var manifestService = new AgentHomeManifestService(hostEnvironment, options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+
+        var serviceProvider = new ServiceCollection()
+                              .AddScoped(_ => resolver)
+                              // The service resolves a fresh per-run logger from a scope. Register the real logger so the run
+                              // writes JSONL into the temp run dir (best-effort; never fails the run).
+                              .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
+                              .BuildServiceProvider();
+
+        var memoryProposalService = new AgentHomeMemoryProposalService(NullLogger<AgentHomeMemoryProposalService>.Instance);
+
+        var workspaceService = new AgentHomeWorkspaceService(provider,
+            new SensitiveFileExclusionService(),
+            options,
+            NullLogger<AgentHomeWorkspaceService>.Instance);
+
+        var patchService = new AgentHomePatchService(provider,
+            options,
+            NullLogger<AgentHomePatchService>.Instance);
+
+        var service = new AgentHomeService(manifestService,
+            provider,
+            identity ?? new MutableIdentityProvider("owner-a", "node-1"),
+            workspaceService,
+            patchService,
+            memoryProposalService,
+            serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            options,
+            clock,
+            NullLogger<AgentHomeService>.Instance);
+
+        return new ServiceHarness(service, manifestService, serviceProvider);
     }
 
     private sealed class CancelRecordingProvider : ISandboxRuntimeProvider
@@ -645,78 +740,6 @@ public sealed class AgentHomeServiceTests : IDisposable
         }
     }
 
-    private static SandboxAttachKey AnyKey()
-    {
-        return new SandboxAttachKey
-        {
-            OwnerUserId = "owner-a",
-            NodeId = "node-1",
-            ProviderName = "fake",
-            RuntimeProfile = "dotnet-agent-home",
-            ManifestVersion = AgentHomeManifest.CurrentVersion
-        };
-    }
-
-    private string CreateSourceFolder()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), "agenthome-src-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, "README.md"), "# project");
-        _tempRoots.Add(directory);
-        return directory;
-    }
-
-    private ServiceHarness CreateHarness(
-        TimeProvider clock,
-        ISandboxRuntimeProvider provider,
-        ISelectedFolderResolver resolver,
-        IAgentHomeIdentityProvider? identity = null,
-        int commandTimeoutSeconds = 300)
-    {
-        var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
-        _tempRoots.Add(root);
-
-        var options = Options.Create(new AgentHomeOptions { RootPath = root, CommandTimeoutSeconds = commandTimeoutSeconds });
-        var hostEnvironment = new TestHostEnvironment { ContentRootPath = root };
-        var manifestService = new AgentHomeManifestService(
-            hostEnvironment, options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
-
-        var serviceProvider = new ServiceCollection()
-            .AddScoped(_ => resolver)
-            // The service resolves a fresh per-run logger from a scope. Register the real logger so the run
-            // writes JSONL into the temp run dir (best-effort; never fails the run).
-            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
-            .BuildServiceProvider();
-
-        var memoryProposalService = new AgentHomeMemoryProposalService(
-            NullLogger<AgentHomeMemoryProposalService>.Instance);
-
-        var workspaceService = new AgentHomeWorkspaceService(
-            provider,
-            new SensitiveFileExclusionService(),
-            options,
-            NullLogger<AgentHomeWorkspaceService>.Instance);
-
-        var patchService = new AgentHomePatchService(
-            provider,
-            options,
-            NullLogger<AgentHomePatchService>.Instance);
-
-        var service = new AgentHomeService(
-            manifestService,
-            provider,
-            identity ?? new MutableIdentityProvider("owner-a", "node-1"),
-            workspaceService,
-            patchService,
-            memoryProposalService,
-            serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            options,
-            clock,
-            NullLogger<AgentHomeService>.Instance);
-
-        return new ServiceHarness(service, manifestService, serviceProvider);
-    }
-
     private sealed class ServiceHarness : IDisposable
     {
         private readonly AgentHomeManifestService _manifestService;
@@ -760,11 +783,6 @@ public sealed class AgentHomeServiceTests : IDisposable
     {
         private readonly Dictionary<Guid, ResolvedSelectedFolder> _folders = [];
 
-        public void Add(Guid id, string alias, string hostPath)
-        {
-            _folders[id] = new ResolvedSelectedFolder(id, alias, hostPath, SelectedFolderMode.Copy);
-        }
-
         public Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
@@ -785,6 +803,11 @@ public sealed class AgentHomeServiceTests : IDisposable
             }
 
             throw new SelectedFolderValidationException($"Unknown selected folder id '{id}'.");
+        }
+
+        public void Add(Guid id, string alias, string hostPath)
+        {
+            _folders[id] = new ResolvedSelectedFolder(id, alias, hostPath, SelectedFolderMode.Copy);
         }
     }
 

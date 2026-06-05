@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 ///     Read-only registry of all <see cref="IScheduledJobHandler" /> implementations discovered at startup.
 ///     Registered as a singleton by <c>NodeSchedulerServiceCollectionExtensions</c> .
@@ -30,5 +32,5 @@ public interface IScheduledJobTemplateRegistry
     ///     <see langword="true" /> if a handler is registered for <paramref name="templateId" />;
     ///     <see langword="false" /> otherwise.
     /// </returns>
-    bool TryGetHandler(string templateId, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IScheduledJobHandler? handler);
+    bool TryGetHandler(string templateId, [NotNullWhen(true)] out IScheduledJobHandler? handler);
 }

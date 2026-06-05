@@ -82,9 +82,18 @@ public sealed class SandboxControlProtoTests
             },
             RuntimeProfile = "dotnet-agent-home",
             DefaultImage = "dotnet-agent-home:2026-05-agenthome-mvp",
-            Limits = new ResourceLimitsMessage { CpuCount = 2.0, MemoryMb = 4096, PidsLimit = 512 },
+            Limits = new ResourceLimitsMessage
+            {
+                CpuCount = 2.0,
+                MemoryMb = 4096,
+                PidsLimit = 512
+            },
             Network = SandboxNetworkMode.Restricted,
-            Labels = { ["owner"] = "owner-1", ["node"] = "node-7" }
+            Labels =
+            {
+                ["owner"] = "owner-1",
+                ["node"] = "node-7"
+            }
         };
 
         var roundTripped = RoundTrip(original, CreateSandboxRequest.Parser);
@@ -132,15 +141,29 @@ public sealed class SandboxControlProtoTests
     [Test]
     public void ExecuteCommandRequest_RoundTripsArgumentsEnvironmentAndStdinBytes()
     {
-        var stdin = new byte[] { 0x00, 0x01, 0x7f, 0xff, 0x2a };
+        var stdin = new byte[]
+        {
+            0x00,
+            0x01,
+            0x7f,
+            0xff,
+            0x2a
+        };
         var original = new ExecuteCommandRequest
         {
             SandboxId = "sandbox-1",
             ExecutionId = "exec-1",
             Executable = "git",
-            Arguments = { "diff", "--binary" },
+            Arguments =
+            {
+                "diff",
+                "--binary"
+            },
             WorkingDirectory = "/agent-home/workspace/selected",
-            Environment = { ["GIT_TERMINAL_PROMPT"] = "0" },
+            Environment =
+            {
+                ["GIT_TERMINAL_PROMPT"] = "0"
+            },
             TimeoutSeconds = 30,
             StandardInput = ByteString.CopyFrom(stdin)
         };
@@ -177,7 +200,14 @@ public sealed class SandboxControlProtoTests
     public void CopyIntoRequest_RoundTripsContentBytesAndFileMode()
     {
         // 0xff is non-UTF8; this proves the wire transport is binary-safe bytes, not strings.
-        var content = new byte[] { 0xde, 0xad, 0xbe, 0xef, 0x00 };
+        var content = new byte[]
+        {
+            0xde,
+            0xad,
+            0xbe,
+            0xef,
+            0x00
+        };
         var original = new CopyIntoRequest
         {
             SandboxId = "sandbox-1",
@@ -196,8 +226,17 @@ public sealed class SandboxControlProtoTests
     [Test]
     public void ReadFileReply_RoundTripsRawBytes()
     {
-        var content = new byte[] { 0x00, 0xff, 0x10, 0x80 };
-        var original = new ReadFileReply { Content = ByteString.CopyFrom(content) };
+        var content = new byte[]
+        {
+            0x00,
+            0xff,
+            0x10,
+            0x80
+        };
+        var original = new ReadFileReply
+        {
+            Content = ByteString.CopyFrom(content)
+        };
 
         var roundTripped = RoundTrip(original, ReadFileReply.Parser);
 
@@ -207,12 +246,26 @@ public sealed class SandboxControlProtoTests
     [Test]
     public void ReadFileRequest_CopyOutRequest_CancelCommandRequest_KillSandboxRequest_RoundTrip()
     {
-        var read = RoundTrip(new ReadFileRequest { SandboxId = "s1", SandboxPath = "/agent-home/out.txt" }, ReadFileRequest.Parser);
-        var copyOut = RoundTrip(new CopyOutRequest { SandboxId = "s1", SourcePath = "/agent-home/out.txt" }, CopyOutRequest.Parser);
-        var cancel = RoundTrip(new CancelCommandRequest { SandboxId = "s1", ExecutionId = "exec-1" }, CancelCommandRequest.Parser);
-        var kill = RoundTrip(new KillSandboxRequest { SandboxId = "s1" }, KillSandboxRequest.Parser);
-        var connect = RoundTrip(
-            new ConnectSandboxRequest
+        var read = RoundTrip(new ReadFileRequest
+        {
+            SandboxId = "s1",
+            SandboxPath = "/agent-home/out.txt"
+        }, ReadFileRequest.Parser);
+        var copyOut = RoundTrip(new CopyOutRequest
+        {
+            SandboxId = "s1",
+            SourcePath = "/agent-home/out.txt"
+        }, CopyOutRequest.Parser);
+        var cancel = RoundTrip(new CancelCommandRequest
+        {
+            SandboxId = "s1",
+            ExecutionId = "exec-1"
+        }, CancelCommandRequest.Parser);
+        var kill = RoundTrip(new KillSandboxRequest
+        {
+            SandboxId = "s1"
+        }, KillSandboxRequest.Parser);
+        var connect = RoundTrip(new ConnectSandboxRequest
             {
                 AttachKey = new SandboxAttachKeyMessage
                 {

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fake;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;

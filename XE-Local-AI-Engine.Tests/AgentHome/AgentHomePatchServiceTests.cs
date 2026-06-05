@@ -59,15 +59,13 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         await service.ExportPatchAsync(handle, Request("run-x", NewTempDir(), Folder("repo-01")));
 
         var gitCommands = provider.ExecutedCommands.Where(command => command.Executable == "git").ToArray();
-        AssertEx.True(
-            gitCommands.Any(command => command.Arguments.Contains("--binary")
-                                       && HasHardenedFlags(command.Arguments)
-                                       && command.WorkingDirectory == "/agent-home/workspace/selected"),
+        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("--binary")
+                                                 && HasHardenedFlags(command.Arguments)
+                                                 && command.WorkingDirectory == "/agent-home/workspace/selected"),
             "the patch diff runs with --binary, the §9.1 -c flags, and the workspace working directory");
-        AssertEx.True(
-            gitCommands.Any(command => command.Arguments.Contains("--name-status")
-                                       && HasHardenedFlags(command.Arguments)
-                                       && command.WorkingDirectory == "/agent-home/workspace/selected"),
+        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("--name-status")
+                                                 && HasHardenedFlags(command.Arguments)
+                                                 && command.WorkingDirectory == "/agent-home/workspace/selected"),
             "the name-status diff runs with the §9.1 -c flags and the workspace working directory");
     }
 
@@ -77,8 +75,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join(
-            '\n',
+        var nameStatus = string.Join('\n',
             "M\trepo-01/src/Program.cs",
             "A\trepo-01/src/New.cs",
             "D\trepo-01/old/Gone.cs",
@@ -109,8 +106,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEntry(entries, repo01.Id.ToString(), "repo-01", "b.txt", "renamed");
         AssertEntry(entries, repo02.Id.ToString(), "repo-02", "lib/X.cs", "modified");
 
-        AssertEx.True(
-            entries.All(entry => !entry.RelativePath.StartsWith("repo-0", StringComparison.Ordinal)),
+        AssertEx.True(entries.All(entry => !entry.RelativePath.StartsWith("repo-0", StringComparison.Ordinal)),
             "relativePath is folder-relative — the alias prefix is stripped");
         AssertEx.False(json.Contains(runDir, StringComparison.Ordinal), "changed-files.json must not leak a host path");
 
@@ -182,11 +178,10 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join(
-            '\n',
-            "M\trepo-01/keep.cs",      // mapped
+        var nameStatus = string.Join('\n',
+            "M\trepo-01/keep.cs", // mapped
             "M\tunknown-alias/skip.cs", // alias not in the prepared workspace → skipped
-            "M\trootfile.txt");        // no alias segment → skipped
+            "M\trootfile.txt"); // no alias segment → skipped
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, nameStatus);
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "diff --git a/repo-01/keep.cs b/repo-01/keep.cs\n");
         var service = CreateService(provider);
@@ -195,8 +190,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var export = await service.ExportPatchAsync(handle, Request("run-4", runDir, Folder("repo-01")));
 
         AssertEx.Equal(1, export.ChangedFileCount);
-        var entries = JsonSerializer.Deserialize<ChangedFileEntry[]>(
-            await File.ReadAllTextAsync(Path.Combine(runDir, "patches", "changed-files.json")),
+        var entries = JsonSerializer.Deserialize<ChangedFileEntry[]>(await File.ReadAllTextAsync(Path.Combine(runDir, "patches", "changed-files.json")),
             JsonOptions)!;
         AssertEx.Equal(1, entries.Length);
         AssertEx.Equal("keep.cs", entries[0].RelativePath);
@@ -217,7 +211,10 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
     private static AgentHomePatchService CreateService(FakeSandboxRuntimeProvider provider, long maxPatchBytes = 52428800)
     {
-        var options = Options.Create(new AgentHomeOptions { MaxPatchBytes = maxPatchBytes });
+        var options = Options.Create(new AgentHomeOptions
+        {
+            MaxPatchBytes = maxPatchBytes
+        });
         return new AgentHomePatchService(provider, options, NullLogger<AgentHomePatchService>.Instance);
     }
 

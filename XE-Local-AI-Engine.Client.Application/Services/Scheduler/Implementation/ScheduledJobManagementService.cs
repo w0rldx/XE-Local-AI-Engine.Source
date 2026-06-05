@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using System.Globalization;
-using Microsoft.Extensions.Logging;
 using Quartz;
 using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -25,36 +24,41 @@ public sealed class ScheduledJobManagementService(
     private readonly IScheduledJobDefinitionStore _definitionStore =
         definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
 
-    private readonly IScheduledJobRunStore _runStore =
-        runStore ?? throw new ArgumentNullException(nameof(runStore));
-
-    private readonly IScheduledJobTemplateRegistry _templateRegistry =
-        templateRegistry ?? throw new ArgumentNullException(nameof(templateRegistry));
-
-    private readonly ISchedulerFactory _schedulerFactory =
-        schedulerFactory ?? throw new ArgumentNullException(nameof(schedulerFactory));
-
     private readonly ISchedulerEventPublisher _eventPublisher =
         eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
 
     private readonly ILogger<ScheduledJobManagementService> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
 
+    private readonly IScheduledJobRunStore _runStore =
+        runStore ?? throw new ArgumentNullException(nameof(runStore));
+
+    private readonly ISchedulerFactory _schedulerFactory =
+        schedulerFactory ?? throw new ArgumentNullException(nameof(schedulerFactory));
+
+    private readonly IScheduledJobTemplateRegistry _templateRegistry =
+        templateRegistry ?? throw new ArgumentNullException(nameof(templateRegistry));
+
     private readonly TimeProvider _timeProvider =
         timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public IReadOnlyList<ScheduledJobTemplateDescriptor> ListTemplatesAsync() => _templateRegistry.ListTemplates();
+    public IReadOnlyList<ScheduledJobTemplateDescriptor> ListTemplatesAsync()
+    {
+        return _templateRegistry.ListTemplates();
+    }
 
-    public Task<IReadOnlyList<ScheduledJobDefinitionRecord>> ListJobsAsync(
-        bool includeDeleted = false,
-        CancellationToken cancellationToken = default) =>
-        _definitionStore.ListAsync(includeDeleted, cancellationToken);
+    public Task<IReadOnlyList<ScheduledJobDefinitionRecord>> ListJobsAsync(bool includeDeleted = false,
+        CancellationToken cancellationToken = default)
+    {
+        return _definitionStore.ListAsync(includeDeleted, cancellationToken);
+    }
 
-    public Task<ScheduledJobDefinitionRecord?> GetJobAsync(Guid id, CancellationToken cancellationToken = default) =>
-        _definitionStore.GetByIdAsync(id, cancellationToken);
+    public Task<ScheduledJobDefinitionRecord?> GetJobAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return _definitionStore.GetByIdAsync(id, cancellationToken);
+    }
 
-    public async Task<ScheduledJobDefinitionRecord> CreateJobAsync(
-        ScheduledJobManagementInput input,
+    public async Task<ScheduledJobDefinitionRecord> CreateJobAsync(ScheduledJobManagementInput input,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -67,8 +71,7 @@ public sealed class ScheduledJobManagementService(
 
         await ReconcileScheduleAsync(record, descriptor, cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "Created scheduled job {ScheduledJobId} from template {TemplateId} ({ScheduleKind}, enabled={Enabled}).",
+        _logger.LogInformation("Created scheduled job {ScheduledJobId} from template {TemplateId} ({ScheduleKind}, enabled={Enabled}).",
             record.Id,
             record.TemplateId,
             record.ScheduleKind,
@@ -79,8 +82,7 @@ public sealed class ScheduledJobManagementService(
         return record;
     }
 
-    public async Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(
-        Guid id,
+    public async Task<ScheduledJobDefinitionRecord?> UpdateJobAsync(Guid id,
         ScheduledJobManagementInput input,
         CancellationToken cancellationToken = default)
     {
@@ -106,8 +108,7 @@ public sealed class ScheduledJobManagementService(
         // Delete-and-recreate is the simplest correct path: the new definition fully determines the Quartz job/trigger.
         await ReconcileScheduleAsync(updated, descriptor, cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "Updated scheduled job {ScheduledJobId} (template {TemplateId}, {ScheduleKind}, enabled={Enabled}).",
+        _logger.LogInformation("Updated scheduled job {ScheduledJobId} (template {TemplateId}, {ScheduleKind}, enabled={Enabled}).",
             updated.Id,
             updated.TemplateId,
             updated.ScheduleKind,
@@ -118,8 +119,7 @@ public sealed class ScheduledJobManagementService(
         return updated;
     }
 
-    public async Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(
-        Guid id,
+    public async Task<ScheduledJobDefinitionRecord?> SetEnabledAsync(Guid id,
         bool enabled,
         CancellationToken cancellationToken = default)
     {
@@ -139,8 +139,7 @@ public sealed class ScheduledJobManagementService(
             // cannot be scheduled. Leave it unscheduled (store flag already flipped) and surface the inconsistency.
             if (descriptor is null)
             {
-                throw new ScheduledJobValidationException(
-                    $"Template '{updated.TemplateId}' is not registered, so this job cannot be enabled.");
+                throw new ScheduledJobValidationException($"Template '{updated.TemplateId}' is not registered, so this job cannot be enabled.");
             }
 
             await ScheduleAsync(scheduler, updated, cancellationToken).ConfigureAwait(false);
@@ -150,8 +149,7 @@ public sealed class ScheduledJobManagementService(
             _ = await scheduler.DeleteJob(jobKey, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.LogInformation(
-            "{Action} scheduled job {ScheduledJobId} (template {TemplateId}).",
+        _logger.LogInformation("{Action} scheduled job {ScheduledJobId} (template {TemplateId}).",
             enabled ? "Enabled" : "Disabled",
             updated.Id,
             updated.TemplateId);
@@ -179,8 +177,7 @@ public sealed class ScheduledJobManagementService(
         return deleted;
     }
 
-    public async Task TriggerNowAsync(
-        Guid id,
+    public async Task TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default)
     {
@@ -198,8 +195,7 @@ public sealed class ScheduledJobManagementService(
         var descriptor = _templateRegistry.GetTemplate(definition.TemplateId);
         if (descriptor is null)
         {
-            throw new ScheduledJobValidationException(
-                $"Template '{definition.TemplateId}' is not registered, so this job cannot be triggered.");
+            throw new ScheduledJobValidationException($"Template '{definition.TemplateId}' is not registered, so this job cannot be triggered.");
         }
 
         if (!descriptor.AllowManualTrigger)
@@ -233,23 +229,25 @@ public sealed class ScheduledJobManagementService(
             await scheduler.TriggerJob(jobKey, cancellationToken).ConfigureAwait(false);
         }
 
-        _logger.LogInformation(
-            "Manually triggered scheduled job {ScheduledJobId} (template {TemplateId}, overrides={OverrideCount}).",
+        _logger.LogInformation("Manually triggered scheduled job {ScheduledJobId} (template {TemplateId}, overrides={OverrideCount}).",
             definition.Id,
             definition.TemplateId,
             parameterOverrides?.Count ?? 0);
     }
 
-    public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(
-        ScheduledRunStatus? status = null,
+    public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,
         Guid? scheduledJobId = null,
-        CancellationToken cancellationToken = default) =>
-        _runStore.ListAsync(status, fromUtc, toUtc, scheduledJobId, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        return _runStore.ListAsync(status, fromUtc, toUtc, scheduledJobId, cancellationToken);
+    }
 
-    public Task<ScheduledJobRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        _runStore.GetByIdAsync(runId, cancellationToken);
+    public Task<ScheduledJobRunRecord?> GetRunAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        return _runStore.GetByIdAsync(runId, cancellationToken);
+    }
 
     public async Task<RunCancellationOutcome> CancelRunAsync(Guid runId, CancellationToken cancellationToken = default)
     {
@@ -279,8 +277,7 @@ public sealed class ScheduledJobManagementService(
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
         var wasInterrupted = await scheduler.Interrupt(run.QuartzFireInstanceId, cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "Cancellation requested for run {RunId} (job {ScheduledJobId}); Quartz interrupt active={WasInterrupted}.",
+        _logger.LogInformation("Cancellation requested for run {RunId} (job {ScheduledJobId}); Quartz interrupt active={WasInterrupted}.",
             runId,
             run.ScheduledJobId,
             wasInterrupted);
@@ -288,12 +285,14 @@ public sealed class ScheduledJobManagementService(
         return wasInterrupted ? RunCancellationOutcome.Requested : RunCancellationOutcome.RequestedButNotRunning;
     }
 
-    private static bool IsTerminal(ScheduledRunStatus status) =>
-        status is ScheduledRunStatus.Succeeded
+    private static bool IsTerminal(ScheduledRunStatus status)
+    {
+        return status is ScheduledRunStatus.Succeeded
             or ScheduledRunStatus.Failed
             or ScheduledRunStatus.Cancelled
             or ScheduledRunStatus.TimedOut
             or ScheduledRunStatus.Skipped;
+    }
 
     // ── realtime ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -304,14 +303,12 @@ public sealed class ScheduledJobManagementService(
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishDefinitionAsync(
-                new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, action, occurredAt),
+            await _eventPublisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, action, occurredAt),
                 CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(
-                exception,
+            _logger.LogWarning(exception,
                 "Failed to publish scheduler definition-changed event ({Action}) for {ScheduledJobId}.",
                 action,
                 scheduledJobId);
@@ -338,12 +335,11 @@ public sealed class ScheduledJobManagementService(
         }
 
         var descriptor = _templateRegistry.GetTemplate(input.TemplateId)
-            ?? throw new ScheduledJobValidationException($"Template '{input.TemplateId}' is not registered.");
+                         ?? throw new ScheduledJobValidationException($"Template '{input.TemplateId}' is not registered.");
 
         if (!descriptor.SupportedScheduleKinds.Contains(input.ScheduleKind))
         {
-            throw new ScheduledJobValidationException(
-                $"Template '{input.TemplateId}' does not support the '{input.ScheduleKind}' schedule kind.");
+            throw new ScheduledJobValidationException($"Template '{input.TemplateId}' does not support the '{input.ScheduleKind}' schedule kind.");
         }
 
         ValidateScheduleFields(input);
@@ -377,14 +373,12 @@ public sealed class ScheduledJobManagementService(
             case ScheduleKind.SimpleInterval:
                 if (input.IntervalSeconds is null or <= 0)
                 {
-                    throw new ScheduledJobValidationException(
-                        "A positive interval in seconds is required for a simple-interval schedule.");
+                    throw new ScheduledJobValidationException("A positive interval in seconds is required for a simple-interval schedule.");
                 }
 
                 if (input.RepeatCount is < 0)
                 {
-                    throw new ScheduledJobValidationException(
-                        "Repeat count, when set, must be zero or greater (omit it to repeat forever).");
+                    throw new ScheduledJobValidationException("Repeat count, when set, must be zero or greater (omit it to repeat forever).");
                 }
 
                 break;
@@ -426,8 +420,7 @@ public sealed class ScheduledJobManagementService(
 
     // ── Quartz reconciliation ────────────────────────────────────────────────────────────────────────────────────
 
-    private async Task ReconcileScheduleAsync(
-        ScheduledJobDefinitionRecord record,
+    private async Task ReconcileScheduleAsync(ScheduledJobDefinitionRecord record,
         ScheduledJobTemplateDescriptor descriptor,
         CancellationToken cancellationToken)
     {
@@ -443,8 +436,7 @@ public sealed class ScheduledJobManagementService(
         }
     }
 
-    private async Task ScheduleAsync(
-        IScheduler scheduler,
+    private async Task ScheduleAsync(IScheduler scheduler,
         ScheduledJobDefinitionRecord record,
         CancellationToken cancellationToken)
     {
@@ -467,11 +459,15 @@ public sealed class ScheduledJobManagementService(
         _ = await scheduler.ScheduleJob(jobDetail, trigger, cancellationToken).ConfigureAwait(false);
     }
 
-    private static JobKey BuildJobKey(Guid definitionId) =>
-        new(definitionId.ToString("N"), SchedulerJobKeys.Group);
+    private static JobKey BuildJobKey(Guid definitionId)
+    {
+        return new JobKey(definitionId.ToString("N"), SchedulerJobKeys.Group);
+    }
 
-    private static TriggerKey BuildTriggerKey(Guid definitionId) =>
-        new(definitionId.ToString("N"), SchedulerJobKeys.Group);
+    private static TriggerKey BuildTriggerKey(Guid definitionId)
+    {
+        return new TriggerKey(definitionId.ToString("N"), SchedulerJobKeys.Group);
+    }
 
     private static IJobDetail BuildJobDetail(ScheduledJobDefinitionRecord record)
     {
@@ -492,8 +488,7 @@ public sealed class ScheduledJobManagementService(
         // (TryGetLongValueFromString → TimeSpan.FromMilliseconds). Falls back to the global default when unset.
         if (record.MaxRuntimeSeconds is > 0)
         {
-            builder = builder.UsingJobData(
-                JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime,
+            builder = builder.UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime,
                 (record.MaxRuntimeSeconds.Value * 1000L).ToString(CultureInfo.InvariantCulture));
         }
 
@@ -521,7 +516,7 @@ public sealed class ScheduledJobManagementService(
     private static TriggerBuilder ApplyCronSchedule(TriggerBuilder builder, ScheduledJobDefinitionRecord record)
     {
         var cron = record.CronExpression
-            ?? throw new ScheduledJobValidationException("A cron expression is required for a cron schedule.");
+                   ?? throw new ScheduledJobValidationException("A cron expression is required for a cron schedule.");
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(record.TimeZoneId);
 
         builder = builder.WithCronSchedule(cron, x =>
@@ -546,7 +541,7 @@ public sealed class ScheduledJobManagementService(
     private static TriggerBuilder ApplySimpleSchedule(TriggerBuilder builder, ScheduledJobDefinitionRecord record, TimeProvider timeProvider)
     {
         var intervalSeconds = record.IntervalSeconds
-            ?? throw new ScheduledJobValidationException("An interval is required for a simple-interval schedule.");
+                              ?? throw new ScheduledJobValidationException("An interval is required for a simple-interval schedule.");
 
         builder = builder.WithSimpleSchedule(x =>
         {
@@ -579,7 +574,7 @@ public sealed class ScheduledJobManagementService(
     private static TriggerBuilder ApplyOneShotSchedule(TriggerBuilder builder, ScheduledJobDefinitionRecord record)
     {
         var startAt = record.StartAtUtc
-            ?? throw new ScheduledJobValidationException("A start time is required for a one-shot schedule.");
+                      ?? throw new ScheduledJobValidationException("A start time is required for a one-shot schedule.");
 
         // No repeat schedule — the simple schedule fires once (0 repeats) at StartAt; only the misfire policy is applied.
         return builder
@@ -625,12 +620,11 @@ public sealed class ScheduledJobManagementService(
         }
     }
 
-    private static ScheduledJobDefinitionInput ToStoreInput(
-        ScheduledJobManagementInput input,
+    private static ScheduledJobDefinitionInput ToStoreInput(ScheduledJobManagementInput input,
         bool enabled,
-        ScheduledJobCreator createdBy) =>
-        new(
-            input.TemplateId,
+        ScheduledJobCreator createdBy)
+    {
+        return new ScheduledJobDefinitionInput(input.TemplateId,
             input.DisplayName,
             input.Description,
             enabled,
@@ -646,4 +640,5 @@ public sealed class ScheduledJobManagementService(
             input.MaxRuntimeSeconds,
             input.Parameters,
             createdBy);
+    }
 }

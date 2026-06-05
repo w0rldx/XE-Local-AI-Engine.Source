@@ -20,15 +20,13 @@ public sealed class ApprovedImageResolverTests
         return new ApprovedImageResolver(new FakeApprovedUtilityImageStore(descriptors), new ApprovedImageReferenceValidator());
     }
 
-    private static ApprovedUtilityImageRecord Descriptor(
-        string id = "llmfit-recommender-0-9-30",
+    private static ApprovedUtilityImageRecord Descriptor(string id = "llmfit-recommender-0-9-30",
         UtilityImagePurpose purpose = UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
         string imageReference = ValidReference,
         bool enabled = true,
         long? deprecatedAtUtc = null)
     {
-        return new ApprovedUtilityImageRecord(
-            ApprovedImageId: id,
+        return new ApprovedUtilityImageRecord(ApprovedImageId: id,
             DisplayName: "llmfit",
             Description: null,
             Purpose: purpose,
@@ -146,13 +144,15 @@ public sealed class ApprovedImageResolverTests
                 return Task.FromResult<ApprovedUtilityImageRecord?>(null);
             }
 
-            var updated = record with { Enabled = enabled };
+            var updated = record with
+            {
+                Enabled = enabled
+            };
             _records[approvedImageId] = updated;
             return Task.FromResult<ApprovedUtilityImageRecord?>(updated);
         }
 
-        public Task<ApprovedUtilityImageRecord?> TouchUsedAsync(
-            string approvedImageId,
+        public Task<ApprovedUtilityImageRecord?> TouchUsedAsync(string approvedImageId,
             long lastUsedAtUtc,
             long? lastSuccessfulRunAtUtc = null,
             CancellationToken cancellationToken = default)

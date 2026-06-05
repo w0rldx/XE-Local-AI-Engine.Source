@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using System.Collections.Concurrent;
-using System.Net.Sockets;
-using System.Text;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -58,7 +56,12 @@ public sealed class LocalContainerSandboxProviderTests
         {
             AttachKey = SampleKey,
             RuntimeProfile = "dotnet-agent-home",
-            ResourceLimits = new SandboxResourceLimits { CpuCount = 1.5, MemoryMb = 2048, PidsLimit = 64 },
+            ResourceLimits = new SandboxResourceLimits
+            {
+                CpuCount = 1.5,
+                MemoryMb = 2048,
+                PidsLimit = 64
+            },
             NetworkPolicy = SandboxNetworkPolicy.None
         });
 
@@ -122,9 +125,17 @@ public sealed class LocalContainerSandboxProviderTests
             ManifestVersion = request.AttachKey.ManifestVersion
         };
 
-        await harness.Provider.CreateOrAttachAsync(new SandboxCreateRequest { AttachKey = SampleKey, RuntimeProfile = "p" });
+        await harness.Provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = SampleKey,
+            RuntimeProfile = "p"
+        });
         var first = harness.Service.LastCreate!.Labels[SandboxLabelKeys.Name];
-        await harness.Provider.CreateOrAttachAsync(new SandboxCreateRequest { AttachKey = SampleKey, RuntimeProfile = "p" });
+        await harness.Provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = SampleKey,
+            RuntimeProfile = "p"
+        });
         var second = harness.Service.LastCreate!.Labels[SandboxLabelKeys.Name];
 
         AssertEx.Equal(first, second);
@@ -154,7 +165,10 @@ public sealed class LocalContainerSandboxProviderTests
             Executable = "git",
             Arguments = ["status", "--porcelain"],
             WorkingDirectory = "/agent-home/workspace/selected",
-            Environment = new Dictionary<string, string> { ["KEY"] = "value" },
+            Environment = new Dictionary<string, string>
+            {
+                ["KEY"] = "value"
+            },
             Timeout = TimeSpan.FromSeconds(30)
         });
 
@@ -222,7 +236,10 @@ public sealed class LocalContainerSandboxProviderTests
     public async Task ReadFileAsync_DecodesReplyBytesAsUtf8()
     {
         await using var harness = await Harness.StartAsync();
-        harness.Service.OnReadFile = _ => new ReadFileReply { Content = ByteString.CopyFromUtf8("héllo") };
+        harness.Service.OnReadFile = _ => new ReadFileReply
+        {
+            Content = ByteString.CopyFromUtf8("héllo")
+        };
         var handle = MakeHandle("sandbox-9");
 
         var content = await harness.Provider.ReadFileAsync(handle, "/agent-home/runs/1/out.txt");
@@ -235,8 +252,17 @@ public sealed class LocalContainerSandboxProviderTests
     public async Task CopyOutAsync_WritesRawReplyBytesToHostDestination()
     {
         await using var harness = await Harness.StartAsync();
-        var payload = new byte[] { 0x00, 0xFF, 0x10, 0x42 };
-        harness.Service.OnCopyOut = _ => new ReadFileReply { Content = UnsafeByteOperations.UnsafeWrap(payload) };
+        var payload = new byte[]
+        {
+            0x00,
+            0xFF,
+            0x10,
+            0x42
+        };
+        harness.Service.OnCopyOut = _ => new ReadFileReply
+        {
+            Content = UnsafeByteOperations.UnsafeWrap(payload)
+        };
         var handle = MakeHandle("sandbox-9");
 
         using var temp = new TempDir();
@@ -472,6 +498,13 @@ public sealed class LocalContainerSandboxProviderTests
 
         public RecordingSandboxControlService Service { get; }
 
+        public async ValueTask DisposeAsync()
+        {
+            Provider.Dispose();
+            await _app.DisposeAsync().ConfigureAwait(false);
+            _socketDir.Dispose();
+        }
+
         public static async Task<Harness> StartAsync(long maxCopyFileBytes = LocalContainerOptions.DefaultMaxCopyFileBytes)
         {
             var socketDir = new TempDir();
@@ -494,21 +527,16 @@ public sealed class LocalContainerSandboxProviderTests
                 Secret = Secret,
                 BucketSeconds = HostAgentClientOptions.DefaultBucketSeconds
             };
-            var providerOptions = Options.Create(new LocalContainerOptions { MaxCopyFileBytes = maxCopyFileBytes });
-            var provider = new LocalContainerSandboxProvider(
-                hostAgentOptions,
+            var providerOptions = Options.Create(new LocalContainerOptions
+            {
+                MaxCopyFileBytes = maxCopyFileBytes
+            });
+            var provider = new LocalContainerSandboxProvider(hostAgentOptions,
                 providerOptions,
                 TimeProvider.System,
                 NullLogger<LocalContainerSandboxProvider>.Instance);
 
             return new Harness(app, socketDir, provider, service);
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            Provider.Dispose();
-            await _app.DisposeAsync().ConfigureAwait(false);
-            _socketDir.Dispose();
         }
     }
 
@@ -551,20 +579,32 @@ public sealed class LocalContainerSandboxProviderTests
             LastCreate = request;
             CreateMethodName = context.Method;
             AssertHmacPresent(context);
-            return Task.FromResult(OnCreate?.Invoke(request) ?? new SandboxHandleReply { SandboxId = "default", AttachKey = request.AttachKey });
+            return Task.FromResult(OnCreate?.Invoke(request) ?? new SandboxHandleReply
+            {
+                SandboxId = "default",
+                AttachKey = request.AttachKey
+            });
         }
 
         public override Task<SandboxHandleReply> ConnectSandbox(ConnectSandboxRequest request, ServerCallContext context)
         {
             AssertHmacPresent(context);
-            return Task.FromResult(OnConnect?.Invoke(request) ?? new SandboxHandleReply { SandboxId = "default", AttachKey = request.AttachKey });
+            return Task.FromResult(OnConnect?.Invoke(request) ?? new SandboxHandleReply
+            {
+                SandboxId = "default",
+                AttachKey = request.AttachKey
+            });
         }
 
         public override Task<ExecuteCommandReply> ExecuteCommand(ExecuteCommandRequest request, ServerCallContext context)
         {
             LastExecute = request;
             AssertHmacPresent(context);
-            return Task.FromResult(OnExecute?.Invoke(request) ?? new ExecuteCommandReply { ExecutionId = request.ExecutionId, Completed = true });
+            return Task.FromResult(OnExecute?.Invoke(request) ?? new ExecuteCommandReply
+            {
+                ExecutionId = request.ExecutionId,
+                Completed = true
+            });
         }
 
         public override Task<Empty> CopyInto(CopyIntoRequest request, ServerCallContext context)
@@ -611,7 +651,7 @@ public sealed class LocalContainerSandboxProviderTests
             var bodyHash = FindHeader(context, HostAgentHmacMetadata.BodySha256Header);
 
             if (authorization is null || !authorization.StartsWith("Bearer ", StringComparison.Ordinal)
-                || string.IsNullOrEmpty(requestId) || string.IsNullOrEmpty(bucket) || string.IsNullOrEmpty(bodyHash))
+                                      || string.IsNullOrEmpty(requestId) || string.IsNullOrEmpty(bucket) || string.IsNullOrEmpty(bodyHash))
             {
                 throw new RpcException(new Status(StatusCode.Unauthenticated, "missing HMAC metadata"));
             }

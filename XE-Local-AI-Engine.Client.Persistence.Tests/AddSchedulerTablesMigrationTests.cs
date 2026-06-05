@@ -141,11 +141,27 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
 
         AssertEx.True(columns.SetEquals(new[]
         {
-            "id", "template_id", "display_name", "description", "enabled", "schedule_kind",
-            "cron_expression", "interval_seconds", "repeat_count", "start_at_utc", "end_at_utc",
-            "time_zone_id", "misfire_policy", "prevent_overlap", "max_runtime_seconds",
-            "parameter_json", "created_by", "created_at_utc", "updated_at_utc",
-            "disabled_at_utc", "deleted_at_utc"
+            "id",
+            "template_id",
+            "display_name",
+            "description",
+            "enabled",
+            "schedule_kind",
+            "cron_expression",
+            "interval_seconds",
+            "repeat_count",
+            "start_at_utc",
+            "end_at_utc",
+            "time_zone_id",
+            "misfire_policy",
+            "prevent_overlap",
+            "max_runtime_seconds",
+            "parameter_json",
+            "created_by",
+            "created_at_utc",
+            "updated_at_utc",
+            "disabled_at_utc",
+            "deleted_at_utc"
         }), "scheduled_job_definitions should expose all mapped columns.");
     }
 
@@ -170,10 +186,22 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
 
         AssertEx.True(columns.SetEquals(new[]
         {
-            "id", "scheduled_job_id", "template_id", "quartz_fire_instance_id",
-            "triggered_by", "status", "scheduled_fire_time_utc", "actual_fire_time_utc",
-            "completed_at_utc", "duration_ms", "summary", "details_json",
-            "error_message", "error_details", "cancellation_requested_at_utc", "created_at_utc"
+            "id",
+            "scheduled_job_id",
+            "template_id",
+            "quartz_fire_instance_id",
+            "triggered_by",
+            "status",
+            "scheduled_fire_time_utc",
+            "actual_fire_time_utc",
+            "completed_at_utc",
+            "duration_ms",
+            "summary",
+            "details_json",
+            "error_message",
+            "error_details",
+            "cancellation_requested_at_utc",
+            "created_at_utc"
         }), "scheduled_job_runs should expose all mapped columns.");
     }
 

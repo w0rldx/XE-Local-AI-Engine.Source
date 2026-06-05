@@ -425,8 +425,12 @@ public sealed class NodeChatStreamService(
     /// <summary>
     ///     Computes the offer-time active model and resolves the effective per-turn agent (definition + orchestration)
     ///     up front so the assistant placeholder can be stamped with the resolved agent's attribution. The effective-agent
-    ///     precedence is <c>request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant
-    ///     id</c>; resolving the Default Assistant on a cold conversation must NOT throw — a missing seed yields a null id,
+    ///     precedence is
+    ///     <c>
+    ///         request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant
+    ///         id
+    ///     </c>
+    ///     ; resolving the Default Assistant on a cold conversation must NOT throw — a missing seed yields a null id,
     ///     the resolver returns null, and the caller keeps the embedded default persona + full offer + the client
     ///     "Default Assistant" label.
     /// </summary>
@@ -497,7 +501,7 @@ public sealed class NodeChatStreamService(
         }
 
         var classifications = await modelClassificationService
-                                    .ClassifyAsync([(activeModel, (string?)null)], cancellationToken)
+                                    .ClassifyAsync([(activeModel, null)], cancellationToken)
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(activeModel, out var classification))
         {
@@ -507,13 +511,6 @@ public sealed class NodeChatStreamService(
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities));
     }
-
-    /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
-    private sealed record ResolvedTurn(string ActiveModel,
-        ResolvedAgentRuntime? Resolved,
-        ResolvedOrchestration? Orchestration,
-        bool SupportsThinking,
-        bool SupportsTools);
 
     /// <summary>
     ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or <c>null</c> to run
@@ -608,4 +605,12 @@ public sealed class NodeChatStreamService(
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
+
+    /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
+    private sealed record ResolvedTurn(
+        string ActiveModel,
+        ResolvedAgentRuntime? Resolved,
+        ResolvedOrchestration? Orchestration,
+        bool SupportsThinking,
+        bool SupportsTools);
 }

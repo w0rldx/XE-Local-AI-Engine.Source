@@ -55,7 +55,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, Guid.NewGuid()))
         {
             // The route carries the ids; FastEndpoints still requires a JSON body for a POST (else 415).
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -73,7 +75,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(agentId, Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -94,7 +98,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
         // Promote the owner's suggestion via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(otherAgentId, actionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -114,7 +120,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(otherAgentId, actionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -133,7 +141,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -161,7 +171,9 @@ public sealed class SuggestedPlaybookActionEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RejectRoute(agentId, actionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -181,8 +193,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,
@@ -199,8 +210,7 @@ public sealed class SuggestedPlaybookActionEndpointTests
         // Seed via the real analysis write path so the row is a genuine Suggested/Analysis action with evidence.
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(
-            agentDefinitionId,
+        var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
             TriggerCondition: null,
             Scope: "search",

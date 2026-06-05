@@ -37,29 +37,36 @@ internal sealed class SchedulerDispatchExecutor(
     TimeProvider timeProvider,
     ILogger<SchedulerDispatchExecutor> logger) : ISchedulerDispatchExecutor
 {
+    /// <summary>
+    ///     The whitelisted parameter keys a per-fire override may replace. Compared case-insensitively against the stored
+    ///     JSON's property names; the stored key's original casing is preserved when it already exists.
+    /// </summary>
+    private const string OverridableUseCaseProperty = "useCase";
+
+    private const string OverridableLimitProperty = "limit";
+
     private readonly IScheduledJobDefinitionStore _definitionStore =
         definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
-
-    private readonly IScheduledJobTemplateRegistry _templateRegistry =
-        templateRegistry ?? throw new ArgumentNullException(nameof(templateRegistry));
-
-    private readonly IScheduledJobRunStore _runStore =
-        runStore ?? throw new ArgumentNullException(nameof(runStore));
-
-    private readonly IScheduledJobRunEventStore _runEventStore =
-        runEventStore ?? throw new ArgumentNullException(nameof(runEventStore));
 
     private readonly ISchedulerEventPublisher _eventPublisher =
         eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
 
-    private readonly TimeProvider _timeProvider =
-        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-
     private readonly ILogger<SchedulerDispatchExecutor> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public async Task DispatchAsync(
-        Guid scheduledJobId,
+    private readonly IScheduledJobRunEventStore _runEventStore =
+        runEventStore ?? throw new ArgumentNullException(nameof(runEventStore));
+
+    private readonly IScheduledJobRunStore _runStore =
+        runStore ?? throw new ArgumentNullException(nameof(runStore));
+
+    private readonly IScheduledJobTemplateRegistry _templateRegistry =
+        templateRegistry ?? throw new ArgumentNullException(nameof(templateRegistry));
+
+    private readonly TimeProvider _timeProvider =
+        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    public async Task DispatchAsync(Guid scheduledJobId,
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
@@ -69,8 +76,7 @@ internal sealed class SchedulerDispatchExecutor(
         var definition = await _definitionStore.GetByIdAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
         if (definition is null)
         {
-            _logger.LogWarning(
-                "Scheduled job dispatch skipped: no definition found for id {ScheduledJobId} (fire {FireInstanceId}).",
+            _logger.LogWarning("Scheduled job dispatch skipped: no definition found for id {ScheduledJobId} (fire {FireInstanceId}).",
                 scheduledJobId,
                 fireInstanceId);
             return;
@@ -78,8 +84,7 @@ internal sealed class SchedulerDispatchExecutor(
 
         if (!definition.Enabled || definition.DeletedAtUtc is not null)
         {
-            _logger.LogInformation(
-                "Scheduled job dispatch skipped: definition {ScheduledJobId} is not dispatchable (enabled={Enabled}, deleted={Deleted}, fire {FireInstanceId}).",
+            _logger.LogInformation("Scheduled job dispatch skipped: definition {ScheduledJobId} is not dispatchable (enabled={Enabled}, deleted={Deleted}, fire {FireInstanceId}).",
                 scheduledJobId,
                 definition.Enabled,
                 definition.DeletedAtUtc is not null,
@@ -89,8 +94,7 @@ internal sealed class SchedulerDispatchExecutor(
 
         if (!_templateRegistry.TryGetHandler(definition.TemplateId, out var handler))
         {
-            _logger.LogWarning(
-                "Scheduled job dispatch skipped: no handler registered for template {TemplateId} (definition {ScheduledJobId}, fire {FireInstanceId}).",
+            _logger.LogWarning("Scheduled job dispatch skipped: no handler registered for template {TemplateId} (definition {ScheduledJobId}, fire {FireInstanceId}).",
                 definition.TemplateId,
                 scheduledJobId,
                 fireInstanceId);
@@ -101,8 +105,7 @@ internal sealed class SchedulerDispatchExecutor(
             .ConfigureAwait(false);
     }
 
-    private async Task RecordAndRunAsync(
-        ScheduledJobDefinitionRecord definition,
+    private async Task RecordAndRunAsync(ScheduledJobDefinitionRecord definition,
         IScheduledJobHandler handler,
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
@@ -114,9 +117,7 @@ internal sealed class SchedulerDispatchExecutor(
 
         // Idempotent open: a refire / recovery callback with the same fire-instance id returns the existing row instead
         // of inserting a duplicate. If that row is already terminal the work has run before — skip re-execution.
-        var run = await _runStore.UpsertByFireInstanceAsync(
-            new ScheduledJobRunInput(
-                definition.Id,
+        var run = await _runStore.UpsertByFireInstanceAsync(new ScheduledJobRunInput(definition.Id,
                 definition.TemplateId,
                 fireInstanceId,
                 ScheduledRunTrigger.Schedule,
@@ -127,8 +128,7 @@ internal sealed class SchedulerDispatchExecutor(
 
         if (IsTerminal(run.Status))
         {
-            _logger.LogInformation(
-                "Scheduled job dispatch skipped: run {RunId} for fire {FireInstanceId} is already {Status} (idempotent re-fire).",
+            _logger.LogInformation("Scheduled job dispatch skipped: run {RunId} for fire {FireInstanceId} is already {Status} (idempotent re-fire).",
                 run.Id,
                 fireInstanceId,
                 run.Status);
@@ -160,8 +160,7 @@ internal sealed class SchedulerDispatchExecutor(
             await handler.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
 
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            var updated = await _runStore.UpdateLifecycleAsync(
-                run.Id,
+            var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 ScheduledRunStatus.Succeeded,
                 completedAtUtc: completedMs,
                 durationMs: completedMs - actualFireMs,
@@ -180,8 +179,7 @@ internal sealed class SchedulerDispatchExecutor(
             var wasCancelRequested = latest?.CancellationRequestedAtUtc is not null;
             var status = wasCancelRequested ? ScheduledRunStatus.Cancelled : ScheduledRunStatus.TimedOut;
 
-            var updated = await _runStore.UpdateLifecycleAsync(
-                run.Id,
+            var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 status,
                 completedAtUtc: completedMs,
                 durationMs: completedMs - actualFireMs,
@@ -190,8 +188,7 @@ internal sealed class SchedulerDispatchExecutor(
                     : "Run exceeded its maximum runtime and was interrupted.",
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
-            await SafePublishRunAsync(
-                updated ?? run,
+            await SafePublishRunAsync(updated ?? run,
                 wasCancelRequested ? SchedulerHubEvents.RunCancelled : SchedulerHubEvents.RunFailed).ConfigureAwait(false);
 
             // Re-throw so Quartz observes the interrupt / shutdown.
@@ -203,8 +200,7 @@ internal sealed class SchedulerDispatchExecutor(
 
             // Full exception (incl. message + stack) goes to the trusted server log only; the persisted run row carries
             // a generic message and the exception type name so no message text or stack trace ever reaches an API/UI.
-            _logger.LogWarning(
-                exception,
+            _logger.LogWarning(exception,
                 "Scheduled job {ScheduledJobId} run {RunId} (fire {FireInstanceId}) failed.",
                 definition.Id,
                 run.Id,
@@ -216,8 +212,7 @@ internal sealed class SchedulerDispatchExecutor(
                 ? safe.Message
                 : "The scheduled job failed during execution.";
 
-            var updated = await _runStore.UpdateLifecycleAsync(
-                run.Id,
+            var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 ScheduledRunStatus.Failed,
                 completedAtUtc: completedMs,
                 durationMs: completedMs - actualFireMs,
@@ -230,14 +225,6 @@ internal sealed class SchedulerDispatchExecutor(
     }
 
     /// <summary>
-    ///     The whitelisted parameter keys a per-fire override may replace. Compared case-insensitively against the stored
-    ///     JSON's property names; the stored key's original casing is preserved when it already exists.
-    /// </summary>
-    private const string OverridableUseCaseProperty = "useCase";
-
-    private const string OverridableLimitProperty = "limit";
-
-    /// <summary>
     ///     Returns <paramref name="storedParametersJson" /> with ONLY the whitelisted <c>useCase</c> and/or <c>limit</c>
     ///     properties replaced by the per-fire override, leaving every other property untouched. The stored definition is
     ///     never mutated — this works on a parsed copy. No override, no whitelisted key in the override, or
@@ -246,8 +233,7 @@ internal sealed class SchedulerDispatchExecutor(
     ///     whitelisted keys. The <c>limit</c> override is written back as a JSON number (the stored shape), so the
     ///     handler's numeric parse is unchanged.
     /// </summary>
-    private static string? ApplyParameterOverrides(
-        string? storedParametersJson,
+    private static string? ApplyParameterOverrides(string? storedParametersJson,
         IReadOnlyDictionary<string, string>? parameterOverrides)
     {
         if (parameterOverrides is null || string.IsNullOrWhiteSpace(storedParametersJson))
@@ -312,8 +298,8 @@ internal sealed class SchedulerDispatchExecutor(
     private static void SetWhitelistedProperty(JsonObject parametersObject, string property, JsonNode? value)
     {
         var existingKey = parametersObject
-            .Select(pair => pair.Key)
-            .FirstOrDefault(key => string.Equals(key, property, StringComparison.OrdinalIgnoreCase));
+                          .Select(pair => pair.Key)
+                          .FirstOrDefault(key => string.Equals(key, property, StringComparison.OrdinalIgnoreCase));
 
         parametersObject[existingKey ?? property] = value;
     }
@@ -330,14 +316,13 @@ internal sealed class SchedulerDispatchExecutor(
         {
             var nextSequence = Interlocked.Increment(ref sequence[0]);
             var dataJson = percent is { } value
-                ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{{\"percent\":{value}}}")
+                ? string.Create(CultureInfo.InvariantCulture, $"{{\"percent\":{value}}}")
                 : null;
 
             // Persist the progress event with CancellationToken.None — same policy as the terminal writes. A handler
             // reporting progress on its way out of a cancelled run forwards its (already-cancelled) token; honoring it
             // here would throw a second OperationCanceledException from SaveChanges that masks the real cancellation.
-            _ = await _runEventStore.AddAsync(
-                new ScheduledJobRunEventInput(runId, nextSequence, ScheduledRunEventLevel.Progress, message, dataJson),
+            _ = await _runEventStore.AddAsync(new ScheduledJobRunEventInput(runId, nextSequence, ScheduledRunEventLevel.Progress, message, dataJson),
                 CancellationToken.None).ConfigureAwait(false);
 
             await SafePublishProgressAsync(runId, scheduledJobId, message, percent).ConfigureAwait(false);
@@ -349,8 +334,7 @@ internal sealed class SchedulerDispatchExecutor(
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            var runEvent = new SchedulerRunHubEvent(
-                eventType,
+            var runEvent = new SchedulerRunHubEvent(eventType,
                 record.Id,
                 record.ScheduledJobId,
                 record.TemplateId,
@@ -377,8 +361,7 @@ internal sealed class SchedulerDispatchExecutor(
         try
         {
             var occurredAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-            await _eventPublisher.PublishRunProgressAsync(
-                new SchedulerRunProgressHubEvent(SchedulerHubEvents.RunProgress, runId, scheduledJobId, message, percent, occurredAt),
+            await _eventPublisher.PublishRunProgressAsync(new SchedulerRunProgressHubEvent(SchedulerHubEvents.RunProgress, runId, scheduledJobId, message, percent, occurredAt),
                 CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
@@ -387,10 +370,12 @@ internal sealed class SchedulerDispatchExecutor(
         }
     }
 
-    private static bool IsTerminal(ScheduledRunStatus status) =>
-        status is ScheduledRunStatus.Succeeded
+    private static bool IsTerminal(ScheduledRunStatus status)
+    {
+        return status is ScheduledRunStatus.Succeeded
             or ScheduledRunStatus.Failed
             or ScheduledRunStatus.Cancelled
             or ScheduledRunStatus.TimedOut
             or ScheduledRunStatus.Skipped;
+    }
 }

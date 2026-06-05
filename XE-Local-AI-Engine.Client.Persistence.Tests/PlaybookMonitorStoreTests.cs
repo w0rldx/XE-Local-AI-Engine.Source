@@ -136,8 +136,7 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context, string name)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,

@@ -9,8 +9,10 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     <list type="bullet">
 ///         <item>Page renders heading + job list + "Create job".</item>
 ///         <item>Open <c>ScheduledJobForm</c> → pick the registered "Model recommendation check" template.</item>
-///         <item>Picking the template auto-selects its default schedule kind (Manual / "On demand"), which
-///               needs no cron/interval/start-at — only a display name.</item>
+///         <item>
+///             Picking the template auto-selects its default schedule kind (Manual / "On demand"), which
+///             needs no cron/interval/start-at — only a display name.
+///         </item>
 ///         <item>Save → the new job appears in <c>ScheduledJobList</c> BY NAME.</item>
 ///     </list>
 ///     <para>
@@ -93,17 +95,22 @@ public sealed class SchedulerPageE2ETests : XEE2ETestBase
         await Expect(Page.GetByTestId("scheduler-form-template-description")).ToBeVisibleAsync();
         // Manual default → the manual-note alert renders (no cron field required).
         await Expect(Page.GetByTestId("scheduler-form-manual-note"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         // Fill the required display name (placeholder "Nightly cleanup").
         await Page.GetByPlaceholder("Nightly cleanup").FillAsync(jobName);
 
         // Save → POST to the scheduler create endpoint.
-        var createResponse = await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("scheduler-form-submit").ClickAsync(),
+        var createResponse = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("scheduler-form-submit").ClickAsync(),
             response => response.Url.Contains("/scheduler/jobs", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         await Assert.That(createResponse.Status >= 200 && createResponse.Status < 300).IsTrue();
 
@@ -113,7 +120,10 @@ public sealed class SchedulerPageE2ETests : XEE2ETestBase
                 Name = jobName,
                 Exact = true
             }))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         // No save-error alert and no page-level JS error during the create sequence.
         await Expect(Page.GetByTestId("scheduler-form-submit-error")).ToHaveCountAsync(0);

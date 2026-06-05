@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 /// </summary>
 public sealed class ApprovedImageResolver : IApprovedImageResolver
 {
-    private readonly IApprovedUtilityImageStore _store;
     private readonly ApprovedImageReferenceValidator _referenceValidator;
+    private readonly IApprovedUtilityImageStore _store;
 
     public ApprovedImageResolver(IApprovedUtilityImageStore store, ApprovedImageReferenceValidator referenceValidator)
     {

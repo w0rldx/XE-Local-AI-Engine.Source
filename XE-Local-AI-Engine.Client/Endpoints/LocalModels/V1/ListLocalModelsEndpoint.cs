@@ -40,8 +40,8 @@ public sealed class ListLocalModelsEndpoint(
             // Lazily resolve each model's effective kind, caching detection by content digest. A cache hit issues no
             // /api/show call, so repeated list calls are cheap.
             var classifications = await _classificationService
-                .ClassifyAsync(models.Select(static model => (model.ReadModelName(), (string?)model.Digest)), ct)
-                .ConfigureAwait(false);
+                                        .ClassifyAsync(models.Select(static model => (model.ReadModelName(), (string?)model.Digest)), ct)
+                                        .ConfigureAwait(false);
 
             var response = LocalModelsMapper.ToListResponse(models, selectedModelName, _localChatOptions.Value.DefaultModel, classifications);
 

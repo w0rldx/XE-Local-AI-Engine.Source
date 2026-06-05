@@ -134,8 +134,7 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            exemplars.Add(new FeedbackExemplar(
-                reader.GetString(0),
+            exemplars.Add(new FeedbackExemplar(reader.GetString(0),
                 reader.GetString(1),
                 Guid.Parse(reader.GetString(2)),
                 Guid.Parse(reader.GetString(3)),

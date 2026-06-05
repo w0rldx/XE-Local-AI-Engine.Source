@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -26,12 +25,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 public sealed class DefaultAgentSeeder : IHostedService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly LocalChatAgentOptions _options;
     private readonly ILogger<DefaultAgentSeeder> _logger;
+    private readonly LocalChatAgentOptions _options;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public DefaultAgentSeeder(
-        IServiceScopeFactory scopeFactory,
+    public DefaultAgentSeeder(IServiceScopeFactory scopeFactory,
         IOptions<LocalChatAgentOptions> options,
         ILogger<DefaultAgentSeeder> logger)
     {
@@ -75,7 +73,10 @@ public sealed class DefaultAgentSeeder : IHostedService
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     ///     The seed input for the Default Assistant: the embedded chat prompt as its instructions (so an unedited row is
@@ -84,8 +85,7 @@ public sealed class DefaultAgentSeeder : IHostedService
     /// </summary>
     private AgentDefinitionInput BuildSeedInput()
     {
-        return new AgentDefinitionInput(
-            AgentDefaults.DefaultAgentName,
+        return new AgentDefinitionInput(AgentDefaults.DefaultAgentName,
             Description: null,
             Instructions: LoadEmbeddedInstructions(),
             ModelProfile: null,

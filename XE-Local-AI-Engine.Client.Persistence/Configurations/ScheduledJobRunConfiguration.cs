@@ -59,7 +59,11 @@ internal sealed class ScheduledJobRunConfiguration : IEntityTypeConfiguration<Sc
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
 
-        builder.HasIndex(entity => new { entity.ScheduledJobId, entity.ActualFireTimeUtc });
+        builder.HasIndex(entity => new
+        {
+            entity.ScheduledJobId,
+            entity.ActualFireTimeUtc
+        });
 
         // The fire-instance id is the idempotency key for the upsert, so it is unique — but only among rows that
         // actually carry one (manual/system runs leave it null), hence the filtered unique index.

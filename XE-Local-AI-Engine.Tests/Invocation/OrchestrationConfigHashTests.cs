@@ -73,7 +73,10 @@ public sealed class OrchestrationConfigHashTests
     public void Compute_WhenParticipantsReordered_YieldsSameDigest()
     {
         var ordered = SampleSpec();
-        var reordered = ordered with { Participants = [.. ordered.Participants.AsEnumerable().Reverse()] };
+        var reordered = ordered with
+        {
+            Participants = [.. ordered.Participants.AsEnumerable().Reverse()]
+        };
 
         AssertEx.Equal(ComputeWith(ordered), ComputeWith(reordered));
     }
@@ -82,7 +85,10 @@ public sealed class OrchestrationConfigHashTests
     public void Compute_WhenEdgesReordered_YieldsSameDigest()
     {
         var ordered = SampleSpec();
-        var reordered = ordered with { Edges = [.. ordered.Edges.AsEnumerable().Reverse()] };
+        var reordered = ordered with
+        {
+            Edges = [.. ordered.Edges.AsEnumerable().Reverse()]
+        };
 
         AssertEx.Equal(ComputeWith(ordered), ComputeWith(reordered));
     }
@@ -92,9 +98,15 @@ public sealed class OrchestrationConfigHashTests
     {
         var ordered = SampleSpec();
         var reorderedParticipants = ordered.Participants
-                                           .Select(participant => participant with { Tools = [.. participant.Tools.AsEnumerable().Reverse()] })
+                                           .Select(participant => participant with
+                                           {
+                                               Tools = [.. participant.Tools.AsEnumerable().Reverse()]
+                                           })
                                            .ToArray();
-        var reordered = ordered with { Participants = reorderedParticipants };
+        var reordered = ordered with
+        {
+            Participants = reorderedParticipants
+        };
 
         AssertEx.Equal(ComputeWith(ordered), ComputeWith(reordered));
     }
@@ -105,7 +117,14 @@ public sealed class OrchestrationConfigHashTests
         var baseSpec = SampleSpec();
         var changed = baseSpec with
         {
-            Participants = [baseSpec.Participants[0] with { Instructions = "A different participant prompt." }, baseSpec.Participants[1]]
+            Participants =
+            [
+                baseSpec.Participants[0] with
+                {
+                    Instructions = "A different participant prompt."
+                },
+                baseSpec.Participants[1]
+            ]
         };
 
         AssertEx.True(ComputeWith(baseSpec) != ComputeWith(changed), "Changing a participant prompt must change the config hash.");
@@ -117,7 +136,14 @@ public sealed class OrchestrationConfigHashTests
         var baseSpec = SampleSpec();
         var changed = baseSpec with
         {
-            Participants = [baseSpec.Participants[0] with { Tools = [] }, baseSpec.Participants[1]]
+            Participants =
+            [
+                baseSpec.Participants[0] with
+                {
+                    Tools = []
+                },
+                baseSpec.Participants[1]
+            ]
         };
 
         AssertEx.True(ComputeWith(baseSpec) != ComputeWith(changed), "Changing a participant's tool set must change the config hash.");
@@ -129,7 +155,15 @@ public sealed class OrchestrationConfigHashTests
         var baseSpec = SampleSpec();
         var changed = baseSpec with
         {
-            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b", Reason = "a different reason" }]
+            Edges =
+            [
+                new OrchestrationSpecEdge
+                {
+                    FromKey = "a",
+                    ToKey = "b",
+                    Reason = "a different reason"
+                }
+            ]
         };
 
         AssertEx.True(ComputeWith(baseSpec) != ComputeWith(changed), "Changing an edge must change the config hash.");
@@ -139,7 +173,10 @@ public sealed class OrchestrationConfigHashTests
     public void Compute_WhenMaxTurnsChanges_ChangesDigest()
     {
         var baseSpec = SampleSpec();
-        var changed = baseSpec with { MaxTurnsPerAgent = baseSpec.MaxTurnsPerAgent + 1 };
+        var changed = baseSpec with
+        {
+            MaxTurnsPerAgent = baseSpec.MaxTurnsPerAgent + 1
+        };
 
         AssertEx.True(ComputeWith(baseSpec) != ComputeWith(changed), "Changing maxTurns must change the config hash.");
     }
@@ -148,7 +185,10 @@ public sealed class OrchestrationConfigHashTests
     public void Compute_WhenReturnToPreviousChanges_ChangesDigest()
     {
         var baseSpec = SampleSpec();
-        var changed = baseSpec with { ReturnToPrevious = !baseSpec.ReturnToPrevious };
+        var changed = baseSpec with
+        {
+            ReturnToPrevious = !baseSpec.ReturnToPrevious
+        };
 
         AssertEx.True(ComputeWith(baseSpec) != ComputeWith(changed), "Changing returnToPrevious must change the config hash.");
     }
@@ -183,8 +223,18 @@ public sealed class OrchestrationConfigHashTests
                     ReasoningEffort = "low",
                     Tools =
                     [
-                        new AllowedToolDto { Id = Guid.Empty, Name = "GetCurrentTime", Location = ToolLocation.ClientLocal },
-                        new AllowedToolDto { Id = Guid.Empty, Name = "Calculate", Location = ToolLocation.ClientLocal }
+                        new AllowedToolDto
+                        {
+                            Id = Guid.Empty,
+                            Name = "GetCurrentTime",
+                            Location = ToolLocation.ClientLocal
+                        },
+                        new AllowedToolDto
+                        {
+                            Id = Guid.Empty,
+                            Name = "Calculate",
+                            Location = ToolLocation.ClientLocal
+                        }
                     ]
                 },
                 new OrchestrationSpecParticipant
@@ -200,7 +250,12 @@ public sealed class OrchestrationConfigHashTests
             ],
             Edges =
             [
-                new OrchestrationSpecEdge { FromKey = "a", ToKey = "b", Reason = "specialist work" }
+                new OrchestrationSpecEdge
+                {
+                    FromKey = "a",
+                    ToKey = "b",
+                    Reason = "specialist work"
+                }
             ]
         };
     }

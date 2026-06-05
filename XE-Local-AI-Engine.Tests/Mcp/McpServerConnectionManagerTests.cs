@@ -1,13 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
-using System.Net.Http;
+using System.ComponentModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Mcp;
@@ -131,7 +130,7 @@ public sealed class McpServerConnectionManagerTests
         // dropped + reconnected so its cached qualified names re-bake to the new slug (no stale determinism hole).
         await using var first = await InProcMcpServer.StartAsync("first",
             AIFunctionFactory.Create(GetForecast, "get_forecast"));
-        var firstRecord = StdioRecord("Server");                  // slugifies to "server"
+        var firstRecord = StdioRecord("Server"); // slugifies to "server"
         var store = new FakeMcpServerStore(firstRecord);
         var factory = new FakeMcpClientFactory((firstRecord.Id, first.Client));
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
@@ -158,8 +157,8 @@ public sealed class McpServerConnectionManagerTests
         await manager.RefreshAsync();
 
         var names = registry.GetDescriptors().Select(static d => d.Name).ToList();
-        AssertEx.Contains(names, "mcp__server__get_forecast");      // the new server (first in order)
-        AssertEx.Contains(names, "mcp__server-2__get_forecast");    // the original, re-keyed to the shifted slug
+        AssertEx.Contains(names, "mcp__server__get_forecast"); // the new server (first in order)
+        AssertEx.Contains(names, "mcp__server-2__get_forecast"); // the original, re-keyed to the shifted slug
         AssertEx.False(names.Any(n => n == "mcp__server__get_forecast" && names.Count(x => x == n) > 1),
             "no duplicate qualified names");
         AssertEx.Equal(2, names.Count);
@@ -248,7 +247,7 @@ public sealed class McpServerConnectionManagerTests
         throw new AssertionException("Expected ObjectDisposedException from the disposed manager.");
     }
 
-    [System.ComponentModel.Description("Returns the weather forecast for a city.")]
+    [Description("Returns the weather forecast for a city.")]
     private static string GetForecast(string city)
     {
         return $"Sunny in {city}.";
@@ -293,7 +292,10 @@ public sealed class McpServerConnectionManagerTests
 
     private static IOptions<McpOptions> Options()
     {
-        return Microsoft.Extensions.Options.Options.Create(new McpOptions { ConnectTimeoutSeconds = 30 });
+        return Microsoft.Extensions.Options.Options.Create(new McpOptions
+        {
+            ConnectTimeoutSeconds = 30
+        });
     }
 
     private sealed class FakeMcpServerStore : IMcpServerStore
@@ -301,11 +303,6 @@ public sealed class McpServerConnectionManagerTests
         private McpServerRecord[] _enabled;
 
         public FakeMcpServerStore(params McpServerRecord[] enabled)
-        {
-            _enabled = enabled;
-        }
-
-        public void SetEnabled(params McpServerRecord[] enabled)
         {
             _enabled = enabled;
         }
@@ -344,6 +341,11 @@ public sealed class McpServerConnectionManagerTests
         {
             throw new NotSupportedException();
         }
+
+        public void SetEnabled(params McpServerRecord[] enabled)
+        {
+            _enabled = enabled;
+        }
     }
 
     private sealed class FakeMcpClientFactory : IMcpClientFactory
@@ -359,6 +361,16 @@ public sealed class McpServerConnectionManagerTests
             }
         }
 
+        public Task<McpClient> CreateAsync(McpServerRecord record, CancellationToken cancellationToken)
+        {
+            if (_failures.TryGetValue(record.Id, out var exceptionFactory))
+            {
+                throw exceptionFactory();
+            }
+
+            return Task.FromResult(_clients[record.Id]);
+        }
+
         public void AddClient(Guid id, McpClient client)
         {
             _clients[id] = client;
@@ -372,16 +384,6 @@ public sealed class McpServerConnectionManagerTests
         public void FailFor(Guid id, Func<Exception> exceptionFactory)
         {
             _failures[id] = exceptionFactory;
-        }
-
-        public Task<McpClient> CreateAsync(McpServerRecord record, CancellationToken cancellationToken)
-        {
-            if (_failures.TryGetValue(record.Id, out var exceptionFactory))
-            {
-                throw exceptionFactory();
-            }
-
-            return Task.FromResult(_clients[record.Id]);
         }
     }
 }

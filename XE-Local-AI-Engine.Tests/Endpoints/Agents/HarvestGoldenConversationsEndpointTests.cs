@@ -34,7 +34,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -49,7 +51,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -68,7 +72,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
         // Route-only POST → send an empty object body (a truly empty body 415s).
         using var request = new HttpRequestMessage(HttpMethod.Post, HarvestRoute(agentId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -94,7 +100,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(Guid.NewGuid(), Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -111,7 +119,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -131,7 +141,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, goldenId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -152,7 +164,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
         // Approve the owner's harvested case via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(otherAgentId, goldenId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -171,7 +185,9 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, goldenId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -191,8 +207,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IGoldenConversationStore>();
-        var added = await store.AddAsync(new GoldenConversationInput(
-            agentId,
+        var added = await store.AddAsync(new GoldenConversationInput(agentId,
             Title: "Seeded case",
             InputTurns: """[{"role":"user","text":"hi"}]""",
             Assertion: null,
@@ -208,8 +223,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,

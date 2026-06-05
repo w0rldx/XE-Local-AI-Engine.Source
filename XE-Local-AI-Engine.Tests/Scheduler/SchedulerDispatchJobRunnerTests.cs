@@ -29,8 +29,7 @@ public sealed class SchedulerDispatchJobRunnerTests
 
         await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
 
-        await executor.Received(1).DispatchAsync(
-            JobId,
+        await executor.Received(1).DispatchAsync(JobId,
             "fire-x",
             Arg.Any<DateTimeOffset?>(),
             Arg.Any<DateTimeOffset>(),
@@ -54,8 +53,7 @@ public sealed class SchedulerDispatchJobRunnerTests
 
         await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
 
-        await executor.Received(1).DispatchAsync(
-            JobId,
+        await executor.Received(1).DispatchAsync(JobId,
             "fire-x",
             Arg.Any<DateTimeOffset?>(),
             Arg.Any<DateTimeOffset>(),
@@ -77,8 +75,7 @@ public sealed class SchedulerDispatchJobRunnerTests
 
         await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
 
-        await executor.Received(1).DispatchAsync(
-            JobId,
+        await executor.Received(1).DispatchAsync(JobId,
             "fire-x",
             Arg.Any<DateTimeOffset?>(),
             Arg.Any<DateTimeOffset>(),
@@ -94,8 +91,7 @@ public sealed class SchedulerDispatchJobRunnerTests
 
         await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
 
-        await executor.DidNotReceive().DispatchAsync(
-            Arg.Any<Guid>(),
+        await executor.DidNotReceive().DispatchAsync(Arg.Any<Guid>(),
             Arg.Any<string>(),
             Arg.Any<DateTimeOffset?>(),
             Arg.Any<DateTimeOffset>(),

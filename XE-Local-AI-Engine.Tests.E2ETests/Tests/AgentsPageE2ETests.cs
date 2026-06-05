@@ -123,8 +123,7 @@ public sealed class AgentsPageE2ETests : XEE2ETestBase
         // where currentTarget was null in the buggy version.
         var instructionsTextarea = Page.GetByPlaceholder(InstructionsTextareaPlaceholder);
         await Expect(instructionsTextarea).ToBeVisibleAsync();
-        await instructionsTextarea.PressSequentiallyAsync(
-            "You are a helpful regression-test agent. This text was typed keystroke-by-keystroke.",
+        await instructionsTextarea.PressSequentiallyAsync("You are a helpful regression-test agent. This text was typed keystroke-by-keystroke.",
             new LocatorPressSequentiallyOptions
             {
                 Delay = 20
@@ -139,11 +138,13 @@ public sealed class AgentsPageE2ETests : XEE2ETestBase
 
         // --- Submit and assert the agent was created ---
         // Wait for the POST /api/local/v1/agents response; 10 s is ample for an in-process call.
-        var createResponse = await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
+        var createResponse = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
             response => response.Url.Contains("/api/local/v1/agents", StringComparison.OrdinalIgnoreCase)
                         && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         // The API must have accepted the create request (201 Created).
         await Assert.That(createResponse.Status).IsEqualTo(201);
@@ -151,7 +152,10 @@ public sealed class AgentsPageE2ETests : XEE2ETestBase
         // After a successful save the editor closes and the list re-renders.
         // At least one agent row must appear in the table.
         await Expect(Page.Locator("[data-testid^='agent-definition-row-']").First)
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         // The create button must be visible again (editor closed = no crash / no stuck state).
         await Expect(Page.GetByTestId("agent-create-button")).ToBeVisibleAsync();

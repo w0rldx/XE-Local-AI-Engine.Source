@@ -8,15 +8,21 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     (gap analysis P1-2). The existing smoke test only proves a FakeOllama model renders; this suite
 ///     drives the full management lifecycle against FakeOllama's pull/show/delete endpoints:
 ///     <list type="bullet">
-///         <item>Pull a NEW, uniquely-named model (FakeOllama's <c>PullEndpoint</c> streams progress and
-///               appends it to its model set) → the installed-models table shows the new row.</item>
-///         <item>Open its details → change the ModelKind override (PUT <c>models/{name}/kind</c>) → the
-///               effective-kind badge reflects the override.</item>
-///         <item>Delete it (DELETE <c>models/{name}</c>) → the row is gone, with NO "Invalid model
-///               identifier" error. The model tag deliberately contains a colon so the delete exercises the
-///               <c>ModelRouteName.Decode</c> slash/colon URL-encoding fix (hey-api encodes the tag to
-///               <c>%3A</c>; Kestrel leaves it encoded in the route value; the endpoint must decode before
-///               validating).</item>
+///         <item>
+///             Pull a NEW, uniquely-named model (FakeOllama's <c>PullEndpoint</c> streams progress and
+///             appends it to its model set) → the installed-models table shows the new row.
+///         </item>
+///         <item>
+///             Open its details → change the ModelKind override (PUT <c>models/{name}/kind</c>) → the
+///             effective-kind badge reflects the override.
+///         </item>
+///         <item>
+///             Delete it (DELETE <c>models/{name}</c>) → the row is gone, with NO "Invalid model
+///             identifier" error. The model tag deliberately contains a colon so the delete exercises the
+///             <c>ModelRouteName.Decode</c> slash/colon URL-encoding fix (hey-api encodes the tag to
+///             <c>%3A</c>; Kestrel leaves it encoded in the route value; the endpoint must decode before
+///             validating).
+///         </item>
 ///     </list>
 ///     <para>
 ///         FakeOllama covers every call: <c>PullEndpoint</c> (NDJSON progress + register), <c>ShowEndpoint</c>
@@ -42,7 +48,10 @@ public sealed class ModelsManagementE2ETests : XEE2ETestBase
 
         // The installed-models table renders once the list query settles (FakeOllama is "online").
         await Expect(Page.GetByTestId("installed-models-table"))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
     }
 
     [Test]
@@ -75,7 +84,10 @@ public sealed class ModelsManagementE2ETests : XEE2ETestBase
             Name = modelName,
             Exact = true
         });
-        await Expect(modelCell).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 15_000 });
+        await Expect(modelCell).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 15_000
+        });
 
         // --- Change kind via the details dialog ---
         // Open details (row "View {name} details" action). The dialog mounts a Type tab with an override Select.
@@ -85,33 +97,46 @@ public sealed class ModelsManagementE2ETests : XEE2ETestBase
         }).ClickAsync();
 
         // Switch to the Type tab and choose "Embedding" via the override Select (aria-labelled per model).
-        await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = "Type" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions
+        {
+            Name = "Type"
+        }).ClickAsync();
 
         var overrideSelect = Page.GetByLabel($"Override type for {modelName}");
-        await Expect(overrideSelect).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(overrideSelect).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
 
         // Selecting the override PUTs models/{name}/kind; wait for that response so the assertion runs after persist.
-        await Page.RunAndWaitForResponseAsync(
-            async () =>
+        await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await overrideSelect.ClickAsync();
-                await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions { Name = "Embedding" }).ClickAsync();
+                await Page.GetByRole(AriaRole.Option, new PageGetByRoleOptions
+                {
+                    Name = "Embedding"
+                }).ClickAsync();
             },
             response => response.Url.Contains("/kind", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "PUT", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         // The Type-tab effective-kind badge reflects the override.
         await Expect(Page.GetByTestId($"model-kind-badge-{modelName}").First)
-            .ToContainTextAsync("Embedding", new LocatorAssertionsToContainTextOptions { Timeout = 5000 });
+            .ToContainTextAsync("Embedding", new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 5000
+            });
 
         // Close the details dialog (Escape) before deleting from the row.
         await Page.Keyboard.PressAsync("Escape");
         await Expect(Page.GetByTestId("installed-models-table")).ToBeVisibleAsync();
 
         // --- Delete (exercises the colon-decode path) ---
-        var deleteResponse = await Page.RunAndWaitForResponseAsync(
-            async () =>
+        var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
                 {
@@ -125,14 +150,20 @@ public sealed class ModelsManagementE2ETests : XEE2ETestBase
                 }).ClickAsync();
             },
             response => response.Url.Contains("/api/local/v1/models/", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "DELETE", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "DELETE", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         // The decode fix means the DELETE must succeed (200), not 400 "Invalid model identifier".
         await Assert.That(deleteResponse.Status).IsEqualTo(200);
 
         // The row must be gone after the list refetches.
-        await Expect(modelCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = 5000 });
+        await Expect(modelCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        {
+            Timeout = 5000
+        });
 
         // No "Invalid model identifier" text leaked anywhere (the decode-regression guard), and no page error.
         var bodyText = await Page.Locator("body").InnerTextAsync();

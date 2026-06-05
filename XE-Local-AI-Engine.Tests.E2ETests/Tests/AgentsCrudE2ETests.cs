@@ -9,9 +9,11 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     reaches 201; this suite complements it by proving the FULL persistence round-trip:
 ///     <list type="bullet">
 ///         <item>Create an agent (name + instructions) → save (201) → it appears in the list BY NAME.</item>
-///         <item>Reopen the SAME agent via its edit control → the form repopulates the persisted
-///               instructions text (proving the value survived the create → reload → fetch round-trip,
-///               not just that the POST returned 201).</item>
+///         <item>
+///             Reopen the SAME agent via its edit control → the form repopulates the persisted
+///             instructions text (proving the value survived the create → reload → fetch round-trip,
+///             not just that the POST returned 201).
+///         </item>
 ///     </list>
 ///     <para>
 ///         Why this matters: a unit/component test mocks the store, so it cannot catch a server-side
@@ -69,11 +71,13 @@ public sealed class AgentsCrudE2ETests : XEE2ETestBase
         await Page.GetByPlaceholder(NamePlaceholder).FillAsync(agentName);
         await Page.GetByPlaceholder(InstructionsPlaceholder).FillAsync(instructions);
 
-        var createResponse = await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
+        var createResponse = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
             response => response.Url.Contains("/api/local/v1/agents", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         await Assert.That(createResponse.Status).IsEqualTo(201);
 
@@ -83,7 +87,10 @@ public sealed class AgentsCrudE2ETests : XEE2ETestBase
             Name = agentName,
             Exact = true
         });
-        await Expect(agentCell).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(agentCell).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
 
         // --- Reopen via the row's edit control and verify the persisted instructions round-trip ---
         // The edit button carries aria-label "Edit {{name}}" (pages.agents.list.editAria).

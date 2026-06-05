@@ -974,7 +974,10 @@ public sealed class NodeChatStreamServiceTests
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             resolver,
@@ -1069,7 +1072,10 @@ public sealed class NodeChatStreamServiceTests
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions { EnableTools = true }),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             resolver,
@@ -1241,7 +1247,10 @@ public sealed class NodeChatStreamServiceTests
     private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null)
     {
         var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { DefaultModelName = defaultModelName });
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            DefaultModelName = defaultModelName
+        });
         return store;
     }
 
@@ -1331,10 +1340,31 @@ public sealed class NodeChatStreamServiceTests
             ReturnToPrevious = false,
             Participants =
             [
-                new OrchestrationSpecParticipant { Key = "a", Name = "Triage", Instructions = "Triage.", ModelId = "qwen3:8b", Tools = [] },
-                new OrchestrationSpecParticipant { Key = "b", Name = "Specialist", Instructions = "Specialist.", ModelId = "qwen3:8b", Tools = [] }
+                new OrchestrationSpecParticipant
+                {
+                    Key = "a",
+                    Name = "Triage",
+                    Instructions = "Triage.",
+                    ModelId = "qwen3:8b",
+                    Tools = []
+                },
+                new OrchestrationSpecParticipant
+                {
+                    Key = "b",
+                    Name = "Specialist",
+                    Instructions = "Specialist.",
+                    ModelId = "qwen3:8b",
+                    Tools = []
+                }
             ],
-            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b" }]
+            Edges =
+            [
+                new OrchestrationSpecEdge
+                {
+                    FromKey = "a",
+                    ToKey = "b"
+                }
+            ]
         };
     }
 
@@ -2135,7 +2165,8 @@ public sealed class NodeChatStreamServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null)
+        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
+            long? generationDurationMs = null)
         {
             if (CurrentInvocation is not null)
             {

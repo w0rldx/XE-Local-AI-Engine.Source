@@ -16,7 +16,10 @@ public sealed partial class ApprovedImageReferenceValidator
     public const string DefaultAllowedRepository = "ghcr.io/alexsjones/llmfit";
 
     private static readonly IReadOnlySet<string> DefaultAllowedRepositories =
-        new HashSet<string>(StringComparer.Ordinal) { DefaultAllowedRepository };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            DefaultAllowedRepository
+        };
 
     private readonly IReadOnlySet<string> _allowedRepositories;
 

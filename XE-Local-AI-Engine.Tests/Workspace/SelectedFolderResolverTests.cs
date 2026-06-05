@@ -27,8 +27,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "relative/path")),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "relative/path")),
             "A relative host path should be rejected.");
     }
 
@@ -37,8 +36,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "/trusted/../etc/passwd")),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", "/trusted/../etc/passwd")),
             "A traversal host path should be rejected.");
     }
 
@@ -47,8 +45,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("!!!", TrustedHostPath)),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("!!!", TrustedHostPath)),
             "An alias that normalizes to empty should be rejected.");
     }
 
@@ -58,8 +55,7 @@ public sealed class SelectedFolderResolverTests
         var resolver = CreateResolver();
         _ = await resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath));
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", "/trusted/host/other")),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("Repo-One", "/trusted/host/other")),
             "A colliding alias should be rejected after normalization.");
     }
 
@@ -68,8 +64,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = new SelectedFolderResolver(new ThrowingSelectedFolderStore(), NullLogger<SelectedFolderResolver>.Instance);
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath)),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration("repo-one", TrustedHostPath)),
             "A unique-index violation surfacing from the store should be mapped to a validation exception.");
     }
 
@@ -78,8 +73,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.ResolveAsync(Guid.NewGuid().ToString()),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync(Guid.NewGuid().ToString()),
             "An unknown id should be rejected.");
     }
 
@@ -88,8 +82,7 @@ public sealed class SelectedFolderResolverTests
     {
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(
-            () => resolver.ResolveAsync("not-a-guid"),
+        _ = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.ResolveAsync("not-a-guid"),
             "A non-GUID id should be rejected.");
     }
 

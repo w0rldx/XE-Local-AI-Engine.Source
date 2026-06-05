@@ -41,7 +41,11 @@ public sealed class McpServerEndpointTests
             name = "Filesystem",
             transportKind = "Stdio",
             command = "npx",
-            arguments = new[] { "-y", "server-filesystem" },
+            arguments = new[]
+            {
+                "-y",
+                "server-filesystem"
+            },
             env = new Dictionary<string, string>()
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -126,7 +130,10 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with { Id = id });
+        service.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        {
+            Id = id
+        });
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -149,8 +156,20 @@ public sealed class McpServerEndpointTests
         var service = Substitute.For<IMcpServerService>();
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetKnownTools().Returns([
-            new LocalToolCatalogEntry { Name = "GetCurrentTime", Description = "Returns the time.", RequiresApproval = false, Source = "builtin" },
-            new LocalToolCatalogEntry { Name = "mcp__filesystem__read_file", Description = "Reads a file.", RequiresApproval = true, Source = "mcp:filesystem" }
+            new LocalToolCatalogEntry
+            {
+                Name = "GetCurrentTime",
+                Description = "Returns the time.",
+                RequiresApproval = false,
+                Source = "builtin"
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = "mcp__filesystem__read_file",
+                Description = "Reads a file.",
+                RequiresApproval = true,
+                Source = "mcp:filesystem"
+            }
         ]);
         await using var factory = CreateFactory(service, offerProvider);
         using var client = factory.CreateClient();
@@ -169,7 +188,10 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: false) with { Id = id });
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: false) with
+        {
+            Id = id
+        });
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -187,7 +209,10 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with { Id = id });
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        {
+            Id = id
+        });
         service.GetConnectionStatuses().Returns([
             new McpServerConnectionStatus
             {
@@ -198,8 +223,18 @@ public sealed class McpServerEndpointTests
                 LastError = null,
                 Tools =
                 [
-                    new McpServerToolInfo { Name = "mcp__filesystem__read_file", Description = "Reads a file.", RequiresApproval = true },
-                    new McpServerToolInfo { Name = "mcp__filesystem__write_file", Description = "Writes a file.", RequiresApproval = true }
+                    new McpServerToolInfo
+                    {
+                        Name = "mcp__filesystem__read_file",
+                        Description = "Reads a file.",
+                        RequiresApproval = true
+                    },
+                    new McpServerToolInfo
+                    {
+                        Name = "mcp__filesystem__write_file",
+                        Description = "Writes a file.",
+                        RequiresApproval = true
+                    }
                 ]
             }
         ]);
@@ -222,7 +257,10 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with { Id = id });
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        {
+            Id = id
+        });
         service.GetConnectionStatuses().Returns([
             new McpServerConnectionStatus
             {
@@ -253,7 +291,10 @@ public sealed class McpServerEndpointTests
         // still in flight). That is a healthy not-yet-connected state, not a hard failure, so it reports "connecting".
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with { Id = id });
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        {
+            Id = id
+        });
         service.GetConnectionStatuses().Returns([]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
@@ -275,7 +316,10 @@ public sealed class McpServerEndpointTests
         // "error". "error" is reserved for an actually recorded failure (a non-empty LastError).
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with { Id = id });
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        {
+            Id = id
+        });
         service.GetConnectionStatuses().Returns([
             new McpServerConnectionStatus
             {

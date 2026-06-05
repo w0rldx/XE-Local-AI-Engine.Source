@@ -17,8 +17,7 @@ public interface IModelClassificationService
     ///     present, digest matches) issues no <c>/api/show</c> call. Detection failures never propagate — the model
     ///     falls back to its cached classification or <see cref="ModelKind.Unknown" />.
     /// </summary>
-    Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(
-        IEnumerable<(string ModelName, string? Digest)> models,
+    Task<IReadOnlyDictionary<string, ModelClassificationResult>> ClassifyAsync(IEnumerable<(string ModelName, string? Digest)> models,
         CancellationToken cancellationToken = default);
 
     /// <summary>Sets the operator override for <paramref name="modelName" /> and returns its resolved classification.</summary>

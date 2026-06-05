@@ -139,8 +139,7 @@ public sealed class ScheduledJobTemplateRegistryTests
     {
         public string TemplateId { get; } = templateId;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(
-            TemplateId: templateId,
+        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: templateId,
             DisplayName: displayName,
             Description: "Stub handler for registry tests.",
             ParameterSchema: null,
@@ -152,7 +151,9 @@ public sealed class ScheduledJobTemplateRegistryTests
             AllowManualTrigger: false,
             AllowAgentCreation: false);
 
-        public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

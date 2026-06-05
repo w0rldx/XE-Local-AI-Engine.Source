@@ -64,7 +64,14 @@ internal sealed class ModelFitSnapshotConfiguration : IEntityTypeConfiguration<M
 
         // Supports the latest-successful lookup keyed on (operation, use_case, provider_name, model_name) filtered to
         // is_latest_successful.
-        builder.HasIndex(entity => new { entity.Operation, entity.UseCase, entity.ProviderName, entity.ModelName, entity.IsLatestSuccessful });
+        builder.HasIndex(entity => new
+        {
+            entity.Operation,
+            entity.UseCase,
+            entity.ProviderName,
+            entity.ModelName,
+            entity.IsLatestSuccessful
+        });
 
         // A snapshot intentionally has NO enforced FK to its scheduler run (created_by_run_id): runs outlive
         // definitions — same intentional no-FK precedent as scheduled_job_runs -> definition.

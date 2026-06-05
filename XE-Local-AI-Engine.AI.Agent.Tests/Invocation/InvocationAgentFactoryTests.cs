@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -233,8 +234,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WithOfferedClientLocalName_ResolvesFromClientLocalRegistry()
     {
-        var clientLocalRegistry = new FakeClientLocalToolRegistry(
-            AIFunctionFactory.Create((string input) => input, "run_in_agent_home"));
+        var clientLocalRegistry = new FakeClientLocalToolRegistry(AIFunctionFactory.Create((string input) => input, "run_in_agent_home"));
         var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home")],
@@ -256,8 +256,7 @@ public sealed class InvocationAgentFactoryTests
         // resolved against the REAL ClientLocalToolRegistry, which wraps a RequiresApproval=true handler in an
         // ApprovalRequiredAIFunction. Prove the wrapped handler flows through the offer→resolve path without being
         // dropped, so the agent builds with tools enabled.
-        var registry = new ClientLocalToolRegistry(
-            [new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", """{"type":"object"}""")]);
+        var registry = new ClientLocalToolRegistry([new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", """{"type":"object"}""")]);
         var resolved = registry.TryResolve("run_in_agent_home", out var wrapped);
         AssertEx.True(resolved);
         AssertEx.True(wrapped is ApprovalRequiredAIFunction, "the high-risk handler must resolve approval-wrapped");
@@ -297,8 +296,7 @@ public sealed class InvocationAgentFactoryTests
     {
         // Option C: an offered MCP-qualified name that matches neither the built-in nor the ClientLocal registry
         // resolves against the MCP tool registry's cached executable.
-        var mcpRegistry = new FakeMcpToolRegistry(
-            AIFunctionFactory.Create((string input) => input, "mcp__weather__get_forecast"));
+        var mcpRegistry = new FakeMcpToolRegistry(AIFunctionFactory.Create((string input) => input, "mcp__weather__get_forecast"));
         var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [InvocationToolBridge.CreateOfferPlaceholder("mcp__weather__get_forecast")],
@@ -318,8 +316,7 @@ public sealed class InvocationAgentFactoryTests
     {
         // An MCP tool is registered approval-wrapped (the catalog default). The factory must resolve the wrapped
         // executable through Option C so the approval gate survives the offer -> resolve path.
-        var wrapped = new ApprovalRequiredAIFunction(
-            AIFunctionFactory.Create((string input) => input, "mcp__files__write_file"));
+        var wrapped = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, "mcp__files__write_file"));
         var snapshot = new[]
         {
             new McpRegisteredTool("mcp__files__write_file",
@@ -609,7 +606,7 @@ public sealed class InvocationAgentFactoryTests
             }
         }
 
-        public bool TryResolve(string toolName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        public bool TryResolve(string toolName, [NotNullWhen(true)] out AITool? tool)
         {
             return _tools.TryGetValue(toolName, out tool);
         }
@@ -627,7 +624,7 @@ public sealed class InvocationAgentFactoryTests
             }
         }
 
-        public bool TryResolve(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        public bool TryResolve(string name, [NotNullWhen(true)] out AITool? tool)
         {
             return _tools.TryGetValue(name, out tool);
         }

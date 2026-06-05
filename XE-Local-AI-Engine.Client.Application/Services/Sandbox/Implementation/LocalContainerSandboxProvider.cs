@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Google.Protobuf;
-using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Options;
@@ -46,6 +45,9 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     // The default copy-into file mode (rw-r--r--); HostAgent reapplies the non-root sandbox owner on extract.
     private const uint DefaultCopyFileMode = 0b110_100_100;
 
+    // O_RDONLY (0x0) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux.
+    private const int ReadOnlyNoFollowCloseOnExecFlags = 0x0 | 0x20000 | 0x80000;
+
     private readonly GrpcChannel _channel;
     private readonly SandboxControl.SandboxControlClient _client;
     private readonly SocketsHttpHandler _handler;
@@ -54,8 +56,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     private readonly LocalContainerOptions _options;
     private readonly TimeProvider _timeProvider;
 
-    public LocalContainerSandboxProvider(
-        HostAgentClientOptions hostAgentOptions,
+    public LocalContainerSandboxProvider(HostAgentClientOptions hostAgentOptions,
         IOptions<LocalContainerOptions> options,
         TimeProvider timeProvider,
         ILogger<LocalContainerSandboxProvider> logger)
@@ -85,6 +86,12 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         _client = new SandboxControl.SandboxControlClient(_channel);
     }
 
+    public void Dispose()
+    {
+        _channel.Dispose();
+        _handler.Dispose();
+    }
+
     public string ProviderName => Name;
 
     public SandboxProviderCapabilities Capabilities =>
@@ -95,12 +102,6 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         | SandboxProviderCapabilities.SupportsKill
         | SandboxProviderCapabilities.SupportsResourceLimits
         | SandboxProviderCapabilities.SupportsNetworkPolicy;
-
-    public void Dispose()
-    {
-        _channel.Dispose();
-        _handler.Dispose();
-    }
 
     public async Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
     {
@@ -127,7 +128,10 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     {
         ArgumentNullException.ThrowIfNull(attachKey);
 
-        var grpcRequest = new ConnectSandboxRequest { AttachKey = ToMessage(attachKey) };
+        var grpcRequest = new ConnectSandboxRequest
+        {
+            AttachKey = ToMessage(attachKey)
+        };
         try
         {
             var reply = await _client.ConnectSandboxAsync(grpcRequest,
@@ -203,8 +207,7 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         {
             // Blocked on re-read: the file is over the per-file cap or grew after the pass-1 sizing. Skip and
             // log — never copy a truncated or over-budget file.
-            _logger.LogWarning(
-                "Copy-into skipped: a selected file exceeded the {Cap}-byte per-file cap or grew after sizing on re-read.",
+            _logger.LogWarning("Copy-into skipped: a selected file exceeded the {Cap}-byte per-file cap or grew after sizing on re-read.",
                 _options.MaxCopyFileBytes);
             return;
         }
@@ -234,7 +237,11 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
 
-        var grpcRequest = new ReadFileRequest { SandboxId = handle.SandboxId, SandboxPath = sandboxPath };
+        var grpcRequest = new ReadFileRequest
+        {
+            SandboxId = handle.SandboxId,
+            SandboxPath = sandboxPath
+        };
         try
         {
             var reply = await _client.ReadFileAsync(grpcRequest,
@@ -254,7 +261,11 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentNullException.ThrowIfNull(request);
 
-        var grpcRequest = new CopyOutRequest { SandboxId = handle.SandboxId, SourcePath = request.SourcePath };
+        var grpcRequest = new CopyOutRequest
+        {
+            SandboxId = handle.SandboxId,
+            SourcePath = request.SourcePath
+        };
         ReadFileReply reply;
         try
         {
@@ -276,7 +287,11 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentException.ThrowIfNullOrWhiteSpace(executionId);
 
-        var grpcRequest = new CancelCommandRequest { SandboxId = handle.SandboxId, ExecutionId = executionId };
+        var grpcRequest = new CancelCommandRequest
+        {
+            SandboxId = handle.SandboxId,
+            ExecutionId = executionId
+        };
         try
         {
             await _client.CancelCommandAsync(grpcRequest,
@@ -293,7 +308,10 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
     {
         ArgumentNullException.ThrowIfNull(handle);
 
-        var grpcRequest = new KillSandboxRequest { SandboxId = handle.SandboxId };
+        var grpcRequest = new KillSandboxRequest
+        {
+            SandboxId = handle.SandboxId
+        };
         try
         {
             await _client.KillSandboxAsync(grpcRequest,
@@ -370,17 +388,15 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
         {
             try
             {
-                return File.OpenHandle(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return File.OpenHandle(sourcePath);
             }
             catch (IOException exception)
             {
-                throw new AgentHomeRequestRejectedException(
-                    "a selected file could not be opened safely for copy.", exception);
+                throw new AgentHomeRequestRejectedException("a selected file could not be opened safely for copy.", exception);
             }
             catch (UnauthorizedAccessException exception)
             {
-                throw new AgentHomeRequestRejectedException(
-                    "a selected file could not be opened safely for copy (access denied).", exception);
+                throw new AgentHomeRequestRejectedException("a selected file could not be opened safely for copy (access denied).", exception);
             }
         }
 
@@ -395,11 +411,8 @@ public sealed class LocalContainerSandboxProvider : ISandboxRuntimeProvider, IDi
                 $"a selected file could not be opened safely for copy (it may have been replaced by a link; errno {error})."));
         }
 
-        return new SafeFileHandle((IntPtr)fileDescriptor, ownsHandle: true);
+        return new SafeFileHandle(fileDescriptor, ownsHandle: true);
     }
-
-    // O_RDONLY (0x0) | O_NOFOLLOW (0x20000) | O_CLOEXEC (0x80000) on Linux.
-    private const int ReadOnlyNoFollowCloseOnExecFlags = 0x0 | 0x20000 | 0x80000;
 
     // A single libc open(). The path is marshalled by the caller into a null-terminated UTF-8 byte array so any
     // filename (incl. non-ASCII) round-trips correctly; the import takes the raw bytes. DllImport (not source-generated

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
 using System.Globalization;
 using System.Text.Json;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -34,13 +33,13 @@ internal sealed class GoldenHarvestService(
     // Cache the serializer options statically (CA1869). Web defaults serialize the payload as camelCase {role,text},
     // matching PlaybookEvalService's InputTurn parse.
     private static readonly JsonSerializerOptions InputTurnsSerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly IGoldenConversationService _conversationService = conversationService ?? throw new ArgumentNullException(nameof(conversationService));
+    private readonly IGoldenConversationStore _goldenStore = goldenStore ?? throw new ArgumentNullException(nameof(goldenStore));
+    private readonly ILogger<GoldenHarvestService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly GoldenHarvestOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
 
     private readonly IGoldenHarvestSourceStore _sourceStore = sourceStore ?? throw new ArgumentNullException(nameof(sourceStore));
-    private readonly IGoldenConversationStore _goldenStore = goldenStore ?? throw new ArgumentNullException(nameof(goldenStore));
-    private readonly IGoldenConversationService _conversationService = conversationService ?? throw new ArgumentNullException(nameof(conversationService));
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly GoldenHarvestOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-    private readonly ILogger<GoldenHarvestService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<GoldenHarvestOutcome> HarvestAsync(Guid agentId, CancellationToken cancellationToken = default)
     {
@@ -96,8 +95,7 @@ internal sealed class GoldenHarvestService(
             }
         }
 
-        return new GoldenHarvestOutcome(
-            AgentExists: true,
+        return new GoldenHarvestOutcome(AgentExists: true,
             ThumbsUpScanned: sources.Count,
             CreatedCount: created,
             DuplicateCount: duplicate,
@@ -106,8 +104,7 @@ internal sealed class GoldenHarvestService(
 
     private static GoldenConversationCreateInput BuildCandidate(Guid agentId, HarvestCandidateSource source, string firstUserTurnText)
     {
-        return new GoldenConversationCreateInput(
-            agentId,
+        return new GoldenConversationCreateInput(agentId,
             BuildTitle(source, firstUserTurnText),
             SerializeTurns(source.PriorTurns),
             Assertion: null,

@@ -14,9 +14,9 @@ public sealed class SandboxContractGuardTests
     public void SandboxContracts_DoNotReferenceProviderSdkTypes()
     {
         var contractTypes = typeof(ISandboxRuntimeProvider).Assembly
-                                                            .GetTypes()
-                                                            .Where(static type => string.Equals(type.Namespace, ContractNamespace, StringComparison.Ordinal))
-                                                            .ToArray();
+                                                           .GetTypes()
+                                                           .Where(static type => string.Equals(type.Namespace, ContractNamespace, StringComparison.Ordinal))
+                                                           .ToArray();
 
         AssertEx.NotEmpty(contractTypes);
 

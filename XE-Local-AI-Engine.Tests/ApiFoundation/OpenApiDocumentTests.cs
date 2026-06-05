@@ -41,10 +41,10 @@ public sealed class OpenApiDocumentTests
         AssertEx.True(operationIds.Count > 0, "Expected the OpenAPI document to expose at least one operation.");
 
         var duplicates = operationIds
-            .GroupBy(static id => id, StringComparer.Ordinal)
-            .Where(static group => group.Count() > 1)
-            .Select(static group => group.Key)
-            .ToList();
+                         .GroupBy(static id => id, StringComparer.Ordinal)
+                         .Where(static group => group.Count() > 1)
+                         .Select(static group => group.Key)
+                         .ToList();
 
         AssertEx.True(duplicates.Count == 0,
             $"OpenAPI operationIds must be globally unique (NSwag emits one operationId namespace). Duplicates: {string.Join(", ", duplicates)}");

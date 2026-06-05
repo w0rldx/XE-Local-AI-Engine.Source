@@ -29,7 +29,9 @@ public sealed class RunPlaybookActionEvalEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(Guid.NewGuid(), Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -63,7 +65,9 @@ public sealed class RunPlaybookActionEvalEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -84,7 +88,9 @@ public sealed class RunPlaybookActionEvalEndpointTests
         // Run eval on the owner's suggestion via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(otherAgentId, actionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -105,8 +111,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
         using (var scope = factory.Services.CreateScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-            var created = await service.CreateAsync(new PlaybookActionInput(
-                agentId,
+            var created = await service.CreateAsync(new PlaybookActionInput(agentId,
                 PlaybookActionState.Enabled,
                 PlaybookActionSource.Manual,
                 TriggerCondition: null,
@@ -118,7 +123,9 @@ public sealed class RunPlaybookActionEvalEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, enabledActionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -139,7 +146,9 @@ public sealed class RunPlaybookActionEvalEndpointTests
         // WITHOUT calling the model, so the full endpoint path runs with no Ollama dependency.
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, actionId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -162,8 +171,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,
@@ -179,8 +187,7 @@ public sealed class RunPlaybookActionEvalEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(
-            agentDefinitionId,
+        var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
             TriggerCondition: null,
             Scope: "search",

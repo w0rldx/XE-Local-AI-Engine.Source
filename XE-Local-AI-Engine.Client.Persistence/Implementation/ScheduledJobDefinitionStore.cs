@@ -177,8 +177,7 @@ public sealed class ScheduledJobDefinitionStore(NodeChatDbContext dbContext, Tim
 
     private static ScheduledJobDefinitionRecord ToRecord(ScheduledJobDefinition entity)
     {
-        return new ScheduledJobDefinitionRecord(
-            entity.Id,
+        return new ScheduledJobDefinitionRecord(entity.Id,
             entity.TemplateId,
             entity.DisplayName,
             entity.Description,

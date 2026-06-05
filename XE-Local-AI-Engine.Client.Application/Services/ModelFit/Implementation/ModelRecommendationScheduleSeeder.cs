@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
@@ -34,12 +32,11 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     private const string SeedTimeZoneId = "UTC";
 
     private const int SeedMaxRuntimeSeconds = 600;
-
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ModelRecommendationScheduleSeeder> _logger;
 
-    public ModelRecommendationScheduleSeeder(
-        IServiceScopeFactory scopeFactory,
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public ModelRecommendationScheduleSeeder(IServiceScopeFactory scopeFactory,
         ILogger<ModelRecommendationScheduleSeeder> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -60,8 +57,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
                 return;
             }
 
-            var input = new ScheduledJobManagementInput(
-                TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
+            var input = new ScheduledJobManagementInput(TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
                 DisplayName: SeedDisplayName,
                 Description: SeedDescription,
                 ScheduleKind: ScheduleKind.Manual,
@@ -79,8 +75,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
             // CreateJobAsync persists the definition enabled, then registers the durable Manual Quartz job (no trigger).
             var created = await managementService.CreateJobAsync(input, cancellationToken).ConfigureAwait(false);
 
-            _logger.LogInformation(
-                "Seeded on-demand {TemplateId} schedule {ScheduledJobId} (Manual, enabled).",
+            _logger.LogInformation("Seeded on-demand {TemplateId} schedule {ScheduledJobId} (Manual, enabled).",
                 ModelRecommendationCheckHandler.TemplateIdValue,
                 created.Id);
         }
@@ -92,21 +87,25 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
         {
             // Seeding is best-effort: a node must start even if the seed fails. The operator can still hand-create the
             // schedule, and the next startup re-attempts once the underlying issue clears.
-            _logger.LogWarning(
-                ex,
+            _logger.LogWarning(ex,
                 "Model recommendation schedule seeding failed at startup; the on-demand refresh job may be missing until the next start.");
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     ///     The catalog-default parameter JSON for the seeded schedule: the approved llmfit recommender image, the
     ///     Recommend operation, the coding use case, the top-5 limit, and the ollama provider. Mirrors the handler's own
     ///     <c>DefaultParameters</c> so the seeded job runs the same recommendation as a hand-created one.
     /// </summary>
-    private static string BuildSeedParameters() =>
-        $$"""
-        {"approvedImageId":"{{ApprovedUtilityImageCatalog.LlmfitRecommenderImageId}}","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}
-        """;
+    private static string BuildSeedParameters()
+    {
+        return $$"""
+                 {"approvedImageId":"{{ApprovedUtilityImageCatalog.LlmfitRecommenderImageId}}","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}
+                 """;
+    }
 }

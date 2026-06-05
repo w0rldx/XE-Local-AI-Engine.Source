@@ -41,8 +41,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     private readonly ISelectedFolderResolver _resolver;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public NodePatchApplyService(
-        ISelectedFolderResolver resolver,
+    public NodePatchApplyService(ISelectedFolderResolver resolver,
         IOptions<AgentHomeOptions> options,
         IHostEnvironment hostEnvironment,
         IAgentHomeIdentityProvider identityProvider,
@@ -83,8 +82,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             var check = await CheckSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
             if (check is null || check.ExitCode != 0)
             {
-                rejections.Add(string.Create(
-                    CultureInfo.InvariantCulture,
+                rejections.Add(string.Create(CultureInfo.InvariantCulture,
                     $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
                 continue;
             }
@@ -121,8 +119,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 var check = await CheckSubPatchAsync(runner, alias, cancellationToken).ConfigureAwait(false);
                 if (check is null || check.ExitCode != 0)
                 {
-                    rejections.Add(string.Create(
-                        CultureInfo.InvariantCulture,
+                    rejections.Add(string.Create(CultureInfo.InvariantCulture,
                         $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
                 }
             }
@@ -152,8 +149,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                 // A clean --check passed for every alias above, so a non-zero apply here is a rare race. Report the
                 // aliases that did land as partially applied rather than silently dropping the failure.
                 var partial = appliedAliases > 0;
-                rejections.Add(string.Create(
-                    CultureInfo.InvariantCulture,
+                rejections.Add(string.Create(CultureInfo.InvariantCulture,
                     $"alias '{alias.Alias}': apply failed after a clean check ({Redact(apply?.StandardError ?? string.Empty, alias.ResolvedRoot)})"));
                 await LogRejectionAsync(request.RunId, rejections, cancellationToken).ConfigureAwait(false);
                 return new NodePatchApplyResult
@@ -222,8 +218,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
     }
 
-    private static IReadOnlyList<PatchApplyFileEntry> ApplyNumstat(
-        IReadOnlyList<PatchApplyFileEntry> files,
+    private static IReadOnlyList<PatchApplyFileEntry> ApplyNumstat(IReadOnlyList<PatchApplyFileEntry> files,
         IReadOnlyDictionary<string, (int Added, int Removed)> numstat)
     {
         return files
@@ -231,7 +226,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
                {
                    var key = string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}");
                    return numstat.TryGetValue(key, out var stats)
-                       ? file with { Added = stats.Added, Removed = stats.Removed }
+                       ? file with
+                       {
+                           Added = stats.Added,
+                           Removed = stats.Removed
+                       }
                        : file;
                })
                .ToArray();
@@ -518,12 +517,21 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
         public static ApplyPlan Invalid(string reason)
         {
-            return new ApplyPlan { IsValid = false, Rejections = [reason] };
+            return new ApplyPlan
+            {
+                IsValid = false,
+                Rejections = [reason]
+            };
         }
 
         public static ApplyPlan WithRejections(IReadOnlyList<string> rejections, bool containsBinary)
         {
-            return new ApplyPlan { IsValid = false, Rejections = rejections, ContainsBinary = containsBinary };
+            return new ApplyPlan
+            {
+                IsValid = false,
+                Rejections = rejections,
+                ContainsBinary = containsBinary
+            };
         }
     }
 }

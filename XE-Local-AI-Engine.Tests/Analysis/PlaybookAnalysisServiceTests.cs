@@ -16,7 +16,13 @@ public sealed class PlaybookAnalysisServiceTests
     public async Task AnalyzeAsync_WhenAgentDoesNotExist_ReportsAgentMissingAndNeverInvokesAgent()
     {
         var agentId = Guid.NewGuid();
-        var agent = new FakeAnalysisAgent(_ => [Proposal(new[] { Guid.NewGuid() }, 0.9d)]);
+        var agent = new FakeAnalysisAgent(_ =>
+        [
+            Proposal(new[]
+            {
+                Guid.NewGuid()
+            }, 0.9d)
+        ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<FeedbackInsightsResult?>(null));
@@ -36,7 +42,13 @@ public sealed class PlaybookAnalysisServiceTests
     public async Task AnalyzeAsync_WhenBelowThreshold_DoesNotInvokeAgentAndWritesNothing()
     {
         var agentId = Guid.NewGuid();
-        var agent = new FakeAnalysisAgent(_ => [Proposal(new[] { Guid.NewGuid() }, 0.9d)]);
+        var agent = new FakeAnalysisAgent(_ =>
+        [
+            Proposal(new[]
+            {
+                Guid.NewGuid()
+            }, 0.9d)
+        ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<FeedbackInsightsResult?>(BuildInsights(agentId, meetsThreshold: false, exemplars: [])));
@@ -62,8 +74,15 @@ public sealed class PlaybookAnalysisServiceTests
 
         var agent = new FakeAnalysisAgent(_ =>
         [
-            Proposal(new[] { firstExemplar.MessageId }, 0.8d, behavior: "Cite sources before answering.", scope: "search"),
-            Proposal(new[] { secondExemplar.MessageId, secondExemplar.ConversationId }, 0.6d, behavior: "Avoid speculative claims.", scope: "writing")
+            Proposal(new[]
+            {
+                firstExemplar.MessageId
+            }, 0.8d, behavior: "Cite sources before answering.", scope: "search"),
+            Proposal(new[]
+            {
+                secondExemplar.MessageId,
+                secondExemplar.ConversationId
+            }, 0.6d, behavior: "Avoid speculative claims.", scope: "writing")
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
@@ -118,7 +137,13 @@ public sealed class PlaybookAnalysisServiceTests
         var insightsResult = BuildInsights(agentId, meetsThreshold: true, exemplars: [exemplar]);
 
         // The cited id is not present in any exemplar message/conversation id — the model invented evidence.
-        var agent = new FakeAnalysisAgent(_ => [Proposal(new[] { Guid.NewGuid() }, 0.95d, behavior: "Hallucinated root cause.")]);
+        var agent = new FakeAnalysisAgent(_ =>
+        [
+            Proposal(new[]
+            {
+                Guid.NewGuid()
+            }, 0.95d, behavior: "Hallucinated root cause.")
+        ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
@@ -144,8 +169,7 @@ public sealed class PlaybookAnalysisServiceTests
         var insightsResult = BuildInsights(agentId, meetsThreshold: true, exemplars: [exemplar]);
 
         // An existing Enabled action whose (scope, behavior) the proposal normalizes to (case/whitespace-insensitive).
-        var existing = new PlaybookActionRecord(
-            Guid.NewGuid(),
+        var existing = new PlaybookActionRecord(Guid.NewGuid(),
             agentId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
@@ -159,7 +183,10 @@ public sealed class PlaybookAnalysisServiceTests
 
         var agent = new FakeAnalysisAgent(_ =>
         [
-            Proposal(new[] { exemplar.MessageId }, 0.8d, behavior: "  CITE   sources before ANSWERING.  ", scope: "Search")
+            Proposal(new[]
+            {
+                exemplar.MessageId
+            }, 0.8d, behavior: "  CITE   sources before ANSWERING.  ", scope: "Search")
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
@@ -185,8 +212,7 @@ public sealed class PlaybookAnalysisServiceTests
     {
         insights = Substitute.For<IFeedbackInsightsService>();
         actionService = Substitute.For<IPlaybookActionService>();
-        return new PlaybookAnalysisService(
-            insights,
+        return new PlaybookAnalysisService(insights,
             agent,
             actionService,
             Options.Create(new PlaybookAnalysisOptions()),
@@ -200,8 +226,7 @@ public sealed class PlaybookAnalysisServiceTests
                      .Returns(callInfo =>
                      {
                          var input = callInfo.Arg<PlaybookAnalysisSuggestionInput>();
-                         return Task.FromResult(new PlaybookActionRecord(
-                             Guid.NewGuid(),
+                         return Task.FromResult(new PlaybookActionRecord(Guid.NewGuid(),
                              input.AgentDefinitionId,
                              PlaybookActionState.Suggested,
                              PlaybookActionSource.Analysis,
@@ -219,8 +244,7 @@ public sealed class PlaybookAnalysisServiceTests
 
     private static FeedbackInsightsResult BuildInsights(Guid agentId, bool meetsThreshold, IReadOnlyList<FeedbackExemplarView> exemplars)
     {
-        return new FeedbackInsightsResult(
-            agentId,
+        return new FeedbackInsightsResult(agentId,
             "Agent",
             GeneratedAtUtc: 1_000,
             MinOccurrenceThreshold: 3,

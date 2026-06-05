@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -11,14 +9,12 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -34,7 +30,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string ProviderUnavailableMessage = "Provider unreachable.";
     private const string OrchestrationFailureMessage = "Orchestration run failed.";
     private const string ModelDoesNotSupportThinkingMessage = "This model does not support reasoning.";
+
     private const string ModelDoesNotSupportToolsMessage = "This model does not support tool calling.";
+
     // A provider HTTP 500 means the model was reached but failed to load OR run (e.g. an Ollama build too old for the
     // model architecture, or an out-of-memory at load). Phrased to cover both so it never falsely asserts a permanent
     // model defect, while still being far more actionable than the generic "Provider unreachable.".
@@ -52,10 +50,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly Lazy<IWorkerEventDispatcher> _eventDispatcher;
     private readonly Lazy<IHubMessageSender> _hubSender;
     private readonly IInvocationAgentFactory _invocationAgentFactory;
-    private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
     private readonly ILogger<InvocationRunner> _logger;
     private readonly TimeSpan _maxPendingToolCallAge;
     private readonly int _maxResponseSizeBytes;
+    private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly IRuntimePackageValidator _runtimePackageValidator;
     private readonly object _syncRoot = new();
@@ -237,6 +235,113 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
+    public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var activeInvocationTasks = _activeInvocationCompletions.Values.Select(static completion => completion.Task).ToArray();
+        if (activeInvocationTasks.Length == 0)
+        {
+            return true;
+        }
+
+        try
+        {
+            await Task.WhenAll(activeInvocationTasks).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    public void Cancel(Guid invocationId)
+    {
+        CancellationTokenSource? invocationCancellationTokenSource = null;
+
+        lock (_syncRoot)
+        {
+            if (_currentInvocationId == invocationId)
+            {
+                invocationCancellationTokenSource = _invocationCancellationTokenSource;
+                _userCancelRequested = true;
+            }
+        }
+
+        invocationCancellationTokenSource?.Cancel();
+        CancelPendingToolCalls(invocationId);
+    }
+
+    public void CancelAll()
+    {
+        CancellationTokenSource? invocationCancellationTokenSource;
+
+        lock (_syncRoot)
+        {
+            invocationCancellationTokenSource = _invocationCancellationTokenSource;
+        }
+
+        invocationCancellationTokenSource?.Cancel();
+
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
+                removedPendingToolCall.ResultCompletion.TrySetCanceled();
+            }
+        }
+    }
+
+    public void CleanupStaleToolCalls(TimeSpan maxAge)
+    {
+        var cutoff = DateTimeOffset.UtcNow - maxAge;
+
+        foreach (var pendingToolCall in _pendingToolCalls)
+        {
+            if (pendingToolCall.Value.CreatedAt >= cutoff)
+            {
+                continue;
+            }
+
+            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
+            {
+                var timeoutException = new TimeoutException("Tool call timed out during cleanup.");
+                removedPendingToolCall.ApprovalCompletion.TrySetException(timeoutException);
+                removedPendingToolCall.ResultCompletion.TrySetException(timeoutException);
+            }
+        }
+    }
+
+    public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
+        {
+            pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
+        }
+    }
+
+    public void ResolveToolCallResult(ToolCallResultEvent evt)
+    {
+        ArgumentNullException.ThrowIfNull(evt);
+
+        if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
+        {
+            pendingToolCall.ResultCompletion.TrySetResult(evt);
+        }
+    }
+
+    public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
+        string toolName,
+        string parameters,
+        CancellationToken cancellationToken = default)
+    {
+        // Default to the approval-gated path; the per-tool overload below is what BuildInvocationTools wires in,
+        // passing the tool's RequiresApproval flag so non-approval tools auto-execute.
+        return ExecuteApiToolCallAsync(invocationId, toolName, parameters, true, cancellationToken);
+    }
+
     // The unchanged single-agent path, extracted verbatim from the former RunAsync body. Drives one ChatClientAgent
     // over an approval-gated do/while loop, accumulating into `stream` through the shared transport so the streaming
     // behavior is identical to before P5.
@@ -360,8 +465,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 currentMessages.Add(new ChatMessage(ChatRole.User,
                     [pendingApproval.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user.")]));
             }
-        }
-        while (pendingApproval is not null);
+        } while (pendingApproval is not null);
     }
 
     // The loop-P5 orchestration path. Compiles the package's OrchestrationSpec into the MAF-agnostic
@@ -421,119 +525,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // The workflow has produced its final output; no further deltas follow. Keep draining so the stream
                     // ends naturally (the factory's documented terminator) rather than breaking the enumeration early.
                     break;
-
-                default:
-                    // ApprovalRequest with no RequestId, or empty text deltas: nothing to forward.
-                    break;
             }
         }
-    }
-
-    public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
-    {
-        var activeInvocationTasks = _activeInvocationCompletions.Values.Select(static completion => completion.Task).ToArray();
-        if (activeInvocationTasks.Length == 0)
-        {
-            return true;
-        }
-
-        try
-        {
-            await Task.WhenAll(activeInvocationTasks).WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-    }
-
-    public void Cancel(Guid invocationId)
-    {
-        CancellationTokenSource? invocationCancellationTokenSource = null;
-
-        lock (_syncRoot)
-        {
-            if (_currentInvocationId == invocationId)
-            {
-                invocationCancellationTokenSource = _invocationCancellationTokenSource;
-                _userCancelRequested = true;
-            }
-        }
-
-        invocationCancellationTokenSource?.Cancel();
-        CancelPendingToolCalls(invocationId);
-    }
-
-    public void CancelAll()
-    {
-        CancellationTokenSource? invocationCancellationTokenSource;
-
-        lock (_syncRoot)
-        {
-            invocationCancellationTokenSource = _invocationCancellationTokenSource;
-        }
-
-        invocationCancellationTokenSource?.Cancel();
-
-        foreach (var pendingToolCall in _pendingToolCalls)
-        {
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-            {
-                removedPendingToolCall.ApprovalCompletion.TrySetCanceled();
-                removedPendingToolCall.ResultCompletion.TrySetCanceled();
-            }
-        }
-    }
-
-    public void CleanupStaleToolCalls(TimeSpan maxAge)
-    {
-        var cutoff = DateTimeOffset.UtcNow - maxAge;
-
-        foreach (var pendingToolCall in _pendingToolCalls)
-        {
-            if (pendingToolCall.Value.CreatedAt >= cutoff)
-            {
-                continue;
-            }
-
-            if (_pendingToolCalls.TryRemove(pendingToolCall.Key, out var removedPendingToolCall))
-            {
-                var timeoutException = new TimeoutException("Tool call timed out during cleanup.");
-                removedPendingToolCall.ApprovalCompletion.TrySetException(timeoutException);
-                removedPendingToolCall.ResultCompletion.TrySetException(timeoutException);
-            }
-        }
-    }
-
-    public void ResolveApprovalResult(ApprovalResolvedEvent evt)
-    {
-        ArgumentNullException.ThrowIfNull(evt);
-
-        if (_pendingToolCalls.TryGetValue(evt.RequestId, out var pendingToolCall))
-        {
-            pendingToolCall.ApprovalCompletion.TrySetResult(evt.Approved);
-        }
-    }
-
-    public void ResolveToolCallResult(ToolCallResultEvent evt)
-    {
-        ArgumentNullException.ThrowIfNull(evt);
-
-        if (_pendingToolCalls.TryRemove(evt.RequestId, out var pendingToolCall))
-        {
-            pendingToolCall.ResultCompletion.TrySetResult(evt);
-        }
-    }
-
-    public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
-        string toolName,
-        string parameters,
-        CancellationToken cancellationToken = default)
-    {
-        // Default to the approval-gated path; the per-tool overload below is what BuildInvocationTools wires in,
-        // passing the tool's RequiresApproval flag so non-approval tools auto-execute.
-        return ExecuteApiToolCallAsync(invocationId, toolName, parameters, true, cancellationToken);
     }
 
     public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
@@ -783,13 +776,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             else
             {
                 await sender.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1
-                {
-                    ConversationId = context.Package.ConversationId,
-                    MessageId = context.MessageId,
-                    EpochVersion = context.EpochVersion,
-                    Error = error,
-                    FailureCategory = failureCategory.ToString()
-                },
+                    {
+                        ConversationId = context.Package.ConversationId,
+                        MessageId = context.MessageId,
+                        EpochVersion = context.EpochVersion,
+                        Error = error,
+                        FailureCategory = failureCategory.ToString()
+                    },
                     CancellationToken.None).ConfigureAwait(false);
             }
         }

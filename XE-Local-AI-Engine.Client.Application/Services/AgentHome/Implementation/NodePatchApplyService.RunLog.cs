@@ -31,8 +31,7 @@ internal sealed partial class NodePatchApplyService
             using var scope = _scopeFactory.CreateScope();
             var runLogger = scope.ServiceProvider.GetRequiredService<IAgentHomeRunLogger>();
             var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-            await runLogger.OpenAsync(
-                new AgentHomeRunLogContext
+            await runLogger.OpenAsync(new AgentHomeRunLogContext
                 {
                     RunId = runId,
                     HostLogDirectory = logDirectory,

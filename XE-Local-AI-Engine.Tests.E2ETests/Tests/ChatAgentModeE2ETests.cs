@@ -10,9 +10,11 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///     <para>
 ///         Flow:
 ///         <list type="number">
-///             <item>Create a uniquely-named agent on <c>/agents</c> (the E2E host removes the agent seeder —
-///                   <c>DefaultAgentSeeder</c> is an <c>IHostedService</c> — so the agent list and the chat
-///                   agent picker start empty; the picker only renders once at least one agent exists).</item>
+///             <item>
+///                 Create a uniquely-named agent on <c>/agents</c> (the E2E host removes the agent seeder —
+///                 <c>DefaultAgentSeeder</c> is an <c>IHostedService</c> — so the agent list and the chat
+///                 agent picker start empty; the picker only renders once at least one agent exists).
+///             </item>
 ///             <item>Go to <c>/chat</c>, open <c>AgentSelectorCard</c>, pick that agent (enabling agent mode).</item>
 ///             <item>Send a message — FakeOllama streams the deterministic reply.</item>
 ///             <item>The assistant turn's attribution row (<c>chat-message-agent-*</c>) names the picked agent.</item>
@@ -60,18 +62,23 @@ public sealed class ChatAgentModeE2ETests : XEE2ETestBase
         await Page.GetByPlaceholder(AgentInstructionsPlaceholder)
                   .FillAsync("You are an E2E attribution probe. Answer in one short sentence.");
 
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("agent-form-submit").ClickAsync(),
             response => response.Url.Contains("/api/local/v1/agents", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         await Expect(Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions
             {
                 Name = agentName,
                 Exact = true
             }))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         return agentName;
     }
@@ -95,7 +102,10 @@ public sealed class ChatAgentModeE2ETests : XEE2ETestBase
         // The agent selector renders only because we created an agent (agentControlsAvailable =
         // showAgentControls && agentOptions.length > 0). Open it and pick our agent.
         var selectorTrigger = Page.GetByTestId("chat-agent-selector-trigger");
-        await Expect(selectorTrigger).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(selectorTrigger).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await Expect(selectorTrigger).ToBeEnabledAsync();
         await selectorTrigger.ClickAsync();
 
@@ -107,7 +117,10 @@ public sealed class ChatAgentModeE2ETests : XEE2ETestBase
 
         // The trigger label now reflects the selected agent (the merged control: picking an agent enables mode).
         await Expect(Page.GetByTestId("chat-agent-selector-selected"))
-            .ToContainTextAsync(agentName, new LocatorAssertionsToContainTextOptions { Timeout = 3000 });
+            .ToContainTextAsync(agentName, new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 3000
+            });
 
         // Send a message — FakeOllama streams a deterministic reply.
         await chatInput.FillAsync("Introduce yourself in one sentence.");
@@ -124,7 +137,10 @@ public sealed class ChatAgentModeE2ETests : XEE2ETestBase
         // "agentName · Reasoning: x · time", so assert the agent name is contained in it. The attribution
         // testid carries the runtime message id, so target it by prefix.
         var attribution = Page.Locator("[data-testid^='chat-message-agent-']").Last;
-        await Expect(attribution).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(attribution).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
         await Expect(attribution).ToContainTextAsync(agentName, new LocatorAssertionsToContainTextOptions
         {
             Timeout = 5000

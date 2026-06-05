@@ -16,9 +16,20 @@ public sealed class ModelFitEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";
 
-    private static string ApprovedImagesRoute() => $"{ApiPrefix}/model-fit/approved-images";
-    private static string RecommendationsLatestRoute() => $"{ApiPrefix}/model-fit/recommendations/latest";
-    private static string RecommendationsRefreshRoute() => $"{ApiPrefix}/model-fit/recommendations/refresh";
+    private static string ApprovedImagesRoute()
+    {
+        return $"{ApiPrefix}/model-fit/approved-images";
+    }
+
+    private static string RecommendationsLatestRoute()
+    {
+        return $"{ApiPrefix}/model-fit/recommendations/latest";
+    }
+
+    private static string RecommendationsRefreshRoute()
+    {
+        return $"{ApiPrefix}/model-fit/recommendations/refresh";
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // 401 — every route requires a bearer token (Operator policy).
@@ -54,7 +65,10 @@ public sealed class ModelFitEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
         {
-            Content = JsonContent.Create(new { scheduledJobId = Guid.NewGuid() })
+            Content = JsonContent.Create(new
+            {
+                scheduledJobId = Guid.NewGuid()
+            })
         };
         request.Headers.Add("Origin", "http://localhost");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -140,7 +154,10 @@ public sealed class ModelFitEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, RecommendationsRefreshRoute())
         {
             // A random id resolves to no definition → the template guard throws → AddError + Send.ErrorsAsync → 400.
-            Content = JsonContent.Create(new { scheduledJobId = Guid.NewGuid() })
+            Content = JsonContent.Create(new
+            {
+                scheduledJobId = Guid.NewGuid()
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);

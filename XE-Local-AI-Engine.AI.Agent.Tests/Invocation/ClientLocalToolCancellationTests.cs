@@ -4,7 +4,6 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -26,8 +25,7 @@ public sealed class ClientLocalToolCancellationTests
         var toolStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var observedCancel = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var tool = new MetadataToolFunction(
-            ToolName,
+        var tool = new MetadataToolFunction(ToolName,
             "Blocks until cancelled.",
             MetadataToolFunction.ParseSchema(Schema),
             async (_, cancellationToken) =>
@@ -49,12 +47,14 @@ public sealed class ClientLocalToolCancellationTests
         using var scripted = new ScriptedToolCallChatClient(ToolName);
         var chatClient = scripted.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        var agent = new ChatClientAgent(
-            chatClient,
+        var agent = new ChatClientAgent(chatClient,
             "cancel-propagation",
             "Call the tool when asked.",
             "Cancellation propagation guard.",
-            new List<AITool> { tool },
+            new List<AITool>
+            {
+                tool
+            },
             NullLoggerFactory.Instance,
             serviceProvider);
 
@@ -92,7 +92,10 @@ public sealed class ClientLocalToolCancellationTests
             }
 
             var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?>());
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { call })));
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                call
+            })));
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)

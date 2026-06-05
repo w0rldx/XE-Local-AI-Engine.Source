@@ -19,6 +19,7 @@
 // Model caveat: small local models (qwen3.5:9b) are nondeterministic about whether they emit the tool
 // call at all. The seed is written to force an immediate tool call and run#1 retries a few
 // times; a run where the model never calls the tool is reported INCONCLUSIVE, distinct from a gate failure.
+
 #if P0_SPIKE
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 

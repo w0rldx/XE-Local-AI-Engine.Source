@@ -59,8 +59,9 @@ internal static class ModelFitMapper
     }
 
     /// <summary>The explicit cache-miss response: no cached recommendation snapshot exists for the key.</summary>
-    public static GetLatestRecommendationsResponse EmptyCache() =>
-        new()
+    public static GetLatestRecommendationsResponse EmptyCache()
+    {
+        return new GetLatestRecommendationsResponse
         {
             HasCache = false,
             SnapshotId = null,
@@ -71,9 +72,11 @@ internal static class ModelFitMapper
             LastRefreshedAtUtc = null,
             Recommendations = []
         };
+    }
 
-    private static ModelFitRecommendationResponse ToResponse(this ModelFitRecommendationRecord record) =>
-        new()
+    private static ModelFitRecommendationResponse ToResponse(this ModelFitRecommendationRecord record)
+    {
+        return new ModelFitRecommendationResponse
         {
             Rank = record.Rank,
             ModelName = record.ModelName,
@@ -90,6 +93,7 @@ internal static class ModelFitMapper
             PullModelName = record.PullModelName,
             ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson)
         };
+    }
 
     /// <summary>
     ///     Pulls ONLY the <c>release_date</c> string out of the persisted diagnostics blob (the rest stays server-side, so

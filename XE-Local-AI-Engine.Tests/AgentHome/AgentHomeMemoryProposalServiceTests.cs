@@ -418,7 +418,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         AssertEx.Empty(result.Rejections, "a redactable token must not throw or reject — the record survives redacted");
         AssertEx.Equal(1, result.Proposals.Count);
         var content = result.Proposals[0].Content;
-        AssertEx.Contains(content, "[REDACTED:high-entropy-token]", StringComparison.Ordinal);
+        AssertEx.Contains(content, "[REDACTED:high-entropy-token]");
         AssertEx.Contains(content, "Bearer ", StringComparison.Ordinal, "the keyword prefix must be preserved");
         AssertEx.False(content.Contains(token, StringComparison.Ordinal), "ZERO token bytes may survive");
         // No leading fragment of the token may survive either (the buggy slice leaked the token's first bytes).
@@ -441,7 +441,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         AssertEx.Equal(1, result.Proposals.Count);
         AssertEx.Empty(result.Rejections);
-        AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:high-entropy-token]", StringComparison.Ordinal);
+        AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:high-entropy-token]");
         AssertEx.False(result.Proposals[0].Content.Contains(token, StringComparison.Ordinal), "the bare token must be fully redacted");
     }
 

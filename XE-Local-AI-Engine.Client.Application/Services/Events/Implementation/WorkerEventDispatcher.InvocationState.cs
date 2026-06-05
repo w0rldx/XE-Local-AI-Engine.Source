@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 
 public sealed partial class WorkerEventDispatcher
 {

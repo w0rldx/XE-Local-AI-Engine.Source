@@ -38,7 +38,10 @@ public sealed class SchedulerOptionsValidatorTests
     [Arguments(-100)]
     public void Validate_WhenMaxConcurrencyIsNotPositive_ReturnsFailure(int value)
     {
-        var options = new SchedulerOptions { MaxConcurrency = value };
+        var options = new SchedulerOptions
+        {
+            MaxConcurrency = value
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -50,7 +53,10 @@ public sealed class SchedulerOptionsValidatorTests
     [Arguments(-1)]
     public void Validate_WhenHistoryRetentionDaysIsNotPositive_ReturnsFailure(int value)
     {
-        var options = new SchedulerOptions { HistoryRetentionDays = value };
+        var options = new SchedulerOptions
+        {
+            HistoryRetentionDays = value
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -62,7 +68,10 @@ public sealed class SchedulerOptionsValidatorTests
     [Arguments(-1)]
     public void Validate_WhenRetentionSweepIntervalMinutesIsNotPositive_ReturnsFailure(int value)
     {
-        var options = new SchedulerOptions { RetentionSweepIntervalMinutes = value };
+        var options = new SchedulerOptions
+        {
+            RetentionSweepIntervalMinutes = value
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -74,7 +83,10 @@ public sealed class SchedulerOptionsValidatorTests
     [Arguments(-1)]
     public void Validate_WhenDefaultMaxRuntimeMinutesIsNotPositive_ReturnsFailure(int value)
     {
-        var options = new SchedulerOptions { DefaultMaxRuntimeMinutes = value };
+        var options = new SchedulerOptions
+        {
+            DefaultMaxRuntimeMinutes = value
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -86,7 +98,10 @@ public sealed class SchedulerOptionsValidatorTests
     [Arguments("   ")]
     public void Validate_WhenDefaultTimeZoneIdIsBlank_ReturnsFailure(string value)
     {
-        var options = new SchedulerOptions { DefaultTimeZoneId = value };
+        var options = new SchedulerOptions
+        {
+            DefaultTimeZoneId = value
+        };
 
         var result = _validator.Validate(null, options);
 
@@ -98,7 +113,10 @@ public sealed class SchedulerOptionsValidatorTests
     [Arguments("   ")]
     public void Validate_WhenQuartzTablePrefixIsBlank_ReturnsFailure(string value)
     {
-        var options = new SchedulerOptions { QuartzTablePrefix = value };
+        var options = new SchedulerOptions
+        {
+            QuartzTablePrefix = value
+        };
 
         var result = _validator.Validate(null, options);
 

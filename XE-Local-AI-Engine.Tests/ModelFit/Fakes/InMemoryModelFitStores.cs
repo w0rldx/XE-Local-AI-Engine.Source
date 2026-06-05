@@ -32,8 +32,7 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
         return Task.FromResult(stored.ToSummary());
     }
 
-    public Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(
-        Guid id,
+    public Task<ModelFitSnapshotSummaryRecord?> MarkTerminalAsync(Guid id,
         ModelFitRunStatus status,
         int? exitCode,
         long? durationMs,
@@ -73,8 +72,7 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
         return Task.FromResult<ModelFitSnapshotSummaryRecord?>(snapshot.ToSummary());
     }
 
-    public Task<ModelFitSnapshotSummaryRecord?> GetLatestSuccessfulSummaryAsync(
-        ModelFitOperation operation,
+    public Task<ModelFitSnapshotSummaryRecord?> GetLatestSuccessfulSummaryAsync(ModelFitOperation operation,
         string? useCase,
         string providerName,
         string? modelName,
@@ -89,18 +87,17 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
         return Task.FromResult(match?.ToSummary());
     }
 
-    public Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(
-        ModelFitOperation? operation = null,
+    public Task<IReadOnlyList<ModelFitSnapshotSummaryRecord>> ListRecentSummariesAsync(ModelFitOperation? operation = null,
         string? providerName = null,
         int limit = 50,
         CancellationToken cancellationToken = default)
     {
         var summaries = Snapshots.Values
-            .Where(s => (operation is null || s.Operation == operation) && (providerName is null || s.ProviderName == providerName))
-            .OrderByDescending(s => s.CreatedAtUtc)
-            .Take(limit)
-            .Select(s => s.ToSummary())
-            .ToArray();
+                                 .Where(s => (operation is null || s.Operation == operation) && (providerName is null || s.ProviderName == providerName))
+                                 .OrderByDescending(s => s.CreatedAtUtc)
+                                 .Take(limit)
+                                 .Select(s => s.ToSummary())
+                                 .ToArray();
         return Task.FromResult<IReadOnlyList<ModelFitSnapshotSummaryRecord>>(summaries);
     }
 
@@ -111,12 +108,13 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
             return Task.FromResult<ModelFitSnapshotRawRecord?>(null);
         }
 
-        return Task.FromResult<ModelFitSnapshotRawRecord?>(
-            new ModelFitSnapshotRawRecord(id, snapshot.RawJson, snapshot.StderrExcerpt, snapshot.DiagnosticsJson));
+        return Task.FromResult<ModelFitSnapshotRawRecord?>(new ModelFitSnapshotRawRecord(id, snapshot.RawJson, snapshot.StderrExcerpt, snapshot.DiagnosticsJson));
     }
 
-    private static bool SameKey(StoredSnapshot a, StoredSnapshot b) =>
-        a.Operation == b.Operation && a.UseCase == b.UseCase && a.ProviderName == b.ProviderName && a.ModelName == b.ModelName;
+    private static bool SameKey(StoredSnapshot a, StoredSnapshot b)
+    {
+        return a.Operation == b.Operation && a.UseCase == b.UseCase && a.ProviderName == b.ProviderName && a.ModelName == b.ModelName;
+    }
 
     internal sealed class StoredSnapshot
     {
@@ -138,9 +136,11 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
         public string? StderrExcerpt { get; set; }
         public string? DiagnosticsJson { get; set; }
 
-        public ModelFitSnapshotSummaryRecord ToSummary() =>
-            new(Id, ApprovedImageId, Operation, UseCase, ProviderName, ModelName, Status, StartedAtUtc, CompletedAtUtc,
+        public ModelFitSnapshotSummaryRecord ToSummary()
+        {
+            return new ModelFitSnapshotSummaryRecord(Id, ApprovedImageId, Operation, UseCase, ProviderName, ModelName, Status, StartedAtUtc, CompletedAtUtc,
                 DurationMs, ExitCode, IsLatestSuccessful, CreatedByRunId, CreatedAtUtc);
+        }
     }
 }
 
@@ -152,11 +152,10 @@ internal sealed class InMemoryModelFitRecommendationStore : IModelFitRecommendat
     public Task<int> ReplaceForSnapshotAsync(Guid snapshotId, IReadOnlyList<ModelFitRecommendationInput> recommendations, CancellationToken cancellationToken = default)
     {
         var rows = recommendations
-            .Select(input => new ModelFitRecommendationRecord(
-                Guid.NewGuid(), snapshotId, input.Rank, input.ModelName, input.ProviderModelName, input.Score,
-                input.FitLevel, input.RunMode, input.Quantization, input.EstimatedTokensPerSecond, input.RequiredRamMb,
-                input.RequiredVramMb, input.ContextTokens, input.IsInstalled, input.PullModelName, input.DiagnosticsJson))
-            .ToList();
+                   .Select(input => new ModelFitRecommendationRecord(Guid.NewGuid(), snapshotId, input.Rank, input.ModelName, input.ProviderModelName, input.Score,
+                       input.FitLevel, input.RunMode, input.Quantization, input.EstimatedTokensPerSecond, input.RequiredRamMb,
+                       input.RequiredVramMb, input.ContextTokens, input.IsInstalled, input.PullModelName, input.DiagnosticsJson))
+                   .ToList();
         _rows[snapshotId] = rows;
         return Task.FromResult(rows.Count);
     }
@@ -166,25 +165,31 @@ internal sealed class InMemoryModelFitRecommendationStore : IModelFitRecommendat
         return Task.FromResult(RowsFor(snapshotId));
     }
 
-    public IReadOnlyList<ModelFitRecommendationRecord> RowsFor(Guid snapshotId) =>
-        _rows.TryGetValue(snapshotId, out var rows) ? rows.OrderBy(r => r.Rank).ToArray() : [];
+    public IReadOnlyList<ModelFitRecommendationRecord> RowsFor(Guid snapshotId)
+    {
+        return _rows.TryGetValue(snapshotId, out var rows) ? rows.OrderBy(r => r.Rank).ToArray() : [];
+    }
 }
 
 /// <summary>In-memory <see cref="IApprovedUtilityImageStore" /> for refresh tests: id lookup + usage stamping.</summary>
 internal sealed class InMemoryApprovedUtilityImageStore : IApprovedUtilityImageStore
 {
-    public Dictionary<string, ApprovedUtilityImageRecord> Records { get; }
-
     public InMemoryApprovedUtilityImageStore(params ApprovedUtilityImageRecord[] records)
     {
         Records = records.ToDictionary(r => r.ApprovedImageId, StringComparer.OrdinalIgnoreCase);
     }
 
-    public Task<IReadOnlyList<ApprovedUtilityImageRecord>> ListAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<ApprovedUtilityImageRecord>>(Records.Values.ToArray());
+    public Dictionary<string, ApprovedUtilityImageRecord> Records { get; }
 
-    public Task<ApprovedUtilityImageRecord?> GetByIdAsync(string approvedImageId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Records.GetValueOrDefault(approvedImageId));
+    public Task<IReadOnlyList<ApprovedUtilityImageRecord>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<ApprovedUtilityImageRecord>>(Records.Values.ToArray());
+    }
+
+    public Task<ApprovedUtilityImageRecord?> GetByIdAsync(string approvedImageId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Records.GetValueOrDefault(approvedImageId));
+    }
 
     public Task<ApprovedUtilityImageRecord> UpsertSeedAsync(ApprovedUtilityImageRecord record, CancellationToken cancellationToken = default)
     {
@@ -199,13 +204,15 @@ internal sealed class InMemoryApprovedUtilityImageStore : IApprovedUtilityImageS
             return Task.FromResult<ApprovedUtilityImageRecord?>(null);
         }
 
-        var updated = record with { Enabled = enabled };
+        var updated = record with
+        {
+            Enabled = enabled
+        };
         Records[approvedImageId] = updated;
         return Task.FromResult<ApprovedUtilityImageRecord?>(updated);
     }
 
-    public Task<ApprovedUtilityImageRecord?> TouchUsedAsync(
-        string approvedImageId,
+    public Task<ApprovedUtilityImageRecord?> TouchUsedAsync(string approvedImageId,
         long lastUsedAtUtc,
         long? lastSuccessfulRunAtUtc = null,
         CancellationToken cancellationToken = default)

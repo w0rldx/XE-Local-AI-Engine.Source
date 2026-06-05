@@ -4,8 +4,10 @@ using XE_Local_AI_Engine.Client.Services.Insights;
 
 /// <summary>
 ///     The analysis staging analysis agent (the AI surface). Reads the per-agent feedback aggregate (feedback insights) and
-///     proposes structured playbook actions, each forced to cite which feedback drove it (<see
-///     cref="ProposedPlaybookAction.SourceFeedbackIds" />) and how confident it is. The agent only PROPOSES — it
+///     proposes structured playbook actions, each forced to cite which feedback drove it (
+///     <see
+///         cref="ProposedPlaybookAction.SourceFeedbackIds" />
+///     ) and how confident it is. The agent only PROPOSES — it
 ///     persists nothing and decides nothing; the service validates the evidence and writes <c>Suggested</c> actions for
 ///     human review. Implementations run a node-local model (never the cloud-capable shared chat client) so feedback
 ///     comments never leave the node (Playbook doc §7 privacy). The seam keeps the model off the hot send path and lets

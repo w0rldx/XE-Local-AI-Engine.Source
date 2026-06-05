@@ -63,41 +63,56 @@ public sealed record OrchestrationUpdate
     /// <summary>The tool awaiting approval for <see cref="OrchestrationUpdateKind.ApprovalRequest" />. Null otherwise.</summary>
     public string? ToolName { get; init; }
 
-    public static OrchestrationUpdate TextFragment(string text, string? participantKey, string? participantName) => new()
+    public static OrchestrationUpdate TextFragment(string text, string? participantKey, string? participantName)
     {
-        Kind = OrchestrationUpdateKind.TextDelta,
-        Text = text,
-        ParticipantKey = participantKey,
-        ParticipantName = participantName
-    };
+        return new OrchestrationUpdate
+        {
+            Kind = OrchestrationUpdateKind.TextDelta,
+            Text = text,
+            ParticipantKey = participantKey,
+            ParticipantName = participantName
+        };
+    }
 
-    public static OrchestrationUpdate ReasoningFragment(string text, string? participantKey, string? participantName) => new()
+    public static OrchestrationUpdate ReasoningFragment(string text, string? participantKey, string? participantName)
     {
-        Kind = OrchestrationUpdateKind.ReasoningDelta,
-        Text = text,
-        ParticipantKey = participantKey,
-        ParticipantName = participantName
-    };
+        return new OrchestrationUpdate
+        {
+            Kind = OrchestrationUpdateKind.ReasoningDelta,
+            Text = text,
+            ParticipantKey = participantKey,
+            ParticipantName = participantName
+        };
+    }
 
-    public static OrchestrationUpdate Approval(string requestId, string toolName, string? participantKey, string? participantName) => new()
+    public static OrchestrationUpdate Approval(string requestId, string toolName, string? participantKey, string? participantName)
     {
-        Kind = OrchestrationUpdateKind.ApprovalRequest,
-        RequestId = requestId,
-        ToolName = toolName,
-        ParticipantKey = participantKey,
-        ParticipantName = participantName
-    };
+        return new OrchestrationUpdate
+        {
+            Kind = OrchestrationUpdateKind.ApprovalRequest,
+            RequestId = requestId,
+            ToolName = toolName,
+            ParticipantKey = participantKey,
+            ParticipantName = participantName
+        };
+    }
 
-    public static OrchestrationUpdate Terminal() => new()
+    public static OrchestrationUpdate Terminal()
     {
-        Kind = OrchestrationUpdateKind.TerminalOutput
-    };
+        return new OrchestrationUpdate
+        {
+            Kind = OrchestrationUpdateKind.TerminalOutput
+        };
+    }
 
-    public static OrchestrationUpdate Failed(string message, string? participantKey, string? participantName) => new()
+    public static OrchestrationUpdate Failed(string message, string? participantKey, string? participantName)
     {
-        Kind = OrchestrationUpdateKind.Failure,
-        Text = message,
-        ParticipantKey = participantKey,
-        ParticipantName = participantName
-    };
+        return new OrchestrationUpdate
+        {
+            Kind = OrchestrationUpdateKind.Failure,
+            Text = message,
+            ParticipantKey = participantKey,
+            ParticipantName = participantName
+        };
+    }
 }

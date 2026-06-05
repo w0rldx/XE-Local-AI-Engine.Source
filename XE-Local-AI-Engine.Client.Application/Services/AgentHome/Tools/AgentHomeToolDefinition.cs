@@ -15,38 +15,38 @@ internal static class AgentHomeToolDefinition
 
     /// <summary>The AgentHome tool parameter schema. Kept byte-for-byte aligned with the server seed.</summary>
     public const string ParameterSchema = """
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["goal", "selectedFolderIds", "allowedActions"],
-          "properties": {
-            "goal": { "type": "string", "minLength": 1, "maxLength": 4000 },
-            "selectedFolderIds": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 8,
-              "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$|^[0-9a-fA-F-]{36}$" }
-            },
-            "runtimeProfile": {
-              "type": "string",
-              "enum": ["dotnet-agent-home"],
-              "default": "dotnet-agent-home"
-            },
-            "persona": {
-              "type": "string",
-              "enum": ["primary/main"],
-              "default": "primary/main"
-            },
-            "allowedActions": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": {
-                "type": "string",
-                "enum": ["read_workspace", "write_workspace", "run_commands", "export_patch", "propose_memory"]
-              }
-            }
-          }
-        }
-        """;
+                                          {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": ["goal", "selectedFolderIds", "allowedActions"],
+                                            "properties": {
+                                              "goal": { "type": "string", "minLength": 1, "maxLength": 4000 },
+                                              "selectedFolderIds": {
+                                                "type": "array",
+                                                "minItems": 1,
+                                                "maxItems": 8,
+                                                "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$|^[0-9a-fA-F-]{36}$" }
+                                              },
+                                              "runtimeProfile": {
+                                                "type": "string",
+                                                "enum": ["dotnet-agent-home"],
+                                                "default": "dotnet-agent-home"
+                                              },
+                                              "persona": {
+                                                "type": "string",
+                                                "enum": ["primary/main"],
+                                                "default": "primary/main"
+                                              },
+                                              "allowedActions": {
+                                                "type": "array",
+                                                "minItems": 1,
+                                                "uniqueItems": true,
+                                                "items": {
+                                                  "type": "string",
+                                                  "enum": ["read_workspace", "write_workspace", "run_commands", "export_patch", "propose_memory"]
+                                                }
+                                              }
+                                            }
+                                          }
+                                          """;
 }

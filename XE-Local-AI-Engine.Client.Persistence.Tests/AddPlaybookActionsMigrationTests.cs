@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -52,8 +53,20 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         // AddPlaybookActionEnabledAtUtc (P5 enabled_at_utc) — hence they are part of the expected set here.
         AssertEx.True(actionColumns.SetEquals(new[]
         {
-            "id", "agent_definition_id", "state", "source", "trigger_condition", "behavior", "scope",
-            "priority", "version", "created_at_utc", "updated_at_utc", "source_feedback_ids", "confidence", "eval_result",
+            "id",
+            "agent_definition_id",
+            "state",
+            "source",
+            "trigger_condition",
+            "behavior",
+            "scope",
+            "priority",
+            "version",
+            "created_at_utc",
+            "updated_at_utc",
+            "source_feedback_ids",
+            "confidence",
+            "eval_result",
             "enabled_at_utc"
         }), "playbook_actions should expose the mapped columns.");
 
@@ -130,7 +143,12 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
                               """;
         command.Parameters.AddWithValue("$id", agentId.ToString());
         command.Parameters.AddWithValue("$name", "Historical");
-        command.Parameters.AddWithValue("$instructions", new byte[] { 1, 2, 3 });
+        command.Parameters.AddWithValue("$instructions", new byte[]
+        {
+            1,
+            2,
+            3
+        });
         command.Parameters.AddWithValue("$kind", 0);
         command.Parameters.AddWithValue("$allowed", "[]");
         command.Parameters.AddWithValue("$approvals", "{}");
@@ -153,7 +171,12 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         command.Parameters.AddWithValue("$agent", agentId.ToString());
         command.Parameters.AddWithValue("$state", 1);
         command.Parameters.AddWithValue("$source", 0);
-        command.Parameters.AddWithValue("$behavior", new byte[] { 9, 8, 7 });
+        command.Parameters.AddWithValue("$behavior", new byte[]
+        {
+            9,
+            8,
+            7
+        });
         command.Parameters.AddWithValue("$priority", 0);
         command.Parameters.AddWithValue("$version", 1);
         command.Parameters.AddWithValue("$created", 1234L);
@@ -228,7 +251,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         command.CommandText = "SELECT playbook_enabled FROM agent_definitions WHERE id = $id;";
         command.Parameters.AddWithValue("$id", agentId.ToString());
         var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return value is not null && Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture) == 0L;
+        return value is not null && Convert.ToInt64(value, CultureInfo.InvariantCulture) == 0L;
     }
 
     private string GetDatabasePath(string fileName)

@@ -39,8 +39,8 @@ internal static class PlaybookRetrievalSelector
         // The ranker orders by relevance; re-impose the store's Priority-then-CreatedAtUtc order so the composer's
         // deterministic contract holds regardless of the ranker's internal ordering.
         return selected
-            .OrderBy(static action => action.Priority)
-            .ThenBy(static action => action.CreatedAtUtc)
-            .ToList();
+               .OrderBy(static action => action.Priority)
+               .ThenBy(static action => action.CreatedAtUtc)
+               .ToList();
     }
 }

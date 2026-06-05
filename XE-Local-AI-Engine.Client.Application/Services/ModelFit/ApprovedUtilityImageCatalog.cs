@@ -31,8 +31,7 @@ public static class ApprovedUtilityImageCatalog
     /// </summary>
     public static IReadOnlyList<ApprovedUtilityImageRecord> Descriptors { get; } =
     [
-        new ApprovedUtilityImageRecord(
-            ApprovedImageId: LlmfitRecommenderImageId,
+        new(ApprovedImageId: LlmfitRecommenderImageId,
             DisplayName: "llmfit recommender 0.9.30",
             Description: null,
             Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,

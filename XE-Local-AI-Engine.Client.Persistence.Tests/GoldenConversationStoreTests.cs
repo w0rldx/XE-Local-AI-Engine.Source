@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -81,7 +80,11 @@ public sealed class GoldenConversationStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var agentId = await SeedAgentAsync(context);
             var store = new GoldenConversationStore(context, TimeProvider.System);
-            var added = await store.AddAsync(CreateInput(agentId) with { Assertion = null, Rubric = null });
+            var added = await store.AddAsync(CreateInput(agentId) with
+            {
+                Assertion = null,
+                Rubric = null
+            });
             goldenId = added.Id;
         }
 
@@ -109,13 +112,26 @@ public sealed class GoldenConversationStoreTests : IDisposable
         var store = new GoldenConversationStore(context, clock);
 
         clock.Advance(1);
-        var firstEnabled = await store.AddAsync(CreateInput(agentId) with { Title = "first" });
+        var firstEnabled = await store.AddAsync(CreateInput(agentId) with
+        {
+            Title = "first"
+        });
         clock.Advance(1);
-        var secondEnabled = await store.AddAsync(CreateInput(agentId) with { Title = "second" });
+        var secondEnabled = await store.AddAsync(CreateInput(agentId) with
+        {
+            Title = "second"
+        });
         // A disabled case on the same agent must be excluded.
-        _ = await store.AddAsync(CreateInput(agentId) with { Title = "parked", Enabled = false });
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Title = "parked",
+            Enabled = false
+        });
         // An enabled case on a different agent must be excluded.
-        _ = await store.AddAsync(CreateInput(otherAgentId) with { Title = "other-agent" });
+        _ = await store.AddAsync(CreateInput(otherAgentId) with
+        {
+            Title = "other-agent"
+        });
 
         var enabled = await store.ListEnabledByAgentAsync(agentId);
 
@@ -140,7 +156,10 @@ public sealed class GoldenConversationStoreTests : IDisposable
         var store = new GoldenConversationStore(context, TimeProvider.System);
 
         _ = await store.AddAsync(CreateInput(agentId));
-        _ = await store.AddAsync(CreateInput(agentId) with { Enabled = false });
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Enabled = false
+        });
         _ = await store.AddAsync(CreateInput(otherAgentId));
 
         var owned = await store.ListByAgentAsync(agentId);
@@ -182,7 +201,12 @@ public sealed class GoldenConversationStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var agentId = await SeedAgentAsync(context);
             var store = new GoldenConversationStore(context, TimeProvider.System);
-            _ = await store.AddAsync(CreateInput(agentId) with { InputTurns = input, Assertion = assertion, Rubric = rubric });
+            _ = await store.AddAsync(CreateInput(agentId) with
+            {
+                InputTurns = input,
+                Assertion = assertion,
+                Rubric = rubric
+            });
         }
 
         var fileBytes = await File.ReadAllBytesAsync(databasePath);
@@ -211,8 +235,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
             await writeContext.Database.EnsureCreatedAsync();
             agentId = await SeedAgentAsync(writeContext);
             var store = new GoldenConversationStore(writeContext, TimeProvider.System);
-            var added = await store.AddAsync(new GoldenConversationInput(
-                agentId,
+            var added = await store.AddAsync(new GoldenConversationInput(agentId,
                 Title: "Harvested case",
                 InputTurns,
                 Assertion: null,
@@ -270,7 +293,10 @@ public sealed class GoldenConversationStoreTests : IDisposable
         var agentId = await SeedAgentAsync(context);
         var store = new GoldenConversationStore(context, clock);
 
-        var added = await store.AddAsync(CreateInput(agentId) with { Enabled = false });
+        var added = await store.AddAsync(CreateInput(agentId) with
+        {
+            Enabled = false
+        });
         AssertEx.False(added.Enabled, "The seeded case starts disabled.");
 
         clock.Advance(500);
@@ -301,7 +327,10 @@ public sealed class GoldenConversationStoreTests : IDisposable
 
         // A Manual row (null source) must be excluded; two Harvested rows for the agent must be returned; a Harvested
         // row for a DIFFERENT agent must be excluded.
-        _ = await store.AddAsync(CreateInput(agentId) with { Title = "manual" });
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Title = "manual"
+        });
         _ = await store.AddAsync(CreateInput(agentId) with
         {
             Title = "harvested-1",
@@ -358,8 +387,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            "Builder",
+        var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
             Description: null,
             Instructions,
             ModelProfile: null,
@@ -373,8 +401,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
 
     private static GoldenConversationInput CreateInput(Guid agentDefinitionId)
     {
-        return new GoldenConversationInput(
-            agentDefinitionId,
+        return new GoldenConversationInput(agentDefinitionId,
             Title: "Summary case",
             InputTurns,
             Assertion,

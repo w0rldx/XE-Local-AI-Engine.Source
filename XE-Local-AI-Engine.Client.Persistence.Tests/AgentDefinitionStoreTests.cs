@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -70,7 +71,10 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
             var store = new AgentDefinitionStore(context, TimeProvider.System);
-            var added = await store.AddAsync(CreateInput() with { Description = null });
+            var added = await store.AddAsync(CreateInput() with
+            {
+                Description = null
+            });
             definitionId = added.Id;
         }
 
@@ -99,8 +103,16 @@ public sealed class AgentDefinitionStoreTests : IDisposable
                 Kind = AgentDefinitionKind.Orchestrator,
                 ReasoningEffort = "high",
                 ModelProfile = "qwen3:8b",
-                AllowedToolNames = new[] { "run_in_agent_home", "export_patch" },
-                ToolApprovals = new Dictionary<string, bool> { ["run_in_agent_home"] = true, ["export_patch"] = false },
+                AllowedToolNames = new[]
+                {
+                    "run_in_agent_home",
+                    "export_patch"
+                },
+                ToolApprovals = new Dictionary<string, bool>
+                {
+                    ["run_in_agent_home"] = true,
+                    ["export_patch"] = false
+                },
                 OrchestrationTopologyJson = "{\"nodes\":[]}"
             };
             var added = await store.AddAsync(input);
@@ -134,7 +146,11 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
             var store = new AgentDefinitionStore(context, TimeProvider.System);
-            _ = await store.AddAsync(CreateInput() with { Instructions = instructions, Description = description });
+            _ = await store.AddAsync(CreateInput() with
+            {
+                Instructions = instructions,
+                Description = description
+            });
         }
 
         var fileBytes = await File.ReadAllBytesAsync(databasePath);
@@ -160,8 +176,10 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         AssertEx.Equal(1, added.Version);
 
         clock.Advance(50);
-        var updated = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput() with { Instructions = "A different system prompt." }),
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
+            {
+                Instructions = "A different system prompt."
+            }),
             "Update should find the definition.");
 
         AssertEx.Equal(2, updated.Version);
@@ -183,8 +201,11 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         var added = await store.AddAsync(CreateInput());
 
         clock.Advance(25);
-        var updated = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput() with { Name = "Renamed", Description = "New description only." }),
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
+            {
+                Name = "Renamed",
+                Description = "New description only."
+            }),
             "Update should find the definition.");
 
         AssertEx.Equal("Renamed", updated.Name);
@@ -205,21 +226,35 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new AgentDefinitionStore(context, clock);
 
-        var allowed = new[] { "alpha", "bravo", "charlie" };
+        var allowed = new[]
+        {
+            "alpha",
+            "bravo",
+            "charlie"
+        };
         var added = await store.AddAsync(CreateInput() with
         {
             AllowedToolNames = allowed,
-            ToolApprovals = new Dictionary<string, bool> { ["alpha"] = true, ["bravo"] = false, ["charlie"] = true }
+            ToolApprovals = new Dictionary<string, bool>
+            {
+                ["alpha"] = true,
+                ["bravo"] = false,
+                ["charlie"] = true
+            }
         });
         AssertEx.Equal(1, added.Version);
 
         // Same approvals, different key insertion order — must be treated as no config change.
         clock.Advance(10);
-        var reordered = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput() with
+        var reordered = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
             {
                 AllowedToolNames = allowed,
-                ToolApprovals = new Dictionary<string, bool> { ["charlie"] = true, ["alpha"] = true, ["bravo"] = false }
+                ToolApprovals = new Dictionary<string, bool>
+                {
+                    ["charlie"] = true,
+                    ["alpha"] = true,
+                    ["bravo"] = false
+                }
             }),
             "Update should find the definition.");
 
@@ -228,11 +263,15 @@ public sealed class AgentDefinitionStoreTests : IDisposable
 
         // Flipping an actual approval value is a real config change and must bump the version.
         clock.Advance(10);
-        var flipped = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput() with
+        var flipped = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
             {
                 AllowedToolNames = allowed,
-                ToolApprovals = new Dictionary<string, bool> { ["alpha"] = false, ["bravo"] = false, ["charlie"] = true }
+                ToolApprovals = new Dictionary<string, bool>
+                {
+                    ["alpha"] = false,
+                    ["bravo"] = false,
+                    ["charlie"] = true
+                }
             }),
             "Update should find the definition.");
 
@@ -286,8 +325,14 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var store = new AgentDefinitionStore(context, TimeProvider.System);
             // A manual row plus the seeded row: the projection must select the seeded row by slug, never the manual one.
-            _ = await store.AddAsync(CreateInput() with { Name = "Manual" });
-            var seeded = await store.AddSeededAsync(CreateInput() with { Name = "Default Assistant" }, seedSlug);
+            _ = await store.AddAsync(CreateInput() with
+            {
+                Name = "Manual"
+            });
+            var seeded = await store.AddSeededAsync(CreateInput() with
+            {
+                Name = "Default Assistant"
+            }, seedSlug);
             seededId = seeded.Id;
         }
 
@@ -326,15 +371,13 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new AgentDefinitionStore(readContext, TimeProvider.System);
 
-        _ = AssertEx.Throws<CryptographicException>(
-            () => readStore.GetByIdAsync(definitionId).GetAwaiter().GetResult(),
+        _ = AssertEx.Throws<CryptographicException>(() => readStore.GetByIdAsync(definitionId).GetAwaiter().GetResult(),
             "Tampered instructions ciphertext should fail authenticated decryption.");
     }
 
     private static AgentDefinitionInput CreateInput()
     {
-        return new AgentDefinitionInput(
-            "Builder",
+        return new AgentDefinitionInput("Builder",
             Description,
             Instructions,
             ModelProfile: null,
@@ -348,7 +391,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     private static async Task TamperInstructionsAsync(string databasePath)
     {
         // The test database holds exactly one definition, so the corruption targets that single row.
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
 
         byte[] blob;

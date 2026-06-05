@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 internal sealed class McpClientFactory : IMcpClientFactory
 {
-    private readonly McpOptions _options;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly McpOptions _options;
 
     public McpClientFactory(IOptions<McpOptions> options, ILoggerFactory loggerFactory)
     {

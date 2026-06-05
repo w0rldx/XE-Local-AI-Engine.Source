@@ -27,79 +27,6 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    public string ProviderName => Name;
-
-    public SandboxProviderCapabilities Capabilities =>
-        SandboxProviderCapabilities.SupportsCopyInto
-        | SandboxProviderCapabilities.SupportsCopyOut
-        | SandboxProviderCapabilities.SupportsCommandCancellation
-        | SandboxProviderCapabilities.SupportsAttach
-        | SandboxProviderCapabilities.SupportsKill;
-
-    // ---- test/seed seams (the fake is a production-resident, config-selected double) ----
-
-    /// <summary>Seed a host file so a later <see cref="CopyIntoAsync" /> has content to copy.</summary>
-    public void WriteHostFile(string hostPath, string content)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
-        ArgumentNullException.ThrowIfNull(content);
-
-        lock (_sync)
-        {
-            _hostFiles[hostPath] = content;
-        }
-    }
-
-    /// <summary>Read a host file previously written or copied out; returns <see langword="null" /> when absent.</summary>
-    public string? TryReadHostFile(string hostPath)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
-
-        lock (_sync)
-        {
-            return _hostFiles.TryGetValue(hostPath, out var content) ? content : null;
-        }
-    }
-
-    /// <summary>Register a deterministic result for a command line (<c>executable</c> plus space-joined arguments).</summary>
-    public void RegisterCommand(string commandLine, int exitCode, string standardOutput = "", string standardError = "")
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
-        ArgumentNullException.ThrowIfNull(standardOutput);
-        ArgumentNullException.ThrowIfNull(standardError);
-
-        lock (_sync)
-        {
-            _scripts[commandLine] = new ScriptedCommand(false, exitCode, standardOutput, standardError);
-        }
-    }
-
-    /// <summary>Register a command that blocks until it is cancelled or the sandbox is killed (for cancel/kill tests).</summary>
-    public void RegisterBlockingCommand(string commandLine)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
-
-        lock (_sync)
-        {
-            _scripts[commandLine] = new ScriptedCommand(true, 0, string.Empty, string.Empty);
-        }
-    }
-
-    /// <summary>
-    ///     The in-sandbox destination paths that currently hold copied content, sorted ordinally. Lets a workspace-copy
-    ///     test (workspace copy) assert exactly which files survived the exclusion rules.
-    /// </summary>
-    public IReadOnlyList<string> SnapshotSandboxPaths(SandboxHandle handle)
-    {
-        ArgumentNullException.ThrowIfNull(handle);
-
-        lock (_sync)
-        {
-            var state = GetAliveState(handle);
-            return state.SandboxFiles.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
-        }
-    }
-
     /// <summary>
     ///     Every command passed to <see cref="ExecuteAsync" />, in order. Lets a test assert that the workspace git
     ///     baseline and patch export issued the expected command sequence.
@@ -114,6 +41,15 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
             }
         }
     }
+
+    public string ProviderName => Name;
+
+    public SandboxProviderCapabilities Capabilities =>
+        SandboxProviderCapabilities.SupportsCopyInto
+        | SandboxProviderCapabilities.SupportsCopyOut
+        | SandboxProviderCapabilities.SupportsCommandCancellation
+        | SandboxProviderCapabilities.SupportsAttach
+        | SandboxProviderCapabilities.SupportsKill;
 
     // ---- ISandboxRuntimeProvider ----
 
@@ -191,8 +127,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
             return BuildResult(request, scripted, true, startedAt);
         }
 
-        using var registration = cancellationToken.Register(
-            static state => ((InFlightExecution)state!).Completion.TrySetCanceled(),
+        using var registration = cancellationToken.Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(),
             inFlight);
 
         bool completedNormally;
@@ -221,23 +156,6 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         }
 
         return Task.CompletedTask;
-    }
-
-    private string ResolveCopyContent(string sourcePath)
-    {
-        // Prefer explicitly seeded content (unit tests). Otherwise fall back to the real file on disk so a workspace
-        // copy test (workspace copy) can walk a real temp source tree without pre-seeding every surviving file.
-        if (_hostFiles.TryGetValue(sourcePath, out var seeded))
-        {
-            return seeded;
-        }
-
-        if (File.Exists(sourcePath))
-        {
-            return File.ReadAllText(sourcePath);
-        }
-
-        throw new FileNotFoundException($"Host source path '{sourcePath}' has no seeded content and does not exist on disk.", sourcePath);
     }
 
     public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
@@ -311,6 +229,87 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         }
 
         return Task.CompletedTask;
+    }
+
+    // ---- test/seed seams (the fake is a production-resident, config-selected double) ----
+
+    /// <summary>Seed a host file so a later <see cref="CopyIntoAsync" /> has content to copy.</summary>
+    public void WriteHostFile(string hostPath, string content)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
+        ArgumentNullException.ThrowIfNull(content);
+
+        lock (_sync)
+        {
+            _hostFiles[hostPath] = content;
+        }
+    }
+
+    /// <summary>Read a host file previously written or copied out; returns <see langword="null" /> when absent.</summary>
+    public string? TryReadHostFile(string hostPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
+
+        lock (_sync)
+        {
+            return _hostFiles.TryGetValue(hostPath, out var content) ? content : null;
+        }
+    }
+
+    /// <summary>Register a deterministic result for a command line (<c>executable</c> plus space-joined arguments).</summary>
+    public void RegisterCommand(string commandLine, int exitCode, string standardOutput = "", string standardError = "")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+        ArgumentNullException.ThrowIfNull(standardOutput);
+        ArgumentNullException.ThrowIfNull(standardError);
+
+        lock (_sync)
+        {
+            _scripts[commandLine] = new ScriptedCommand(false, exitCode, standardOutput, standardError);
+        }
+    }
+
+    /// <summary>Register a command that blocks until it is cancelled or the sandbox is killed (for cancel/kill tests).</summary>
+    public void RegisterBlockingCommand(string commandLine)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+
+        lock (_sync)
+        {
+            _scripts[commandLine] = new ScriptedCommand(true, 0, string.Empty, string.Empty);
+        }
+    }
+
+    /// <summary>
+    ///     The in-sandbox destination paths that currently hold copied content, sorted ordinally. Lets a workspace-copy
+    ///     test (workspace copy) assert exactly which files survived the exclusion rules.
+    /// </summary>
+    public IReadOnlyList<string> SnapshotSandboxPaths(SandboxHandle handle)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+
+        lock (_sync)
+        {
+            var state = GetAliveState(handle);
+            return state.SandboxFiles.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
+        }
+    }
+
+    private string ResolveCopyContent(string sourcePath)
+    {
+        // Prefer explicitly seeded content (unit tests). Otherwise fall back to the real file on disk so a workspace
+        // copy test (workspace copy) can walk a real temp source tree without pre-seeding every surviving file.
+        if (_hostFiles.TryGetValue(sourcePath, out var seeded))
+        {
+            return seeded;
+        }
+
+        if (File.Exists(sourcePath))
+        {
+            return File.ReadAllText(sourcePath);
+        }
+
+        throw new FileNotFoundException($"Host source path '{sourcePath}' has no seeded content and does not exist on disk.", sourcePath);
     }
 
     private SandboxState? FindAliveByKey(SandboxAttachKey attachKey)

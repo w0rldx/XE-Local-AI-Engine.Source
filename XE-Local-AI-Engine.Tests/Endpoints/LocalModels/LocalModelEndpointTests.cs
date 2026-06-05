@@ -293,8 +293,7 @@ public sealed class LocalModelEndpointTests
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
-        using var request = CreateRequest(
-            context.Factory,
+        using var request = CreateRequest(context.Factory,
             HttpMethod.Delete,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -304,7 +303,7 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
         await modelService.Received(1)
-            .DeleteModelAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+                          .DeleteModelAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -344,12 +343,11 @@ public sealed class LocalModelEndpointTests
     {
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: 4096, Capabilities: []));
+                    .Returns(new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: 4096, Capabilities: []));
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
-        using var request = CreateRequest(
-            context.Factory,
+        using var request = CreateRequest(context.Factory,
             HttpMethod.Get,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -358,7 +356,7 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
         await modelService.Received(1)
-            .ShowModelDetailsAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+                          .ShowModelDetailsAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -366,17 +364,15 @@ public sealed class LocalModelEndpointTests
     {
         var classificationService = Substitute.For<IModelClassificationService>();
         classificationService.SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind>(), Arg.Any<CancellationToken>())
-            .Returns(new ModelClassificationResult(
-                "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
-                ModelKind.Chat,
-                ModelKind.Unknown,
-                Capabilities: [],
-                IsOverridden: true));
+                             .Returns(new ModelClassificationResult("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                                 ModelKind.Chat,
+                                 ModelKind.Unknown,
+                                 Capabilities: [],
+                                 IsOverridden: true));
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 
-        using var request = CreateRequest(
-            context.Factory,
+        using var request = CreateRequest(context.Factory,
             HttpMethod.Put,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
         request.Content = JsonContent.Create(new SetModelKindRequest
@@ -387,7 +383,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await classificationService.Received(1)
-            .SetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", ModelKind.Chat, Arg.Any<CancellationToken>());
+                                   .SetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", ModelKind.Chat, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -395,24 +391,22 @@ public sealed class LocalModelEndpointTests
     {
         var classificationService = Substitute.For<IModelClassificationService>();
         classificationService.ResetOverrideAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new ModelClassificationResult(
-                "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
-                ModelKind.Unknown,
-                ModelKind.Unknown,
-                Capabilities: [],
-                IsOverridden: false));
+                             .Returns(new ModelClassificationResult("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                                 ModelKind.Unknown,
+                                 ModelKind.Unknown,
+                                 Capabilities: [],
+                                 IsOverridden: false));
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 
-        using var request = CreateRequest(
-            context.Factory,
+        using var request = CreateRequest(context.Factory,
             HttpMethod.Delete,
             "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await classificationService.Received(1)
-            .ResetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+                                   .ResetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
     }
 
     private static async Task<LocalModelEndpointTestContext> CreateContextAsync(params string[] models)

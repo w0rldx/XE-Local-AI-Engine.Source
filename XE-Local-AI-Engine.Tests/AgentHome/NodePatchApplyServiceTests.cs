@@ -56,14 +56,16 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var harness = NewHarness();
         var hostRoot = harness.AddFolder("repo-01");
 
-        var patch = await GenerateGPatchAsync(
-            "repo-01",
+        var patch = await GenerateGPatchAsync("repo-01",
             hostRoot,
             ("src/App.cs", "line1\nline2\n", "line1\nline2\nline3\n"),
             ("old/Gone.cs", "remove me\n", null));
         await WritePatchAsync(harness, "run-apply", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-apply" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-apply"
+        });
 
         AssertEx.True(result.Applied, $"a clean patch applies. rejections: {string.Join(';', result.Rejections)}");
         AssertEx.Empty(result.Rejections);
@@ -83,7 +85,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var before = await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs"));
         await WritePatchAsync(harness, "run-preview", patch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-preview" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-preview"
+        });
 
         AssertEx.True(preview.CanApply, $"the patch checks clean. rejections: {string.Join(';', preview.Rejections)}");
         AssertEx.Equal(before, await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")), "preview must not mutate the host");
@@ -110,8 +115,14 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "+pwned\n";
         await WritePatchAsync(harness, "run-traversal", patch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-traversal" });
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-traversal" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-traversal"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-traversal"
+        });
 
         AssertEx.False(preview.CanApply, "a traversal target is rejected");
         AssertEx.NotEmpty(preview.Rejections);
@@ -130,7 +141,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("a.txt", "x\n", "x\ny\n"));
         await WritePatchAsync(harness, "run-root", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-root" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-root"
+        });
 
         AssertEx.True(result.Applied, $"rejections: {string.Join(';', result.Rejections)}");
         AssertEx.Equal(siblingSnapshot, Directory.GetFileSystemEntries(sibling).Length, "the unrelated sibling dir is untouched");
@@ -147,7 +161,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateGPatchAsync("repo-99", throwaway, ("a.txt", "orig\n", "orig\nchanged\n"));
         await WritePatchAsync(harness, "run-unknown", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-unknown" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-unknown"
+        });
 
         AssertEx.False(result.Applied);
         AssertEx.Contains(result.Rejections, reason => reason.Contains("repo-99", StringComparison.Ordinal) && reason.Contains("not a registered", StringComparison.Ordinal));
@@ -167,7 +184,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "rename to repo-02/y.txt\n";
         await WritePatchAsync(harness, "run-cross", patch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-cross" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-cross"
+        });
 
         AssertEx.False(preview.CanApply);
         AssertEx.Contains(preview.Rejections, reason => reason.Contains("across selected folders", StringComparison.Ordinal));
@@ -180,14 +200,16 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var root01 = harness.AddFolder("repo-01");
         var root02 = harness.AddFolder("repo-02");
 
-        var patch = await GenerateMultiAliasPatchAsync(
-            root01,
+        var patch = await GenerateMultiAliasPatchAsync(root01,
             root02,
             ("repo-01", "one.txt", "one\n", "one\nupdated\n"),
             ("repo-02", "two.txt", "two\n", "two\nupdated\n"));
         await WritePatchAsync(harness, "run-multi", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-multi" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-multi"
+        });
 
         AssertEx.True(result.Applied, $"rejections: {string.Join(';', result.Rejections)}");
         AssertEx.Equal("one\nupdated\n", await File.ReadAllTextAsync(Path.Combine(root01, "one.txt")));
@@ -205,9 +227,15 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateBinaryPatchAsync("repo-01", "blob.bin", [0x00, 0x01, 0x02, 0x03], [0x00, 0x01, 0x02, 0x03, 0xFF, 0x10]);
         await WritePatchAsync(rejectingHarness, "run-binary", patch);
 
-        var rejected = await rejectingHarness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-binary" });
+        var rejected = await rejectingHarness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-binary"
+        });
         AssertEx.False(rejected.Applied, "a binary block is rejected by default");
-        var preview = await rejectingHarness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-binary" });
+        var preview = await rejectingHarness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-binary"
+        });
         AssertEx.True(preview.ContainsBinary, "the binary block is detected");
         AssertEx.Contains(preview.Rejections, reason => reason.Contains("binary", StringComparison.Ordinal));
 
@@ -217,7 +245,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         await SeedHostBinaryAsync(allowedRoot, "blob.bin", [0x00, 0x01, 0x02, 0x03]);
         await WritePatchAsync(allowed, "run-binary", patch);
 
-        var allowedResult = await allowed.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-binary" });
+        var allowedResult = await allowed.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-binary"
+        });
         AssertEx.True(allowedResult.Applied, $"a binary patch applies when allowed. rejections: {string.Join(';', allowedResult.Rejections)}");
     }
 
@@ -234,8 +265,14 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var before = await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs"));
         await WritePatchAsync(harness, "run-conflict", patch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-conflict" });
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-conflict" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-conflict"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-conflict"
+        });
 
         AssertEx.False(preview.CanApply, "a conflicting context fails the check");
         AssertEx.NotEmpty(preview.Rejections);
@@ -250,7 +287,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         harness.AddFolder("repo-01");
 
         // No changes.patch at all.
-        var missing = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-missing" });
+        var missing = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-missing"
+        });
         AssertEx.False(missing.CanApply);
 
         // changed-files.json present but no changes.patch — must still reject (never gate on changed-files.json).
@@ -258,7 +298,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         Directory.CreateDirectory(patchesDir);
         await File.WriteAllTextAsync(Path.Combine(patchesDir, "changed-files.json"), "[{\"alias\":\"repo-01\"}]");
 
-        var metaOnly = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-meta-only" });
+        var metaOnly = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-meta-only"
+        });
         AssertEx.False(metaOnly.CanApply, "a present changed-files.json must not enable apply when changes.patch is absent");
 
         // Empty changes.patch — rejected.
@@ -266,7 +309,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         Directory.CreateDirectory(emptyDir);
         await File.WriteAllTextAsync(Path.Combine(emptyDir, "changes.patch"), string.Empty);
 
-        var empty = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-empty" });
+        var empty = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-empty"
+        });
         AssertEx.False(empty.CanApply, "an empty patch is rejected");
     }
 
@@ -276,9 +322,19 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var harness = NewHarness();
         harness.AddFolder("repo-01");
 
-        foreach (var badRunId in new[] { "../escape", "run/../../etc", "a/b", "..", "with\\back" })
+        foreach (var badRunId in new[]
+                 {
+                     "../escape",
+                     "run/../../etc",
+                     "a/b",
+                     "..",
+                     "with\\back"
+                 })
         {
-            var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = badRunId });
+            var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+            {
+                RunId = badRunId
+            });
             AssertEx.False(preview.CanApply, $"an injection run id '{badRunId}' is rejected");
         }
     }
@@ -295,7 +351,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("src/App.cs", "alpha\n", "alpha\nbravo\n"));
         await WritePatchAsync(harness, "run-log", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-log" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-log"
+        });
         AssertEx.True(result.Applied, $"rejections: {string.Join(';', result.Rejections)}");
 
         var eventsPath = Path.Combine(harness.AgentHomeRoot, "runs", "run-log", "logs", "events.jsonl");
@@ -318,11 +377,13 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         await SeedHostAsync(hostRoot, ("src/App.cs", "different\n"));
         await WritePatchAsync(harness, "run-redact", patch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-redact" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-redact"
+        });
 
         AssertEx.False(preview.CanApply);
-        AssertEx.True(
-            preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
+        AssertEx.True(preview.Rejections.All(reason => !reason.Contains(hostRoot, StringComparison.Ordinal)),
             "no rejection string may contain the host root path");
     }
 
@@ -345,7 +406,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "+new\n";
         await WritePatchAsync(harness, "run-mismatch", patch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-mismatch" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-mismatch"
+        });
 
         AssertEx.False(preview.CanApply, "a header/body path mismatch is rejected by our guard, not git");
         AssertEx.NotEmpty(preview.Rejections);
@@ -377,7 +441,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateGPatchAsync("repo-01", throwaway, ("subdir/target.txt", "before\n", "after\n"));
         await WritePatchAsync(harness, "run-symlink", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-symlink" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-symlink"
+        });
 
         AssertEx.False(result.Applied, "a symlink that escapes the root is rejected");
         AssertEx.Contains(result.Rejections, reason => reason.Contains("symlink", StringComparison.Ordinal));
@@ -405,10 +472,12 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
-        var service = new NodePatchApplyService(
-            resolver,
+        var service = new NodePatchApplyService(resolver,
             options,
-            new TestHostEnvironment { ContentRootPath = agentHomeStateRoot },
+            new TestHostEnvironment
+            {
+                ContentRootPath = agentHomeStateRoot
+            },
             new StubIdentityProvider(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -417,7 +486,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         Directory.CreateDirectory(patchesDir);
         await File.WriteAllTextAsync(Path.Combine(patchesDir, "changes.patch"), new string('x', tinyBudget + 1));
 
-        var preview = await service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-big" });
+        var preview = await service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-big"
+        });
 
         AssertEx.False(preview.CanApply, "a patch exceeding MaxPatchBytes is rejected");
         AssertEx.Contains(preview.Rejections, reason => reason.Contains("maximum allowed size", StringComparison.Ordinal));
@@ -436,7 +508,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateGPatchAsync("repo-01", hostRoot, ("dir b/file.cs", "old\n", "old\nnew\n"));
         await WritePatchAsync(harness, "run-dirb", patch);
 
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-dirb" });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-dirb"
+        });
 
         AssertEx.True(result.Applied, $"a file under 'dir b/' must not be falsely rejected. rejections: {string.Join(';', result.Rejections)}");
         AssertEx.Equal("old\nnew\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "dir b", "file.cs")));
@@ -457,8 +532,14 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "new mode 100755\n";
         await WritePatchAsync(harness, "run-modeonly-traversal", traversingPatch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-modeonly-traversal" });
-        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest { RunId = "run-modeonly-traversal" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-modeonly-traversal"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-modeonly-traversal"
+        });
 
         AssertEx.False(preview.CanApply, "a mode-only block with a traversing header path is rejected by our guard");
         AssertEx.NotEmpty(preview.Rejections);
@@ -480,10 +561,12 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             "new mode 100755\n";
         await WritePatchAsync(harness, "run-modeonly-clean", cleanPatch);
 
-        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest { RunId = "run-modeonly-clean" });
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-modeonly-clean"
+        });
 
-        AssertEx.False(
-            preview.Rejections.Any(reason =>
+        AssertEx.False(preview.Rejections.Any(reason =>
                 reason.Contains("traversal", StringComparison.OrdinalIgnoreCase)
                 || reason.Contains("outside its folder", StringComparison.OrdinalIgnoreCase)
                 || reason.Contains("no alias", StringComparison.OrdinalIgnoreCase)
@@ -505,13 +588,15 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             AllowBinaryPatchApply = allowBinary,
             PatchApplyTimeoutSeconds = 120
         });
-        var hostEnvironment = new TestHostEnvironment { ContentRootPath = agentHomeStateRoot };
+        var hostEnvironment = new TestHostEnvironment
+        {
+            ContentRootPath = agentHomeStateRoot
+        };
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
 
-        var service = new NodePatchApplyService(
-            resolver,
+        var service = new NodePatchApplyService(resolver,
             options,
             hostEnvironment,
             new StubIdentityProvider(),
@@ -556,8 +641,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         return await DiffAsync(selected);
     }
 
-    private async Task<string> GenerateMultiAliasPatchAsync(
-        string hostRoot01,
+    private async Task<string> GenerateMultiAliasPatchAsync(string hostRoot01,
         string hostRoot02,
         (string Alias, string Relative, string Before, string After) file01,
         (string Alias, string Relative, string Before, string After) file02)
@@ -660,7 +744,10 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             startInfo.ArgumentList.Add(arg);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
@@ -705,11 +792,6 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     {
         private readonly Dictionary<Guid, ResolvedSelectedFolder> _folders = [];
 
-        public void Add(Guid id, string alias, string hostPath)
-        {
-            _folders[id] = new ResolvedSelectedFolder(id, alias, hostPath, SelectedFolderMode.Copy);
-        }
-
         public Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
@@ -730,6 +812,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             }
 
             throw new SelectedFolderValidationException($"Unknown selected folder id '{id}'.");
+        }
+
+        public void Add(Guid id, string alias, string hostPath)
+        {
+            _folders[id] = new ResolvedSelectedFolder(id, alias, hostPath, SelectedFolderMode.Copy);
         }
     }
 

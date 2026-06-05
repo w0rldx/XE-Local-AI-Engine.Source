@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -13,11 +12,11 @@ internal sealed class PlaybookAnalysisService(
     IOptions<PlaybookAnalysisOptions> options,
     ILogger<PlaybookAnalysisService> logger) : IPlaybookAnalysisService
 {
-    private readonly IFeedbackInsightsService _insightsService = insightsService ?? throw new ArgumentNullException(nameof(insightsService));
     private readonly IPlaybookAnalysisAgent _analysisAgent = analysisAgent ?? throw new ArgumentNullException(nameof(analysisAgent));
-    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
-    private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly IFeedbackInsightsService _insightsService = insightsService ?? throw new ArgumentNullException(nameof(insightsService));
     private readonly ILogger<PlaybookAnalysisService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+    private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
 
     public async Task<PlaybookAnalysisOutcome> AnalyzeAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
@@ -72,9 +71,7 @@ internal sealed class PlaybookAnalysisService(
                 continue;
             }
 
-            var record = await _playbookActionService.CreateAnalysisSuggestionAsync(
-                new PlaybookAnalysisSuggestionInput(
-                    agentDefinitionId,
+            var record = await _playbookActionService.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
                     proposal.Behavior,
                     proposal.TriggerCondition,
                     proposal.Scope,
@@ -86,8 +83,7 @@ internal sealed class PlaybookAnalysisService(
             created.Add(record);
         }
 
-        _logger.LogInformation(
-            "Playbook analysis for agent {AgentId}: proposed {Proposed}, kept {Kept}, rejected {Rejected}, duplicates {Duplicates}.",
+        _logger.LogInformation("Playbook analysis for agent {AgentId}: proposed {Proposed}, kept {Kept}, rejected {Rejected}, duplicates {Duplicates}.",
             agentDefinitionId, proposals.Count, created.Count, rejected, duplicates);
 
         return new PlaybookAnalysisOutcome(true, true, created, proposals.Count, rejected, duplicates);
@@ -118,7 +114,11 @@ internal sealed class PlaybookAnalysisService(
     private static HashSet<Guid> BuildEvidenceIdSet(FeedbackInsightsResult insights)
     {
         return insights.Exemplars
-                       .SelectMany(static exemplar => new[] { exemplar.MessageId, exemplar.ConversationId })
+                       .SelectMany(static exemplar => new[]
+                       {
+                           exemplar.MessageId,
+                           exemplar.ConversationId
+                       })
                        .ToHashSet();
     }
 

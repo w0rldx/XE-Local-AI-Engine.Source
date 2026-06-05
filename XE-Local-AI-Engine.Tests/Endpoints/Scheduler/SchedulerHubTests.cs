@@ -47,17 +47,15 @@ public sealed class SchedulerHubTests
                                      .Build();
 
         var received = new TaskCompletionSource<SchedulerDefinitionHubEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = connection.On<SchedulerDefinitionHubEvent>(
-            SchedulerHubEvents.JobDefinitionChanged,
+        _ = connection.On<SchedulerDefinitionHubEvent>(SchedulerHubEvents.JobDefinitionChanged,
             evt => received.TrySetResult(evt));
 
         await connection.StartAsync().ConfigureAwait(false);
 
         // Publish through the host's hub-backed publisher (supersedes the no-op default in the Client host).
         var publisher = factory.Services.GetRequiredService<ISchedulerEventPublisher>();
-        await publisher.PublishDefinitionAsync(
-            new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, "created", 123L))
-            .ConfigureAwait(false);
+        await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, "created", 123L))
+                       .ConfigureAwait(false);
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 

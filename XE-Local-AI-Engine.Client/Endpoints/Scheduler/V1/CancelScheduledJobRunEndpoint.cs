@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1;
 
 using FastEndpoints;
-using Microsoft.AspNetCore.Http;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
@@ -43,7 +42,7 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
             default:
                 // Requested / RequestedButNotRunning — the request was recorded; report the stamped timestamp.
                 var run = await _scheduledJobManagementService.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
-                await Send.ResultAsync(Results.Accepted((string?)null, new ScheduledJobRunCancelResponse
+                await Send.ResultAsync(Results.Accepted(null, new ScheduledJobRunCancelResponse
                 {
                     Outcome = outcome.ToString(),
                     CancellationRequestedAtUtc = run?.CancellationRequestedAtUtc

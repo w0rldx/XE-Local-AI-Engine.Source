@@ -13,10 +13,11 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
 
     private readonly List<ScheduledJobExecutionContext> _captured = [];
 
+    public int InvocationCount => _captured.Count;
+
     public string TemplateId => Id;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(
-        TemplateId: Id,
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: Id,
         DisplayName: "Echo (test)",
         Description: "No-op test handler that records invocations.",
         ParameterSchema: null,
@@ -27,8 +28,6 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
         DefaultMaxRuntimeSeconds: null,
         AllowManualTrigger: true,
         AllowAgentCreation: false);
-
-    public int InvocationCount => _captured.Count;
 
     public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {

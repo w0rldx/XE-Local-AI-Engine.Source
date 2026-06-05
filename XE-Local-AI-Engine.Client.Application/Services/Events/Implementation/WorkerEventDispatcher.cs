@@ -434,7 +434,8 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         return Task.CompletedTask;
     }
 
-    public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null)
+    public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
+        long? generationDurationMs = null)
     {
         UpdateInvocation(invocationId,
             state =>
@@ -748,5 +749,4 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             CurrentInvocation = null;
         }
     }
-
 }

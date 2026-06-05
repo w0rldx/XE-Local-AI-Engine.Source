@@ -55,10 +55,10 @@ public sealed class JsonStringEnumMemberNameSchemaProcessor : ISchemaProcessor
         }
 
         var rewritten = schema.Enumeration
-            .Select(value => value is string memberName && memberNameToWireName.TryGetValue(memberName, out var wireName)
-                ? wireName
-                : value)
-            .ToList();
+                              .Select(value => value is string memberName && memberNameToWireName.TryGetValue(memberName, out var wireName)
+                                  ? wireName
+                                  : value)
+                              .ToList();
 
         schema.Enumeration.Clear();
         foreach (var value in rewritten)

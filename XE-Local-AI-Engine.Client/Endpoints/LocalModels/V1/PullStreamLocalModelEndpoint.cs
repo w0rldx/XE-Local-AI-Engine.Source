@@ -21,19 +21,19 @@ public sealed class PullStreamLocalModelEndpoint(
     IOllamaModelService modelService,
     ModelNameValidator modelNameValidator) : Endpoint<PullLocalModelRequest>
 {
-    // Omit null properties so the optional `error` field is written only on the terminal failure line — the
-    // success/progress lines stay the exact `{status, completedBytes, totalBytes}` shape (sanitization invariant).
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>
     ///     Minimum gap between progress lines while the status is unchanged. Ollama emits many "downloading" updates
     ///     per second; coalescing same-status updates to one per second keeps the wire (and the React client) from
     ///     being flooded. A status change always flushes immediately, and the final update is always flushed.
     /// </summary>
     private const long ProgressThrottleMs = 1000;
+
+    // Omit null properties so the optional `error` field is written only on the terminal failure line — the
+    // success/progress lines stay the exact `{status, completedBytes, totalBytes}` shape (sanitization invariant).
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));

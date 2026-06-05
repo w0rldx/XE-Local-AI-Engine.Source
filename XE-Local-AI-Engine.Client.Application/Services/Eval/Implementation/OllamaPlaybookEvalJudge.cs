@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
@@ -18,14 +17,14 @@ internal sealed class OllamaPlaybookEvalJudge(ILogger<OllamaPlaybookEvalJudge> l
     internal const string JudgeScoredBy = "judge";
 
     private const string JudgeSystemPrompt = """
-        You judge whether an AI agent's answer satisfies a rubric. You are given a JSON object with a "rubric"
-        (the criteria the answer must meet) and a "candidateText" (the agent's answer). Decide whether the answer
-        meets the rubric.
+                                             You judge whether an AI agent's answer satisfies a rubric. You are given a JSON object with a "rubric"
+                                             (the criteria the answer must meet) and a "candidateText" (the agent's answer). Decide whether the answer
+                                             meets the rubric.
 
-        Return ONLY a JSON object of the form: { "pass": boolean, "reason": string }
-        - "pass" is true only when the candidateText satisfies the rubric.
-        - "reason" is a short justification.
-        """;
+                                             Return ONLY a JSON object of the form: { "pass": boolean, "reason": string }
+                                             - "pass" is true only when the candidateText satisfies the rubric.
+                                             - "reason" is a short justification.
+                                             """;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -52,8 +51,7 @@ internal sealed class OllamaPlaybookEvalJudge(ILogger<OllamaPlaybookEvalJudge> l
             return new EvalScore(false, JudgeScoredBy);
         }
 
-        return new EvalScore(
-            await ScoreByJudgeAsync(goldenCase, candidateText ?? string.Empty, nodeLocalClient, cancellationToken).ConfigureAwait(false),
+        return new EvalScore(await ScoreByJudgeAsync(goldenCase, candidateText ?? string.Empty, nodeLocalClient, cancellationToken).ConfigureAwait(false),
             JudgeScoredBy);
     }
 
@@ -100,10 +98,17 @@ internal sealed class OllamaPlaybookEvalJudge(ILogger<OllamaPlaybookEvalJudge> l
         List<ChatMessage> messages =
         [
             new(ChatRole.System, JudgeSystemPrompt),
-            new(ChatRole.User, JsonSerializer.Serialize(new { goldenCase.Rubric, CandidateText = candidateText }, SerializerOptions))
+            new(ChatRole.User, JsonSerializer.Serialize(new
+            {
+                goldenCase.Rubric,
+                CandidateText = candidateText
+            }, SerializerOptions))
         ];
 
-        var chatOptions = new ChatOptions { Temperature = 0f };
+        var chatOptions = new ChatOptions
+        {
+            Temperature = 0f
+        };
 
         var response = await nodeLocalClient
                              .GetResponseAsync<JudgeVerdict>(messages, chatOptions, cancellationToken: cancellationToken)

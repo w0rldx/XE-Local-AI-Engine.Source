@@ -36,8 +36,7 @@ public interface IModelFitRefreshTrigger
     ///         definition's baked limit. Like the use-case, only this single whitelisted parameter is widened.
     ///     </para>
     /// </summary>
-    Task TriggerRecommendationRefreshAsync(
-        Guid scheduledJobId,
+    Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,
         int? limitOverride = null,
         CancellationToken cancellationToken = default);

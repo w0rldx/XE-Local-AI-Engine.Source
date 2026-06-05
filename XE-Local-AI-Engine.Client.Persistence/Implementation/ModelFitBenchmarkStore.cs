@@ -66,8 +66,7 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
 
     private static ModelFitBenchmarkRecord ToRecord(ModelFitBenchmark entity)
     {
-        return new ModelFitBenchmarkRecord(
-            entity.Id,
+        return new ModelFitBenchmarkRecord(entity.Id,
             entity.SnapshotId,
             entity.ModelName,
             entity.ProviderName,

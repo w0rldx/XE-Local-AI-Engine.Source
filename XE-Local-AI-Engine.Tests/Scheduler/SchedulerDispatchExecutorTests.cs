@@ -176,8 +176,7 @@ public sealed class SchedulerDispatchExecutorTests
             [SchedulerJobKeys.ModelFitUseCaseOverrideKey] = "general"
         };
 
-        await executor.DispatchAsync(
-            JobId,
+        await executor.DispatchAsync(JobId,
             "fire-override",
             scheduledFireTimeUtc: Now,
             actualFireTimeUtc: Now,
@@ -325,16 +324,14 @@ public sealed class SchedulerDispatchExecutorTests
         var executor = CreateExecutor(store, registry);
 
         // The handler calls ThrowIfCancellationRequested — the exception must propagate.
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, actualFireTimeUtc: Now, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, actualFireTimeUtc: Now, cts.Token));
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────
 
-    private static SchedulerDispatchExecutor CreateExecutor(
-        IScheduledJobDefinitionStore store,
+    private static SchedulerDispatchExecutor CreateExecutor(IScheduledJobDefinitionStore store,
         IScheduledJobTemplateRegistry registry,
         IScheduledJobRunStore? runStore = null,
         IScheduledJobRunEventStore? eventStore = null)
@@ -342,8 +339,7 @@ public sealed class SchedulerDispatchExecutorTests
         runStore ??= CreateRunStoreSubstitute();
         eventStore ??= Substitute.For<IScheduledJobRunEventStore>();
 
-        return new SchedulerDispatchExecutor(
-            store,
+        return new SchedulerDispatchExecutor(store,
             registry,
             runStore,
             eventStore,
@@ -362,9 +358,9 @@ public sealed class SchedulerDispatchExecutorTests
         return runStore;
     }
 
-    private static ScheduledJobRunRecord ToRunningRecord(ScheduledJobRunInput input) =>
-        new(
-            Id: Guid.NewGuid(),
+    private static ScheduledJobRunRecord ToRunningRecord(ScheduledJobRunInput input)
+    {
+        return new ScheduledJobRunRecord(Id: Guid.NewGuid(),
             ScheduledJobId: input.ScheduledJobId,
             TemplateId: input.TemplateId,
             QuartzFireInstanceId: input.QuartzFireInstanceId,
@@ -380,14 +376,14 @@ public sealed class SchedulerDispatchExecutorTests
             ErrorDetails: input.ErrorDetails,
             CancellationRequestedAtUtc: null,
             CreatedAtUtc: 1L);
+    }
 
-    private static ScheduledJobDefinitionRecord BuildRecord(
-        bool enabled,
+    private static ScheduledJobDefinitionRecord BuildRecord(bool enabled,
         bool deleted,
         string templateId = TestEchoScheduledJobHandler.Id,
-        string? parameterJson = null) =>
-        new(
-            Id: JobId,
+        string? parameterJson = null)
+    {
+        return new ScheduledJobDefinitionRecord(Id: JobId,
             TemplateId: templateId,
             DisplayName: "Test Job",
             Description: null,
@@ -408,4 +404,5 @@ public sealed class SchedulerDispatchExecutorTests
             UpdatedAtUtc: 0L,
             DisabledAtUtc: null,
             DeletedAtUtc: deleted ? 1L : null);
+    }
 }

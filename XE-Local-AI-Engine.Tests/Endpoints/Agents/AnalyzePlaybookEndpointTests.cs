@@ -35,7 +35,9 @@ public sealed class AnalyzePlaybookEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()))
         {
             // The route carries the agent id; FastEndpoints still requires a JSON body for a POST (else 415).
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -53,7 +55,9 @@ public sealed class AnalyzePlaybookEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(agentId))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -72,8 +76,7 @@ public sealed class AnalyzePlaybookEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,

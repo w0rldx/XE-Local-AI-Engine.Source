@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>

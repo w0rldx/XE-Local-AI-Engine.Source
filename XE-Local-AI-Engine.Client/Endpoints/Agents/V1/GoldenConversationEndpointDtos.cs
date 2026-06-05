@@ -163,8 +163,7 @@ internal static class GoldenConversationMapper
     {
         ArgumentNullException.ThrowIfNull(outcome);
 
-        return new GoldenHarvestResponse(
-            outcome.ThumbsUpScanned,
+        return new GoldenHarvestResponse(outcome.ThumbsUpScanned,
             outcome.CreatedCount,
             outcome.DuplicateCount,
             outcome.SkippedCount);
@@ -179,8 +178,7 @@ internal static class GoldenConversationMapper
             ? null
             : JsonSerializer.Serialize(request.Assertion, SerializerOptions);
 
-        return new GoldenConversationCreateInput(
-            request.AgentDefinitionId,
+        return new GoldenConversationCreateInput(request.AgentDefinitionId,
             request.Title,
             inputTurnsJson,
             assertionJson,

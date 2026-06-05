@@ -101,7 +101,10 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
             var store = new AgentDefinitionStore(context, TimeProvider.System);
-            _ = await store.AddSeededAsync(CreateInput() with { Instructions = instructions }, Slug);
+            _ = await store.AddSeededAsync(CreateInput() with
+            {
+                Instructions = instructions
+            }, Slug);
         }
 
         var fileBytes = await File.ReadAllBytesAsync(databasePath);
@@ -124,15 +127,13 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
 
         _ = await store.AddSeededAsync(CreateInput(), Slug);
 
-        _ = await AssertEx.ThrowsAsync<DbUpdateException>(
-            () => store.AddSeededAsync(CreateInput(), Slug),
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => store.AddSeededAsync(CreateInput(), Slug),
             "A second seeded insert of the same slug must violate the filtered unique index.");
     }
 
     private static AgentDefinitionInput CreateInput()
     {
-        return new AgentDefinitionInput(
-            "Backend Architect",
+        return new AgentDefinitionInput("Backend Architect",
             Description: null,
             Instructions,
             ModelProfile: null,

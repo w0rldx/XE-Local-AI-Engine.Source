@@ -22,8 +22,7 @@ public sealed class CreateNodeChatConversationEndpoint(
     public override async Task HandleAsync(CreateNodeChatConversationRequest req, CancellationToken ct)
     {
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var conversation = await _chatPersistence.CreateConversationAsync(
-            new NodeChatCreateConversationRequest(req.Title, req.UserId, createdAtUtc, AgentDefinitionId: req.AgentDefinitionId),
+        var conversation = await _chatPersistence.CreateConversationAsync(new NodeChatCreateConversationRequest(req.Title, req.UserId, createdAtUtc, AgentDefinitionId: req.AgentDefinitionId),
             ct).ConfigureAwait(false);
 
         await Send.CreatedAtAsync<GetNodeChatConversationEndpoint>(new

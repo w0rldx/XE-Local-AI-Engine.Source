@@ -24,7 +24,9 @@ using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
@@ -198,10 +200,10 @@ public static class ConfigureServices
         // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
         // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
         // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).
-        builder.Services.AddHostedService<Services.ModelFit.Implementation.ModelRecommendationScheduleSeeder>();
+        builder.Services.AddHostedService<ModelRecommendationScheduleSeeder>();
         // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
-        builder.Services.AddHostedService<Services.Agents.Implementation.DefaultAgentSeeder>();
+        builder.Services.AddHostedService<DefaultAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])

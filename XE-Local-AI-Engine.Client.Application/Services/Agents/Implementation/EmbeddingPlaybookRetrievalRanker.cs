@@ -2,12 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using System.Collections.Concurrent;
 using System.Numerics.Tensors;
-
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-
 using OllamaSharp.Models.Exceptions;
-
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -26,17 +22,16 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
 {
-    private readonly ILocalModelProvider _provider;
-    private readonly PlaybookRetrievalOptions _options;
-    private readonly LexicalPlaybookRetrievalRanker _lexical;
-    private readonly ILogger<EmbeddingPlaybookRetrievalRanker> _logger;
-
     // RAM-only candidate-embedding cache keyed by (action id, version, embedding model). Version invalidates an edited
     // action automatically; the model name guards against cosine'ing a stale-dimension vector against a new model's
     // query. Insertion order is tracked separately so the bound evicts the oldest-inserted entries first.
     private readonly ConcurrentDictionary<EmbeddingCacheKey, ReadOnlyMemory<float>> _cache = new();
-    private readonly Queue<EmbeddingCacheKey> _insertionOrder = new();
     private readonly Lock _cacheLock = new();
+    private readonly Queue<EmbeddingCacheKey> _insertionOrder = new();
+    private readonly LexicalPlaybookRetrievalRanker _lexical;
+    private readonly ILogger<EmbeddingPlaybookRetrievalRanker> _logger;
+    private readonly PlaybookRetrievalOptions _options;
+    private readonly ILocalModelProvider _provider;
 
     public EmbeddingPlaybookRetrievalRanker(ILocalModelProvider provider,
         IOptions<PlaybookRetrievalOptions> options,
@@ -163,13 +158,13 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         }
 
         return candidates
-            .Select((candidate, index) => new ScoredCandidate(candidate, CosineScore(queryVector, candidateVectors[index])))
-            .OrderByDescending(scored => scored.Score)
-            .ThenBy(scored => scored.Action.Priority)
-            .ThenBy(scored => scored.Action.CreatedAtUtc)
-            .Take(k)
-            .Select(scored => scored.Action)
-            .ToList();
+               .Select((candidate, index) => new ScoredCandidate(candidate, CosineScore(queryVector, candidateVectors[index])))
+               .OrderByDescending(scored => scored.Score)
+               .ThenBy(scored => scored.Action.Priority)
+               .ThenBy(scored => scored.Action.CreatedAtUtc)
+               .Take(k)
+               .Select(scored => scored.Action)
+               .ToList();
     }
 
     private static string CandidateText(PlaybookActionRecord candidate)

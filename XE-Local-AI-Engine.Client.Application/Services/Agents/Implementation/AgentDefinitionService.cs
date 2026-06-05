@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
@@ -23,9 +22,10 @@ internal sealed class AgentDefinitionService(
         "high"
     };
 
-    private readonly IAgentDefinitionStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly ILocalToolOfferProvider _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
     private readonly ILogger<AgentDefinitionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+    private readonly IAgentDefinitionStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<AgentDefinitionRecord> CreateAsync(AgentDefinitionInput input, CancellationToken cancellationToken = default)
     {
@@ -157,7 +157,11 @@ internal sealed class AgentDefinitionService(
         }
 
         var danglingEndpoints = topology.Handoffs
-                                        .SelectMany(handoff => new[] { handoff.FromAgentDefinitionId, handoff.ToAgentDefinitionId })
+                                        .SelectMany(handoff => new[]
+                                        {
+                                            handoff.FromAgentDefinitionId,
+                                            handoff.ToAgentDefinitionId
+                                        })
                                         .Where(endpoint => !participantIds.Contains(endpoint))
                                         .Distinct()
                                         .ToArray();
@@ -177,7 +181,8 @@ internal sealed class AgentDefinitionService(
                                   .ToArray();
         if (missingParticipants.Length > 0)
         {
-            _logger.LogWarning("Orchestrator definition references {MissingCount} participant agent definition id(s) that do not currently exist ({MissingIds}); they will be skipped until the definition is created.",
+            _logger.LogWarning(
+                "Orchestrator definition references {MissingCount} participant agent definition id(s) that do not currently exist ({MissingIds}); they will be skipped until the definition is created.",
                 missingParticipants.Length,
                 string.Join(", ", missingParticipants));
         }

@@ -46,7 +46,12 @@ public sealed class AddModelClassificationsMigrationTests : IDisposable
         var columns = await GetColumnsAsync(connection).ConfigureAwait(false);
         AssertEx.True(columns.SetEquals(new[]
         {
-            "model_name", "digest", "detected_kind", "detected_capabilities_json", "override_kind", "detected_at_utc",
+            "model_name",
+            "digest",
+            "detected_kind",
+            "detected_capabilities_json",
+            "override_kind",
+            "detected_at_utc",
             "updated_at_utc"
         }), "model_classifications should expose the mapped columns.");
 

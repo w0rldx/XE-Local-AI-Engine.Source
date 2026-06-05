@@ -46,8 +46,19 @@ public sealed class AddMcpServersMigrationTests : IDisposable
         var columns = await GetMcpServerColumnsAsync(connection).ConfigureAwait(false);
         AssertEx.True(columns.SetEquals(new[]
         {
-            "id", "name", "description", "transport_kind", "command", "arguments", "working_directory", "env",
-            "url", "enabled", "version", "created_at_utc", "updated_at_utc"
+            "id",
+            "name",
+            "description",
+            "transport_kind",
+            "command",
+            "arguments",
+            "working_directory",
+            "env",
+            "url",
+            "enabled",
+            "version",
+            "created_at_utc",
+            "updated_at_utc"
         }), "mcp_servers should expose the mapped columns.");
 
         AssertEx.True(await UniqueIndexOnNameExistsAsync(connection).ConfigureAwait(false),

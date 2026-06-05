@@ -52,9 +52,22 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         var definitionColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);
         AssertEx.True(definitionColumns.SetEquals(new[]
         {
-            "id", "name", "description", "instructions", "model_profile", "reasoning_effort", "kind",
-            "allowed_tool_names_json", "tool_approvals_json", "orchestration_topology_json", "version",
-            "created_at_utc", "updated_at_utc", "playbook_enabled", "source", "seed_slug"
+            "id",
+            "name",
+            "description",
+            "instructions",
+            "model_profile",
+            "reasoning_effort",
+            "kind",
+            "allowed_tool_names_json",
+            "tool_approvals_json",
+            "orchestration_topology_json",
+            "version",
+            "created_at_utc",
+            "updated_at_utc",
+            "playbook_enabled",
+            "source",
+            "seed_slug"
         }), "agent_definitions should expose the mapped columns.");
 
         var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);

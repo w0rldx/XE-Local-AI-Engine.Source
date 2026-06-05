@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Insights;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -83,8 +82,7 @@ public sealed class FeedbackInsightsServiceTests
         var service = CreateService(out var store, nowUtcMs: 1);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(
-                 agentId,
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId,
                  "Agent",
                  3,
                  1,
@@ -112,8 +110,7 @@ public sealed class FeedbackInsightsServiceTests
         var longComment = new string('x', FeedbackInsightsService.MaxExemplarCommentLength + 20);
         const string ShortComment = "concise feedback";
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(
-                 agentId,
+             .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId,
                  "Agent",
                  0,
                  2,

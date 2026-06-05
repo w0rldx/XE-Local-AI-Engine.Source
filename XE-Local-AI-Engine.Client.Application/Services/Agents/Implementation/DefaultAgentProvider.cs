@@ -11,8 +11,10 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 internal sealed class DefaultAgentProvider : IDefaultAgentProvider, IDisposable
 {
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+
     // Guarded by _gate on write; the fast-path read is a benign race (a missed just-written value just re-enters the
     // gate, finds it set, and returns). Guid? cannot be volatile, and the gate supplies the publish barrier.
     private Guid? _cachedId;
@@ -20,11 +22,6 @@ internal sealed class DefaultAgentProvider : IDefaultAgentProvider, IDisposable
     public DefaultAgentProvider(IServiceScopeFactory scopeFactory)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-    }
-
-    public void Dispose()
-    {
-        _gate.Dispose();
     }
 
     public async Task<Guid?> GetDefaultAgentIdAsync(CancellationToken cancellationToken = default)
@@ -59,5 +56,10 @@ internal sealed class DefaultAgentProvider : IDefaultAgentProvider, IDisposable
         {
             _ = _gate.Release();
         }
+    }
+
+    public void Dispose()
+    {
+        _gate.Dispose();
     }
 }

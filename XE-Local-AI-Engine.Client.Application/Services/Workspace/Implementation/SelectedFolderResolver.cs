@@ -3,13 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 
 internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore store, ILogger<SelectedFolderResolver> logger) : ISelectedFolderResolver
 {
-    private readonly INodeSelectedFolderStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly ILogger<SelectedFolderResolver> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly INodeSelectedFolderStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<SelectedFolderReference> RegisterAsync(SelectedFolderRegistration registration, CancellationToken cancellationToken = default)
     {
