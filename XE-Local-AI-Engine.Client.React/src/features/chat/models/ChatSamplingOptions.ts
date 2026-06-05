@@ -26,6 +26,8 @@ export interface SamplingFieldMeta {
 	step: number;
 	decimalScale?: number;
 	allowDecimal: boolean;
+	// When true the dialog renders a Slider paired with a NumberInput; false = number-only (e.g. seed).
+	slider: boolean;
 }
 
 export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[] }[] = [
@@ -41,6 +43,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 0.05,
 				decimalScale: 2,
 				allowDecimal: true,
+				slider: true,
 			},
 			{
 				key: "topP",
@@ -51,6 +54,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 0.05,
 				decimalScale: 2,
 				allowDecimal: true,
+				slider: true,
 			},
 			{
 				key: "topK",
@@ -60,6 +64,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				max: 200,
 				step: 1,
 				allowDecimal: false,
+				slider: true,
 			},
 			{
 				key: "minP",
@@ -70,6 +75,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 0.05,
 				decimalScale: 2,
 				allowDecimal: true,
+				slider: true,
 			},
 		],
 	},
@@ -85,6 +91,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 0.05,
 				decimalScale: 2,
 				allowDecimal: true,
+				slider: true,
 			},
 			{
 				key: "repeatLastN",
@@ -94,6 +101,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				max: 512,
 				step: 1,
 				allowDecimal: false,
+				slider: true,
 			},
 			{
 				key: "presencePenalty",
@@ -104,6 +112,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 0.05,
 				decimalScale: 2,
 				allowDecimal: true,
+				slider: true,
 			},
 			{
 				key: "frequencyPenalty",
@@ -114,6 +123,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				step: 0.05,
 				decimalScale: 2,
 				allowDecimal: true,
+				slider: true,
 			},
 		],
 	},
@@ -128,6 +138,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				max: 131072,
 				step: 128,
 				allowDecimal: false,
+				slider: true,
 			},
 			{
 				key: "seed",
@@ -137,6 +148,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				max: 2147483647,
 				step: 1,
 				allowDecimal: false,
+				slider: false,
 			},
 			{
 				key: "numCtx",
@@ -146,6 +158,7 @@ export const samplingFieldGroups: { groupKey: string; fields: SamplingFieldMeta[
 				max: 131072,
 				step: 512,
 				allowDecimal: false,
+				slider: true,
 			},
 		],
 	},

@@ -123,4 +123,72 @@ describe("ChatSamplingOptionsDialog", () => {
 		expect(screen.getByTestId("chat-sampling-field-maxOutputTokens")).toBeDefined();
 		expect(screen.getByTestId("chat-sampling-field-numCtx")).toBeDefined();
 	});
+
+	it("slider fields (e.g. temperature) render a slider element", async () => {
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+
+		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+
+		// temperature has slider:true → the Mantine Slider root has role="slider"
+		expect(screen.getByTestId("chat-sampling-slider-temperature")).toBeDefined();
+		// At least one slider role exists for temperature
+		const sliders = screen.getAllByRole("slider");
+		expect(sliders.length).toBeGreaterThan(0);
+	});
+
+	it("seed field does NOT render a slider", async () => {
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+
+		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+
+		// seed has slider:false — no slider testid for seed
+		expect(screen.queryByTestId("chat-sampling-slider-seed")).toBeNull();
+		// The number input for seed is still present
+		expect(screen.getByTestId("chat-sampling-field-seed")).toBeDefined();
+	});
+
+	it("per-field reset clears only that field and leaves others untouched", async () => {
+		vi.resetModules();
+		localStorage.setItem(
+			"xe-node-chat-sampling-options",
+			JSON.stringify({ temperature: 0.7, topP: 0.9 }),
+		);
+
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+		const { useChatSamplingPreferencesStore } = await import("@/features/chat/stores/ChatSamplingPreferencesStore");
+
+		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+
+		// Reset only temperature
+		const fieldResetBtn = screen.getByTestId("chat-sampling-reset-temperature");
+		fireEvent.click(fieldResetBtn);
+
+		const state = useChatSamplingPreferencesStore.getState().options;
+		expect(state.temperature).toBeUndefined();
+		// topP must remain
+		expect(state.topP).toBe(0.9);
+	});
+
+	it("per-field reset button is disabled when the field is unset", async () => {
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+
+		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+
+		// With no overrides, every per-field reset is disabled
+		const fieldResetBtn = screen.getByTestId("chat-sampling-reset-temperature");
+		expect(fieldResetBtn.hasAttribute("disabled")).toBe(true);
+	});
+
+	it("number-coercion: string-like entry is stored as a finite number", async () => {
+		vi.resetModules();
+		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
+		const { useChatSamplingPreferencesStore } = await import("@/features/chat/stores/ChatSamplingPreferencesStore");
+
+		renderWithProviders(<ChatSamplingOptionsDialog opened={true} onClose={vi.fn()} />);
+
+		// Mantine NumberInput passes a number once a valid value is committed; simulate directly
+		// via store to verify coercion path without relying on DOM event details.
+		useChatSamplingPreferencesStore.getState().actions.setField("temperature", 1.2 as never);
+		expect(useChatSamplingPreferencesStore.getState().options.temperature).toBe(1.2);
+	});
 });

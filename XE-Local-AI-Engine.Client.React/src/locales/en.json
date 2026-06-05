@@ -497,7 +497,8 @@
         "stopDescription": "One stop sequence per line. The model halts when it emits any of these strings.",
         "modelDefault": "Model default",
         "reset": "Reset to defaults",
-        "close": "Close"
+        "close": "Close",
+        "resetField": "Reset {{field}}"
       },
       "composer": {
         "samplingOptions": "Advanced sampling options"

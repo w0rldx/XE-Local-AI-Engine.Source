@@ -497,7 +497,8 @@
         "stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
         "modelDefault": "Modellstandard",
         "reset": "Auf Standard zurücksetzen",
-        "close": "Schließen"
+        "close": "Schließen",
+        "resetField": "{{field}} zurücksetzen"
       },
       "composer": {
         "samplingOptions": "Erweiterte Sampling-Optionen"
