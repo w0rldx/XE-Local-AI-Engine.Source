@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
 {
     private const string AgentName = "playbook-eval";
-    private const string AgentDescription = "Playbook P4 golden-conversation eval runner.";
+    private const string AgentDescription = "Golden-conversation eval runner.";
 
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _serviceProvider;
