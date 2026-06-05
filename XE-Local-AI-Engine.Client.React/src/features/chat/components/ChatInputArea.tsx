@@ -1,9 +1,11 @@
 import { ActionIcon, Box, Button, Group, Menu, Textarea, Tooltip } from "@mantine/core";
-import { IconBrain, IconDeviceDesktop, IconPaperclip, IconPhoto, IconPlayerStopFilled, IconSend } from "@tabler/icons-react";
+import { IconAdjustments, IconBrain, IconDeviceDesktop, IconPaperclip, IconPhoto, IconPlayerStopFilled, IconSend } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
+import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
@@ -76,6 +78,9 @@ export function ChatInputArea({
 }: ChatInputAreaProps) {
 	const { t } = useTranslation();
 	const [content, setContent] = useState("");
+	const [samplingDialogOpen, setSamplingDialogOpen] = useState(false);
+	// Read developer mode directly from the global store — avoids prop-drilling through ChatDisplayShell.
+	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const trimmed = content.trim();
 	const reasoningEnabled = reasoningEffort !== "none";
 	const reasoningMenuDisabled = disabled || isSending || availableReasoningEfforts.length <= 1;
@@ -170,6 +175,20 @@ export function ChatInputArea({
 						</ActionIcon>
 					</Tooltip>
 				) : null}
+				{developerMode ? (
+					<Tooltip label={t("pages.chat.composer.samplingOptions", "Advanced sampling options")}>
+						<ActionIcon
+							size={36}
+							variant="subtle"
+							color="gray"
+							onClick={() => setSamplingDialogOpen(true)}
+							aria-label={t("pages.chat.composer.samplingOptions", "Advanced sampling options")}
+							data-testid="chat-sampling-options-trigger"
+						>
+							<IconAdjustments size={15} />
+						</ActionIcon>
+					</Tooltip>
+				) : null}
 				{contextUsage ? <ContextUsageBadge {...contextUsage} /> : null}
 			</Group>
 			<Button
@@ -195,6 +214,13 @@ export function ChatInputArea({
 
 	return (
 		<Box data-testid="chat-input-area">
+			{developerMode ? (
+				<ChatSamplingOptionsDialog
+					opened={samplingDialogOpen}
+					onClose={() => setSamplingDialogOpen(false)}
+					maxContextTokens={contextUsage?.maxTokens}
+				/>
+			) : null}
 			<Textarea
 				data-testid="chat-input"
 				placeholder={t("pages.chat.inputPlaceholder", "Message the local node")}

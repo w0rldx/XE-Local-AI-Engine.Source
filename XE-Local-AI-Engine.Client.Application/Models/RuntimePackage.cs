@@ -23,6 +23,15 @@ public sealed record RuntimePackage
     public string? ReasoningEffort { get; init; }
 
     /// <summary>
+    ///     Developer-gated per-send sampling overrides (temperature, top-p, min-p, num_ctx, …). Null when no overrides
+    ///     were requested, which keeps the no-override path byte-identical to today. Deliberately excluded from the
+    ///     config hash (mirrors <see cref="SupportsThinking" />): sampling is a loopback-only per-send knob, so the
+    ///     cross-repo encrypted/server digest stays stable. Threaded to the invocation factory, which sets the matching
+    ///     Ollama chat options only for the non-null fields.
+    /// </summary>
+    public SamplingOptions? SamplingOptions { get; init; }
+
+    /// <summary>
     ///     Whether the active model advertises the Ollama <c>thinking</c> capability. Threaded to the invocation factory
     ///     so the <c>think</c> chat option is attached only for a capable model (an incapable model returns HTTP 400 for
     ///     any <c>think</c> value). Defaults to <c>true</c> so the cloud/non-Ollama path and pre-existing callers stay

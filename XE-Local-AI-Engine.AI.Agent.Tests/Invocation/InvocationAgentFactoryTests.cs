@@ -367,6 +367,197 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal("second", context.SeedMessages[2].Text);
     }
 
+    [Test]
+    public async Task CreateAsync_WhenSamplingProvided_AppliesNativeChatOptions()
+    {
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                Temperature = 0.3f,
+                TopP = 0.85f,
+                TopK = 40,
+                MaxOutputTokens = 256,
+                PresencePenalty = 0.2f,
+                FrequencyPenalty = 0.1f,
+                Seed = 7,
+                Stop = ["END"]
+            });
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ResolveChatOptions(context);
+        AssertEx.Equal(0.3f, chatOptions.Temperature);
+        AssertEx.Equal(0.85f, chatOptions.TopP);
+        AssertEx.Equal(40, chatOptions.TopK);
+        AssertEx.Equal(256, chatOptions.MaxOutputTokens);
+        AssertEx.Equal(0.2f, chatOptions.PresencePenalty);
+        AssertEx.Equal(0.1f, chatOptions.FrequencyPenalty);
+        AssertEx.Equal(7L, chatOptions.Seed);
+        AssertEx.Equal("END", AssertEx.NotNull(chatOptions.StopSequences)[0]);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSamplingProvided_AddsOllamaAdditionalProperties()
+    {
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                MinP = 0.05f,
+                RepeatPenalty = 1.2f,
+                RepeatLastN = 128,
+                NumCtx = 8192
+            });
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<float>("min_p", out var minP));
+        AssertEx.Equal(0.05f, minP);
+        AssertEx.True(additionalProperties.TryGetValue<float>("repeat_penalty", out var repeatPenalty));
+        AssertEx.Equal(1.2f, repeatPenalty);
+        AssertEx.True(additionalProperties.TryGetValue<int>("repeat_last_n", out var repeatLastN));
+        AssertEx.Equal(128, repeatLastN);
+        AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
+        AssertEx.Equal(8192, numCtx);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSamplingAbsent_LeavesChatOptionsByteIdentical()
+    {
+        // No-override guarantee: with no sampling, the factory sets only `think` (the pre-sampling behavior) and leaves
+        // every native sampling property null and adds no Ollama option keys.
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            []);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ResolveChatOptions(context);
+        AssertEx.Null(chatOptions.Temperature);
+        AssertEx.Null(chatOptions.TopP);
+        AssertEx.Null(chatOptions.TopK);
+        AssertEx.Null(chatOptions.MaxOutputTokens);
+        AssertEx.Null(chatOptions.Seed);
+        AssertEx.Null(chatOptions.StopSequences);
+
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey("min_p"));
+        AssertEx.False(additionalProperties.ContainsKey("num_ctx"));
+        AssertEx.True(additionalProperties.ContainsKey("think"));
+        // Only the `think` key is present (no sampling keys leaked).
+        AssertEx.Equal(1, additionalProperties.Count);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenMaxOutputTokensExceedsNumCtx_ClampsToContextWindow()
+    {
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                MaxOutputTokens = 16384,
+                NumCtx = 4096
+            });
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ResolveChatOptions(context);
+        AssertEx.Equal(4096, chatOptions.MaxOutputTokens);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSamplingValuesOutOfRange_SkipsInvalidFields()
+    {
+        // Defensive guards: NaN/negative/out-of-range values are treated as "no override" and dropped. Covers both the
+        // lower bounds (negative/zero) and the upper bounds (temperature > 2, penalty |x| > 2, seed < -1).
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                Temperature = 2.5f,
+                TopP = 1.5f,
+                MinP = float.NaN,
+                TopK = 0,
+                PresencePenalty = 3f,
+                FrequencyPenalty = -3f,
+                Seed = -2
+            });
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ResolveChatOptions(context);
+        AssertEx.Null(chatOptions.Temperature);
+        AssertEx.Null(chatOptions.TopP);
+        AssertEx.Null(chatOptions.TopK);
+        AssertEx.Null(chatOptions.PresencePenalty);
+        AssertEx.Null(chatOptions.FrequencyPenalty);
+        AssertEx.Null(chatOptions.Seed);
+        AssertEx.False(AssertEx.NotNull(chatOptions.AdditionalProperties).ContainsKey("min_p"));
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSamplingValuesAtBoundaryEdges_AppliesThem()
+    {
+        // The boundary edges are inclusive: temperature 2, penalties ±2, and seed -1 (Ollama's random-seed sentinel)
+        // are all valid and must be applied, not dropped.
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions
+            {
+                Temperature = 2f,
+                PresencePenalty = 2f,
+                FrequencyPenalty = -2f,
+                Seed = -1
+            });
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ResolveChatOptions(context);
+        AssertEx.Equal(2f, chatOptions.Temperature);
+        AssertEx.Equal(2f, chatOptions.PresencePenalty);
+        AssertEx.Equal(-2f, chatOptions.FrequencyPenalty);
+        AssertEx.Equal(-1L, chatOptions.Seed);
+    }
+
+    private static ChatOptions ResolveChatOptions(InvocationAgentContext context)
+    {
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        return runOptions.ChatOptions
+               ?? throw new AssertionException("Expected ChatOptions to be populated.");
+    }
+
     private static InvocationAgentFactory CreateSut(FakeChatClient chatClient,
         IAgentToolRegistry? toolRegistry = null,
         IClientLocalToolRegistry? clientLocalToolRegistry = null,

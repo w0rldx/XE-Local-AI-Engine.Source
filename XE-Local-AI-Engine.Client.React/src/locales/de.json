@@ -464,7 +464,44 @@
         "label": "Nachrichtenoptionen",
         "showTokensPerSecond": "Tokens/Sek. anzeigen"
       },
-      "tokensPerSecond": "{{value}} Tok/s"
+      "tokensPerSecond": "{{value}} Tok/s",
+      "samplingOptions": {
+        "title": "Erweiterte Sampling-Optionen",
+        "description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert und nicht pro Konversation persistiert.",
+        "groupSampling": "Sampling",
+        "groupPenalties": "Strafen",
+        "groupLimits": "Limits",
+        "temperature": "Temperatur",
+        "temperatureDescription": "Steuert die Zufälligkeit. Niedrigere Werte sind deterministischer; höhere Werte sind kreativer.",
+        "topP": "Top P",
+        "topPDescription": "Schwellenwert für Nucleus-Sampling. Nur Tokens, deren kumulierte Wahrscheinlichkeit diesen Wert erreicht, werden berücksichtigt.",
+        "topK": "Top K",
+        "topKDescription": "Begrenzt das Sampling auf die Top-K wahrscheinlichsten Tokens.",
+        "minP": "Min P",
+        "minPDescription": "Mindestwahrscheinlichkeit für ein Token relativ zum wahrscheinlichsten Token.",
+        "repeatPenalty": "Wiederholungsstrafe",
+        "repeatPenaltyDescription": "Bestraft Wiederholungen. Werte über 1 verhindern, dass das Modell sich wiederholt.",
+        "repeatLastN": "Letzte N wiederholen",
+        "repeatLastNDescription": "Anzahl der Tokens, die bei der Wiederholungsstrafe berücksichtigt werden. -1 verwendet den gesamten Kontext.",
+        "presencePenalty": "Präsenzstrafe",
+        "presencePenaltyDescription": "Bestraft Tokens, die bereits in der Ausgabe erschienen sind, unabhängig von der Häufigkeit.",
+        "frequencyPenalty": "Häufigkeitsstrafe",
+        "frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
+        "maxOutputTokens": "Max. Ausgabe-Tokens",
+        "maxOutputTokensDescription": "Maximale Anzahl der zu generierenden Tokens. Wird auf die Modellkontextlänge begrenzt, wenn gesetzt.",
+        "seed": "Seed",
+        "seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
+        "numCtx": "Kontextlänge (num_ctx)",
+        "numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens.",
+        "stop": "Stop-Sequenzen",
+        "stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
+        "modelDefault": "Modellstandard",
+        "reset": "Auf Standard zurücksetzen",
+        "close": "Schließen"
+      },
+      "composer": {
+        "samplingOptions": "Erweiterte Sampling-Optionen"
+      }
     },
     "clientNodes": {
       "fields": {
@@ -811,6 +848,11 @@
       "placeholder": {
         "title": "Node-Einstellungen",
         "description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden."
+      },
+      "developerMode": {
+        "title": "Entwicklereinstellungen",
+        "label": "Entwicklermodus",
+        "description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen). Wird nur in diesem Browser gespeichert."
       }
     },
     "cloudSettings": {

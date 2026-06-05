@@ -869,7 +869,37 @@ public sealed class InvocationRunner : IInvocationRunner
             BuildInvocationTools(package),
             messages,
             package.ReasoningEffort,
-            package.SupportsThinking);
+            package.SupportsThinking,
+            MapSamplingOptions(package.SamplingOptions));
+    }
+
+    /// <summary>
+    ///     Maps the client-side <see cref="SamplingOptions" /> onto the provider-agnostic
+    ///     <see cref="InvocationSamplingOptions" /> the factory consumes (.AI.Agent cannot reference Client.Models).
+    ///     Returns null when no overrides were requested so the no-override path stays byte-identical.
+    /// </summary>
+    private static InvocationSamplingOptions? MapSamplingOptions(SamplingOptions? sampling)
+    {
+        if (sampling is null)
+        {
+            return null;
+        }
+
+        return new InvocationSamplingOptions
+        {
+            Temperature = sampling.Temperature,
+            TopP = sampling.TopP,
+            TopK = sampling.TopK,
+            MinP = sampling.MinP,
+            MaxOutputTokens = sampling.MaxOutputTokens,
+            RepeatPenalty = sampling.RepeatPenalty,
+            RepeatLastN = sampling.RepeatLastN,
+            PresencePenalty = sampling.PresencePenalty,
+            FrequencyPenalty = sampling.FrequencyPenalty,
+            Seed = sampling.Seed,
+            Stop = sampling.Stop,
+            NumCtx = sampling.NumCtx
+        };
     }
 
     private static IReadOnlyList<ChatMessage> BuildChatMessages(RuntimePackage package)

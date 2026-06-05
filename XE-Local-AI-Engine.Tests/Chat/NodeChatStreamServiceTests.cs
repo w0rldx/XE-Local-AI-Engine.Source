@@ -253,6 +253,98 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_ThreadsSamplingOptionsIntoRuntimePackage()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var sampling = new SamplingOptions
+        {
+            Temperature = 0.4f,
+            TopP = 0.9f,
+            NumCtx = 8192
+        };
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           SamplingOptions: sampling)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        var captured = AssertEx.NotNull(runner.LastSamplingOptions);
+        AssertEx.Equal(0.4f, captured.Temperature);
+        AssertEx.Equal(0.9f, captured.TopP);
+        AssertEx.Equal(8192, captured.NumCtx);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenSamplingOptionsOmitted_LeavesRuntimePackageSamplingNull()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the invocation runner to observe the package.");
+        AssertEx.True(runner.LastSamplingOptions is null, "Expected sampling options to default to null.");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenUseLocalTools_OffersCatalogToolsOnRuntimePackage()
     {
         var conversationId = Guid.NewGuid();
@@ -1848,6 +1940,10 @@ public sealed class NodeChatStreamServiceTests
         // runtime package only when the client opted in.
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
 
+        // The sampling overrides carried on the runtime package; the test asserts per-send sampling reaches the
+        // runtime package (or stays null when none was selected).
+        public SamplingOptions? LastSamplingOptions { get; private set; }
+
         public bool CaptureObserved { get; private set; }
         public int ActiveInvocationCount => 0;
 
@@ -1855,6 +1951,7 @@ public sealed class NodeChatStreamServiceTests
         {
             LastReasoningEffort = context.Package.ReasoningEffort;
             LastAllowedTools = context.Package.AllowedTools;
+            LastSamplingOptions = context.Package.SamplingOptions;
             CaptureObserved = true;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);

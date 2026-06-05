@@ -97,6 +97,16 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             additionalProperties["think"] = false;
         }
 
+        var chatOptions = new ChatOptions
+        {
+            ModelId = definition.ModelId,
+            AdditionalProperties = additionalProperties
+        };
+
+        // Developer-gated per-send sampling overrides. Null (the default, mode-off) leaves chatOptions byte-identical to
+        // the pre-sampling path — the no-override guarantee.
+        ApplySamplingOptions(chatOptions, additionalProperties, definition.Sampling);
+
         InvocationAgentContext context = new()
         {
             Agent = agent,
@@ -104,11 +114,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             SeedMessages = seedMessages,
             RunOptions = new ChatClientAgentRunOptions
             {
-                ChatOptions = new ChatOptions
-                {
-                    ModelId = definition.ModelId,
-                    AdditionalProperties = additionalProperties
-                }
+                ChatOptions = chatOptions
             }
         };
 
@@ -116,6 +122,114 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         context.Items["toolsEnabled"] = tools.Count > 0;
 
         return Task.FromResult(context);
+    }
+
+    // Ollama option keys read from ChatOptions.AdditionalProperties by OllamaSharp 5.4.25
+    // (OllamaSharp.MicrosoftAi.AbstractionMapper → OllamaOption.*.Name; verified against the installed assembly
+    // 2026-06-05). The natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/
+    // seed/stop) ride the strongly-typed ChatOptions properties instead and so are not listed here.
+    private const string OllamaMinPKey = "min_p";
+    private const string OllamaRepeatPenaltyKey = "repeat_penalty";
+    private const string OllamaRepeatLastNKey = "repeat_last_n";
+    private const string OllamaNumCtxKey = "num_ctx";
+
+    /// <summary>
+    ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />. Native
+    ///     knobs ride the strongly-typed properties (mapped by OllamaSharp's <c>AbstractionMapper</c>); the four Ollama
+    ///     knobs without a native property travel as <see cref="AdditionalPropertiesDictionary" /> entries keyed by the
+    ///     raw Ollama option name (the same channel the existing <c>think</c> property proves). Each field is applied only
+    ///     when set and only when it passes a defensive range guard (NaN/negative/out-of-range → skipped). When both
+    ///     <c>MaxOutputTokens</c> and <c>NumCtx</c> are set, the output cap is clamped to the context window.
+    /// </summary>
+    private static void ApplySamplingOptions(ChatOptions chatOptions,
+        AdditionalPropertiesDictionary additionalProperties,
+        InvocationSamplingOptions? sampling)
+    {
+        if (sampling is null)
+        {
+            return;
+        }
+
+        // Temperature is accepted in [0, 2] (the UI cap); out-of-range → skip and keep the model default.
+        if (IsValidRangedFloat(sampling.Temperature, 0f, 2f))
+        {
+            chatOptions.Temperature = sampling.Temperature;
+        }
+
+        if (IsValidUnitFloat(sampling.TopP))
+        {
+            chatOptions.TopP = sampling.TopP;
+        }
+
+        if (sampling.TopK is { } topK && topK > 0)
+        {
+            chatOptions.TopK = topK;
+        }
+
+        // Penalties are accepted in [-2, 2] (the UI cap); out-of-range → skip and keep the model default.
+        if (IsValidRangedFloat(sampling.PresencePenalty, -2f, 2f))
+        {
+            chatOptions.PresencePenalty = sampling.PresencePenalty;
+        }
+
+        if (IsValidRangedFloat(sampling.FrequencyPenalty, -2f, 2f))
+        {
+            chatOptions.FrequencyPenalty = sampling.FrequencyPenalty;
+        }
+
+        // Seed floor mirrors the UI: -1 is Ollama's "random seed" sentinel, anything below is invalid → skip.
+        if (sampling.Seed is { } seed && seed >= -1)
+        {
+            chatOptions.Seed = seed;
+        }
+
+        if (sampling.Stop is { Count: > 0 } stop)
+        {
+            var sequences = stop.Where(static value => !string.IsNullOrWhiteSpace(value)).ToList();
+            if (sequences.Count > 0)
+            {
+                chatOptions.StopSequences = sequences;
+            }
+        }
+
+        // num_ctx is read first so the output cap below can be clamped to a valid context window.
+        var numCtx = sampling.NumCtx is { } ctx && ctx > 0 ? ctx : (int?)null;
+        if (numCtx is { } resolvedCtx)
+        {
+            additionalProperties[OllamaNumCtxKey] = resolvedCtx;
+        }
+
+        if (sampling.MaxOutputTokens is { } maxOutputTokens && maxOutputTokens > 0)
+        {
+            // Safety clamp: an output budget larger than the context window would be rejected/truncated by the model.
+            var clamped = numCtx is { } window ? Math.Min(maxOutputTokens, window) : maxOutputTokens;
+            chatOptions.MaxOutputTokens = clamped;
+        }
+
+        if (IsValidUnitFloat(sampling.MinP))
+        {
+            additionalProperties[OllamaMinPKey] = sampling.MinP!.Value;
+        }
+
+        if (sampling.RepeatPenalty is { } repeatPenalty && !float.IsNaN(repeatPenalty) && repeatPenalty >= 0f)
+        {
+            additionalProperties[OllamaRepeatPenaltyKey] = repeatPenalty;
+        }
+
+        if (sampling.RepeatLastN is { } repeatLastN && repeatLastN >= -1)
+        {
+            additionalProperties[OllamaRepeatLastNKey] = repeatLastN;
+        }
+    }
+
+    private static bool IsValidRangedFloat(float? value, float min, float max)
+    {
+        return value is { } resolved && !float.IsNaN(resolved) && resolved >= min && resolved <= max;
+    }
+
+    private static bool IsValidUnitFloat(float? value)
+    {
+        return IsValidRangedFloat(value, 0f, 1f);
     }
 
     /// <summary>

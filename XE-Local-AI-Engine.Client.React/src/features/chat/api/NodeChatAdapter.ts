@@ -1,4 +1,5 @@
 import { ApiError } from "@/core/api/errors/ApiError";
+import type { ChatSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import {
 	archiveNodeChatConversation,
 	branchNodeChatConversation,
@@ -66,6 +67,8 @@ export interface SendMessageRequest {
 	// agent mode is enabled, a valid agent is selected, and the agent still exists in the live list (stale/deleted
 	// ids are dropped by Chat.tsx before the send — see §7.11 of the plan).
 	agentDefinitionId?: string;
+	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields null.
+	samplingOptions?: ChatSamplingOptions;
 }
 
 export interface NodeChatAdapter {
@@ -118,6 +121,8 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		reasoningEffort: request.reasoningEffort,
 		selectedPath: request.selectedPath,
 		agentDefinitionId: request.agentDefinitionId,
+		// Forward sampling overrides only when present; omitted when developer mode is off or nothing set.
+		samplingOptions: request.samplingOptions,
 	};
 }
 

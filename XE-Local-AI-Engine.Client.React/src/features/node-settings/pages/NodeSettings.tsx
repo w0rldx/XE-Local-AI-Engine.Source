@@ -1,7 +1,8 @@
-import { Alert, Button, Card, Container, Group, Loader, NumberInput, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { Alert, Button, Card, Container, Group, Loader, NumberInput, Stack, Switch, Text, Title } from "@mantine/core";
+import { IconAlertTriangle, IconCode, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
 import {
@@ -10,6 +11,7 @@ import {
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	type NodeSettingsTimeoutInput,
@@ -22,8 +24,11 @@ function errorMessage(error: unknown): string {
 }
 
 export function NodeSettings() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(withResponseValidation(getNodeSettingsOptions()));
+	const developerMode = useDeveloperModeStore((state) => state.developerMode);
+	const { toggle: toggleDeveloperMode } = useDeveloperModeStore((state) => state.actions);
 	const settings = settingsQuery.data;
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
@@ -129,6 +134,25 @@ export function NodeSettings() {
 								Reload
 							</Button>
 						</Group>
+					</Stack>
+				</Card>
+
+				<Card withBorder={true} radius="md" p="lg">
+					<Stack gap="md">
+						<Group justify="space-between" align="center">
+							<Title order={3}>{t("pages.nodeSettings.developerMode.title", "Developer settings")}</Title>
+							<IconCode size={22} />
+						</Group>
+						<Switch
+							label={t("pages.nodeSettings.developerMode.label", "Developer mode")}
+							description={t(
+								"pages.nodeSettings.developerMode.description",
+								"Enables advanced, experimental controls in the app (e.g. chat sampling options). Stored in this browser only.",
+							)}
+							checked={developerMode}
+							onChange={() => toggleDeveloperMode()}
+							data-testid="developer-mode-switch"
+						/>
 					</Stack>
 				</Card>
 			</Stack>

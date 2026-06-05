@@ -151,6 +151,71 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.Null(package.ReasoningEffort);
     }
 
+    [Test]
+    public void Build_WhenSamplingOptionsProvided_PassesThroughOntoRuntimePackage()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+        var sampling = new SamplingOptions
+        {
+            Temperature = 0.4f,
+            TopP = 0.9f,
+            MinP = 0.05f,
+            NumCtx = 8192,
+            Stop = ["END"]
+        };
+
+        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", 0)],
+            "qwen3.5:0.8b",
+            1,
+            SamplingOptions: sampling));
+
+        var carried = AssertEx.NotNull(package.SamplingOptions);
+        AssertEx.Equal(0.4f, carried.Temperature);
+        AssertEx.Equal(0.9f, carried.TopP);
+        AssertEx.Equal(0.05f, carried.MinP);
+        AssertEx.Equal(8192, carried.NumCtx);
+        AssertEx.Equal("END", AssertEx.NotNull(carried.Stop)[0]);
+    }
+
+    // Invariant guard (mirrors SupportsThinking): sampling overrides must NOT enter the config hash, so a send with
+    // sampling produces a byte-identical ConfigHash to the same send without it. RuntimePackageConfigHash.Compute has
+    // no sampling parameter (structural guarantee); this proves the builder also keeps it out of the digest.
+    [Test]
+    public void Build_WhenSamplingOptionsProvided_LeavesConfigHashByteIdentical()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        var withoutSampling = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", 0)],
+            "qwen3.5:0.8b",
+            1,
+            ReasoningEffort: "high"));
+
+        var withSampling = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
+            conversationId,
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", 0)],
+            "qwen3.5:0.8b",
+            1,
+            ReasoningEffort: "high",
+            SamplingOptions: new SamplingOptions
+            {
+                Temperature = 0.4f,
+                NumCtx = 8192
+            }));
+
+        AssertEx.Equal(withoutSampling.ConfigHash, withSampling.ConfigHash);
+        AssertEx.Null(withoutSampling.SamplingOptions);
+        AssertEx.NotNull(withSampling.SamplingOptions);
+    }
+
     private static ConversationMessageDto CreateMessage(MessageRole role, string content, int sortOrder)
     {
         return new ConversationMessageDto

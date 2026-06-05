@@ -16,10 +16,16 @@ using Microsoft.Extensions.AI;
 ///     <c>thinking</c> capability so an incapable model never receives the field (Ollama returns HTTP 400 otherwise).
 ///     Defaults to <c>true</c> so cloud providers (which ignore the unknown <c>think</c> property) keep reasoning.
 /// </param>
+/// <param name="Sampling">
+///     Optional developer-gated per-send sampling overrides. Null (the default) keeps the no-override path
+///     byte-identical: the factory sets no extra chat options. When present, the factory applies only the non-null
+///     fields as native chat options or Ollama additional properties.
+/// </param>
 public sealed record InvocationAgentDefinition(
     string ModelId,
     string Instructions,
     IReadOnlyList<AITool> Tools,
     IReadOnlyList<ChatMessage> ConversationContext,
     string? ReasoningEffort = null,
-    bool SupportsThinking = true);
+    bool SupportsThinking = true,
+    InvocationSamplingOptions? Sampling = null);

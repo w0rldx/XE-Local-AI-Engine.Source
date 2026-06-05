@@ -464,7 +464,44 @@
         "label": "Message options",
         "showTokensPerSecond": "Show tokens/sec"
       },
-      "tokensPerSecond": "{{value}} tok/s"
+      "tokensPerSecond": "{{value}} tok/s",
+      "samplingOptions": {
+        "title": "Advanced sampling options",
+        "description": "These parameters override the model defaults for the next message send. They are stored in this browser only and are not persisted per-conversation.",
+        "groupSampling": "Sampling",
+        "groupPenalties": "Penalties",
+        "groupLimits": "Limits",
+        "temperature": "Temperature",
+        "temperatureDescription": "Controls randomness. Lower values are more deterministic; higher values are more creative.",
+        "topP": "Top P",
+        "topPDescription": "Nucleus sampling threshold. Only tokens whose cumulative probability reaches this value are considered.",
+        "topK": "Top K",
+        "topKDescription": "Limits sampling to the top K most likely tokens.",
+        "minP": "Min P",
+        "minPDescription": "Minimum probability for a token to be considered relative to the most probable token.",
+        "repeatPenalty": "Repeat penalty",
+        "repeatPenaltyDescription": "Penalizes repetition. Values above 1 discourage the model from repeating itself.",
+        "repeatLastN": "Repeat last N",
+        "repeatLastNDescription": "Number of tokens to look back when applying the repeat penalty. -1 uses the full context.",
+        "presencePenalty": "Presence penalty",
+        "presencePenaltyDescription": "Penalizes tokens that have already appeared in the output, regardless of frequency.",
+        "frequencyPenalty": "Frequency penalty",
+        "frequencyPenaltyDescription": "Penalizes tokens proportionally to how often they have already appeared in the output.",
+        "maxOutputTokens": "Max output tokens",
+        "maxOutputTokensDescription": "Maximum number of tokens to generate. Clamped to the model context length when set.",
+        "seed": "Seed",
+        "seedDescription": "Random seed for reproducibility. -1 uses a random seed.",
+        "numCtx": "Context length (num_ctx)",
+        "numCtxDescription": "Size of the context window in tokens used to generate the next token.",
+        "stop": "Stop sequences",
+        "stopDescription": "One stop sequence per line. The model halts when it emits any of these strings.",
+        "modelDefault": "Model default",
+        "reset": "Reset to defaults",
+        "close": "Close"
+      },
+      "composer": {
+        "samplingOptions": "Advanced sampling options"
+      }
     },
     "clientNodes": {
       "fields": {
@@ -811,6 +848,11 @@
       "placeholder": {
         "title": "Node settings",
         "description": "Local node settings will be backed by the node FastEndpoints API."
+      },
+      "developerMode": {
+        "title": "Developer settings",
+        "label": "Developer mode",
+        "description": "Enables advanced, experimental controls in the app (e.g. chat sampling options). Stored in this browser only."
       }
     },
     "cloudSettings": {
