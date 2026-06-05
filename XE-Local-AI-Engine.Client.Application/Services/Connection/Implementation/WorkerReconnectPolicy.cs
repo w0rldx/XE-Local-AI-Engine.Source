@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.Connection;
+namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
 using Microsoft.AspNetCore.SignalR.Client;
 using XE_Local_AI_Engine.Client.Configuration;
