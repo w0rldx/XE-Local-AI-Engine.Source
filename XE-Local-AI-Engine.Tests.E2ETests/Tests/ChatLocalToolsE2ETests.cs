@@ -32,6 +32,12 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
     private const string SendButtonTestId = "chat-send-button";
     private const string LocalToolsToggleTestId = "chat-local-tools-toggle";
 
+    // The local-tools toggle gates on the ACTIVE model advertising the Ollama `tools` capability. A fresh session
+    // starts on the "Local default" sentinel, whose capabilities are unknown (treated as not tool-capable), so the
+    // toggle is intentionally hidden until a concrete tool-capable model is picked. This is the FakeOllama chat model
+    // (it advertises `completion` + `tools` via ShowEndpoint), mirroring a real user selecting e.g. qwen.
+    private const string ToolCapableModelName = "qwen3.5:0.8b";
+
     [After(Test)]
     public void ResetToolCallScript()
     {
@@ -48,7 +54,43 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
 
         var chatInput = Page.GetByPlaceholder(ChatInputPlaceholder);
         await Expect(chatInput).ToBeVisibleAsync();
+
+        // Pick a concrete tool-capable model so the composer offers the local-tool controls. Without this the
+        // session stays on the "Local default" sentinel (capabilities unknown → no tools toggle), mirroring a real
+        // user who must select a tool-capable model before the local-tools toggle appears.
+        await SelectToolCapableModelAsync();
+
         return chatInput;
+    }
+
+    /// <summary>
+    ///     Opens the model selector and picks the FakeOllama tool-capable chat model so the composer's local-tool
+    ///     controls are gated on. The selector trigger lives in the chat input toolbar; each option carries a
+    ///     <c>data-testid="chat-model-selector-option-{value}"</c>.
+    /// </summary>
+    private async Task SelectToolCapableModelAsync()
+    {
+        var trigger = Page.GetByTestId("chat-model-selector-trigger");
+        await Expect(trigger).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
+        await trigger.ClickAsync();
+
+        var option = Page.GetByTestId($"chat-model-selector-option-{ToolCapableModelName}");
+        await Expect(option).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
+        await option.ClickAsync();
+
+        // Selection echoes into the trigger's displayed model; wait for it so the capability-gated toggle has
+        // re-rendered before the caller asserts on it.
+        await Expect(Page.GetByTestId("chat-model-selector-selected"))
+            .ToContainTextAsync(ToolCapableModelName, new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 5000
+            });
     }
 
     /// <summary>
