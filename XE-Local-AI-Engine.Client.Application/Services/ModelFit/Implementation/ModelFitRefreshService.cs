@@ -120,7 +120,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     ModelName: null,
                     ProviderName: request.ProviderName,
                     ProviderUrl: null,
-                    AttachRuntimeNetwork: false, // recommend runs fully offline (verified Marker 0).
+                    AttachRuntimeNetwork: false, // recommend runs fully offline (no runtime network attached).
                     CpuCoresOverride: cpuCoresOverride,
                     RamOverrideGb: ramOverrideGb,
                     VramOverrideGb: vramOverrideGb,
