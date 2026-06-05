@@ -106,7 +106,7 @@ function makeMutation() {
 	return { mutate: vi.fn(), isPending: false, error: null, variables: undefined };
 }
 
-// Playbook P5 — a monitoring signal for one Enabled action (joined by actionId).
+// A cohort-monitoring signal for one Enabled action (joined by actionId).
 function makeMonitorItem(overrides: Partial<PlaybookMonitorItem> = {}): PlaybookMonitorItem {
 	return {
 		actionId: "action-1",

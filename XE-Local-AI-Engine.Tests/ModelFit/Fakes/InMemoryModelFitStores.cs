@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     In-memory <see cref="IModelFitSnapshotStore" /> for Marker 3 refresh tests. Mirrors the production store's
+///     In-memory <see cref="IModelFitSnapshotStore" /> for refresh tests. Mirrors the production store's
 ///     contract: assigns ids/timestamps on create, stamps terminal fields, and enforces the single-latest-successful
 ///     invariant per <c>(operation, use_case, provider_name, model_name)</c> key on a Succeeded terminal transition.
 ///     It exposes the stored rows so tests can assert status / raw / diagnostics / latest-successful without decryption.

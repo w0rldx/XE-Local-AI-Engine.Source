@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     E2E tests for the Dashboard remote-connection action controls (plan Phase 5.3):
+///     E2E tests for the Dashboard remote-connection action controls:
 ///     Connect, Disconnect, Enable auto-connect, Disable auto-connect.
 ///     <para>
 ///         The test factory uses <c>StubTokenStore</c> which reports <c>IsPaired = false</c>.
@@ -104,7 +104,7 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
     }
 
     // -----------------------------------------------------------------------------------------
-    // Phase 5.3 — Connect / Disconnect buttons
+    // Connect / Disconnect buttons
     // -----------------------------------------------------------------------------------------
 
     /// <summary>
@@ -185,7 +185,7 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
     }
 
     // -----------------------------------------------------------------------------------------
-    // Phase 5.3 — Enable / Disable auto-connect buttons
+    // Enable / Disable auto-connect buttons
     // -----------------------------------------------------------------------------------------
 
     /// <summary>
@@ -236,7 +236,7 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
     }
 
     // -----------------------------------------------------------------------------------------
-    // Phase 5.3 — Refresh button
+    // Refresh button
     // -----------------------------------------------------------------------------------------
 
     /// <summary>
@@ -264,7 +264,7 @@ public sealed class DashboardRemoteConnectionE2ETests : XEE2ETestBase
     }
 
     // -----------------------------------------------------------------------------------------
-    // Phase 5.3 — Disable-while-Reconnecting (deferred)
+    // Disable-while-Reconnecting (deferred)
     // -----------------------------------------------------------------------------------------
 
     /// <summary>

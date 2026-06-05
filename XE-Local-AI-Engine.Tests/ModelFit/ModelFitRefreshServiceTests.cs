@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 3 <see cref="ModelFitRefreshService" /> tests: the single non-bypass refresh path maps every runner
+///     <see cref="ModelFitRefreshService" /> tests: the single non-bypass refresh path maps every runner
 ///     outcome to the right snapshot status (Succeeded / Failed / Cancelled / TimedOut), persists normalized rows on
 ///     success with the verified field mapping, stamps usage, tolerates malformed JSON without crashing, and re-throws
 ///     on a cancelled run after recording a Cancelled (not Failed) snapshot.
@@ -26,7 +26,7 @@ public sealed class ModelFitRefreshServiceTests
     private const string ValidReference =
         "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";
 
-    // A representative two-model recommend payload with a system object (schema captured live at Marker 0).
+    // A representative two-model recommend payload with a system object (schema captured live).
     private const string TwoModelJson =
         """
         {

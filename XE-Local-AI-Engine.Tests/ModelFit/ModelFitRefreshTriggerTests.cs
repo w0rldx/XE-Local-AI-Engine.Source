@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 4 <see cref="ModelFitRefreshTrigger" /> tests: the template-guarded facade rejects a non-existent job and a
+///     <see cref="ModelFitRefreshTrigger" /> tests: the template-guarded facade rejects a non-existent job and a
 ///     job of any other template (throwing <see cref="ScheduledJobValidationException" /> WITHOUT calling
 ///     <c>TriggerNowAsync</c>), and delegates exactly once to <c>TriggerNowAsync</c> for a valid
 ///     <c>model-recommendation-check</c> job. The facade depends only on the scheduler service — it has no utility-runner

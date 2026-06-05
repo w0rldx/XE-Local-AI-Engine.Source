@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 4 <see cref="ModelFitQueryService" /> tests: the cache reader returns the assembled view when a latest
+///     <see cref="ModelFitQueryService" /> tests: the cache reader returns the assembled view when a latest
 ///     successful recommendation snapshot exists, returns null on a cache-miss, maps the approved-image registry rows,
 ///     and — by construction — has NO dependency on the utility runner (it cannot run llmfit). The constructor's
 ///     three-store signature is the structural proof of the no-runner invariant.

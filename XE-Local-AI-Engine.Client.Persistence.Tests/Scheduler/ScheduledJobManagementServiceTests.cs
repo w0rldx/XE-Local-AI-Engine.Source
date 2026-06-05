@@ -398,7 +398,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // dispatch job would write run history through EF to the SAME SQLite file the Quartz ADO job store uses, and the
         // single-writer contention between the Quartz worker thread and the store deadlocks the test. The end-to-end fire
         // (dispatcher → handler → snapshot) is covered deterministically by ModelRecommendationCheckSchedulerPathTests
-        // (Marker 3). Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
+        // Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
         await service.TriggerNowAsync(record.Id).ConfigureAwait(false);
 
         AssertEx.True(
