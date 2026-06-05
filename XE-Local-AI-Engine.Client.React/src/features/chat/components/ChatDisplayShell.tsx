@@ -10,6 +10,9 @@ import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapability
 import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
 const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
+// Stable empty default for the optional agentOptions prop — a fresh `[]` default would allocate a new array
+// reference every render (same reasoning as EMPTY_TIMELINE_ENTRIES above).
+const EMPTY_AGENT_OPTIONS: ChatDisplayShellProps["agentOptions"] = [];
 
 /* eslint-disable react-doctor/no-inline-exhaustive-style */
 
@@ -39,7 +42,7 @@ export function ChatDisplayShell({
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
 	selectedAgentId = "",
-	agentOptions = [],
+	agentOptions = EMPTY_AGENT_OPTIONS,
 	onSelectAgent,
 	onSend,
 	onCancel,

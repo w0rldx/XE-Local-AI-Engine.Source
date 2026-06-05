@@ -1,4 +1,4 @@
-import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
+import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";

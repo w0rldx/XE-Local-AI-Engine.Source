@@ -52,13 +52,6 @@ export interface EvalResult {
 	readonly cases: readonly EvalCase[];
 }
 
-// The two states a P1 user can author (the create/edit form is constrained to these; the backend rejects the
-// reserved Suggested/Archived states in this phase).
-export const editablePlaybookActionStates: readonly Extract<PlaybookActionState, "Enabled" | "Disabled">[] = [
-	"Enabled",
-	"Disabled",
-];
-
 // Domain view-model for a playbook action. Timestamps are epoch milliseconds (long on the wire).
 //
 // Analysis provenance: an analysis-proposed action (source "Analysis", state "Suggested") carries

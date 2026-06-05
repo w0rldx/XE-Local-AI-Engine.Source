@@ -9,8 +9,8 @@ interface MenuItemStylesParameters {
 }
 
 type ElementStyles =
-	| (CSSProperties & Record<string, any>)
-	| ((parameters: MenuItemStylesParameters) => (CSSProperties & Record<string, any>) | undefined);
+	| (CSSProperties & Record<string, unknown>)
+	| ((parameters: MenuItemStylesParameters) => (CSSProperties & Record<string, unknown>) | undefined);
 
 export interface MenuItemStyles {
 	root?: ElementStyles;

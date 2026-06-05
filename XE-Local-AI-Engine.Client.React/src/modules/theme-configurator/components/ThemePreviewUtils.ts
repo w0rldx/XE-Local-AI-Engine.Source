@@ -56,7 +56,7 @@ export function withGeneratedPaletteScale(
 	};
 }
 
-export function resolvePreviewVariantColors(
+function resolvePreviewVariantColors(
 	input: Parameters<VariantColorsResolver>[0],
 	primaryMain: string,
 	primaryHover: string,

@@ -73,7 +73,7 @@ export interface RuntimeManagerStatusViewModel {
 	manifest: RuntimeManifestDto;
 }
 
-export const runtimeEmptyValue = "—";
+const runtimeEmptyValue = "—";
 
 export function formatRuntimeBoolean(value: boolean): string {
 	return value ? "Yes" : "No";

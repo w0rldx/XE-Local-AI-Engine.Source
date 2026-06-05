@@ -1,7 +1,7 @@
 import { isAxiosError } from "axios";
 
 /** Conflict code the node returns when a mutation targets a read-only (Origin=Remote) conversation. */
-export const nodeChatReadOnlyConflictCode = "conversation-read-only";
+const nodeChatReadOnlyConflictCode = "conversation-read-only";
 
 interface NodeChatConflictResponseDto {
 	code: string;

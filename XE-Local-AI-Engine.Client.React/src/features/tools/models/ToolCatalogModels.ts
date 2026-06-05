@@ -7,8 +7,6 @@
 // the UI group/badge tools by their originating server. ToolCatalogSourceKind is the coarse classification.
 export type ToolCatalogSourceKind = "builtin" | "mcp";
 
-export const toolCatalogSourceKinds: readonly ToolCatalogSourceKind[] = ["builtin", "mcp"];
-
 // Parsed source: a coarse kind plus, for MCP tools, the originating server slug (null for built-ins).
 export interface ToolCatalogSource {
 	readonly kind: ToolCatalogSourceKind;

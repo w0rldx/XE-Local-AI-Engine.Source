@@ -45,7 +45,7 @@ export function toApprovedImage(dto: XeLocalAiEngineClientEndpointsModelFitV1App
 	};
 }
 
-export function toModelFitRecommendation(
+function toModelFitRecommendation(
 	dto: XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse,
 ): ModelFitRecommendation {
 	return {
