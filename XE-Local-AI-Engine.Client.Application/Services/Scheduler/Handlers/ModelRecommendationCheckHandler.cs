@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
-///     Quartz template handler for the reserved <c>model-recommendation-check</c> template (plan Marker 3). On each fire
+///     Quartz template handler for the reserved <c>model-recommendation-check</c> template. On each fire
 ///     it validates the decrypted parameters, then invokes <see cref="IModelFitRefreshService" /> to run the approved
 ///     llmfit recommend image and replace the cached recommendation snapshot.
 ///     <para>

@@ -55,10 +55,10 @@ public interface IDockerRuntimeClient
     /// <summary>Force-removes a sandbox container (kill + rm); subsequent operations against it fail.</summary>
     Task RemoveSandboxContainerAsync(string containerId, CancellationToken cancellationToken);
 
-    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner, plan Marker 2) ---
+    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner) ---
 
     /// <summary>
-    ///     Runs a single one-shot utility container to completion and returns its captured result (plan Marker 2). The
+    ///     Runs a single one-shot utility container to completion and returns its captured result. The
     ///     container is created from the pinned <see cref="UtilityContainerRunSpec.Image" /> with the supplied argv, the
     ///     least-privilege hardening posture, and the requested network, then awaited for exit under a timeout. The
     ///     container is removed afterwards (force) UNLESS the run failed and

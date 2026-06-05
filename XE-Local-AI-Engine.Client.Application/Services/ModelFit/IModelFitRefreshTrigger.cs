@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
-///     Template-guarded facade over the scheduler trigger service (plan Marker 4). This is NOT a new execution path: it
+///     Template-guarded facade over the scheduler trigger service. This is NOT a new execution path: it
 ///     never runs llmfit directly and owns no run/cancellation/history state. It simply asks the scheduler to fire an
-///     EXISTING <c>model-recommendation-check</c> job definition; the dispatcher then drives the Marker 3 handler, which
+///     EXISTING <c>model-recommendation-check</c> job definition; the dispatcher then drives the model-fit handler, which
 ///     owns the run history and the actual utility run.
 ///     <para>
 ///         The guard is a security boundary: the endpoint accepts only a scheduled-job id (never an image reference,

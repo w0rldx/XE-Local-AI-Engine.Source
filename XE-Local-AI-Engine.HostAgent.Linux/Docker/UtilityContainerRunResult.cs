@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Outcome of <see cref="IDockerRuntimeClient.RunUtilityContainerAsync" /> (plan Marker 2). <see cref="Completed" />
+///     Outcome of <see cref="IDockerRuntimeClient.RunUtilityContainerAsync" />. <see cref="Completed" />
 ///     is <see langword="false" /> when the run was cancelled or timed out before the container exited (the service maps
 ///     that onto a CANCELLED/TIMED_OUT terminal status); on a non-completed run <see cref="ExitCode" /> is <c>-1</c>.
 /// </summary>

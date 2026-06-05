@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Serves the narrow <c>ModelFitUtilityControl</c> gRPC contract (plan Marker 2): runs a digest-pinned, approved
+///     Serves the narrow <c>ModelFitUtilityControl</c> gRPC contract: runs a digest-pinned, approved
 ///     llmfit utility image for a recommend or benchmark operation. The global HMAC interceptor authenticates every
 ///     call (the rpc is unary by design), so this service does no auth wiring.
 ///
@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 ///     profile — never accepted from the request — and the image reference is RE-validated against the allowlist
 ///     (defense in depth on top of the node-side validation) before anything runs. The verified command profiles are:
 ///     <list type="bullet">
-///       <item><c>recommend</c>: <c>(--cpu-cores n)? (--ram gG)? (--memory vG)? recommend --json --use-case &lt;uc&gt; --limit &lt;n&gt;</c> — HW overrides MUST precede the subcommand (verified Marker 0).</item>
+///       <item><c>recommend</c>: <c>(--cpu-cores n)? (--ram gG)? (--memory vG)? recommend --json --use-case &lt;uc&gt; --limit &lt;n&gt;</c> — HW overrides MUST precede the subcommand (verified against the llmfit CLI).</item>
 ///       <item><c>bench</c>: <c>bench --provider &lt;provider&gt; --url &lt;url&gt; --json &lt;model&gt;</c> — model name is REQUIRED for ollama bench.</item>
 ///     </list>
 /// </summary>
@@ -152,7 +152,7 @@ public sealed class ModelFitUtilityControlService : ModelFitUtilityControl.Model
 
     private List<string> BuildRecommendArguments(RunModelFitUtilityRequest request)
     {
-        // HW overrides are GLOBAL flags and MUST precede the subcommand (verified Marker 0; placing them after exits 2).
+        // HW overrides are GLOBAL flags and MUST precede the subcommand (verified against the llmfit CLI; placing them after exits 2).
         var arguments = new List<string>();
         AppendOverride(arguments, "--cpu-cores", request.CpuCoresOverride, suffixG: false);
         AppendOverride(arguments, "--ram", request.RamOverrideGb, suffixG: true);
@@ -178,7 +178,7 @@ public sealed class ModelFitUtilityControlService : ModelFitUtilityControl.Model
 
     private static List<string> BuildBenchmarkArguments(RunModelFitUtilityRequest request)
     {
-        // bench --provider <provider> --url <url> --json <model> (verified Marker 0). The positional model name is
+        // bench --provider <provider> --url <url> --json <model> (verified against the llmfit CLI). The positional model name is
         // required for ollama bench. provider_url is benchmark-only — never passed for recommend.
         var arguments = new List<string>
         {

@@ -284,29 +284,29 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddScoped<IScheduledJobDefinitionStore, ScheduledJobDefinitionStore>();
         builder.Services.AddScoped<IScheduledJobRunStore, ScheduledJobRunStore>();
         builder.Services.AddScoped<IScheduledJobRunEventStore, ScheduledJobRunEventStore>();
-        // Marker 1 model-fit llmfit persistence stores. The approved-image registry is code-seeded and operator-toggled.
+        // Model-fit llmfit persistence stores. The approved-image registry is code-seeded and operator-toggled.
         // Snapshots carry sanitized-by-default summaries; the encrypted raw output, stderr and diagnostics are exposed only
         // on the explicit operator-diagnostics read. Recommendation and benchmark rows are normalized snapshot projections.
-        // Scoped to match the scoped, DbContext-backed stores. No endpoints, HostAgent or React until later markers.
+        // Scoped to match the scoped, DbContext-backed stores.
         builder.Services.AddScoped<IApprovedUtilityImageStore, ApprovedUtilityImageStore>();
         builder.Services.AddScoped<IModelFitSnapshotStore, ModelFitSnapshotStore>();
         builder.Services.AddScoped<IModelFitRecommendationStore, ModelFitRecommendationStore>();
         builder.Services.AddScoped<IModelFitBenchmarkStore, ModelFitBenchmarkStore>();
-        // Marker 2 model-fit utility runner and guards. The runner is a thin HostAgent gRPC client; selection follows
+        // Model-fit utility runner and guards. The runner is a thin HostAgent gRPC client; selection follows
         // the AgentHome Sandbox Provider config key so that the local container value selects the gRPC runner while any
         // other value including the default fake selects the deterministic fake. The resolver is the reusable
-        // approved image guard that Marker 3 calls before a run. The request validator allowlists the intent params.
+        // approved image guard the scheduler refresh path calls before a run. The request validator allowlists the intent params.
         // Every boundary carries intent only and never a raw command line. The resolver is Scoped because it depends on
         // the Scoped image store. The runner and request validator are Singletons because the runner holds a long lived
-        // gRPC channel and the validator is stateless. No endpoints, scheduler handler or React until later markers.
+        // gRPC channel and the validator is stateless.
         builder.Services.AddSingleton<IModelFitUtilityRunner>(ModelFitUtilityRunnerSelector.Resolve);
         builder.Services.AddScoped<IApprovedImageResolver, ApprovedImageResolver>();
         builder.Services.AddSingleton<ModelFitRequestValidator>();
-        // Marker 3 model-fit refresh service: the single non-bypass path that runs the approved llmfit recommend image,
+        // Model-fit refresh service: the single non-bypass path that runs the approved llmfit recommend image,
         // tolerantly parses the JSON and replaces the cached recommendation snapshot. Invoked only by the scheduler's
         // ModelRecommendationCheckHandler. Scoped because it depends on the Scoped resolver and DbContext-backed stores.
         builder.Services.AddScoped<IModelFitRefreshService, ModelFitRefreshService>();
-        // Marker 4 model-fit local-API services. The query service is a pure cache reader over the M1 stores (approved
+        // Model-fit local-API services. The query service is a pure cache reader over the persistence stores (approved
         // images + sanitized snapshot summary + normalized recommendation rows) and takes NO dependency on the runner or
         // refresh service, so a read can never start an llmfit run. The refresh trigger is a template-guarded facade over
         // the scheduler trigger service: it fires only an existing model-recommendation-check definition and never runs
@@ -405,7 +405,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.Services.AddSingleton<IMcpClientFactory, McpClientFactory>();
         builder.Services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
         builder.Services.AddHostedService<McpServerStartupConnector>();
-        // Marker 1 model-fit image-reference validator (security boundary): validates that a reference is already in the
+        // Model-fit image-reference validator (security boundary): validates that a reference is already in the
         // strict canonical repository:tag@sha256:<64 lowercase hex> form against the approved-repository allowlist, never
         // rewriting an untrusted reference into a trusted one. Stateless → singleton. The startup seeder re-validates every
         // code-defined catalog descriptor through it and skips any whose reference fails, then upserts the rest into the

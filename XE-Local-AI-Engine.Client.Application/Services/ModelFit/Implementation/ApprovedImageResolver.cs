@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
 ///     Default <see cref="IApprovedImageResolver" />: loads the descriptor from the registry, applies the enable/deprecate/
-///     purpose guards, and re-validates the stored pinned reference (plan Marker 2). It never logs or echoes the image
+///     purpose guards, and re-validates the stored pinned reference. It never logs or echoes the image
 ///     reference and never rewrites it — the reference must already be canonical and allowlisted.
 /// </summary>
 public sealed class ApprovedImageResolver : IApprovedImageResolver

@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Resolves an approved image id to a validated, runnable pinned image reference (plan Marker 2). This is the reusable
-///     guard the scheduler handler (Marker 3) calls before a run: it loads the descriptor, refuses to resolve a descriptor
+///     Resolves an approved image id to a validated, runnable pinned image reference. This is the reusable
+///     guard the scheduler model-fit handler calls before a run: it loads the descriptor, refuses to resolve a descriptor
 ///     that is missing, disabled, deprecated, or not sanctioned for the requested operation, and re-validates the stored
 ///     reference through the security validator. Rejection is a typed result, never an exception used for flow control.
 /// </summary>

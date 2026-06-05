@@ -57,7 +57,7 @@ public static class NodeSchedulerServiceCollectionExtensions
         builder.Services.AddSingleton<IScheduledJobTemplateRegistry, ScheduledJobTemplateRegistry>();
         builder.Services.AddScoped<IScheduledJobManagementService, ScheduledJobManagementService>();
 
-        // Marker 3 model-fit template handler. Registered as a Singleton because the registry captures every handler in
+        // Model-fit template handler. Registered as a Singleton because the registry captures every handler in
         // a FrozenDictionary at construction; the handler resolves the Scoped IModelFitRefreshService through an
         // IServiceScopeFactory scope per fire.
         builder.Services.AddSingleton<IScheduledJobHandler, ModelRecommendationCheckHandler>();

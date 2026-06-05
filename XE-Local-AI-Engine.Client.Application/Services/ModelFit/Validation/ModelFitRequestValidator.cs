@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
-///     Server-side validation of a model-fit run's intent params (plan Marker 2). This is mandatory because llmfit does
+///     Server-side validation of a model-fit run's intent params. This is mandatory because llmfit does
 ///     no input validation of its own (it silently accepts an unknown <c>--use-case</c> and exits 0). The validator
 ///     allowlists the use-case (the six llmfit-supported values), bounds the limit, allowlists the provider, and routes
 ///     a benchmark model name through the existing <see cref="ModelNameValidator" />. Returns a sanitized error string,
@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 /// </summary>
 public sealed class ModelFitRequestValidator
 {
-    /// <summary>The six llmfit-supported use-case values (Marker 0). Matched ordinally and case-sensitively.</summary>
+    /// <summary>The six llmfit-supported use-case values. Matched ordinally and case-sensitively.</summary>
     public static readonly IReadOnlySet<string> AllowedUseCases =
         new HashSet<string>(StringComparer.Ordinal) { "general", "coding", "reasoning", "chat", "multimodal", "embedding" };
 

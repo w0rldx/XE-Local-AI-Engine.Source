@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Read-only projections over the cached model-fit data (plan Marker 4). This is a pure cache reader: it lists the
-///     approved utility images and assembles the latest cached recommendation snapshot from the sanitized M1 store
+///     Read-only projections over the cached model-fit data. This is a pure cache reader: it lists the
+///     approved utility images and assembles the latest cached recommendation snapshot from the sanitized persistence-store
 ///     projections. It NEVER invokes the HostAgent utility runner and never runs llmfit — fresh runs are produced only by
 ///     the scheduler's <c>model-recommendation-check</c> handler. It deliberately takes no dependency on
 ///     <c>IModelFitUtilityRunner</c> or <c>IModelFitRefreshService</c> so a query can never trigger an execution path.

@@ -474,7 +474,7 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
             cancellationToken);
     }
 
-    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner, plan Marker 2) ---
+    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner) ---
 
     /// <summary>The Docker label stamped on every utility container so orphans can be reconciled on startup.</summary>
     public const string UtilityLabelKey = "xe.modelfit.utility";

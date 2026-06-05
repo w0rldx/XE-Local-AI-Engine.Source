@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 /// </summary>
 public sealed partial class ApprovedImageReferenceValidator
 {
-    /// <summary>The single approved repository the Marker 0 process sanctioned. Used as the default allowlist.</summary>
+    /// <summary>The single approved repository sanctioned during image review. Used as the default allowlist.</summary>
     public const string DefaultAllowedRepository = "ghcr.io/alexsjones/llmfit";
 
     private static readonly IReadOnlySet<string> DefaultAllowedRepositories =

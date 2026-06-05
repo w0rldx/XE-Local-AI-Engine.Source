@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Orchestrates a single model-fit refresh (plan Marker 3): it resolves the approved image, validates the intent
+///     Orchestrates a single model-fit refresh: it resolves the approved image, validates the intent
 ///     params, computes node hardware overrides, opens a snapshot run, invokes the narrow HostAgent utility runner,
 ///     tolerantly parses the recommendation JSON and replaces the cached normalized recommendation snapshot.
 ///     <para>

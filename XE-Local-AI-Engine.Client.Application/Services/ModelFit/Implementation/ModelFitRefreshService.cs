@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
-///     Default <see cref="IModelFitRefreshService" /> (plan Marker 3). Resolves the approved image, validates the intent
+///     Default <see cref="IModelFitRefreshService" /> . Resolves the approved image, validates the intent
 ///     params, computes node hardware overrides, opens a snapshot run, invokes the narrow HostAgent runner, tolerantly
 ///     parses the recommendation JSON, and replaces the cached normalized recommendation snapshot. It owns NO scheduler
 ///     state and publishes no SignalR — the dispatcher owns the run row. Logs carry the snapshot id, approved image id,

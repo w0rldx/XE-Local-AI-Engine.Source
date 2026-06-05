@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Server-side configuration for the narrow model-fit utility runner (plan Marker 2). Bound from the
+///     Server-side configuration for the narrow model-fit utility runner. Bound from the
 ///     <c>HostAgent:ModelFitUtility</c> section. These values are the trust boundary the
 ///     <c>ModelFitUtilityControlService</c> enforces: only an image whose repository is on
 ///     <see cref="AllowedImageRepositories" /> may run, the benchmark path attaches only the
@@ -13,7 +13,7 @@ public sealed class ModelFitUtilityOptions
 {
     public const string SectionName = "HostAgent:ModelFitUtility";
 
-    /// <summary>The single approved llmfit repository the Marker 0 process sanctioned. Used as the default allowlist entry.</summary>
+    /// <summary>The single approved llmfit repository sanctioned during image review. Used as the default allowlist entry.</summary>
     public const string DefaultAllowedRepository = "ghcr.io/alexsjones/llmfit";
 
     /// <summary>

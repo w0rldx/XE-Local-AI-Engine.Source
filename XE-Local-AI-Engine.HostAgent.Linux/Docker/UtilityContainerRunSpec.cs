@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 
 /// <summary>
-///     Describes a single one-shot utility container run (plan Marker 2). This is a hardened, run-to-completion path
+///     Describes a single one-shot utility container run. This is a hardened, run-to-completion path
 ///     distinct from the sandbox/managed-runtime paths: the container runs the supplied <see cref="Arguments" /> argv
 ///     against a digest-pinned image, the run is awaited for exit with a timeout, output is captured, and the container
 ///     is removed afterwards (unless the run failed and <see cref="RetainOnFailure" /> is set). The argv is built
