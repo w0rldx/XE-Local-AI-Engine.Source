@@ -6,7 +6,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Endpoint integration tests for the Marker 4 model-fit local API. Covers: 401 on every route without a bearer
+///     Endpoint integration tests for the model-fit local API. Covers: 401 on every route without a bearer
 ///     token; reachability with an operator token; the latest endpoint's explicit cache-miss state (hasCache:false, 200,
 ///     never a 404); the refresh endpoint's template guard (a random scheduled-job id is rejected, not executed); and
 ///     redaction (the latest response carries no raw output / stderr / diagnostics keys). These run against the real DI

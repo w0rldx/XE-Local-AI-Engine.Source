@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 2 <see cref="ModelFitRequestValidator" /> tests: the mandatory server-side intent validation (llmfit does
+///     <see cref="ModelFitRequestValidator" /> tests: the mandatory server-side intent validation (llmfit does
 ///     no input validation of its own) rejects unknown use cases, out-of-range limits, unsupported providers, and bad
 ///     benchmark model names, and accepts the valid recommend/benchmark shapes.
 /// </summary>

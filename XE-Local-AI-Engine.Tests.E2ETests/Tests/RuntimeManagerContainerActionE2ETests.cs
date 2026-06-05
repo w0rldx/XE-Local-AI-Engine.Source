@@ -84,7 +84,7 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
     }
 
     // -----------------------------------------------------------------------------------------
-    // Phase 6.3 — Container action controls
+    // Container action controls
     // -----------------------------------------------------------------------------------------
 
     /// <summary>
@@ -198,7 +198,7 @@ public sealed class RuntimeManagerContainerActionE2ETests : XEE2ETestBase
     }
 
     // -----------------------------------------------------------------------------------------
-    // Phase 6.4 — Log-stream / Follow-logs UI
+    // Log-stream / Follow-logs UI
     // -----------------------------------------------------------------------------------------
 
     /// <summary>

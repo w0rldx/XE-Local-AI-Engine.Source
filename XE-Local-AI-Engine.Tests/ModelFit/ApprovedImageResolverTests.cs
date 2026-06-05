@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 2 <see cref="ApprovedImageResolver" /> tests: the reusable approved-image guard rejects unknown, disabled,
+///     <see cref="ApprovedImageResolver" /> tests: the reusable approved-image guard rejects unknown, disabled,
 ///     deprecated, purpose-mismatched, and invalid-reference descriptors, and resolves a valid enabled one.
 /// </summary>
 public sealed class ApprovedImageResolverTests

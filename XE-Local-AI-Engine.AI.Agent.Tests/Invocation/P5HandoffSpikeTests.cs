@@ -355,7 +355,7 @@ public sealed class P5HandoffSpikeTests
         var accepted = await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
         Console.WriteLine($"[P5][C approveFirst={approveFirst}] TurnToken accepted={accepted}");
 
-        // --- Phase 1: drain until approval RequestInfoEvent appears ---
+        // --- Step 1: drain until approval RequestInfoEvent appears ---
         RequestInfoEvent? approvalEvent = null;
         using (var ph1Cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
         {
@@ -380,7 +380,7 @@ public sealed class P5HandoffSpikeTests
         AssertEx.Equal(0, lookupExecuted, "C: lookup tool must NOT execute before approval");
         AssertEx.True(approvalEvent is not null, "C: workflow must pause with RequestInfoEvent for approval-required own tool");
 
-        // --- Phase 2: send approval/rejection, drain until handoff completes or tool-not-executed confirmed ---
+        // --- Step 2: send approval/rejection, drain until handoff completes or tool-not-executed confirmed ---
         var approvalResponse = BuildApprovalResponse(approvalEvent!.Request, approveFirst);
         await run.SendResponseAsync(approvalResponse);
         Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 approval sent (approve={approveFirst})");
@@ -715,7 +715,7 @@ public sealed class P5HandoffSpikeTests
             var hasOwnToolResult = list.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Any();
             if (hasOwnToolResult)
             {
-                // Phase 2: own-tool result is in history → now emit the handoff call.
+                // Step 2: own-tool result is in history → now emit the handoff call.
                 var handoffName = handoffTool.Name;
                 Console.WriteLine($"[P5][C][fake]   -> TRIAGE phase2 handoff call '{handoffName}'");
                 var handoffCall = new FunctionCallContent($"call-{handoffName}", handoffName, new Dictionary<string, object?>());
@@ -724,7 +724,7 @@ public sealed class P5HandoffSpikeTests
                     : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { handoffCall })), null);
             }
 
-            // Phase 1: no result yet → emit the own-tool call (approval-required, will be intercepted by FICC).
+            // Step 1: no result yet → emit the own-tool call (approval-required, will be intercepted by FICC).
             Console.WriteLine($"[P5][C][fake]   -> TRIAGE phase1 own-tool call '{_ownToolName}'");
             var ownCall = new FunctionCallContent($"call-{_ownToolName}", _ownToolName, new Dictionary<string, object?> { ["customerId"] = "C-42" });
             return streaming

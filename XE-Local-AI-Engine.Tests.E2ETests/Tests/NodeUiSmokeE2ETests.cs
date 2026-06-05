@@ -36,7 +36,7 @@ public sealed class NodeUiSmokeE2ETests : XEE2ETestBase
             WaitUntil = WaitUntilState.NetworkIdle
         });
 
-        // Phase 6 will replace this with the real setup/login browser flow.
+        // A later iteration will replace this with the real setup/login browser flow.
         await Expect(Page.GetByText("qwen3.5:0.8b").First).ToBeVisibleAsync();
     }
 

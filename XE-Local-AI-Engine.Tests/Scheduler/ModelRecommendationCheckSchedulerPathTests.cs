@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 3 no-bypass proof: a real <see cref="SchedulerDispatchExecutor" /> dispatching a definition that
+///     No-bypass proof: a real <see cref="SchedulerDispatchExecutor" /> dispatching a definition that
 ///     references the <c>model-recommendation-check</c> template runs the REAL handler through the registry's
 ///     <c>TryGetHandler</c>, opening a <c>scheduled_job_runs</c> row that goes Running → Succeeded AND creating a
 ///     <c>model_fit_snapshots</c> row. The refresh service is wired only behind the scheduler — there is no direct

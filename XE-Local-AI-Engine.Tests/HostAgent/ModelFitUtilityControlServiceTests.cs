@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.HostAgent.Linux.Services;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Handler coverage for <see cref="ModelFitUtilityControlService" /> (plan Marker 2) driven entirely by
+///     Handler coverage for <see cref="ModelFitUtilityControlService" /> driven entirely by
 ///     <see cref="FakeDockerRuntimeClient" /> — NO Docker. Asserts the image allowlist gate (only an allowlisted pinned
 ///     ref runs; a non-allowlisted repo / :latest / unpinned ref is rejected WITHOUT running), the server-built argv
 ///     (HW overrides BEFORE the recommend subcommand; bench requires a model name), cancellation/timeout cleanup, the
@@ -73,7 +73,7 @@ public sealed class ModelFitUtilityControlServiceTests
         await service.RunModelFitUtility(request, Context());
 
         var argv = docker.LastUtilityRunSpec!.Arguments;
-        // Overrides MUST precede the subcommand (verified Marker 0: placing them after exits 2).
+        // Overrides MUST precede the subcommand (verified against the llmfit CLI: placing them after exits 2).
         AssertEx.Equal("--cpu-cores", argv[0]);
         AssertEx.Equal("4", argv[1]);
         AssertEx.Equal("--ram", argv[2]);

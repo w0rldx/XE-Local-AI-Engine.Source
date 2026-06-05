@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Marker 2 model-fit runner tests: the production-resident fake round-trips a scripted result and records the
+///     Model-fit runner tests: the production-resident fake round-trips a scripted result and records the
 ///     intent request, and the gRPC runner's request→proto and reply→result mapping is asserted as a pure unit test
 ///     (no live channel).
 /// </summary>
