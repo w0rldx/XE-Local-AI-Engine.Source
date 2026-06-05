@@ -350,10 +350,16 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		// an empty JSON object at runtime — FastEndpoints rejects an empty-body POST with 415 at model-binding
 		// (before the route guard runs), and the generated client omits the request data when `body === undefined`.
 		// Cast `{}` past the `never` body type so the runtime payload is the required empty object.
+		//
+		// The generated request validator (`body: z.never().optional()`) would REJECT that `{}` before the call is
+		// ever sent — the two constraints are irreconcilable through the generated schema, so override it to a no-op.
+		// The empty body carries no data to validate; the server still enforces the route + guard. Without this the
+		// branch action silently no-ops for every user (the ZodError surfaces only as "unexpected response shape").
 		const { data } = await callWithResponseValidation(
 			branchNodeChatConversation({
 				path: { conversationId, messageId },
 				body: {} as unknown as never,
+				requestValidator: undefined,
 				signal: options?.signal,
 				throwOnError: true,
 			}),
