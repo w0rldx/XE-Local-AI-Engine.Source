@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.AI.Agent.Tools;
+namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
