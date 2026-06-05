@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.Scheduler;
+namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using Quartz;
 
