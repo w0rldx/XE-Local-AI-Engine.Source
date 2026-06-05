@@ -33,6 +33,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             // Deliberately NOT fed into the config hash below: capable models keep a byte-identical hash, and only the
             // currently-failing incapable models see a (harmless) hash difference.
             SupportsThinking = request.SupportsThinking,
+            // Deliberately NOT fed into the config hash below (mirrors SupportsThinking): sampling is a loopback-only
+            // per-send knob, so the no-override path keeps a byte-identical hash and the cross-repo digest stays stable.
+            SamplingOptions = request.SamplingOptions,
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,

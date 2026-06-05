@@ -35,7 +35,10 @@ import type {
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import { binaryReasoningEfforts, reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
@@ -148,6 +151,9 @@ export function Chat() {
 		setAgentModeEnabled,
 		setSelectedAgentId,
 	} = useNodeChatPreferencesStore((state) => state.actions);
+	// Developer mode + per-send sampling overrides (§7.9 of plan). Read directly from global stores.
+	const developerMode = useDeveloperModeStore((state) => state.developerMode);
+	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
 	// Tool-call activity entries accumulated over the current streaming turn (keyed by tool call id). Reset per turn.
@@ -494,6 +500,10 @@ export function Chat() {
 						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
 						selectedPath: Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
 						agentDefinitionId: effectiveAgentId,
+						// Include sampling overrides only when developer mode is on and at least one field is set.
+						// toWireSamplingOptions returns undefined when all fields are null → omitted from wire payload
+						// (§3 byte-identical invariant: OFF path is byte-identical to today).
+						samplingOptions: developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
 					},
 					abortController.signal,
 				)) {
@@ -546,9 +556,11 @@ export function Chat() {
 			agentModeEnabled,
 			agentOptions,
 			cacheConversation,
+			developerMode,
 			queryClient,
 			refreshConversation,
 			resolveSendConversation,
+			samplingOptions,
 			selectedAgentId,
 			toolsEnabled,
 		],

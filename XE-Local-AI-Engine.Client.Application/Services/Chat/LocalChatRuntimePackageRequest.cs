@@ -16,4 +16,5 @@ public sealed record LocalChatRuntimePackageRequest(
     TimeoutSettings? Timeouts = null,
     string? ReasoningEffort = null,
     OrchestrationSpec? OrchestrationSpec = null,
-    bool SupportsThinking = true);
+    bool SupportsThinking = true,
+    SamplingOptions? SamplingOptions = null);

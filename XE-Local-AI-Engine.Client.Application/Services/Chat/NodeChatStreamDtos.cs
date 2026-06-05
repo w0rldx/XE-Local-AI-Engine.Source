@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Models;
+
 /// <summary>
 ///     Represents chat stream event types.
 /// </summary>
@@ -31,7 +33,10 @@ public sealed record NodeChatStreamRequest(
     // The per-send selected agent (composer agent mode). Takes precedence over the legacy conversation binding; null
     // falls back to the conversation binding, then to the seeded Default Assistant (mode-off persona). Trailing
     // optional so the SignalR hub forwards the record unchanged.
-    Guid? AgentDefinitionId = null);
+    Guid? AgentDefinitionId = null,
+    // Developer-gated per-send sampling overrides. Null (the default) keeps the no-override path byte-identical to
+    // today; the SignalR hub forwards the record unchanged.
+    SamplingOptions? SamplingOptions = null);
 
 public sealed record ChatStreamEvent(
     string Type,
