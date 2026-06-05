@@ -1,6 +1,7 @@
-namespace XE_Local_AI_Engine.Client.Services.Chat;
+namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Services.Chat;
 
 public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer)
 {
