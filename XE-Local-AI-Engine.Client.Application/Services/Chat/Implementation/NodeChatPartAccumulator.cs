@@ -1,4 +1,6 @@
-namespace XE_Local_AI_Engine.Client.Services.Chat;
+namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+
+using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Accumulates the ordered interleave of reasoning segments and tool cards for a single assistant turn so the

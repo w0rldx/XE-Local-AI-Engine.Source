@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 /// <summary>
 ///     Persists the chat content of a PLATFORM-served (Origin=Remote) invocation to node SQLite, mirroring what the
