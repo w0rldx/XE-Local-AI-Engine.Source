@@ -69,7 +69,10 @@ public sealed class InvocationRunnerTests
 
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
-        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
+        // The runner now stamps a wall-clock generation duration on the completion report; match it with Arg.Any so the
+        // non-deterministic elapsed value does not fail the call assertion (the rest of the args stay null-checked).
+        await dispatcher.Received(1)
+            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -88,7 +91,9 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationThinkingChunkAsync(package.InvocationId, " more thought");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
-        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
+        // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
+        await dispatcher.Received(1)
+            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -131,7 +136,9 @@ public sealed class InvocationRunnerTests
         AssertEx.Empty(sender.SentEncryptedChunks);
         AssertEx.Empty(sender.SentEncryptedCompletions);
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
-        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId);
+        // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
+        await dispatcher.Received(1)
+            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -201,7 +208,10 @@ public sealed class InvocationRunnerTests
         AssertEx.Equal(10, sender.SentCompletions[0].InputTokens);
         AssertEx.Equal(2, sender.SentCompletions[0].OutputTokens);
         AssertEx.Equal(12, sender.SentCompletions[0].TokensUsed);
-        await dispatcher.Received(1).ReportInvocationCompletedAsync(package.InvocationId, 10, 2, 12);
+        // The authoritative token counts are asserted exactly; the new wall-clock duration arg is matched with Arg.Any
+        // because the elapsed value is non-deterministic.
+        await dispatcher.Received(1)
+            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(10), Arg.Is<int?>(2), Arg.Is<int?>(12), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]

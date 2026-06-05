@@ -9,6 +9,7 @@ const SIDEBAR_COLLAPSED_STORAGE_KEY = "xe-node-chat-sidebar-collapsed";
 const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
 const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
 const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
+const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second";
 
 // The store reads localStorage once at module-init, so each test seeds storage then re-imports the module
 // with a fresh registry to exercise the init path.
@@ -178,5 +179,29 @@ describe("NodeChatPreferencesStore", () => {
 		useStore.getState().actions.setSelectedAgentId("");
 		expect(useStore.getState().selectedAgentId).toBe("");
 		expect(localStorage.getItem(SELECTED_AGENT_STORAGE_KEY)).toBe("");
+	});
+
+	it("defaults the tokens/sec toggle to off", async () => {
+		const useStore = await loadStore();
+
+		expect(useStore.getState().showTokensPerSecond).toBe(false);
+	});
+
+	it("hydrates the persisted tokens/sec toggle on init", async () => {
+		const useStore = await loadStore({ [SHOW_TOKENS_PER_SECOND_STORAGE_KEY]: "true" });
+
+		expect(useStore.getState().showTokensPerSecond).toBe(true);
+	});
+
+	it("persists the tokens/sec toggle when set", async () => {
+		const useStore = await loadStore();
+
+		useStore.getState().actions.setShowTokensPerSecond(true);
+		expect(useStore.getState().showTokensPerSecond).toBe(true);
+		expect(localStorage.getItem(SHOW_TOKENS_PER_SECOND_STORAGE_KEY)).toBe("true");
+
+		useStore.getState().actions.setShowTokensPerSecond(false);
+		expect(useStore.getState().showTokensPerSecond).toBe(false);
+		expect(localStorage.getItem(SHOW_TOKENS_PER_SECOND_STORAGE_KEY)).toBe("false");
 	});
 });

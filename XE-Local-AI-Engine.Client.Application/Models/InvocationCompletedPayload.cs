@@ -20,4 +20,7 @@ public sealed record InvocationCompletedPayload
     public string? FinalReasoning { get; init; }
 
     public int? ReasoningTokens { get; init; }
+
+    /// <summary>Whole-turn wall-clock generation duration in milliseconds, measured by the invocation runner. Null when not reported.</summary>
+    public long? GenerationDurationMs { get; init; }
 }

@@ -142,7 +142,10 @@ public sealed record NodeChatTerminalizeMessageRequest(
     int? ReasoningCount = null,
     // Ordered interleave assembled from the run's reasoning segments + tool lifecycle. Null leaves any existing parts
     // untouched; an empty list is a meaningful "no parts" (e.g. a plain-text turn) and overwrites.
-    IReadOnlyList<NodeChatMessagePart>? Parts = null);
+    IReadOnlyList<NodeChatMessagePart>? Parts = null,
+    // Whole-turn wall-clock generation duration in milliseconds (drives the optional tokens-per-second attribution).
+    // Trailing optional so legacy callers and the platform path leave it null. Null preserves any existing value.
+    long? GenerationDurationMs = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,
@@ -251,7 +254,11 @@ public sealed record NodeChatPersistedMessageDto(
     string? AgentName = null,
     // The reasoning effort actually used to generate this assistant turn, surfaced from the metadata blob (no DB
     // column). Null for legacy turns persisted before this field existed and for user messages.
-    string? ReasoningEffort = null) : ISelectedPathMessage;
+    string? ReasoningEffort = null,
+    // Whole-turn wall-clock generation duration in milliseconds, surfaced from the metadata blob (no DB column).
+    // Null for legacy turns persisted before this field existed, the platform path, and user messages. Drives the
+    // optional tokens-per-second attribution alongside OutputCount.
+    long? GenerationDurationMs = null) : ISelectedPathMessage;
 
 /// <summary>
 ///     Transport DTO for node chat cancel result data.

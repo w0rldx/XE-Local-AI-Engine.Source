@@ -14,6 +14,7 @@ const SIDEBAR_COLLAPSED_STORAGE_KEY = "xe-node-chat-sidebar-collapsed";
 const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
 const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
 const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
+const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second";
 
 // Graded reasoning efforts, offered for models that advertise the Ollama `thinking` capability.
 export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high"];
@@ -37,6 +38,9 @@ interface NodeChatPreferencesStore {
 	// agent was deleted — Chat.tsx validates against the live list on read and drops stale ids).
 	agentModeEnabled: boolean;
 	selectedAgentId: string;
+	// When enabled, completed assistant turns show a tokens/sec figure on their attribution line (computed from the
+	// persisted generation duration + output tokens). Off by default; global preference like the others above.
+	showTokensPerSecond: boolean;
 	actions: {
 		setSelectedModel: (value: string) => void;
 		setReasoningEffort: (value: ReasoningEffort) => void;
@@ -48,6 +52,7 @@ interface NodeChatPreferencesStore {
 		setAgentModeEnabled: (value: boolean) => void;
 		toggleAgentMode: () => void;
 		setSelectedAgentId: (value: string) => void;
+		setShowTokensPerSecond: (value: boolean) => void;
 	};
 }
 
@@ -97,6 +102,10 @@ function readStoredSelectedAgentId(): string {
 	return readStoredString(SELECTED_AGENT_STORAGE_KEY) ?? "";
 }
 
+function readStoredShowTokensPerSecond(): boolean {
+	return readStoredString(SHOW_TOKENS_PER_SECOND_STORAGE_KEY) === "true";
+}
+
 export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((set) => ({
 	selectedModel: readStoredModel(),
 	reasoningEffort: readStoredReasoningEffort(),
@@ -105,6 +114,7 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 	selectedConversationId: readStoredSelectedConversationId(),
 	agentModeEnabled: readStoredAgentModeEnabled(),
 	selectedAgentId: readStoredSelectedAgentId(),
+	showTokensPerSecond: readStoredShowTokensPerSecond(),
 	actions: {
 		setSelectedModel: (value) => {
 			writeStoredValue(SELECTED_MODEL_STORAGE_KEY, value);
@@ -157,6 +167,10 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 		setSelectedAgentId: (value) => {
 			writeStoredValue(SELECTED_AGENT_STORAGE_KEY, value);
 			set({ selectedAgentId: value });
+		},
+		setShowTokensPerSecond: (value) => {
+			writeStoredValue(SHOW_TOKENS_PER_SECOND_STORAGE_KEY, String(value));
+			set({ showTokensPerSecond: value });
 		},
 	},
 }));

@@ -221,6 +221,24 @@ describe("node chat mapper", () => {
 		expect(mapSingleMessage({ reasoningEffort: "turbo" }).reasoningEffort).toBeUndefined();
 	});
 
+	it("maps a numeric generationDurationMs onto the message model", () => {
+		expect(mapSingleMessage({ generationDurationMs: 2480 }).generationDurationMs).toBe(2480);
+	});
+
+	it("converts a runtime bigint generationDurationMs (int64 from coerced zod) to a number", () => {
+		// The wire field is a C# int64; the generated zod is z.coerce.bigint() with validator:true, so at runtime
+		// dto.generationDurationMs is a bigint even though the TS type reads `number`. The mapper must Number()-convert
+		// it, or the downstream tps math would throw "Cannot mix BigInt and other types".
+		const message = mapSingleMessage({ generationDurationMs: 2480n as unknown as number });
+
+		expect(message.generationDurationMs).toBe(2480);
+		expect(typeof message.generationDurationMs).toBe("number");
+	});
+
+	it("maps a null generationDurationMs (legacy turn) to undefined", () => {
+		expect(mapSingleMessage({ generationDurationMs: null }).generationDurationMs).toBeUndefined();
+	});
+
 	it("maps the persisted ordered parts into the message's interleave", () => {
 		const message = mapSingleMessage({
 			reasoning: "flat blob",

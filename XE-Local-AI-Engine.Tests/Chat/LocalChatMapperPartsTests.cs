@@ -64,6 +64,28 @@ public sealed class LocalChatMapperPartsTests
         AssertEx.Contains(json, "\"requiresApproval\":false");
     }
 
+    [Test]
+    public void ToResponse_SurfacesGenerationDurationMs()
+    {
+        var message = BuildMessage(parts: null) with { GenerationDurationMs = 2000 };
+
+        var response = message.ToResponse();
+
+        AssertEx.Equal(2000L, response.GenerationDurationMs);
+
+        // The frontend reads "generationDurationMs" off the camelCase wire response to compute tokens/sec.
+        var json = JsonSerializer.Serialize(response, WebOptions);
+        AssertEx.Contains(json, "\"generationDurationMs\":2000");
+    }
+
+    [Test]
+    public void ToResponse_WhenNoGenerationDuration_ReturnsNull()
+    {
+        var response = BuildMessage(parts: null).ToResponse();
+
+        AssertEx.Null(response.GenerationDurationMs);
+    }
+
     private static NodeChatPersistedMessageDto BuildMessage(IReadOnlyList<NodeChatMessagePart>? parts)
     {
         return new NodeChatPersistedMessageDto(Guid.NewGuid(),

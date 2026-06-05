@@ -298,6 +298,31 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task ReportInvocationCompletedAsync_PreservesGenerationDurationMsThroughSnapshotClone()
+    {
+        // Regression: Clone() copied the token fields but dropped GenerationDurationMs, so the cloned snapshot
+        // delivered to the chat pump (both via the CurrentInvocation getter and the InvocationStateChanged event)
+        // persisted a null duration even though the runner reported one. Assert both clone paths carry it.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        InvocationState? lastEventState = null;
+        dispatcher.InvocationStateChanged += (_, args) => lastEventState = args.State;
+
+        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId, 10, 3, 13, 1, 1234);
+
+        // The getter returns Clone(CurrentInvocation): the duration must survive that copy.
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(1234L, current.GenerationDurationMs);
+        AssertEx.Equal(3, current.OutputTokens);
+
+        // The event payload is also a Clone of the state; the pump consumes this snapshot.
+        var eventState = AssertEx.NotNull(lastEventState);
+        AssertEx.Equal(1234L, eventState.GenerationDurationMs);
+    }
+
+    [Test]
     public async Task ReportInvocationChunkAsync_WhenChunkIsWhitespaceOnly_PreservesWhitespace()
     {
         var runner = Substitute.For<IInvocationRunner>();

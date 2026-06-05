@@ -227,6 +227,13 @@ public sealed class NodeChatMessageResponse
     ///     Null for legacy turns persisted before this field existed and for user messages.
     /// </summary>
     public string? ReasoningEffort { get; init; }
+
+    /// <summary>
+    ///     Whole-turn wall-clock generation duration in milliseconds, used with <see cref="OutputTokens" /> to compute
+    ///     the optional tokens-per-second attribution. Null for legacy turns persisted before this field existed, the
+    ///     platform path, and user messages.
+    /// </summary>
+    public long? GenerationDurationMs { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse

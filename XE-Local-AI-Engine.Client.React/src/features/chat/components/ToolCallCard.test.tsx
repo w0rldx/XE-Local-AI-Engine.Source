@@ -57,8 +57,8 @@ describe("ToolCallCard", () => {
 	it("pretty-prints JSON args and passes non-JSON through unchanged", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "received", args: '{"a":1}', result: "plain text" })} />);
 
-		// JSON args are indented across lines; the plain result is shown verbatim.
-		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toBe("plain text");
+		// JSON args are indented across lines; the plain result is shown verbatim inside the code block.
+		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toContain("plain text");
 		expect(screen.getByText("Arguments")).toBeTruthy();
 	});
 
@@ -68,7 +68,7 @@ describe("ToolCallCard", () => {
 		const card = screen.getByTestId("chat-tool-call-card-get_time");
 		expect(card.getAttribute("data-state")).toBe("failed");
 		expect(screen.getByText("Error")).toBeTruthy();
-		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toBe("boom");
+		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toContain("boom");
 	});
 
 	it("surfaces an approval indicator when the tool requires approval", () => {

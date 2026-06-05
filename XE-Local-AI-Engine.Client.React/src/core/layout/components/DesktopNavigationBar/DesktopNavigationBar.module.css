@@ -113,6 +113,7 @@
    reflowing label wraps at narrow intermediate widths and snaps back, causing a height jump. A stable
    single-line label keeps every nav button the same height and makes the reveal smooth. A label wider
    than the expanded slot is clipped by the nav's overflow rather than wrapping to a second line. */
+
 .control-label-motion > * {
 	white-space: nowrap;
 }

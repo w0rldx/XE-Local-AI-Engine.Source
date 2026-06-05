@@ -6263,6 +6263,11 @@
           "reasoningEffort": {
             "type": "string",
             "nullable": true
+          },
+          "generationDurationMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           }
         }
       },

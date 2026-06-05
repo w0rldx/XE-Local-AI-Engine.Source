@@ -4,6 +4,7 @@ import { m, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
@@ -142,26 +143,17 @@ export function ToolCallCard({ part }: ToolCallCardProps) {
 							<Text size="xs" c="dimmed" fw={600}>
 								{t("chat.toolCall.argsLabel", "Arguments")}
 							</Text>
-							<Text component="pre" ff="monospace" fz="xs" style={{ margin: 0, overflowX: "auto", whiteSpace: "pre-wrap" }}>
-								{formattedArgs}
-							</Text>
+							<CodeBlock language="json" code={formattedArgs} />
 						</Stack>
 					) : null}
 					{formattedResult ? (
 						<Stack gap={2}>
-							<Text size="xs" c="dimmed" fw={600}>
+							<Text size="xs" c={part.state === "failed" ? "red" : "dimmed"} fw={600}>
 								{part.state === "failed" ? t("chat.toolCall.errorLabel", "Error") : t("chat.toolCall.resultLabel", "Result")}
 							</Text>
-							<Text
-								component="pre"
-								ff="monospace"
-								fz="xs"
-								c={part.state === "failed" ? "red" : undefined}
-								style={{ margin: 0, overflowX: "auto", whiteSpace: "pre-wrap" }}
-								data-testid={`chat-tool-call-result-${part.name}`}
-							>
-								{formattedResult}
-							</Text>
+							<div data-testid={`chat-tool-call-result-${part.name}`}>
+								<CodeBlock language="json" code={formattedResult} />
+							</div>
 						</Stack>
 					) : part.state === "received" ? (
 						<Text size="xs" c="dimmed" ff="monospace" data-testid={`chat-tool-call-no-output-${part.name}`}>

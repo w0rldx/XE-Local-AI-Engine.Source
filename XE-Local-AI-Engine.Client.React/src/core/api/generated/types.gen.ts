@@ -640,6 +640,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	agentDefinitionId?: string | null;
 	agentName?: string | null;
 	reasoningEffort?: string | null;
+	generationDurationMs?: number | null;
 };
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {

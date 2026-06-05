@@ -106,7 +106,9 @@ internal static class LocalChatMapper
             AgentDefinitionId = message.AgentDefinitionId,
             AgentName = message.AgentName,
             // The reasoning effort used to generate this turn (null for legacy turns + user messages).
-            ReasoningEffort = message.ReasoningEffort
+            ReasoningEffort = message.ReasoningEffort,
+            // Whole-turn generation duration (null for legacy turns + user messages); drives the optional tps display.
+            GenerationDurationMs = message.GenerationDurationMs
         };
     }
 }

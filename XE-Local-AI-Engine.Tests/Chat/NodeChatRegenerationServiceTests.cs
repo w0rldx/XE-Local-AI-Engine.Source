@@ -1112,7 +1112,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null)
+        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null)
         {
             if (CurrentInvocation is not null)
             {
@@ -1122,6 +1122,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 CurrentInvocation.OutputTokens = outputTokens;
                 CurrentInvocation.TotalTokens = totalTokens;
                 CurrentInvocation.ReasoningTokens = reasoningTokens;
+                CurrentInvocation.GenerationDurationMs = generationDurationMs;
                 RaiseChanged();
             }
 
