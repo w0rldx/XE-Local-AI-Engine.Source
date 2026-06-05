@@ -73,6 +73,8 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 					);
 					setSelected([]);
 				},
+				onError: (error) =>
+					toast.error(errorMessage(error, t("pages.agents.templates.importError", "Could not import the selected agents."))),
 			},
 		);
 	}, [importMutation, selected, t]);
@@ -120,12 +122,6 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 				{templatesQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-template-error">
 						{errorMessage(templatesQuery.error, t("pages.agents.templates.loadError", "Could not load starter agents."))}
-					</Alert>
-				) : null}
-
-				{importMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-template-import-error">
-						{errorMessage(importMutation.error, t("pages.agents.templates.importError", "Could not import the selected agents."))}
 					</Alert>
 				) : null}
 

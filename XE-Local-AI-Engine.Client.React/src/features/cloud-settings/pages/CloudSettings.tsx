@@ -24,6 +24,7 @@ import {
 	saveCloudSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toast } from "@/core/ui/notifications/Toast";
 import { type CloudSettingsFormValues, validateCloudSettingsForm } from "@/features/cloud-settings/models/CloudSettingsModel";
 
 // The generated cloud-settings responses share one shape, so both the save and clear mutations resolve the same
@@ -44,7 +45,6 @@ export function CloudSettings() {
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(withResponseValidation(getCloudSettingsOptions()));
 	const [formValues, setFormValues] = useState<CloudSettingsFormValues>(emptyFormValues);
-	const [message, setMessage] = useState<string | undefined>();
 	const [touchedFields, setTouchedFields] = useState<Partial<Record<keyof CloudSettingsFormValues, true>>>({});
 	const [submitted, setSubmitted] = useState(false);
 
@@ -83,6 +83,7 @@ export function CloudSettings() {
 			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
 			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
 	const clearMutation = useMutation({
@@ -92,12 +93,13 @@ export function CloudSettings() {
 			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
 			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
-	// Save and clear return the same view; both reset the form to the stored (redacted) values and surface the
+	// Save and clear return the same view; both reset the form to the stored (redacted) values and toast the
 	// matching message. The API key is never echoed back, so it always resets to empty.
 	function applySettingsResult(settings: CloudSettings): void {
-		setMessage(
+		toast.success(
 			settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
 		);
 		setFormValues({
@@ -106,7 +108,6 @@ export function CloudSettings() {
 			deploymentName: settings.deploymentName ?? "",
 		});
 	}
-	const actionError = saveMutation.error ?? clearMutation.error;
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
 	const settings = settingsQuery.data;
 
@@ -135,14 +136,6 @@ export function CloudSettings() {
 						{errorMessage(settingsQuery.error)}
 					</Alert>
 				) : null}
-
-				{actionError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(actionError)}
-					</Alert>
-				) : null}
-
-				{message ? <Alert color="green">{message}</Alert> : null}
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">

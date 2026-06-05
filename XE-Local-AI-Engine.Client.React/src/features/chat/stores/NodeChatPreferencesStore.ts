@@ -15,9 +15,16 @@ const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
 const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
 const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 
-// Single source of truth for the selectable reasoning efforts: the hydrate-validation set here and the
-// composer's availableReasoningEfforts prop both read from this list.
+// Graded reasoning efforts, offered for models that advertise the Ollama `thinking` capability.
 export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high"];
+// Binary reasoning efforts (On/Off), offered for models WITHOUT the `thinking` capability that still reason by
+// default (e.g. some GGUF chat templates). "on" lets the model's built-in reasoning run (think omitted); "none"
+// suppresses it (think:false). "on" is first so it is the safe fallback default when a stale graded effort is
+// clamped onto a binary model — restoring the model's natural reasoning, which the user can then switch off.
+export const binaryReasoningEfforts: readonly ReasoningEffort[] = ["on", "none"];
+// Every persistable reasoning-effort value — used to validate the hydrated localStorage value and persisted
+// wire values so a binary "on" survives reload/round-trip instead of being narrowed away.
+export const persistableReasoningEfforts: readonly ReasoningEffort[] = ["none", "on", "low", "medium", "high"];
 
 interface NodeChatPreferencesStore {
 	selectedModel: string;
@@ -67,7 +74,7 @@ function readStoredModel(): string {
 
 function readStoredReasoningEffort(): ReasoningEffort {
 	const stored = readStoredString(REASONING_EFFORT_STORAGE_KEY);
-	return reasoningEfforts.includes(stored as ReasoningEffort) ? (stored as ReasoningEffort) : "medium";
+	return persistableReasoningEfforts.includes(stored as ReasoningEffort) ? (stored as ReasoningEffort) : "medium";
 }
 
 function readStoredToolsEnabled(): boolean {

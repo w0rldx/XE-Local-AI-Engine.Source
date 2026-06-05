@@ -104,7 +104,9 @@ internal static class LocalChatMapper
             // Per-response agent attribution snapshot (null for legacy turns + user messages; the client renders the
             // localized "Default Assistant" fallback when AgentName is null).
             AgentDefinitionId = message.AgentDefinitionId,
-            AgentName = message.AgentName
+            AgentName = message.AgentName,
+            // The reasoning effort used to generate this turn (null for legacy turns + user messages).
+            ReasoningEffort = message.ReasoningEffort
         };
     }
 }

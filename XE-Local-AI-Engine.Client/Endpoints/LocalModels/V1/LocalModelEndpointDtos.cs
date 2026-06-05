@@ -58,6 +58,18 @@ public sealed class LocalModelResponse
     /// <summary>Raw Ollama capability strings for read-only badges (e.g. <c>tools</c>, <c>vision</c>, <c>thinking</c>).</summary>
     public required IReadOnlyList<string> Capabilities { get; init; }
 
+    /// <summary>
+    ///     True when the model advertises the Ollama <c>thinking</c> capability. The composer uses this to gate the
+    ///     reasoning-effort menu so a non-reasoning model is never offered (or sent) the <c>think</c> field.
+    /// </summary>
+    public required bool IsReasoningCapable { get; init; }
+
+    /// <summary>
+    ///     True when the model advertises the Ollama <c>tools</c> capability. The composer uses this to gate the local-tool
+    ///     controls so a non-tool model is never offered tools.
+    /// </summary>
+    public required bool IsToolCapable { get; init; }
+
     /// <summary>True when an operator override is set, so the effective kind differs from the detected one.</summary>
     public required bool IsOverridden { get; init; }
 }

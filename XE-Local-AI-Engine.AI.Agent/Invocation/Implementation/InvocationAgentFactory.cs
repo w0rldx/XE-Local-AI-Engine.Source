@@ -9,6 +9,15 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 {
+    /// <summary>
+    ///     The binary reasoning-"on" sentinel for a model that lacks the Ollama <c>thinking</c> capability but reasons
+    ///     by default. "on" — and any graded level (low/medium/high) carried onto such a model — makes the factory OMIT
+    ///     the think field so the model's built-in reasoning runs; only "none"/unspecified suppresses it via think:false
+    ///     (see <see cref="IsReasoningRequested" />). Thinking-capable models never take this path — they honor
+    ///     false/low/medium/high via <see cref="ResolveThinkOption" />.
+    /// </summary>
+    private const string BinaryReasoningOn = "on";
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<InvocationAgentFactory> _logger;
@@ -57,6 +66,37 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         var seedMessages = BuildSeedMessages(definition);
 
+        // Ollama think option, by model capability:
+        //  - Thinking-capable model: honor the requested effort (false, low, medium, or high).
+        //  - Non-thinking model: omit the think field when reasoning is requested (the binary on, OR a graded level
+        //    carried onto it by an agent definition or a stale composer selection), and send think false only for
+        //    none or unspecified. Sending think true or a level is rejected by Ollama with HTTP 400 (does not support
+        //    thinking); think false is accepted but actively suppresses the reasoning some GGUF chat templates (e.g.
+        //    unsloth gemma-4-12b-it) emit by default, whereas omitting the field lets that template reasoning through
+        //    so the user sees a reasoning block. Verified live against gemma-4-12b-it on Ollama 0.30.5: think false
+        //    returns empty thinking, while omitting the field returns populated thinking. Cloud providers default
+        //    SupportsThinking to true and ignore the unknown property, so their option dictionary is unchanged.
+        var additionalProperties = new AdditionalPropertiesDictionary();
+        if (definition.SupportsThinking)
+        {
+            // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high").
+            additionalProperties["think"] = ResolveThinkOption(definition.ReasoningEffort);
+        }
+        else if (IsReasoningRequested(definition.ReasoningEffort))
+        {
+            // Non-thinking model, reasoning requested (binary "on" OR a graded low/medium/high carried onto a model
+            // that cannot do graded thinking): OMIT the think field entirely so the model's default (chat-template-
+            // baked) reasoning is allowed through. We must NOT send think:true or a level — Ollama returns HTTP 400
+            // ("does not support thinking") for a model without the thinking capability; only omission lets the
+            // built-in reasoning run. The key is therefore intentionally left out here.
+        }
+        else
+        {
+            // Non-thinking model, reasoning OFF ("none") or unspecified (the safe default for agent/legacy paths):
+            // think:false actively suppresses the reasoning some GGUF templates emit by default.
+            additionalProperties["think"] = false;
+        }
+
         InvocationAgentContext context = new()
         {
             Agent = agent,
@@ -67,10 +107,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                 ChatOptions = new ChatOptions
                 {
                     ModelId = definition.ModelId,
-                    AdditionalProperties = new AdditionalPropertiesDictionary
-                    {
-                        ["think"] = ResolveThinkOption(definition.ReasoningEffort)
-                    }
+                    AdditionalProperties = additionalProperties
                 }
             }
         };
@@ -121,7 +158,33 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             return "high";
         }
 
+        // Default to think:true (reason). This also intentionally covers the "on" binary-reasoning sentinel
+        // (<see cref="BinaryReasoningOn" />): it is normally handled in the !SupportsThinking branch, and only reaches
+        // this graded path defensively (the React clamp keeps "on" off thinking-capable models) — where "reason" is the
+        // right meaning for a model that can think.
         return true;
+    }
+
+    /// <summary>
+    ///     True when the effort asks the model to reason: the binary <see cref="BinaryReasoningOn" /> sentinel or a
+    ///     graded level (low/medium/high). Used ONLY on the non-thinking-model branch — a graded level can be carried
+    ///     onto a model that lacks the Ollama <c>thinking</c> capability (an agent definition pins it, or the composer
+    ///     keeps a stale selection across a model switch). The model cannot honor the graded level (Ollama 400s on
+    ///     <c>think:&lt;level&gt;</c>), but the user still asked to reason, so the caller OMITS the think field and lets
+    ///     the model's built-in reasoning run. Only <c>none</c> (or unspecified/blank) returns false → think:false.
+    /// </summary>
+    private static bool IsReasoningRequested(string? reasoningEffort)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return false;
+        }
+
+        var normalized = reasoningEffort.Trim();
+        return string.Equals(normalized, BinaryReasoningOn, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<ChatMessage> BuildSeedMessages(InvocationAgentDefinition definition)

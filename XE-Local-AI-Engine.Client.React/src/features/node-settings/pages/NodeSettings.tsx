@@ -10,6 +10,7 @@ import {
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toast } from "@/core/ui/notifications/Toast";
 import {
 	type NodeSettingsTimeoutInput,
 	nodeSettingsDefaults,
@@ -27,7 +28,6 @@ export function NodeSettings() {
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
 	);
-	const [message, setMessage] = useState<string | undefined>();
 
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
@@ -46,13 +46,14 @@ export function NodeSettings() {
 	const saveMutation = useMutation({
 		...withResponseValidation(saveNodeSettingsMutation()),
 		onSuccess: async (updatedSettings: SaveNodeSettingsResponse) => {
-			setMessage("Node settings saved. Capability reporting was requested for the worker connection.");
+			toast.success("Node settings saved. Capability reporting was requested for the worker connection.");
 			setTimeoutSeconds(
 				updatedSettings.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
 			);
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
 			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
 	const canSave = timeoutToSave !== undefined && !saveMutation.isPending;
@@ -80,14 +81,6 @@ export function NodeSettings() {
 						{errorMessage(settingsQuery.error)}
 					</Alert>
 				) : null}
-
-				{saveMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(saveMutation.error)}
-					</Alert>
-				) : null}
-
-				{message ? <Alert color="green">{message}</Alert> : null}
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">

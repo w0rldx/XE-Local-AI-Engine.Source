@@ -222,7 +222,7 @@ describe("SchedulerPage", () => {
 
 		fireEvent.click(screen.getByTestId("scheduler-job-enabled-job-1"));
 
-		expect(enableMutation.mutate).toHaveBeenCalledWith({ id: "job-1", enabled: true });
+		expect(enableMutation.mutate).toHaveBeenCalledWith({ id: "job-1", enabled: true }, { onError: expect.any(Function) });
 	});
 
 	it("triggers a job through the row action", () => {
@@ -233,7 +233,7 @@ describe("SchedulerPage", () => {
 
 		fireEvent.click(screen.getByTestId("scheduler-job-trigger-job-1"));
 
-		expect(triggerMutation.mutate).toHaveBeenCalledWith({ path: { scheduledJobId: "job-1" } });
+		expect(triggerMutation.mutate).toHaveBeenCalledWith({ path: { scheduledJobId: "job-1" } }, { onError: expect.any(Function) });
 	});
 
 	it("surfaces a load error", () => {

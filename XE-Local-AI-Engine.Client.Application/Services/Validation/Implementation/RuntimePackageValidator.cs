@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 
 public sealed class RuntimePackageValidator : IRuntimePackageValidator
@@ -67,16 +68,8 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
 
     private static void ValidateReasoningEffort(string? reasoningEffort, List<string> errors)
     {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        if (!string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase))
+        // Blank (unspecified) is allowed; a non-blank value that the shared normalizer does not recognize is invalid.
+        if (!ReasoningEffortNormalizer.IsValid(reasoningEffort))
         {
             errors.Add("Invalid reasoning effort");
         }

@@ -216,7 +216,7 @@ describe("McpServersPage", () => {
 
 		fireEvent.click(screen.getByTestId("mcp-server-enabled-mcp-1"));
 
-		expect(enableMutation.mutate).toHaveBeenCalledWith({ id: "mcp-1", enabled: true });
+		expect(enableMutation.mutate).toHaveBeenCalledWith({ id: "mcp-1", enabled: true }, { onError: expect.any(Function) });
 	});
 
 	it("surfaces a load error", () => {

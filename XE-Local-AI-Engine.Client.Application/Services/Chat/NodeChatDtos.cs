@@ -111,7 +111,10 @@ public sealed record NodeChatCreateAssistantPlaceholderRequest(
     // pending placeholder already carries the agent name; null on cold/fallback paths (client renders the localized
     // "Default Assistant" label).
     Guid? AgentDefinitionId = null,
-    string? AgentName = null);
+    string? AgentName = null,
+    // The reasoning effort that will drive this turn's generation, stamped at send time into the metadata blob (no DB
+    // column) so the persisted assistant turn records it. Null when no effort was selected.
+    string? ReasoningEffort = null);
 
 public sealed record NodeChatMessageCorrelation(
     Guid ConversationId,
@@ -245,7 +248,10 @@ public sealed record NodeChatPersistedMessageDto(
     // provenance of the agent that produced the turn; AgentName is its display-name snapshot at send time (survives a
     // later rename/delete). Both are null for legacy turns persisted before agent mode existed.
     Guid? AgentDefinitionId = null,
-    string? AgentName = null) : ISelectedPathMessage;
+    string? AgentName = null,
+    // The reasoning effort actually used to generate this assistant turn, surfaced from the metadata blob (no DB
+    // column). Null for legacy turns persisted before this field existed and for user messages.
+    string? ReasoningEffort = null) : ISelectedPathMessage;
 
 /// <summary>
 ///     Transport DTO for node chat cancel result data.
@@ -314,7 +320,10 @@ public sealed record NodeChatCreateMessageVariantRequest(
     // rename; falls back to the original's stored name when the agent was deleted). Same metadata-blob path as the
     // send placeholder; trailing optional so existing callers are unaffected.
     Guid? AgentDefinitionId = null,
-    string? AgentName = null);
+    string? AgentName = null,
+    // The reasoning effort used to generate this regenerated variant, stamped at mint time into the metadata blob (no
+    // DB column). Null when no effort was selected.
+    string? ReasoningEffort = null);
 
 /// <summary>
 ///     Transport DTO for node chat message variant data.

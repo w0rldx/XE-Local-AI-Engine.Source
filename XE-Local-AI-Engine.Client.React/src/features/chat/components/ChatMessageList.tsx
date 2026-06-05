@@ -67,7 +67,11 @@ export function ChatMessageList({
 	const normalizedMessages = useMemo(
 		() =>
 			(messages ?? conversation?.messages ?? [])
-				.filter((message) => hasText(message.content) || hasText(message.reasoning))
+				// Keep failed turns even though they have no content/reasoning: they carry an `error` that must
+				// survive reload (rendered as an error block inside the bubble, with a regenerate affordance).
+				.filter(
+					(message) => hasText(message.content) || hasText(message.reasoning) || message.status === "failed" || hasText(message.error),
+				)
 				.toSorted(bySortOrder),
 		[conversation?.messages, messages],
 	);
@@ -80,16 +84,17 @@ export function ChatMessageList({
 		conversation?.id && streamingMessage?.conversationId === conversation.id ? streamingMessage : undefined;
 	const streamingContent = scopedStreamingMessage?.content ?? "";
 	const hasStreamingContent = streamingContent.trim().length > 0;
+	// The stream error is NOT a placeholder: it renders once as an error block inside the assistant bubble
+	// (via the message's `error` field below), never as the body text or in the StreamingIndicator footer.
 	const streamingPlaceholder = hasStreamingContent
 		? undefined
-		: scopedStreamingMessage?.error ||
-			(scopedStreamingMessage?.isQueued
-				? // Queued is surfaced solely by the StreamingIndicator pill below the turn; emitting it as the body
-					// placeholder too would show the same text twice.
-					undefined
-				: scopedStreamingMessage?.isActive
-					? t("pages.chat.waitingForResponse", "Waiting for response")
-					: undefined);
+		: scopedStreamingMessage?.isQueued
+			? // Queued is surfaced solely by the StreamingIndicator pill below the turn; emitting it as the body
+				// placeholder too would show the same text twice.
+				undefined
+			: scopedStreamingMessage?.isActive
+				? t("pages.chat.waitingForResponse", "Waiting for response")
+				: undefined;
 	const hasPersistedStreamingMessage = scopedStreamingMessage
 		? normalizedMessages.some((message) => message.id === scopedStreamingMessage.messageId && message.role === "assistant")
 		: false;
@@ -155,8 +160,6 @@ export function ChatMessageList({
 							footer={
 								isStreamingTarget ? (
 									<StreamingIndicator
-										error={scopedStreamingMessage?.error}
-										failureCategory={scopedStreamingMessage?.failureCategory}
 										hasContent={hasStreamingContent}
 										isDelayed={scopedStreamingMessage?.isDelayed}
 										isQueued={scopedStreamingMessage?.isQueued}
@@ -175,23 +178,32 @@ export function ChatMessageList({
 							conversationId: conversation.id,
 							role: "assistant",
 							content: scopedStreamingMessage.content,
-							status: scopedStreamingMessage.isQueued ? "queued" : scopedStreamingMessage.isActive ? "streaming" : "completed",
+							status: scopedStreamingMessage.isQueued
+								? "queued"
+								: scopedStreamingMessage.isActive
+									? "streaming"
+									: scopedStreamingMessage.error
+										? "failed"
+										: "completed",
+							// Carry the live error so the transient turn renders it once as an error block inside the
+							// bubble (the post-stream refetch then swaps in the persisted failed turn, same id).
+							error: scopedStreamingMessage.error,
 							createdAt: streamingStartedAt ?? conversation.updatedAt,
 							sortOrder: normalizedMessages.length + 1,
-							// Carry the optimistically-stamped agent attribution so the live turn shows the selected agent
-							// immediately (not the "Default Assistant" fallback) — the persisted name replaces it on refetch.
+							// Carry the optimistically-stamped agent attribution and reasoning effort so the live turn
+							// shows both immediately — the persisted values replace them on the post-stream refetch.
 							agentName: streamingAssistantMessage?.agentName,
 							agentDefinitionId: streamingAssistantMessage?.agentDefinitionId,
+							reasoningEffort: streamingAssistantMessage?.reasoningEffort,
 						}}
 						placeholder={streamingPlaceholder}
 						streamingParts={scopedStreamingMessage.parts}
 						streamingReasoningOverflowBytes={scopedStreamingMessage.reasoningOverflowBytes}
 						isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
 						reasoningEffort={reasoningEffort}
+						failureCategory={scopedStreamingMessage.failureCategory}
 						footer={
 							<StreamingIndicator
-								error={scopedStreamingMessage.error}
-								failureCategory={scopedStreamingMessage.failureCategory}
 								hasContent={hasStreamingContent}
 								isDelayed={scopedStreamingMessage.isDelayed}
 								isQueued={scopedStreamingMessage.isQueued}

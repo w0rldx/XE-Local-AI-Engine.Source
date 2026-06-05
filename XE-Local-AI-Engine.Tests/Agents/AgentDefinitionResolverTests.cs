@@ -222,6 +222,37 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenModelLacksToolsCapability_WithholdsAllTools()
+    {
+        // The model-capability gate (supportsTools=false) overrides everything: even a tool-capable model name and a
+        // definition that names safe tools yields an EMPTY offer, because the active model cannot drive any tool call.
+        var resolver = CreateResolver(out var store,
+            OfferTool(CapabilityGatedToolName),
+            OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: ToolCapableModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(0, resolved!.AllowedTools.Count);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenModelHasToolsCapability_KeepsOfferedTools()
+    {
+        // Contrast: the same setup with supportsTools=true keeps the name-gated projection (today's behaviour).
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "GetCurrentTime");
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenDefinitionPinsNoModel_GatesByCallerActiveModelAndModelProfileIsNull()
     {
         // A definition with a NULL ModelProfile must fall back to the caller's active model for capability gating, and

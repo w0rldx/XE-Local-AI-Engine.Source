@@ -108,4 +108,74 @@ public sealed class ModelKindDetectorTests
 
         AssertEx.Equal(ModelKind.Unknown, result);
     }
+
+    [Test]
+    [Arguments("thinking")]
+    [Arguments("THINKING")]
+    [Arguments("Thinking")]
+    public void SupportsThinking_WhenThinkingPresent_ReturnsTrue(string capability)
+    {
+        var result = ModelKindDetector.SupportsThinking(["completion", capability]);
+
+        AssertEx.Equal(true, result);
+    }
+
+    [Test]
+    public void SupportsThinking_WhenThinkingAbsent_ReturnsFalse()
+    {
+        var result = ModelKindDetector.SupportsThinking(["completion", "vision"]);
+
+        AssertEx.Equal(false, result);
+    }
+
+    [Test]
+    public void SupportsThinking_WhenCapabilitiesEmpty_ReturnsFalse()
+    {
+        var result = ModelKindDetector.SupportsThinking([]);
+
+        AssertEx.Equal(false, result);
+    }
+
+    [Test]
+    public void SupportsThinking_WhenCapabilitiesNull_ReturnsFalse()
+    {
+        var result = ModelKindDetector.SupportsThinking(null);
+
+        AssertEx.Equal(false, result);
+    }
+
+    [Test]
+    [Arguments("tools")]
+    [Arguments("TOOLS")]
+    [Arguments("Tools")]
+    public void SupportsTools_WhenToolsPresent_ReturnsTrue(string capability)
+    {
+        var result = ModelKindDetector.SupportsTools(["completion", capability]);
+
+        AssertEx.Equal(true, result);
+    }
+
+    [Test]
+    public void SupportsTools_WhenToolsAbsent_ReturnsFalse()
+    {
+        var result = ModelKindDetector.SupportsTools(["completion", "vision"]);
+
+        AssertEx.Equal(false, result);
+    }
+
+    [Test]
+    public void SupportsTools_WhenCapabilitiesEmpty_ReturnsFalse()
+    {
+        var result = ModelKindDetector.SupportsTools([]);
+
+        AssertEx.Equal(false, result);
+    }
+
+    [Test]
+    public void SupportsTools_WhenCapabilitiesNull_ReturnsFalse()
+    {
+        var result = ModelKindDetector.SupportsTools(null);
+
+        AssertEx.Equal(false, result);
+    }
 }

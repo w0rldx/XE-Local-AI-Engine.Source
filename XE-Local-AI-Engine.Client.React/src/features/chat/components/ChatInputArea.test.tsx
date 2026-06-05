@@ -71,14 +71,26 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("hides the local tools toggle when the capability gate is off", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} capabilities={defaultChatUiCapabilities} toolsEnabled={false} onToggleTools={vi.fn()} />);
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={defaultChatUiCapabilities} activeModelToolCapable={true} toolsEnabled={false} onToggleTools={vi.fn()} />,
+		);
 
 		expect(screen.queryByTestId("chat-local-tools-toggle")).toBeNull();
 	});
 
-	it("shows the toggle and fires onToggleTools when the gate is on", () => {
+	it("hides the local tools toggle when the active model is not tool-capable even with the gate on", () => {
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={false} toolsEnabled={false} onToggleTools={vi.fn()} />,
+		);
+
+		expect(screen.queryByTestId("chat-local-tools-toggle")).toBeNull();
+	});
+
+	it("shows the toggle and fires onToggleTools when the gate is on and the model is tool-capable", () => {
 		const onToggleTools = vi.fn();
-		renderWithProviders(<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} toolsEnabled={false} onToggleTools={onToggleTools} />);
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} toolsEnabled={false} onToggleTools={onToggleTools} />,
+		);
 
 		const toggle = screen.getByTestId("chat-local-tools-toggle");
 		expect(toggle.hasAttribute("disabled")).toBe(false);
@@ -88,14 +100,54 @@ describe("ChatInputArea local tools toggle", () => {
 	});
 
 	it("reflects the enabled state via aria-pressed", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} toolsEnabled={true} onToggleTools={vi.fn()} />);
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} toolsEnabled={true} onToggleTools={vi.fn()} />,
+		);
 
 		expect(screen.getByTestId("chat-local-tools-toggle").getAttribute("aria-pressed")).toBe("true");
 	});
 
 	it("disables the toggle while a message is sending", () => {
-		renderWithProviders(<ChatInputArea {...baseProps()} isSending={true} capabilities={toolsCapabilities()} toolsEnabled={false} onToggleTools={vi.fn()} />);
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} isSending={true} capabilities={toolsCapabilities()} activeModelToolCapable={true} toolsEnabled={false} onToggleTools={vi.fn()} />,
+		);
 
 		expect(screen.getByTestId("chat-local-tools-toggle").hasAttribute("disabled")).toBe(true);
+	});
+});
+
+describe("ChatInputArea reasoning-effort menu capability gating", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("disables the reasoning menu when only one effort is available", () => {
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none"]} reasoningEffort="none" />,
+		);
+
+		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(true);
+	});
+
+	it("enables the reasoning menu when multiple efforts are available (graded reasoning model)", () => {
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none", "low", "medium", "high"]} reasoningEffort="medium" />,
+		);
+
+		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(false);
+	});
+
+	it("enables the reasoning menu with binary On/Off for a non-thinking model that reasons by default", () => {
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />,
+		);
+
+		// Two options (on/none) => the menu is interactive, and the brain control reads "enabled" for "on".
+		const trigger = screen.getByTestId("chat-reasoning-effort-menu-trigger");
+		expect(trigger.hasAttribute("disabled")).toBe(false);
 	});
 });

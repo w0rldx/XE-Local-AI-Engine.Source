@@ -15,4 +15,5 @@ public sealed record LocalChatRuntimePackageRequest(
     IReadOnlyList<string>? RequestedCapabilities = null,
     TimeoutSettings? Timeouts = null,
     string? ReasoningEffort = null,
-    OrchestrationSpec? OrchestrationSpec = null);
+    OrchestrationSpec? OrchestrationSpec = null,
+    bool SupportsThinking = true);

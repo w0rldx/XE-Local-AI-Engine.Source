@@ -222,6 +222,36 @@ public sealed class RuntimePackageValidatorTests
         AssertEx.True(result.Errors.Count >= 5);
     }
 
+    [Test]
+    [Arguments("on")]
+    [Arguments("On")]
+    [Arguments("ON")]
+    public void Validate_WhenReasoningEffortIsBinaryOn_ReturnsValid(string reasoningEffort)
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ReasoningEffort = reasoningEffort
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertEx.True(result.IsValid);
+        AssertEx.False(result.Errors.Any(error => error.Contains("reasoning effort", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Test]
+    public void Validate_WhenReasoningEffortIsInvalid_ReturnsError()
+    {
+        var package = RuntimePackageBuilder.Valid().Build() with
+        {
+            ReasoningEffort = "bogus"
+        };
+
+        var result = _validator.Validate(package);
+
+        AssertErrorContains(result, "reasoning effort");
+    }
+
     private static void AssertErrorContains(RuntimePackageValidationResult result, string expectedText)
     {
         AssertEx.False(result.IsValid);

@@ -6,7 +6,11 @@ export type MessageStatus = "pending" | "queued" | "streaming" | "completed" | "
 
 export type ChatOrigin = "local" | "remote";
 
-export type ReasoningEffort = "none" | "low" | "medium" | "high";
+// "none"/"low"/"medium"/"high" are the graded efforts for models with the Ollama `thinking` capability.
+// "on" is the binary-reasoning ON state for a model WITHOUT that capability that still reasons by default
+// (e.g. some GGUF chat templates): it maps to "omit the think field" so the model's built-in reasoning runs,
+// while "none" maps to think:false (suppress). Graded models never use "on"; binary models only use "on"/"none".
+export type ReasoningEffort = "none" | "on" | "low" | "medium" | "high";
 
 export type ToolCallState = "requesting" | "waiting" | "received" | "failed";
 
@@ -93,6 +97,10 @@ export interface ChatMessageModel {
 	// assistant turns so every response carries a visible attribution even without a persisted name.
 	agentName?: string;
 	agentDefinitionId?: string;
+	// The reasoning effort that was ACTUALLY used for this turn (persisted in metadata_json, ground truth).
+	// Distinct from the live composer `reasoningEffort` prop (that's the current picker selection).
+	// null/absent = legacy turn or user message. "none" = reasoning explicitly disabled.
+	reasoningEffort?: ReasoningEffort;
 }
 
 export type ChatFeedbackRating = "up" | "down";
@@ -187,6 +195,10 @@ export interface ModelOption {
 	label: string;
 	displayName?: string;
 	isReasoningModel?: boolean;
+	// Whether the model advertises the Ollama `tools` capability. Drives whether the composer offers the
+	// local-tool controls (gated together with the node-wide capability). Undefined on the local-default
+	// option (the runtime picks a concrete model later), so callers treat undefined as "not tool-capable".
+	isToolCapable?: boolean;
 	isAvailable: boolean;
 	statusLabel?: string;
 }
@@ -242,6 +254,9 @@ export interface ChatDisplayShellProps {
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
 	availableReasoningEfforts: ReasoningEffort[];
+	// Whether the active model advertises the Ollama `tools` capability. Gated together with the node-wide
+	// capability to decide whether the composer offers the local-tool controls. Defaults to false (safe).
+	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
 	contextUsage?: ContextUsageModel;
 	streamingMessage?: ChatStreamingState;

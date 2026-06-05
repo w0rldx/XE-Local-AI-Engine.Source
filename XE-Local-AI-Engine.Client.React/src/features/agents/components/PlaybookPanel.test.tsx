@@ -19,7 +19,7 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { hooksMock, monitorHookMock, confirmMock } = vi.hoisted(() => ({
+const { hooksMock, monitorHookMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	hooksMock: {
 		usePlaybookActions: vi.fn(),
 		useCreatePlaybookAction: vi.fn(),
@@ -35,6 +35,7 @@ const { hooksMock, monitorHookMock, confirmMock } = vi.hoisted(() => ({
 		usePlaybookMonitor: vi.fn(),
 	},
 	confirmMock: vi.fn(),
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
 }));
 
 vi.mock("@/features/agents/queries/usePlaybookActions", () => hooksMock);
@@ -42,6 +43,7 @@ vi.mock("@/features/agents/queries/usePlaybookMonitor", () => monitorHookMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
 import { PromoteConflictError } from "@/features/agents/models/PlaybookActionMappers";
@@ -350,7 +352,7 @@ describe("PlaybookPanel", () => {
 		expect(approve.disabled).toBe(false);
 		fireEvent.click(approve);
 
-		expect(promoteMutation.mutate).toHaveBeenCalledWith("suggested-1");
+		expect(promoteMutation.mutate).toHaveBeenCalledWith("suggested-1", { onError: expect.any(Function) });
 	});
 
 	it("renders the evalResult pass badge + counts and disables Approve only when not passed", () => {
@@ -443,23 +445,31 @@ describe("PlaybookPanel", () => {
 
 		fireEvent.click(screen.getByTestId("playbook-suggested-run-eval-suggested-1"));
 
-		expect(runEvalMutation.mutate).toHaveBeenCalledWith("suggested-1");
+		expect(runEvalMutation.mutate).toHaveBeenCalledWith("suggested-1", { onError: expect.any(Function) });
 	});
 
-	it("surfaces a 409 promote conflict reason in the review-error alert", () => {
+	it("surfaces a 409 promote conflict reason as an error toast", () => {
+		// The mocked mutate invokes the promote handler's onError with the typed conflict, mirroring a 409.
 		hooksMock.usePromoteSuggestedAction.mockReturnValue({
-			mutate: vi.fn(),
+			mutate: (_id: string, options?: { onError?: (error: unknown) => void }) =>
+				options?.onError?.(new PromoteConflictError("EvalRegressed", "Candidate regressed golden case g-1.")),
 			isPending: false,
-			error: new PromoteConflictError("EvalRegressed", "Candidate regressed golden case g-1."),
+			error: null,
 			variables: undefined,
 		});
-		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+		// A passing eval (matching the action version) ungates the Approve button.
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ evalResult: makeEvalResult() })],
+			isLoading: false,
+			error: null,
+		});
 
 		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
 
-		// The panel maps the typed conflict status to a localized reason in the review-error alert.
-		const alert = screen.getByTestId("playbook-review-error");
-		expect(alert.textContent).toContain("regressed");
+		fireEvent.click(screen.getByTestId("playbook-suggested-approve-suggested-1"));
+
+		// The panel maps the typed conflict status to a localized reason in the error toast.
+		expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("regressed"));
 	});
 
 	it("rejects a Suggested action through the reject mutation after confirmation", async () => {
@@ -475,7 +485,7 @@ describe("PlaybookPanel", () => {
 		await Promise.resolve();
 
 		expect(confirmMock).toHaveBeenCalled();
-		expect(rejectMutation.mutate).toHaveBeenCalledWith("suggested-1");
+		expect(rejectMutation.mutate).toHaveBeenCalledWith("suggested-1", { onError: expect.any(Function) });
 	});
 
 	it("opens the edit form for a Suggested action without the Enabled/Disabled state field (edit-before-approve)", () => {
@@ -667,18 +677,25 @@ describe("PlaybookPanel", () => {
 		expect(ranker.textContent).not.toContain("nomic-embed-text");
 	});
 
-	it("surfaces the CapReached 409 reason in the review-error alert", () => {
+	it("surfaces the CapReached 409 reason as an error toast", () => {
 		hooksMock.usePromoteSuggestedAction.mockReturnValue({
-			mutate: vi.fn(),
+			mutate: (_id: string, options?: { onError?: (error: unknown) => void }) =>
+				options?.onError?.(new PromoteConflictError("CapReached", "Archive an enabled action before promoting (cap reached).")),
 			isPending: false,
-			error: new PromoteConflictError("CapReached", "Archive an enabled action before promoting (cap reached)."),
+			error: null,
 			variables: undefined,
 		});
-		hooksMock.usePlaybookActions.mockReturnValue({ data: [makeSuggestedAction()], isLoading: false, error: null });
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ evalResult: makeEvalResult() })],
+			isLoading: false,
+			error: null,
+		});
 
 		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
 
-		// The typed CapReached conflict maps to a localized cap reason in the review-error alert.
-		expect(screen.getByTestId("playbook-review-error").textContent).toContain("cap");
+		fireEvent.click(screen.getByTestId("playbook-suggested-approve-suggested-1"));
+
+		// The typed CapReached conflict maps to a localized cap reason in the error toast.
+		expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("cap"));
 	});
 });

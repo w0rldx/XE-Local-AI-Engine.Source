@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
+import { toast } from "@/core/ui/notifications/Toast";
 import { McpServerForm, type McpServerFormHandle } from "@/features/mcp/components/McpServerForm";
 import { McpServerList } from "@/features/mcp/components/McpServerList";
 import { McpServerToolsPanel } from "@/features/mcp/components/McpServerToolsPanel";
@@ -153,7 +154,10 @@ export function McpServersPage() {
 				if (expandedToolsId === server.id) {
 					setExpandedToolsId(null);
 				}
-				deleteMutation.mutate({ path: { mcpServerId: server.id } });
+				deleteMutation.mutate(
+					{ path: { mcpServerId: server.id } },
+					{ onError: (error) => toast.error(errorMessage(error, t("pages.mcp.errors.delete", "Could not delete the MCP server."))) },
+				);
 			}
 		},
 		[confirm, deleteMutation, expandedToolsId, t],
@@ -161,9 +165,12 @@ export function McpServersPage() {
 
 	const handleToggleEnabled = useCallback(
 		(server: McpServerRegistration, enabled: boolean) => {
-			enableMutation.mutate({ id: server.id, enabled });
+			enableMutation.mutate(
+				{ id: server.id, enabled },
+				{ onError: (error) => toast.error(errorMessage(error, t("pages.mcp.errors.enable", "Could not change the server state."))) },
+			);
 		},
-		[enableMutation],
+		[enableMutation, t],
 	);
 
 	const isEditorOpen = editorTarget !== null;
@@ -192,18 +199,6 @@ export function McpServersPage() {
 						{t("pages.mcp.createButton", "Register server")}
 					</Button>
 				</Group>
-
-				{deleteMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-delete-error">
-						{errorMessage(deleteMutation.error, t("pages.mcp.errors.delete", "Could not delete the MCP server."))}
-					</Alert>
-				) : null}
-
-				{enableMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-enable-error">
-						{errorMessage(enableMutation.error, t("pages.mcp.errors.enable", "Could not change the server state."))}
-					</Alert>
-				) : null}
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">

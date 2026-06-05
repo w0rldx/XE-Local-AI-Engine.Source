@@ -36,7 +36,7 @@ import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDeri
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
-import { reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { binaryReasoningEfforts, reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
 
@@ -44,7 +44,11 @@ const localDefaultModelOption: ModelOption = {
 	value: localDefaultModelValue,
 	label: "Local default",
 	displayName: "Local runtime default",
+	// The runtime resolves the concrete model later, so its capabilities are unknown here. Treat as not
+	// reasoning/tool capable (safe default): offer neither the reasoning menu nor the tool controls until
+	// a concrete, capability-known model is selected.
 	isReasoningModel: false,
+	isToolCapable: false,
 	isAvailable: true,
 	statusLabel: "Runtime-selected model",
 };
@@ -186,6 +190,20 @@ export function Chat() {
 		() => modelOptions.find((option) => option.value === selectedModel),
 		[modelOptions, selectedModel],
 	);
+	// Per-model capability gating (plan §6.6): only offer the reasoning-effort menu when the active model
+	// advertises the Ollama `thinking` capability — otherwise collapse to ["none"] so the composer disables the
+	// menu (it disables at length <= 1) and a non-reasoning model can never send a stale effort. Tool controls
+	// gate on the model's `tools` capability (combined with the node-wide gate inside ChatInputArea).
+	const activeModelReasoningCapable = selectedModelOption?.isReasoningModel ?? false;
+	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
+	// A model that advertises the Ollama `thinking` capability gets the graded efforts (none/low/medium/high).
+	// Every other chat model gets a binary On/Off (["on","none"]): On omits the think field so a model that reasons
+	// by default (e.g. some GGUF templates) runs its built-in reasoning; Off sends think:false to suppress it. We
+	// can't send think:true / a level to a non-thinking model (Ollama 400s), so graded levels are withheld.
+	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(
+		() => (activeModelReasoningCapable ? [...reasoningEfforts] : [...binaryReasoningEfforts]),
+		[activeModelReasoningCapable],
+	);
 
 	const agentDefinitionsQuery = useAgentDefinitions();
 	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
@@ -234,6 +252,16 @@ export function Chat() {
 			setSelectedModel(localDefaultModelValue);
 		}
 	}, [localModelsQuery.data, modelOptions, selectedModel, setSelectedModel]);
+	// Keep the selected reasoning effort valid for the active model's reasoning mode so the composer never SENDS an
+	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none. When
+	// the current effort isn't in the active model's set (a graded "medium" carried onto a binary model, or a binary
+	// "on" carried onto a graded model) fall back to its first available effort — "on" for binary (reason by default,
+	// switch off to suppress), "none" for graded. Runs on every model switch and on first load.
+	useEffect(() => {
+		if (!availableReasoningEfforts.includes(reasoningEffort)) {
+			setReasoningEffort(availableReasoningEfforts[0] ?? "none");
+		}
+	}, [availableReasoningEfforts, reasoningEffort, setReasoningEffort]);
 	const selectedConcreteModelName = useMemo(() => {
 		const requestModel = toNodeChatRequestModel(selectedModel);
 		return requestModel ?? localModelsQuery.data?.selectedModelName ?? localModelsQuery.data?.configuredDefaultModelName ?? "";
@@ -432,6 +460,7 @@ export function Chat() {
 				startedAt,
 				requestModel,
 				effectiveAgentName,
+				effort,
 			);
 			const abortController = new AbortController();
 
@@ -940,7 +969,8 @@ export function Chat() {
 				modelOptions={modelOptions}
 				selectedModel={selectedModel}
 				reasoningEffort={reasoningEffort}
-				availableReasoningEfforts={[...reasoningEfforts]}
+				availableReasoningEfforts={availableReasoningEfforts}
+				activeModelToolCapable={activeModelToolCapable}
 				toolsEnabled={toolsEnabled}
 				capabilities={chatUiCapabilities}
 				contextUsage={{

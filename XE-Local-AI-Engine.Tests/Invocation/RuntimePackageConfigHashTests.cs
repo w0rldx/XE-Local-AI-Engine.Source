@@ -206,6 +206,62 @@ public sealed class RuntimePackageConfigHashTests
     }
 
     [Test]
+    public void Compute_WhenReasoningEffortIsBinaryOn_DiffersFromNullAndNone()
+    {
+        var onDigest = RuntimePackageConfigHash.Compute(7,
+            "prompt",
+            [],
+            null,
+            new TimeoutSettings(),
+            "on");
+
+        var nullDigest = RuntimePackageConfigHash.Compute(7,
+            "prompt",
+            [],
+            null,
+            new TimeoutSettings());
+
+        var noneDigest = RuntimePackageConfigHash.Compute(7,
+            "prompt",
+            [],
+            null,
+            new TimeoutSettings(),
+            "none");
+
+        AssertEx.NotEqual(nullDigest, onDigest);
+        AssertEx.NotEqual(noneDigest, onDigest);
+    }
+
+    // Stability guard: the binary-"on" feature must NOT shift the hash of any capable-model effort. The canonical
+    // JSON for low/medium/high/none must remain byte-identical to the pre-fix serialization (only the previously
+    // failing binary-on turn changes). Pinned as literals so any drift in named-effort normalization fails loudly.
+    [Test]
+    [Arguments("low", "low")]
+    [Arguments("medium", "medium")]
+    [Arguments("high", "high")]
+    [Arguments("none", "none")]
+    public void SerializeCanonicalJson_WhenReasoningEffortIsNamed_IsUnchanged(string reasoningEffort, string expectedNormalized)
+    {
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
+            "prompt",
+            [],
+            null,
+            new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30
+            },
+            reasoningEffort);
+
+        AssertEx.Equal(
+            "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"prompt\",\"allowedTools\":[],\"modelProfile\":null,\"reasoningEffort\":\"" +
+            expectedNormalized +
+            "\",\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}",
+            canonicalJson);
+    }
+
+    [Test]
     public void Compute_WhenAllowedToolOrderChanges_ChangesDigest()
     {
         var firstDigest = RuntimePackageConfigHash.Compute(7,

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Represents runtime package config hash.
@@ -80,7 +81,7 @@ public static class RuntimePackageConfigHash
                 })
             ],
             ModelProfile = modelProfile,
-            ReasoningEffort = NormalizeReasoningEffort(reasoningEffort),
+            ReasoningEffort = ReasoningEffortNormalizer.Normalize(reasoningEffort),
             Timeouts = new TimeoutSettingsHashPayload
             {
                 InvocationTimeoutSeconds = timeouts.InvocationTimeoutSeconds,
@@ -120,7 +121,7 @@ public static class RuntimePackageConfigHash
                            Description = participant.Description,
                            Instructions = participant.Instructions,
                            ModelProfile = participant.ModelId,
-                           ReasoningEffort = NormalizeReasoningEffort(participant.ReasoningEffort),
+                           ReasoningEffort = ReasoningEffortNormalizer.Normalize(participant.ReasoningEffort),
                            // Unlike the top-level MapAllowedTools (which drops Description), a participant tool's
                            // Description IS folded into the hash: a participant agent's tool description is shown to the
                            // model and can influence its tool choice within that participant, so a description edit is a
@@ -169,32 +170,6 @@ public static class RuntimePackageConfigHash
                 buffer[(index * 2) + 1] = HexAlphabet[value & 0x0F];
             }
         });
-    }
-
-    private static string? NormalizeReasoningEffort(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return null;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
-        {
-            return "low";
-        }
-
-        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return "none";
-        }
-
-        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
-        {
-            return "medium";
-        }
-
-        return string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase) ? "high" : null;
     }
 
     private sealed record ConfigHashPayload

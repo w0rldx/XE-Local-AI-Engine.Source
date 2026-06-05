@@ -116,6 +116,41 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.Equal(expectedHash, package.ConfigHash);
     }
 
+    [Test]
+    [Arguments("on")]
+    [Arguments("On")]
+    [Arguments("ON")]
+    public void Build_WhenReasoningEffortIsBinaryOn_PreservesOnSentinel(string reasoningEffort)
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+
+        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", 0)],
+            "qwen3.5:0.8b",
+            1,
+            ReasoningEffort: reasoningEffort));
+
+        AssertEx.Equal("on", package.ReasoningEffort);
+    }
+
+    [Test]
+    public void Build_WhenReasoningEffortIsUnknown_NormalizesToNull()
+    {
+        var builder = new LocalChatRuntimePackageBuilder();
+
+        var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "You are helpful.",
+            [CreateMessage(MessageRole.User, "hello", 0)],
+            "qwen3.5:0.8b",
+            1,
+            ReasoningEffort: "bogus"));
+
+        AssertEx.Null(package.ReasoningEffort);
+    }
+
     private static ConversationMessageDto CreateMessage(MessageRole role, string content, int sortOrder)
     {
         return new ConversationMessageDto

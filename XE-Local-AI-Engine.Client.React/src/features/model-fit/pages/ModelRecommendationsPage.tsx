@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
+import { toast } from "@/core/ui/notifications/Toast";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
@@ -65,7 +66,13 @@ export function ModelRecommendationsPage() {
 		// Send the currently-selected use case so the run targets what the operator is viewing (server validates it
 		// against the fixed allowlist), instead of the use case baked into the job definition. Also widen the breadth
 		// (--limit) so more pullable/installed candidates surface than the definition's baked default (Lane H1).
-		refreshMutation.mutate({ scheduledJobId: refreshJob.id, useCase, limit: recommendationRefreshLimit });
+		refreshMutation.mutate(
+			{ scheduledJobId: refreshJob.id, useCase, limit: recommendationRefreshLimit },
+			{
+				onError: (error) =>
+					toast.error(errorMessage(error, t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."))),
+			},
+		);
 	};
 
 	const handleUseCaseChange = (value: string | null): void => {
@@ -155,15 +162,6 @@ export function ModelRecommendationsPage() {
 								{t("pages.modelFit.recommendations.openScheduler", "Open Scheduler")}
 							</Anchor>
 						</Group>
-					</Alert>
-				) : null}
-
-				{refreshMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-refresh-error">
-						{errorMessage(
-							refreshMutation.error,
-							t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."),
-						)}
 					</Alert>
 				) : null}
 

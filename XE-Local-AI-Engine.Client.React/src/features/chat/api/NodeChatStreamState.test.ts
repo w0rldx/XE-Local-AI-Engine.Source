@@ -184,6 +184,59 @@ describe("node chat stream state", () => {
 		});
 	});
 
+	it("stamps reasoningEffort on the optimistic assistant message so the attribution row is live during streaming", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+			undefined,
+			"medium",
+		);
+
+		expect(optimistic.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			reasoningEffort: "medium",
+		});
+	});
+
+	it("carries reasoningEffort through streaming events so the live attribution row stays consistent", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+			undefined,
+			"high",
+		);
+
+		const streaming = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantStreaming, status: "streaming", content: "hi", delta: "hi" }),
+		);
+		expect(streaming.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			reasoningEffort: "high",
+		});
+	});
+
+	it("carries reasoningEffort through a terminal cancelled state", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+			undefined,
+			"none",
+		);
+
+		const cancelled = markNodeChatStreamTerminated(optimistic, "assistant-1", "cancelled");
+		expect(cancelled.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			reasoningEffort: "none",
+		});
+	});
+
 	it("stamps the streaming state with the assistant turn's own start time, not the conversation update time", () => {
 		// Optimistic assistant turn started at 00:00:01; a later conversation update must not be borrowed.
 		const optimistic = appendOptimisticNodeChatSend(

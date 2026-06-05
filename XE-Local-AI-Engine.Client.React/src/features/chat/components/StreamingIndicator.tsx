@@ -1,42 +1,21 @@
-import { Badge, Group, Text } from "@mantine/core";
+import { Badge, Text } from "@mantine/core";
 import { IconClock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 /* eslint-disable react-doctor/no-many-boolean-props */
 
+// Errors are NOT rendered here: a failed turn shows its error as a highlighted block inside the assistant
+// bubble (see ChatMessage) so it renders exactly once and survives reload. This footer only conveys the
+// transient queued/streaming/delayed affordances.
 interface StreamingIndicatorProps {
-	error?: string;
-	failureCategory?: string;
 	hasContent?: boolean;
 	isDelayed?: boolean;
 	isQueued?: boolean;
 	isActive: boolean;
 }
 
-export function StreamingIndicator({
-	error,
-	failureCategory,
-	hasContent = false,
-	isDelayed = false,
-	isQueued = false,
-	isActive,
-}: StreamingIndicatorProps) {
+export function StreamingIndicator({ hasContent = false, isDelayed = false, isQueued = false, isActive }: StreamingIndicatorProps) {
 	const { t } = useTranslation();
-
-	if (error) {
-		return (
-			<Group gap="xs">
-				<Text size="sm" c="red" data-testid="chat-stream-error">
-					{error}
-				</Text>
-				{failureCategory ? (
-					<Badge color="red" size="sm" variant="light">
-						{failureCategory}
-					</Badge>
-				) : null}
-			</Group>
-		);
-	}
 
 	// Queued is distinct from streaming/typing: the turn is accepted but waiting behind another active
 	// invocation, so show a paused clock affordance with no typing text.

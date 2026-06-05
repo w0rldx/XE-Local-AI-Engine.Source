@@ -186,6 +186,45 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-agent-user-1")).toBeNull();
 	});
 
+	it("includes the reasoning label segment in the attribution row when reasoningEffort is present", () => {
+		// The test environment runs without full i18n initialisation: t() returns fallback strings, and
+		// variable interpolation inside fallbacks is not performed. The outer fallback for the reasoning
+		// label is "Reasoning: {{effort}}" — its presence proves the segment was rendered.
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ reasoningEffort: "medium", createdAt: "2026-06-04T10:00:00.000Z" })} />,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		// "Reasoning:" prefix proves the label segment is present (catches the case where it is omitted).
+		expect(attribution).toContain("Reasoning:");
+		// Three-segment row: agentName · Reasoning: … · time.
+		expect(attribution).toContain("·");
+	});
+
+	it("includes the reasoning label for effort 'none' — it is never silently omitted", () => {
+		// "none" (reasoning off) is a valid persisted value and must appear in the attribution row just
+		// like any other effort. The label key "pages.chat.reasoning.effort.none" maps to "Off" in the
+		// real locale (kept in sync with the composer menu's reasoningEffortOptions.none = "Off"); in
+		// test env the fallback string is returned, but the segment is still present.
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ reasoningEffort: "none", createdAt: "2026-06-04T10:00:00.000Z" })} />,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).toContain("Reasoning:");
+		expect(attribution).toContain("·");
+	});
+
+	it("omits the reasoning label from the attribution row when reasoningEffort is absent (legacy turn)", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ reasoningEffort: undefined, createdAt: "2026-06-04T10:00:00.000Z" })} />,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		// No reasoning segment rendered — "Reasoning:" fallback text must not appear.
+		expect(attribution).not.toContain("Reasoning:");
+	});
+
 	it("renders the ordered parts interleave: reasoning → tool card → reasoning", () => {
 		renderWithProviders(
 			<ChatMessage
@@ -205,6 +244,51 @@ describe("ChatMessage actions", () => {
 		expect(screen.getByTestId("chat-tool-call-card-get_time")).toBeTruthy();
 		// The trailing answer still renders from message.content.
 		expect(screen.getByText("Here is the answer.")).toBeTruthy();
+	});
+
+	it("renders a persisted failed turn's error block once and offers regenerate", () => {
+		const onRegenerate = vi.fn();
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "failed", error: "Stream timed out at hf.co/unsloth/model." })}
+				onRegenerate={onRegenerate}
+			/>,
+		);
+
+		// Rendered exactly once, inside the assistant bubble, with the literal slash (no HTML entity).
+		const errorBlocks = screen.getAllByTestId("chat-message-error-assistant-1");
+		expect(errorBlocks).toHaveLength(1);
+		expect(errorBlocks[0]?.textContent).toContain("Stream timed out at hf.co/unsloth/model.");
+		expect(errorBlocks[0]?.textContent).not.toContain("&#x2F;");
+
+		// The regenerate affordance is present on the failed turn (it is not streaming).
+		fireEvent.click(screen.getByLabelText("Regenerate response"));
+		expect(onRegenerate).toHaveBeenCalledWith("assistant-1");
+	});
+
+	it("folds the live failure category into the error block", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "failed", error: "Inter-chunk stall." })}
+				failureCategory="inter-chunk-stall"
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toContain("inter-chunk-stall");
+	});
+
+	it("renders the error block alongside partial content when a turn streamed text before failing", () => {
+		// Regression for the MEDIUM bug: the original guard `!hasContentStarted` hid the error whenever
+		// the turn had any content, so a partial-stream failure showed truncated text with no error indicator.
+		// The error Alert must render AFTER the content Paper regardless of whether content is present.
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ content: "Partial answer so far…", status: "failed", error: "Stream failed mid-response." })} />,
+		);
+
+		// Both the content and the error block are present.
+		expect(screen.getByText("Partial answer so far…")).toBeTruthy();
+		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
+		expect(screen.getByTestId("chat-message-error-assistant-1").textContent).toContain("Stream failed mid-response.");
 	});
 
 	it("renders the live tool card and its result from the streaming parts while streaming", () => {

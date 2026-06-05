@@ -1,5 +1,6 @@
-import { ActionIcon, Avatar, Badge, Box, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Avatar, Badge, Box, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
 import {
+	IconAlertTriangle,
 	IconCheck,
 	IconChevronLeft,
 	IconChevronRight,
@@ -67,6 +68,13 @@ interface ChatMessageProps {
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 	// The active composer reasoning effort, used to flag reasoning emitted while "none" is selected.
 	reasoningEffort?: ReasoningEffort;
+	// Live failure classification (e.g. "inter-chunk-stall") from the stream state. Only present for the
+	// transient streaming turn; persisted failed turns carry just `message.error`. Folded into the error block.
+	failureCategory?: string;
+}
+
+function hasText(value?: string): boolean {
+	return typeof value === "string" && value.trim().length > 0;
 }
 
 function timeText(iso?: string): string {
@@ -97,6 +105,7 @@ export function ChatMessage({
 	feedbackPending = false,
 	onSubmitFeedback,
 	reasoningEffort,
+	failureCategory,
 }: ChatMessageProps) {
 	const { t } = useTranslation();
 	const reducedMotion = useReducedMotion();
@@ -112,8 +121,21 @@ export function ChatMessage({
 	const agentDisplayName = assistantMessage
 		? (message.agentName ?? t("pages.chat.defaultAgentName", "Default Assistant"))
 		: undefined;
+	// Reasoning effort used at generation time (ground truth from persisted metadata_json). Shown on every
+	// assistant turn where it is present, including "none" → "off". Absent for legacy/user turns → omitted.
+	const reasoningLabel =
+		assistantMessage && message.reasoningEffort != null
+			? t("pages.chat.reasoning.label", "Reasoning: {{effort}}", {
+					effort: t(`pages.chat.reasoning.effort.${message.reasoningEffort}`, message.reasoningEffort),
+				})
+			: undefined;
 	const hasContentStarted = message.content.trim().length > 0;
 	const parts = assistantMessage ? resolveParts(message, streamingParts) : EMPTY_PARTS;
+	// A failed assistant turn carries an `error`. Render it as a highlighted block inside the bubble —
+	// exactly once, always, regardless of whether the turn also has partial content. This covers the case
+	// where the model streamed some text before failing: both the partial content AND the error block show.
+	// StreamingIndicator no longer renders errors (single render site).
+	const errorText = assistantMessage && hasText(message.error) ? message.error?.trim() : undefined;
 	const canCopy = hasContentStarted && !isStreaming;
 	const canRegenerate = assistantMessage && !isStreaming && Boolean(onRegenerate);
 	const canBranch = assistantMessage && !isStreaming && Boolean(onBranch);
@@ -302,9 +324,28 @@ export function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
+				{errorText ? (
+					<Alert
+						color="red"
+						variant="light"
+						icon={<IconAlertTriangle size={16} />}
+						title={t("pages.chat.error.title", "Response failed")}
+						data-testid={`chat-message-error-${message.id}`}
+						style={{ borderRadius: "4px 14px 14px 14px" }}
+					>
+						<Stack gap={6}>
+							<Text size="sm">{errorText}</Text>
+							{hasText(failureCategory) ? (
+								<Badge color="red" size="sm" variant="light" data-testid={`chat-message-error-category-${message.id}`}>
+									{failureCategory}
+								</Badge>
+							) : null}
+						</Stack>
+					</Alert>
+				) : null}
 				{assistantMessage && (agentDisplayName || time) ? (
 					// Attribution row: left side holds action icons (real empty Box when null, so space-between pins
-					// right side even during streaming when actions is null). Right side = agentName · time.
+					// right side even during streaming when actions is null). Right side = agentName · Reasoning: X · time.
 					<Group justify="space-between" align="center" wrap="nowrap" gap={4}>
 						<Box>{actions}</Box>
 						<Text
@@ -313,7 +354,7 @@ export function ChatMessage({
 							data-testid={`chat-message-agent-${message.id}`}
 							style={{ flexShrink: 0 }}
 						>
-							{[agentDisplayName, time].filter(Boolean).join(" · ")}
+							{[agentDisplayName, reasoningLabel, time].filter(Boolean).join(" · ")}
 						</Text>
 					</Group>
 				) : (

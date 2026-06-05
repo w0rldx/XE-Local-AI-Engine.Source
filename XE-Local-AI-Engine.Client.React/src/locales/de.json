@@ -142,7 +142,8 @@
       "cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
       "cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Provider senden",
       "reasoningEffortOptions": {
-        "none": "Keine",
+        "none": "Aus",
+        "on": "An",
         "low": "Niedrig",
         "medium": "Mittel",
         "high": "Hoch"
@@ -445,7 +446,20 @@
         "triggerLabel": "Agent",
         "offOptionHint": "Kein Agent — verwendet die Knoten-Standardeinstellung"
       },
-      "nodeReply": "Knoten-Antwort"
+      "nodeReply": "Knoten-Antwort",
+      "error": {
+        "title": "Antwort fehlgeschlagen"
+      },
+      "reasoning": {
+        "label": "Denken: {{effort}}",
+        "effort": {
+          "none": "Aus",
+          "on": "An",
+          "low": "Niedrig",
+          "medium": "Mittel",
+          "high": "Hoch"
+        }
+      }
     },
     "clientNodes": {
       "fields": {

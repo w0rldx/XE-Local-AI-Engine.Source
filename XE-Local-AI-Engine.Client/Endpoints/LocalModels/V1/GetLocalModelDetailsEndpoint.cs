@@ -22,12 +22,15 @@ public sealed class GetLocalModelDetailsEndpoint(
 
     public override async Task HandleAsync(GetLocalModelDetailsRequest req, CancellationToken ct)
     {
-        if (!await ValidateModelNameAsync(req.ModelName, ct).ConfigureAwait(false))
+        // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and probe
+        // the decoded canonical name to keep "validated name == probed name" true.
+        var decodedModelName = ModelRouteName.Decode(req.ModelName);
+        if (!await ValidateModelNameAsync(decodedModelName, ct).ConfigureAwait(false))
         {
             return;
         }
 
-        var modelName = req.ModelName!.Trim();
+        var modelName = decodedModelName!.Trim();
         var details = await _modelService.ShowModelDetailsAsync(modelName, ct).ConfigureAwait(false);
         await Send.OkAsync(details.ToResponse(modelName), ct).ConfigureAwait(false);
     }

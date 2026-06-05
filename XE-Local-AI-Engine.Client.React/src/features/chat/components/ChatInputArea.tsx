@@ -29,6 +29,9 @@ interface ChatInputAreaProps {
 	sendDisabled?: boolean;
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
+	// Whether the active model advertises the Ollama `tools` capability. Combined with the node-wide
+	// capability to gate the local-tool controls so a non-tool model never offers them.
+	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
@@ -58,6 +61,7 @@ export function ChatInputArea({
 	sendDisabled: sendDisabledProp = false,
 	selectedModel,
 	reasoningEffort,
+	activeModelToolCapable = false,
 	toolsEnabled = false,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
@@ -75,6 +79,9 @@ export function ChatInputArea({
 	const trimmed = content.trim();
 	const reasoningEnabled = reasoningEffort !== "none";
 	const reasoningMenuDisabled = disabled || isSending || availableReasoningEfforts.length <= 1;
+	// Local-tool controls require BOTH the node-wide capability AND the active model advertising the Ollama
+	// `tools` capability — a model that can't call tools must never be offered them.
+	const showLocalToolControls = capabilities.showLocalToolControls && activeModelToolCapable;
 	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed;
 	// Agent selector is disabled while sending or when there are no agents to pick from.
 	const agentSelectorDisabled = disabled || isSending || agentOptions.length === 0;
@@ -124,7 +131,7 @@ export function ChatInputArea({
 						))}
 					</Menu.Dropdown>
 				</Menu>
-				{capabilities.showLocalToolControls ? (
+				{showLocalToolControls ? (
 					<Tooltip label={toolsEnabled ? t("pages.chat.localToolsEnabled", "Local tools enabled") : t("pages.chat.localToolsDisabled", "Local tools disabled")}>
 						<ActionIcon
 							size={36}

@@ -36,6 +36,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { toast } from "@/core/ui/notifications/Toast";
 import {
 	PromoteConflictError,
 	toSavePlaybookActionRequest,
@@ -233,32 +234,48 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 			});
 
 			if (confirmed) {
-				deleteMutation.mutate(action.id);
+				deleteMutation.mutate(action.id, {
+					onError: (error) =>
+						toast.error(errorMessage(error, t("pages.agents.playbook.errors.delete", "Could not delete the playbook action."))),
+				});
 			}
 		},
 		[confirm, deleteMutation, t],
 	);
 
+	// A blocked promote (the eval gate, HTTP 409) surfaces as a typed PromoteConflictError carrying the precise
+	// reason (needs eval / regressed / stale). Prefer a localized message keyed by its status; fall back to the
+	// generic review error for any other promote/reject/run-eval failure.
+	const reviewErrorMessage = useCallback(
+		(error: unknown): string =>
+			error instanceof PromoteConflictError
+				? t(`pages.agents.playbook.eval.conflict.${error.status}`, error.message)
+				: errorMessage(error, t("pages.agents.playbook.errors.review", "Could not update the suggestion.")),
+		[t],
+	);
+
 	// Run the analysis agent. The mutation result + invalidation refresh the Suggested section; the empty-result
 	// notice is derived from analyzeMutation below.
 	const handleAnalyze = useCallback(() => {
-		analyzeMutation.mutate();
-	}, [analyzeMutation]);
+		analyzeMutation.mutate(undefined, {
+			onError: (error) => toast.error(errorMessage(error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))),
+		});
+	}, [analyzeMutation, t]);
 
 	const handlePromote = useCallback(
 		(action: PlaybookAction) => {
-			promoteMutation.mutate(action.id);
+			promoteMutation.mutate(action.id, { onError: (error) => toast.error(reviewErrorMessage(error)) });
 		},
-		[promoteMutation],
+		[promoteMutation, reviewErrorMessage],
 	);
 
 	// Playbook P4 — run the eval gate for a single Suggested action against the agent's golden set. The mutation
 	// invalidation refreshes the row's eval badge + the Approve gate (Approve stays disabled until passed).
 	const handleRunEval = useCallback(
 		(action: PlaybookAction) => {
-			runEvalMutation.mutate(action.id);
+			runEvalMutation.mutate(action.id, { onError: (error) => toast.error(reviewErrorMessage(error)) });
 		},
-		[runEvalMutation],
+		[runEvalMutation, reviewErrorMessage],
 	);
 
 	const handleReject = useCallback(
@@ -274,10 +291,10 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 			});
 
 			if (confirmed) {
-				rejectMutation.mutate(action.id);
+				rejectMutation.mutate(action.id, { onError: (error) => toast.error(reviewErrorMessage(error)) });
 			}
 		},
-		[confirm, rejectMutation, t],
+		[confirm, rejectMutation, reviewErrorMessage, t],
 	);
 
 	if (!enabled) {
@@ -295,16 +312,6 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	// "No new suggestions" notice: shown only after a completed analyze run that returned zero proposals and when
 	// there are no Suggested actions outstanding to review.
 	const showNoSuggestionsNotice = analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
-	// A blocked promote (the eval gate, HTTP 409) surfaces as a typed PromoteConflictError carrying the precise
-	// reason (needs eval / regressed / stale). Prefer a localized message keyed by its status; fall back to the
-	// generic review error for any other promote/reject failure.
-	const reviewError = promoteMutation.error ?? rejectMutation.error ?? runEvalMutation.error;
-	const promoteRejectError =
-		promoteMutation.error instanceof PromoteConflictError
-			? t(`pages.agents.playbook.eval.conflict.${promoteMutation.error.status}`, promoteMutation.error.message)
-			: reviewError
-				? errorMessage(reviewError, t("pages.agents.playbook.errors.review", "Could not update the suggestion."))
-				: undefined;
 
 	return (
 		<Paper withBorder={true} radius="md" p="md" data-testid={`playbook-panel-${agentDefinitionId}`}>
@@ -380,18 +387,6 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 					</Alert>
 				) : null}
 
-				{analyzeMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-analyze-error">
-						{errorMessage(analyzeMutation.error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))}
-					</Alert>
-				) : null}
-
-				{promoteRejectError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-review-error">
-						{promoteRejectError}
-					</Alert>
-				) : null}
-
 				{showNoSuggestionsNotice ? (
 					<Text size="sm" c="dimmed" data-testid="playbook-no-suggestions">
 						{t("pages.agents.playbook.noSuggestions", "No new suggestions from the latest analysis.")}
@@ -416,15 +411,6 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 							/>
 						))}
 					</Stack>
-				) : null}
-
-				{deleteMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-delete-error">
-						{errorMessage(
-							deleteMutation.error,
-							t("pages.agents.playbook.errors.delete", "Could not delete the playbook action."),
-						)}
-					</Alert>
 				) : null}
 
 				{isEditorOpen ? (

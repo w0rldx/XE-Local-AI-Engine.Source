@@ -187,7 +187,7 @@ describe("GoldenConversationPanel", () => {
 		await Promise.resolve();
 
 		expect(confirmMock).toHaveBeenCalled();
-		expect(deleteMutation.mutate).toHaveBeenCalledWith("golden-1");
+		expect(deleteMutation.mutate).toHaveBeenCalledWith("golden-1", { onError: expect.any(Function) });
 	});
 
 	it("surfaces a load error", () => {
@@ -232,7 +232,7 @@ describe("GoldenConversationPanel", () => {
 		fireEvent.click(screen.getByTestId("golden-pending-approve-golden-pending-2"));
 
 		expect(approveMutation.mutate).toHaveBeenCalledTimes(1);
-		expect(approveMutation.mutate).toHaveBeenCalledWith("golden-pending-2");
+		expect(approveMutation.mutate).toHaveBeenCalledWith("golden-pending-2", { onError: expect.any(Function) });
 	});
 
 	it("clicking Reject on a pending case invokes the delete flow with confirmation", async () => {
@@ -253,7 +253,7 @@ describe("GoldenConversationPanel", () => {
 		await Promise.resolve();
 
 		expect(confirmMock).toHaveBeenCalled();
-		expect(deleteMutation.mutate).toHaveBeenCalledWith("golden-pending-3");
+		expect(deleteMutation.mutate).toHaveBeenCalledWith("golden-pending-3", { onError: expect.any(Function) });
 	});
 
 	it("shows the 'harvested' badge in the active list for a harvested+enabled case", () => {

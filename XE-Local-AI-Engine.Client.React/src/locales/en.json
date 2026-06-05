@@ -142,7 +142,8 @@
       "cloudToolsUnavailable": "Cloud tools are unavailable for the selected model",
       "cloudToolsPrivacyHint": "Cloud tools may send data to the provider",
       "reasoningEffortOptions": {
-        "none": "None",
+        "none": "Off",
+        "on": "On",
         "low": "Low",
         "medium": "Medium",
         "high": "High"
@@ -445,7 +446,20 @@
         "triggerLabel": "Agent",
         "offOptionHint": "No agent — uses the node default"
       },
-      "nodeReply": "Node reply"
+      "nodeReply": "Node reply",
+      "error": {
+        "title": "Response failed"
+      },
+      "reasoning": {
+        "label": "Reasoning: {{effort}}",
+        "effort": {
+          "none": "Off",
+          "on": "On",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      }
     },
     "clientNodes": {
       "fields": {

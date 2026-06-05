@@ -27,6 +27,7 @@ public sealed class NodeChatStreamService(
     IDefaultAgentProvider defaultAgentProvider,
     IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
+    IModelClassificationService modelClassificationService,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -84,7 +85,10 @@ public sealed class NodeChatStreamService(
                 NowUnixMilliseconds(),
                 request.Model,
                 AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
-                AgentName: resolution.Resolved?.AgentName),
+                AgentName: resolution.Resolved?.AgentName,
+                // Persist the effort that actually drives this turn — an agent's pinned effort wins over the request's
+                // selection (same precedence as the runtime package built below). Survives reload off the metadata blob.
+                ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? request.ReasoningEffort),
             cancellationToken).ConfigureAwait(false);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
@@ -155,10 +159,11 @@ public sealed class NodeChatStreamService(
         var orchestration = resolution.Orchestration;
 
         // Tools are offered to the loopback agent only when the client asked for them AND the node has the agent
-        // tool engine enabled. When offered, the catalog's local tools travel in the runtime package as the offer
-        // list; the invocation factory resolves the matching executables from the registry by name. A bound
-        // definition narrows that offer to its allowed set; an unbound conversation uses the full offer.
-        var offerTools = request.UseLocalTools && localChatOptions.Value.EnableTools;
+        // tool engine enabled AND the active model advertises the Ollama tools capability. When offered, the catalog's
+        // local tools travel in the runtime package as the offer list; the invocation factory resolves the matching
+        // executables from the registry by name. A bound definition narrows that offer to its allowed set (and the
+        // resolver already withheld the offer for a non-tools model); an unbound conversation uses the full offer.
+        var offerTools = request.UseLocalTools && localChatOptions.Value.EnableTools && resolution.SupportsTools;
         var allowedTools = offerTools
             ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
             : null;
@@ -173,7 +178,8 @@ public sealed class NodeChatStreamService(
             AllowedTools: allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
-            OrchestrationSpec: orchestration?.Spec));
+            OrchestrationSpec: orchestration?.Spec,
+            SupportsThinking: resolution.SupportsThinking));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
@@ -453,25 +459,60 @@ public sealed class NodeChatStreamService(
                                ?? conversation.AgentDefinitionId
                                ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken).ConfigureAwait(false);
 
+        // Resolve the active model's advertised Ollama capabilities ONCE so the think field and the tool offer are both
+        // gated by what the model can actually do. A non-thinking model returns HTTP 400 for any think value; a
+        // non-tools model cannot drive tool calls. Unknown/offline capabilities resolve to NOT-capable (the safe
+        // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call.
+        var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
+
         // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
         // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
         // offer, and agent version 1. When resolved, the definition supplies the system prompt, the tool offer (full for
         // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
         // that feeds the config hash, AND the attribution snapshot (id + display name). The just-sent user turn is the
         // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, cancellationToken).ConfigureAwait(false);
 
         // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
         // keeping the unbound/single-agent path byte-identical. The same user turn drives per-participant retrieval.
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, trimmedContent, cancellationToken).ConfigureAwait(false);
+        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, cancellationToken).ConfigureAwait(false);
 
-        return new ResolvedTurn(activeModel, resolved, orchestration);
+        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools);
+    }
+
+    /// <summary>
+    ///     Resolves the active model's advertised <c>thinking</c>/<c>tools</c> capabilities via the shared classification
+    ///     service (cache-first; no <c>/api/show</c> call on a cache hit). A null/blank model or any detection miss
+    ///     resolves to NOT-capable for both — the safe default that omits the think field (avoiding the Ollama 400) and
+    ///     withholds the tool offer while still allowing a plain chat.
+    /// </summary>
+    private async Task<(bool SupportsThinking, bool SupportsTools)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(activeModel))
+        {
+            return (false, false);
+        }
+
+        var classifications = await modelClassificationService
+                                    .ClassifyAsync([(activeModel, (string?)null)], cancellationToken)
+                                    .ConfigureAwait(false);
+        if (!classifications.TryGetValue(activeModel, out var classification))
+        {
+            return (false, false);
+        }
+
+        return (ModelKindDetector.SupportsThinking(classification.Capabilities),
+            ModelKindDetector.SupportsTools(classification.Capabilities));
     }
 
     /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
-    private sealed record ResolvedTurn(string ActiveModel, ResolvedAgentRuntime? Resolved, ResolvedOrchestration? Orchestration);
+    private sealed record ResolvedTurn(string ActiveModel,
+        ResolvedAgentRuntime? Resolved,
+        ResolvedOrchestration? Orchestration,
+        bool SupportsThinking,
+        bool SupportsTools);
 
     /// <summary>
     ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or <c>null</c> to run
@@ -481,6 +522,7 @@ public sealed class NodeChatStreamService(
     private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
         string? activeModel,
         string? retrievalQuery,
+        bool supportsTools,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
@@ -494,7 +536,7 @@ public sealed class NodeChatStreamService(
             return null;
         }
 
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,

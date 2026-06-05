@@ -79,6 +79,8 @@ internal static class LocalModelsMapper
             Kind = classification.Kind.ToString(),
             DetectedKind = classification.DetectedKind.ToString(),
             Capabilities = classification.Capabilities,
+            IsReasoningCapable = ModelKindDetector.SupportsThinking(classification.Capabilities),
+            IsToolCapable = ModelKindDetector.SupportsTools(classification.Capabilities),
             IsOverridden = classification.IsOverridden
         };
     }

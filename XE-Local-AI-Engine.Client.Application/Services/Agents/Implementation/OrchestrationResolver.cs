@@ -57,6 +57,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     public async Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator,
         string? activeModelId,
         string? retrievalQuery = null,
+        bool supportsTools = true,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(orchestrator);
@@ -64,6 +65,15 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         if (orchestrator.Kind != AgentDefinitionKind.Orchestrator)
         {
             // Single-agent definition: never an orchestration. The caller's single-agent resolver owns this case.
+            return null;
+        }
+
+        // Orchestration is inherently multi-hop function calling, so a model that does not advertise the Ollama "tools"
+        // capability cannot drive it: degrade the whole turn to single-agent (where the single-agent resolver withholds
+        // tools as well). This is the capability gate; the ToolCapableModels name allow-list below is the additional gate.
+        if (!supportsTools)
+        {
+            _logger.LogInformation("Orchestrator {AgentDefinitionId} active model does not advertise the tools capability; degrading to single-agent.", orchestrator.Id);
             return null;
         }
 

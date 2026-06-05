@@ -720,6 +720,8 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 	kind: z.string().optional(),
 	detectedKind: z.string().optional(),
 	capabilities: z.array(z.string()).optional(),
+	isReasoningCapable: z.boolean().optional(),
+	isToolCapable: z.boolean().optional(),
 	isOverridden: z.boolean().optional(),
 });
 
@@ -845,6 +847,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	parts: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessagePart).nullish(),
 	agentDefinitionId: z.guid().nullish(),
 	agentName: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
@@ -998,6 +1001,8 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"AgentToolCall",
 	"HashMismatch",
 	"ModelUnavailable",
+	"ModelCapabilityUnsupported",
+	"ModelLoadFailed",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
+import { toast } from "@/core/ui/notifications/Toast";
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import { ScheduledJobRunDetail } from "@/features/scheduler/components/ScheduledJobRunDetail";
@@ -144,7 +145,10 @@ export function SchedulerPage() {
 			});
 
 			if (confirmed) {
-				deleteMutation.mutate({ path: { scheduledJobId: job.id } });
+				deleteMutation.mutate(
+					{ path: { scheduledJobId: job.id } },
+					{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.delete", "Could not delete the scheduled job."))) },
+				);
 			}
 		},
 		[confirm, deleteMutation, t],
@@ -152,23 +156,32 @@ export function SchedulerPage() {
 
 	const handleTrigger = useCallback(
 		(job: ScheduledJob) => {
-			triggerMutation.mutate({ path: { scheduledJobId: job.id } });
+			triggerMutation.mutate(
+				{ path: { scheduledJobId: job.id } },
+				{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.trigger", "Could not trigger the job."))) },
+			);
 		},
-		[triggerMutation],
+		[triggerMutation, t],
 	);
 
 	const handleToggleEnabled = useCallback(
 		(job: ScheduledJob, enabled: boolean) => {
-			enableMutation.mutate({ id: job.id, enabled });
+			enableMutation.mutate(
+				{ id: job.id, enabled },
+				{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.enable", "Could not change the job state."))) },
+			);
 		},
-		[enableMutation],
+		[enableMutation, t],
 	);
 
 	const handleCancelRun = useCallback(
 		(run: ScheduledJobRun) => {
-			cancelMutation.mutate({ path: { runId: run.id } });
+			cancelMutation.mutate(
+				{ path: { runId: run.id } },
+				{ onError: (error) => toast.error(errorMessage(error, t("pages.scheduler.errors.cancel", "Could not cancel the run."))) },
+			);
 		},
-		[cancelMutation],
+		[cancelMutation, t],
 	);
 
 	const isEditorOpen = editorTarget !== null;
@@ -246,30 +259,6 @@ export function SchedulerPage() {
 						{t("pages.scheduler.createButton", "Create job")}
 					</Button>
 				</Group>
-
-				{deleteMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-delete-error">
-						{errorMessage(deleteMutation.error, t("pages.scheduler.errors.delete", "Could not delete the scheduled job."))}
-					</Alert>
-				) : null}
-
-				{enableMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-enable-error">
-						{errorMessage(enableMutation.error, t("pages.scheduler.errors.enable", "Could not change the job state."))}
-					</Alert>
-				) : null}
-
-				{triggerMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-trigger-error">
-						{errorMessage(triggerMutation.error, t("pages.scheduler.errors.trigger", "Could not trigger the job."))}
-					</Alert>
-				) : null}
-
-				{cancelMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-cancel-error">
-						{errorMessage(cancelMutation.error, t("pages.scheduler.errors.cancel", "Could not cancel the run."))}
-					</Alert>
-				) : null}
 
 				{/* Editor dialog: replaces the inline card. Both the title-bar X and the footer
 				    Cancel route through requestCloseEditor so a dirty-state confirm is shown

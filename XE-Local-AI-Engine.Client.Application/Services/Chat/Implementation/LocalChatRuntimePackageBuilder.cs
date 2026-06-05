@@ -29,7 +29,10 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             AllowedTools = allowedTools,
             ToolPolicies = request.ToolPolicies is null ? null : new Dictionary<string, object>(request.ToolPolicies),
             ModelProfile = request.ModelProfile,
-            ReasoningEffort = NormalizeReasoningEffort(request.ReasoningEffort),
+            ReasoningEffort = ReasoningEffortNormalizer.Normalize(request.ReasoningEffort),
+            // Deliberately NOT fed into the config hash below: capable models keep a byte-identical hash, and only the
+            // currently-failing incapable models see a (harmless) hash difference.
+            SupportsThinking = request.SupportsThinking,
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,
@@ -41,32 +44,6 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
                 request.ReasoningEffort,
                 request.OrchestrationSpec)
         };
-    }
-
-    private static string? NormalizeReasoningEffort(string? reasoningEffort)
-    {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return null;
-        }
-
-        var normalized = reasoningEffort.Trim();
-        if (string.Equals(normalized, "low", StringComparison.OrdinalIgnoreCase))
-        {
-            return "low";
-        }
-
-        if (string.Equals(normalized, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return "none";
-        }
-
-        if (string.Equals(normalized, "medium", StringComparison.OrdinalIgnoreCase))
-        {
-            return "medium";
-        }
-
-        return string.Equals(normalized, "high", StringComparison.OrdinalIgnoreCase) ? "high" : null;
     }
 
     private static IReadOnlyList<MixedEnvelopeAllowedToolDto> MapAllowedTools(IReadOnlyList<AllowedToolDto> allowedTools)

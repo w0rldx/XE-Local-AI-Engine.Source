@@ -44,6 +44,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -88,6 +89,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -135,6 +137,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -190,6 +193,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -230,6 +234,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -275,6 +280,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -327,6 +333,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -369,6 +376,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -423,6 +431,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -475,7 +484,7 @@ public sealed class NodeChatStreamServiceTests
 
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", 9));
 
         var service = new NodeChatStreamService(persistence,
@@ -495,6 +504,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -517,7 +527,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent binding must carry no orchestration spec.");
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -537,7 +547,7 @@ public sealed class NodeChatStreamServiceTests
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
-        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                              .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", null, 4));
 
         var service = new NodeChatStreamService(persistence,
@@ -554,6 +564,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             orchestrationResolver,
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -599,6 +610,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -614,7 +626,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
-        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -631,7 +643,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", null, 3, requestAgentId, "Selected Agent"));
 
         var service = new NodeChatStreamService(persistence,
@@ -648,6 +660,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -662,8 +675,8 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -679,7 +692,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Default persona.", [], null, null, 1, defaultAssistantId, "Default Assistant"));
 
         var service = new NodeChatStreamService(persistence,
@@ -696,6 +709,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(defaultAssistantId),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -709,7 +723,7 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -726,7 +740,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, agentId, "Backend Buddy"));
 
         var service = new NodeChatStreamService(persistence,
@@ -743,6 +757,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(agentId),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -776,7 +791,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, agentId, "Pending Persona"));
 
         var service = new NodeChatStreamService(persistence,
@@ -793,6 +808,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(agentId),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -874,6 +890,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(defaultAssistantId),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -968,6 +985,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(defaultAssistantId),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1052,6 +1070,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore("qwen3:8b"),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1100,6 +1119,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1133,12 +1153,37 @@ public sealed class NodeChatStreamServiceTests
         return store;
     }
 
+    // The default classification service: every model resolves to BOTH thinking- and tools-capable, so the existing
+    // think/tool-offer assertions stay byte-identical (these tests pre-date per-model capability gating). The dedicated
+    // capability-gate tests substitute an incapable classification.
+    private static IModelClassificationService CreateModelClassificationService(params string[] capabilities)
+    {
+        var resolved = capabilities.Length > 0 ? capabilities : ["completion", "tools", "thinking"];
+        var service = Substitute.For<IModelClassificationService>();
+        service.ClassifyAsync(Arg.Any<IEnumerable<(string ModelName, string? Digest)>>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var models = callInfo.Arg<IEnumerable<(string ModelName, string? Digest)>>();
+                   var map = new Dictionary<string, ModelClassificationResult>(StringComparer.OrdinalIgnoreCase);
+                   foreach (var (modelName, _) in models)
+                   {
+                       if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
+                       {
+                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, resolved, IsOverridden: false);
+                       }
+                   }
+
+                   return Task.FromResult<IReadOnlyDictionary<string, ModelClassificationResult>>(map);
+               });
+        return service;
+    }
+
     // The default (unbound) resolver: ResolveAsync returns null, so the service keeps today's literals — these tests
     // exercise the default chat persona. Bound-agent behavior is covered by the dedicated bound-conversation tests.
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
     }
 
@@ -1164,7 +1209,7 @@ public sealed class NodeChatStreamServiceTests
     private static IOrchestrationResolver CreateOrchestrationResolver()
     {
         var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
         return resolver;
     }
 
@@ -1325,6 +1370,7 @@ public sealed class NodeChatStreamServiceTests
             CreateDefaultAgentProvider(),
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
