@@ -374,3 +374,7 @@ tmp/
 
 # Worker Credentials
 *worker-credentials.enc
+
+# Local runtime artifacts (machine-specific, not for version control)
+.claude/scheduled_tasks.lock
+.codegraph/daemon.pid
