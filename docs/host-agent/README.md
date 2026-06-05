@@ -2,6 +2,8 @@
 
 Use this folder for operational and developer-facing documentation for the `XE-Local-AI-Engine` local node runtime.
 
+For the list of shipped node features — including the Quartz scheduler, model-fit recommendation/benchmark, agent mode (definitions, playbook, eval gate, retrieval), and MCP tool extensibility — see the [root README](../../README.md#what-ships-from-this-repo).
+
 ## Start here
 
 - [Architecture](./architecture.md) — component boundaries, data paths, and security boundaries.
