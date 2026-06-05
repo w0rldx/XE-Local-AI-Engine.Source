@@ -459,7 +459,12 @@
           "medium": "Mittel",
           "high": "Hoch"
         }
-      }
+      },
+      "menu": {
+        "label": "Nachrichtenoptionen",
+        "showTokensPerSecond": "Tokens/Sek. anzeigen"
+      },
+      "tokensPerSecond": "{{value}} Tok/s"
     },
     "clientNodes": {
       "fields": {

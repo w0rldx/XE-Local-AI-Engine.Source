@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -148,15 +149,22 @@ public sealed class InvocationRunner : IInvocationRunner
                 await RunSingleAgentAsync(package, resolvedModel, transport, stream, invocationToken).ConfigureAwait(false);
             }
 
+            // Read the whole-turn wall-clock duration once. The same value rides every completion transport (encrypted
+            // counts dict, plain payload, dispatcher report) so the persisted tokens-per-second is computed from one
+            // authoritative measurement regardless of which path serves the turn.
+            var generationDurationMs = (long)stream.GenerationStopwatch.Elapsed.TotalMilliseconds;
+
             if (sendEncrypted)
             {
+                var tokenCounts = stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>();
+                tokenCounts["generationDurationMs"] = generationDurationMs;
                 await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
                         context.MessageId,
                         context.EpochVersion,
                         context.EpochKey.Span,
                         Encoding.UTF8.GetBytes(stream.ResponseBuilder.ToString()),
                         stream.Sequence,
-                        stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(),
+                        tokenCounts,
                         stream.ReasoningBuilder.Length > 0 ? Encoding.UTF8.GetBytes(stream.ReasoningBuilder.ToString()) : null),
                     invocationToken).ConfigureAwait(false);
             }
@@ -188,7 +196,8 @@ public sealed class InvocationRunner : IInvocationRunner
                     OutputTokens = stream.UsageSnapshot?.OutputTokens,
                     TokensUsed = stream.UsageSnapshot?.TotalTokens,
                     FinalReasoning = stream.ReasoningBuilder.ToString(),
-                    ReasoningTokens = stream.UsageSnapshot?.ReasoningTokens
+                    ReasoningTokens = stream.UsageSnapshot?.ReasoningTokens,
+                    GenerationDurationMs = generationDurationMs
                 }, invocationToken).ConfigureAwait(false);
             }
 
@@ -196,7 +205,8 @@ public sealed class InvocationRunner : IInvocationRunner
                 stream.UsageSnapshot?.InputTokens,
                 stream.UsageSnapshot?.OutputTokens,
                 stream.UsageSnapshot?.TotalTokens,
-                stream.UsageSnapshot?.ReasoningTokens).ConfigureAwait(false);
+                stream.UsageSnapshot?.ReasoningTokens,
+                generationDurationMs).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (IsCurrentInvocation(package.InvocationId))
         {
@@ -1186,6 +1196,11 @@ public sealed class InvocationRunner : IInvocationRunner
     // block in RunAsync reads the final state.
     private sealed class StreamState
     {
+        // Wall-clock generation timer for the whole turn (prompt-eval through final token), started at state
+        // construction so it covers both the single-agent and orchestration branches. Read once in the completion
+        // block to stamp the persisted tokens-per-second duration.
+        public Stopwatch GenerationStopwatch { get; } = Stopwatch.StartNew();
+
         public StringBuilder ResponseBuilder { get; } = new();
 
         public StringBuilder ReasoningBuilder { get; } = new();

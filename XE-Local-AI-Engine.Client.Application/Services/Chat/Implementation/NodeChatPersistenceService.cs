@@ -322,7 +322,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             request.ReasoningCount,
             true,
             cancellationToken,
-            request.Parts);
+            request.Parts,
+            request.GenerationDurationMs);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -845,7 +846,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         int? reasoningTokens,
         bool replaceContent,
         CancellationToken cancellationToken,
-        IReadOnlyList<NodeChatMessagePart>? parts = null)
+        IReadOnlyList<NodeChatMessagePart>? parts = null,
+        long? generationDurationMs = null)
     {
         ValidateCorrelation(correlation);
 
@@ -871,11 +873,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 // A null parts arg leaves the persisted parts untouched (a partial flush carries no parts); a
                 // non-null list (including empty) is the authoritative interleave from terminalize and overwrites.
                 var nextParts = parts ?? current.Parts;
+                // The generation duration is reported once at terminalize; a null arg (partial flush) preserves any
+                // existing value, mirroring the token-count preservation above.
+                var nextGenerationDurationMs = generationDurationMs ?? current.GenerationDurationMs;
                 // Agent attribution and the reasoning effort are stamped once at placeholder/variant mint and never
                 // updated here, so always preserve them from current — otherwise a later flush/terminalize would
                 // re-serialize the blob without those fields and silently drop the per-response attribution.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
-                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort);
+                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -910,7 +915,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     OutputCount = nextOutputTokens,
                     TotalCount = nextTotalTokens,
                     ReasoningCount = nextReasoningTokens,
-                    Parts = nextParts
+                    Parts = nextParts,
+                    GenerationDurationMs = nextGenerationDurationMs
                 };
             },
             cancellationToken).ConfigureAwait(false);
@@ -1011,7 +1017,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 metadata.Parts,
                 metadata.AgentDefinitionId,
                 metadata.AgentName,
-                metadata.ReasoningEffort));
+                metadata.ReasoningEffort,
+                metadata.GenerationDurationMs));
         }
 
         return messages;
@@ -1108,15 +1115,16 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         IReadOnlyList<NodeChatMessagePart>? parts = null,
         Guid? agentDefinitionId = null,
         string? agentName = null,
-        string? reasoningEffort = null)
+        string? reasoningEffort = null,
+        long? generationDurationMs = null)
     {
         if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null && parts is null
-            && agentDefinitionId is null && agentName is null && reasoningEffort is null)
+            && agentDefinitionId is null && agentName is null && reasoningEffort is null && generationDurationMs is null)
         {
             return null;
         }
 
-        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName, reasoningEffort),
+        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName, reasoningEffort, generationDurationMs),
             MetadataJsonOptions));
     }
 
@@ -1215,5 +1223,10 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         // The reasoning effort actually used to generate this assistant turn (per-response attribution). Trailing
         // optional member with a null default, so a legacy blob written before this field existed omits the key and
         // deserializes to null (no migration). Same plaintext-on-device posture as the existing metadata fields.
-        string? ReasoningEffort = null);
+        string? ReasoningEffort = null,
+        // Whole-turn wall-clock generation duration in milliseconds (drives the optional tokens-per-second
+        // attribution). Trailing optional member with a null default, so a legacy blob written before this field
+        // existed omits the key and deserializes to null (no migration). Same plaintext-on-device posture as the
+        // existing metadata fields.
+        long? GenerationDurationMs = null);
 }

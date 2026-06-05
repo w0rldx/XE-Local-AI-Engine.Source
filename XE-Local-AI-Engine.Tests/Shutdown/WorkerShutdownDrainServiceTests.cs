@@ -279,7 +279,7 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null)
+        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null)
         {
             return Task.CompletedTask;
         }

@@ -1,10 +1,12 @@
-import { ActionIcon, Alert, Avatar, Badge, Box, CopyButton, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Avatar, Badge, Box, CopyButton, Group, Menu, Paper, Stack, Text, Tooltip } from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconCheck,
 	IconChevronLeft,
 	IconChevronRight,
 	IconCopy,
+	IconDotsVertical,
+	IconGauge,
 	IconGitBranch,
 	IconRefresh,
 	IconSparkles,
@@ -18,6 +20,7 @@ import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@
 import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel, ChatMessagePart, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 const EMPTY_PARTS: ChatMessagePart[] = [];
 
@@ -109,6 +112,8 @@ export function ChatMessage({
 }: ChatMessageProps) {
 	const { t } = useTranslation();
 	const reducedMotion = useReducedMotion();
+	const showTokensPerSecond = useNodeChatPreferencesStore((state) => state.showTokensPerSecond);
+	const setShowTokensPerSecond = useNodeChatPreferencesStore((state) => state.actions.setShowTokensPerSecond);
 	const label = roleLabel(message.role);
 	const userMessage = message.role === "user";
 	const assistantMessage = message.role === "assistant";
@@ -129,6 +134,18 @@ export function ChatMessage({
 					effort: t(`pages.chat.reasoning.effort.${message.reasoningEffort}`, message.reasoningEffort),
 				})
 			: undefined;
+	// Overall tokens/sec for the turn = output tokens / wall-clock generation seconds. Both must be present and
+	// the duration positive, and the result finite & > 0, or no figure is shown (legacy turns have no duration).
+	const tps =
+		assistantMessage &&
+		message.generationDurationMs != null &&
+		message.generationDurationMs > 0 &&
+		message.outputTokens != null &&
+		message.outputTokens > 0
+			? Math.round(message.outputTokens / (message.generationDurationMs / 1000))
+			: undefined;
+	const tpsLabel =
+		tps != null && Number.isFinite(tps) && tps > 0 ? t("pages.chat.tokensPerSecond", "{{value}} tok/s", { value: tps }) : undefined;
 	const hasContentStarted = message.content.trim().length > 0;
 	const parts = assistantMessage ? resolveParts(message, streamingParts) : EMPTY_PARTS;
 	// A failed assistant turn carries an `error`. Render it as a highlighted block inside the bubble —
@@ -141,7 +158,10 @@ export function ChatMessage({
 	const canBranch = assistantMessage && !isStreaming && Boolean(onBranch);
 	const showRevisionNav = assistantMessage && !isStreaming && Boolean(revisionNav) && (revisionNav?.total ?? 0) > 1;
 	const showFeedback = assistantMessage && !isStreaming && showFeedbackControls && Boolean(onSubmitFeedback) && hasContentStarted;
-	const hasActions = canCopy || canRegenerate || canBranch || showRevisionNav || showFeedback;
+	// The ⋮ options menu shows on every completed assistant turn (not while streaming), independent of the other
+	// actions, so the menu is always reachable. Including it in hasActions guarantees the actions row renders.
+	const showMenu = assistantMessage && !isStreaming;
+	const hasActions = canCopy || canRegenerate || canBranch || showRevisionNav || showFeedback || showMenu;
 
 	const actions = hasActions ? (
 		<Group gap={2} align="center" data-testid={`chat-message-actions-${message.id}`}>
@@ -236,6 +256,33 @@ export function ChatMessage({
 					pending={feedbackPending}
 					onSubmit={(rating, comment) => onSubmitFeedback(message.id, rating, comment)}
 				/>
+			) : null}
+			{showMenu ? (
+				<Menu position="bottom-end" withinPortal={true}>
+					<Menu.Target>
+						<ActionIcon
+							aria-label={t("pages.chat.menu.label", "Message options")}
+							color="gray"
+							variant="subtle"
+							size="sm"
+							data-testid={`chat-message-menu-${message.id}`}
+						>
+							<IconDotsVertical size={14} />
+						</ActionIcon>
+					</Menu.Target>
+					<Menu.Dropdown>
+						<Menu.Label>{t("pages.chat.menu.label", "Message options")}</Menu.Label>
+						<Menu.Item
+							leftSection={<IconGauge size={14} />}
+							rightSection={showTokensPerSecond ? <IconCheck size={14} /> : null}
+							closeMenuOnClick={false}
+							onClick={() => setShowTokensPerSecond(!showTokensPerSecond)}
+							data-testid={`chat-message-menu-tps-${message.id}`}
+						>
+							{t("pages.chat.menu.showTokensPerSecond", "Show tokens/sec")}
+						</Menu.Item>
+					</Menu.Dropdown>
+				</Menu>
 			) : null}
 		</Group>
 	) : null;
@@ -345,7 +392,8 @@ export function ChatMessage({
 				) : null}
 				{assistantMessage && (agentDisplayName || time) ? (
 					// Attribution row: left side holds action icons (real empty Box when null, so space-between pins
-					// right side even during streaming when actions is null). Right side = agentName · Reasoning: X · time.
+					// right side even during streaming when actions is null). Right side = agentName · Reasoning: X ·
+					// [NN tok/s ·] time. The tps segment sits before time (when the toggle is on) so the clock stays right-most.
 					<Group justify="space-between" align="center" wrap="nowrap" gap={4}>
 						<Box>{actions}</Box>
 						<Text
@@ -354,7 +402,7 @@ export function ChatMessage({
 							data-testid={`chat-message-agent-${message.id}`}
 							style={{ flexShrink: 0 }}
 						>
-							{[agentDisplayName, reasoningLabel, time].filter(Boolean).join(" · ")}
+							{[agentDisplayName, reasoningLabel, showTokensPerSecond ? tpsLabel : undefined, time].filter(Boolean).join(" · ")}
 						</Text>
 					</Group>
 				) : (

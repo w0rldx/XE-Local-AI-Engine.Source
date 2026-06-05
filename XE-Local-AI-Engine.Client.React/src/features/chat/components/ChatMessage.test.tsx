@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
+import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
@@ -57,10 +58,14 @@ describe("ChatMessage actions", () => {
 		Object.assign(navigator, {
 			clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
 		});
+		// The tokens/sec preference is a module-singleton store; reset it to the default (off) so a test that flips
+		// it on does not leak into the others.
+		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(false);
 	});
 
 	afterEach(() => {
 		cleanup();
+		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(false);
 	});
 
 	it("copies the message content to the clipboard", async () => {
@@ -304,5 +309,88 @@ describe("ChatMessage actions", () => {
 		);
 
 		expect(screen.getByTestId("chat-tool-call-result-get_time").textContent).toContain("12:00");
+	});
+
+	it("renders the ⋮ options menu on a completed assistant turn", () => {
+		renderWithProviders(<ChatMessage message={assistantMessage()} />);
+
+		expect(screen.getByTestId("chat-message-menu-assistant-1")).toBeTruthy();
+	});
+
+	it("does not render the ⋮ options menu while streaming or on user turns", () => {
+		const { rerender } = renderWithProviders(
+			<ChatMessage message={assistantMessage({ status: "streaming", content: "" })} isStreaming={true} />,
+		);
+		expect(screen.queryByTestId("chat-message-menu-assistant-1")).toBeNull();
+
+		rerender(
+			<MantineProvider>
+				<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />
+			</MantineProvider>,
+		);
+		expect(screen.queryByTestId("chat-message-menu-user-1")).toBeNull();
+	});
+
+	it("does not show tokens/sec by default even when duration and tokens are present", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ generationDurationMs: 2000, outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })}
+			/>,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).not.toContain("tok/s");
+	});
+
+	it("shows tokens/sec on the attribution row when the toggle is on and duration + output tokens are present", () => {
+		// 84 tokens over 2.0s → 42 tok/s. The test env runs without full i18n init: t() returns the fallback string
+		// and does NOT interpolate {{value}}, so the rendered segment is the literal "{{value}} tok/s" — its presence
+		// proves the tps was computed (> 0) and the segment was added to the attribution row (same pattern the
+		// reasoning-label tests use for "Reasoning:").
+		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ generationDurationMs: 2000, outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })}
+			/>,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).toContain("tok/s");
+	});
+
+	it("hides tokens/sec when the toggle is on but the turn has no recorded duration (legacy turn)", () => {
+		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })} />,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).not.toContain("tok/s");
+	});
+
+	it("hides tokens/sec when the toggle is on but the duration is zero (no div-by-zero)", () => {
+		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ generationDurationMs: 0, outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })}
+			/>,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).not.toContain("tok/s");
+	});
+
+	it("toggles the tokens/sec preference from the menu item", async () => {
+		renderWithProviders(<ChatMessage message={assistantMessage()} />);
+
+		expect(useNodeChatPreferencesStore.getState().showTokensPerSecond).toBe(false);
+
+		// Open the menu (the dropdown mounts asynchronously via the portal), then click the checkable item; the menu
+		// stays open (closeMenuOnClick=false) and the pref flips.
+		fireEvent.click(screen.getByTestId("chat-message-menu-assistant-1"));
+		const item = await screen.findByTestId("chat-message-menu-tps-assistant-1");
+		fireEvent.click(item);
+
+		expect(useNodeChatPreferencesStore.getState().showTokensPerSecond).toBe(true);
 	});
 });

@@ -41,6 +41,13 @@ public sealed class InvocationState
 
     public int? ReasoningTokens { get; set; }
 
+    /// <summary>
+    ///     Wall-clock generation duration in milliseconds, measured by the invocation runner across the whole turn
+    ///     (prompt-eval through final token). Null until the invocation completes and for legacy/platform turns that
+    ///     did not report it. Drives the optional tokens-per-second attribution.
+    /// </summary>
+    public long? GenerationDurationMs { get; set; }
+
     public InvocationApprovalState? PendingApproval { get; set; }
 
     public InvocationApprovalResolutionState? LastApprovalResolution { get; set; }

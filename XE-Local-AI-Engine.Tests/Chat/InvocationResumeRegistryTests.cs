@@ -26,6 +26,22 @@ public sealed class InvocationResumeRegistryTests
     }
 
     [Test]
+    public void TryGetLiveInvocation_PreservesGenerationDurationMsThroughClone()
+    {
+        // Regression: InvocationResumeRegistry.Clone() copied the token fields but dropped GenerationDurationMs,
+        // so the resume snapshot lost the duration even though the published state carried it. The value crosses two
+        // clones here (Publish stores Clone(state); TryGetLiveInvocation returns Clone(LatestState)) — both must keep it.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, content: "hi", generationDurationMs: 1234));
+
+        var live = AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
+        AssertEx.Equal(1234L, live.GenerationDurationMs);
+    }
+
+    [Test]
     public void TryGetLiveInvocation_WhenUnknown_ReturnsNull()
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -137,7 +153,8 @@ public sealed class InvocationResumeRegistryTests
     private static InvocationState NewState(Guid invocationId,
         Guid conversationId,
         InvocationStatus status,
-        string content = "")
+        string content = "",
+        long? generationDurationMs = null)
     {
         return new InvocationState
         {
@@ -145,6 +162,7 @@ public sealed class InvocationResumeRegistryTests
             ConversationId = conversationId,
             Status = status,
             StreamedContent = content,
+            GenerationDurationMs = generationDurationMs,
             StartedAt = DateTimeOffset.UtcNow,
             LastUpdatedAt = DateTimeOffset.UtcNow
         };

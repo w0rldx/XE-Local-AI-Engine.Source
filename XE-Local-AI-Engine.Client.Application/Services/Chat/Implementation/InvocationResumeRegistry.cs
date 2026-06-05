@@ -225,6 +225,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             OutputTokens = state.OutputTokens,
             TotalTokens = state.TotalTokens,
             ReasoningTokens = state.ReasoningTokens,
+            GenerationDurationMs = state.GenerationDurationMs,
             PendingApproval = state.PendingApproval,
             LastApprovalResolution = state.LastApprovalResolution,
             PendingToolCalls = [.. state.PendingToolCalls],

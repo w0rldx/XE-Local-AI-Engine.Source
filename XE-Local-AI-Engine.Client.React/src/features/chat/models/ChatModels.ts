@@ -101,6 +101,10 @@ export interface ChatMessageModel {
 	// Distinct from the live composer `reasoningEffort` prop (that's the current picker selection).
 	// null/absent = legacy turn or user message. "none" = reasoning explicitly disabled.
 	reasoningEffort?: ReasoningEffort;
+	// Backend-exact wall-clock generation duration in milliseconds (persisted in metadata_json, same blob as
+	// agentName/reasoningEffort — no migration). Drives the optional tokens/sec attribution. Absent for legacy
+	// turns and user messages → no tps shown.
+	generationDurationMs?: number;
 }
 
 export type ChatFeedbackRating = "up" | "down";

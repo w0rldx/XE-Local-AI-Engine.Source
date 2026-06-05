@@ -89,7 +89,9 @@ public sealed class NodeChatInvocationPump(
                 state.ReasoningTokens,
                 // Null when the caller assembled no interleave (platform path, or a turn with no parts); the persisted
                 // parts are then left untouched. The local front doors pass the accumulated ordered parts here.
-                parts),
+                parts,
+                // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
+                state.GenerationDurationMs),
             CancellationToken.None).ConfigureAwait(false);
 
         return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);

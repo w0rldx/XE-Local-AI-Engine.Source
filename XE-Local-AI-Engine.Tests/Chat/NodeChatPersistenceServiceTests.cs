@@ -269,6 +269,59 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Metadata_RoundTripsGenerationDurationMs()
+    {
+        await using var provider = await BuildProviderAsync("generation-duration-roundtrip.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Generation duration", "node", 3400)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3401, "model-x")).ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, 3402).ConfigureAwait(false);
+        // The runner reports the whole-turn duration at terminalize; it rides the metadata blob (no DB column) and
+        // must survive reload alongside the token counts that feed the tokens-per-second display.
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                3403,
+                "the answer",
+                "thinking",
+                Model: "model-x",
+                OutputCount: 42,
+                GenerationDurationMs: 2000))
+            .ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Equal(2000L, assistant.GenerationDurationMs);
+        AssertEx.Equal(42, assistant.OutputCount);
+        AssertEx.Equal("the answer", assistant.Content);
+    }
+
+    [Test]
+    public async Task Metadata_LegacyBlobWithoutGenerationDurationMs_DeserializesNull()
+    {
+        await using var provider = await BuildProviderAsync("generation-duration-legacy.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy generation duration", "node", 3500)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3501)).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3502, "legacy answer", "legacy reasoning")).ConfigureAwait(false);
+
+        // Simulate a blob written before the generation-duration field existed: the GenerationDurationMs key is absent
+        // entirely (no migration), so it must deserialize to null without error.
+        await OverwriteMetadataJsonAsync(provider, assistantMessageId, "{\"Reasoning\":\"legacy reasoning\",\"Model\":null}").ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Null(assistant.GenerationDurationMs);
+        AssertEx.Equal("legacy reasoning", assistant.Reasoning);
+    }
+
+    [Test]
     public async Task CancelMessageAsync_TerminalizesOnlyMatchingCorrelation()
     {
         await using var provider = await BuildProviderAsync("cancel.sqlite").ConfigureAwait(false);
