@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools;
 
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
 internal static class InvocationToolBridge
 {

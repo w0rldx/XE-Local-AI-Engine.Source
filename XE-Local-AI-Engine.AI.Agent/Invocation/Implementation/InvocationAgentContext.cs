@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.AI.Agent.Invocation;
+namespace XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;

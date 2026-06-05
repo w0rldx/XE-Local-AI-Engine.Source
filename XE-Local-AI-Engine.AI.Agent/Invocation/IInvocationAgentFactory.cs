@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
+
 /// <summary>
 ///     Builds single-agent execution contexts from runtime-package projections.
 /// </summary>
