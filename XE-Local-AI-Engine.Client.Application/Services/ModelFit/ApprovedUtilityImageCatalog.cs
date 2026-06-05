@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
 ///     The code-defined source of truth for approved utility image descriptors. The registry is SQLite-backed but
-///     seeded from this catalog on startup (Marker 0 decision): the image reference is code/migration-owned and never
+///     seeded from this catalog on startup: the image reference is code/migration-owned and never
 ///     settable from any API. Each descriptor ships <c>Enabled = false</c> — an operator flips it on after review; the
 ///     seed preserves that operator toggle on re-seed. The timestamps on these records are placeholders; the store
 ///     stamps the real creation/update times.
@@ -15,7 +15,7 @@ public static class ApprovedUtilityImageCatalog
     public const string LlmfitRecommenderImageId = "llmfit-recommender-0-9-30";
 
     /// <summary>
-    ///     Canonical, digest-pinned reference for the approved llmfit image (verified Marker 0, 2026-06-02). Code-owned;
+    ///     Canonical, digest-pinned reference for the approved llmfit image (verified 2026-06-02). Code-owned;
     ///     this is the only place the reference is defined.
     /// </summary>
     public const string LlmfitImageReference =

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Node-side abstraction over the narrow HostAgent model-fit utility runner (plan Marker 2). Callers pass
+///     Node-side abstraction over the narrow HostAgent model-fit utility runner. Callers pass
 ///     INTENT only — an operation, validated params, and an already-resolved pinned image reference — never a command,
 ///     argv, or arbitrary image name. The HostAgent builds the actual <c>llmfit</c> argv from a fixed server-side
 ///     command profile and re-validates the image reference. Implementations:

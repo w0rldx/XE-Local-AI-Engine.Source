@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
 /// <summary>
 ///     The HostAgent-backed <see cref="IModelFitUtilityRunner" />: a thin gRPC client to HostAgent's
 ///     <c>ModelFitUtilityControl</c> service over the same Unix socket and HMAC scheme the lifecycle/sandbox clients use
-///     (plan Marker 2). It owns no Docker — the privileged container work runs in HostAgent.Linux. The runner only
+///     . It owns no Docker — the privileged container work runs in HostAgent.Linux. The runner only
 ///     translates the intent-level request to the proto message, attaches per-call HMAC metadata, and maps the reply
 ///     back. There is no command/argv/image-name on the wire — the HostAgent builds the llmfit argv server-side.
 /// </summary>

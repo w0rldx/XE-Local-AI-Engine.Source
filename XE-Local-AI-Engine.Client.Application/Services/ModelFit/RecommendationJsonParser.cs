@@ -4,7 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Tolerant parser for llmfit <c>recommend --json</c> output (schema captured live at plan Marker 0). It maps the
+///     Tolerant parser for llmfit <c>recommend --json</c> output (schema captured live, 2026-06-02). It maps the
 ///     top-level <c>{ "models": [...], "system": {...} }</c> shape to normalized recommendation rows plus a sanitized
 ///     <c>system</c> diagnostics blob. Tolerant by design: unknown fields are ignored, missing/null fields map to null,
 ///     and a malformed root (not an object, or <c>models</c> absent / not an array) is a typed failure — never an

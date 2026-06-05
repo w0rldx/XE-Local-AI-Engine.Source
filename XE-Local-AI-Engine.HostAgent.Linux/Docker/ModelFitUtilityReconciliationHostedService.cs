@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using global::Docker.DotNet;
 
 /// <summary>
-///     Startup reconciliation for the model-fit utility runner (plan Marker 2): removes any leftover utility containers
+///     Startup reconciliation for the model-fit utility runner: removes any leftover utility containers
 ///     (those stamped with the <c>xe.modelfit.utility</c> label) that a prior crash orphaned, so an interrupted llmfit
 ///     run does not keep consuming CPU/GPU after the node restarts. Best-effort — a reconciliation failure is logged and
 ///     swallowed so the HostAgent still starts; the next start retries.

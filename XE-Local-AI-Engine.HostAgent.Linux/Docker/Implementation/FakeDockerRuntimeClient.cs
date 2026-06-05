@@ -244,7 +244,7 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         return Task.CompletedTask;
     }
 
-    // --- Model-fit utility one-shot run (scriptable, plan Marker 2) ---
+    // --- Model-fit utility one-shot run (scriptable) ---
 
     private readonly object _utilitySync = new();
     private ScriptedUtilityRun _scriptedUtilityRun = new(0, string.Empty, string.Empty, false);

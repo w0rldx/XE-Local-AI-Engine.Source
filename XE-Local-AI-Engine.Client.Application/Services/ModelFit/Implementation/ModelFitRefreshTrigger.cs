@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 /// <summary>
 ///     Default <see cref="IModelFitRefreshTrigger" />: loads the scheduled job definition, guards that it is a
 ///     <c>model-recommendation-check</c> job, then delegates firing to the scheduler management service. It never runs
-///     llmfit — the scheduler dispatcher and the Marker 3 handler own the run.
+///     llmfit — the scheduler dispatcher and the model-fit handler own the run.
 /// </summary>
 public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService scheduledJobManagementService) : IModelFitRefreshTrigger
 {
@@ -58,7 +58,7 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
 
         // Delegate to the scheduler; it performs its own enabled/deleted/forbidden/unscheduled validation and fires the
         // existing definition. No override supplied → pass null so the dispatcher takes the unchanged cron/back-compat
-        // path. The dispatcher → Marker 3 handler does the work and owns the run history.
+        // path. The dispatcher → model-fit handler does the work and owns the run history.
         await _scheduledJobManagementService.TriggerNowAsync(
             scheduledJobId,
             parameterOverrides.Count == 0 ? null : parameterOverrides,
