@@ -4,6 +4,7 @@ using global::Grpc.Core;
 using Google.Protobuf.WellKnownTypes;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Linux.Capabilities;
+using XE_Local_AI_Engine.HostAgent.Linux.Capabilities.Implementation;
 using XE_Local_AI_Engine.HostAgent.Linux.Lifecycle;
 using XE_Local_AI_Engine.HostAgent.Linux.Logs;
 using XE_Local_AI_Engine.HostAgent.Linux.Models;

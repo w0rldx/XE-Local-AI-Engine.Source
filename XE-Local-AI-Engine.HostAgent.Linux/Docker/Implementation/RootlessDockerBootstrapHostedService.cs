@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.HostAgent.Linux.Docker;
+namespace XE_Local_AI_Engine.HostAgent.Linux.Docker.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Linux.Capabilities;

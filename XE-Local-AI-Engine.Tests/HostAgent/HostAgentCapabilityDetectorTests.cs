@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.HostAgent;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Linux.Capabilities;
+using XE_Local_AI_Engine.HostAgent.Linux.Capabilities.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class HostAgentCapabilityDetectorTests

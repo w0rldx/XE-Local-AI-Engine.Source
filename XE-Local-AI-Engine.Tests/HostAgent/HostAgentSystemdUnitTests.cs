@@ -72,7 +72,7 @@ public sealed class HostAgentSystemdUnitTests
     public async Task HostAgentLinux_WhenDockerSocketIsMissing_RunsRootlessDockerSetupOnFirstStart()
     {
         var program = await File.ReadAllTextAsync(GetLinuxProjectPath("Program.cs"));
-        var bootstrap = await File.ReadAllTextAsync(GetLinuxProjectPath("Docker", "RootlessDockerBootstrapHostedService.cs"));
+        var bootstrap = await File.ReadAllTextAsync(GetLinuxProjectPath("Docker", "Implementation", "RootlessDockerBootstrapHostedService.cs"));
 
         AssertEx.Contains(program, "AddHostedService<RootlessDockerBootstrapHostedService>");
         AssertEx.Contains(bootstrap, "dockerd-rootless-setuptool.sh");
