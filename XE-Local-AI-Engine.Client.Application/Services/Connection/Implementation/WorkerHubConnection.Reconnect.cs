@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
-using Microsoft.AspNetCore.SignalR.Client;
 using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
 public sealed partial class WorkerHubConnection

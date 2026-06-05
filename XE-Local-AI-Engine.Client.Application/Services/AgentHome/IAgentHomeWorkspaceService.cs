@@ -13,8 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </summary>
 internal interface IAgentHomeWorkspaceService
 {
-    Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(
-        SandboxHandle handle,
+    Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
         IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
         CancellationToken cancellationToken = default);
 }

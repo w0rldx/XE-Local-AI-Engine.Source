@@ -73,7 +73,14 @@ public sealed class PlaybookEvalServiceTests
         var actionId = Guid.NewGuid();
         // An assertion case is scored by the REAL judge's deterministic path (no model call): the required phrase is
         // present in both baseline and candidate output, so the case passes via "assertion".
-        var assertion = JsonSerializer.Serialize(new { requiredPhrases = new[] { "output" }, forbiddenPhrases = Array.Empty<string>() });
+        var assertion = JsonSerializer.Serialize(new
+        {
+            requiredPhrases = new[]
+            {
+                "output"
+            },
+            forbiddenPhrases = Array.Empty<string>()
+        });
         var goldenCase = AssertionCase(agentId, assertion);
         var service = CreateService(agentId, actionId, [goldenCase], new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance), out _, out _);
 
@@ -123,8 +130,7 @@ public sealed class PlaybookEvalServiceTests
         // The candidate is LOW priority (10) so it must sort BEFORE this already-enabled action (priority 50). Once
         // promoted, ListEnabledByAgentAsync re-orders by (Priority, CreatedAtUtc), so the eval must compose the
         // candidate in that SAME sorted position — not merely append it last — or the gate scores the wrong prompt.
-        var enabledAction = new PlaybookActionRecord(
-            Guid.NewGuid(),
+        var enabledAction = new PlaybookActionRecord(Guid.NewGuid(),
             agentId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
@@ -223,8 +229,7 @@ public sealed class PlaybookEvalServiceTests
         int maxGoldenCases,
         out IPlaybookActionService actionService)
     {
-        var pending = new PlaybookActionRecord(
-            actionId,
+        var pending = new PlaybookActionRecord(actionId,
             agentId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
@@ -271,8 +276,7 @@ public sealed class PlaybookEvalServiceTests
         localModelProvider.ProviderName.Returns("ollama");
         localModelProvider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(Substitute.For<IChatClient>());
 
-        return new PlaybookEvalService(
-            actionService,
+        return new PlaybookEvalService(actionService,
             actionStore,
             agentStore,
             goldenStore,
@@ -280,14 +284,17 @@ public sealed class PlaybookEvalServiceTests
             judge,
             localModelProvider,
             TimeProvider.System,
-            Options.Create(new PlaybookEvalOptions { ModelName = "test-model", MaxGoldenCases = maxGoldenCases }),
+            Options.Create(new PlaybookEvalOptions
+            {
+                ModelName = "test-model",
+                MaxGoldenCases = maxGoldenCases
+            }),
             NullLogger<PlaybookEvalService>.Instance);
     }
 
     private static GoldenConversationRecord JudgeCase(Guid agentId)
     {
-        return new GoldenConversationRecord(
-            Guid.NewGuid(),
+        return new GoldenConversationRecord(Guid.NewGuid(),
             agentId,
             "Judge case",
             InputTurns: """[{"role":"user","text":"hello"}]""",
@@ -300,8 +307,7 @@ public sealed class PlaybookEvalServiceTests
 
     private static GoldenConversationRecord AssertionCase(Guid agentId, string assertion)
     {
-        return new GoldenConversationRecord(
-            Guid.NewGuid(),
+        return new GoldenConversationRecord(Guid.NewGuid(),
             agentId,
             "Assertion case",
             InputTurns: """[{"role":"user","text":"hello"}]""",
@@ -329,8 +335,10 @@ public sealed class PlaybookEvalServiceTests
             UpdatedAtUtc: 10);
     }
 
-    /// <summary>Scripted runner: returns "candidate output" when the system prompt contains the candidate behaviour,
-    ///          else "baseline output". No Ollama.</summary>
+    /// <summary>
+    ///     Scripted runner: returns "candidate output" when the system prompt contains the candidate behaviour,
+    ///     else "baseline output". No Ollama.
+    /// </summary>
     private sealed class FakePlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
     {
         public Task<string> RunAsync(IChatClient chatClient,
@@ -345,8 +353,10 @@ public sealed class PlaybookEvalServiceTests
         }
     }
 
-    /// <summary>Captures the candidate system prompt (the one containing the candidate behaviour) so a test can assert
-    ///          composition order. No Ollama.</summary>
+    /// <summary>
+    ///     Captures the candidate system prompt (the one containing the candidate behaviour) so a test can assert
+    ///     composition order. No Ollama.
+    /// </summary>
     private sealed class CapturingEvalAgentRunner : IPlaybookEvalAgentRunner
     {
         public string? CandidatePrompt { get; private set; }

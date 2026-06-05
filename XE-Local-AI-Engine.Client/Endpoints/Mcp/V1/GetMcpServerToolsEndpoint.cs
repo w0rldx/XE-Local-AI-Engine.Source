@@ -98,11 +98,14 @@ public sealed class GetMcpServerToolsEndpoint(IMcpServerService mcpServerService
     // display.
     private static IReadOnlyList<McpDiscoveredToolResponse> ProjectDiscoveredTools(McpServerConnectionStatus status)
     {
-        return [.. status.Tools.Select(static tool => new McpDiscoveredToolResponse
-        {
-            Name = tool.Name,
-            Description = tool.Description,
-            RequiresApproval = tool.RequiresApproval
-        })];
+        return
+        [
+            .. status.Tools.Select(static tool => new McpDiscoveredToolResponse
+            {
+                Name = tool.Name,
+                Description = tool.Description,
+                RequiresApproval = tool.RequiresApproval
+            })
+        ];
     }
 }

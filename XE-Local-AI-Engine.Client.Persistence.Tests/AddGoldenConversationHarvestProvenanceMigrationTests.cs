@@ -100,7 +100,12 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
                                   """;
             command.Parameters.AddWithValue("$id", agentId.ToString());
             command.Parameters.AddWithValue("$name", "Historical");
-            command.Parameters.AddWithValue("$instructions", new byte[] { 1, 2, 3 });
+            command.Parameters.AddWithValue("$instructions", new byte[]
+            {
+                1,
+                2,
+                3
+            });
             command.Parameters.AddWithValue("$kind", 0);
             command.Parameters.AddWithValue("$allowed", "[]");
             command.Parameters.AddWithValue("$approvals", "{}");
@@ -121,7 +126,12 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
             command.Parameters.AddWithValue("$id", goldenId.ToString());
             command.Parameters.AddWithValue("$agent", agentId.ToString());
             command.Parameters.AddWithValue("$title", "Historical case");
-            command.Parameters.AddWithValue("$input", new byte[] { 9, 8, 7 });
+            command.Parameters.AddWithValue("$input", new byte[]
+            {
+                9,
+                8,
+                7
+            });
             command.Parameters.AddWithValue("$enabled", 1);
             command.Parameters.AddWithValue("$created", 1234L);
             command.Parameters.AddWithValue("$updated", 1234L);

@@ -21,6 +21,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class ModelRecommendationCheckHandlerTests
 {
+    private const string ValidParameters =
+        """{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "ollama" }""";
+
     [Test]
     public void Descriptor_ClaimsReservedTemplateIdAndSafeDefaults()
     {
@@ -51,8 +54,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     {
         var (handler, refresh) = CreateHandler();
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => handler.ExecuteAsync(Context(parametersJson), CancellationToken.None));
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => handler.ExecuteAsync(Context(parametersJson), CancellationToken.None));
 
         AssertEx.Equal(0, refresh.CallCount);
     }
@@ -80,8 +82,7 @@ public sealed class ModelRecommendationCheckHandlerTests
         var (handler, refresh) = CreateHandler();
         refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, "The approved image is disabled.");
 
-        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(
-            () => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
         // The operator-safe SanitizedError is surfaced verbatim so the run row / toast is actionable.
         AssertEx.Equal("The approved image is disabled.", exception.Message);
@@ -94,8 +95,7 @@ public sealed class ModelRecommendationCheckHandlerTests
         var (handler, refresh) = CreateHandler();
         refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, null);
 
-        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(
-            () => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
         AssertEx.Equal("The model recommendation refresh did not succeed.", exception.Message);
         AssertEx.Equal(1, refresh.CallCount);
@@ -107,17 +107,14 @@ public sealed class ModelRecommendationCheckHandlerTests
         var (handler, refresh) = CreateHandler();
         refresh.ThrowCancellation = true;
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
         AssertEx.Equal(1, refresh.CallCount);
     }
 
-    private const string ValidParameters =
-        """{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "ollama" }""";
-
-    private static ScheduledJobExecutionContext Context(string? parametersJson) =>
-        new()
+    private static ScheduledJobExecutionContext Context(string? parametersJson)
+    {
+        return new ScheduledJobExecutionContext
         {
             ScheduledJobId = Guid.NewGuid(),
             TemplateId = ModelRecommendationCheckHandler.TemplateIdValue,
@@ -129,19 +126,22 @@ public sealed class ModelRecommendationCheckHandlerTests
             TriggeredBy = ScheduledRunTrigger.Manual,
             ReportProgressAsync = null
         };
+    }
 
     private static (ModelRecommendationCheckHandler Handler, RecordingRefreshService Refresh) CreateHandler()
     {
         var refresh = new RecordingRefreshService();
         var services = new ServiceCollection();
         services.AddSingleton<IModelFitRefreshService>(refresh);
-        services.AddSingleton(Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$" }));
+        services.AddSingleton(Options.Create(new SecurityOptions
+        {
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
+        }));
         services.AddSingleton<ModelNameValidator>();
         services.AddSingleton<ModelFitRequestValidator>();
         var provider = services.BuildServiceProvider();
 
-        var handler = new ModelRecommendationCheckHandler(
-            provider.GetRequiredService<IServiceScopeFactory>(),
+        var handler = new ModelRecommendationCheckHandler(provider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<ModelRecommendationCheckHandler>.Instance);
 
         return (handler, refresh);
@@ -154,8 +154,7 @@ public sealed class ModelRecommendationCheckHandlerTests
         public ModelFitRefreshResult Result { get; set; } = new(Guid.NewGuid(), ModelFitRunStatus.Succeeded, 0, null);
         public bool ThrowCancellation { get; set; }
 
-        public Task<ModelFitRefreshResult> RefreshAsync(
-            ModelFitRefreshRequest request,
+        public Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,
             Func<string, int?, CancellationToken, Task>? reportProgress,
             CancellationToken cancellationToken)
         {

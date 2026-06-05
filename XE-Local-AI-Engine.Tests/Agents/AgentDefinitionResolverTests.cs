@@ -334,9 +334,18 @@ public sealed class AgentDefinitionResolverTests
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
 
         var baseDefinition = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 1);
-        var versionBumped = baseDefinition with { Version = 2 };
-        var instructionsChanged = baseDefinition with { Instructions = "A different system prompt." };
-        var toolsChanged = baseDefinition with { AllowedToolNames = ["GetCurrentTime", "Calculate"] };
+        var versionBumped = baseDefinition with
+        {
+            Version = 2
+        };
+        var instructionsChanged = baseDefinition with
+        {
+            Instructions = "A different system prompt."
+        };
+        var toolsChanged = baseDefinition with
+        {
+            AllowedToolNames = ["GetCurrentTime", "Calculate"]
+        };
 
         var baseHash = await ResolveAndHashAsync(resolver, store, builder, baseDefinition).ConfigureAwait(false);
         var versionHash = await ResolveAndHashAsync(resolver, store, builder, versionBumped).ConfigureAwait(false);
@@ -389,8 +398,7 @@ public sealed class AgentDefinitionResolverTests
         // The store fast-path returns enabled actions already ordered by Priority; the resolver must not re-sort, so the
         // composed prompt preserves this exact order.
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
-                     [
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
                          EnabledAction(definition.Id, "Run the tests first.", priority: 1),
                          EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
                      ]));
@@ -409,10 +417,12 @@ public sealed class AgentDefinitionResolverTests
         var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
 
         var disabled = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 1, playbookEnabled: false);
-        var enabled = disabled with { PlaybookEnabled = true };
+        var enabled = disabled with
+        {
+            PlaybookEnabled = true
+        };
         playbookStore.ListEnabledByAgentAsync(enabled.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
-                     [
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
                          EnabledAction(enabled.Id, "Run the tests first.", priority: 1)
                      ]));
 
@@ -432,8 +442,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
-                     [
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
                          EnabledAction(definition.Id, "Run the tests first.", priority: 1),
                          EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
                      ]));
@@ -456,8 +465,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(
-                     [
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
                          EnabledAction(definition.Id, "Run the tests first.", priority: 1),
                          EnabledAction(definition.Id, "Prefer small commits.", priority: 5),
                          EnabledAction(definition.Id, "Write a changelog.", priority: 9)
@@ -613,27 +621,12 @@ public sealed class AgentDefinitionResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
-        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions { RetrievalThreshold = threshold, TopK = topK });
-        return new AgentDefinitionResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, NullLogger<AgentDefinitionResolver>.Instance);
-    }
-
-    // A fake ranker that records how many times it was consulted and returns a fixed (deliberately out-of-order)
-    // selection, so a test can assert both the gate (consulted only above the threshold with a query) and the resolver's
-    // re-order of the ranker's output.
-    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
-    {
-        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
-
-        public int CallCount { get; private set; }
-
-        public Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
-            IReadOnlyList<PlaybookActionRecord> candidates,
-            int k,
-            CancellationToken cancellationToken)
+        var retrievalOptions = Options.Create(new PlaybookRetrievalOptions
         {
-            CallCount++;
-            return Task.FromResult(_selection ?? candidates);
-        }
+            RetrievalThreshold = threshold,
+            TopK = topK
+        });
+        return new AgentDefinitionResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, NullLogger<AgentDefinitionResolver>.Instance);
     }
 
     private static AgentDefinitionRecord CreateDefinition(string name = "Agent",
@@ -686,5 +679,24 @@ public sealed class AgentDefinitionResolverTests
             ParameterSchema = "{\"type\":\"object\"}",
             RequiresApproval = requiresApproval
         };
+    }
+
+    // A fake ranker that records how many times it was consulted and returns a fixed (deliberately out-of-order)
+    // selection, so a test can assert both the gate (consulted only above the threshold with a query) and the resolver's
+    // re-order of the ranker's output.
+    private sealed class RecordingRanker(IReadOnlyList<PlaybookActionRecord>? selection = null) : IPlaybookRetrievalRanker
+    {
+        private readonly IReadOnlyList<PlaybookActionRecord>? _selection = selection;
+
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<PlaybookActionRecord>> SelectTopKAsync(string query,
+            IReadOnlyList<PlaybookActionRecord> candidates,
+            int k,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(_selection ?? candidates);
+        }
     }
 }

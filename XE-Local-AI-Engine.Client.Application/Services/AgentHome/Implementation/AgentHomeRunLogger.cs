@@ -127,13 +127,23 @@ internal sealed class AgentHomeRunLogger : IAgentHomeRunLogger
 
     private AgentHomeRunLogContext RequireContext()
     {
-        return _context ?? throw new InvalidOperationException(
-            "AgentHomeRunLogger.OpenAsync must be called before any append operation.");
+        return _context ?? throw new InvalidOperationException("AgentHomeRunLogger.OpenAsync must be called before any append operation.");
     }
 
-    private string EventsFile() => Path.Combine(RequireContext().HostLogDirectory, "events.jsonl");
-    private string CommandsFile() => Path.Combine(RequireContext().HostLogDirectory, "commands.jsonl");
-    private string ToolCallsFile() => Path.Combine(RequireContext().HostLogDirectory, "tool-calls.jsonl");
+    private string EventsFile()
+    {
+        return Path.Combine(RequireContext().HostLogDirectory, "events.jsonl");
+    }
+
+    private string CommandsFile()
+    {
+        return Path.Combine(RequireContext().HostLogDirectory, "commands.jsonl");
+    }
+
+    private string ToolCallsFile()
+    {
+        return Path.Combine(RequireContext().HostLogDirectory, "tool-calls.jsonl");
+    }
 
     private static async Task AppendLineAsync<T>(string filePath, T record, CancellationToken cancellationToken)
     {

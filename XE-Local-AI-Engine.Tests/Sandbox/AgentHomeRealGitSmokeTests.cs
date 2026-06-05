@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>LocalContainerSandboxProvider</c> → HostAgent gRPC → Docker.DotNet chain) and runs the same
 ///     <see cref="AgentHomeGit" /> hardened-flag command sequence the worker emits, so command-construction drift
 ///     would surface here.
-///
 ///     It is NOT in the default CI run: it skips with an explicit BLOCKED note unless
 ///     <c>AGENTHOME_DOCKER_SMOKE=1</c> is set AND Docker is reachable AND the
 ///     <c>dotnet-agent-home:2026-05-agenthome-mvp</c> image is present. If the image is unavailable the smoke is
@@ -188,7 +187,10 @@ public sealed class AgentHomeRealGitSmokeTests
     {
         // AgentHomeGit.Arguments prefixes the hardened git flags (hooksPath, attributesfile, quotePath=false) — using
         // the production helper keeps the smoke faithful to the exact command the worker runs in the sandbox.
-        var arguments = new List<string> { "git" };
+        var arguments = new List<string>
+        {
+            "git"
+        };
         arguments.AddRange(AgentHomeGit.Arguments(tail));
         return container.ExecAsync(arguments, WorkRoot);
     }
@@ -274,7 +276,10 @@ public sealed class AgentHomeRealGitSmokeTests
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.Start();
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
@@ -294,9 +299,18 @@ public sealed class AgentHomeRealGitSmokeTests
 
         public string Id { get; }
 
+        public async ValueTask DisposeAsync()
+        {
+            // --rm on the detached container removes it on stop; force-remove to be certain even on a hung exec.
+            await RunProcessAsync("docker", ["rm", "--force", Id]).ConfigureAwait(false);
+        }
+
         public Task<ExecResult> ExecAsync(IReadOnlyList<string> command, string? workingDirectory = null)
         {
-            var arguments = new List<string> { "exec" };
+            var arguments = new List<string>
+            {
+                "exec"
+            };
             if (workingDirectory is not null)
             {
                 arguments.Add("--workdir");
@@ -306,12 +320,6 @@ public sealed class AgentHomeRealGitSmokeTests
             arguments.Add(Id);
             arguments.AddRange(command);
             return RunProcessAsync("docker", arguments);
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            // --rm on the detached container removes it on stop; force-remove to be certain even on a hung exec.
-            await RunProcessAsync("docker", ["rm", "--force", Id]).ConfigureAwait(false);
         }
     }
 }

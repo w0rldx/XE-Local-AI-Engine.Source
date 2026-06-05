@@ -99,8 +99,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         // AllowedToolNames stays order-sensitive (order feeds the offer list and thus the config hash), but
         // ToolApprovals only reach the config hash via each tool's RequiresApproval in offer order, so a pure key
         // reorder must NOT count as a config change. Compare a key-sorted canonical projection on both sides.
-        var approvalsChanged = !string.Equals(
-            CanonicalizeApprovals(DeserializeApprovals(entity.ToolApprovalsJson)),
+        var approvalsChanged = !string.Equals(CanonicalizeApprovals(DeserializeApprovals(entity.ToolApprovalsJson)),
             CanonicalizeApprovals(input.ToolApprovals),
             StringComparison.Ordinal);
 
@@ -202,8 +201,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
 
     private static AgentDefinitionRecord ToRecord(AgentDefinition entity)
     {
-        return new AgentDefinitionRecord(
-            entity.Id,
+        return new AgentDefinitionRecord(entity.Id,
             entity.Name,
             entity.Description is null ? null : Decode(entity.Description),
             Decode(entity.Instructions),

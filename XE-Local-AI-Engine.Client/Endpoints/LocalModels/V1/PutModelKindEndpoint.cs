@@ -54,7 +54,7 @@ public sealed class PutModelKindEndpoint(
         // Enum.TryParse accepts numeric strings for undefined values (e.g. "99"), so guard with Enum.IsDefined to only
         // allow the defined ModelKind names. Setting Unknown is allowed as an explicit "I don't know" override.
         return !string.IsNullOrWhiteSpace(value)
-            && Enum.TryParse(value, ignoreCase: true, out kind)
-            && Enum.IsDefined(kind);
+               && Enum.TryParse(value, ignoreCase: true, out kind)
+               && Enum.IsDefined(kind);
     }
 }

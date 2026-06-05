@@ -35,7 +35,10 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
     private readonly string _contentRootPath;
@@ -45,8 +48,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     private readonly ISandboxRuntimeProvider _sandboxProvider;
     private readonly TimeProvider _timeProvider;
 
-    public AgentHomeManifestService(
-        IHostEnvironment hostEnvironment,
+    public AgentHomeManifestService(IHostEnvironment hostEnvironment,
         IOptions<AgentHomeOptions> options,
         ISandboxRuntimeProvider sandboxProvider,
         TimeProvider timeProvider,
@@ -59,11 +61,6 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    public void Dispose()
-    {
-        _gate.Dispose();
     }
 
     public async Task<AgentHomeLayout> InitializeAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default)
@@ -80,6 +77,11 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         {
             _gate.Release();
         }
+    }
+
+    public void Dispose()
+    {
+        _gate.Dispose();
     }
 
     private async Task<AgentHomeLayout> InitializeCoreAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken)
@@ -104,23 +106,25 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             }
             else if (existing.Status == AgentHomeStatus.Initializing && IsStale(existing))
             {
-                _logger.LogWarning(
-                    "AgentHome manifest was stuck initializing since {UpdatedAt}; reinitializing from scratch.",
+                _logger.LogWarning("AgentHome manifest was stuck initializing since {UpdatedAt}; reinitializing from scratch.",
                     existing.UpdatedAt);
                 WipeAgentHome(agentHomeRoot);
                 createdAt = null;
             }
             else if (existing.Status == AgentHomeStatus.Ready && IsLayoutComplete(agentHomeRoot))
             {
-                return new AgentHomeLayout { RootPath = agentHomeRoot, Manifest = existing };
+                return new AgentHomeLayout
+                {
+                    RootPath = agentHomeRoot,
+                    Manifest = existing
+                };
             }
         }
 
         return await MaterializeAsync(agentHomeRoot, attachKey, createdAt, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<AgentHomeLayout> MaterializeAsync(
-        string agentHomeRoot,
+    private async Task<AgentHomeLayout> MaterializeAsync(string agentHomeRoot,
         SandboxAttachKey attachKey,
         DateTimeOffset? createdAt,
         CancellationToken cancellationToken)
@@ -137,16 +141,23 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         EnsureDirectories(agentHomeRoot);
         await EnsureBaselineFilesAsync(agentHomeRoot, cancellationToken).ConfigureAwait(false);
 
-        var ready = initializing with { Status = AgentHomeStatus.Ready, UpdatedAt = _timeProvider.GetUtcNow() };
+        var ready = initializing with
+        {
+            Status = AgentHomeStatus.Ready,
+            UpdatedAt = _timeProvider.GetUtcNow()
+        };
         await WriteManifestAtomicAsync(agentHomeRoot, ready, cancellationToken).ConfigureAwait(false);
 
         RemoveLockFile(agentHomeRoot);
 
-        return new AgentHomeLayout { RootPath = agentHomeRoot, Manifest = ready };
+        return new AgentHomeLayout
+        {
+            RootPath = agentHomeRoot,
+            Manifest = ready
+        };
     }
 
-    private async Task RecoverFromOwnerMismatchAsync(
-        AgentHomeManifest existing,
+    private async Task RecoverFromOwnerMismatchAsync(AgentHomeManifest existing,
         string agentHomeRoot,
         CancellationToken cancellationToken)
     {
@@ -187,8 +198,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         return age.TotalSeconds > _options.PrepareStaleAfterSeconds;
     }
 
-    private static AgentHomeManifest BuildManifest(
-        SandboxAttachKey key,
+    private static AgentHomeManifest BuildManifest(SandboxAttachKey key,
         AgentHomeStatus status,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
@@ -279,8 +289,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
     private static IReadOnlyList<AgentHomeBaselineFile> BuildBaselineFiles()
     {
-        var policyJson = JsonSerializer.Serialize(
-            new AgentHomePolicy
+        var policyJson = JsonSerializer.Serialize(new AgentHomePolicy
             {
                 Version = AgentHomePolicy.CurrentVersion,
                 NetworkPolicy = "disabled",
@@ -289,9 +298,21 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             },
             SerializerOptions);
 
-        var skillsRegistry = JsonSerializer.Serialize(new { version = 1, skills = Array.Empty<string>() }, SerializerOptions);
-        var toolsRegistry = JsonSerializer.Serialize(new { version = 1, tools = Array.Empty<string>() }, SerializerOptions);
-        var toolsPolicy = JsonSerializer.Serialize(new { version = 1, writableMounts = false }, SerializerOptions);
+        var skillsRegistry = JsonSerializer.Serialize(new
+        {
+            version = 1,
+            skills = Array.Empty<string>()
+        }, SerializerOptions);
+        var toolsRegistry = JsonSerializer.Serialize(new
+        {
+            version = 1,
+            tools = Array.Empty<string>()
+        }, SerializerOptions);
+        var toolsPolicy = JsonSerializer.Serialize(new
+        {
+            version = 1,
+            writableMounts = false
+        }, SerializerOptions);
 
         return
         [
@@ -330,8 +351,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         // does not, refuse rather than recursively delete an unexpected (mis-configured root) directory.
         if (!File.Exists(Path.Combine(agentHomeRoot, ManifestFileName)))
         {
-            throw new InvalidOperationException(
-                $"Refusing to recursively delete '{agentHomeRoot}': no AgentHome manifest is present.");
+            throw new InvalidOperationException($"Refusing to recursively delete '{agentHomeRoot}': no AgentHome manifest is present.");
         }
 
         Directory.Delete(agentHomeRoot, recursive: true);

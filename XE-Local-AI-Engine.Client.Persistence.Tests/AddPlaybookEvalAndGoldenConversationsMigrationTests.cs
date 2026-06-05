@@ -52,8 +52,18 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         // the three provenance columns are present alongside the columns this migration introduced.
         AssertEx.True(new HashSet<string>(goldenColumns.Keys, StringComparer.Ordinal).SetEquals(new[]
         {
-            "id", "agent_definition_id", "title", "input_turns", "assertion", "rubric", "enabled",
-            "created_at_utc", "updated_at_utc", "source", "source_message_id", "source_conversation_id"
+            "id",
+            "agent_definition_id",
+            "title",
+            "input_turns",
+            "assertion",
+            "rubric",
+            "enabled",
+            "created_at_utc",
+            "updated_at_utc",
+            "source",
+            "source_message_id",
+            "source_conversation_id"
         }), "golden_conversations should expose the mapped columns.");
         AssertEx.True(goldenColumns["input_turns"], "input_turns should be non-nullable.");
         AssertEx.False(goldenColumns["assertion"], "assertion should be nullable.");
@@ -125,7 +135,12 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
                               """;
         command.Parameters.AddWithValue("$id", agentId.ToString());
         command.Parameters.AddWithValue("$name", "Historical");
-        command.Parameters.AddWithValue("$instructions", new byte[] { 1, 2, 3 });
+        command.Parameters.AddWithValue("$instructions", new byte[]
+        {
+            1,
+            2,
+            3
+        });
         command.Parameters.AddWithValue("$kind", 0);
         command.Parameters.AddWithValue("$allowed", "[]");
         command.Parameters.AddWithValue("$approvals", "{}");
@@ -147,7 +162,12 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         command.Parameters.AddWithValue("$id", goldenId.ToString());
         command.Parameters.AddWithValue("$agent", agentId.ToString());
         command.Parameters.AddWithValue("$title", "Case A");
-        command.Parameters.AddWithValue("$input", new byte[] { 9, 8, 7 });
+        command.Parameters.AddWithValue("$input", new byte[]
+        {
+            9,
+            8,
+            7
+        });
         command.Parameters.AddWithValue("$enabled", 1);
         command.Parameters.AddWithValue("$created", 1234L);
         command.Parameters.AddWithValue("$updated", 1234L);

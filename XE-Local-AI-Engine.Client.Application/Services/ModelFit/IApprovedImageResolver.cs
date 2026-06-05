@@ -25,8 +25,7 @@ public interface IApprovedImageResolver
 /// </summary>
 public sealed record ApprovedImageResolution
 {
-    private ApprovedImageResolution(
-        bool isResolved,
+    private ApprovedImageResolution(bool isResolved,
         string? imageReference,
         ApprovedUtilityImageRecord? descriptor,
         ApprovedImageRejectionCode rejectionCode,

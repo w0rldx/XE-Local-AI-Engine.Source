@@ -50,7 +50,7 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
         // input turns. Instructions flow through both the agent constructor and this seed message for fidelity.
         List<ChatMessage> seed =
         [
-            new ChatMessage(ChatRole.System, systemInstructions),
+            new(ChatRole.System, systemInstructions),
             .. inputTurns
         ];
 

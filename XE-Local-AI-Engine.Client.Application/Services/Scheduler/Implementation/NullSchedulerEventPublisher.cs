@@ -7,12 +7,18 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 /// </summary>
 internal sealed class NullSchedulerEventPublisher : ISchedulerEventPublisher
 {
-    public Task PublishRunAsync(SchedulerRunHubEvent runEvent, CancellationToken cancellationToken = default) =>
-        Task.CompletedTask;
+    public Task PublishRunAsync(SchedulerRunHubEvent runEvent, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 
-    public Task PublishRunProgressAsync(SchedulerRunProgressHubEvent progressEvent, CancellationToken cancellationToken = default) =>
-        Task.CompletedTask;
+    public Task PublishRunProgressAsync(SchedulerRunProgressHubEvent progressEvent, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 
-    public Task PublishDefinitionAsync(SchedulerDefinitionHubEvent definitionEvent, CancellationToken cancellationToken = default) =>
-        Task.CompletedTask;
+    public Task PublishDefinitionAsync(SchedulerDefinitionHubEvent definitionEvent, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 }

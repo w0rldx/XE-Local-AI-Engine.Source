@@ -17,6 +17,13 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
     private const string RunningState = "running";
     private const long BytesPerMegabyte = 1024L * 1024L;
 
+    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner) ---
+
+    /// <summary>The Docker label stamped on every utility container so orphans can be reconciled on startup.</summary>
+    public const string UtilityLabelKey = "xe.modelfit.utility";
+
+    private const string UtilityLabelValue = "1";
+
     private readonly DockerClient _client;
 
     public DockerRuntimeClient(IOptions<HostAgentDockerOptions> options)
@@ -240,53 +247,15 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         return created.ID;
     }
 
-    /// <summary>
-    ///     Builds the hardened <see cref="HostConfig" /> for a sandbox container: a locked-down
-    ///     no-network default, no-new-privileges, all capabilities dropped, plus the spec's resource ceilings. Exposed
-    ///     so the resource/network mapping can be asserted without a Docker daemon. NEVER mounts the Docker socket and
-    ///     never adds writable host binds.
-    /// </summary>
-    public static HostConfig BuildSandboxHostConfig(SandboxContainerSpec spec)
-    {
-        ArgumentNullException.ThrowIfNull(spec);
-
-        // D6: a tag-only local image is accepted as-is by the caller; it is NOT routed through the strict
-        // managed-runtime DockerImageReference.Parse (which mandates repo:tag@sha256 and rejects :latest).
-        var hostConfig = new HostConfig
-        {
-            // Both None and the reserved Restricted posture map to the no-network default; a restricted egress policy
-            // is not implemented yet. None is the secure default.
-            NetworkMode = "none",
-            SecurityOpt = ["no-new-privileges"],
-            CapDrop = ["ALL"],
-            ReadonlyRootfs = false,
-            AutoRemove = false
-        };
-
-        if (spec.MemoryMb is { } memoryMb && memoryMb > 0)
-        {
-            hostConfig.Memory = memoryMb * BytesPerMegabyte;
-        }
-
-        if (spec.CpuCount is { } cpuCount && cpuCount > 0)
-        {
-            hostConfig.NanoCPUs = (long)(cpuCount * 1_000_000_000d);
-        }
-
-        if (spec.PidsLimit is { } pidsLimit && pidsLimit > 0)
-        {
-            hostConfig.PidsLimit = pidsLimit;
-        }
-
-        return hostConfig;
-    }
-
     public async Task<string?> FindSandboxContainerAsync(string containerName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(containerName);
 
-        var containers = await _client.Containers.ListContainersAsync(new ContainersListParameters { All = true }, cancellationToken)
-                                     .ConfigureAwait(false);
+        var containers = await _client.Containers.ListContainersAsync(new ContainersListParameters
+                                      {
+                                          All = true
+                                      }, cancellationToken)
+                                      .ConfigureAwait(false);
 
         var match = containers.FirstOrDefault(container =>
             container.Names is not null
@@ -327,7 +296,10 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         var execToken = linkedCts.Token;
 
-        var argv = new List<string>(request.Arguments.Count + 1) { request.Executable };
+        var argv = new List<string>(request.Arguments.Count + 1)
+        {
+            request.Executable
+        };
         argv.AddRange(request.Arguments);
 
         var execCreate = await _client.Exec.CreateContainerExecAsync(containerId, new ContainerExecCreateParameters
@@ -413,20 +385,25 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         // ExtractArchiveToContainerAsync wants the destination DIRECTORY plus a tar holding the single file entry.
         await using var tar = new MemoryStream();
         using (var data = new MemoryStream(content.ToArray()))
-        await using (var writer = new TarWriter(tar, TarEntryFormat.Pax, leaveOpen: true))
         {
-            var entry = new PaxTarEntry(TarEntryType.RegularFile, fileName)
+            await using (var writer = new TarWriter(tar, TarEntryFormat.Pax, leaveOpen: true))
             {
-                // UnixFileMode is a POSIX-octal flags enum; the normalized 9-bit mode maps directly.
-                Mode = (UnixFileMode)NormalizeFileMode(fileMode),
-                DataStream = data
-            };
-            await writer.WriteEntryAsync(entry, cancellationToken).ConfigureAwait(false);
+                var entry = new PaxTarEntry(TarEntryType.RegularFile, fileName)
+                {
+                    // UnixFileMode is a POSIX-octal flags enum; the normalized 9-bit mode maps directly.
+                    Mode = (UnixFileMode)NormalizeFileMode(fileMode),
+                    DataStream = data
+                };
+                await writer.WriteEntryAsync(entry, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         tar.Position = 0;
         await _client.Containers.ExtractArchiveToContainerAsync(containerId,
-            new CopyToContainerParameters { Path = directory },
+            new CopyToContainerParameters
+            {
+                Path = directory
+            },
             tar,
             cancellationToken).ConfigureAwait(false);
     }
@@ -437,7 +414,10 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
 
         var archive = await _client.Containers.GetArchiveFromContainerAsync(containerId,
-            new ContainerPathStatParameters { Path = sourcePath },
+            new ContainerPathStatParameters
+            {
+                Path = sourcePath
+            },
             statOnly: false,
             cancellationToken).ConfigureAwait(false);
 
@@ -470,16 +450,12 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
 
         return _client.Containers.RemoveContainerAsync(containerId,
-            new ContainerRemoveParameters { Force = true },
+            new ContainerRemoveParameters
+            {
+                Force = true
+            },
             cancellationToken);
     }
-
-    // --- Model-fit utility one-shot run (narrow approved-image llmfit runner) ---
-
-    /// <summary>The Docker label stamped on every utility container so orphans can be reconciled on startup.</summary>
-    public const string UtilityLabelKey = "xe.modelfit.utility";
-
-    private const string UtilityLabelValue = "1";
 
     public async Task<UtilityContainerRunResult> RunUtilityContainerAsync(UtilityContainerRunSpec spec, CancellationToken cancellationToken)
     {
@@ -501,7 +477,10 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
             Cmd = spec.Arguments.ToList(),
             User = spec.User,
             Env = spec.Environment.Select(static pair => $"{pair.Key}={pair.Value}").ToList(),
-            Labels = new Dictionary<string, string>(StringComparer.Ordinal) { [UtilityLabelKey] = UtilityLabelValue },
+            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [UtilityLabelKey] = UtilityLabelValue
+            },
             HostConfig = BuildUtilityHostConfig(spec, networkName)
         };
 
@@ -611,7 +590,10 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
                 All = true,
                 Filters = new Dictionary<string, IDictionary<string, bool>>
                 {
-                    ["label"] = new Dictionary<string, bool> { [$"{UtilityLabelKey}={UtilityLabelValue}"] = true }
+                    ["label"] = new Dictionary<string, bool>
+                    {
+                        [$"{UtilityLabelKey}={UtilityLabelValue}"] = true
+                    }
                 }
             },
             cancellationToken).ConfigureAwait(false);
@@ -627,6 +609,47 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         }
 
         return removed;
+    }
+
+    /// <summary>
+    ///     Builds the hardened <see cref="HostConfig" /> for a sandbox container: a locked-down
+    ///     no-network default, no-new-privileges, all capabilities dropped, plus the spec's resource ceilings. Exposed
+    ///     so the resource/network mapping can be asserted without a Docker daemon. NEVER mounts the Docker socket and
+    ///     never adds writable host binds.
+    /// </summary>
+    public static HostConfig BuildSandboxHostConfig(SandboxContainerSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        // D6: a tag-only local image is accepted as-is by the caller; it is NOT routed through the strict
+        // managed-runtime DockerImageReference.Parse (which mandates repo:tag@sha256 and rejects :latest).
+        var hostConfig = new HostConfig
+        {
+            // Both None and the reserved Restricted posture map to the no-network default; a restricted egress policy
+            // is not implemented yet. None is the secure default.
+            NetworkMode = "none",
+            SecurityOpt = ["no-new-privileges"],
+            CapDrop = ["ALL"],
+            ReadonlyRootfs = false,
+            AutoRemove = false
+        };
+
+        if (spec.MemoryMb is { } memoryMb && memoryMb > 0)
+        {
+            hostConfig.Memory = memoryMb * BytesPerMegabyte;
+        }
+
+        if (spec.CpuCount is { } cpuCount && cpuCount > 0)
+        {
+            hostConfig.NanoCPUs = (long)(cpuCount * 1_000_000_000d);
+        }
+
+        if (spec.PidsLimit is { } pidsLimit && pidsLimit > 0)
+        {
+            hostConfig.PidsLimit = pidsLimit;
+        }
+
+        return hostConfig;
     }
 
     /// <summary>
@@ -672,7 +695,10 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         try
         {
             await _client.Containers.StopContainerAsync(containerId,
-                new ContainerStopParameters { WaitBeforeKillSeconds = 1 },
+                new ContainerStopParameters
+                {
+                    WaitBeforeKillSeconds = 1
+                },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (DockerApiException)
@@ -686,7 +712,10 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         try
         {
             await _client.Containers.RemoveContainerAsync(containerId,
-                new ContainerRemoveParameters { Force = true },
+                new ContainerRemoveParameters
+                {
+                    Force = true
+                },
                 cancellationToken).ConfigureAwait(false);
             return true;
         }

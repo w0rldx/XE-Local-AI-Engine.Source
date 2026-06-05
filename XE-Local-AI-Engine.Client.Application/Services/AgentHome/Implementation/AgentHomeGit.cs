@@ -32,5 +32,8 @@ internal static class AgentHomeGit
     ///     <c>--name-status</c> parser maps a copied folder's <c>&lt;alias&gt;/…</c> path correctly instead of seeing a
     ///     C-style quoted, escaped path.
     /// </summary>
-    public static IReadOnlyList<string> Arguments(params string[] tail) => [.. HardenedConfig, .. tail];
+    public static IReadOnlyList<string> Arguments(params string[] tail)
+    {
+        return [.. HardenedConfig, .. tail];
+    }
 }

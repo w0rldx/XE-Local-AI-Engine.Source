@@ -32,11 +32,9 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         await executor.DispatchAsync(JobId, "fire-success", Now, Now, CancellationToken.None);
 
         AssertEx.Equal(1, handler.InvocationCount, "Handler must run exactly once.");
-        await runStore.Received(1).UpsertByFireInstanceAsync(
-            Arg.Is<ScheduledJobRunInput>(i => i.Status == ScheduledRunStatus.Running && i.QuartzFireInstanceId == "fire-success"),
+        await runStore.Received(1).UpsertByFireInstanceAsync(Arg.Is<ScheduledJobRunInput>(i => i.Status == ScheduledRunStatus.Running && i.QuartzFireInstanceId == "fire-success"),
             Arg.Any<CancellationToken>());
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.Succeeded,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -61,8 +59,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         // Must NOT throw — the run row is the record of failure; a faulting handler may not fault the scheduler.
         await executor.DispatchAsync(JobId, "fire-fail", Now, Now, CancellationToken.None);
 
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.Failed,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -86,8 +83,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-sanitized", Now, Now, CancellationToken.None);
 
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.Failed,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -110,8 +106,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-generic", Now, Now, CancellationToken.None);
 
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.Failed,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -142,11 +137,9 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         runStore.GetByIdAsync(RunId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, cancellationRequestedAtUtc: 123L)));
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => executor.DispatchAsync(JobId, "fire-cancel", null, Now, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", null, Now, cts.Token));
 
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.Cancelled,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -177,11 +170,9 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         runStore.GetByIdAsync(RunId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, cancellationRequestedAtUtc: null)));
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => executor.DispatchAsync(JobId, "fire-timeout", null, Now, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-timeout", null, Now, cts.Token));
 
-        await runStore.Received(1).UpdateLifecycleAsync(
-            RunId,
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
             ScheduledRunStatus.TimedOut,
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -207,8 +198,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-progress", null, Now, CancellationToken.None);
 
-        await eventStore.Received(1).AddAsync(
-            Arg.Is<ScheduledJobRunEventInput>(e =>
+        await eventStore.Received(1).AddAsync(Arg.Is<ScheduledJobRunEventInput>(e =>
                 e.RunId == RunId &&
                 e.Level == ScheduledRunEventLevel.Progress &&
                 e.Sequence == 1 &&
@@ -231,8 +221,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         await executor.DispatchAsync(JobId, "fire-dup", Now, Now, CancellationToken.None);
 
         AssertEx.Equal(0, handler.InvocationCount, "A terminal re-fire must not re-run the handler.");
-        await runStore.DidNotReceive().UpdateLifecycleAsync(
-            Arg.Any<Guid>(),
+        await runStore.DidNotReceive().UpdateLifecycleAsync(Arg.Any<Guid>(),
             Arg.Any<ScheduledRunStatus>(),
             Arg.Any<long?>(),
             Arg.Any<long?>(),
@@ -255,11 +244,9 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-publish", Now, Now, CancellationToken.None);
 
-        await publisher.Received(1).PublishRunAsync(
-            Arg.Is<SchedulerRunHubEvent>(e => e.EventType == SchedulerHubEvents.RunStarted && e.RunId == RunId),
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunHubEvent>(e => e.EventType == SchedulerHubEvents.RunStarted && e.RunId == RunId),
             Arg.Any<CancellationToken>());
-        await publisher.Received(1).PublishRunAsync(
-            Arg.Is<SchedulerRunHubEvent>(e => e.EventType == SchedulerHubEvents.RunCompleted && e.RunId == RunId),
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunHubEvent>(e => e.EventType == SchedulerHubEvents.RunCompleted && e.RunId == RunId),
             Arg.Any<CancellationToken>());
     }
 
@@ -271,8 +258,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         await executor.DispatchAsync(JobId, "fire-publish-progress", null, Now, CancellationToken.None);
 
-        await publisher.Received(1).PublishRunProgressAsync(
-            Arg.Is<SchedulerRunProgressHubEvent>(e =>
+        await publisher.Received(1).PublishRunProgressAsync(Arg.Is<SchedulerRunProgressHubEvent>(e =>
                 e.EventType == SchedulerHubEvents.RunProgress &&
                 e.RunId == RunId &&
                 e.Message == "step" &&
@@ -295,8 +281,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         runStore.UpsertByFireInstanceAsync(Arg.Any<ScheduledJobRunInput>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult(RunRecord(upsertStatus)));
         // UpdateLifecycle echoes a record in the requested terminal status so the published event reflects it.
-        runStore.UpdateLifecycleAsync(
-                    Arg.Any<Guid>(), Arg.Any<ScheduledRunStatus>(), Arg.Any<long?>(), Arg.Any<long?>(),
+        runStore.UpdateLifecycleAsync(Arg.Any<Guid>(), Arg.Any<ScheduledRunStatus>(), Arg.Any<long?>(), Arg.Any<long?>(),
                     Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo => Task.FromResult<ScheduledJobRunRecord?>(RunRecord((ScheduledRunStatus)callInfo[1])));
 
@@ -307,8 +292,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         var publisher = Substitute.For<ISchedulerEventPublisher>();
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
-        var executor = new SchedulerDispatchExecutor(
-            definitionStore,
+        var executor = new SchedulerDispatchExecutor(definitionStore,
             registry,
             runStore,
             eventStore,
@@ -319,9 +303,9 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         return (executor, runStore, eventStore, publisher);
     }
 
-    private static ScheduledJobDefinitionRecord DefinitionRecord() =>
-        new(
-            Id: JobId,
+    private static ScheduledJobDefinitionRecord DefinitionRecord()
+    {
+        return new ScheduledJobDefinitionRecord(Id: JobId,
             TemplateId: ConfigurableHandler.Id,
             DisplayName: "History Test Job",
             Description: null,
@@ -342,10 +326,11 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             UpdatedAtUtc: 0L,
             DisabledAtUtc: null,
             DeletedAtUtc: null);
+    }
 
-    private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status, long? cancellationRequestedAtUtc = null) =>
-        new(
-            Id: RunId,
+    private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status, long? cancellationRequestedAtUtc = null)
+    {
+        return new ScheduledJobRunRecord(Id: RunId,
             ScheduledJobId: JobId,
             TemplateId: ConfigurableHandler.Id,
             QuartzFireInstanceId: "fire",
@@ -361,9 +346,12 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             ErrorDetails: null,
             CancellationRequestedAtUtc: cancellationRequestedAtUtc,
             CreatedAtUtc: 1L);
+    }
 
-    private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input) =>
-        new(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, 1L);
+    private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
+    {
+        return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, 1L);
+    }
 
     private sealed class ConfigurableHandler(Func<ScheduledJobExecutionContext, CancellationToken, Task> body)
         : IScheduledJobHandler
@@ -376,8 +364,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         public string TemplateId => Id;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(
-            TemplateId: Id,
+        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: Id,
             DisplayName: "Configurable (test)",
             Description: "Test handler that runs an injected body.",
             ParameterSchema: null,

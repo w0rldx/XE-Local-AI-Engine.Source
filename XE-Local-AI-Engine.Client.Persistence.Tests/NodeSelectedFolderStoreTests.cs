@@ -112,8 +112,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
 
         _ = await store.AddAsync("repo-one", "/trusted/a", SelectedFolderMode.Copy);
 
-        _ = AssertEx.Throws<DbUpdateException>(
-            () => store.AddAsync("repo-one", "/trusted/b", SelectedFolderMode.Copy).GetAwaiter().GetResult(),
+        _ = AssertEx.Throws<DbUpdateException>(() => store.AddAsync("repo-one", "/trusted/b", SelectedFolderMode.Copy).GetAwaiter().GetResult(),
             "Duplicate alias should violate the unique index.");
     }
 
@@ -138,8 +137,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new NodeSelectedFolderStore(readContext, TimeProvider.System);
 
-        _ = AssertEx.Throws<CryptographicException>(
-            () => readStore.GetByIdAsync(folderId).GetAwaiter().GetResult(),
+        _ = AssertEx.Throws<CryptographicException>(() => readStore.GetByIdAsync(folderId).GetAwaiter().GetResult(),
             "A tampered host path ciphertext should fail authenticated decryption.");
     }
 
@@ -158,7 +156,14 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
         await connection.OpenAsync();
 
         var columns = await GetSelectedFolderColumnsAsync(connection);
-        AssertEx.True(columns.SetEquals(new[] { "id", "alias", "host_path", "mode", "created_at_utc" }),
+        AssertEx.True(columns.SetEquals(new[]
+            {
+                "id",
+                "alias",
+                "host_path",
+                "mode",
+                "created_at_utc"
+            }),
             "selected_folders should expose the mapped columns.");
         AssertEx.True(await HasUniqueAliasIndexAsync(connection),
             "selected_folders.alias should have a unique index.");

@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -20,8 +19,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class GoldenHarvestServiceTests
 {
-    private static readonly Guid AgentId = Guid.NewGuid();
     private const string RubricSeedPrefix = "The response should be consistent with this operator-approved answer:";
+    private static readonly Guid AgentId = Guid.NewGuid();
 
     [Test]
     public async Task HarvestAsync_WhenAgentUnknown_ReportsAgentMissingWithZeroCounts()
@@ -48,8 +47,7 @@ public sealed class GoldenHarvestServiceTests
         var harness = new Harness();
         var sourceMessageId = Guid.NewGuid();
         var sourceConversationId = Guid.NewGuid();
-        var source = new HarvestCandidateSource(
-            sourceMessageId,
+        var source = new HarvestCandidateSource(sourceMessageId,
             sourceConversationId,
             ConversationTitle: "Original Conversation",
             PriorTurns: [new HarvestTurn("user", "How do I reset?"), new HarvestTurn("assistant", "Use the reset button.")],
@@ -94,8 +92,7 @@ public sealed class GoldenHarvestServiceTests
     {
         var harness = new Harness();
         var sourceMessageId = Guid.NewGuid();
-        var source = new HarvestCandidateSource(
-            sourceMessageId,
+        var source = new HarvestCandidateSource(sourceMessageId,
             Guid.NewGuid(),
             ConversationTitle: "Conv",
             PriorTurns: [new HarvestTurn("user", "q")],
@@ -118,8 +115,7 @@ public sealed class GoldenHarvestServiceTests
     public async Task HarvestAsync_WhenSourceHasNoPriorUserTurn_CountsSkippedAndDoesNotCreate()
     {
         var harness = new Harness();
-        var source = new HarvestCandidateSource(
-            Guid.NewGuid(),
+        var source = new HarvestCandidateSource(Guid.NewGuid(),
             Guid.NewGuid(),
             ConversationTitle: "Conv",
             // Only an assistant prior turn (no lead-up user turn) → unusable as an input conversation.
@@ -140,8 +136,7 @@ public sealed class GoldenHarvestServiceTests
     public async Task HarvestAsync_WhenMoreSourcesThanMaxProposals_CapsCreatedCount()
     {
         var harness = new Harness(maxProposals: 2);
-        harness.WithSources(
-            FreshSource("q1"),
+        harness.WithSources(FreshSource("q1"),
             FreshSource("q2"),
             FreshSource("q3"));
 
@@ -179,8 +174,7 @@ public sealed class GoldenHarvestServiceTests
 
     private static HarvestCandidateSource FreshSource(string question)
     {
-        return new HarvestCandidateSource(
-            Guid.NewGuid(),
+        return new HarvestCandidateSource(Guid.NewGuid(),
             Guid.NewGuid(),
             ConversationTitle: "Conv",
             PriorTurns: [new HarvestTurn("user", question)],
@@ -189,8 +183,7 @@ public sealed class GoldenHarvestServiceTests
 
     private static GoldenConversationRecord StoredRecord(GoldenConversationCreateInput input)
     {
-        return new GoldenConversationRecord(
-            Guid.NewGuid(),
+        return new GoldenConversationRecord(Guid.NewGuid(),
             input.AgentDefinitionId,
             input.Title,
             input.InputTurns,
@@ -222,9 +215,12 @@ public sealed class GoldenHarvestServiceTests
             ConversationService.CreateHarvestedAsync(Arg.Any<GoldenConversationCreateInput>(), Arg.Any<CancellationToken>())
                                .Returns(callInfo => Task.FromResult(StoredRecord(callInfo.Arg<GoldenConversationCreateInput>())));
 
-            var options = Options.Create(new GoldenHarvestOptions { MaxProposals = maxProposals, MaxThumbsUpScan = maxThumbsUpScan });
-            Service = new GoldenHarvestService(
-                SourceStore,
+            var options = Options.Create(new GoldenHarvestOptions
+            {
+                MaxProposals = maxProposals,
+                MaxThumbsUpScan = maxThumbsUpScan
+            });
+            Service = new GoldenHarvestService(SourceStore,
                 GoldenStore,
                 ConversationService,
                 AgentStore,

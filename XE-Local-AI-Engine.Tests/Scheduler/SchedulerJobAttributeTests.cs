@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Scheduler;
 
 using Quartz;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

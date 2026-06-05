@@ -81,7 +81,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Parts", "node", 2000)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 2001)).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 2001))
+                     .ConfigureAwait(false);
 
         // reasoning -> tool -> reasoning: a tool call between two reasoning runs is the Option A interleave that
         // produces a second Thoughts block. The tool part carries args + result (the completed-phase data).
@@ -93,12 +94,12 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         };
 
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                2002,
-                "the answer",
-                "thinking before\nthinking after",
-                Parts: parts))
-            .ConfigureAwait(false);
+                         NodeChatMessageStatusValues.Completed,
+                         2002,
+                         "the answer",
+                         "thinking before\nthinking after",
+                         Parts: parts))
+                     .ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
@@ -127,15 +128,16 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy", "node", 2100)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 2101)).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 2101))
+                     .ConfigureAwait(false);
 
         // Terminalize WITHOUT parts (the pre-parts shape): the serialized metadata omits the parts key entirely.
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                2102,
-                "legacy answer",
-                "legacy reasoning"))
-            .ConfigureAwait(false);
+                         NodeChatMessageStatusValues.Completed,
+                         2102,
+                         "legacy answer",
+                         "legacy reasoning"))
+                     .ConfigureAwait(false);
 
         // Simulate an even older blob with no parts key by overwriting the raw metadata column with a parts-free JSON.
         await OverwriteMetadataJsonAsync(provider, assistantMessageId, "{\"Reasoning\":\"legacy reasoning\",\"Model\":null}").ConfigureAwait(false);
@@ -161,21 +163,21 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         // The placeholder is stamped with the per-response agent attribution at send time; it must survive the
         // streaming/terminalize updates (which preserve it from current) and reload off the metadata blob.
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
-                assistantMessageId,
-                correlation.RequestId,
-                3001,
-                "model-x",
-                AgentDefinitionId: agentDefinitionId,
-                AgentName: "Backend Buddy"))
-            .ConfigureAwait(false);
+                         assistantMessageId,
+                         correlation.RequestId,
+                         3001,
+                         "model-x",
+                         AgentDefinitionId: agentDefinitionId,
+                         AgentName: "Backend Buddy"))
+                     .ConfigureAwait(false);
         await service.MarkAssistantStreamingAsync(correlation, 3002).ConfigureAwait(false);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                3003,
-                "the answer",
-                "thinking",
-                Model: "model-x"))
-            .ConfigureAwait(false);
+                         NodeChatMessageStatusValues.Completed,
+                         3003,
+                         "the answer",
+                         "thinking",
+                         Model: "model-x"))
+                     .ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
@@ -195,8 +197,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy attribution", "node", 3100)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3101)).ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3102, "legacy answer", "legacy reasoning")).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3101))
+                     .ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3102, "legacy answer", "legacy reasoning"))
+                     .ConfigureAwait(false);
 
         // Simulate a blob written before agent mode existed: the AgentDefinitionId/AgentName keys are absent entirely
         // (no migration), so they must deserialize to null without error.
@@ -222,20 +226,20 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         // The placeholder is stamped with the reasoning effort used to drive the turn; it must survive the
         // streaming/terminalize updates (which preserve it from current) and reload off the metadata blob.
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
-                assistantMessageId,
-                correlation.RequestId,
-                3201,
-                "model-x",
-                ReasoningEffort: "high"))
-            .ConfigureAwait(false);
+                         assistantMessageId,
+                         correlation.RequestId,
+                         3201,
+                         "model-x",
+                         ReasoningEffort: "high"))
+                     .ConfigureAwait(false);
         await service.MarkAssistantStreamingAsync(correlation, 3202).ConfigureAwait(false);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                3203,
-                "the answer",
-                "thinking",
-                Model: "model-x"))
-            .ConfigureAwait(false);
+                         NodeChatMessageStatusValues.Completed,
+                         3203,
+                         "the answer",
+                         "thinking",
+                         Model: "model-x"))
+                     .ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
@@ -254,8 +258,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy reasoning effort", "node", 3300)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3301)).ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3302, "legacy answer", "legacy reasoning")).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3301))
+                     .ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3302, "legacy answer", "legacy reasoning"))
+                     .ConfigureAwait(false);
 
         // Simulate a blob written before the reasoning-effort field existed: the ReasoningEffort key is absent entirely
         // (no migration), so it must deserialize to null without error.
@@ -277,19 +283,20 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
 
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3401, "model-x")).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3401, "model-x"))
+                     .ConfigureAwait(false);
         await service.MarkAssistantStreamingAsync(correlation, 3402).ConfigureAwait(false);
         // The runner reports the whole-turn duration at terminalize; it rides the metadata blob (no DB column) and
         // must survive reload alongside the token counts that feed the tokens-per-second display.
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                3403,
-                "the answer",
-                "thinking",
-                Model: "model-x",
-                OutputCount: 42,
-                GenerationDurationMs: 2000))
-            .ConfigureAwait(false);
+                         NodeChatMessageStatusValues.Completed,
+                         3403,
+                         "the answer",
+                         "thinking",
+                         Model: "model-x",
+                         OutputCount: 42,
+                         GenerationDurationMs: 2000))
+                     .ConfigureAwait(false);
 
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
@@ -307,8 +314,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy generation duration", "node", 3500)).ConfigureAwait(false);
         var assistantMessageId = Guid.NewGuid();
         var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3501)).ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3502, "legacy answer", "legacy reasoning")).ConfigureAwait(false);
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3501))
+                     .ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3502, "legacy answer", "legacy reasoning"))
+                     .ConfigureAwait(false);
 
         // Simulate a blob written before the generation-duration field existed: the GenerationDurationMs key is absent
         // entirely (no migration), so it must deserialize to null without error.

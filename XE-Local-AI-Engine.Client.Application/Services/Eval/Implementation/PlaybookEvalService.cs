@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Eval;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -32,17 +31,17 @@ internal sealed class PlaybookEvalService(
     ILogger<PlaybookEvalService> logger) : IPlaybookEvalService
 {
     private static readonly JsonSerializerOptions InputTurnsSerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly IPlaybookEvalAgentRunner _evalAgentRunner = evalAgentRunner ?? throw new ArgumentNullException(nameof(evalAgentRunner));
+    private readonly IPlaybookEvalJudge _evalJudge = evalJudge ?? throw new ArgumentNullException(nameof(evalJudge));
+    private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
+    private readonly ILocalModelProvider _localModelProvider = localModelProvider ?? throw new ArgumentNullException(nameof(localModelProvider));
+    private readonly ILogger<PlaybookEvalService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly PlaybookEvalOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
     private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
-    private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
-    private readonly IPlaybookEvalAgentRunner _evalAgentRunner = evalAgentRunner ?? throw new ArgumentNullException(nameof(evalAgentRunner));
-    private readonly IPlaybookEvalJudge _evalJudge = evalJudge ?? throw new ArgumentNullException(nameof(evalJudge));
-    private readonly ILocalModelProvider _localModelProvider = localModelProvider ?? throw new ArgumentNullException(nameof(localModelProvider));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly PlaybookEvalOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
-    private readonly ILogger<PlaybookEvalService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)
     {
@@ -69,10 +68,10 @@ internal sealed class PlaybookEvalService(
         // last — for the eval to score it in the SAME position the post-promotion injection will. The baseline stays
         // Compose(Instructions, enabled) since `enabled` is already store-ordered.
         var candidateActions = enabled
-                              .Append(suggested)
-                              .OrderBy(static action => action.Priority)
-                              .ThenBy(static action => action.CreatedAtUtc)
-                              .ToList();
+                               .Append(suggested)
+                               .OrderBy(static action => action.Priority)
+                               .ThenBy(static action => action.CreatedAtUtc)
+                               .ToList();
         var baselinePrompt = PlaybookPromptComposer.Compose(agent.Instructions, enabled);
         var candidatePrompt = PlaybookPromptComposer.Compose(agent.Instructions, candidateActions);
 
@@ -172,8 +171,7 @@ internal sealed class PlaybookEvalService(
         // Passed requires at least one golden case AND zero regressions (no-regression is unprovable with zero cases).
         var passed = caseResults.Count > 0 && regressed == 0;
 
-        return new PlaybookEvalResult(
-            passed,
+        return new PlaybookEvalResult(passed,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             actionVersion,
             _options.ModelName,
@@ -188,8 +186,7 @@ internal sealed class PlaybookEvalService(
 
     private PlaybookEvalResult BuildEmptyResult(int actionVersion)
     {
-        return new PlaybookEvalResult(
-            Passed: false,
+        return new PlaybookEvalResult(Passed: false,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             actionVersion,
             _options.ModelName,

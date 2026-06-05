@@ -9,8 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
-using XE_Local_AI_Engine.Client;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
@@ -22,10 +20,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 /// </summary>
 public sealed class NodeSchedulerRegistrationTests : IDisposable
 {
-    private readonly string _rootPath = Path.Combine(
-        Path.GetTempPath(), "xe-scheduler-reg-" + Guid.NewGuid().ToString("N"));
-
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
+
+    private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-scheduler-reg-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
@@ -139,17 +136,17 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
             await sched1.Start(CancellationToken.None).ConfigureAwait(false);
 
             var job = JobBuilder.Create<NoOpTestJob>()
-                .WithIdentity(jobKey)
-                .UsingJobData(SchedulerJobKeys.ScheduledJobIdKey, jobId.ToString())
-                .StoreDurably()
-                .Build();
+                                .WithIdentity(jobKey)
+                                .UsingJobData(SchedulerJobKeys.ScheduledJobIdKey, jobId.ToString())
+                                .StoreDurably()
+                                .Build();
 
             // Far-future trigger — will never fire during the test.
             var trigger = TriggerBuilder.Create()
-                .WithIdentity("persist-trigger", SchedulerJobKeys.Group)
-                .ForJob(jobKey)
-                .StartAt(DateTimeOffset.UtcNow.AddYears(10))
-                .Build();
+                                        .WithIdentity("persist-trigger", SchedulerJobKeys.Group)
+                                        .ForJob(jobKey)
+                                        .StartAt(DateTimeOffset.UtcNow.AddYears(10))
+                                        .Build();
 
             await sched1.ScheduleJob(job, trigger, CancellationToken.None).ConfigureAwait(false);
             await sched1.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
@@ -164,8 +161,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
 
             var jobDetail = await sched2.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false);
             AssertEx.NotNull(jobDetail, "Job must persist across scheduler restart.");
-            AssertEx.Equal(
-                jobId.ToString(),
+            AssertEx.Equal(jobId.ToString(),
                 jobDetail!.JobDataMap.GetString(SchedulerJobKeys.ScheduledJobIdKey),
                 "JobDataMap scheduledJobId must survive restart.");
 
@@ -203,7 +199,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         // IConfiguration in the DI container at scheduler-start time (see NodeSchedulerServiceCollectionExtensions:
         // db.ConnectionStringName). The real application host always has IConfiguration registered, so this
         // hand-rolled provider must register it too for the named lookup to succeed.
-        services.AddSingleton<IConfiguration>(config);
+        services.AddSingleton(config);
         new MinimalHostApplicationBuilder(services).AddNodeScheduler(config);
 
         return services.BuildServiceProvider();
@@ -215,17 +211,19 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         await context.Database.MigrateAsync().ConfigureAwait(false);
     }
 
-    private static IConfiguration BuildConfig(bool enabled, string connectionString) =>
-        new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Scheduler:Enabled"] = enabled ? "true" : "false",
-                ["Scheduler:MaxConcurrency"] = "2",
-                ["Scheduler:DefaultMaxRuntimeMinutes"] = "5",
-                ["Scheduler:QuartzTablePrefix"] = "QRTZ_",
-                ["ConnectionStrings:node-sqlite"] = connectionString
-            })
-            .Build();
+    private static IConfiguration BuildConfig(bool enabled, string connectionString)
+    {
+        return new ConfigurationBuilder()
+               .AddInMemoryCollection(new Dictionary<string, string?>
+               {
+                   ["Scheduler:Enabled"] = enabled ? "true" : "false",
+                   ["Scheduler:MaxConcurrency"] = "2",
+                   ["Scheduler:DefaultMaxRuntimeMinutes"] = "5",
+                   ["Scheduler:QuartzTablePrefix"] = "QRTZ_",
+                   ["ConnectionStrings:node-sqlite"] = connectionString
+               })
+               .Build();
+    }
 
     private string GetDatabasePath(string fileName)
     {
@@ -241,7 +239,10 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     /// </summary>
     private sealed class NoOpTestJob : IJob
     {
-        public Task Execute(IJobExecutionContext context) => Task.CompletedTask;
+        public Task Execute(IJobExecutionContext context)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>
@@ -257,8 +258,9 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         public IDictionary<object, object> Properties { get; } = new Dictionary<object, object>();
         public IMetricsBuilder Metrics { get; } = Substitute.For<IMetricsBuilder>();
 
-        public void ConfigureContainer<TContainerBuilder>(
-            IServiceProviderFactory<TContainerBuilder> factory,
-            Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull { }
+        public void ConfigureContainer<TContainerBuilder>(IServiceProviderFactory<TContainerBuilder> factory,
+            Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull
+        {
+        }
     }
 }

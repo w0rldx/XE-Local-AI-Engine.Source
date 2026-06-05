@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.Collections.Concurrent;
 using System.Globalization;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -43,11 +42,6 @@ internal sealed class AgentHomeService : IAgentHomeService
             ["dotnet-agent-home"] = new("dotnet", ["--version"])
         };
 
-    // Run-level single-flight guard: one semaphore per owner-node, created on demand. A second run for
-    // the same owner-node while one is in flight is rejected (non-blocking Wait(0)), not queued. Keyed by a string so
-    // the guard does not couple to SandboxAttachKey value-equality (which folds in ManifestVersion/RuntimeProfile).
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _runGuards = new(StringComparer.Ordinal);
-
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILogger<AgentHomeService> _logger;
     private readonly IAgentHomeManifestService _manifestService;
@@ -55,13 +49,17 @@ internal sealed class AgentHomeService : IAgentHomeService
     private readonly AgentHomeOptions _options;
     private readonly IAgentHomePatchService _patchService;
     private readonly ISandboxRuntimeProvider _provider;
+
+    // Run-level single-flight guard: one semaphore per owner-node, created on demand. A second run for
+    // the same owner-node while one is in flight is rejected (non-blocking Wait(0)), not queued. Keyed by a string so
+    // the guard does not couple to SandboxAttachKey value-equality (which folds in ManifestVersion/RuntimeProfile).
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _runGuards = new(StringComparer.Ordinal);
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly IAgentHomeWorkspaceService _workspaceService;
     private int _runCounter;
 
-    public AgentHomeService(
-        IAgentHomeManifestService manifestService,
+    public AgentHomeService(IAgentHomeManifestService manifestService,
         ISandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         IAgentHomeWorkspaceService workspaceService,
@@ -104,16 +102,14 @@ internal sealed class AgentHomeService : IAgentHomeService
 
         try
         {
-            var prepared = await PrepareAsync(
-                new AgentHomePrepareRequest
+            var prepared = await PrepareAsync(new AgentHomePrepareRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds,
                     RuntimeProfile = request.RuntimeProfile
                 },
                 cancellationToken).ConfigureAwait(false);
 
-            return await RunAsync(
-                new AgentHomeRunRequest
+            return await RunAsync(new AgentHomeRunRequest
                 {
                     Prepared = prepared,
                     Goal = request.Goal,
@@ -165,10 +161,9 @@ internal sealed class AgentHomeService : IAgentHomeService
         // workspace copy: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape guard,
         // per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command timeout.
         var folderSnapshots = await _workspaceService
-            .PrepareSelectedFoldersAsync(handle, resolvedFolders, prepareToken).ConfigureAwait(false);
+                                    .PrepareSelectedFoldersAsync(handle, resolvedFolders, prepareToken).ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "AgentHome prepared for node {NodeId}: sandbox {SandboxId}, {FolderCount} selected folder(s) resolved.",
+        _logger.LogInformation("AgentHome prepared for node {NodeId}: sandbox {SandboxId}, {FolderCount} selected folder(s) resolved.",
             attachKey.NodeId,
             handle.SandboxId,
             resolvedFolders.Count);
@@ -254,8 +249,7 @@ internal sealed class AgentHomeService : IAgentHomeService
                 string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={_options.CommandTimeoutSeconds}"),
                 CancellationToken.None).ConfigureAwait(false);
 
-            _logger.LogWarning(
-                "AgentHome run {RunId} timed out after {TimeoutSeconds}s.",
+            _logger.LogWarning("AgentHome run {RunId} timed out after {TimeoutSeconds}s.",
                 runId,
                 _options.CommandTimeoutSeconds);
 
@@ -285,8 +279,7 @@ internal sealed class AgentHomeService : IAgentHomeService
             string.Create(CultureInfo.InvariantCulture, $"exit_code={result.ExitCode};changed_files={patch.ChangedFileCount}"),
             cancellationToken).ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "AgentHome run {RunId} finished: completed={Completed}, exitCode={ExitCode}, changedFiles={ChangedFiles}.",
+        _logger.LogInformation("AgentHome run {RunId} finished: completed={Completed}, exitCode={ExitCode}, changedFiles={ChangedFiles}.",
             runId,
             result.Completed,
             result.ExitCode,
@@ -303,8 +296,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         };
     }
 
-    private async Task<AgentHomePatchExport> ExportPatchAsync(
-        AgentHomeRunRequest request,
+    private async Task<AgentHomePatchExport> ExportPatchAsync(AgentHomeRunRequest request,
         string runId,
         string runDirectory,
         CancellationToken cancellationToken)
@@ -317,14 +309,13 @@ internal sealed class AgentHomeService : IAgentHomeService
         }
 
         var hasBaseline = request.Prepared.FolderSnapshots
-            .Any(snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 });
+                                 .Any(snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 });
         if (!hasBaseline)
         {
             return EmptyPatchExport;
         }
 
-        return await _patchService.ExportPatchAsync(
-            request.Prepared.Handle,
+        return await _patchService.ExportPatchAsync(request.Prepared.Handle,
             new AgentHomePatchExportRequest
             {
                 RunId = runId,
@@ -334,8 +325,7 @@ internal sealed class AgentHomeService : IAgentHomeService
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task CollectMemoryProposalsAsync(
-        AgentHomeRunRequest request,
+    private async Task CollectMemoryProposalsAsync(AgentHomeRunRequest request,
         string runId,
         string runDirectory,
         IAgentHomeRunLogger runLogger,
@@ -349,8 +339,7 @@ internal sealed class AgentHomeService : IAgentHomeService
             return;
         }
 
-        var collected = await _memoryProposalService.CollectAsync(
-            new MemoryProposalCollectRequest
+        var collected = await _memoryProposalService.CollectAsync(new MemoryProposalCollectRequest
             {
                 RunId = runId,
                 HostRunDirectory = runDirectory
@@ -375,8 +364,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         }
     }
 
-    private async Task OpenRunLogAsync(
-        IAgentHomeRunLogger runLogger,
+    private async Task OpenRunLogAsync(IAgentHomeRunLogger runLogger,
         string runId,
         string logDirectory,
         AgentHomeOwnerIdentity identity,
@@ -384,8 +372,7 @@ internal sealed class AgentHomeService : IAgentHomeService
     {
         try
         {
-            await runLogger.OpenAsync(
-                new AgentHomeRunLogContext
+            await runLogger.OpenAsync(new AgentHomeRunLogContext
                 {
                     RunId = runId,
                     HostLogDirectory = logDirectory,
@@ -420,8 +407,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         }
     }
 
-    private async Task AppendCommandSafelyAsync(
-        IAgentHomeRunLogger runLogger,
+    private async Task AppendCommandSafelyAsync(IAgentHomeRunLogger runLogger,
         string runId,
         AgentHomeCommandDescriptor descriptor,
         bool completed,
@@ -433,8 +419,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         var elapsed = _timeProvider.GetElapsedTime(startedTimestamp);
         try
         {
-            await runLogger.AppendCommandAsync(
-                new AgentHomeCommandLogRecord
+            await runLogger.AppendCommandAsync(new AgentHomeCommandLogRecord
                 {
                     TimestampUtc = _timeProvider.GetUtcNow(),
                     ExecutionId = runId,
@@ -464,8 +449,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         // hit; the explicit throw guards a future profile added to options but not to the descriptor table.
         return ProfileCommands.TryGetValue(runtimeProfile, out var descriptor)
             ? descriptor
-            : throw new AgentHomeRequestRejectedException(
-                $"no command descriptor is registered for runtime profile '{runtimeProfile}'.");
+            : throw new AgentHomeRequestRejectedException($"no command descriptor is registered for runtime profile '{runtimeProfile}'.");
     }
 
     private static bool HasCopiedWorkspace(IReadOnlyList<SelectedFolderSnapshot> snapshots)
@@ -477,15 +461,13 @@ internal sealed class AgentHomeService : IAgentHomeService
     {
         if (requestedProfile is not null && !string.Equals(requestedProfile, _options.DefaultRuntimeProfile, StringComparison.Ordinal))
         {
-            throw new AgentHomeRequestRejectedException(
-                $"runtime profile '{requestedProfile}' is not enabled on this node.");
+            throw new AgentHomeRequestRejectedException($"runtime profile '{requestedProfile}' is not enabled on this node.");
         }
 
         return _options.DefaultRuntimeProfile;
     }
 
-    private async Task<IReadOnlyList<ResolvedSelectedFolder>> ResolveFoldersAsync(
-        IReadOnlyList<string> selectedFolderIds,
+    private async Task<IReadOnlyList<ResolvedSelectedFolder>> ResolveFoldersAsync(IReadOnlyList<string> selectedFolderIds,
         CancellationToken cancellationToken)
     {
         // The resolver is scoped (it owns a NodeChatDbContext); this service is a singleton, so resolve all ids within
@@ -507,8 +489,7 @@ internal sealed class AgentHomeService : IAgentHomeService
     {
         var counter = Interlocked.Increment(ref _runCounter);
         var unixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        return string.Create(
-            CultureInfo.InvariantCulture,
+        return string.Create(CultureInfo.InvariantCulture,
             $"run-{unixMs}-{counter}");
     }
 

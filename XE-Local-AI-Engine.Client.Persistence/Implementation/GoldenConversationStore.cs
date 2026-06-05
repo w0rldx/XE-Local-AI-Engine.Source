@@ -121,8 +121,7 @@ public sealed class GoldenConversationStore(NodeChatDbContext dbContext, TimePro
 
     private static GoldenConversationRecord ToRecord(GoldenConversation entity)
     {
-        return new GoldenConversationRecord(
-            entity.Id,
+        return new GoldenConversationRecord(entity.Id,
             entity.AgentDefinitionId,
             entity.Title,
             Decode(entity.InputTurns),

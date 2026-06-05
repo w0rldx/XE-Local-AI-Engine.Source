@@ -20,8 +20,7 @@ public interface IModelFitQueryService
     ///     snapshot has ever been cached (a cache-miss the caller surfaces as the empty state). Reads cached state only —
     ///     it never runs the utility.
     /// </summary>
-    Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(
-        string? useCase,
+    Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(string? useCase,
         string providerName,
         CancellationToken cancellationToken = default);
 }

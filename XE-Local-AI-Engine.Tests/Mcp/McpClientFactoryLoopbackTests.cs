@@ -18,20 +18,20 @@ public sealed class McpClientFactoryLoopbackTests
 {
     [Test]
     [Arguments("http://evil.com/mcp")]
-    [Arguments("http://169.254.169.254/latest/meta-data/")]      // cloud metadata SSRF
-    [Arguments("http://10.0.0.5/mcp")]                           // private range
-    [Arguments("http://192.168.1.10/mcp")]                       // private range
-    [Arguments("http://127.0.0.1.evil.com/mcp")]                 // suffix-confusion: host is 127.0.0.1.evil.com
-    [Arguments("http://localhost.evil.com/mcp")]                 // suffix-confusion
-    [Arguments("http://127.0.0.1@evil.com/mcp")]                 // userinfo trick: host is evil.com
-    [Arguments("http://localhost@evil.com/mcp")]                 // userinfo trick
-    [Arguments("http://127.0.0.2/mcp")]                          // rest of 127/8 is fail-closed (allowlist only has 127.0.0.1)
-    [Arguments("http://localhost./mcp")]                         // trailing-dot host, fail-closed
-    [Arguments("http://0.0.0.0/mcp")]                            // wildcard bind address is not a loopback host
-    [Arguments("ftp://127.0.0.1/mcp")]                           // loopback host but non-HTTP scheme — rejected by the scheme guard
-    [Arguments("file:///etc/passwd")]                            // file scheme — rejected by the scheme guard
-    [Arguments("not-a-url")]                                     // unparseable (not an absolute URI)
-    [Arguments("")]                                              // empty
+    [Arguments("http://169.254.169.254/latest/meta-data/")] // cloud metadata SSRF
+    [Arguments("http://10.0.0.5/mcp")] // private range
+    [Arguments("http://192.168.1.10/mcp")] // private range
+    [Arguments("http://127.0.0.1.evil.com/mcp")] // suffix-confusion: host is 127.0.0.1.evil.com
+    [Arguments("http://localhost.evil.com/mcp")] // suffix-confusion
+    [Arguments("http://127.0.0.1@evil.com/mcp")] // userinfo trick: host is evil.com
+    [Arguments("http://localhost@evil.com/mcp")] // userinfo trick
+    [Arguments("http://127.0.0.2/mcp")] // rest of 127/8 is fail-closed (allowlist only has 127.0.0.1)
+    [Arguments("http://localhost./mcp")] // trailing-dot host, fail-closed
+    [Arguments("http://0.0.0.0/mcp")] // wildcard bind address is not a loopback host
+    [Arguments("ftp://127.0.0.1/mcp")] // loopback host but non-HTTP scheme — rejected by the scheme guard
+    [Arguments("file:///etc/passwd")] // file scheme — rejected by the scheme guard
+    [Arguments("not-a-url")] // unparseable (not an absolute URI)
+    [Arguments("")] // empty
     public async Task CreateAsync_WhenHttpUrlIsNotLoopbackOrMalformed_RejectsBeforeConnecting(string url)
     {
         var factory = CreateFactory();

@@ -12,13 +12,12 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 /// </summary>
 public sealed class SchedulerHistoryRetentionService : BackgroundService
 {
+    private readonly ILogger<SchedulerHistoryRetentionService> _logger;
+    private readonly SchedulerOptions _options;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
-    private readonly SchedulerOptions _options;
-    private readonly ILogger<SchedulerHistoryRetentionService> _logger;
 
-    public SchedulerHistoryRetentionService(
-        IServiceScopeFactory serviceScopeFactory,
+    public SchedulerHistoryRetentionService(IServiceScopeFactory serviceScopeFactory,
         TimeProvider timeProvider,
         IOptions<SchedulerOptions> options,
         ILogger<SchedulerHistoryRetentionService> logger)
@@ -83,8 +82,7 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
 
         if (deletedRunCount > 0)
         {
-            _logger.LogInformation(
-                "Scheduler history retention sweep deleted {DeletedRunCount} run(s) older than {RetentionDays} day(s).",
+            _logger.LogInformation("Scheduler history retention sweep deleted {DeletedRunCount} run(s) older than {RetentionDays} day(s).",
                 deletedRunCount,
                 _options.HistoryRetentionDays);
         }

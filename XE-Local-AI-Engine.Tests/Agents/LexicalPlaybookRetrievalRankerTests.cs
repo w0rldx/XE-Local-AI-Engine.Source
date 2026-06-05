@@ -106,8 +106,7 @@ public sealed class LexicalPlaybookRetrievalRankerTests
 
     private static PlaybookActionRecord Action(string triggerCondition, int priority, long createdAtUtc)
     {
-        return new PlaybookActionRecord(
-            Guid.NewGuid(),
+        return new PlaybookActionRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,

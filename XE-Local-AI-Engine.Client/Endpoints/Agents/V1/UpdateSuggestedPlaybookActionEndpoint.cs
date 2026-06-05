@@ -27,9 +27,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpoint(IPlaybookActionService
     {
         try
         {
-            var record = await _playbookActionService.UpdateSuggestedAsync(
-                new SuggestedActionEditInput(
-                    req.AgentDefinitionId,
+            var record = await _playbookActionService.UpdateSuggestedAsync(new SuggestedActionEditInput(req.AgentDefinitionId,
                     req.ActionId,
                     req.Behavior ?? string.Empty,
                     req.TriggerCondition,

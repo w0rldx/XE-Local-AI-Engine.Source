@@ -127,7 +127,13 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator,
             orchestrationTopologyJson: TopologyJson(triage,
                 [triage, specialist],
-                [new OrchestrationHandoff { FromAgentDefinitionId = triage, ToAgentDefinitionId = specialist }]));
+                [
+                    new OrchestrationHandoff
+                    {
+                        FromAgentDefinitionId = triage,
+                        ToAgentDefinitionId = specialist
+                    }
+                ]));
         // Both participants exist → no warning, no failure.
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([StoredRecord(triage), StoredRecord(specialist)]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
@@ -224,7 +230,13 @@ public sealed class AgentDefinitionServiceTests
         var input = CreateInput(kind: AgentDefinitionKind.Orchestrator,
             orchestrationTopologyJson: TopologyJson(triage,
                 [triage, specialist],
-                [new OrchestrationHandoff { FromAgentDefinitionId = triage, ToAgentDefinitionId = stranger }]));
+                [
+                    new OrchestrationHandoff
+                    {
+                        FromAgentDefinitionId = triage,
+                        ToAgentDefinitionId = stranger
+                    }
+                ]));
 
         await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
         await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);

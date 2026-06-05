@@ -48,9 +48,17 @@ public sealed class SandboxRuntimeServiceTests
             AttachKey = AttachKey(),
             RuntimeProfile = "dotnet-agent-home",
             DefaultImage = "dotnet-agent-home:2026-05-agenthome-mvp",
-            Limits = new ResourceLimitsMessage { CpuCount = 2.0, MemoryMb = 4096, PidsLimit = 512 },
+            Limits = new ResourceLimitsMessage
+            {
+                CpuCount = 2.0,
+                MemoryMb = 4096,
+                PidsLimit = 512
+            },
             Network = ProtoNetworkMode.None,
-            Labels = { ["team"] = "core" }
+            Labels =
+            {
+                ["team"] = "core"
+            }
         };
     }
 
@@ -116,7 +124,10 @@ public sealed class SandboxRuntimeServiceTests
         var (service, _) = CreateService();
 
         var exception = await AssertEx.ThrowsAsync<RpcException>(() =>
-            service.ConnectSandbox(new ConnectSandboxRequest { AttachKey = AttachKey() }, Context()));
+            service.ConnectSandbox(new ConnectSandboxRequest
+            {
+                AttachKey = AttachKey()
+            }, Context()));
 
         AssertEx.Equal(StatusCode.FailedPrecondition, exception.StatusCode);
     }
@@ -127,7 +138,10 @@ public sealed class SandboxRuntimeServiceTests
         var (service, _) = CreateService();
         var created = await service.CreateOrAttachSandbox(CreateRequest(), Context());
 
-        var connected = await service.ConnectSandbox(new ConnectSandboxRequest { AttachKey = AttachKey() }, Context());
+        var connected = await service.ConnectSandbox(new ConnectSandboxRequest
+        {
+            AttachKey = AttachKey()
+        }, Context());
 
         AssertEx.Equal(created.SandboxId, connected.SandboxId);
     }
@@ -172,7 +186,10 @@ public sealed class SandboxRuntimeServiceTests
         mismatched.RuntimeProfile = "python-agent-home";
 
         var exception = await AssertEx.ThrowsAsync<RpcException>(() =>
-            service.ConnectSandbox(new ConnectSandboxRequest { AttachKey = mismatched }, Context()));
+            service.ConnectSandbox(new ConnectSandboxRequest
+            {
+                AttachKey = mismatched
+            }, Context()));
 
         AssertEx.Equal(StatusCode.FailedPrecondition, exception.StatusCode);
     }
@@ -190,7 +207,10 @@ public sealed class SandboxRuntimeServiceTests
             SandboxId = created.SandboxId,
             ExecutionId = "exec-1",
             Executable = "dotnet",
-            Arguments = { "--info" }
+            Arguments =
+            {
+                "--info"
+            }
         }, Context());
 
         AssertEx.Equal("exec-1", reply.ExecutionId);
@@ -209,7 +229,10 @@ public sealed class SandboxRuntimeServiceTests
             SandboxId = "nonexistent",
             ExecutionId = "exec-1",
             Executable = "git",
-            Arguments = { "status" }
+            Arguments =
+            {
+                "status"
+            }
         }, Context()));
 
         AssertEx.Equal(StatusCode.FailedPrecondition, exception.StatusCode);
@@ -220,7 +243,15 @@ public sealed class SandboxRuntimeServiceTests
     {
         var (service, _) = CreateService();
         var created = await service.CreateOrAttachSandbox(CreateRequest(), Context());
-        var content = new byte[] { 0xde, 0xad, 0xbe, 0xef, 0x00, 0xff };
+        var content = new byte[]
+        {
+            0xde,
+            0xad,
+            0xbe,
+            0xef,
+            0x00,
+            0xff
+        };
 
         await service.CopyInto(new CopyIntoRequest
         {
@@ -244,7 +275,12 @@ public sealed class SandboxRuntimeServiceTests
     {
         var (service, _) = CreateService();
         var created = await service.CreateOrAttachSandbox(CreateRequest(), Context());
-        var content = new byte[] { 0x01, 0x02, 0x03 };
+        var content = new byte[]
+        {
+            0x01,
+            0x02,
+            0x03
+        };
 
         await service.CopyInto(new CopyIntoRequest
         {
@@ -290,7 +326,10 @@ public sealed class SandboxRuntimeServiceTests
             SandboxId = created.SandboxId,
             ExecutionId = "exec-block",
             Executable = "sleep",
-            Arguments = { "1000" }
+            Arguments =
+            {
+                "1000"
+            }
         }, Context(cts.Token));
 
         await cts.CancelAsync();
@@ -306,7 +345,10 @@ public sealed class SandboxRuntimeServiceTests
         var (service, _) = CreateService();
         var created = await service.CreateOrAttachSandbox(CreateRequest(), Context());
 
-        await service.KillSandbox(new KillSandboxRequest { SandboxId = created.SandboxId }, Context());
+        await service.KillSandbox(new KillSandboxRequest
+        {
+            SandboxId = created.SandboxId
+        }, Context());
 
         var exception = await AssertEx.ThrowsAsync<RpcException>(() => service.ReadFile(new ReadFileRequest
         {
@@ -323,7 +365,10 @@ public sealed class SandboxRuntimeServiceTests
         var (service, _) = CreateService();
 
         // No sandbox was ever created; a kill must not throw because kill is best-effort.
-        await service.KillSandbox(new KillSandboxRequest { SandboxId = "never-existed" }, Context());
+        await service.KillSandbox(new KillSandboxRequest
+        {
+            SandboxId = "never-existed"
+        }, Context());
     }
 
     [Test]
@@ -331,7 +376,11 @@ public sealed class SandboxRuntimeServiceTests
     {
         var (service, _) = CreateService();
 
-        await service.CancelCommand(new CancelCommandRequest { SandboxId = "s1", ExecutionId = "exec-1" }, Context());
+        await service.CancelCommand(new CancelCommandRequest
+        {
+            SandboxId = "s1",
+            ExecutionId = "exec-1"
+        }, Context());
     }
 
     // --- Pure resource/network → HostConfig mapping (no Docker). ---
@@ -387,11 +436,9 @@ public sealed class SandboxRuntimeServiceTests
 
     private sealed class TestServerCallContext : ServerCallContext
     {
-        private readonly CancellationToken _cancellationToken;
-
         public TestServerCallContext(CancellationToken cancellationToken)
         {
-            _cancellationToken = cancellationToken;
+            CancellationTokenCore = cancellationToken;
         }
 
         protected override string MethodCore => "/xe.hostagent.v1.SandboxControl/Test";
@@ -399,7 +446,8 @@ public sealed class SandboxRuntimeServiceTests
         protected override string PeerCore => "test";
         protected override DateTime DeadlineCore => DateTime.MaxValue;
         protected override Metadata RequestHeadersCore => [];
-        protected override CancellationToken CancellationTokenCore => _cancellationToken;
+        protected override CancellationToken CancellationTokenCore { get; }
+
         protected override Metadata ResponseTrailersCore { get; } = [];
         protected override Status StatusCore { get; set; }
         protected override WriteOptions? WriteOptionsCore { get; set; }

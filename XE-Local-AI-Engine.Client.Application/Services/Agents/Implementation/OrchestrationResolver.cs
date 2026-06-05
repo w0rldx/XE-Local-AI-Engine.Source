@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -18,14 +17,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 {
     private const int MinimumCapableParticipants = 2;
     private const int DefaultMaxTurnsPerAgent = 8;
+    private readonly ILocalToolOfferProvider _localToolOfferProvider;
+    private readonly ILogger<OrchestrationResolver> _logger;
+    private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly PlaybookRetrievalOptions _retrievalOptions;
+    private readonly IPlaybookRetrievalRanker _retrievalRanker;
 
     private readonly IAgentDefinitionStore _store;
-    private readonly IPlaybookActionStore _playbookActionStore;
-    private readonly ILocalToolOfferProvider _localToolOfferProvider;
-    private readonly IPlaybookRetrievalRanker _retrievalRanker;
-    private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly HashSet<string> _toolCapableModels;
-    private readonly ILogger<OrchestrationResolver> _logger;
 
     public OrchestrationResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
@@ -46,13 +45,6 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         _toolCapableModels = new HashSet<string>(agentHomeOptions.Value.ToolCapableModels ?? [], StringComparer.Ordinal);
     }
-
-    /// <summary>
-    ///     A capable participant paired with the system prompt to emit for it: its base Instructions, or its
-    ///     playbook-composed prompt when its own playbook is enabled. The composition is resolved during the async
-    ///     participant load so the synchronous <see cref="ToSpecParticipant" /> can stay query-free.
-    /// </summary>
-    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions);
 
     public async Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator,
         string? activeModelId,
@@ -293,4 +285,11 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     {
         return agentDefinitionId.ToString("D");
     }
+
+    /// <summary>
+    ///     A capable participant paired with the system prompt to emit for it: its base Instructions, or its
+    ///     playbook-composed prompt when its own playbook is enabled. The composition is resolved during the async
+    ///     participant load so the synchronous <see cref="ToSpecParticipant" /> can stay query-free.
+    /// </summary>
+    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions);
 }

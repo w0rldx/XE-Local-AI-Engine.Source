@@ -67,7 +67,10 @@ public sealed class LocalChatMapperPartsTests
     [Test]
     public void ToResponse_SurfacesGenerationDurationMs()
     {
-        var message = BuildMessage(parts: null) with { GenerationDurationMs = 2000 };
+        var message = BuildMessage(parts: null) with
+        {
+            GenerationDurationMs = 2000
+        };
 
         var response = message.ToResponse();
 

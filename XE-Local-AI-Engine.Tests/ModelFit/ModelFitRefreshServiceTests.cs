@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ModelFitRefreshServiceTests
 {
     private const string ApprovedImageId = "llmfit-recommender-0-9-30";
+
     private const string ValidReference =
         "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";
 
@@ -147,8 +148,7 @@ public sealed class ModelFitRefreshServiceTests
     public async Task RefreshAsync_WhenRunnerReturnsFailed_RecordsFailedSnapshotWithoutRowsOrSuccessStamp()
     {
         var harness = Harness.Create();
-        harness.Runner.ScriptResult(new ModelFitUtilityRunResult(
-            Status: ModelFitRunStatus.Failed,
+        harness.Runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Failed,
             ExitCode: 1,
             StandardOutput: string.Empty,
             StandardError: "Error: provider unavailable",
@@ -175,8 +175,7 @@ public sealed class ModelFitRefreshServiceTests
         var harness = Harness.Create();
         harness.Runner.ScriptThrowCancellation();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None));
 
         // Exactly one snapshot was opened and it is Cancelled — NOT Failed.
         AssertEx.Equal(1, harness.SnapshotStore.Snapshots.Count);
@@ -191,8 +190,7 @@ public sealed class ModelFitRefreshServiceTests
     {
         var harness = Harness.Create();
 
-        var result = await harness.Service.RefreshAsync(
-            new ModelFitRefreshRequest(ApprovedImageId, ModelFitOperation.Benchmark, UseCase: null, Limit: 5, ProviderName: "ollama", ModelName: "llama3"),
+        var result = await harness.Service.RefreshAsync(new ModelFitRefreshRequest(ApprovedImageId, ModelFitOperation.Benchmark, UseCase: null, Limit: 5, ProviderName: "ollama", ModelName: "llama3"),
             reportProgress: null,
             CancellationToken.None);
 
@@ -215,8 +213,10 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.Equal(0, harness.Runner.RunCount);
     }
 
-    private static ModelFitRefreshRequest RecommendRequest() =>
-        new(ApprovedImageId, ModelFitOperation.Recommend, UseCase: "coding", Limit: 5, ProviderName: "ollama", ModelName: null);
+    private static ModelFitRefreshRequest RecommendRequest()
+    {
+        return new ModelFitRefreshRequest(ApprovedImageId, ModelFitOperation.Recommend, UseCase: "coding", Limit: 5, ProviderName: "ollama", ModelName: null);
+    }
 
     private sealed class Harness
     {
@@ -233,11 +233,13 @@ public sealed class ModelFitRefreshServiceTests
             var recommendationStore = new InMemoryModelFitRecommendationStore();
             var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor(enabled));
             var resolver = new ApprovedImageResolver(approvedImageStore, new ApprovedImageReferenceValidator());
-            var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$" });
+            var securityOptions = Options.Create(new SecurityOptions
+            {
+                AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
+            });
             var validator = new ModelFitRequestValidator(new ModelNameValidator(securityOptions));
 
-            var service = new ModelFitRefreshService(
-                resolver,
+            var service = new ModelFitRefreshService(resolver,
                 validator,
                 new StubCapabilityReporter(),
                 runner,
@@ -257,9 +259,9 @@ public sealed class ModelFitRefreshServiceTests
             };
         }
 
-        public void ScriptSucceeded(string standardOutput) =>
-            Runner.ScriptResult(new ModelFitUtilityRunResult(
-                Status: ModelFitRunStatus.Succeeded,
+        public void ScriptSucceeded(string standardOutput)
+        {
+            Runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Succeeded,
                 ExitCode: 0,
                 StandardOutput: standardOutput,
                 StandardError: string.Empty,
@@ -268,10 +270,11 @@ public sealed class ModelFitRefreshServiceTests
                 StartedAtUtc: null,
                 CompletedAtUtc: null,
                 SanitizedError: null));
+        }
 
-        private static ApprovedUtilityImageRecord Descriptor(bool enabled) =>
-            new(
-                ApprovedImageId: ApprovedImageId,
+        private static ApprovedUtilityImageRecord Descriptor(bool enabled)
+        {
+            return new ApprovedUtilityImageRecord(ApprovedImageId: ApprovedImageId,
                 DisplayName: "llmfit",
                 Description: null,
                 Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
@@ -286,16 +289,29 @@ public sealed class ModelFitRefreshServiceTests
                 LastUsedAtUtc: null,
                 LastSuccessfulRunAtUtc: null,
                 DiagnosticsJson: null);
+        }
     }
 
     private sealed class StubCapabilityReporter : ICapabilityReporter
     {
-        public Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ClientCapabilities { RamMb = 32_768, VramMb = 8_192, CudaAvailable = true });
+        public Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ClientCapabilities
+            {
+                RamMb = 32_768,
+                VramMb = 8_192,
+                CudaAvailable = true
+            });
+        }
 
-        public Task ReportToApiAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReportToApiAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(true);
+        public Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
     }
 }

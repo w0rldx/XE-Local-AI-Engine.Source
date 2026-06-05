@@ -22,9 +22,9 @@ internal sealed class GoldenConversationService(
     private const int MaxInputTurnsLength = 50_000;
     private const int MaxRubricLength = 20_000;
     private const int MaxAssertionLength = 20_000;
+    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
 
     private readonly IGoldenConversationStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
 
     public async Task<GoldenConversationRecord> CreateAsync(GoldenConversationCreateInput input, CancellationToken cancellationToken = default)
     {
@@ -32,14 +32,12 @@ internal sealed class GoldenConversationService(
 
         // A manual create never produces harvested provenance: pin Source=Manual regardless of the input so the manual
         // path always stamps Manual (the harvested staging path is the only producer of Harvested rows).
-        var storeInput = new GoldenConversationInput(
-            input.AgentDefinitionId,
+        var storeInput = new GoldenConversationInput(input.AgentDefinitionId,
             input.Title,
             input.InputTurns,
             input.Assertion,
             input.Rubric,
-            input.Enabled,
-            GoldenConversationSource.Manual);
+            input.Enabled);
 
         return await _store.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
     }
@@ -56,8 +54,7 @@ internal sealed class GoldenConversationService(
 
         // Stage every harvested candidate inert regardless of the input's Enabled flag: the operator approves it into the
         // active set later, so it stays out of eval runs until then (the Enabled==true runner filter).
-        var storeInput = new GoldenConversationInput(
-            input.AgentDefinitionId,
+        var storeInput = new GoldenConversationInput(input.AgentDefinitionId,
             input.Title,
             input.InputTurns,
             input.Assertion,

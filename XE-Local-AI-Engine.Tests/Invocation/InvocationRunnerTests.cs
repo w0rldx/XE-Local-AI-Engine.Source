@@ -73,7 +73,8 @@ public sealed class InvocationRunnerTests
         // The runner now stamps a wall-clock generation duration on the completion report; match it with Arg.Any so the
         // non-deterministic elapsed value does not fail the call assertion (the rest of the args stay null-checked).
         await dispatcher.Received(1)
-            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
+                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -94,7 +95,8 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
         // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
         await dispatcher.Received(1)
-            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
+                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -139,7 +141,8 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
         await dispatcher.Received(1)
-            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
+                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -212,7 +215,7 @@ public sealed class InvocationRunnerTests
         // The authoritative token counts are asserted exactly; the new wall-clock duration arg is matched with Arg.Any
         // because the elapsed value is non-deterministic.
         await dispatcher.Received(1)
-            .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(10), Arg.Is<int?>(2), Arg.Is<int?>(12), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(10), Arg.Is<int?>(2), Arg.Is<int?>(12), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
     }
 
     [Test]
@@ -555,8 +558,8 @@ public sealed class InvocationRunnerTests
         var factory = Substitute.For<IInvocationAgentFactory>();
         // The blob path in the message must never reach the surfaced error; the status code alone drives the mapping.
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(
-                   "unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null, HttpStatusCode.InternalServerError)));
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null,
+                   HttpStatusCode.InternalServerError)));
 
         var runner = CreateRunner(sender, factory);
 
@@ -572,8 +575,8 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(
-                   "unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null, HttpStatusCode.InternalServerError)));
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null,
+                   HttpStatusCode.InternalServerError)));
 
         var runner = CreateRunner(sender, factory);
 
@@ -700,7 +703,7 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        await orchestrationFactory.Received(1).CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>>(), Arg.Any<CancellationToken>());
+        await orchestrationFactory.Received(1).CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>());
         await singleAgentFactory.DidNotReceive().CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
@@ -721,7 +724,7 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        await orchestrationFactory.DidNotReceive().CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>>(), Arg.Any<CancellationToken>());
+        await orchestrationFactory.DidNotReceive().CreateAsync(Arg.Any<OrchestrationAgentDefinition>(), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>());
         await singleAgentFactory.Received(1).CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
         AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
     }
@@ -1178,7 +1181,10 @@ public sealed class InvocationRunnerTests
         // the runner must detect this, run the approval round-trip, and resume threadlessly.
         var toolCall = new ToolCallContent("call-run-in-agent-home");
         var approvalRequest = new ToolApprovalRequestContent("approval-run-in-agent-home", toolCall);
-        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent> { approvalRequest });
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            approvalRequest
+        });
         await Task.Yield();
     }
 
@@ -1255,7 +1261,10 @@ public sealed class InvocationRunnerTests
 
     private static IOrchestrationAgentFactory CreateOrchestrationFactory(FakeOrchestrationRunSession session, out Ref<FakeOrchestrationRunSession> sessionRef)
     {
-        var capturedRef = new Ref<FakeOrchestrationRunSession> { Value = session };
+        var capturedRef = new Ref<FakeOrchestrationRunSession>
+        {
+            Value = session
+        };
         sessionRef = capturedRef;
 
         var factory = Substitute.For<IOrchestrationAgentFactory>();
@@ -1324,7 +1333,15 @@ public sealed class InvocationRunnerTests
                     Tools = []
                 }
             ],
-            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b", Reason = "specialist work" }]
+            Edges =
+            [
+                new OrchestrationSpecEdge
+                {
+                    FromKey = "a",
+                    ToKey = "b",
+                    Reason = "specialist work"
+                }
+            ]
         };
     }
 

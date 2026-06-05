@@ -10,12 +10,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
-using XE_Local_AI_Engine.Client;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
@@ -27,10 +24,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 /// </summary>
 public sealed class ModelRecommendationScheduleSeederTests : IDisposable
 {
-    private readonly string _rootPath = Path.Combine(
-        Path.GetTempPath(), "xe-sched-seed-" + Guid.NewGuid().ToString("N"));
-
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
+
+    private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-sched-seed-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
@@ -63,8 +59,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
         var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
         var jobKey = new JobKey(seeded[0].Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "The seeded Manual job must be registered as a durable Quartz job.");
         var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
         AssertEx.Equal(0, triggers.Count, "The seeded Manual job must have no trigger.");
@@ -136,8 +131,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         {
             options.UseSqlite($"Data Source={dbPath}")
                    .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                   .AddInterceptors(
-                       sp.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                   .AddInterceptors(sp.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
                        sp.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
 
@@ -155,17 +149,19 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         return services.BuildServiceProvider();
     }
 
-    private static IConfiguration BuildConfig(string connectionString) =>
-        new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Scheduler:Enabled"] = "true",
-                ["Scheduler:MaxConcurrency"] = "2",
-                ["Scheduler:DefaultMaxRuntimeMinutes"] = "5",
-                ["Scheduler:QuartzTablePrefix"] = "QRTZ_",
-                ["ConnectionStrings:node-sqlite"] = connectionString
-            })
-            .Build();
+    private static IConfiguration BuildConfig(string connectionString)
+    {
+        return new ConfigurationBuilder()
+               .AddInMemoryCollection(new Dictionary<string, string?>
+               {
+                   ["Scheduler:Enabled"] = "true",
+                   ["Scheduler:MaxConcurrency"] = "2",
+                   ["Scheduler:DefaultMaxRuntimeMinutes"] = "5",
+                   ["Scheduler:QuartzTablePrefix"] = "QRTZ_",
+                   ["ConnectionStrings:node-sqlite"] = connectionString
+               })
+               .Build();
+    }
 
     /// <summary>
     ///     Minimal <see cref="IHostApplicationBuilder" /> shim mirroring the one in
@@ -180,8 +176,9 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         public IDictionary<object, object> Properties { get; } = new Dictionary<object, object>();
         public IMetricsBuilder Metrics { get; } = Substitute.For<IMetricsBuilder>();
 
-        public void ConfigureContainer<TContainerBuilder>(
-            IServiceProviderFactory<TContainerBuilder> factory,
-            Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull { }
+        public void ConfigureContainer<TContainerBuilder>(IServiceProviderFactory<TContainerBuilder> factory,
+            Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull
+        {
+        }
     }
 }

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -112,7 +113,10 @@ public sealed class McpServerStoreTests : IDisposable
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
             var store = new McpServerStore(context, TimeProvider.System);
-            var added = await store.AddAsync(CreateStdioInput() with { Description = null });
+            var added = await store.AddAsync(CreateStdioInput() with
+            {
+                Description = null
+            });
             serverId = added.Id;
         }
 
@@ -140,8 +144,14 @@ public sealed class McpServerStoreTests : IDisposable
             _ = await store.AddAsync(CreateStdioInput() with
             {
                 Description = secretDescription,
-                Arguments = new[] { secretArg },
-                Environment = new Dictionary<string, string> { ["TOKEN"] = secretEnv }
+                Arguments = new[]
+                {
+                    secretArg
+                },
+                Environment = new Dictionary<string, string>
+                {
+                    ["TOKEN"] = secretEnv
+                }
             });
         }
 
@@ -170,8 +180,10 @@ public sealed class McpServerStoreTests : IDisposable
         AssertEx.Equal(1, added.Version);
 
         clock.Advance(50);
-        var updated = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateStdioInput() with { Command = "node" }),
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
+            {
+                Command = "node"
+            }),
             "Update should find the server.");
 
         AssertEx.Equal(2, updated.Version);
@@ -193,8 +205,11 @@ public sealed class McpServerStoreTests : IDisposable
         var added = await store.AddAsync(CreateStdioInput());
 
         clock.Advance(25);
-        var updated = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateStdioInput() with { Name = "renamed", Description = "New description only." }),
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
+            {
+                Name = "renamed",
+                Description = "New description only."
+            }),
             "Update should find the server.");
 
         AssertEx.Equal("renamed", updated.Name);
@@ -217,16 +232,25 @@ public sealed class McpServerStoreTests : IDisposable
 
         var added = await store.AddAsync(CreateStdioInput() with
         {
-            Environment = new Dictionary<string, string> { ["ALPHA"] = "1", ["BRAVO"] = "2", ["CHARLIE"] = "3" }
+            Environment = new Dictionary<string, string>
+            {
+                ["ALPHA"] = "1",
+                ["BRAVO"] = "2",
+                ["CHARLIE"] = "3"
+            }
         });
         AssertEx.Equal(1, added.Version);
 
         // Same environment entries, different key insertion order — must be treated as no connection change.
         clock.Advance(10);
-        var reordered = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateStdioInput() with
+        var reordered = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
             {
-                Environment = new Dictionary<string, string> { ["CHARLIE"] = "3", ["ALPHA"] = "1", ["BRAVO"] = "2" }
+                Environment = new Dictionary<string, string>
+                {
+                    ["CHARLIE"] = "3",
+                    ["ALPHA"] = "1",
+                    ["BRAVO"] = "2"
+                }
             }),
             "Update should find the server.");
 
@@ -234,10 +258,14 @@ public sealed class McpServerStoreTests : IDisposable
 
         // Changing an actual environment value is a real connection change and must bump the version.
         clock.Advance(10);
-        var changed = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateStdioInput() with
+        var changed = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
             {
-                Environment = new Dictionary<string, string> { ["ALPHA"] = "9", ["BRAVO"] = "2", ["CHARLIE"] = "3" }
+                Environment = new Dictionary<string, string>
+                {
+                    ["ALPHA"] = "9",
+                    ["BRAVO"] = "2",
+                    ["CHARLIE"] = "3"
+                }
             }),
             "Update should find the server.");
 
@@ -261,8 +289,10 @@ public sealed class McpServerStoreTests : IDisposable
         AssertEx.Equal(1, added.Version);
 
         clock.Advance(10);
-        var enabled = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateStdioInput() with { Enabled = true }),
+        var enabled = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
+            {
+                Enabled = true
+            }),
             "Update should find the server.");
 
         AssertEx.True(enabled.Enabled, "Enabling should persist the enabled flag.");
@@ -313,14 +343,24 @@ public sealed class McpServerStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new McpServerStore(context, TimeProvider.System);
 
-        var first = await store.AddAsync(CreateStdioInput() with { Name = "first" });
-        _ = await store.AddAsync(CreateStdioInput() with { Name = "second" });
+        var first = await store.AddAsync(CreateStdioInput() with
+        {
+            Name = "first"
+        });
+        _ = await store.AddAsync(CreateStdioInput() with
+        {
+            Name = "second"
+        });
 
         // Both are registered disabled, so the enabled set is empty until one is enabled.
         var beforeEnable = await store.ListEnabledAsync();
         AssertEx.Equal(0, beforeEnable.Count);
 
-        _ = await store.UpdateAsync(first.Id, CreateStdioInput() with { Name = "first", Enabled = true });
+        _ = await store.UpdateAsync(first.Id, CreateStdioInput() with
+        {
+            Name = "first",
+            Enabled = true
+        });
 
         var afterEnable = await store.ListEnabledAsync();
         AssertEx.Equal(1, afterEnable.Count);
@@ -339,14 +379,19 @@ public sealed class McpServerStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new McpServerStore(context, TimeProvider.System);
 
-        _ = await store.AddAsync(CreateStdioInput() with { Name = "Weather" });
+        _ = await store.AddAsync(CreateStdioInput() with
+        {
+            Name = "Weather"
+        });
 
         // The unique index on name uses NOCASE collation, so a case-only-different name collides with the existing
         // row and SQLite rejects the insert — matching the application service's case-insensitive name handling.
-        var exception = AssertEx.Throws<DbUpdateException>(
-            () => store.AddAsync(CreateStdioInput() with { Name = "weather" }).GetAwaiter().GetResult(),
+        var exception = AssertEx.Throws<DbUpdateException>(() => store.AddAsync(CreateStdioInput() with
+            {
+                Name = "weather"
+            }).GetAwaiter().GetResult(),
             "A name differing only in case must be rejected as a duplicate.");
-        AssertEx.True(exception.InnerException is Microsoft.Data.Sqlite.SqliteException,
+        AssertEx.True(exception.InnerException is SqliteException,
             "The duplicate should surface as a SQLite unique-constraint violation.");
     }
 
@@ -372,8 +417,7 @@ public sealed class McpServerStoreTests : IDisposable
         var descriptionBefore = await ReadRawBlobAsync(databasePath, "description");
 
         clock.Advance(10);
-        var enabled = AssertEx.NotNull(
-            await store.SetEnabledAsync(added.Id, enabled: true),
+        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true),
             "SetEnabled should find the server.");
 
         AssertEx.True(enabled.Enabled, "Enabling should persist the enabled flag.");
@@ -394,15 +438,13 @@ public sealed class McpServerStoreTests : IDisposable
         // A second SetEnabled to the same value is a no-op for Version (no over-invalidation), and the secrets still
         // decrypt correctly across the whole sequence — proving the untouched ciphertext is still valid.
         clock.Advance(10);
-        var unchanged = AssertEx.NotNull(
-            await store.SetEnabledAsync(added.Id, enabled: true),
+        var unchanged = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true),
             "SetEnabled should find the server.");
         AssertEx.Equal(2, unchanged.Version);
 
         // Disabling again is a real change and bumps Version once more (so an enable/disable cycle is +2 total, not +4).
         clock.Advance(10);
-        var disabled = AssertEx.NotNull(
-            await store.SetEnabledAsync(added.Id, enabled: false),
+        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: false),
             "SetEnabled should find the server.");
         AssertEx.False(disabled.Enabled, "Disabling should clear the enabled flag.");
         AssertEx.Equal(3, disabled.Version);
@@ -451,29 +493,33 @@ public sealed class McpServerStoreTests : IDisposable
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new McpServerStore(readContext, TimeProvider.System);
 
-        _ = AssertEx.Throws<CryptographicException>(
-            () => readStore.GetByIdAsync(serverId).GetAwaiter().GetResult(),
+        _ = AssertEx.Throws<CryptographicException>(() => readStore.GetByIdAsync(serverId).GetAwaiter().GetResult(),
             "Tampered arguments ciphertext should fail authenticated decryption.");
     }
 
     private static McpServerInput CreateStdioInput()
     {
-        return new McpServerInput(
-            "filesystem",
+        return new McpServerInput("filesystem",
             Description,
             McpTransportKind.Stdio,
             Command: "npx",
-            Arguments: new[] { "--root", "repo" },
+            Arguments: new[]
+            {
+                "--root",
+                "repo"
+            },
             WorkingDirectory: "work-dir",
-            Environment: new Dictionary<string, string> { ["API_TOKEN"] = "s3cr3t" },
+            Environment: new Dictionary<string, string>
+            {
+                ["API_TOKEN"] = "s3cr3t"
+            },
             Url: null,
             Enabled: false);
     }
 
     private static McpServerInput CreateHttpInput()
     {
-        return new McpServerInput(
-            "playwright",
+        return new McpServerInput("playwright",
             Description: null,
             McpTransportKind.Http,
             Command: null,
@@ -487,7 +533,7 @@ public sealed class McpServerStoreTests : IDisposable
     private static async Task TamperArgumentsAsync(string databasePath)
     {
         // The test database holds exactly one registration, so the corruption targets that single row.
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
 
         byte[] blob;
@@ -518,7 +564,7 @@ public sealed class McpServerStoreTests : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(column), column, "Unsupported blob column.")
         };
 
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
 
         await using var command = connection.CreateCommand();

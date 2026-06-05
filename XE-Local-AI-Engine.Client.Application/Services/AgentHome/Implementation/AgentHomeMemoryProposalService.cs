@@ -11,7 +11,13 @@ using System.Text.Json.Nodes;
 /// </summary>
 internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalService
 {
-    private static readonly JsonDocumentOptions JsonDocOptions = new() { AllowTrailingCommas = false };
+    private const int MaxContentLength = 4000;
+    private const int MinContentLength = 1;
+
+    private static readonly JsonDocumentOptions JsonDocOptions = new()
+    {
+        AllowTrailingCommas = false
+    };
 
     // Valid closed-enum values for the proposal schema.
     private static readonly HashSet<string> ValidTypes = new(StringComparer.Ordinal)
@@ -34,9 +40,6 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         "high"
     };
 
-    private const int MaxContentLength = 4000;
-    private const int MinContentLength = 1;
-
     private readonly ILogger<AgentHomeMemoryProposalService> _logger;
 
     public AgentHomeMemoryProposalService(ILogger<AgentHomeMemoryProposalService> logger)
@@ -44,8 +47,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<MemoryProposalCollectResult> CollectAsync(
-        MemoryProposalCollectRequest request,
+    public async Task<MemoryProposalCollectResult> CollectAsync(MemoryProposalCollectRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -55,8 +57,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         if (!Directory.Exists(proposalsDirectory))
         {
             // No proposals directory means the agent wrote nothing — not an error.
-            _logger.LogDebug(
-                "No memory/proposals directory found for run {RunId}; returning empty result.",
+            _logger.LogDebug("No memory/proposals directory found for run {RunId}; returning empty result.",
                 request.RunId);
             return EmptyResult();
         }
@@ -85,8 +86,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
                 .ConfigureAwait(false);
         }
 
-        _logger.LogInformation(
-            "Memory proposal collection for run {RunId}: {ProposalCount} accepted, {RejectionCount} rejected.",
+        _logger.LogInformation("Memory proposal collection for run {RunId}: {ProposalCount} accepted, {RejectionCount} rejected.",
             request.RunId,
             proposals.Count,
             rejections.Count);
@@ -98,8 +98,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         };
     }
 
-    private async Task ReadJsonlFileAsync(
-        string filePath,
+    private async Task ReadJsonlFileAsync(string filePath,
         string fileName,
         List<MemoryProposalRecord> proposals,
         List<MemoryProposalRejection> rejections,
@@ -128,8 +127,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
             var rejection = TryParseLine(line, fileName, i, out var record);
             if (rejection is not null)
             {
-                _logger.LogDebug(
-                    "Proposal line {LineIndex} in {FileName} rejected: {Reason}",
+                _logger.LogDebug("Proposal line {LineIndex} in {FileName} rejected: {Reason}",
                     i,
                     fileName,
                     rejection.Reason);
@@ -146,8 +144,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
     ///     Parses and validates one JSONL line. Returns a <see cref="MemoryProposalRejection" /> when the record must be
     ///     rejected, or <see langword="null" /> on success (with <paramref name="record" /> set).
     /// </summary>
-    private static MemoryProposalRejection? TryParseLine(
-        string line,
+    private static MemoryProposalRejection? TryParseLine(string line,
         string fileName,
         int lineIndex,
         out MemoryProposalRecord? record)

@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.HostAgent;
 
-using global::Grpc.Core;
+using Grpc.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
@@ -24,8 +24,7 @@ public sealed class ModelFitUtilityControlServiceTests
     private static (ModelFitUtilityControlService Service, FakeDockerRuntimeClient Docker) CreateService(ModelFitUtilityOptions? options = null)
     {
         var docker = new FakeDockerRuntimeClient(TimeProvider.System);
-        var service = new ModelFitUtilityControlService(
-            docker,
+        var service = new ModelFitUtilityControlService(docker,
             Options.Create(options ?? new ModelFitUtilityOptions()),
             TimeProvider.System,
             NullLogger<ModelFitUtilityControlService>.Instance);
@@ -106,7 +105,10 @@ public sealed class ModelFitUtilityControlServiceTests
     [Test]
     public async Task RunModelFitUtility_RecommendArgv_ClampsLimitToMax()
     {
-        var (service, docker) = CreateService(new ModelFitUtilityOptions { MaxRecommendLimit = 10 });
+        var (service, docker) = CreateService(new ModelFitUtilityOptions
+        {
+            MaxRecommendLimit = 10
+        });
         var request = RecommendRequest();
         request.Limit = 999;
 
@@ -218,7 +220,10 @@ public sealed class ModelFitUtilityControlServiceTests
     [Test]
     public async Task RunModelFitUtility_WhenTimeoutElapses_ReturnsTimedOutAndRemovesContainer()
     {
-        var (service, docker) = CreateService(new ModelFitUtilityOptions { DefaultMaxRuntimeSeconds = 600 });
+        var (service, docker) = CreateService(new ModelFitUtilityOptions
+        {
+            DefaultMaxRuntimeSeconds = 600
+        });
         docker.ScriptBlockingUtilityRun();
 
         // A tiny per-request timeout drives the timeout branch (distinct from a caller cancel).
@@ -236,7 +241,10 @@ public sealed class ModelFitUtilityControlServiceTests
     [Test]
     public async Task RunModelFitUtility_WhenFailedAndRetainDebugOff_RemovesContainer()
     {
-        var (service, docker) = CreateService(new ModelFitUtilityOptions { RetainFailedContainersForDebug = false });
+        var (service, docker) = CreateService(new ModelFitUtilityOptions
+        {
+            RetainFailedContainersForDebug = false
+        });
         docker.ScriptUtilityRun(1, string.Empty, "Error: provider unavailable");
 
         var reply = await service.RunModelFitUtility(RecommendRequest(), Context());
@@ -251,7 +259,10 @@ public sealed class ModelFitUtilityControlServiceTests
     [Test]
     public async Task RunModelFitUtility_WhenFailedAndRetainDebugOn_KeepsContainer()
     {
-        var (service, docker) = CreateService(new ModelFitUtilityOptions { RetainFailedContainersForDebug = true });
+        var (service, docker) = CreateService(new ModelFitUtilityOptions
+        {
+            RetainFailedContainersForDebug = true
+        });
         docker.ScriptUtilityRun(2, string.Empty, "error: bad arg");
 
         var reply = await service.RunModelFitUtility(RecommendRequest(), Context());
@@ -268,11 +279,20 @@ public sealed class ModelFitUtilityControlServiceTests
         // The narrow contract must never expose a command/argv/executable/image-name field — the argv is built
         // server-side. Asserting on the generated proto type pins this invariant: only the intent fields exist.
         var properties = typeof(RunModelFitUtilityRequest)
-            .GetProperties()
-            .Select(property => property.Name)
-            .ToArray();
+                         .GetProperties()
+                         .Select(property => property.Name)
+                         .ToArray();
 
-        foreach (var forbidden in new[] { "Command", "Arguments", "Argv", "Executable", "ImageName", "Cmd", "Shell" })
+        foreach (var forbidden in new[]
+                 {
+                     "Command",
+                     "Arguments",
+                     "Argv",
+                     "Executable",
+                     "ImageName",
+                     "Cmd",
+                     "Shell"
+                 })
         {
             AssertEx.False(properties.Contains(forbidden), $"the request must not expose a '{forbidden}' field.");
         }
@@ -288,11 +308,9 @@ public sealed class ModelFitUtilityControlServiceTests
 
     private sealed class TestServerCallContext : ServerCallContext
     {
-        private readonly CancellationToken _cancellationToken;
-
         public TestServerCallContext(CancellationToken cancellationToken)
         {
-            _cancellationToken = cancellationToken;
+            CancellationTokenCore = cancellationToken;
         }
 
         protected override string MethodCore => "/xe.hostagent.v1.ModelFitUtilityControl/Test";
@@ -300,7 +318,8 @@ public sealed class ModelFitUtilityControlServiceTests
         protected override string PeerCore => "test";
         protected override DateTime DeadlineCore => DateTime.MaxValue;
         protected override Metadata RequestHeadersCore => [];
-        protected override CancellationToken CancellationTokenCore => _cancellationToken;
+        protected override CancellationToken CancellationTokenCore { get; }
+
         protected override Metadata ResponseTrailersCore { get; } = [];
         protected override Status StatusCore { get; set; }
         protected override WriteOptions? WriteOptionsCore { get; set; }

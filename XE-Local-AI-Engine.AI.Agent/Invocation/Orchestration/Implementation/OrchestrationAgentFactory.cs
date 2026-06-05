@@ -149,7 +149,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             }
         }
 
-        _ = builder.EmitAgentResponseEvents(true);
+        _ = builder.EmitAgentResponseEvents();
         _ = builder.EmitAgentResponseUpdateEvents(definition.EmitStreamingUpdates);
 
         if (definition.MaxTurnsPerAgent > 0)

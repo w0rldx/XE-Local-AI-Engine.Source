@@ -30,7 +30,8 @@ public interface IOrchestrationResolver
     ///     tool offer is withheld (the model cannot drive tool calls), independent of the existing per-tool
     ///     <c>ToolCapableModels</c> name allow-list. Defaults to <c>true</c> so callers that do not gate keep today's behaviour.
     /// </param>
-    Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, CancellationToken cancellationToken = default);
+    Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

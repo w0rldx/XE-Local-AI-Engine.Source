@@ -128,8 +128,16 @@ public sealed class FakeSandboxRuntimeProviderTests
         provider.WriteHostFile("/host/a", "a");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/b", DestinationPath = "/agent-home/b" });
-        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/a", DestinationPath = "/agent-home/a" });
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "/host/b",
+            DestinationPath = "/agent-home/b"
+        });
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "/host/a",
+            DestinationPath = "/agent-home/a"
+        });
 
         var paths = provider.SnapshotSandboxPaths(handle);
 
@@ -144,8 +152,18 @@ public sealed class FakeSandboxRuntimeProviderTests
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        await provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "c1", Executable = "git", Arguments = ["init"] });
-        await provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "c2", Executable = "git", Arguments = ["status"] });
+        await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "c1",
+            Executable = "git",
+            Arguments = ["init"]
+        });
+        await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "c2",
+            Executable = "git",
+            Arguments = ["status"]
+        });
 
         var commands = provider.ExecutedCommands;
 
@@ -198,7 +216,11 @@ public sealed class FakeSandboxRuntimeProviderTests
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
         provider.WriteHostFile("/host/file", "data");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
-        await provider.CopyIntoAsync(handle, new SandboxCopyRequest { SourcePath = "/host/file", DestinationPath = "/agent-home/file" });
+        await provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = "/host/file",
+            DestinationPath = "/agent-home/file"
+        });
 
         await provider.KillAsync(handle);
 
@@ -212,7 +234,11 @@ public sealed class FakeSandboxRuntimeProviderTests
         provider.RegisterBlockingCommand("sleep");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        var executeTask = provider.ExecuteAsync(handle, new SandboxCommandRequest { ExecutionId = "block-3", Executable = "sleep" });
+        var executeTask = provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "block-3",
+            Executable = "sleep"
+        });
         await provider.KillAsync(handle);
         var result = await executeTask;
 
@@ -225,7 +251,11 @@ public sealed class FakeSandboxRuntimeProviderTests
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
         provider.WriteHostFile("/host/secret", "owner-a secret");
         var handleA = await provider.CreateOrAttachAsync(CreateRequest(Key(owner: "owner-a")));
-        await provider.CopyIntoAsync(handleA, new SandboxCopyRequest { SourcePath = "/host/secret", DestinationPath = "/agent-home/secret" });
+        await provider.CopyIntoAsync(handleA, new SandboxCopyRequest
+        {
+            SourcePath = "/host/secret",
+            DestinationPath = "/agent-home/secret"
+        });
 
         var handleB = await provider.CreateOrAttachAsync(CreateRequest(Key(owner: "owner-b")));
 

@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -156,8 +155,7 @@ public sealed class ModelFitQueryServiceTests
             var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor());
             var ollamaModelService = new FakeOllamaModelService(installedModelNames, throwOnList);
 
-            var service = new ModelFitQueryService(
-                approvedImageStore,
+            var service = new ModelFitQueryService(approvedImageStore,
                 snapshotStore,
                 recommendationStore,
                 ollamaModelService,
@@ -178,13 +176,13 @@ public sealed class ModelFitQueryServiceTests
             var summary = SnapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(
                 ApprovedImageId, ModelFitOperation.Recommend, useCase, ProviderName, ModelName: null, ModelFitRunStatus.Running, StartedAtUtc: 1L)).GetAwaiter().GetResult();
             SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: "{}", stderrExcerpt: null, diagnosticsJson: "{}", completedAtUtc: 2L)
-                .GetAwaiter().GetResult();
+                         .GetAwaiter().GetResult();
             return summary.Id;
         }
 
-        private static ApprovedUtilityImageRecord Descriptor() =>
-            new(
-                ApprovedImageId: ApprovedImageId,
+        private static ApprovedUtilityImageRecord Descriptor()
+        {
+            return new ApprovedUtilityImageRecord(ApprovedImageId: ApprovedImageId,
                 DisplayName: "llmfit",
                 Description: null,
                 Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
@@ -199,6 +197,7 @@ public sealed class ModelFitQueryServiceTests
                 LastUsedAtUtc: null,
                 LastSuccessfulRunAtUtc: null,
                 DiagnosticsJson: null);
+        }
     }
 
     /// <summary>
@@ -209,14 +208,20 @@ public sealed class ModelFitQueryServiceTests
     {
         private readonly InMemoryModelFitRecommendationStore _inner = new();
 
-        public void Seed(Guid snapshotId, params ModelFitRecommendationInput[] rows) =>
+        public Task<int> ReplaceForSnapshotAsync(Guid snapshotId, IReadOnlyList<ModelFitRecommendationInput> recommendations, CancellationToken cancellationToken = default)
+        {
+            return _inner.ReplaceForSnapshotAsync(snapshotId, recommendations, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<ModelFitRecommendationRecord>> ListForSnapshotAsync(Guid snapshotId, CancellationToken cancellationToken = default)
+        {
+            return _inner.ListForSnapshotAsync(snapshotId, cancellationToken);
+        }
+
+        public void Seed(Guid snapshotId, params ModelFitRecommendationInput[] rows)
+        {
             _inner.ReplaceForSnapshotAsync(snapshotId, rows).GetAwaiter().GetResult();
-
-        public Task<int> ReplaceForSnapshotAsync(Guid snapshotId, IReadOnlyList<ModelFitRecommendationInput> recommendations, CancellationToken cancellationToken = default) =>
-            _inner.ReplaceForSnapshotAsync(snapshotId, recommendations, cancellationToken);
-
-        public Task<IReadOnlyList<ModelFitRecommendationRecord>> ListForSnapshotAsync(Guid snapshotId, CancellationToken cancellationToken = default) =>
-            _inner.ListForSnapshotAsync(snapshotId, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -235,22 +240,35 @@ public sealed class ModelFitQueryServiceTests
                 throw new InvalidOperationException("Ollama unreachable (test).");
             }
 
-            return Task.FromResult(_installed.Select(name => new Model { Name = name }));
+            return Task.FromResult(_installed.Select(name => new Model
+            {
+                Name = name
+            }));
         }
 
-        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default) =>
+        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default)
+        {
             throw new NotSupportedException();
+        }
 
-        public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default) =>
+        public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)
+        {
             throw new NotSupportedException();
+        }
 
-        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default) =>
+        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default)
+        {
             throw new NotSupportedException();
+        }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct = default) =>
+        public Task DeleteModelAsync(string modelName, CancellationToken ct = default)
+        {
             throw new NotSupportedException();
+        }
 
-        public Task<bool> IsAvailableAsync(CancellationToken ct = default) =>
+        public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+        {
             throw new NotSupportedException();
+        }
     }
 }

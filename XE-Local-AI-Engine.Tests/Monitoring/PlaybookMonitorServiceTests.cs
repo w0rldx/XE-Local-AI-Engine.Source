@@ -164,7 +164,11 @@ public sealed class PlaybookMonitorServiceTests
 
     private static IOptions<PlaybookMonitorOptions> DefaultOptions()
     {
-        return Options.Create(new PlaybookMonitorOptions { ImprovementEpsilon = 0.05d, MinSampleSize = 3 });
+        return Options.Create(new PlaybookMonitorOptions
+        {
+            ImprovementEpsilon = 0.05d,
+            MinSampleSize = 3
+        });
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, long? enabledAtUtc, string? scope)

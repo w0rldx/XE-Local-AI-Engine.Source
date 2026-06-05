@@ -60,7 +60,9 @@ public sealed partial class NodeChatPersistenceService
             return null;
         }
 
-        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName, reasoningEffort, generationDurationMs),
+        return Encode(JsonSerializer.Serialize(
+            new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName, reasoningEffort,
+                generationDurationMs),
             MetadataJsonOptions));
     }
 

@@ -7,10 +7,10 @@ using global::Docker.DotNet;
 using global::Grpc.Core;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 using ProtoNetworkMode = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.SandboxNetworkMode;
+using SandboxNetworkMode = XE_Local_AI_Engine.HostAgent.Linux.Docker.SandboxNetworkMode;
 
 /// <summary>
 ///     Serves the <c>SandboxControl</c> gRPC contract by translating proto requests into
@@ -27,10 +27,10 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
     // docker/Dockerfile.agent-home-dotnet creates the "agent" user. Setting it here (not relying solely on the
     // image's baked USER) makes the non-root guarantee explicit and create-time, for the sandbox hardening guarantee.
     private const string NonRootUser = "agent";
+    private readonly ILogger<SandboxRuntimeService> _logger;
 
     private readonly IDockerRuntimeClient _runtimeClient;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<SandboxRuntimeService> _logger;
 
     public SandboxRuntimeService(IDockerRuntimeClient runtimeClient,
         TimeProvider timeProvider,
@@ -54,7 +54,7 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
             try
             {
                 containerId = await _runtimeClient.CreateSandboxContainerAsync(BuildSpec(request, containerName, attachKey), context.CancellationToken)
-                                                 .ConfigureAwait(false);
+                                                  .ConfigureAwait(false);
             }
             catch (DockerApiException exception)
             {
@@ -157,7 +157,10 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
         RequireSandboxId(request.SandboxId);
 
         var content = await ReadBytesAsync(request.SandboxId, request.SandboxPath, context.CancellationToken).ConfigureAwait(false);
-        return new ReadFileReply { Content = UnsafeByteOperations.UnsafeWrap(content) };
+        return new ReadFileReply
+        {
+            Content = UnsafeByteOperations.UnsafeWrap(content)
+        };
     }
 
     public override async Task<ReadFileReply> CopyOut(CopyOutRequest request, ServerCallContext context)
@@ -166,7 +169,10 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
         RequireSandboxId(request.SandboxId);
 
         var content = await ReadBytesAsync(request.SandboxId, request.SourcePath, context.CancellationToken).ConfigureAwait(false);
-        return new ReadFileReply { Content = UnsafeByteOperations.UnsafeWrap(content) };
+        return new ReadFileReply
+        {
+            Content = UnsafeByteOperations.UnsafeWrap(content)
+        };
     }
 
     public override Task<Empty> CancelCommand(CancelCommandRequest request, ServerCallContext context)
@@ -307,8 +313,8 @@ public sealed class SandboxRuntimeService : SandboxControl.SandboxControlBase
             MemoryMb = request.Limits is { MemoryMb: > 0 } ? request.Limits.MemoryMb : null,
             PidsLimit = request.Limits is { PidsLimit: > 0 } ? request.Limits.PidsLimit : null,
             NetworkMode = request.Network == ProtoNetworkMode.Restricted
-                ? Docker.SandboxNetworkMode.Restricted
-                : Docker.SandboxNetworkMode.None,
+                ? SandboxNetworkMode.Restricted
+                : SandboxNetworkMode.None,
             Labels = labels,
             Environment = new Dictionary<string, string>(StringComparer.Ordinal)
         };

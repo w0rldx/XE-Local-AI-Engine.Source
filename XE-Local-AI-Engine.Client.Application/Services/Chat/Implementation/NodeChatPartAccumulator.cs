@@ -1,14 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
-
 /// <summary>
 ///     Accumulates the ordered interleave of reasoning segments and tool cards for a single assistant turn so the
 ///     terminal persist can write a <see cref="NodeChatMessagePart" /> list (the render source of truth on reload).
 ///     The local front doors (<c>NodeChatStreamService</c> / <c>NodeChatRegenerationService</c>) are the only place
 ///     that observes BOTH producers of the turn — the reasoning deltas fanned out by the persistence pump and the
 ///     tool-call lifecycle events — so accumulation lives here, fed by both handlers under one lock.
-///
 ///     Ordering model (Option A): reasoning deltas extend the trailing reasoning segment; a tool event between two
 ///     reasoning runs closes the current reasoning segment, so a turn can show more than one Thoughts block. Tool
 ///     calls collapse requested-&gt;completed by tool-call id (the completed phase fills the result), guarding the
@@ -18,8 +15,23 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 public sealed class NodeChatPartAccumulator
 {
     private readonly List<MutablePart> _parts = [];
-    private readonly Dictionary<string, MutablePart> _toolPartsByCallId = new(StringComparer.Ordinal);
     private readonly object _syncRoot = new();
+    private readonly Dictionary<string, MutablePart> _toolPartsByCallId = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     Whether any part was accumulated. The caller persists an empty interleave only when the turn produced no
+    ///     parts at all (a plain-text answer) by passing the snapshot regardless; this lets it skip the call cheaply.
+    /// </summary>
+    public bool HasParts
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _parts.Count > 0;
+            }
+        }
+    }
 
     /// <summary>
     ///     Appends a reasoning delta. Extends the trailing reasoning segment, or opens a new one when the turn has no
@@ -43,7 +55,10 @@ public sealed class NodeChatPartAccumulator
 
             // Parts are appended in insertion order (concurrent feed), but Snapshot() reconciles global order via
             // OrderBy(Sequence), so the "preserves global order" guarantee holds even under concurrent producers.
-            _parts.Add(new MutablePart(NodeChatMessagePartKinds.Reasoning, sequence) { Text = delta });
+            _parts.Add(new MutablePart(NodeChatMessagePartKinds.Reasoning, sequence)
+            {
+                Text = delta
+            });
         }
     }
 
@@ -102,21 +117,6 @@ public sealed class NodeChatPartAccumulator
             };
             _parts.Add(part);
             _toolPartsByCallId[toolCallId] = part;
-        }
-    }
-
-    /// <summary>
-    ///     Whether any part was accumulated. The caller persists an empty interleave only when the turn produced no
-    ///     parts at all (a plain-text answer) by passing the snapshot regardless; this lets it skip the call cheaply.
-    /// </summary>
-    public bool HasParts
-    {
-        get
-        {
-            lock (_syncRoot)
-            {
-                return _parts.Count > 0;
-            }
         }
     }
 

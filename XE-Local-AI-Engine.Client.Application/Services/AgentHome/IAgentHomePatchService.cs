@@ -11,8 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </summary>
 internal interface IAgentHomePatchService
 {
-    Task<AgentHomePatchExport> ExportPatchAsync(
-        SandboxHandle handle,
+    Task<AgentHomePatchExport> ExportPatchAsync(SandboxHandle handle,
         AgentHomePatchExportRequest request,
         CancellationToken cancellationToken = default);
 }

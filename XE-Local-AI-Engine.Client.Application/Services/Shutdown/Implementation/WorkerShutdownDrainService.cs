@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;

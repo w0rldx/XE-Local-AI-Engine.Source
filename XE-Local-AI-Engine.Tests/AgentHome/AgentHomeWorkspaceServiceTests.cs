@@ -163,23 +163,19 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         // Every baseline command runs in the selected workspace with the byte-stabilizing git flags so a copied
         // .gitattributes cannot perturb the baseline (and thus the later diff) bytes.
         AssertEx.True(gitCommands.Length > 0, "the baseline must issue git commands");
-        AssertEx.True(
-            gitCommands.All(command => command.WorkingDirectory == "/agent-home/workspace/selected"),
+        AssertEx.True(gitCommands.All(command => command.WorkingDirectory == "/agent-home/workspace/selected"),
             "every baseline command runs in the selected workspace");
-        AssertEx.True(
-            gitCommands.All(command => HasHardenedFlags(command.Arguments)),
+        AssertEx.True(gitCommands.All(command => HasHardenedFlags(command.Arguments)),
             "every baseline command carries -c core.hooksPath=/dev/null and -c core.attributesfile=/dev/null");
 
         AssertEx.True(IssuesArgument(gitCommands, "init"), "git init must run");
-        AssertEx.True(
-            gitCommands.Any(command => command.Arguments.Contains("config")
-                                       && command.Arguments.Contains("core.autocrlf")
-                                       && command.Arguments.Contains("false")),
+        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("config")
+                                                 && command.Arguments.Contains("core.autocrlf")
+                                                 && command.Arguments.Contains("false")),
             "core.autocrlf must be disabled");
-        AssertEx.True(
-            gitCommands.Any(command => command.Arguments.Contains("config")
-                                       && command.Arguments.Contains("core.filemode")
-                                       && command.Arguments.Contains("false")),
+        AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("config")
+                                                 && command.Arguments.Contains("core.filemode")
+                                                 && command.Arguments.Contains("false")),
             "core.filemode must be disabled");
         AssertEx.True(IssuesArgument(gitCommands, "add"), "git add -A must run");
         AssertEx.True(IssuesArgument(gitCommands, "commit"), "git commit must run for the baseline");
@@ -226,8 +222,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         var service = CreateService(provider);
 
-        var snapshots = await service.PrepareSelectedFoldersAsync(
-            handle,
+        var snapshots = await service.PrepareSelectedFoldersAsync(handle,
             [Folder("proj", source, SelectedFolderMode.ReadOnlyMount)]);
 
         AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshots[0].Status);
@@ -236,9 +231,11 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
     private static AgentHomeWorkspaceService CreateService(FakeSandboxRuntimeProvider provider, long maxBytes = 536870912)
     {
-        var options = Options.Create(new AgentHomeOptions { MaxSelectedFolderBytes = maxBytes });
-        return new AgentHomeWorkspaceService(
-            provider,
+        var options = Options.Create(new AgentHomeOptions
+        {
+            MaxSelectedFolderBytes = maxBytes
+        });
+        return new AgentHomeWorkspaceService(provider,
             new SensitiveFileExclusionService(),
             options,
             NullLogger<AgentHomeWorkspaceService>.Instance);

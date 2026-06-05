@@ -14,7 +14,10 @@ public interface IFeedbackInsightsService
     Task<FeedbackInsightsResult?> GetAgentFeedbackInsightsAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The per-agent feedback insights read model. <see cref="MinOccurrenceThreshold" /> is the "act on a pattern, never n=1" bar applied to <see cref="OverallFeedback.MeetsThreshold" /> and each <see cref="ToolFeedbackBreakdown.MeetsThreshold" />.</summary>
+/// <summary>
+///     The per-agent feedback insights read model. <see cref="MinOccurrenceThreshold" /> is the "act on a pattern, never n=1" bar applied to <see cref="OverallFeedback.MeetsThreshold" /> and each
+///     <see cref="ToolFeedbackBreakdown.MeetsThreshold" />.
+/// </summary>
 public sealed record FeedbackInsightsResult(
     Guid AgentDefinitionId,
     string AgentName,

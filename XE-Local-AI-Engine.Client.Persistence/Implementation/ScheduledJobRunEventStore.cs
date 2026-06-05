@@ -47,8 +47,7 @@ public sealed class ScheduledJobRunEventStore(NodeChatDbContext dbContext, TimeP
 
     private static ScheduledJobRunEventRecord ToRecord(ScheduledJobRunEvent entity)
     {
-        return new ScheduledJobRunEventRecord(
-            entity.Id,
+        return new ScheduledJobRunEventRecord(entity.Id,
             entity.RunId,
             entity.Sequence,
             entity.Level,

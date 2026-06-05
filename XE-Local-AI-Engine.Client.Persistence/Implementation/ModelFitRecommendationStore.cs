@@ -69,8 +69,7 @@ public sealed class ModelFitRecommendationStore(NodeChatDbContext dbContext) : I
 
     private static ModelFitRecommendationRecord ToRecord(ModelFitRecommendation entity)
     {
-        return new ModelFitRecommendationRecord(
-            entity.Id,
+        return new ModelFitRecommendationRecord(entity.Id,
             entity.SnapshotId,
             entity.Rank,
             entity.ModelName,

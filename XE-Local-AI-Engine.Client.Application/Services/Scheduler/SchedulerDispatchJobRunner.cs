@@ -11,8 +11,7 @@ using Quartz;
 /// </summary>
 internal static class SchedulerDispatchJobRunner
 {
-    public static async Task RunAsync(
-        ISchedulerDispatchExecutor dispatchExecutor,
+    public static async Task RunAsync(ISchedulerDispatchExecutor dispatchExecutor,
         ILogger logger,
         IJobExecutionContext context)
     {
@@ -23,8 +22,7 @@ internal static class SchedulerDispatchJobRunner
         var rawScheduledJobId = SafeGetString(context, SchedulerJobKeys.ScheduledJobIdKey);
         if (!Guid.TryParse(rawScheduledJobId, out var scheduledJobId))
         {
-            logger.LogWarning(
-                "Scheduled job dispatch skipped: job {JobKey} (fire {FireInstanceId}) has no valid '{DataMapKey}' in its JobDataMap.",
+            logger.LogWarning("Scheduled job dispatch skipped: job {JobKey} (fire {FireInstanceId}) has no valid '{DataMapKey}' in its JobDataMap.",
                 context.JobDetail.Key,
                 context.FireInstanceId,
                 SchedulerJobKeys.ScheduledJobIdKey);
@@ -36,8 +34,7 @@ internal static class SchedulerDispatchJobRunner
         // stored parameters unchanged. The executor decides whether/how to apply them.
         var parameterOverrides = ExtractParameterOverrides(context);
 
-        await dispatchExecutor.DispatchAsync(
-            scheduledJobId,
+        await dispatchExecutor.DispatchAsync(scheduledJobId,
             context.FireInstanceId,
             context.ScheduledFireTimeUtc,
             context.FireTimeUtc,
@@ -74,6 +71,8 @@ internal static class SchedulerDispatchJobRunner
     ///     <see cref="JobDataMap" /> <c>GetString</c> throws <see cref="KeyNotFoundException" /> for a missing key, so a
     ///     no-override (cron) fire — which carries none of the optional keys — must be read defensively.
     /// </summary>
-    private static string? SafeGetString(IJobExecutionContext context, string key) =>
-        context.MergedJobDataMap.TryGetValue(key, out var value) ? value as string : null;
+    private static string? SafeGetString(IJobExecutionContext context, string key)
+    {
+        return context.MergedJobDataMap.TryGetValue(key, out var value) ? value as string : null;
+    }
 }

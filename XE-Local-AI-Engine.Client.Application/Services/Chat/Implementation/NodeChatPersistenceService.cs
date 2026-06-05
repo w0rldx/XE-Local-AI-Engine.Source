@@ -1,12 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using System.Data;
-using System.Data.Common;
-using System.Globalization;
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence;
 
 public sealed partial class NodeChatPersistenceService(NodeChatPersistenceWriter writer) : INodeChatPersistenceService
 {
@@ -691,5 +685,4 @@ public sealed partial class NodeChatPersistenceService(NodeChatPersistenceWriter
             (dbContext, token) => ReadFeedbackAsync(dbContext, conversationId, messageId, token),
             cancellationToken).ConfigureAwait(false);
     }
-
 }

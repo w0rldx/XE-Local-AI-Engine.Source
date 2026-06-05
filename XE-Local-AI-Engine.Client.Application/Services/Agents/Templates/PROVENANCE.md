@@ -6,14 +6,14 @@ and the **transformed output** are committed so we have a permanent audit of *wh
 
 ## Upstream source
 
-| | |
-|---|---|
-| Repo | [`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents) |
-| Pinned commit | `783f6a72bfd7f3135700ac273c619d92821b419a` |
-| Commit date | 2026-04-12 |
-| Vendored on | 2026-06-02 |
-| License | **MIT** — Copyright (c) 2025 AgentLand Contributors (see `LICENSE-agency-agents`) |
-| Upstream size at pin | 172 agents across 14 divisions |
+|                      |                                                                                   |
+|----------------------|-----------------------------------------------------------------------------------|
+| Repo                 | [`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents)     |
+| Pinned commit        | `783f6a72bfd7f3135700ac273c619d92821b419a`                                        |
+| Commit date          | 2026-04-12                                                                        |
+| Vendored on          | 2026-06-02                                                                        |
+| License              | **MIT** — Copyright (c) 2025 AgentLand Contributors (see `LICENSE-agency-agents`) |
+| Upstream size at pin | 172 agents across 14 divisions                                                    |
 
 ## What is committed here
 
@@ -55,6 +55,7 @@ dotnet run --project tools/AgentTemplateGenerator -- \
 ```
 
 Transform rules:
+
 - Bodies are emitted **verbatim** (the audited base is never edited; large prompts are surfaced via an
   estimated-token field, not condensed).
 - `estimatedPromptTokens` = `ceil(bodyChars / 4)` — a heuristic, **not** a real tokenizer.

@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -78,7 +78,10 @@ public sealed class PlaybookActionStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var agentId = await SeedAgentAsync(context);
             var store = new PlaybookActionStore(context, TimeProvider.System);
-            var added = await store.AddAsync(CreateInput(agentId) with { TriggerCondition = null });
+            var added = await store.AddAsync(CreateInput(agentId) with
+            {
+                TriggerCondition = null
+            });
             actionId = added.Id;
         }
 
@@ -109,15 +112,36 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
         // Two enabled actions with the same priority but different creation times to prove the CreatedAtUtc tiebreak.
         clock.Advance(1);
-        var second = await store.AddAsync(CreateInput(agentId) with { Behavior = "second", Priority = 5 });
+        var second = await store.AddAsync(CreateInput(agentId) with
+        {
+            Behavior = "second",
+            Priority = 5
+        });
         clock.Advance(1);
-        var first = await store.AddAsync(CreateInput(agentId) with { Behavior = "first", Priority = 1 });
+        var first = await store.AddAsync(CreateInput(agentId) with
+        {
+            Behavior = "first",
+            Priority = 1
+        });
         clock.Advance(1);
-        var sameTie = await store.AddAsync(CreateInput(agentId) with { Behavior = "tie-later", Priority = 5 });
+        var sameTie = await store.AddAsync(CreateInput(agentId) with
+        {
+            Behavior = "tie-later",
+            Priority = 5
+        });
         // A disabled action on the same agent must be excluded.
-        _ = await store.AddAsync(CreateInput(agentId) with { Behavior = "disabled", Priority = 0, State = PlaybookActionState.Disabled });
+        _ = await store.AddAsync(CreateInput(agentId) with
+        {
+            Behavior = "disabled",
+            Priority = 0,
+            State = PlaybookActionState.Disabled
+        });
         // An enabled action on a different agent must be excluded.
-        _ = await store.AddAsync(CreateInput(otherAgentId) with { Behavior = "other-agent", Priority = 0 });
+        _ = await store.AddAsync(CreateInput(otherAgentId) with
+        {
+            Behavior = "other-agent",
+            Priority = 0
+        });
 
         var enabled = await store.ListEnabledByAgentAsync(agentId);
 
@@ -147,21 +171,30 @@ public sealed class PlaybookActionStoreTests : IDisposable
         AssertEx.Equal(1, added.Version);
 
         clock.Advance(10);
-        var behaviorChanged = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { Behavior = "A different behavior." }),
+        var behaviorChanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                Behavior = "A different behavior."
+            }),
             "Update should find the action.");
         AssertEx.Equal(2, behaviorChanged.Version);
         AssertEx.True(behaviorChanged.UpdatedAtUtc > added.UpdatedAtUtc, "A config change should advance UpdatedAtUtc.");
 
         clock.Advance(10);
-        var priorityChanged = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { Behavior = "A different behavior.", Priority = 99 }),
+        var priorityChanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                Behavior = "A different behavior.",
+                Priority = 99
+            }),
             "Update should find the action.");
         AssertEx.Equal(3, priorityChanged.Version);
 
         clock.Advance(10);
-        var stateChanged = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { Behavior = "A different behavior.", Priority = 99, State = PlaybookActionState.Disabled }),
+        var stateChanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                Behavior = "A different behavior.",
+                Priority = 99,
+                State = PlaybookActionState.Disabled
+            }),
             "Update should find the action.");
         AssertEx.Equal(4, stateChanged.Version);
     }
@@ -183,8 +216,10 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
         // Even if a caller bypasses the service guard and supplies a different (real) agent id, the store must NOT
         // re-parent the action — defense-in-depth for the cross-agent IDOR fix.
-        var updated = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(otherAgentId) with { Behavior = "Edited behavior." }),
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(otherAgentId) with
+            {
+                Behavior = "Edited behavior."
+            }),
             "Update should find the action.");
 
         AssertEx.Equal(ownerAgentId, updated.AgentDefinitionId);
@@ -207,8 +242,11 @@ public sealed class PlaybookActionStoreTests : IDisposable
         AssertEx.Equal(1, added.Version);
 
         clock.Advance(25);
-        var updated = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { Scope = "new-scope", TriggerCondition = "A different trigger." }),
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                Scope = "new-scope",
+                TriggerCondition = "A different trigger."
+            }),
             "Update should find the action.");
 
         AssertEx.Equal("new-scope", updated.Scope);
@@ -266,7 +304,11 @@ public sealed class PlaybookActionStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var agentId = await SeedAgentAsync(context);
             var store = new PlaybookActionStore(context, TimeProvider.System);
-            _ = await store.AddAsync(CreateInput(agentId) with { Behavior = behavior, TriggerCondition = trigger });
+            _ = await store.AddAsync(CreateInput(agentId) with
+            {
+                Behavior = behavior,
+                TriggerCondition = trigger
+            });
         }
 
         var fileBytes = await File.ReadAllBytesAsync(databasePath);
@@ -298,8 +340,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new PlaybookActionStore(readContext, TimeProvider.System);
 
-        _ = AssertEx.Throws<CryptographicException>(
-            () => readStore.GetByIdAsync(actionId).GetAwaiter().GetResult(),
+        _ = AssertEx.Throws<CryptographicException>(() => readStore.GetByIdAsync(actionId).GetAwaiter().GetResult(),
             "Tampered behavior ciphertext should fail authenticated decryption.");
     }
 
@@ -308,7 +349,11 @@ public sealed class PlaybookActionStoreTests : IDisposable
     {
         var databasePath = GetDatabasePath("provenance-roundtrip.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
-        var feedbackIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var feedbackIds = new[]
+        {
+            Guid.NewGuid(),
+            Guid.NewGuid()
+        };
         const double Confidence = 0.875d;
 
         Guid actionId;
@@ -395,7 +440,10 @@ public sealed class PlaybookActionStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var agentId = await SeedAgentAsync(context);
             var store = new PlaybookActionStore(context, TimeProvider.System);
-            var added = await store.AddAsync(CreateInput(agentId) with { EvalResult = EvalJson });
+            var added = await store.AddAsync(CreateInput(agentId) with
+            {
+                EvalResult = EvalJson
+            });
             actionId = added.Id;
 
             AssertEx.Equal(EvalJson, added.EvalResult);
@@ -431,8 +479,10 @@ public sealed class PlaybookActionStoreTests : IDisposable
         // Recording an eval is not a config-affecting edit (EvalResult is not injected into the prompt), so it must not
         // bump Version even though every other field is unchanged.
         clock.Advance(15);
-        var withEval = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { EvalResult = """{"passed":true}""" }),
+        var withEval = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                EvalResult = """{"passed":true}"""
+            }),
             "Update should find the action.");
 
         AssertEx.Equal("""{"passed":true}""", withEval.EvalResult);
@@ -452,14 +502,20 @@ public sealed class PlaybookActionStoreTests : IDisposable
         var agentId = await SeedAgentAsync(context);
         var store = new PlaybookActionStore(context, TimeProvider.System);
 
-        var enabledAction = await store.AddAsync(CreateInput(agentId) with { Behavior = "enabled" });
+        var enabledAction = await store.AddAsync(CreateInput(agentId) with
+        {
+            Behavior = "enabled"
+        });
         // A Suggested/Analysis action is inert by construction: the resolver fast-path must never surface it.
         _ = await store.AddAsync(CreateInput(agentId) with
         {
             Behavior = "suggested",
             State = PlaybookActionState.Suggested,
             Source = PlaybookActionSource.Analysis,
-            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            SourceFeedbackIds = new[]
+            {
+                Guid.NewGuid()
+            },
             Confidence = 0.9d
         });
 
@@ -486,7 +542,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         // CreateInput defaults to State == Enabled, so the create-as-Enabled path stamps the cohort clock to now.
         var added = await store.AddAsync(CreateInput(agentId));
 
-        AssertEx.Equal((long?)5_000L, added.EnabledAtUtc, "Create-as-Enabled should stamp EnabledAtUtc to now.");
+        AssertEx.Equal(5_000L, added.EnabledAtUtc, "Create-as-Enabled should stamp EnabledAtUtc to now.");
     }
 
     [Test]
@@ -505,7 +561,10 @@ public sealed class PlaybookActionStoreTests : IDisposable
         {
             State = PlaybookActionState.Suggested,
             Source = PlaybookActionSource.Analysis,
-            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            SourceFeedbackIds = new[]
+            {
+                Guid.NewGuid()
+            },
             Confidence = 0.9d
         });
 
@@ -529,24 +588,29 @@ public sealed class PlaybookActionStoreTests : IDisposable
         {
             State = PlaybookActionState.Suggested,
             Source = PlaybookActionSource.Analysis,
-            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            SourceFeedbackIds = new[]
+            {
+                Guid.NewGuid()
+            },
             Confidence = 0.9d
         });
         AssertEx.Null(added.EnabledAtUtc, "A Suggested action carries no enabled clock.");
 
         // The eval-gated promote funnels Suggested -> Enabled through UpdateAsync; the store stamps the clock then.
         clock.Advance(20);
-        var promoted = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with
+        var promoted = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
             {
                 State = PlaybookActionState.Enabled,
                 Source = PlaybookActionSource.Analysis,
-                SourceFeedbackIds = new[] { Guid.NewGuid() },
+                SourceFeedbackIds = new[]
+                {
+                    Guid.NewGuid()
+                },
                 Confidence = 0.9d
             }),
             "Update should find the action.");
 
-        AssertEx.Equal((long?)6_020L, promoted.EnabledAtUtc, "Promoting into Enabled should stamp EnabledAtUtc.");
+        AssertEx.Equal(6_020L, promoted.EnabledAtUtc, "Promoting into Enabled should stamp EnabledAtUtc.");
     }
 
     [Test]
@@ -563,15 +627,20 @@ public sealed class PlaybookActionStoreTests : IDisposable
         var store = new PlaybookActionStore(context, clock);
 
         // Start disabled (no enabled clock), then a manual toggle enables it — the store stamps the clock on that edge.
-        var added = await store.AddAsync(CreateInput(agentId) with { State = PlaybookActionState.Disabled });
+        var added = await store.AddAsync(CreateInput(agentId) with
+        {
+            State = PlaybookActionState.Disabled
+        });
         AssertEx.Null(added.EnabledAtUtc, "A Disabled action carries no enabled clock.");
 
         clock.Advance(30);
-        var enabled = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { State = PlaybookActionState.Enabled }),
+        var enabled = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                State = PlaybookActionState.Enabled
+            }),
             "Update should find the action.");
 
-        AssertEx.Equal((long?)7_030L, enabled.EnabledAtUtc, "A manual Disabled -> Enabled toggle should stamp EnabledAtUtc.");
+        AssertEx.Equal(7_030L, enabled.EnabledAtUtc, "A manual Disabled -> Enabled toggle should stamp EnabledAtUtc.");
     }
 
     [Test]
@@ -594,8 +663,11 @@ public sealed class PlaybookActionStoreTests : IDisposable
         // Disabling must NOT clear the clock — the last-enabled instant is preserved for cohort monitoring. The caller
         // round-trips the current record's EnabledAtUtc, which the store carries through unchanged on a non-enabling edit.
         clock.Advance(40);
-        var disabled = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { State = PlaybookActionState.Disabled, EnabledAtUtc = enabledAt }),
+        var disabled = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                State = PlaybookActionState.Disabled,
+                EnabledAtUtc = enabledAt
+            }),
             "Update should find the action.");
 
         AssertEx.Equal(enabledAt, disabled.EnabledAtUtc, "Disabling should preserve the last-enabled instant.");
@@ -622,8 +694,11 @@ public sealed class PlaybookActionStoreTests : IDisposable
         // Recording an eval on an already-Enabled action is not a transition into Enabled, so the clock is carried
         // through (not re-stamped) and — being a pure-timestamp/non-injected field — must not bump Version.
         clock.Advance(50);
-        var withEval = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with { EvalResult = """{"passed":true}""", EnabledAtUtc = enabledAt }),
+        var withEval = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
+            {
+                EvalResult = """{"passed":true}""",
+                EnabledAtUtc = enabledAt
+            }),
             "Update should find the action.");
 
         AssertEx.Equal(enabledAt, withEval.EnabledAtUtc, "Recording an eval should carry the existing EnabledAtUtc through unchanged.");
@@ -647,20 +722,25 @@ public sealed class PlaybookActionStoreTests : IDisposable
         {
             State = PlaybookActionState.Suggested,
             Source = PlaybookActionSource.Analysis,
-            SourceFeedbackIds = new[] { Guid.NewGuid() },
+            SourceFeedbackIds = new[]
+            {
+                Guid.NewGuid()
+            },
             Confidence = 0.9d
         });
         AssertEx.Null(added.EnabledAtUtc, "A Suggested action carries no enabled clock.");
 
         // Editing a Suggested action (it stays Suggested) is not a transition into Enabled, so the clock stays null.
         clock.Advance(60);
-        var edited = AssertEx.NotNull(
-            await store.UpdateAsync(added.Id, CreateInput(agentId) with
+        var edited = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
             {
                 State = PlaybookActionState.Suggested,
                 Source = PlaybookActionSource.Analysis,
                 Behavior = "Edited suggestion.",
-                SourceFeedbackIds = new[] { Guid.NewGuid() },
+                SourceFeedbackIds = new[]
+                {
+                    Guid.NewGuid()
+                },
                 Confidence = 0.95d
             }),
             "Update should find the action.");
@@ -671,8 +751,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            "Builder",
+        var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
             Description: null,
             Instructions,
             ModelProfile: null,
@@ -686,8 +765,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
     private static PlaybookActionInput CreateInput(Guid agentDefinitionId)
     {
-        return new PlaybookActionInput(
-            agentDefinitionId,
+        return new PlaybookActionInput(agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
             TriggerCondition,
@@ -699,7 +777,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     private static async Task TamperBehaviorAsync(string databasePath)
     {
         // The test database holds exactly one action, so the corruption targets that single row.
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
 
         byte[] blob;

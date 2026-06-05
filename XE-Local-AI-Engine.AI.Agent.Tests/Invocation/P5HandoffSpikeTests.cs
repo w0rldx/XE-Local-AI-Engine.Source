@@ -5,10 +5,12 @@
 //   (B) tool-approval pause/resume INSIDE a workflow run (surfacing event + resume mechanism).
 //
 // All findings are emitted to Console for the report; the test asserts the load-bearing facts.
+
 #pragma warning disable CA1707, CA1822, CA2007, S3267, CA1031, MAAIW001
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation;
 
 using System.Reflection;
+using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
@@ -47,8 +49,7 @@ public sealed class P5HandoffSpikeTests
         // NOTE: do NOT pre-wrap with UseFunctionInvocation. The handoff builder injects its own
         // handoff_to_<id> tools and intercepts the raw FunctionCallContent; an external FICC layer would
         // try to *invoke* handoff_to_<id> (no matching AIFunction) and swallow the handoff.
-        var triage = new ChatClientAgent(
-            fake,
+        var triage = new ChatClientAgent(fake,
             "triage",
             TriageInstructions,
             "Triage agent.",
@@ -56,8 +57,7 @@ public sealed class P5HandoffSpikeTests
             NullLoggerFactory.Instance,
             sp);
 
-        var specialist = new ChatClientAgent(
-            fake,
+        var specialist = new ChatClientAgent(fake,
             "specialist",
             SpecialistInstructions,
             "Specialist agent.",
@@ -68,10 +68,10 @@ public sealed class P5HandoffSpikeTests
         Console.WriteLine($"[P5][A] triage.Id='{triage.Id}' specialist.Id='{specialist.Id}'");
 
         var workflow = AgentWorkflowBuilder
-            .CreateHandoffBuilderWith(triage)
-            .WithHandoff(triage, specialist, "Route domain questions to the specialist.")
-            .EmitAgentResponseEvents(true)
-            .Build();
+                       .CreateHandoffBuilderWith(triage)
+                       .WithHandoff(triage, specialist, "Route domain questions to the specialist.")
+                       .EmitAgentResponseEvents()
+                       .Build();
 
         var input = new List<ChatMessage>
         {
@@ -86,7 +86,7 @@ public sealed class P5HandoffSpikeTests
         var accepted = await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
         Console.WriteLine($"[P5][A] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
-        var outputText = new System.Text.StringBuilder();
+        var outputText = new StringBuilder();
         var sawSpecialistAgentEvent = false;
         var sawOutput = false;
         // WatchStreamAsync only ends on RequestHaltEvent; in non-autonomous mode a handoff run goes IDLE
@@ -114,8 +114,6 @@ public sealed class P5HandoffSpikeTests
                 case ExecutorFailedEvent fail:
                     Console.WriteLine($"[P5][A]   ExecutorFailedEvent: {fail.Data?.GetType().Name}: {fail.Data?.Message}");
                     break;
-                default:
-                    break;
             }
 
             if (sawOutput && fake.SpecialistInvocations > 0)
@@ -129,8 +127,7 @@ public sealed class P5HandoffSpikeTests
         Console.WriteLine($"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion}");
 
         AssertEx.True(fake.SpecialistInvocations > 0, "specialist agent must be invoked after the handoff");
-        AssertEx.True(
-            allOutput.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal) || sawSpecialistAgentEvent,
+        AssertEx.True(allOutput.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal) || sawSpecialistAgentEvent,
             "specialist's answer must reach the workflow output / agent-response stream");
         AssertEx.True(fake.SpecialistSawUserQuestion, "conversation history (the original user question) must carry across the handoff hop");
     }
@@ -151,8 +148,7 @@ public sealed class P5HandoffSpikeTests
     {
         const string toolName = "destructive_cleanup";
         var executed = 0;
-        var inner = AIFunctionFactory.Create(
-            (string reason) =>
+        var inner = AIFunctionFactory.Create((string reason) =>
             {
                 executed++;
                 return "cleanup performed: " + reason;
@@ -164,20 +160,22 @@ public sealed class P5HandoffSpikeTests
         using var fake = new ApprovalScriptedChatClient(toolName);
         var sp = new ServiceCollection().BuildServiceProvider();
 
-        var agent = new ChatClientAgent(
-            fake.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build(),
+        var agent = new ChatClientAgent(fake.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build(),
             "approver",
             "Call the destructive_cleanup tool when asked to perform a cleanup.",
             "Approval agent.",
-            new List<AITool> { approvalTool },
+            new List<AITool>
+            {
+                approvalTool
+            },
             NullLoggerFactory.Instance,
             sp);
 
         // Single-agent workflow (a handoff builder needs >=1 agent; we route nothing — just exercise the
         // agent inside the workflow runtime so approval surfacing through the workflow stream is observed).
         var workflow = AgentWorkflowBuilder
-            .CreateHandoffBuilderWith(agent)
-            .Build();
+                       .CreateHandoffBuilderWith(agent)
+                       .Build();
 
         var input = new List<ChatMessage>
         {
@@ -201,7 +199,8 @@ public sealed class P5HandoffSpikeTests
                 Console.WriteLine($"[P5][B approve={approve}] event={evt.GetType().Name} :: {Truncate(evt.ToString(), 160)}");
                 if (evt is RequestInfoEvent rie)
                 {
-                    Console.WriteLine($"[P5][B approve={approve}]   RequestInfoEvent RequestId='{rie.Request.RequestId}' DataType={rie.Request.Data?.GetType().Name} portReqType={rie.Request.PortInfo.RequestType} portRespType={rie.Request.PortInfo.ResponseType}");
+                    Console.WriteLine(
+                        $"[P5][B approve={approve}]   RequestInfoEvent RequestId='{rie.Request.RequestId}' DataType={rie.Request.Data?.GetType().Name} portReqType={rie.Request.PortInfo.RequestType} portRespType={rie.Request.PortInfo.ResponseType}");
                     approvalRequestEvent = rie;
                     break;
                 }
@@ -209,9 +208,9 @@ public sealed class P5HandoffSpikeTests
                 if (evt is AgentResponseEvent are)
                 {
                     var found = are.Response.Messages
-                        .SelectMany(m => m.Contents)
-                        .OfType<ToolApprovalRequestContent>()
-                        .FirstOrDefault();
+                                   .SelectMany(m => m.Contents)
+                                   .OfType<ToolApprovalRequestContent>()
+                                   .FirstOrDefault();
                     if (found is not null)
                     {
                         Console.WriteLine($"[P5][B approve={approve}]   approval content surfaced via AgentResponseEvent: {found.GetType().Name}");
@@ -221,7 +220,8 @@ public sealed class P5HandoffSpikeTests
             }
         }
 
-        Console.WriteLine($"[P5][B approve={approve}] PAUSE: requestInfoEvent={(approvalRequestEvent is not null)} agentEventApproval={(approvalContentFromAgentEvent is not null)} executedBeforeResume={executed}");
+        Console.WriteLine(
+            $"[P5][B approve={approve}] PAUSE: requestInfoEvent={approvalRequestEvent is not null} agentEventApproval={approvalContentFromAgentEvent is not null} executedBeforeResume={executed}");
         AssertEx.Equal(0, executed, "tool must NOT execute before approval is granted");
         AssertEx.True(approvalRequestEvent is not null, "workflow must pause by surfacing a RequestInfoEvent for the approval");
 
@@ -298,16 +298,14 @@ public sealed class P5HandoffSpikeTests
         const string ownToolName = "lookup_customer";
         var lookupExecuted = 0;
         var lookupReason = string.Empty;
-        var lookupTool = new ApprovalRequiredAIFunction(
-            AIFunctionFactory.Create(
-                (string customerId) =>
-                {
-                    lookupExecuted++;
-                    lookupReason = customerId;
-                    return "customer_data: premium tier";
-                },
-                ownToolName,
-                "Looks up customer data. Requires approval because it accesses PII."));
+        var lookupTool = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string customerId) =>
+            {
+                lookupExecuted++;
+                lookupReason = customerId;
+                return "customer_data: premium tier";
+            },
+            ownToolName,
+            "Looks up customer data. Requires approval because it accesses PII."));
 
         // RECIPE: do NOT externally wrap with UseFunctionInvocation.
         // ChatClientAgent.ctor -> WithDefaultAgentMiddleware -> auto-inserts FunctionInvokingChatClient
@@ -320,17 +318,18 @@ public sealed class P5HandoffSpikeTests
         using var fake = new CombinedScriptedChatClient(ownToolName, SpecialistAnswer);
         var sp = new ServiceCollection().BuildServiceProvider();
 
-        var triage = new ChatClientAgent(
-            fake,                    // bare IChatClient — FICC auto-inserted by WithDefaultAgentMiddleware
+        var triage = new ChatClientAgent(fake, // bare IChatClient — FICC auto-inserted by WithDefaultAgentMiddleware
             "triage",
             TriageInstructions,
             "Triage agent that can look up customer data before handing off.",
-            new List<AITool> { lookupTool },  // own tool — set as AdditionalTools on the auto-FICC
+            new List<AITool>
+            {
+                lookupTool
+            }, // own tool — set as AdditionalTools on the auto-FICC
             NullLoggerFactory.Instance,
             sp);
 
-        var specialist = new ChatClientAgent(
-            fake,
+        var specialist = new ChatClientAgent(fake,
             "specialist",
             SpecialistInstructions,
             "Specialist agent.",
@@ -341,10 +340,10 @@ public sealed class P5HandoffSpikeTests
         Console.WriteLine($"[P5][C approveFirst={approveFirst}] triage.Id='{triage.Id}' specialist.Id='{specialist.Id}'");
 
         var workflow = AgentWorkflowBuilder
-            .CreateHandoffBuilderWith(triage)
-            .WithHandoff(triage, specialist, "Route after customer lookup.")
-            .EmitAgentResponseEvents(true)
-            .Build();
+                       .CreateHandoffBuilderWith(triage)
+                       .WithHandoff(triage, specialist, "Route after customer lookup.")
+                       .EmitAgentResponseEvents()
+                       .Build();
 
         var input = new List<ChatMessage>
         {
@@ -376,7 +375,7 @@ public sealed class P5HandoffSpikeTests
             }
         }
 
-        Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 done: approvalEvent={(approvalEvent is not null)} lookupExecuted={lookupExecuted}");
+        Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 done: approvalEvent={approvalEvent is not null} lookupExecuted={lookupExecuted}");
         AssertEx.Equal(0, lookupExecuted, "C: lookup tool must NOT execute before approval");
         AssertEx.True(approvalEvent is not null, "C: workflow must pause with RequestInfoEvent for approval-required own tool");
 
@@ -433,7 +432,8 @@ public sealed class P5HandoffSpikeTests
             }
         }
 
-        Console.WriteLine($"[P5][C approveFirst={approveFirst}] FINAL lookupExecuted={lookupExecuted} specialistInvocations={fake.SpecialistInvocations} sawHandoff={sawHandoffToSpecialist} sawTerminalOutput={sawTerminalOutput}");
+        Console.WriteLine(
+            $"[P5][C approveFirst={approveFirst}] FINAL lookupExecuted={lookupExecuted} specialistInvocations={fake.SpecialistInvocations} sawHandoff={sawHandoffToSpecialist} sawTerminalOutput={sawTerminalOutput}");
 
         if (approveFirst)
         {
@@ -462,7 +462,7 @@ public sealed class P5HandoffSpikeTests
         return request.CreateResponse(approve);
     }
 
-    private static void AppendChatMessages(System.Text.StringBuilder sb, object? data)
+    private static void AppendChatMessages(StringBuilder sb, object? data)
     {
         switch (data)
         {
@@ -488,9 +488,9 @@ public sealed class P5HandoffSpikeTests
     private static string ReadFunctionPrefix()
     {
         var coreType = typeof(AgentWorkflowBuilder).Assembly
-            .GetType("Microsoft.Agents.AI.Workflows.HandoffWorkflowBuilderCore`1")!;
+                                                   .GetType("Microsoft.Agents.AI.Workflows.HandoffWorkflowBuilderCore`1")!;
         var field = coreType.GetField("FunctionPrefix", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
-            ?? coreType.GetField("FunctionPrefix", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    ?? coreType.GetField("FunctionPrefix", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         var value = field?.GetRawConstantValue() ?? field?.GetValue(null);
         return value as string ?? "<unknown>";
     }
@@ -537,6 +537,16 @@ public sealed class P5HandoffSpikeTests
             return Single(update!);
         }
 
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
         private (ChatResponse? Response, ChatResponseUpdate? Update) Build(List<ChatMessage> list, ChatOptions? options, bool streaming)
         {
             // DISCRIMINATOR: the handoff builder injects the `handoff_to_<n>` tool declarations ONLY into the
@@ -568,8 +578,14 @@ public sealed class P5HandoffSpikeTests
             Console.WriteLine($"[P5][A][fake]   -> TRIAGE handoff call '{handoffName}'");
             var call = new FunctionCallContent($"call-{handoffName}", handoffName, new Dictionary<string, object?>());
             return streaming
-                ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { call }))
-                : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { call })), null);
+                ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent>
+                {
+                    call
+                }))
+                : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+                {
+                    call
+                })), null);
         }
 
         private static async IAsyncEnumerable<ChatResponseUpdate> Single(ChatResponseUpdate update)
@@ -577,12 +593,6 @@ public sealed class P5HandoffSpikeTests
             yield return update;
             await Task.CompletedTask;
         }
-
-        public object? GetService(Type serviceType, object? serviceKey = null)
-            => serviceType == typeof(IChatClient) ? this : null;
-
-        public void Dispose()
-            => GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -594,10 +604,16 @@ public sealed class P5HandoffSpikeTests
         private readonly string _toolName;
 
         public ApprovalScriptedChatClient(string toolName)
-            => _toolName = toolName;
+        {
+            _toolName = toolName;
+        }
+
+        public int CallCount { get; private set; }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(BuildResponse(messages));
+        {
+            return Task.FromResult(BuildResponse(messages));
+        }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
@@ -605,7 +621,15 @@ public sealed class P5HandoffSpikeTests
             return ToUpdates(resp);
         }
 
-        public int CallCount { get; private set; }
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
 
         private ChatResponse BuildResponse(IEnumerable<ChatMessage> messages)
         {
@@ -625,8 +649,14 @@ public sealed class P5HandoffSpikeTests
             }
 
             Console.WriteLine($"[P5][B][fake]   -> emitting tool call '{_toolName}'");
-            var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?> { ["reason"] = "nightly maintenance" });
-            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { call }));
+            var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?>
+            {
+                ["reason"] = "nightly maintenance"
+            });
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                call
+            }));
         }
 
         private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(ChatResponse response)
@@ -638,30 +668,24 @@ public sealed class P5HandoffSpikeTests
 
             await Task.CompletedTask;
         }
-
-        public object? GetService(Type serviceType, object? serviceKey = null)
-            => serviceType == typeof(IChatClient) ? this : null;
-
-        public void Dispose()
-            => GC.SuppressFinalize(this);
     }
 
     /// <summary>
     ///     Scripted model for the COMBINED scenario (C). The triage agent has both an own
     ///     <see cref="ApprovalRequiredAIFunction" /> and an outgoing <c>handoff_to_*</c> edge.
     ///     <para>
-    ///     Phase discrimination (triage turns only — specialist is identified by absence of handoff tool):
-    ///     <list type="bullet">
-    ///       <item>Call 1 (no FunctionResultContent in history): emit own-tool call.</item>
-    ///       <item>Call 2 (FunctionResultContent present): emit the handoff_to_1 call.</item>
-    ///     </list>
+    ///         Phase discrimination (triage turns only — specialist is identified by absence of handoff tool):
+    ///         <list type="bullet">
+    ///             <item>Call 1 (no FunctionResultContent in history): emit own-tool call.</item>
+    ///             <item>Call 2 (FunctionResultContent present): emit the handoff_to_1 call.</item>
+    ///         </list>
     ///     </para>
     ///     <para>
-    ///     FICC (auto-inserted by <c>WithDefaultAgentMiddleware</c>) handles the own-tool call:
-    ///     approval-required → <see cref="ToolApprovalRequestContent" /> → RequestInfoEvent.
-    ///     After resume FICC calls back with the result in the message history (call 2).
-    ///     The handoff_to_* call is an <see cref="AIFunctionDeclaration" /> with no implementation —
-    ///     FICC lets it through unserviced; the executor's CollectHandoffRequestsFilter catches it.
+    ///         FICC (auto-inserted by <c>WithDefaultAgentMiddleware</c>) handles the own-tool call:
+    ///         approval-required → <see cref="ToolApprovalRequestContent" /> → RequestInfoEvent.
+    ///         After resume FICC calls back with the result in the message history (call 2).
+    ///         The handoff_to_* call is an <see cref="AIFunctionDeclaration" /> with no implementation —
+    ///         FICC lets it through unserviced; the executor's CollectHandoffRequestsFilter catches it.
     ///     </para>
     /// </summary>
     private sealed class CombinedScriptedChatClient : IChatClient
@@ -687,6 +711,16 @@ public sealed class P5HandoffSpikeTests
         {
             var (_, upd) = Build(messages.ToList(), options, streaming: true);
             return Single(upd!);
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
         }
 
         private (ChatResponse? Response, ChatResponseUpdate? Update) Build(List<ChatMessage> list, ChatOptions? options, bool streaming)
@@ -720,16 +754,31 @@ public sealed class P5HandoffSpikeTests
                 Console.WriteLine($"[P5][C][fake]   -> TRIAGE phase2 handoff call '{handoffName}'");
                 var handoffCall = new FunctionCallContent($"call-{handoffName}", handoffName, new Dictionary<string, object?>());
                 return streaming
-                    ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { handoffCall }))
-                    : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { handoffCall })), null);
+                    ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent>
+                    {
+                        handoffCall
+                    }))
+                    : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+                    {
+                        handoffCall
+                    })), null);
             }
 
             // Step 1: no result yet → emit the own-tool call (approval-required, will be intercepted by FICC).
             Console.WriteLine($"[P5][C][fake]   -> TRIAGE phase1 own-tool call '{_ownToolName}'");
-            var ownCall = new FunctionCallContent($"call-{_ownToolName}", _ownToolName, new Dictionary<string, object?> { ["customerId"] = "C-42" });
+            var ownCall = new FunctionCallContent($"call-{_ownToolName}", _ownToolName, new Dictionary<string, object?>
+            {
+                ["customerId"] = "C-42"
+            });
             return streaming
-                ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { ownCall }))
-                : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { ownCall })), null);
+                ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent>
+                {
+                    ownCall
+                }))
+                : (new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+                {
+                    ownCall
+                })), null);
         }
 
         private static async IAsyncEnumerable<ChatResponseUpdate> Single(ChatResponseUpdate update)
@@ -737,12 +786,6 @@ public sealed class P5HandoffSpikeTests
             yield return update;
             await Task.CompletedTask;
         }
-
-        public object? GetService(Type serviceType, object? serviceKey = null)
-            => serviceType == typeof(IChatClient) ? this : null;
-
-        public void Dispose()
-            => GC.SuppressFinalize(this);
     }
 }
 #pragma warning restore CA1707, CA1822, CA2007, S3267, CA1031, MAAIW001

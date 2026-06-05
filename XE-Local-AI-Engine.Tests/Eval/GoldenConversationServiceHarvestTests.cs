@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -24,8 +23,7 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task CreateHarvestedAsync_PinsHarvestedSourceAndStagesInert_EvenWhenInputEnabled()
     {
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(
-            AgentId,
+        var input = new GoldenConversationCreateInput(AgentId,
             Title: "Harvested case",
             InputTurns: """[{"role":"user","text":"hi"}]""",
             Assertion: null,
@@ -37,8 +35,7 @@ public sealed class GoldenConversationServiceHarvestTests
 
         _ = await service.CreateHarvestedAsync(input).ConfigureAwait(false);
 
-        await store.Received(1).AddAsync(
-            Arg.Is<GoldenConversationInput>(stored =>
+        await store.Received(1).AddAsync(Arg.Is<GoldenConversationInput>(stored =>
                 stored.Source == GoldenConversationSource.Harvested
                 && !stored.Enabled
                 && stored.SourceMessageId == input.SourceMessageId
@@ -50,8 +47,7 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task CreateHarvestedAsync_WhenProvenanceMissing_RejectsWithValidationError()
     {
         var service = CreateService(out var store);
-        var input = new GoldenConversationCreateInput(
-            AgentId,
+        var input = new GoldenConversationCreateInput(AgentId,
             Title: "Harvested case",
             InputTurns: """[{"role":"user","text":"hi"}]""",
             Assertion: null,
@@ -61,8 +57,7 @@ public sealed class GoldenConversationServiceHarvestTests
             SourceMessageId: null,
             SourceConversationId: Guid.NewGuid());
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(
-            async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
 
         await store.DidNotReceive().AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
@@ -71,8 +66,7 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task CreateHarvestedAsync_WhenTitleExceedsCap_RejectsWithValidationError()
     {
         var service = CreateService(out _);
-        var input = new GoldenConversationCreateInput(
-            AgentId,
+        var input = new GoldenConversationCreateInput(AgentId,
             Title: new string('t', 201),
             InputTurns: """[{"role":"user","text":"hi"}]""",
             Assertion: null,
@@ -83,8 +77,7 @@ public sealed class GoldenConversationServiceHarvestTests
             SourceConversationId: Guid.NewGuid());
 
         // The harvested path reuses the same boundary validation (caps + ≥1 signal + owning agent) as CreateAsync.
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(
-            async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     [Test]
@@ -96,8 +89,7 @@ public sealed class GoldenConversationServiceHarvestTests
                   .Returns(Task.FromResult<AgentDefinitionRecord?>(null));
         var service = new GoldenConversationService(store, agentStore);
 
-        var input = new GoldenConversationCreateInput(
-            AgentId,
+        var input = new GoldenConversationCreateInput(AgentId,
             Title: "Harvested case",
             InputTurns: """[{"role":"user","text":"hi"}]""",
             Assertion: null,
@@ -107,8 +99,7 @@ public sealed class GoldenConversationServiceHarvestTests
             SourceMessageId: Guid.NewGuid(),
             SourceConversationId: Guid.NewGuid());
 
-        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(
-            async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
     [Test]
@@ -184,8 +175,7 @@ public sealed class GoldenConversationServiceHarvestTests
 
     private static GoldenConversationRecord Existing(Guid id, Guid agentId, GoldenConversationSource source, bool enabled)
     {
-        return new GoldenConversationRecord(
-            id,
+        return new GoldenConversationRecord(id,
             agentId,
             Title: "case",
             InputTurns: """[{"role":"user","text":"hi"}]""",
@@ -201,8 +191,7 @@ public sealed class GoldenConversationServiceHarvestTests
 
     private static GoldenConversationRecord StoredRecord(GoldenConversationInput input)
     {
-        return new GoldenConversationRecord(
-            Guid.NewGuid(),
+        return new GoldenConversationRecord(Guid.NewGuid(),
             input.AgentDefinitionId,
             input.Title,
             input.InputTurns,

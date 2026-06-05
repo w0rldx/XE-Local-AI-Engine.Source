@@ -18,6 +18,8 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Analysis;
+using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
@@ -38,8 +40,6 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
-using XE_Local_AI_Engine.Client.Services.Analysis;
-using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -55,7 +55,6 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Monitoring;
 using XE_Local_AI_Engine.Client.Services.Monitoring.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -63,6 +62,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
@@ -299,7 +299,7 @@ public static class NodeApplicationServiceCollectionExtensions
         // Every boundary carries intent only and never a raw command line. The resolver is Scoped because it depends on
         // the Scoped image store. The runner and request validator are Singletons because the runner holds a long lived
         // gRPC channel and the validator is stateless.
-        builder.Services.AddSingleton<IModelFitUtilityRunner>(ModelFitUtilityRunnerSelector.Resolve);
+        builder.Services.AddSingleton(ModelFitUtilityRunnerSelector.Resolve);
         builder.Services.AddScoped<IApprovedImageResolver, ApprovedImageResolver>();
         builder.Services.AddSingleton<ModelFitRequestValidator>();
         // Model-fit refresh service: the single non-bypass path that runs the approved llmfit recommend image,
@@ -442,7 +442,7 @@ public static class NodeApplicationServiceCollectionExtensions
                .Bind(configuration.GetSection(LocalContainerOptions.SectionName))
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
-        builder.Services.AddSingleton<ISandboxRuntimeProvider>(SandboxProviderSelector.Resolve);
+        builder.Services.AddSingleton(SandboxProviderSelector.Resolve);
         // AgentHome layout initializer. Materializes the worker-local /agent-home tree idempotently and can run while
         // AgentHome itself is disabled.
         builder.Services.AddOptions<AgentHomeOptions>()

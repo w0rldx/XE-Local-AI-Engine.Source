@@ -18,11 +18,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     // The built-in catalog is static for the process lifetime, so precompute its three projections once. The MCP part
     // is dynamic (servers connect/disconnect) and is read live from the registry on each call, then merged in.
     private readonly IReadOnlyList<AllowedToolDto> _builtinAllTools;
-    private readonly IReadOnlyList<AllowedToolDto> _builtinWithoutAgentHome;
     private readonly IReadOnlyList<LocalToolCatalogEntry> _builtinCatalogEntries;
     private readonly IReadOnlyList<string> _builtinNames;
-    private readonly HashSet<string> _toolCapableModels;
+    private readonly IReadOnlyList<AllowedToolDto> _builtinWithoutAgentHome;
     private readonly IMcpToolRegistry _mcpToolRegistry;
+    private readonly HashSet<string> _toolCapableModels;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,

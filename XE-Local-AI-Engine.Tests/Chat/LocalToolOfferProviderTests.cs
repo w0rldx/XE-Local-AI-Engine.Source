@@ -165,13 +165,15 @@ public sealed class LocalToolOfferProviderTests
 
     private static LocalToolOfferProvider CreateProvider(IMcpToolRegistry mcpToolRegistry, params string[] toolCapableModels)
     {
-        var registry = new FakeAgentToolRegistry(
-        [
+        var registry = new FakeAgentToolRegistry([
             new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", true),
             new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", false)
         ]);
 
-        var options = Options.Create(new AgentHomeOptions { ToolCapableModels = toolCapableModels });
+        var options = Options.Create(new AgentHomeOptions
+        {
+            ToolCapableModels = toolCapableModels
+        });
         return new LocalToolOfferProvider(registry, mcpToolRegistry, options);
     }
 

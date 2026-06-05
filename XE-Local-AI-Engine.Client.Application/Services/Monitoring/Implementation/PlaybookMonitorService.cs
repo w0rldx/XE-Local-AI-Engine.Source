@@ -17,8 +17,8 @@ public sealed class PlaybookMonitorService(
     IOptions<PlaybookMonitorOptions> monitorOptions) : IPlaybookMonitorService
 {
     private readonly IPlaybookMonitorStore _monitorStore = monitorStore ?? throw new ArgumentNullException(nameof(monitorStore));
-    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
     private readonly PlaybookMonitorOptions _options = (monitorOptions ?? throw new ArgumentNullException(nameof(monitorOptions))).Value;
+    private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
 
     public async Task<IReadOnlyList<PlaybookActionMonitorView>> GetMonitorAsync(Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {

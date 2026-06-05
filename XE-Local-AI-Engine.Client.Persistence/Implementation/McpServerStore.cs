@@ -174,8 +174,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
 
     private static McpServerRecord ToRecord(McpServerRegistration entity)
     {
-        return new McpServerRecord(
-            entity.Id,
+        return new McpServerRecord(entity.Id,
             entity.Name,
             entity.Description is null ? null : Decode(entity.Description),
             (McpTransportKind)entity.TransportKind,

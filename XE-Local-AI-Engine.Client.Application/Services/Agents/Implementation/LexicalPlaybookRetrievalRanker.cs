@@ -27,13 +27,13 @@ public sealed class LexicalPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         var queryTokens = Tokenize(query);
 
         IReadOnlyList<PlaybookActionRecord> selected = candidates
-            .Select(candidate => new ScoredCandidate(candidate, ScoreOverlap(queryTokens, Tokenize(candidate.TriggerCondition ?? candidate.Behavior))))
-            .OrderByDescending(scored => scored.Score)
-            .ThenBy(scored => scored.Action.Priority)
-            .ThenBy(scored => scored.Action.CreatedAtUtc)
-            .Take(k)
-            .Select(scored => scored.Action)
-            .ToList();
+                                                       .Select(candidate => new ScoredCandidate(candidate, ScoreOverlap(queryTokens, Tokenize(candidate.TriggerCondition ?? candidate.Behavior))))
+                                                       .OrderByDescending(scored => scored.Score)
+                                                       .ThenBy(scored => scored.Action.Priority)
+                                                       .ThenBy(scored => scored.Action.CreatedAtUtc)
+                                                       .Take(k)
+                                                       .Select(scored => scored.Action)
+                                                       .ToList();
 
         return Task.FromResult(selected);
     }
@@ -56,13 +56,13 @@ public sealed class LexicalPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         }
 
         var normalized = new string(text
-            .ToUpperInvariant()
-            .Select(static character => char.IsLetterOrDigit(character) ? character : ' ')
-            .ToArray());
+                                    .ToUpperInvariant()
+                                    .Select(static character => char.IsLetterOrDigit(character) ? character : ' ')
+                                    .ToArray());
 
         return normalized
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToHashSet(StringComparer.Ordinal);
+               .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               .ToHashSet(StringComparer.Ordinal);
     }
 
     private readonly record struct ScoredCandidate(PlaybookActionRecord Action, int Score);

@@ -36,8 +36,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
         return entities.Select(ToRecord).ToArray();
     }
 
-    public async Task<ModelClassificationRecord> UpsertDetectedAsync(
-        string modelName,
+    public async Task<ModelClassificationRecord> UpsertDetectedAsync(string modelName,
         string? digest,
         ModelKind detectedKind,
         string? capabilitiesJson,
@@ -81,8 +80,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
         return ToRecord(entity);
     }
 
-    public async Task<ModelClassificationRecord> SetOverrideAsync(
-        string modelName,
+    public async Task<ModelClassificationRecord> SetOverrideAsync(string modelName,
         ModelKind? overrideKind,
         CancellationToken cancellationToken = default)
     {
@@ -124,8 +122,7 @@ public sealed class ModelClassificationStore(NodeChatDbContext dbContext, TimePr
 
     private static ModelClassificationRecord ToRecord(ModelClassification entity)
     {
-        return new ModelClassificationRecord(
-            entity.ModelName,
+        return new ModelClassificationRecord(entity.ModelName,
             entity.Digest,
             entity.DetectedKind,
             entity.DetectedCapabilitiesJson,

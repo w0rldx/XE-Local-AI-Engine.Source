@@ -16,10 +16,7 @@ using Microsoft.Extensions.AI;
 /// </summary>
 internal sealed class MetadataToolFunction : AIFunction
 {
-    private readonly string _description;
     private readonly Func<string, CancellationToken, Task<string>> _handler;
-    private readonly JsonElement _jsonSchema;
-    private readonly string _name;
 
     public MetadataToolFunction(string name,
         string? description,
@@ -29,17 +26,17 @@ internal sealed class MetadataToolFunction : AIFunction
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(handler);
 
-        _name = name;
-        _description = description ?? string.Empty;
-        _jsonSchema = jsonSchema;
+        Name = name;
+        Description = description ?? string.Empty;
+        JsonSchema = jsonSchema;
         _handler = handler;
     }
 
-    public override string Name => _name;
+    public override string Name { get; }
 
-    public override string Description => _description;
+    public override string Description { get; }
 
-    public override JsonElement JsonSchema => _jsonSchema;
+    public override JsonElement JsonSchema { get; }
 
     /// <summary>Parses a tool's <c>ParameterSchema</c> JSON string into a detached <see cref="JsonElement" />.</summary>
     public static JsonElement ParseSchema(string parameterSchema)

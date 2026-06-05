@@ -80,8 +80,7 @@ public sealed class OllamaPlaybookEvalJudgeTests
     public async Task ScoreAsync_WhenNeitherAssertionNorRubric_FailsClosed()
     {
         var judge = new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance);
-        var goldenCase = new GoldenConversationRecord(
-            Guid.NewGuid(),
+        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             "Invalid case",
             InputTurns: "[]",
@@ -98,9 +97,12 @@ public sealed class OllamaPlaybookEvalJudgeTests
 
     private static GoldenConversationRecord AssertionCase(string[] required, string[] forbidden)
     {
-        var assertion = JsonSerializer.Serialize(new { requiredPhrases = required, forbiddenPhrases = forbidden });
-        return new GoldenConversationRecord(
-            Guid.NewGuid(),
+        var assertion = JsonSerializer.Serialize(new
+        {
+            requiredPhrases = required,
+            forbiddenPhrases = forbidden
+        });
+        return new GoldenConversationRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             "Assertion case",
             InputTurns: """[{"role":"user","text":"hello"}]""",

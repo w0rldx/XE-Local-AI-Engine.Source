@@ -47,8 +47,7 @@ internal static partial class MemoryProposalSecretScanner
     // ── Redact-in-content patterns ────────────────────────────────────────
     // Assignment-like secrets: api_key=, secret:, password =, connectionstring=, client_secret=, access_token=, refresh_token=
     // followed by a non-whitespace, non-comment value (single/double quoted or bare word).
-    [GeneratedRegex(
-        @"(?:api[_\-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)\s*(?:=|:|:=|"":\s*""|':\s*')[^\s,;}{""'\r\n]{4,}",
+    [GeneratedRegex(@"(?:api[_\-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)\s*(?:=|:|:=|"":\s*""|':\s*')[^\s,;}{""'\r\n]{4,}",
         RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex AssignmentSecretRegex();
 
@@ -81,8 +80,7 @@ internal static partial class MemoryProposalSecretScanner
     private static partial Regex JwtRegex();
 
     // High-entropy bearer-like substrings (≥32 chars, token context keyword, Shannon entropy checked separately).
-    [GeneratedRegex(
-        @"(?:Bearer|sk-|token|key)\s+([A-Za-z0-9+/=_\-]{32,})",
+    [GeneratedRegex(@"(?:Bearer|sk-|token|key)\s+([A-Za-z0-9+/=_\-]{32,})",
         RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex BearerLikeRegex();
 
@@ -90,31 +88,15 @@ internal static partial class MemoryProposalSecretScanner
     // The whitespace/start/end boundaries (rather than \b) keep the '[REDACTED:…]' markers — which contain '[' and ']' —
     // out of the match, so a second pass never re-redacts an already-redacted span. Shannon entropy is gated separately
     // so an ordinary long identifier (low entropy) is left intact.
-    [GeneratedRegex(
-        @"(?<![A-Za-z0-9+/=_\-])([A-Za-z0-9+/=_\-]{32,})(?![A-Za-z0-9+/=_\-])",
+    [GeneratedRegex(@"(?<![A-Za-z0-9+/=_\-])([A-Za-z0-9+/=_\-]{32,})(?![A-Za-z0-9+/=_\-])",
         RegexOptions.Singleline)]
     private static partial Regex BareHighEntropyTokenRegex();
-
-    // ── Public API ────────────────────────────────────────────────────────
-
-    /// <summary>
-    ///     Outcome of scanning a single proposal record. <see cref="ShouldReject" /> is set when the record must be
-    ///     rejected outright. <see cref="RedactedContent" /> is non-null when the content was modified but the record
-    ///     is still usable.
-    /// </summary>
-    internal readonly struct ScanResult
-    {
-        public bool ShouldReject { get; init; }
-        public string? RejectionReason { get; init; }
-        public string? RedactedContent { get; init; }
-    }
 
     /// <summary>
     ///     Scans a validated proposal record. Returns a <see cref="ScanResult" /> indicating whether the record should
     ///     be rejected and/or its content redacted.
     /// </summary>
-    internal static ScanResult Scan(
-        string type,
+    internal static ScanResult Scan(string type,
         string operation,
         string content,
         IReadOnlyList<string> evidence,
@@ -126,31 +108,55 @@ internal static partial class MemoryProposalSecretScanner
             || PemPrivateKeyRegex().IsMatch(type)
             || PemPrivateKeyRegex().IsMatch(operation))
         {
-            return new ScanResult { ShouldReject = true, RejectionReason = "record contains a PEM private-key block" };
+            return new ScanResult
+            {
+                ShouldReject = true,
+                RejectionReason = "record contains a PEM private-key block"
+            };
         }
 
         // ── 2. Whole-record reject: Google service-account JSON ─────────────
         if (ServiceAccountTypeRegex().IsMatch(content) && ServiceAccountPrivateKeyRegex().IsMatch(content))
         {
-            return new ScanResult { ShouldReject = true, RejectionReason = "record contains a Google service-account JSON block" };
+            return new ScanResult
+            {
+                ShouldReject = true,
+                RejectionReason = "record contains a Google service-account JSON block"
+            };
         }
 
         // ── 3. Whole-record reject: secrets in metadata fields ──────────────
-        if (new[] { type, operation, confidence }.Any(ContainsAnyRedactPattern))
+        if (new[]
+            {
+                type,
+                operation,
+                confidence
+            }.Any(ContainsAnyRedactPattern))
         {
-            return new ScanResult { ShouldReject = true, RejectionReason = "secret detected in a metadata field (type/operation/confidence)" };
+            return new ScanResult
+            {
+                ShouldReject = true,
+                RejectionReason = "secret detected in a metadata field (type/operation/confidence)"
+            };
         }
 
         if (evidence.Any(path => ContainsAnyRedactPattern(path) || PemPrivateKeyRegex().IsMatch(path)))
         {
-            return new ScanResult { ShouldReject = true, RejectionReason = "secret detected in an evidence path" };
+            return new ScanResult
+            {
+                ShouldReject = true,
+                RejectionReason = "secret detected in an evidence path"
+            };
         }
 
         // ── 4. Redact content matches ───────────────────────────────────────
         var redacted = RedactContent(content);
         var contentChanged = !string.Equals(redacted, content, StringComparison.Ordinal);
 
-        return new ScanResult { RedactedContent = contentChanged ? redacted : null };
+        return new ScanResult
+        {
+            RedactedContent = contentChanged ? redacted : null
+        };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -260,5 +266,19 @@ internal static partial class MemoryProposalSecretScanner
         }
 
         return entropy;
+    }
+
+    // ── Public API ────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Outcome of scanning a single proposal record. <see cref="ShouldReject" /> is set when the record must be
+    ///     rejected outright. <see cref="RedactedContent" /> is non-null when the content was modified but the record
+    ///     is still usable.
+    /// </summary>
+    internal readonly struct ScanResult
+    {
+        public bool ShouldReject { get; init; }
+        public string? RejectionReason { get; init; }
+        public string? RedactedContent { get; init; }
     }
 }

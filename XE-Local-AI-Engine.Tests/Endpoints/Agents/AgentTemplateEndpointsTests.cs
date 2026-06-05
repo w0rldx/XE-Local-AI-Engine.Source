@@ -87,7 +87,11 @@ public sealed class AgentTemplateEndpointsTests
         {
             Content = JsonContent.Create(new
             {
-                slugs = new[] { knownSlug, "not-a-real-slug" }
+                slugs = new[]
+                {
+                    knownSlug,
+                    "not-a-real-slug"
+                }
             })
         };
         factory.AddNodeBearerToken(request);

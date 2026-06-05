@@ -14,9 +14,8 @@ public sealed class FakeModelFitUtilityRunner : IModelFitUtilityRunner
     public const string Name = "fake";
 
     private readonly object _sync = new();
-    private bool _throwCancellation;
-    private ModelFitUtilityRunResult _scriptedResult = new(
-        Status: ModelFitRunStatus.Succeeded,
+
+    private ModelFitUtilityRunResult _scriptedResult = new(Status: ModelFitRunStatus.Succeeded,
         ExitCode: 0,
         StandardOutput: "{}",
         StandardError: string.Empty,
@@ -26,11 +25,31 @@ public sealed class FakeModelFitUtilityRunner : IModelFitUtilityRunner
         CompletedAtUtc: null,
         SanitizedError: null);
 
+    private bool _throwCancellation;
+
     /// <summary>The last request passed to <see cref="RunAsync" />, or <c>null</c> when never called.</summary>
     public ModelFitUtilityRunRequest? LastRequest { get; private set; }
 
     /// <summary>How many times <see cref="RunAsync" /> was invoked.</summary>
     public int RunCount { get; private set; }
+
+    public Task<ModelFitUtilityRunResult> RunAsync(ModelFitUtilityRunRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_sync)
+        {
+            LastRequest = request;
+            RunCount++;
+            if (_throwCancellation)
+            {
+                throw new OperationCanceledException("Scripted model-fit utility run cancellation.");
+            }
+
+            return Task.FromResult(_scriptedResult);
+        }
+    }
 
     /// <summary>Scripts the result the next run returns.</summary>
     public void ScriptResult(ModelFitUtilityRunResult result)
@@ -53,24 +72,6 @@ public sealed class FakeModelFitUtilityRunner : IModelFitUtilityRunner
         lock (_sync)
         {
             _throwCancellation = true;
-        }
-    }
-
-    public Task<ModelFitUtilityRunResult> RunAsync(ModelFitUtilityRunRequest request, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_sync)
-        {
-            LastRequest = request;
-            RunCount++;
-            if (_throwCancellation)
-            {
-                throw new OperationCanceledException("Scripted model-fit utility run cancellation.");
-            }
-
-            return Task.FromResult(_scriptedResult);
         }
     }
 }

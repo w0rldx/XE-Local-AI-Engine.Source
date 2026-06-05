@@ -24,9 +24,9 @@ public sealed class ListGoldenConversationsEndpoint(IGoldenConversationService g
     {
         var records = await _goldenConversationService.ListByAgentAsync(req.AgentDefinitionId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListGoldenConversationsResponse
-        {
-            Items = [.. records.Select(static record => record.ToResponse())]
-        },
+            {
+                Items = [.. records.Select(static record => record.ToResponse())]
+            },
             ct).ConfigureAwait(false);
     }
 }

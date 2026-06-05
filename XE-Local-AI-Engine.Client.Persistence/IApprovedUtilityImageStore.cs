@@ -34,8 +34,7 @@ public interface IApprovedUtilityImageStore
     ///     <paramref name="approvedImageId" /> and bumps <c>UpdatedAtUtc</c>. Returns the updated record, or <c>null</c>
     ///     when none exists.
     /// </summary>
-    Task<ApprovedUtilityImageRecord?> TouchUsedAsync(
-        string approvedImageId,
+    Task<ApprovedUtilityImageRecord?> TouchUsedAsync(string approvedImageId,
         long lastUsedAtUtc,
         long? lastSuccessfulRunAtUtc = null,
         CancellationToken cancellationToken = default);

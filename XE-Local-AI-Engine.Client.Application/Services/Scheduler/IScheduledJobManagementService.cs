@@ -64,8 +64,7 @@ public interface IScheduledJobManagementService
     ///         empty map fires the definition exactly as its stored parameters describe (the recurring/cron path).
     ///     </para>
     /// </summary>
-    Task TriggerNowAsync(
-        Guid id,
+    Task TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default);
 
@@ -73,8 +72,7 @@ public interface IScheduledJobManagementService
     ///     Returns run-history records matching the supplied filters (each <c>null</c> filter is ignored), ordered by
     ///     actual fire time descending.
     /// </summary>
-    Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(
-        ScheduledRunStatus? status = null,
+    Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
         long? fromUtc = null,
         long? toUtc = null,
         Guid? scheduledJobId = null,

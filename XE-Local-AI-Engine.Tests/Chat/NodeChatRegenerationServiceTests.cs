@@ -109,8 +109,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
         var agentDefinitionId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(
-            new NodeChatCreateConversationRequest("Bound regen", "node", 10, AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Bound regen", "node", 10, AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false);
         AssertEx.Equal(agentDefinitionId, conversation.AgentDefinitionId!.Value);
 
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
@@ -159,7 +158,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // ResolvePrecedingUserTurnContent anchors the relevance-retrieval query to the user turn the
         // regenerate re-answers — here the seeded "what is 2+2?" — not just any string. This is the only direct
         // coverage of that variant-group-anchored query selection.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "what is 2+2?"), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "what is 2+2?"), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                      .ConfigureAwait(false);
         AssertEx.Equal("Bound persona prompt.", runner.LastSystemPrompt);
         AssertEx.Equal(9, runner.LastAgentDefinitionVersion);
         AssertEx.Equal("high", runner.LastReasoningEffort);
@@ -180,20 +180,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var conversationAgentId = Guid.NewGuid();
         var originalTurnAgentId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(
-            new NodeChatCreateConversationRequest("Reuse original agent", "node", 10, AgentDefinitionId: conversationAgentId)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Reuse original agent", "node", 10, AgentDefinitionId: conversationAgentId))
+                                            .ConfigureAwait(false);
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
         // The original assistant turn carries its own agent attribution (stamped at its send time).
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
-                originalId,
-                originalCorrelation.RequestId,
-                12,
-                "model-x",
-                AgentDefinitionId: originalTurnAgentId,
-                AgentName: "Original Agent"))
-            .ConfigureAwait(false);
+                             originalId,
+                             originalCorrelation.RequestId,
+                             12,
+                             "model-x",
+                             AgentDefinitionId: originalTurnAgentId,
+                             AgentName: "Original Agent"))
+                         .ConfigureAwait(false);
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: "model-x"))
                          .ConfigureAwait(false);
 
@@ -251,8 +251,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
         var agentDefinitionId = Guid.NewGuid();
 
-        var conversation = await persistence.CreateConversationAsync(
-            new NodeChatCreateConversationRequest("Orchestrated regen", "node", 10, AgentDefinitionId: agentDefinitionId)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Orchestrated regen", "node", 10, AgentDefinitionId: agentDefinitionId))
+                                            .ConfigureAwait(false);
         await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
         var originalId = Guid.NewGuid();
         var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
@@ -754,7 +754,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static INodeSettingsStore CreateNodeSettingsStore(string? defaultModelName = null)
     {
         var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { DefaultModelName = defaultModelName });
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            DefaultModelName = defaultModelName
+        });
         return store;
     }
 
@@ -841,10 +844,31 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             ReturnToPrevious = false,
             Participants =
             [
-                new OrchestrationSpecParticipant { Key = "a", Name = "Triage", Instructions = "Triage.", ModelId = "qwen3:8b", Tools = [] },
-                new OrchestrationSpecParticipant { Key = "b", Name = "Specialist", Instructions = "Specialist.", ModelId = "qwen3:8b", Tools = [] }
+                new OrchestrationSpecParticipant
+                {
+                    Key = "a",
+                    Name = "Triage",
+                    Instructions = "Triage.",
+                    ModelId = "qwen3:8b",
+                    Tools = []
+                },
+                new OrchestrationSpecParticipant
+                {
+                    Key = "b",
+                    Name = "Specialist",
+                    Instructions = "Specialist.",
+                    ModelId = "qwen3:8b",
+                    Tools = []
+                }
             ],
-            Edges = [new OrchestrationSpecEdge { FromKey = "a", ToKey = "b" }]
+            Edges =
+            [
+                new OrchestrationSpecEdge
+                {
+                    FromKey = "a",
+                    ToKey = "b"
+                }
+            ]
         };
     }
 
@@ -1112,7 +1136,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null)
+        public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
+            long? generationDurationMs = null)
         {
             if (CurrentInvocation is not null)
             {

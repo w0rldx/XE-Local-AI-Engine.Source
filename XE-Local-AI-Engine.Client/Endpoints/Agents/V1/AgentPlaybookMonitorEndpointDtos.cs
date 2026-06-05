@@ -37,7 +37,8 @@ public sealed record PlaybookRetrievalResponse(
     int Threshold,
     int TopK,
     string Ranker,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EmbeddingModel);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? EmbeddingModel);
 
 /// <summary>
 ///     Read-only playbook monitoring envelope for one agent: one item per Enabled action that carries an enable

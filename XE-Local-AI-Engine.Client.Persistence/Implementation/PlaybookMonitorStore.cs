@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -83,8 +84,7 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
         }
 
         // SUM over no rows yields SQL NULL; the aggregate-row read coalesces each column to 0.
-        return new CohortComparison(
-            ReadCount(reader, 0),
+        return new CohortComparison(ReadCount(reader, 0),
             ReadCount(reader, 1),
             ReadCount(reader, 2),
             ReadCount(reader, 3));
@@ -92,7 +92,7 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
 
     private static int ReadCount(DbDataReader reader, int ordinal)
     {
-        return reader.IsDBNull(ordinal) ? 0 : Convert.ToInt32(reader.GetValue(ordinal), System.Globalization.CultureInfo.InvariantCulture);
+        return reader.IsDBNull(ordinal) ? 0 : Convert.ToInt32(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
     private static async Task OpenIfNeededAsync(DbConnection connection, CancellationToken cancellationToken)

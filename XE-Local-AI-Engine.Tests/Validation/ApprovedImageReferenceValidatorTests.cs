@@ -113,7 +113,10 @@ public sealed class ApprovedImageReferenceValidatorTests
     [Test]
     public void Validate_WithCustomAllowlist_AcceptsOnlyTheAllowlistedRepository()
     {
-        var customAllowlist = new HashSet<string>(StringComparer.Ordinal) { "ghcr.io/example/util" };
+        var customAllowlist = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ghcr.io/example/util"
+        };
         var validator = new ApprovedImageReferenceValidator(customAllowlist);
         const string accepted =
             "ghcr.io/example/util:1.2.3@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";

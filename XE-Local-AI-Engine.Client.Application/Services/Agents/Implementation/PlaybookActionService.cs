@@ -10,9 +10,9 @@ internal sealed class PlaybookActionService(
     IAgentDefinitionStore agentDefinitionStore,
     IOptions<PlaybookActionOptions> actionOptions) : IPlaybookActionService
 {
-    private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
-    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
     private readonly PlaybookActionOptions _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
+    private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
     {
@@ -114,8 +114,7 @@ internal sealed class PlaybookActionService(
 
         // State/Source are pinned here (Suggested/Analysis) — never client-supplied — so the manual CRUD route stays
         // the only path that authors Manual actions, and a suggestion stays inert until a human promotes it.
-        var storeInput = new PlaybookActionInput(
-            input.AgentDefinitionId,
+        var storeInput = new PlaybookActionInput(input.AgentDefinitionId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
             input.TriggerCondition,
@@ -199,8 +198,7 @@ internal sealed class PlaybookActionService(
 
         // Record the eval JSON only — the action stays Suggested/Analysis with every injected field (Behavior, Priority,
         // State) unchanged, so the store leaves Version alone (EvalResult is excluded from its config-affecting rule).
-        var storeInput = new PlaybookActionInput(
-            pending.AgentDefinitionId,
+        var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
             pending.TriggerCondition,
@@ -239,8 +237,7 @@ internal sealed class PlaybookActionService(
         // The action stays Suggested/Analysis and keeps its evidence + confidence; only the operator-editable fields
         // change. Editing clears any recorded EvalResult (the trailing argument is left null) so a stale pass cannot
         // promote an edited action — the operator must re-run the eval. Promotion remains a separate, explicit step.
-        var storeInput = new PlaybookActionInput(
-            pending.AgentDefinitionId,
+        var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
             input.TriggerCondition,
@@ -252,29 +249,6 @@ internal sealed class PlaybookActionService(
             EvalResult: null);
 
         return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<PlaybookActionRecord?> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, string? evalResult, CancellationToken cancellationToken)
-    {
-        var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
-        if (pending is null)
-        {
-            return null;
-        }
-
-        var storeInput = new PlaybookActionInput(
-            pending.AgentDefinitionId,
-            target,
-            PlaybookActionSource.Analysis,
-            pending.TriggerCondition,
-            pending.Behavior,
-            pending.Scope,
-            pending.Priority,
-            pending.SourceFeedbackIds,
-            pending.Confidence,
-            evalResult);
-
-        return await _store.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
@@ -292,6 +266,28 @@ internal sealed class PlaybookActionService(
         }
 
         return existing;
+    }
+
+    private async Task<PlaybookActionRecord?> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, string? evalResult, CancellationToken cancellationToken)
+    {
+        var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
+        if (pending is null)
+        {
+            return null;
+        }
+
+        var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
+            target,
+            PlaybookActionSource.Analysis,
+            pending.TriggerCondition,
+            pending.Behavior,
+            pending.Scope,
+            pending.Priority,
+            pending.SourceFeedbackIds,
+            pending.Confidence,
+            evalResult);
+
+        return await _store.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task EnsureBelowEnabledCapAsync(Guid agentDefinitionId, Guid? excludedActionId, CancellationToken cancellationToken)

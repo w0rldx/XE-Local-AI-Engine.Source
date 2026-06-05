@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 
 public sealed partial class WorkerHubConnection
 {

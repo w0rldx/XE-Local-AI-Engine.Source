@@ -22,24 +22,30 @@ internal static class FeedbackInsightsMapper
                 DownRate = result.Overall.DownRate,
                 MeetsThreshold = result.Overall.MeetsThreshold
             },
-            ByTool = [.. result.ByTool.Select(static tool => new ToolFeedbackResponse
-            {
-                ToolName = tool.ToolName,
-                Total = tool.Total,
-                Up = tool.Up,
-                Down = tool.Down,
-                DownRate = tool.DownRate,
-                MeetsThreshold = tool.MeetsThreshold
-            })],
-            Exemplars = [.. result.Exemplars.Select(static exemplar => new FeedbackExemplarResponse
-            {
-                Rating = exemplar.Rating,
-                Comment = exemplar.Comment,
-                MessageId = exemplar.MessageId,
-                ConversationId = exemplar.ConversationId,
-                CreatedAtUtc = exemplar.CreatedAtUtc,
-                Truncated = exemplar.Truncated
-            })]
+            ByTool =
+            [
+                .. result.ByTool.Select(static tool => new ToolFeedbackResponse
+                {
+                    ToolName = tool.ToolName,
+                    Total = tool.Total,
+                    Up = tool.Up,
+                    Down = tool.Down,
+                    DownRate = tool.DownRate,
+                    MeetsThreshold = tool.MeetsThreshold
+                })
+            ],
+            Exemplars =
+            [
+                .. result.Exemplars.Select(static exemplar => new FeedbackExemplarResponse
+                {
+                    Rating = exemplar.Rating,
+                    Comment = exemplar.Comment,
+                    MessageId = exemplar.MessageId,
+                    ConversationId = exemplar.ConversationId,
+                    CreatedAtUtc = exemplar.CreatedAtUtc,
+                    Truncated = exemplar.Truncated
+                })
+            ]
         };
     }
 }

@@ -4,7 +4,6 @@ using System.Globalization;
 using global::Docker.DotNet;
 using global::Grpc.Core;
 using Google.Protobuf.WellKnownTypes;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Linux.Docker;
@@ -13,28 +12,29 @@ using XE_Local_AI_Engine.HostAgent.Linux.Docker;
 ///     Serves the narrow <c>ModelFitUtilityControl</c> gRPC contract: runs a digest-pinned, approved
 ///     llmfit utility image for a recommend or benchmark operation. The global HMAC interceptor authenticates every
 ///     call (the rpc is unary by design), so this service does no auth wiring.
-///
 ///     This is NOT a general Docker executor. The only selectable unit on the wire is INTENT (operation + validated
 ///     params + a pinned image reference). The actual <c>llmfit</c> argv is built HERE from a fixed server-side command
 ///     profile — never accepted from the request — and the image reference is RE-validated against the allowlist
 ///     (defense in depth on top of the node-side validation) before anything runs. The verified command profiles are:
 ///     <list type="bullet">
-///       <item><c>recommend</c>: <c>(--cpu-cores n)? (--ram gG)? (--memory vG)? recommend --json --use-case &lt;uc&gt; --limit &lt;n&gt;</c> — HW overrides MUST precede the subcommand (verified against the llmfit CLI).</item>
-///       <item><c>bench</c>: <c>bench --provider &lt;provider&gt; --url &lt;url&gt; --json &lt;model&gt;</c> — model name is REQUIRED for ollama bench.</item>
+///         <item>
+///             <c>recommend</c>: <c>(--cpu-cores n)? (--ram gG)? (--memory vG)? recommend --json --use-case &lt;uc&gt; --limit &lt;n&gt;</c> — HW overrides MUST precede the subcommand (verified
+///             against the llmfit CLI).
+///         </item>
+///         <item><c>bench</c>: <c>bench --provider &lt;provider&gt; --url &lt;url&gt; --json &lt;model&gt;</c> — model name is REQUIRED for ollama bench.</item>
 ///     </list>
 /// </summary>
 public sealed class ModelFitUtilityControlService : ModelFitUtilityControl.ModelFitUtilityControlBase
 {
     private const string RecommendSubcommand = "recommend";
     private const string BenchmarkSubcommand = "bench";
+    private readonly ILogger<ModelFitUtilityControlService> _logger;
+    private readonly ModelFitUtilityOptions _options;
 
     private readonly IDockerRuntimeClient _runtimeClient;
-    private readonly ModelFitUtilityOptions _options;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<ModelFitUtilityControlService> _logger;
 
-    public ModelFitUtilityControlService(
-        IDockerRuntimeClient runtimeClient,
+    public ModelFitUtilityControlService(IDockerRuntimeClient runtimeClient,
         IOptions<ModelFitUtilityOptions> options,
         TimeProvider timeProvider,
         ILogger<ModelFitUtilityControlService> logger)
@@ -247,8 +247,7 @@ public sealed class ModelFitUtilityControlService : ModelFitUtilityControl.Model
             : value.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static ModelFitTerminalStatusMessage ResolveTerminalStatus(
-        UtilityContainerRunResult result,
+    private static ModelFitTerminalStatusMessage ResolveTerminalStatus(UtilityContainerRunResult result,
         CancellationTokenSource timeoutCts,
         CancellationToken callerToken)
     {

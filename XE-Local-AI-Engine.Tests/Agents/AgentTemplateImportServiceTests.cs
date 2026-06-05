@@ -30,8 +30,7 @@ public sealed class AgentTemplateImportServiceTests
         AssertEx.Empty(result.Unknown);
 
         var definitions = await store.ListAsync().ConfigureAwait(false);
-        var created = AssertEx.NotNull(
-            definitions.FirstOrDefault(definition => definition.SeedSlug == slug),
+        var created = AssertEx.NotNull(definitions.FirstOrDefault(definition => definition.SeedSlug == slug),
             "The imported slug should have produced a stored definition.");
 
         // Seeded provenance and a plain chat persona: verbatim instructions, no tools, single kind, no model/effort.

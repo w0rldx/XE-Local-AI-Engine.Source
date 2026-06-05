@@ -10,11 +10,9 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 /// </summary>
 internal static class GitDiffCommandKeys
 {
-    public static string PatchDiff => CommandKey(AgentHomeGit.Arguments(
-        "diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."));
+    public static string PatchDiff => CommandKey(AgentHomeGit.Arguments("diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."));
 
-    public static string NameStatus => CommandKey(AgentHomeGit.Arguments(
-        "diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
+    public static string NameStatus => CommandKey(AgentHomeGit.Arguments("diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."));
 
     private static string CommandKey(IReadOnlyList<string> arguments)
     {

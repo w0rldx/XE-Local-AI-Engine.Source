@@ -12,14 +12,6 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 /// </summary>
 public sealed class ModelFitRequestValidator
 {
-    /// <summary>The six llmfit-supported use-case values. Matched ordinally and case-sensitively.</summary>
-    public static readonly IReadOnlySet<string> AllowedUseCases =
-        new HashSet<string>(StringComparer.Ordinal) { "general", "coding", "reasoning", "chat", "multimodal", "embedding" };
-
-    /// <summary>The allowlisted providers (initially ollama only). Matched ordinally and case-sensitively.</summary>
-    public static readonly IReadOnlySet<string> AllowedProviders =
-        new HashSet<string>(StringComparer.Ordinal) { "ollama" };
-
     /// <summary>The inclusive lower bound for the recommend limit.</summary>
     public const int MinLimit = 1;
 
@@ -30,6 +22,25 @@ public sealed class ModelFitRequestValidator
     /// </summary>
     public const int MaxLimit = 500;
 
+    /// <summary>The six llmfit-supported use-case values. Matched ordinally and case-sensitively.</summary>
+    public static readonly IReadOnlySet<string> AllowedUseCases =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "general",
+            "coding",
+            "reasoning",
+            "chat",
+            "multimodal",
+            "embedding"
+        };
+
+    /// <summary>The allowlisted providers (initially ollama only). Matched ordinally and case-sensitively.</summary>
+    public static readonly IReadOnlySet<string> AllowedProviders =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ollama"
+        };
+
     private readonly ModelNameValidator _modelNameValidator;
 
     public ModelFitRequestValidator(ModelNameValidator modelNameValidator)
@@ -38,8 +49,7 @@ public sealed class ModelFitRequestValidator
     }
 
     /// <summary>Validates the params for the given <paramref name="operation" />. Returns a sanitized error, or <c>null</c> when valid.</summary>
-    public string? GetValidationError(
-        ModelFitOperation operation,
+    public string? GetValidationError(ModelFitOperation operation,
         string? useCase,
         int limit,
         string? providerName,
@@ -85,8 +95,7 @@ public sealed class ModelFitRequestValidator
     }
 
     /// <summary>Convenience predicate: <c>true</c> only when <see cref="GetValidationError" /> returns <c>null</c>.</summary>
-    public bool IsValid(
-        ModelFitOperation operation,
+    public bool IsValid(ModelFitOperation operation,
         string? useCase,
         int limit,
         string? providerName,

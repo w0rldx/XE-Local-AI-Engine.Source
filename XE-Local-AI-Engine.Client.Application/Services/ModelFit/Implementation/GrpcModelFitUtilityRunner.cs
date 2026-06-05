@@ -93,8 +93,7 @@ public sealed class GrpcModelFitUtilityRunner : IModelFitUtilityRunner, IDisposa
     {
         ArgumentNullException.ThrowIfNull(reply);
 
-        return new ModelFitUtilityRunResult(
-            Status: ToRunStatus(reply.Status),
+        return new ModelFitUtilityRunResult(Status: ToRunStatus(reply.Status),
             ExitCode: reply.ExitCode,
             StandardOutput: reply.StandardOutput,
             StandardError: reply.StandardError,

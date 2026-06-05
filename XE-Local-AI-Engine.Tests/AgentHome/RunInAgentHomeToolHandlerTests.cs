@@ -53,8 +53,7 @@ public sealed class RunInAgentHomeToolHandlerTests
         var gateway = new StubGateway("run reached the gateway");
         var handler = CreateHandler(enabled: true, gateway);
 
-        var result = await handler.ExecuteAsync(
-            """{"goal":"g","selectedFolderIds":["/etc/passwd"],"allowedActions":["read_workspace"]}""");
+        var result = await handler.ExecuteAsync("""{"goal":"g","selectedFolderIds":["/etc/passwd"],"allowedActions":["read_workspace"]}""");
 
         AssertEx.Contains(result, "invalid", StringComparison.OrdinalIgnoreCase);
         AssertEx.False(gateway.WasCalled, "a raw host path id must reject before the gateway");
@@ -75,11 +74,11 @@ public sealed class RunInAgentHomeToolHandlerTests
     private static RunInAgentHomeToolHandler CreateHandler(bool enabled, IAgentHomeToolGateway gateway)
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["AgentHome:Enabled"] = enabled ? "true" : "false"
-            })
-            .Build();
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["AgentHome:Enabled"] = enabled ? "true" : "false"
+                            })
+                            .Build();
 
         return new RunInAgentHomeToolHandler(configuration, gateway);
     }

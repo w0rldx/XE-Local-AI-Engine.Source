@@ -499,7 +499,7 @@ public sealed class NodeChatRegenerationService(
         }
 
         var classifications = await modelClassificationService
-                                    .ClassifyAsync([(activeModel, (string?)null)], cancellationToken)
+                                    .ClassifyAsync([(activeModel, null)], cancellationToken)
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(activeModel, out var classification))
         {
@@ -509,13 +509,6 @@ public sealed class NodeChatRegenerationService(
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities));
     }
-
-    /// <summary>The up-front per-turn resolution shared by variant stamping and runtime-package construction.</summary>
-    private sealed record ResolvedTurn(string ActiveModel,
-        ResolvedAgentRuntime? Resolved,
-        ResolvedOrchestration? Orchestration,
-        bool SupportsThinking,
-        bool SupportsTools);
 
     /// <summary>
     ///     Mirrors <c>NodeChatStreamService.ResolveOrchestrationAsync</c>: resolves a compiled orchestration spec for a
@@ -634,4 +627,12 @@ public sealed class NodeChatRegenerationService(
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
+
+    /// <summary>The up-front per-turn resolution shared by variant stamping and runtime-package construction.</summary>
+    private sealed record ResolvedTurn(
+        string ActiveModel,
+        ResolvedAgentRuntime? Resolved,
+        ResolvedOrchestration? Orchestration,
+        bool SupportsThinking,
+        bool SupportsTools);
 }

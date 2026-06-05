@@ -2,12 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using System.Collections.Immutable;
 using System.Globalization;
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
@@ -23,23 +22,23 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, IAsyncDisposable
 {
-    private readonly SemaphoreSlim _refreshGate = new(1, 1);
-
-    // Guards _connections and _statuses (mutated only under the refresh gate, but GetStatuses reads concurrently).
-    private readonly object _stateLock = new();
+    private readonly IMcpClientFactory _clientFactory;
     private readonly Dictionary<Guid, ConnectedServer> _connections = [];
-    private ImmutableArray<McpServerConnectionStatus> _statuses = [];
+    private readonly ILogger<McpServerConnectionManager> _logger;
+    private readonly McpOptions _options;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly IMcpToolRegistry _registry;
 
     // The store is DbContext-backed and therefore Scoped, so a singleton manager must resolve it per refresh through a
     // scope rather than capturing it (a captive dependency would fail ValidateOnBuild and risk concurrent DbContext use).
     // This mirrors NodeChatPersistenceWriter / AgentHomeService.
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IMcpToolRegistry _registry;
-    private readonly IMcpClientFactory _clientFactory;
-    private readonly McpOptions _options;
-    private readonly ILogger<McpServerConnectionManager> _logger;
+
+    // Guards _connections and _statuses (mutated only under the refresh gate, but GetStatuses reads concurrently).
+    private readonly object _stateLock = new();
 
     private bool _disposed;
+    private ImmutableArray<McpServerConnectionStatus> _statuses = [];
 
     public McpServerConnectionManager(IServiceScopeFactory scopeFactory,
         IMcpToolRegistry registry,
@@ -53,6 +52,24 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        foreach (var server in _connections.Values)
+        {
+            await DisposeClientSafelyAsync(server).ConfigureAwait(false);
+        }
+
+        _connections.Clear();
+        _refreshGate.Dispose();
     }
 
     public IReadOnlyList<McpServerConnectionStatus> GetStatuses()
@@ -228,7 +245,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 named.JsonSchema.GetRawText(),
                 requiresApproval);
 
-            Microsoft.Extensions.AI.AITool executable = new Microsoft.Extensions.AI.ApprovalRequiredAIFunction(named);
+            AITool executable = new ApprovalRequiredAIFunction(named);
             registered.Add(new McpRegisteredTool(qualifiedName, executable, descriptor));
         }
 
@@ -342,24 +359,6 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         {
             _logger.LogDebug(ex, "Ignored error while disposing an MCP client during reconcile.");
         }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-
-        foreach (var server in _connections.Values)
-        {
-            await DisposeClientSafelyAsync(server).ConfigureAwait(false);
-        }
-
-        _connections.Clear();
-        _refreshGate.Dispose();
     }
 
     private sealed record ConnectedServer(McpClient Client, int Version, string Slug, IReadOnlyList<McpRegisteredTool> Tools);

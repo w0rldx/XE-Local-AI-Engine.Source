@@ -50,8 +50,7 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
                              .Select(message => new HarvestTurn(message.Role, Encoding.UTF8.GetString(message.Content)))
                              .ToArray();
 
-            sources.Add(new HarvestCandidateSource(
-                row.MessageId,
+            sources.Add(new HarvestCandidateSource(row.MessageId,
                 row.ConversationId,
                 row.Title,
                 priorTurns,
@@ -82,8 +81,7 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            rows.Add(new ThumbsUpRow(
-                Guid.Parse(reader.GetString(0)),
+            rows.Add(new ThumbsUpRow(Guid.Parse(reader.GetString(0)),
                 Guid.Parse(reader.GetString(1)),
                 await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(2)));
         }

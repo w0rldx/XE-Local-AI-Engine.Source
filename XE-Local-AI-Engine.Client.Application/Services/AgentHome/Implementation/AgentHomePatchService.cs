@@ -19,14 +19,16 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 internal sealed class AgentHomePatchService : IAgentHomePatchService
 {
     private static readonly JsonSerializerOptions ChangedFilesJsonOptions =
-        new(JsonSerializerDefaults.Web) { WriteIndented = true };
+        new(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = true
+        };
 
     private readonly ILogger<AgentHomePatchService> _logger;
     private readonly AgentHomeOptions _options;
     private readonly ISandboxRuntimeProvider _provider;
 
-    public AgentHomePatchService(
-        ISandboxRuntimeProvider provider,
+    public AgentHomePatchService(ISandboxRuntimeProvider provider,
         IOptions<AgentHomeOptions> options,
         ILogger<AgentHomePatchService> logger)
     {
@@ -36,8 +38,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<AgentHomePatchExport> ExportPatchAsync(
-        SandboxHandle handle,
+    public async Task<AgentHomePatchExport> ExportPatchAsync(SandboxHandle handle,
         AgentHomePatchExportRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -49,19 +50,15 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         // Full binary-aware patch. Captured from standard output; the worker writes the file, since the SPI
         // carries no shell redirection.
-        var patchResult = await _provider.ExecuteAsync(
-            handle,
-            DiffCommand(
-                $"{request.RunId}-patch-diff",
+        var patchResult = await _provider.ExecuteAsync(handle,
+            DiffCommand($"{request.RunId}-patch-diff",
                 commandTimeout,
                 "diff", "--binary", "--find-renames=50%", "--find-copies=50%", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", "."),
             cancellationToken).ConfigureAwait(false);
 
         // Name-status summary used to build changed-files.json.
-        var statusResult = await _provider.ExecuteAsync(
-            handle,
-            DiffCommand(
-                $"{request.RunId}-patch-status",
+        var statusResult = await _provider.ExecuteAsync(handle,
+            DiffCommand($"{request.RunId}-patch-status",
                 commandTimeout,
                 "diff", "--name-status", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", "."),
             cancellationToken).ConfigureAwait(false);
@@ -71,8 +68,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             // A non-zero exit or an incomplete command means no patch could be produced. Surface that distinctly so it
             // is not reported as a clean zero-change run; write no artifacts. (Real non-zero git exits are exercised by
             // the local-container provider in local-container sandbox — the fake's git is scripted.)
-            _logger.LogWarning(
-                "Patch export for run {RunId} aborted: patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
+            _logger.LogWarning("Patch export for run {RunId} aborted: patch diff exit {PatchExit} (completed {PatchCompleted}), name-status exit {StatusExit} (completed {StatusCompleted}).",
                 request.RunId,
                 patchResult.ExitCode,
                 patchResult.Completed,
@@ -95,15 +91,14 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         var changedFilesRelative = RunRelativePath(request.RunId, "changed-files.json");
         var changedFilesJson = JsonSerializer.Serialize(changedFiles, ChangedFilesJsonOptions);
         await File.WriteAllTextAsync(Path.Combine(patchesDirectory, "changed-files.json"), changedFilesJson, cancellationToken)
-            .ConfigureAwait(false);
+                  .ConfigureAwait(false);
 
         var patchText = patchResult.StandardOutput;
         var patchBytes = Encoding.UTF8.GetByteCount(patchText);
         if (patchBytes > _options.MaxPatchBytes)
         {
             // Over budget: keep the changed-file metadata, drop the oversized patch.
-            _logger.LogWarning(
-                "Patch for run {RunId} is {Bytes} byte(s), over the {Budget}-byte budget; changes.patch not written.",
+            _logger.LogWarning("Patch for run {RunId} is {Bytes} byte(s), over the {Budget}-byte budget; changes.patch not written.",
                 request.RunId,
                 patchBytes,
                 _options.MaxPatchBytes);
@@ -119,10 +114,9 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         }
 
         await File.WriteAllTextAsync(Path.Combine(patchesDirectory, "changes.patch"), patchText, cancellationToken)
-            .ConfigureAwait(false);
+                  .ConfigureAwait(false);
 
-        _logger.LogInformation(
-            "Exported patch for run {RunId}: {ChangedCount} changed file(s), {Bytes} byte(s).",
+        _logger.LogInformation("Exported patch for run {RunId}: {ChangedCount} changed file(s), {Bytes} byte(s).",
             request.RunId,
             changedFiles.Count,
             patchBytes);
@@ -154,15 +148,14 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         return result.Completed && result.ExitCode == 0;
     }
 
-    private List<ChangedFileEntry> ParseChangedFiles(
-        string nameStatusOutput,
+    private List<ChangedFileEntry> ParseChangedFiles(string nameStatusOutput,
         IReadOnlyList<ResolvedSelectedFolder> resolvedFolders)
     {
         // Defensive group-by-alias: the selected-folder store's unique alias index makes a duplicate unreachable, but
         // grouping (take-first) keeps a should-never-happen collision from throwing during export.
         var aliasToId = resolvedFolders
-            .GroupBy(folder => folder.Alias, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().Id.ToString(), StringComparer.Ordinal);
+                        .GroupBy(folder => folder.Alias, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.First().Id.ToString(), StringComparer.Ordinal);
 
         return nameStatusOutput
                .Split('\n')

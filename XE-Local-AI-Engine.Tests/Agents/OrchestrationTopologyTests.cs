@@ -36,7 +36,10 @@ public sealed class OrchestrationTopologyTests
     {
         // Fail-closed cap: an oversized participant list would fan out into one DB lookup per id per turn.
         var triage = Guid.NewGuid();
-        var participants = new List<Guid> { triage };
+        var participants = new List<Guid>
+        {
+            triage
+        };
         for (var i = 0; i < OrchestrationTopologyJson.MaxParticipants; i++)
         {
             participants.Add(Guid.NewGuid());
@@ -61,7 +64,11 @@ public sealed class OrchestrationTopologyTests
         var handoffs = new List<OrchestrationHandoff>();
         for (var i = 0; i <= OrchestrationTopologyJson.MaxHandoffs; i++)
         {
-            handoffs.Add(new OrchestrationHandoff { FromAgentDefinitionId = triage, ToAgentDefinitionId = specialist });
+            handoffs.Add(new OrchestrationHandoff
+            {
+                FromAgentDefinitionId = triage,
+                ToAgentDefinitionId = specialist
+            });
         }
 
         var topology = new OrchestrationTopology
@@ -81,7 +88,10 @@ public sealed class OrchestrationTopologyTests
     {
         // Exactly at the cap is allowed — only a list STRICTLY over the cap fails closed.
         var triage = Guid.NewGuid();
-        var participants = new List<Guid> { triage };
+        var participants = new List<Guid>
+        {
+            triage
+        };
         while (participants.Count < OrchestrationTopologyJson.MaxParticipants)
         {
             participants.Add(Guid.NewGuid());
@@ -140,7 +150,12 @@ public sealed class OrchestrationTopologyTests
             ParticipantAgentDefinitionIds = [triage, specialist],
             Handoffs =
             [
-                new OrchestrationHandoff { FromAgentDefinitionId = triage, ToAgentDefinitionId = specialist, Reason = "specialist work" }
+                new OrchestrationHandoff
+                {
+                    FromAgentDefinitionId = triage,
+                    ToAgentDefinitionId = specialist,
+                    Reason = "specialist work"
+                }
             ],
             MaxTurnsPerAgent = 8,
             ReturnToPrevious = false

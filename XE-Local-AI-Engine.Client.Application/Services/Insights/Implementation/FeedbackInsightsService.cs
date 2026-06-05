@@ -27,8 +27,7 @@ internal sealed class FeedbackInsightsService(IFeedbackInsightsStore store, Time
         var byTool = aggregate.ByTool.Select(BuildToolBreakdown).ToArray();
         var exemplars = aggregate.Exemplars.Select(BuildExemplar).ToArray();
 
-        return new FeedbackInsightsResult(
-            aggregate.AgentDefinitionId,
+        return new FeedbackInsightsResult(aggregate.AgentDefinitionId,
             aggregate.AgentName,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             MinOccurrenceThreshold,

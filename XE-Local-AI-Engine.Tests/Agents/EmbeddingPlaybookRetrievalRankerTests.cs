@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Agents;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
@@ -29,8 +28,16 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         AssertEx.Equal(3, result.Count);
         // The two candidates that share tokens with the query embed closer than the unrelated cooking action.
         AssertEx.Equal(cooking.Id, result[2].Id, "Zero-overlap candidate ranks last by cosine.");
-        AssertEx.Contains(new[] { result[0].Id, result[1].Id }, weather.Id, "Token-overlapping candidates rank ahead of the unrelated one.");
-        AssertEx.Contains(new[] { result[0].Id, result[1].Id }, partial.Id, "Token-overlapping candidates rank ahead of the unrelated one.");
+        AssertEx.Contains(new[]
+        {
+            result[0].Id,
+            result[1].Id
+        }, weather.Id, "Token-overlapping candidates rank ahead of the unrelated one.");
+        AssertEx.Contains(new[]
+        {
+            result[0].Id,
+            result[1].Id
+        }, partial.Id, "Token-overlapping candidates rank ahead of the unrelated one.");
     }
 
     [Test]
@@ -69,7 +76,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_ReEmbedsCandidate_WhenVersionBumps()
     {
         var original = Action("deploy production build", priority: 10, createdAtUtc: 1);
-        var bumped = original with { Version = original.Version + 1 };
+        var bumped = original with
+        {
+            Version = original.Version + 1
+        };
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
@@ -92,10 +102,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel, cacheMaxEntries: 1);
 
-        await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None);   // caches first (count 1)
-        await ranker.SelectTopKAsync("beta", [second], 1, CancellationToken.None);   // caches second, evicts first
+        await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None); // caches first (count 1)
+        await ranker.SelectTopKAsync("beta", [second], 1, CancellationToken.None); // caches second, evicts first
         var beforeReQuery = provider.TotalEmbeddedTexts;
-        await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None);    // first evicted => re-embed
+        await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None); // first evicted => re-embed
         var afterReQuery = provider.TotalEmbeddedTexts;
 
         AssertEx.Equal(beforeReQuery + 2, afterReQuery, "An evicted candidate is re-embedded (candidate + query) on re-query.");
@@ -118,7 +128,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_WhenGeneratorThrows_FallsBackToLexical()
     {
         var candidates = SampleCandidates();
-        var provider = new FakeEmbeddingProvider { ThrowOnGenerate = true };
+        var provider = new FakeEmbeddingProvider
+        {
+            ThrowOnGenerate = true
+        };
         var ranker = BuildRanker(provider, EmbeddingModel);
 
         var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
@@ -132,7 +145,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_WhenGeneratorReturnsFewerEmbeddingsThanInputs_FallsBackToLexical()
     {
         var candidates = SampleCandidates();
-        var provider = new FakeEmbeddingProvider { ReturnShortResponse = true };
+        var provider = new FakeEmbeddingProvider
+        {
+            ReturnShortResponse = true
+        };
         var ranker = BuildRanker(provider, EmbeddingModel);
 
         // A short/partial embedding response must degrade to lexical rather than throwing ArgumentOutOfRangeException
@@ -151,13 +167,15 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_WhenCancelled_RethrowsAndDoesNotFallBack()
     {
         var candidates = SampleCandidates();
-        var provider = new FakeEmbeddingProvider { ThrowCancellation = true };
+        var provider = new FakeEmbeddingProvider
+        {
+            ThrowCancellation = true
+        };
         var ranker = BuildRanker(provider, EmbeddingModel);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            async () => await ranker.SelectTopKAsync("deploy", candidates, 2, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await ranker.SelectTopKAsync("deploy", candidates, 2, cts.Token));
     }
 
     [Test]
@@ -200,8 +218,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
 
     private static PlaybookActionRecord Action(string triggerCondition, int priority, long createdAtUtc)
     {
-        return new PlaybookActionRecord(
-            Guid.NewGuid(),
+        return new PlaybookActionRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
@@ -239,19 +256,40 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
             return new FakeEmbeddingGenerator(this);
         }
 
-        public IChatClient CreateChatClient(LocalModelSelection selection) => throw new NotSupportedException();
+        public IChatClient CreateChatClient(LocalModelSelection selection)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task WarmModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
         private sealed class FakeEmbeddingGenerator(FakeEmbeddingProvider owner) : IEmbeddingGenerator<string, Embedding<float>>
         {
@@ -287,7 +325,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
             }
 
-            public object? GetService(Type serviceType, object? serviceKey = null) => null;
+            public object? GetService(Type serviceType, object? serviceKey = null)
+            {
+                return null;
+            }
 
             public void Dispose()
             {

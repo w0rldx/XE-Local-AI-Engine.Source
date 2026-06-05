@@ -23,7 +23,11 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(Guid.NewGuid(), Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { behavior = "Edited behavior.", priority = 7 })
+            Content = JsonContent.Create(new
+            {
+                behavior = "Edited behavior.",
+                priority = 7
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -40,7 +44,11 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(agentId, Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { behavior = "Edited behavior.", priority = 7 })
+            Content = JsonContent.Create(new
+            {
+                behavior = "Edited behavior.",
+                priority = 7
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -61,7 +69,11 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         // Edit the owner's suggestion via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(otherAgentId, seeded.Id))
         {
-            Content = JsonContent.Create(new { behavior = "Edited behavior.", priority = 7 })
+            Content = JsonContent.Create(new
+            {
+                behavior = "Edited behavior.",
+                priority = 7
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -81,7 +93,11 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         // A blank Behavior is rejected by the service (PlaybookActionValidationException → 400 via Send.ErrorsAsync).
         using var request = new HttpRequestMessage(HttpMethod.Put, SuggestedRoute(agentId, seeded.Id))
         {
-            Content = JsonContent.Create(new { behavior = "   ", priority = 7 })
+            Content = JsonContent.Create(new
+            {
+                behavior = "   ",
+                priority = 7
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -136,8 +152,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var agent = await store.AddAsync(new AgentDefinitionInput(
-            name,
+        var agent = await store.AddAsync(new AgentDefinitionInput(name,
             Description: null,
             "You are a careful engineering agent.",
             ModelProfile: null,
@@ -154,8 +169,7 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         // Seed via the real analysis write path so the row is a genuine Suggested/Analysis action with evidence.
         using var scope = factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-        return await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(
-            agentDefinitionId,
+        return await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
             TriggerCondition: null,
             Scope: "search",

@@ -18,6 +18,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     /// </summary>
     private const string BinaryReasoningOn = "on";
 
+    // Ollama option keys read from ChatOptions.AdditionalProperties by OllamaSharp 5.4.25
+    // (OllamaSharp.MicrosoftAi.AbstractionMapper → OllamaOption.*.Name; verified against the installed assembly
+    // 2026-06-05). The natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/
+    // seed/stop) ride the strongly-typed ChatOptions properties instead and so are not listed here.
+    private const string OllamaMinPKey = "min_p";
+    private const string OllamaRepeatPenaltyKey = "repeat_penalty";
+    private const string OllamaRepeatLastNKey = "repeat_last_n";
+    private const string OllamaNumCtxKey = "num_ctx";
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<InvocationAgentFactory> _logger;
@@ -123,15 +132,6 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         return Task.FromResult(context);
     }
-
-    // Ollama option keys read from ChatOptions.AdditionalProperties by OllamaSharp 5.4.25
-    // (OllamaSharp.MicrosoftAi.AbstractionMapper → OllamaOption.*.Name; verified against the installed assembly
-    // 2026-06-05). The natively-mapped knobs (temperature/top_p/top_k/num_predict/presence_penalty/frequency_penalty/
-    // seed/stop) ride the strongly-typed ChatOptions properties instead and so are not listed here.
-    private const string OllamaMinPKey = "min_p";
-    private const string OllamaRepeatPenaltyKey = "repeat_penalty";
-    private const string OllamaRepeatLastNKey = "repeat_last_n";
-    private const string OllamaNumCtxKey = "num_ctx";
 
     /// <summary>
     ///     Applies the developer-gated per-send sampling overrides onto the turn's <see cref="ChatOptions" />. Native

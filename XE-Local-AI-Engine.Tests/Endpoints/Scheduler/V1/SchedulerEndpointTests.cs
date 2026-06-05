@@ -19,15 +19,50 @@ public sealed class SchedulerEndpointTests
 
     private const string ApiPrefix = "/api/local/v1";
 
-    private static string TemplatesRoute() => $"{ApiPrefix}/scheduler/templates";
-    private static string JobsRoute() => $"{ApiPrefix}/scheduler/jobs";
-    private static string JobByIdRoute(Guid id) => $"{ApiPrefix}/scheduler/jobs/{id}";
-    private static string JobEnableRoute(Guid id) => $"{ApiPrefix}/scheduler/jobs/{id}/enable";
-    private static string JobDisableRoute(Guid id) => $"{ApiPrefix}/scheduler/jobs/{id}/disable";
-    private static string JobTriggerRoute(Guid id) => $"{ApiPrefix}/scheduler/jobs/{id}/trigger";
-    private static string RunsRoute() => $"{ApiPrefix}/scheduler/runs";
-    private static string RunByIdRoute(Guid id) => $"{ApiPrefix}/scheduler/runs/{id}";
-    private static string RunCancelRoute(Guid id) => $"{ApiPrefix}/scheduler/runs/{id}/cancel";
+    private static string TemplatesRoute()
+    {
+        return $"{ApiPrefix}/scheduler/templates";
+    }
+
+    private static string JobsRoute()
+    {
+        return $"{ApiPrefix}/scheduler/jobs";
+    }
+
+    private static string JobByIdRoute(Guid id)
+    {
+        return $"{ApiPrefix}/scheduler/jobs/{id}";
+    }
+
+    private static string JobEnableRoute(Guid id)
+    {
+        return $"{ApiPrefix}/scheduler/jobs/{id}/enable";
+    }
+
+    private static string JobDisableRoute(Guid id)
+    {
+        return $"{ApiPrefix}/scheduler/jobs/{id}/disable";
+    }
+
+    private static string JobTriggerRoute(Guid id)
+    {
+        return $"{ApiPrefix}/scheduler/jobs/{id}/trigger";
+    }
+
+    private static string RunsRoute()
+    {
+        return $"{ApiPrefix}/scheduler/runs";
+    }
+
+    private static string RunByIdRoute(Guid id)
+    {
+        return $"{ApiPrefix}/scheduler/runs/{id}";
+    }
+
+    private static string RunCancelRoute(Guid id)
+    {
+        return $"{ApiPrefix}/scheduler/runs/{id}/cancel";
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // 401 — every route requires a bearer token
@@ -63,7 +98,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobsRoute())
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -89,7 +126,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Put, JobByIdRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -116,7 +155,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobEnableRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -131,7 +172,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobDisableRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -146,7 +189,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, JobTriggerRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -183,7 +228,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -267,7 +314,9 @@ public sealed class SchedulerEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RunCancelRoute(Guid.NewGuid()))
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new
+            {
+            })
         };
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -322,7 +371,7 @@ public sealed class SchedulerEndpointTests
         var body = new
         {
             templateId = "does-not-exist",
-            displayName = "",           // blank → validation error
+            displayName = "", // blank → validation error
             scheduleKind = "Cron",
             cronExpression = "0 0 * * * ?",
             timeZoneId = "UTC",

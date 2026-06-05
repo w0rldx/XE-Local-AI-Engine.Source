@@ -20,8 +20,7 @@ public sealed class ModelFitUtilityRunnerTests
 
     private static ModelFitUtilityRunRequest RecommendRequest()
     {
-        return new ModelFitUtilityRunRequest(
-            ImageReference: ValidReference,
+        return new ModelFitUtilityRunRequest(ImageReference: ValidReference,
             Operation: ModelFitOperation.Recommend,
             UseCase: "coding",
             Limit: 5,
@@ -39,8 +38,7 @@ public sealed class ModelFitUtilityRunnerTests
     public async Task FakeRunner_RecordsRequestAndReturnsScriptedResult()
     {
         var runner = new FakeModelFitUtilityRunner();
-        runner.ScriptResult(new ModelFitUtilityRunResult(
-            Status: ModelFitRunStatus.Succeeded,
+        runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Succeeded,
             ExitCode: 0,
             StandardOutput: """{"models":[]}""",
             StandardError: string.Empty,
@@ -82,8 +80,7 @@ public sealed class ModelFitUtilityRunnerTests
     [Test]
     public void GrpcRunner_ToMessage_BenchmarkRequestAttachesRuntimeNetwork()
     {
-        var message = GrpcModelFitUtilityRunner.ToMessage(new ModelFitUtilityRunRequest(
-            ImageReference: ValidReference,
+        var message = GrpcModelFitUtilityRunner.ToMessage(new ModelFitUtilityRunRequest(ImageReference: ValidReference,
             Operation: ModelFitOperation.Benchmark,
             UseCase: null,
             Limit: 0,

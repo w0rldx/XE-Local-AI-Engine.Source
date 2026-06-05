@@ -49,8 +49,7 @@ internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, 
     {
         // Imported agents are plain chat personas: the body is seeded verbatim, no tools are granted, and there is no
         // orchestration. The operator grants node tools afterward through the existing tool selector.
-        return new AgentDefinitionInput(
-            template.Name,
+        return new AgentDefinitionInput(template.Name,
             template.Description,
             template.Instructions,
             ModelProfile: null,

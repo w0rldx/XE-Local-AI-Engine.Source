@@ -114,8 +114,7 @@ public sealed class ApprovedUtilityImageStore(NodeChatDbContext dbContext, TimeP
         return ToRecord(entity);
     }
 
-    public async Task<ApprovedUtilityImageRecord?> TouchUsedAsync(
-        string approvedImageId,
+    public async Task<ApprovedUtilityImageRecord?> TouchUsedAsync(string approvedImageId,
         long lastUsedAtUtc,
         long? lastSuccessfulRunAtUtc = null,
         CancellationToken cancellationToken = default)
@@ -147,8 +146,7 @@ public sealed class ApprovedUtilityImageStore(NodeChatDbContext dbContext, TimeP
 
     private static ApprovedUtilityImageRecord ToRecord(ApprovedUtilityImage entity)
     {
-        return new ApprovedUtilityImageRecord(
-            entity.ApprovedImageId,
+        return new ApprovedUtilityImageRecord(entity.ApprovedImageId,
             entity.DisplayName,
             entity.Description,
             entity.Purpose,

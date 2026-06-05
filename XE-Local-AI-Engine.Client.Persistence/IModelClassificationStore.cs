@@ -18,8 +18,7 @@ public interface IModelClassificationStore
     ///     Inserts or updates the detected fields (digest, kind, capabilities, detected-at) for <paramref name="modelName" />,
     ///     preserving any existing operator override, and returns the stored record.
     /// </summary>
-    Task<ModelClassificationRecord> UpsertDetectedAsync(
-        string modelName,
+    Task<ModelClassificationRecord> UpsertDetectedAsync(string modelName,
         string? digest,
         ModelKind detectedKind,
         string? capabilitiesJson,
@@ -29,8 +28,7 @@ public interface IModelClassificationStore
     ///     Sets (or, when <paramref name="overrideKind" /> is <c>null</c>, clears) the operator override for
     ///     <paramref name="modelName" />, inserting a row when none exists, and returns the stored record.
     /// </summary>
-    Task<ModelClassificationRecord> SetOverrideAsync(
-        string modelName,
+    Task<ModelClassificationRecord> SetOverrideAsync(string modelName,
         ModelKind? overrideKind,
         CancellationToken cancellationToken = default);
 }

@@ -9,11 +9,12 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hubs;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 
@@ -226,10 +227,9 @@ static async Task ReconcileStaleScheduledRunsAsync(IServiceProvider services)
     // gone. Reconcile them to a sanitized terminal state BEFORE the Quartz hosted service starts firing recovery work,
     // so the history never shows a run stuck Running forever. Cheap no-op when there is no scheduler history.
     await using var scope = services.CreateAsyncScope();
-    var runStore = scope.ServiceProvider.GetRequiredService<XE_Local_AI_Engine.Client.Persistence.IScheduledJobRunStore>();
+    var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
 
-    var reconciledCount = await runStore.MarkStaleActiveRunsAsync(
-        XE_Local_AI_Engine.Client.Persistence.Entities.ScheduledRunStatus.Failed,
+    var reconciledCount = await runStore.MarkStaleActiveRunsAsync(ScheduledRunStatus.Failed,
         "Run was interrupted by a node restart and reconciled at startup.").ConfigureAwait(false);
 
     if (reconciledCount > 0)

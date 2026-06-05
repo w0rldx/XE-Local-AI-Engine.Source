@@ -15,8 +15,7 @@ internal interface IAgentHomeMemoryProposalService
     ///     record — validation and scan errors are surfaced as <see cref="MemoryProposalRejection" /> entries on the
     ///     result.
     /// </summary>
-    Task<MemoryProposalCollectResult> CollectAsync(
-        MemoryProposalCollectRequest request,
+    Task<MemoryProposalCollectResult> CollectAsync(MemoryProposalCollectRequest request,
         CancellationToken cancellationToken = default);
 }
 

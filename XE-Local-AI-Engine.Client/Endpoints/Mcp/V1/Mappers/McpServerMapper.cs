@@ -33,8 +33,7 @@ internal static class McpServerMapper
 
         // Enabled is always false on create: a registration is persisted disabled and the store ignores this flag, but
         // pass false explicitly so the input is unambiguous.
-        return new McpServerInput(
-            request.Name ?? string.Empty,
+        return new McpServerInput(request.Name ?? string.Empty,
             request.Description,
             request.TransportKind,
             request.Command,
@@ -51,8 +50,7 @@ internal static class McpServerMapper
 
         // The service preserves the current enabled state on update (enabling is the dedicated PATCH), so the value here
         // is a placeholder the service overrides.
-        return new McpServerInput(
-            request.Name ?? string.Empty,
+        return new McpServerInput(request.Name ?? string.Empty,
             request.Description,
             request.TransportKind,
             request.Command,

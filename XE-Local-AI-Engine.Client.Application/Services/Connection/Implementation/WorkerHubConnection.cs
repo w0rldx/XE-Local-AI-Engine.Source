@@ -6,14 +6,11 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Http.Connections.Client;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Options;
-using NSec.Cryptography;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 
 /// <summary>
@@ -352,5 +349,4 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
 
         await connection.SendAsync(methodName, payload, cancellationToken).ConfigureAwait(false);
     }
-
 }

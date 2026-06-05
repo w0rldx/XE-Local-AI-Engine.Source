@@ -32,7 +32,11 @@ internal sealed class ScheduledJobRunEventConfiguration : IEntityTypeConfigurati
         builder.Property(entity => entity.OccurredAtUtc)
                .HasColumnName("occurred_at_utc");
 
-        builder.HasIndex(entity => new { entity.RunId, entity.Sequence })
+        builder.HasIndex(entity => new
+               {
+                   entity.RunId,
+                   entity.Sequence
+               })
                .IsUnique();
 
         // An event is meaningless without its owning run, so the FK cascades: deleting a run removes its events.

@@ -93,11 +93,13 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
         await Page.GetByPlaceholder(CommandPlaceholder).FillAsync("/usr/bin/true");
 
         // Save → POST /api/local/v1/mcp/servers. Wait for the response so the assertion runs after persist.
-        var createResponse = await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("mcp-form-submit").ClickAsync(),
+        var createResponse = await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("mcp-form-submit").ClickAsync(),
             response => response.Url.Contains("/mcp/servers", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         await Assert.That(createResponse.Status).IsEqualTo(201);
 
@@ -107,7 +109,10 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
             Name = serverName,
             Exact = true
         });
-        await Expect(serverCell).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+        await Expect(serverCell).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
 
         // Delete: the row's delete control has aria-label "Delete {{name}}". Clicking it raises the
         // ConfirmProvider dialog; confirm with its "Delete" button.
@@ -117,8 +122,7 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
         });
         await Expect(deleteRowButton).ToBeVisibleAsync();
 
-        var deleteResponse = await Page.RunAndWaitForResponseAsync(
-            async () =>
+        var deleteResponse = await Page.RunAndWaitForResponseAsync(async () =>
             {
                 await deleteRowButton.ClickAsync();
                 // Confirm dialog: exact "Delete" button (ConfirmProvider confirmationText = "Delete").
@@ -129,13 +133,19 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
                 }).ClickAsync();
             },
             response => response.Url.Contains("/mcp/servers/", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "DELETE", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "DELETE", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         await Assert.That(deleteResponse.Status >= 200 && deleteResponse.Status < 300).IsTrue();
 
         // The row must be gone after the list re-renders.
-        await Expect(serverCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = 5000 });
+        await Expect(serverCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        {
+            Timeout = 5000
+        });
 
         // No page-level JS error during the full create/delete sequence.
         await Assert.That(pageErrors.Count == 0).IsTrue();
@@ -164,11 +174,13 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
         await Page.GetByTestId("mcp-form-env-key-0").FillAsync("API_TOKEN");
         await Page.GetByTestId("mcp-form-env-value-0").FillAsync(secretMarker);
 
-        await Page.RunAndWaitForResponseAsync(
-            async () => await Page.GetByTestId("mcp-form-submit").ClickAsync(),
+        await Page.RunAndWaitForResponseAsync(async () => await Page.GetByTestId("mcp-form-submit").ClickAsync(),
             response => response.Url.Contains("/mcp/servers", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
-            new PageRunAndWaitForResponseOptions { Timeout = 10_000 });
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
 
         // The row appears by name…
         await Expect(Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions
@@ -176,7 +188,10 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
                 Name = serverName,
                 Exact = true
             }))
-            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = 5000 });
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 5000
+            });
 
         // …but the secret env value must NOT be present anywhere in the rendered DOM.
         var bodyText = await Page.Locator("body").InnerTextAsync();
@@ -198,6 +213,9 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
                 Name = serverName,
                 Exact = true
             }))
-            .ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions { Timeout = 5000 });
+            .ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+            {
+                Timeout = 5000
+            });
     }
 }

@@ -180,8 +180,8 @@ internal sealed partial class NodePatchApplyService
                         .Select(result => result.Relative)
                         .FirstOrDefault();
         var displayRelative = changeType == "deleted"
-            ? (aRelative ?? targetPaths[0])
-            : (bRelative ?? targetPaths[0]);
+            ? aRelative ?? targetPaths[0]
+            : bRelative ?? targetPaths[0];
 
         var files = new List<PatchApplyFileEntry>
         {
@@ -322,7 +322,10 @@ internal sealed partial class NodePatchApplyService
 
         public static ParsedBlock Rejected(string reason)
         {
-            return new ParsedBlock { Rejection = reason };
+            return new ParsedBlock
+            {
+                Rejection = reason
+            };
         }
     }
 }

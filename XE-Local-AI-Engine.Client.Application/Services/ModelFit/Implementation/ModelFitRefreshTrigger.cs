@@ -14,8 +14,7 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
 {
     private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
 
-    public async Task TriggerRecommendationRefreshAsync(
-        Guid scheduledJobId,
+    public async Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,
         int? limitOverride = null,
         CancellationToken cancellationToken = default)
@@ -59,8 +58,7 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
         // Delegate to the scheduler; it performs its own enabled/deleted/forbidden/unscheduled validation and fires the
         // existing definition. No override supplied → pass null so the dispatcher takes the unchanged cron/back-compat
         // path. The dispatcher → model-fit handler does the work and owns the run history.
-        await _scheduledJobManagementService.TriggerNowAsync(
-            scheduledJobId,
+        await _scheduledJobManagementService.TriggerNowAsync(scheduledJobId,
             parameterOverrides.Count == 0 ? null : parameterOverrides,
             cancellationToken).ConfigureAwait(false);
     }

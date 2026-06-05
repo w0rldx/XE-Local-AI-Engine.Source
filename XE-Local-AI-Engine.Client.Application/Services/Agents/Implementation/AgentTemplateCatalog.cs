@@ -12,9 +12,9 @@ internal sealed class AgentTemplateCatalog : IAgentTemplateCatalog
     private const string ResourceNameSuffix = "agent-templates.seed.json";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IReadOnlyDictionary<string, AgentTemplate> _bySlug;
 
     private readonly IReadOnlyList<AgentTemplate> _templates;
-    private readonly IReadOnlyDictionary<string, AgentTemplate> _bySlug;
 
     public AgentTemplateCatalog()
     {

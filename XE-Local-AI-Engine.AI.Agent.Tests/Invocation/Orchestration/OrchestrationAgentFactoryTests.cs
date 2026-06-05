@@ -2,10 +2,13 @@
 // scripted IChatClient stands in for the model (NO Ollama, NO network) — and drives the PRODUCTION surface
 // (IOrchestrationAgentFactory.CreateAsync + IOrchestrationRunSession.WatchAsync / RespondToApprovalAsync), not the
 // raw workflow. Evolves the framework-handoff probe shapes into regression guards.
+
 #pragma warning disable MEAI001 // ApprovalRequiredAIFunction is [Experimental]; adopted deliberately (loop plan §4).
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -14,7 +17,6 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class OrchestrationAgentFactoryTests
@@ -41,7 +43,7 @@ public sealed class OrchestrationAgentFactoryTests
 
         await using var session = await factory.CreateAsync(definition, seed);
 
-        var text = new System.Text.StringBuilder();
+        var text = new StringBuilder();
         var sawTerminal = false;
         await foreach (var update in session.WatchAsync())
         {
@@ -68,7 +70,10 @@ public sealed class OrchestrationAgentFactoryTests
         using var fake = new HandoffScriptedChatClient(SpecialistAnswer);
         var factory = CreateFactory(fake);
         var definition = BuildHandoffDefinition();
-        var seed = new List<ChatMessage> { new(ChatRole.User, "Did the database migration complete?") };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Did the database migration complete?")
+        };
 
         await using var session = await factory.CreateAsync(definition, seed);
 
@@ -116,28 +121,40 @@ public sealed class OrchestrationAgentFactoryTests
         // the fix, the idle CTS was a whole-run wall-clock cap and would have cancelled the held run during the wait.)
         const string ownToolName = "lookup_customer";
         var lookupExecuted = 0;
-        var lookupTool = new ApprovalRequiredAIFunction(
-            AIFunctionFactory.Create(
-                (string customerId) =>
-                {
-                    lookupExecuted++;
-                    return "customer_data: premium tier";
-                },
-                ownToolName,
-                "Looks up customer data. Requires approval because it accesses PII."));
+        var lookupTool = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string customerId) =>
+            {
+                lookupExecuted++;
+                return "customer_data: premium tier";
+            },
+            ownToolName,
+            "Looks up customer data. Requires approval because it accesses PII."));
 
         using var fake = new CombinedScriptedChatClient(ownToolName, SpecialistAnswer);
         var clientLocalRegistry = new FakeClientLocalToolRegistry(lookupTool);
         var factory = CreateFactory(fake, clientLocalToolRegistry: clientLocalRegistry, idleTimeoutSeconds: 1);
 
-        var triage = Triage() with { Tools = [InvocationToolBridge.CreateOfferPlaceholder(ownToolName)] };
+        var triage = Triage() with
+        {
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder(ownToolName)]
+        };
         var definition = new OrchestrationAgentDefinition
         {
             Triage = triage,
             Participants = [triage, Specialist()],
-            Edges = [new OrchestrationEdge { FromKey = "triage", ToKey = "specialist", Reason = "Route after customer lookup." }]
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route after customer lookup."
+                }
+            ]
         };
-        var seed = new List<ChatMessage> { new(ChatRole.User, "Look up customer C-42, then hand off to specialist.") };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Look up customer C-42, then hand off to specialist.")
+        };
 
         await using var session = await factory.CreateAsync(definition, seed);
 
@@ -177,7 +194,10 @@ public sealed class OrchestrationAgentFactoryTests
             Edges = [],
             MaxTurnsPerAgent = 2
         };
-        var seed = new List<ChatMessage> { new(ChatRole.User, "Did the database migration complete?") };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Did the database migration complete?")
+        };
 
         await using var session = await factory.CreateAsync(definition, seed);
 
@@ -203,16 +223,14 @@ public sealed class OrchestrationAgentFactoryTests
         const string ownToolName = "lookup_customer";
         var lookupExecuted = 0;
         var lookupArgument = string.Empty;
-        var lookupTool = new ApprovalRequiredAIFunction(
-            AIFunctionFactory.Create(
-                (string customerId) =>
-                {
-                    lookupExecuted++;
-                    lookupArgument = customerId;
-                    return "customer_data: premium tier";
-                },
-                ownToolName,
-                "Looks up customer data. Requires approval because it accesses PII."));
+        var lookupTool = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string customerId) =>
+            {
+                lookupExecuted++;
+                lookupArgument = customerId;
+                return "customer_data: premium tier";
+            },
+            ownToolName,
+            "Looks up customer data. Requires approval because it accesses PII."));
 
         using var fake = new CombinedScriptedChatClient(ownToolName, SpecialistAnswer);
 
@@ -231,14 +249,28 @@ public sealed class OrchestrationAgentFactoryTests
         var clientLocalRegistry = new FakeClientLocalToolRegistry(lookupTool);
         var factory = CreateFactory(chatClient, clientLocalToolRegistry: clientLocalRegistry);
 
-        var triage = Triage() with { Tools = [InvocationToolBridge.CreateOfferPlaceholder(ownToolName)] };
+        var triage = Triage() with
+        {
+            Tools = [InvocationToolBridge.CreateOfferPlaceholder(ownToolName)]
+        };
         var definition = new OrchestrationAgentDefinition
         {
             Triage = triage,
             Participants = [triage, Specialist()],
-            Edges = [new OrchestrationEdge { FromKey = "triage", ToKey = "specialist", Reason = "Route after customer lookup." }]
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route after customer lookup."
+                }
+            ]
         };
-        var seed = new List<ChatMessage> { new(ChatRole.User, "Look up customer C-42, then hand off to specialist.") };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Look up customer C-42, then hand off to specialist.")
+        };
 
         await using var session = await factory.CreateAsync(definition, seed);
 
@@ -274,7 +306,15 @@ public sealed class OrchestrationAgentFactoryTests
         {
             Triage = Triage(),
             Participants = [Triage(), Specialist()],
-            Edges = [new OrchestrationEdge { FromKey = "triage", ToKey = "specialist", Reason = "Route domain questions to the specialist." }]
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                }
+            ]
         };
     }
 
@@ -311,13 +351,29 @@ public sealed class OrchestrationAgentFactoryTests
         int idleTimeoutSeconds = 20)
     {
         return new OrchestrationAgentFactory(chatClient,
-            Options.Create(new OrchestrationAgentOptions { IdleTimeoutSeconds = idleTimeoutSeconds }),
+            Options.Create(new OrchestrationAgentOptions
+            {
+                IdleTimeoutSeconds = idleTimeoutSeconds
+            }),
             NullLogger<OrchestrationAgentFactory>.Instance,
             NullLoggerFactory.Instance,
             FakeServiceProvider.Instance,
             toolRegistry ?? new FakeToolRegistry(),
             clientLocalToolRegistry ?? new FakeClientLocalToolRegistry(),
             mcpToolRegistry ?? new FakeMcpToolRegistry());
+    }
+
+    private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(ChatResponse response,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var message in response.Messages)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new ChatResponseUpdate(message.Role, message.Contents);
+        }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -348,6 +404,16 @@ public sealed class OrchestrationAgentFactoryTests
             return ToUpdates(Build(messages.ToList(), options), cancellationToken);
         }
 
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
         private ChatResponse Build(List<ChatMessage> list, ChatOptions? options)
         {
             // Discriminate by the participant's system instructions: the SPECIALIST answers; the triage hands off.
@@ -366,17 +432,10 @@ public sealed class OrchestrationAgentFactoryTests
             }
 
             var call = new FunctionCallContent($"call-{handoffTool.Name}", handoffTool.Name, new Dictionary<string, object?>());
-            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { call }));
-        }
-
-        public object? GetService(Type serviceType, object? serviceKey = null)
-        {
-            return serviceType == typeof(IChatClient) ? this : null;
-        }
-
-        public void Dispose()
-        {
-            GC.SuppressFinalize(this);
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                call
+            }));
         }
     }
 
@@ -408,6 +467,16 @@ public sealed class OrchestrationAgentFactoryTests
             return ToUpdates(Build(messages.ToList(), options), cancellationToken);
         }
 
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
         private ChatResponse Build(List<ChatMessage> list, ChatOptions? options)
         {
             var handoffTool = options?.Tools?.FirstOrDefault(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal));
@@ -421,34 +490,21 @@ public sealed class OrchestrationAgentFactoryTests
             if (hasOwnToolResult)
             {
                 var handoffCall = new FunctionCallContent($"call-{handoffTool.Name}", handoffTool.Name, new Dictionary<string, object?>());
-                return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { handoffCall }));
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+                {
+                    handoffCall
+                }));
             }
 
-            var ownCall = new FunctionCallContent($"call-{_ownToolName}", _ownToolName, new Dictionary<string, object?> { ["customerId"] = "C-42" });
-            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent> { ownCall }));
+            var ownCall = new FunctionCallContent($"call-{_ownToolName}", _ownToolName, new Dictionary<string, object?>
+            {
+                ["customerId"] = "C-42"
+            });
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                ownCall
+            }));
         }
-
-        public object? GetService(Type serviceType, object? serviceKey = null)
-        {
-            return serviceType == typeof(IChatClient) ? this : null;
-        }
-
-        public void Dispose()
-        {
-            GC.SuppressFinalize(this);
-        }
-    }
-
-    private static async IAsyncEnumerable<ChatResponseUpdate> ToUpdates(ChatResponse response,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        foreach (var message in response.Messages)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            yield return new ChatResponseUpdate(message.Role, message.Contents);
-        }
-
-        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -473,6 +529,16 @@ public sealed class OrchestrationAgentFactoryTests
             return ToUpdates(Build(options), cancellationToken);
         }
 
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
         private ChatResponse Build(ChatOptions? options)
         {
             TriageInvoked = true;
@@ -482,16 +548,6 @@ public sealed class OrchestrationAgentFactoryTests
                                          .ToList()
                                   ?? [];
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, "Mesh probe answer."));
-        }
-
-        public object? GetService(Type serviceType, object? serviceKey = null)
-        {
-            return serviceType == typeof(IChatClient) ? this : null;
-        }
-
-        public void Dispose()
-        {
-            GC.SuppressFinalize(this);
         }
     }
 
@@ -527,7 +583,7 @@ public sealed class OrchestrationAgentFactoryTests
             }
         }
 
-        public bool TryResolve(string toolName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        public bool TryResolve(string toolName, [NotNullWhen(true)] out AITool? tool)
         {
             return _tools.TryGetValue(toolName, out tool);
         }
@@ -537,7 +593,7 @@ public sealed class OrchestrationAgentFactoryTests
     {
         private readonly Dictionary<string, AITool> _tools = new(StringComparer.Ordinal);
 
-        public bool TryResolve(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        public bool TryResolve(string name, [NotNullWhen(true)] out AITool? tool)
         {
             return _tools.TryGetValue(name, out tool);
         }

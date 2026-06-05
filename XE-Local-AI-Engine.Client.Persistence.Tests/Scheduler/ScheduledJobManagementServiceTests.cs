@@ -11,8 +11,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
 using Quartz.Plugin.Interrupt;
-using XE_Local_AI_Engine.Client;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -25,10 +23,9 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 /// </summary>
 public sealed class ScheduledJobManagementServiceTests : IDisposable
 {
-    private readonly string _rootPath = Path.Combine(
-        Path.GetTempPath(), "xe-sched-mgmt-" + Guid.NewGuid().ToString("N"));
-
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
+
+    private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-sched-mgmt-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
@@ -53,8 +50,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var input = ValidCronInput("does-not-exist");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -67,11 +63,10 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = new ScheduledJobManagementInput(
-            TemplateId: TestEchoScheduledJobHandler.Id,
+        var input = new ScheduledJobManagementInput(TemplateId: TestEchoScheduledJobHandler.Id,
             DisplayName: "Bad kind",
             Description: null,
-            ScheduleKind: ScheduleKind.SimpleInterval,   // not in SupportedScheduleKinds
+            ScheduleKind: ScheduleKind.SimpleInterval, // not in SupportedScheduleKinds
             CronExpression: null,
             IntervalSeconds: 60,
             RepeatCount: null,
@@ -83,8 +78,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: null,
             Parameters: null);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -98,8 +92,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var input = ValidCronInput(cronExpression: "");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -113,8 +106,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var input = ValidCronInput(cronExpression: "not-a-valid-cron");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -127,13 +119,12 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath, extraHandler: new SimpleIntervalOnlyHandler());
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = new ScheduledJobManagementInput(
-            TemplateId: SimpleIntervalOnlyHandler.Id,
+        var input = new ScheduledJobManagementInput(TemplateId: SimpleIntervalOnlyHandler.Id,
             DisplayName: "Bad interval",
             Description: null,
             ScheduleKind: ScheduleKind.SimpleInterval,
             CronExpression: null,
-            IntervalSeconds: 0,   // must be > 0
+            IntervalSeconds: 0, // must be > 0
             RepeatCount: null,
             StartAtUtc: null,
             EndAtUtc: null,
@@ -143,8 +134,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: null,
             Parameters: null);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -156,15 +146,14 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = new ScheduledJobManagementInput(
-            TemplateId: TestEchoScheduledJobHandler.Id,
+        var input = new ScheduledJobManagementInput(TemplateId: TestEchoScheduledJobHandler.Id,
             DisplayName: "One-shot no start",
             Description: null,
             ScheduleKind: ScheduleKind.OneShot,
             CronExpression: null,
             IntervalSeconds: null,
             RepeatCount: null,
-            StartAtUtc: null,   // required for OneShot
+            StartAtUtc: null, // required for OneShot
             EndAtUtc: null,
             TimeZoneId: "UTC",
             MisfirePolicy: SchedulerMisfirePolicy.Smart,
@@ -172,8 +161,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MaxRuntimeSeconds: null,
             Parameters: null);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -187,8 +175,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var input = ValidCronInput(timeZoneId: "Not/A/Real/Zone");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -200,10 +187,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await using var provider = BuildEnabledProvider(dbPath);
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
 
-        var input = ValidCronInput(maxRuntimeSeconds: 0);   // must be > 0 or null
+        var input = ValidCronInput(maxRuntimeSeconds: 0); // must be > 0 or null
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     [Test]
@@ -217,8 +203,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var input = ValidCronInput(displayName: "   ");
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.CreateJobAsync(input)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input)).ConfigureAwait(false);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -249,8 +234,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         // Quartz: job exists in the ADO store.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Quartz job must be scheduled after CreateJobAsync.");
 
         // Quartz: at least one trigger attached.
@@ -285,8 +269,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
         var jobDetail = await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false);
         AssertEx.NotNull(jobDetail, "Job detail must be retrievable.");
-        AssertEx.Equal(
-            record.Id.ToString(),
+        AssertEx.Equal(record.Id.ToString(),
             jobDetail!.JobDataMap.GetString(SchedulerJobKeys.ScheduledJobIdKey),
             "Job data map must carry the definition id.");
 
@@ -313,8 +296,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         // Quartz: job exists.
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Quartz job must be scheduled for a non-overlapping job.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
@@ -364,8 +346,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
 
         // The durable job exists ...
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "A Manual job must be registered as a durable Quartz job.");
 
         // ... but it has NO trigger (a Manual job never auto-fires).
@@ -401,8 +382,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
         await service.TriggerNowAsync(record.Id).ConfigureAwait(false);
 
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "The durable Manual job must remain registered and triggerable after TriggerNowAsync.");
     }
 
@@ -428,8 +408,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.NotNull(disabled, "SetEnabledAsync must return the updated record.");
         AssertEx.Equal(false, disabled!.Enabled);
 
-        AssertEx.False(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Disabling a Manual job must remove the durable Quartz job.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
@@ -461,8 +440,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Equal("Updated Job", updated!.DisplayName);
 
         // Quartz: job still exists (rescheduled, not removed).
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Quartz job must still exist after update.");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
@@ -520,8 +498,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.True(disabled.DisabledAtUtc.HasValue, "DisabledAtUtc must be stamped on disable.");
 
         // Quartz: job must be removed.
-        AssertEx.False(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Quartz job must be unscheduled after SetEnabled(false).");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
@@ -551,8 +528,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Equal(true, enabled!.Enabled);
         AssertEx.Null(enabled.DisabledAtUtc, "DisabledAtUtc must be cleared on re-enable.");
 
-        AssertEx.True(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Quartz job must be rescheduled after SetEnabled(true).");
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
@@ -583,8 +559,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await service.DeleteJobAsync(created.Id).ConfigureAwait(false);
 
         // Quartz: job removed.
-        AssertEx.False(
-            await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+        AssertEx.False(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "Quartz job must be removed after DeleteJobAsync.");
 
         // Store: definition excluded from default list (soft-deleted).
@@ -620,8 +595,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var created = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
         await service.SetEnabledAsync(created.Id, false).ConfigureAwait(false);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.TriggerNowAsync(created.Id)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(created.Id)).ConfigureAwait(false);
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
@@ -638,8 +612,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
 
-        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(
-            () => service.TriggerNowAsync(Guid.NewGuid())).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.TriggerNowAsync(Guid.NewGuid())).ConfigureAwait(false);
 
         await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
     }
@@ -684,8 +657,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
         var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
-        AssertEx.Equal(
-            "true",
+        AssertEx.Equal("true",
             jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable),
             "Every dispatch job must opt into the auto-interrupt monitor, else max-runtime enforcement is a no-op.");
 
@@ -709,8 +681,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
         var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
         // The plugin parses MaxRunTime as a millisecond long from its string form: 120 s → "120000".
-        AssertEx.Equal(
-            "120000",
+        AssertEx.Equal("120000",
             jobDetail.JobDataMap.GetString(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime),
             "Per-job max runtime must be persisted as milliseconds.");
 
@@ -745,8 +716,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var service = provider.GetRequiredService<IScheduledJobManagementService>();
         var runStore = provider.GetRequiredService<IScheduledJobRunStore>();
 
-        var run = await runStore.AddAsync(new ScheduledJobRunInput(
-            ScheduledJobId: Guid.NewGuid(),
+        var run = await runStore.AddAsync(new ScheduledJobRunInput(ScheduledJobId: Guid.NewGuid(),
             TemplateId: TestEchoScheduledJobHandler.Id,
             QuartzFireInstanceId: "fire-terminal",
             TriggeredBy: ScheduledRunTrigger.Schedule,
@@ -773,8 +743,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
 
         // A Running row whose fire instance is not actually executing — Quartz.Interrupt finds nothing to interrupt.
-        var run = await runStore.AddAsync(new ScheduledJobRunInput(
-            ScheduledJobId: Guid.NewGuid(),
+        var run = await runStore.AddAsync(new ScheduledJobRunInput(ScheduledJobId: Guid.NewGuid(),
             TemplateId: TestEchoScheduledJobHandler.Id,
             QuartzFireInstanceId: "fire-not-active",
             TriggeredBy: ScheduledRunTrigger.Schedule,
@@ -810,8 +779,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
 
-        await publisher.Received(1).PublishDefinitionAsync(
-            Arg.Is<SchedulerDefinitionHubEvent>(e =>
+        await publisher.Received(1).PublishDefinitionAsync(Arg.Is<SchedulerDefinitionHubEvent>(e =>
                 e.EventType == SchedulerHubEvents.JobDefinitionChanged &&
                 e.ScheduledJobId == record.Id &&
                 e.Action == "created"),
@@ -834,8 +802,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await context.Database.MigrateAsync().ConfigureAwait(false);
     }
 
-    private static ServiceProvider BuildEnabledProvider(
-        string dbPath,
+    private static ServiceProvider BuildEnabledProvider(string dbPath,
         IScheduledJobHandler? extraHandler = null,
         ISchedulerEventPublisher? eventPublisher = null,
         TestEchoScheduledJobHandler? echoHandler = null)
@@ -873,8 +840,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         {
             options.UseSqlite($"Data Source={dbPath}")
                    .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                   .AddInterceptors(
-                       sp.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                   .AddInterceptors(sp.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
                        sp.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
 
@@ -885,7 +851,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         services.AddSingleton(TimeProvider.System);
 
         var config = BuildConfig(connectionString: $"Data Source={dbPath}");
-        services.AddSingleton<IConfiguration>(config);
+        services.AddSingleton(config);
         new MinimalHostApplicationBuilder(services).AddNodeScheduler(config);
 
         // Override the no-op publisher registered by AddNodeScheduler (last registration wins) when a test supplies one.
@@ -897,28 +863,29 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         return services.BuildServiceProvider();
     }
 
-    private static IConfiguration BuildConfig(string connectionString) =>
-        new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Scheduler:Enabled"] = "true",
-                ["Scheduler:MaxConcurrency"] = "2",
-                ["Scheduler:DefaultMaxRuntimeMinutes"] = "5",
-                ["Scheduler:QuartzTablePrefix"] = "QRTZ_",
-                ["ConnectionStrings:node-sqlite"] = connectionString
-            })
-            .Build();
+    private static IConfiguration BuildConfig(string connectionString)
+    {
+        return new ConfigurationBuilder()
+               .AddInMemoryCollection(new Dictionary<string, string?>
+               {
+                   ["Scheduler:Enabled"] = "true",
+                   ["Scheduler:MaxConcurrency"] = "2",
+                   ["Scheduler:DefaultMaxRuntimeMinutes"] = "5",
+                   ["Scheduler:QuartzTablePrefix"] = "QRTZ_",
+                   ["ConnectionStrings:node-sqlite"] = connectionString
+               })
+               .Build();
+    }
 
     // Valid cron input using the test.echo template (supports OneShot + Cron).
-    private static ScheduledJobManagementInput ValidCronInput(
-        string cronExpression = "0 0 * * * ?",
+    private static ScheduledJobManagementInput ValidCronInput(string cronExpression = "0 0 * * * ?",
         string displayName = "Test Cron Job",
         string templateId = TestEchoScheduledJobHandler.Id,
         string timeZoneId = "UTC",
         bool preventOverlap = false,
-        int? maxRuntimeSeconds = null) =>
-        new(
-            TemplateId: templateId,
+        int? maxRuntimeSeconds = null)
+    {
+        return new ScheduledJobManagementInput(TemplateId: templateId,
             DisplayName: displayName,
             Description: null,
             ScheduleKind: ScheduleKind.Cron,
@@ -932,13 +899,13 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             PreventOverlap: preventOverlap,
             MaxRuntimeSeconds: maxRuntimeSeconds,
             Parameters: null);
+    }
 
     // Valid Manual input using the test.echo template (supports Manual). A Manual job carries no schedule fields.
-    private static ScheduledJobManagementInput ManualInput(
-        string displayName = "Test Manual Job",
-        bool preventOverlap = false) =>
-        new(
-            TemplateId: TestEchoScheduledJobHandler.Id,
+    private static ScheduledJobManagementInput ManualInput(string displayName = "Test Manual Job",
+        bool preventOverlap = false)
+    {
+        return new ScheduledJobManagementInput(TemplateId: TestEchoScheduledJobHandler.Id,
             DisplayName: displayName,
             Description: null,
             ScheduleKind: ScheduleKind.Manual,
@@ -952,6 +919,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             PreventOverlap: preventOverlap,
             MaxRuntimeSeconds: null,
             Parameters: null);
+    }
 
     // Polls a condition for up to ~5 s (Quartz fires off the trigger asynchronously). Returns true once it holds.
     /// <summary>
@@ -967,9 +935,10 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         public IDictionary<object, object> Properties { get; } = new Dictionary<object, object>();
         public IMetricsBuilder Metrics { get; } = Substitute.For<IMetricsBuilder>();
 
-        public void ConfigureContainer<TContainerBuilder>(
-            IServiceProviderFactory<TContainerBuilder> factory,
-            Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull { }
+        public void ConfigureContainer<TContainerBuilder>(IServiceProviderFactory<TContainerBuilder> factory,
+            Action<TContainerBuilder>? configure = null) where TContainerBuilder : notnull
+        {
+        }
     }
 
     /// <summary>
@@ -981,8 +950,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         public string TemplateId => Id;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(
-            TemplateId: Id,
+        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: Id,
             DisplayName: "Simple Interval (test)",
             Description: "Test handler that only supports SimpleInterval.",
             ParameterSchema: null,
@@ -994,7 +962,9 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             AllowManualTrigger: false,
             AllowAgentCreation: false);
 
-        public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

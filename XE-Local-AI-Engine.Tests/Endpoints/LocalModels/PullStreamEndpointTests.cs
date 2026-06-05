@@ -34,7 +34,10 @@ public sealed class PullStreamEndpointTests
 
         using var client = factory.CreateClient();
         using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/models/pull/stream");
-        request.Content = JsonContent.Create(new PullLocalModelRequest { ModelName = "tinyllama:latest" });
+        request.Content = JsonContent.Create(new PullLocalModelRequest
+        {
+            ModelName = "tinyllama:latest"
+        });
 
         // Act
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
@@ -91,7 +94,10 @@ public sealed class PullStreamEndpointTests
 
         using var client = factory.CreateClient();
         using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/models/pull/stream");
-        request.Content = JsonContent.Create(new PullLocalModelRequest { ModelName = "../secret" });
+        request.Content = JsonContent.Create(new PullLocalModelRequest
+        {
+            ModelName = "../secret"
+        });
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -120,7 +126,10 @@ public sealed class PullStreamEndpointTests
 
         using var client = factory.CreateClient();
         using var request = CreateRequest(factory, HttpMethod.Post, "/api/local/v1/models/pull/stream");
-        request.Content = JsonContent.Create(new PullLocalModelRequest { ModelName = "ghost:latest" });
+        request.Content = JsonContent.Create(new PullLocalModelRequest
+        {
+            ModelName = "ghost:latest"
+        });
 
         // Act
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
@@ -153,9 +162,24 @@ public sealed class PullStreamEndpointTests
     private static async IAsyncEnumerable<PullModelResponse> BuildProgressSequence()
     {
         // Ollama sends 0 (not null) when there is no byte-progress data for a line.
-        yield return new PullModelResponse { Status = "pulling manifest", Total = 0L, Completed = 0L };
-        yield return new PullModelResponse { Status = "pulling layers", Total = 100L, Completed = 50L };
-        yield return new PullModelResponse { Status = "success", Total = 0L, Completed = 0L };
+        yield return new PullModelResponse
+        {
+            Status = "pulling manifest",
+            Total = 0L,
+            Completed = 0L
+        };
+        yield return new PullModelResponse
+        {
+            Status = "pulling layers",
+            Total = 100L,
+            Completed = 50L
+        };
+        yield return new PullModelResponse
+        {
+            Status = "success",
+            Total = 0L,
+            Completed = 0L
+        };
 
         await Task.CompletedTask.ConfigureAwait(false);
     }
@@ -164,7 +188,12 @@ public sealed class PullStreamEndpointTests
     {
         // First a real line that commits the 200 response, then a throw mid-enumeration (mirrors OllamaSharp's
         // ResponseError "pull model manifest: file does not exist" for a non-existent model).
-        yield return new PullModelResponse { Status = "pulling manifest", Total = 0L, Completed = 0L };
+        yield return new PullModelResponse
+        {
+            Status = "pulling manifest",
+            Total = 0L,
+            Completed = 0L
+        };
 
         await Task.Yield();
         throw new InvalidOperationException("pull model manifest: file does not exist");

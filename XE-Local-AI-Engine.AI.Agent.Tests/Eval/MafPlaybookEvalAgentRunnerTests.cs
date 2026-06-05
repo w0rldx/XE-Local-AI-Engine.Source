@@ -69,10 +69,12 @@ public sealed class MafPlaybookEvalAgentRunnerTests
     }
 
     private static List<ChatMessage> BuildTurns()
-        =>
+    {
+        return
         [
             new ChatMessage(ChatRole.User, "Summarise the deployment status.")
         ];
+    }
 
     /// <summary>
     ///     Scripted stand-in for the node-local model. Returns a distinct reply depending on whether the system
@@ -102,8 +104,8 @@ public sealed class MafPlaybookEvalAgentRunnerTests
             }
 
             var hasCandidateMarker = messages
-                .Where(message => message.Role == ChatRole.System)
-                .Any(message => message.Text.Contains("CANDIDATE", StringComparison.Ordinal));
+                                     .Where(message => message.Role == ChatRole.System)
+                                     .Any(message => message.Text.Contains("CANDIDATE", StringComparison.Ordinal));
             if (hasCandidateMarker)
             {
                 SawCandidateMarker = true;
@@ -116,13 +118,19 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
-            => throw new NotSupportedException("The eval runner exercises the non-streaming RunAsync path only.");
+        {
+            throw new NotSupportedException("The eval runner exercises the non-streaming RunAsync path only.");
+        }
 
         public object? GetService(Type serviceType, object? serviceKey = null)
-            => serviceType == typeof(IChatClient) ? this : null;
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
 
         public void Dispose()
-            => GC.SuppressFinalize(this);
+        {
+            GC.SuppressFinalize(this);
+        }
     }
 
     private sealed class EmptyServiceProvider : IServiceProvider
@@ -130,6 +138,8 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         public static EmptyServiceProvider Instance { get; } = new();
 
         public object? GetService(Type serviceType)
-            => null;
+        {
+            return null;
+        }
     }
 }

@@ -1,28 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.AI.Agent.Invocation;
-using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
-using XE_Local_AI_Engine.AI.Agent.Tools;
-using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
-using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 
 public sealed partial class InvocationRunner
 {
@@ -58,11 +43,11 @@ public sealed partial class InvocationRunner
     // single-agent path.
     private sealed class StreamTransport
     {
-        private readonly InvocationRunner _runner;
-        private readonly IHubMessageSender _sender;
         private readonly InvocationExecutionContext _context;
         private readonly RuntimePackage _package;
+        private readonly InvocationRunner _runner;
         private readonly bool _sendEncrypted;
+        private readonly IHubMessageSender _sender;
         private readonly bool _sendPlain;
 
         public StreamTransport(InvocationRunner runner,
