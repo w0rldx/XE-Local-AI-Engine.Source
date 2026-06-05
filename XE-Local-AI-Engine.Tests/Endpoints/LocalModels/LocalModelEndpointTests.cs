@@ -9,6 +9,7 @@ using NSubstitute;
 using OllamaSharp;
 using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -283,6 +284,137 @@ public sealed class LocalModelEndpointTests
         modelService.DidNotReceiveWithAnyArgs().PullModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task DeleteLocalModel_WhenNameHasEncodedSlashes_DecodesBeforeDeleting()
+    {
+        // The hey-api client escapes the route segment with encodeURIComponent, and Kestrel leaves %2F encoded by design,
+        // so the bound name arrives as "hf.co%2F...". The endpoint must decode it and delete the canonical HF reference.
+        var modelService = Substitute.For<IOllamaModelService>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(
+            context.Factory,
+            HttpMethod.Delete,
+            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", deleted.ModelName);
+        AssertEx.True(deleted.Deleted);
+        await modelService.Received(1)
+            .DeleteModelAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteLocalModel_WhenNameIsPlainTag_DeletesUnchanged()
+    {
+        var modelService = Substitute.For<IOllamaModelService>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var deleted = await ReadJsonAsync<DeleteLocalModelResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("llama3:8b", deleted.ModelName);
+        await modelService.Received(1).DeleteModelAsync("llama3:8b", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteLocalModel_WhenEncodedSlashHidesTraversal_ReturnsValidationProblem()
+    {
+        // ..%2F..%2Fetc decodes to "../../etc", which the validator's ".." guard rejects AFTER decoding — so decoding
+        // cannot smuggle path traversal past the guard.
+        var modelService = Substitute.For<IOllamaModelService>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await modelService.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenNameHasEncodedSlashes_DecodesBeforeProbing()
+    {
+        var modelService = Substitute.For<IOllamaModelService>();
+        modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: 4096, Capabilities: []));
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(
+            context.Factory,
+            HttpMethod.Get,
+            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
+        await modelService.Received(1)
+            .ShowModelDetailsAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SetModelKind_WhenNameHasEncodedSlashes_DecodesBeforeStoring()
+    {
+        var classificationService = Substitute.For<IModelClassificationService>();
+        classificationService.SetOverrideAsync(Arg.Any<string>(), Arg.Any<ModelKind>(), Arg.Any<CancellationToken>())
+            .Returns(new ModelClassificationResult(
+                "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                ModelKind.Chat,
+                ModelKind.Unknown,
+                Capabilities: [],
+                IsOverridden: true));
+        await using var context = CreateContextWithClassification(classificationService);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(
+            context.Factory,
+            HttpMethod.Put,
+            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
+        request.Content = JsonContent.Create(new SetModelKindRequest
+        {
+            Kind = "Chat"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await classificationService.Received(1)
+            .SetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", ModelKind.Chat, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ResetModelKind_WhenNameHasEncodedSlashes_DecodesBeforeResetting()
+    {
+        var classificationService = Substitute.For<IModelClassificationService>();
+        classificationService.ResetOverrideAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new ModelClassificationResult(
+                "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                ModelKind.Unknown,
+                ModelKind.Unknown,
+                Capabilities: [],
+                IsOverridden: false));
+        await using var context = CreateContextWithClassification(classificationService);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(
+            context.Factory,
+            HttpMethod.Delete,
+            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/kind");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await classificationService.Received(1)
+            .ResetOverrideAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+    }
+
     private static async Task<LocalModelEndpointTestContext> CreateContextAsync(params string[] models)
     {
         var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
@@ -303,6 +435,11 @@ public sealed class LocalModelEndpointTests
     private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService, StubNodeSettingsStore settingsStore)
     {
         return new LocalModelEndpointTestContext(modelService, settingsStore);
+    }
+
+    private static LocalModelEndpointTestContext CreateContextWithClassification(IModelClassificationService classificationService)
+    {
+        return new LocalModelEndpointTestContext(classificationService);
     }
 
     private static HttpRequestMessage CreateRequest(TestingWebAppFactory factory, HttpMethod method, string uri)
@@ -362,6 +499,13 @@ public sealed class LocalModelEndpointTests
             Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)), SettingsStore);
         }
 
+        public LocalModelEndpointTestContext(IModelClassificationService classificationService)
+        {
+            ArgumentNullException.ThrowIfNull(classificationService);
+            SettingsStore = new StubNodeSettingsStore(new StoredNodeSettings());
+            Factory = CreateFactory(classificationService, SettingsStore);
+        }
+
         public TestingWebAppFactory Factory { get; }
 
         public StubNodeSettingsStore SettingsStore { get; }
@@ -389,6 +533,20 @@ public sealed class LocalModelEndpointTests
                 {
                     services.RemoveAll<IOllamaModelService>();
                     services.AddSingleton(modelService);
+                    services.RemoveAll<INodeSettingsStore>();
+                    services.AddSingleton<INodeSettingsStore>(settingsStore);
+                }
+            };
+        }
+
+        private static TestingWebAppFactory CreateFactory(IModelClassificationService classificationService, StubNodeSettingsStore settingsStore)
+        {
+            return new TestingWebAppFactory
+            {
+                ConfigureAdditionalTestServices = services =>
+                {
+                    services.RemoveAll<IModelClassificationService>();
+                    services.AddSingleton(classificationService);
                     services.RemoveAll<INodeSettingsStore>();
                     services.AddSingleton<INodeSettingsStore>(settingsStore);
                 }

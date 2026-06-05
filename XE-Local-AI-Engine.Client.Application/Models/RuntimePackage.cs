@@ -22,6 +22,14 @@ public sealed record RuntimePackage
 
     public string? ReasoningEffort { get; init; }
 
+    /// <summary>
+    ///     Whether the active model advertises the Ollama <c>thinking</c> capability. Threaded to the invocation factory
+    ///     so the <c>think</c> chat option is attached only for a capable model (an incapable model returns HTTP 400 for
+    ///     any <c>think</c> value). Defaults to <c>true</c> so the cloud/non-Ollama path and pre-existing callers stay
+    ///     byte-identical; deliberately excluded from the config hash so capable models keep a stable hash.
+    /// </summary>
+    public bool SupportsThinking { get; init; } = true;
+
     public List<string>? RequestedCapabilities { get; init; }
 
     public required TimeoutSettings Timeouts { get; init; }

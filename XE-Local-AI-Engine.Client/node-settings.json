@@ -1,4 +1,4 @@
 {
   "maxMessageRequestTimeoutSeconds": 300,
-  "defaultModelName": "gemma4:e4b"
+  "defaultModelName": "qwen3:8b"
 }

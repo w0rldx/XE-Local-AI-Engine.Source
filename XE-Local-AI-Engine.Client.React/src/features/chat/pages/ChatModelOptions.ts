@@ -18,7 +18,10 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 	return {
 		value: modelName,
 		label: modelName,
-		isReasoningModel: false,
+		// Per-model capabilities (Ollama `/api/show`): thinking → reasoning menu; tools → local-tool controls.
+		// Coalesce the optional generated booleans to false so a model that omits them is treated as not capable.
+		isReasoningModel: model.isReasoningCapable ?? false,
+		isToolCapable: model.isToolCapable ?? false,
 		isAvailable: nodeAvailable,
 		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
 	};

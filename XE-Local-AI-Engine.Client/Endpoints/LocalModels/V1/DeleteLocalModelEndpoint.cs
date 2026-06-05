@@ -21,12 +21,15 @@ public sealed class DeleteLocalModelEndpoint(
 
     public override async Task HandleAsync(DeleteLocalModelRequest req, CancellationToken ct)
     {
-        if (!await ValidateModelNameAsync(req.ModelName, ct).ConfigureAwait(false))
+        // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and delete
+        // the decoded canonical name to keep "validated name == deleted name" true.
+        var decodedModelName = ModelRouteName.Decode(req.ModelName);
+        if (!await ValidateModelNameAsync(decodedModelName, ct).ConfigureAwait(false))
         {
             return;
         }
 
-        var modelName = req.ModelName!.Trim();
+        var modelName = decodedModelName!.Trim();
         await _modelService.DeleteModelAsync(modelName, ct).ConfigureAwait(false);
         await Send.OkAsync(new DeleteLocalModelResponse
         {

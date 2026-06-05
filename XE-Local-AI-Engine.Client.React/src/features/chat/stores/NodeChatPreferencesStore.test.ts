@@ -66,6 +66,23 @@ describe("NodeChatPreferencesStore", () => {
 		expect(useStore.getState().reasoningEffort).toBe("medium");
 	});
 
+	it("hydrates a persisted binary 'on' reasoning effort (a valid persistable value)", async () => {
+		const useStore = await loadStore({ [REASONING_EFFORT_STORAGE_KEY]: "on" });
+
+		expect(useStore.getState().reasoningEffort).toBe("on");
+	});
+
+	it("keeps the graded + binary effort lists in sync with the persistable validation set", async () => {
+		// persistableReasoningEfforts is the validation source of truth for both store hydrate and the wire mapper, so
+		// it must equal the union of the graded (menu) and binary (menu) lists — otherwise a value offered in the UI
+		// could be silently dropped on reload/round-trip. Pins the three hand-maintained lists against desync.
+		const { reasoningEfforts, binaryReasoningEfforts, persistableReasoningEfforts } = await import(
+			"@/features/chat/stores/NodeChatPreferencesStore"
+		);
+
+		expect(new Set(persistableReasoningEfforts)).toEqual(new Set([...reasoningEfforts, ...binaryReasoningEfforts]));
+	});
+
 	it("persists selections to localStorage when set", async () => {
 		const useStore = await loadStore();
 

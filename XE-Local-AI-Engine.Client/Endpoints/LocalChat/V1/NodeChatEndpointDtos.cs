@@ -221,6 +221,12 @@ public sealed class NodeChatMessageResponse
     ///     Assistant" fallback label in that case.
     /// </summary>
     public string? AgentName { get; init; }
+
+    /// <summary>
+    ///     The reasoning effort actually used to generate this assistant turn (e.g. "none", "low", "medium", "high").
+    ///     Null for legacy turns persisted before this field existed and for user messages.
+    /// </summary>
+    public string? ReasoningEffort { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse

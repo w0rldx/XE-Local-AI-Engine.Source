@@ -24,7 +24,12 @@ public interface IAgentDefinitionResolver
     ///     actions are injected; otherwise (blank query, or at/below the threshold) the full static prepend is used, so the
     ///     resolved prompt — and the config hash — stays byte-identical to the pre-retrieval path.
     /// </param>
-    Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, CancellationToken cancellationToken = default);
+    /// <param name="supportsTools">
+    ///     Whether the active model advertises the Ollama <c>tools</c> capability. When <c>false</c> ALL tool offers are
+    ///     withheld (the model cannot drive tool calls), independent of the existing per-tool <c>ToolCapableModels</c>
+    ///     name allow-list. Defaults to <c>true</c> so callers that do not gate by capability keep today's behaviour.
+    /// </param>
+    Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

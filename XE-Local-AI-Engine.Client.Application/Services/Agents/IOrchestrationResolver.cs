@@ -25,7 +25,12 @@ public interface IOrchestrationResolver
     ///     threshold) keeps the full static prepend per participant, so each participant's composed prompt stays
     ///     byte-identical to the pre-retrieval path.
     /// </param>
-    Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, CancellationToken cancellationToken = default);
+    /// <param name="supportsTools">
+    ///     Whether the active model advertises the Ollama <c>tools</c> capability. When <c>false</c> every participant's
+    ///     tool offer is withheld (the model cannot drive tool calls), independent of the existing per-tool
+    ///     <c>ToolCapableModels</c> name allow-list. Defaults to <c>true</c> so callers that do not gate keep today's behaviour.
+    /// </param>
+    Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

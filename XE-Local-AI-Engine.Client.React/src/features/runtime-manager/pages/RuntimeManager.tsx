@@ -25,6 +25,7 @@ import {
 	getRuntimeManagerStatusQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toast } from "@/core/ui/notifications/Toast";
 import { type RuntimeLogLineDto, streamRuntimeLogs } from "@/features/runtime-manager/api/RuntimeLogStream";
 import { toRuntimeManagerStatusViewModel } from "@/features/runtime-manager/models/RuntimeManagerMappers";
 import {
@@ -91,7 +92,6 @@ function Diagnostics({ diagnostics }: { readonly diagnostics: string[] }) {
 
 export function RuntimeManager() {
 	const queryClient = useQueryClient();
-	const [actionMessage, setActionMessage] = useState<string | undefined>();
 	const [selectedLogContainer, setSelectedLogContainer] = useState<string | null>(null);
 	const [runtimeLogLines, setRuntimeLogLines] = useState<RuntimeLogLineDto[]>([]);
 	const [runtimeLogError, setRuntimeLogError] = useState<string | undefined>();
@@ -117,13 +117,13 @@ export function RuntimeManager() {
 	const actionMutation = useMutation({
 		...withResponseValidation(executeRuntimeContainerActionMutation()),
 		onSuccess: async (response) => {
-			setActionMessage(`${response.action ?? ""} requested for ${response.containerName ?? ""}.`);
+			toast.success(`${response.action ?? ""} requested for ${response.containerName ?? ""}.`);
 			await queryClient.invalidateQueries({ queryKey: getRuntimeManagerStatusQueryKey() });
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 	const runContainerAction = useCallback(
 		(containerName: string, action: RuntimeContainerActionName) => {
-			setActionMessage(undefined);
 			actionMutation.mutate({
 				body: { containerName, action, drainTimeoutSeconds: snapshot?.manifest.stopDrainTimeoutSeconds ?? undefined },
 			});
@@ -207,14 +207,6 @@ export function RuntimeManager() {
 						{errorMessage(statusQuery.error)}
 					</Alert>
 				) : null}
-
-				{actionMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(actionMutation.error)}
-					</Alert>
-				) : null}
-
-				{actionMessage ? <Alert color="green">{actionMessage}</Alert> : null}
 
 				{snapshot ? (
 					<Tabs defaultValue="status" keepMounted={false}>

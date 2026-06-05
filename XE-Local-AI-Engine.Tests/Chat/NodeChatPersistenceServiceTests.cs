@@ -211,6 +211,64 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Metadata_RoundTripsReasoningEffort()
+    {
+        await using var provider = await BuildProviderAsync("reasoning-effort-roundtrip.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Reasoning effort", "node", 3200)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        // The placeholder is stamped with the reasoning effort used to drive the turn; it must survive the
+        // streaming/terminalize updates (which preserve it from current) and reload off the metadata blob.
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId,
+                assistantMessageId,
+                correlation.RequestId,
+                3201,
+                "model-x",
+                ReasoningEffort: "high"))
+            .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, 3202).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                3203,
+                "the answer",
+                "thinking",
+                Model: "model-x"))
+            .ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Equal("high", assistant.ReasoningEffort);
+        // The terminalize update must NOT drop the effort while it rewrites the rest of the blob.
+        AssertEx.Equal("the answer", assistant.Content);
+        AssertEx.Equal("thinking", assistant.Reasoning);
+    }
+
+    [Test]
+    public async Task Metadata_LegacyBlobWithoutReasoningEffort_DeserializesNull()
+    {
+        await using var provider = await BuildProviderAsync("reasoning-effort-legacy.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy reasoning effort", "node", 3300)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, 3301)).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, 3302, "legacy answer", "legacy reasoning")).ConfigureAwait(false);
+
+        // Simulate a blob written before the reasoning-effort field existed: the ReasoningEffort key is absent entirely
+        // (no migration), so it must deserialize to null without error.
+        await OverwriteMetadataJsonAsync(provider, assistantMessageId, "{\"Reasoning\":\"legacy reasoning\",\"Model\":null}").ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Null(assistant.ReasoningEffort);
+        AssertEx.Equal("legacy reasoning", assistant.Reasoning);
+    }
+
+    [Test]
     public async Task CancelMessageAsync_TerminalizesOnlyMatchingCorrelation()
     {
         await using var provider = await BuildProviderAsync("cancel.sqlite").ConfigureAwait(false);

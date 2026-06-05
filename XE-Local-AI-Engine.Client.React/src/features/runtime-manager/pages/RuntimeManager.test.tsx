@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse } from "@/core/api/generated";
 
-const { generatedMock, logStreamMock } = vi.hoisted(() => ({
+const { generatedMock, logStreamMock, toastMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getRuntimeManagerStatusOptions: vi.fn(),
 		getRuntimeManagerStatusQueryKey: vi.fn(() => ["getRuntimeManagerStatus"]),
@@ -19,6 +19,7 @@ const { generatedMock, logStreamMock } = vi.hoisted(() => ({
 	logStreamMock: {
 		streamRuntimeLogs: vi.fn(),
 	},
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
 }));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
@@ -27,6 +28,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	executeRuntimeContainerActionMutation: generatedMock.executeRuntimeContainerActionMutation,
 }));
 vi.mock("@/features/runtime-manager/api/RuntimeLogStream", () => logStreamMock);
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { RuntimeManager } from "@/features/runtime-manager/pages/RuntimeManager";
 
@@ -126,7 +128,7 @@ describe("RuntimeManager", () => {
 				body: { containerName: "ollama", action: "restart", drainTimeoutSeconds: 30 },
 			}),
 		);
-		expect(await screen.findByText("restart requested for ollama.")).toBeTruthy();
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("restart requested for ollama."));
 		await waitFor(() => expect(generatedMock.statusFn).toHaveBeenCalledTimes(2));
 	});
 

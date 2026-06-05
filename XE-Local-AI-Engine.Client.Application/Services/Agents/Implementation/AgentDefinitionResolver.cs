@@ -31,7 +31,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, CancellationToken cancellationToken = default)
+    public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, CancellationToken cancellationToken = default)
     {
         if (agentDefinitionId is not { } definitionId)
         {
@@ -52,7 +52,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // offer by it — not the caller's active model — to keep capability gating and the runtime model consistent.
         // When the definition pins no profile the turn keeps the caller's active model.
         var effectiveModel = definition.ModelProfile ?? activeModelId;
-        var allowedTools = ProjectAllowedTools(definition, effectiveModel);
+        var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools);
         var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
@@ -89,8 +89,16 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId)
+    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools)
     {
+        // A model that does not advertise the Ollama "tools" capability cannot drive ANY tool call, so withhold the
+        // entire offer (empty) before the per-tool name gating below. This is the capability gate; the offer provider's
+        // ToolCapableModels name allow-list remains the additional gate for high-risk tools (run_in_agent_home / MCP).
+        if (!supportsTools)
+        {
+            return [];
+        }
+
         // The seeded "Default Assistant" (mode-off persona) reproduces today's chat exactly: it receives the FULL
         // capability-gated offer for the effective model, NOT the intersected allowed set (D3). It is the ONLY
         // definition granted the full offer — every other definition stays intersected (security invariant: a selected

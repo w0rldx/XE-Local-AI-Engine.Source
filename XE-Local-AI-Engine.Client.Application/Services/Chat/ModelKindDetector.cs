@@ -11,6 +11,8 @@ public static class ModelKindDetector
 {
     private const string CompletionCapability = "completion";
     private const string EmbeddingCapability = "embedding";
+    private const string ThinkingCapability = "thinking";
+    private const string ToolsCapability = "tools";
 
     /// <summary>
     ///     Upper-cased name fragments that reliably identify embedding-only models when Ollama reports
@@ -55,6 +57,27 @@ public static class ModelKindDetector
         }
 
         return FromNameHeuristic(modelName);
+    }
+
+    /// <summary>
+    ///     True when the supplied Ollama capabilities advertise the <c>thinking</c> capability (case-insensitive). A
+    ///     model without it returns HTTP 400 for any <c>think</c> request field, so the loopback path gates the field on
+    ///     this. Null/empty capabilities (older daemon or offline) are treated as NOT thinking-capable — the safe choice
+    ///     that avoids the 400 while still allowing a plain chat.
+    /// </summary>
+    public static bool SupportsThinking(IReadOnlyList<string>? capabilities)
+    {
+        return capabilities is { Count: > 0 } && ContainsCapability(capabilities, ThinkingCapability);
+    }
+
+    /// <summary>
+    ///     True when the supplied Ollama capabilities advertise the <c>tools</c> capability (case-insensitive). A model
+    ///     without it cannot drive tool calls, so the loopback path withholds all tool offers. Null/empty capabilities
+    ///     are treated as NOT tool-capable (the safe default).
+    /// </summary>
+    public static bool SupportsTools(IReadOnlyList<string>? capabilities)
+    {
+        return capabilities is { Count: > 0 } && ContainsCapability(capabilities, ToolsCapability);
     }
 
     private static ModelKind FromNameHeuristic(string modelName)

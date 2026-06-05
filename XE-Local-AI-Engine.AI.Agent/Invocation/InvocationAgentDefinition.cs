@@ -10,9 +10,16 @@ using Microsoft.Extensions.AI;
 /// <param name="Tools">Offer-list tools projected from the runtime package before executable registry resolution.</param>
 /// <param name="ConversationContext">Prior conversation turns that should seed the agent run.</param>
 /// <param name="ReasoningEffort">Optional reasoning budget hint mapped to provider-specific chat options.</param>
+/// <param name="SupportsThinking">
+///     When <c>true</c> the factory attaches the Ollama-specific <c>think</c> chat option for this turn; when
+///     <c>false</c> the option is omitted entirely. The loopback path sets this from the active model's advertised
+///     <c>thinking</c> capability so an incapable model never receives the field (Ollama returns HTTP 400 otherwise).
+///     Defaults to <c>true</c> so cloud providers (which ignore the unknown <c>think</c> property) keep reasoning.
+/// </param>
 public sealed record InvocationAgentDefinition(
     string ModelId,
     string Instructions,
     IReadOnlyList<AITool> Tools,
     IReadOnlyList<ChatMessage> ConversationContext,
-    string? ReasoningEffort = null);
+    string? ReasoningEffort = null,
+    bool SupportsThinking = true);

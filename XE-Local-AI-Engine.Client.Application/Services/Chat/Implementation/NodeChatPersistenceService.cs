@@ -244,7 +244,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
             request.Origin,
             cancellationToken,
             agentDefinitionId: request.AgentDefinitionId,
-            agentName: request.AgentName);
+            agentName: request.AgentName,
+            reasoningEffort: request.ReasoningEffort);
     }
 
     public Task<NodeChatPersistedMessageDto> MarkAssistantQueuedAsync(NodeChatMessageCorrelation correlation, long updatedAtUtc, CancellationToken cancellationToken = default)
@@ -518,7 +519,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     AddParameter(messageCommand, "$content", Encode(message.Content));
                     AddParameter(messageCommand, "$metadata_json",
                         SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount, message.Parts,
-                            message.AgentDefinitionId, message.AgentName));
+                            message.AgentDefinitionId, message.AgentName, message.ReasoningEffort));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);
                     AddParameter(messageCommand, "$updated_at_utc", message.UpdatedAtUtc);
                     AddParameter(messageCommand, "$status", message.Status);
@@ -571,7 +572,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 // per-response agent attribution is stamped at mint time so the pending variant already carries the
                 // agent name (symmetric with the send placeholder).
                 var sequence = await NextSequenceAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(request.MetadataJson, null, request.Model, null, null, null, null, null, request.AgentDefinitionId, request.AgentName);
+                var metadata = SerializeMetadata(request.MetadataJson, null, request.Model, null, null, null, null, null, request.AgentDefinitionId, request.AgentName, request.ReasoningEffort);
 
                 await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 insertCommand.CommandText = """
@@ -612,7 +613,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                     ParentMessageId: request.OriginalMessageId,
                     VariantGroupId: variantGroupId,
                     AgentDefinitionId: request.AgentDefinitionId,
-                    AgentName: request.AgentName);
+                    AgentName: request.AgentName,
+                    ReasoningEffort: request.ReasoningEffort);
 
                 return new NodeChatMessageVariantDto(variantGroupId, request.OriginalMessageId, variant);
             },
@@ -791,13 +793,14 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         Guid? parentMessageId = null,
         Guid? variantGroupId = null,
         Guid? agentDefinitionId = null,
-        string? agentName = null)
+        string? agentName = null,
+        string? reasoningEffort = null)
     {
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
             async (dbContext, token) =>
             {
                 var sequence = await NextSequenceAsync(dbContext, conversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(metadataJson, reasoning, model, null, null, null, null, null, agentDefinitionId, agentName);
+                var metadata = SerializeMetadata(metadataJson, reasoning, model, null, null, null, null, null, agentDefinitionId, agentName, reasoningEffort);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -824,7 +827,7 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token).ConfigureAwait(false);
 
                 return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson,
-                    Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId, AgentDefinitionId: agentDefinitionId, AgentName: agentName);
+                    Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId, AgentDefinitionId: agentDefinitionId, AgentName: agentName, ReasoningEffort: reasoningEffort);
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -868,11 +871,11 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 // A null parts arg leaves the persisted parts untouched (a partial flush carries no parts); a
                 // non-null list (including empty) is the authoritative interleave from terminalize and overwrites.
                 var nextParts = parts ?? current.Parts;
-                // Agent attribution is stamped once at placeholder/variant mint and never updated here, so always
-                // preserve it from current — otherwise a later flush/terminalize would re-serialize the blob without
-                // the agent fields and silently drop the per-response attribution.
+                // Agent attribution and the reasoning effort are stamped once at placeholder/variant mint and never
+                // updated here, so always preserve them from current — otherwise a later flush/terminalize would
+                // re-serialize the blob without those fields and silently drop the per-response attribution.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
-                    current.AgentDefinitionId, current.AgentName);
+                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
@@ -1007,7 +1010,8 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
                 await reader.IsDBNullAsync(15, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(15),
                 metadata.Parts,
                 metadata.AgentDefinitionId,
-                metadata.AgentName));
+                metadata.AgentName,
+                metadata.ReasoningEffort));
         }
 
         return messages;
@@ -1103,15 +1107,16 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         int? reasoningTokens,
         IReadOnlyList<NodeChatMessagePart>? parts = null,
         Guid? agentDefinitionId = null,
-        string? agentName = null)
+        string? agentName = null,
+        string? reasoningEffort = null)
     {
         if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null && parts is null
-            && agentDefinitionId is null && agentName is null)
+            && agentDefinitionId is null && agentName is null && reasoningEffort is null)
         {
             return null;
         }
 
-        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName),
+        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName, reasoningEffort),
             MetadataJsonOptions));
     }
 
@@ -1206,5 +1211,9 @@ public sealed class NodeChatPersistenceService(NodeChatPersistenceWriter writer)
         // before agent mode existed omits the keys and deserializes with both null (no migration). AgentName is a
         // display-name snapshot — same plaintext-on-device posture as the existing metadata fields.
         Guid? AgentDefinitionId = null,
-        string? AgentName = null);
+        string? AgentName = null,
+        // The reasoning effort actually used to generate this assistant turn (per-response attribution). Trailing
+        // optional member with a null default, so a legacy blob written before this field existed omits the key and
+        // deserializes to null (no migration). Same plaintext-on-device posture as the existing metadata fields.
+        string? ReasoningEffort = null);
 }

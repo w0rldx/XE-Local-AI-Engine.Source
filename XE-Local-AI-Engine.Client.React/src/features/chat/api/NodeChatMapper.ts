@@ -6,6 +6,7 @@ import type {
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse,
 	XeLocalAiEngineClientServicesChatNodeChatMessagePart,
 } from "@/core/api/generated";
+import { persistableReasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
@@ -17,6 +18,7 @@ import type {
 	ChatRole,
 	ChatToolCall,
 	MessageStatus,
+	ReasoningEffort,
 	ToolCallState,
 } from "@/features/chat/models/ChatModels";
 import { type NodeChatStreamEventDto, nodeChatToolStreamEventTypes } from "@/features/chat/models/NodeChatStreamTypes";
@@ -160,6 +162,13 @@ export function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		// Absent for legacy turns (null on the wire → undefined here); ChatMessage falls back to "Default Assistant".
 		agentName: dto.agentName ?? undefined,
 		agentDefinitionId: dto.agentDefinitionId ?? undefined,
+		// Effective reasoning effort used at generation time (persisted in metadata_json, same blob as agentName).
+		// null on wire = legacy turn or no effort recorded → undefined. Unknown/malformed values also → undefined
+		// (narrowed against the known union; a stale server value must not corrupt the client model).
+		reasoningEffort:
+			dto.reasoningEffort != null && persistableReasoningEfforts.includes(dto.reasoningEffort as ReasoningEffort)
+				? (dto.reasoningEffort as ReasoningEffort)
+				: undefined,
 	};
 }
 

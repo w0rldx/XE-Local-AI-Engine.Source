@@ -102,14 +102,18 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 					),
 				);
 			},
+			onError: (error) => toast.error(errorMessage(error, t("pages.agents.golden.errors.harvest", "Could not harvest golden cases."))),
 		});
 	}, [harvestMutation, t]);
 
 	const handleApprove = useCallback(
 		(goldenCase: GoldenConversation) => {
-			approveMutation.mutate(goldenCase.id);
+			approveMutation.mutate(goldenCase.id, {
+				onError: (error) =>
+					toast.error(errorMessage(error, t("pages.agents.golden.errors.approve", "Could not approve the golden case."))),
+			});
 		},
-		[approveMutation],
+		[approveMutation, t],
 	);
 
 	const handleCreate = useCallback(
@@ -131,7 +135,10 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 			});
 
 			if (confirmed) {
-				deleteMutation.mutate(goldenCase.id);
+				deleteMutation.mutate(goldenCase.id, {
+					onError: (error) =>
+						toast.error(errorMessage(error, t("pages.agents.golden.errors.delete", "Could not delete the golden case."))),
+				});
 			}
 		},
 		[confirm, deleteMutation, t],
@@ -193,24 +200,6 @@ export function GoldenConversationPanel({ agentDefinitionId, agentName, enabled 
 						onSubmit={handleCreate}
 						onCancel={closeForm}
 					/>
-				) : null}
-
-				{deleteMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-delete-error">
-						{errorMessage(deleteMutation.error, t("pages.agents.golden.errors.delete", "Could not delete the golden case."))}
-					</Alert>
-				) : null}
-
-				{harvestMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-harvest-error">
-						{errorMessage(harvestMutation.error, t("pages.agents.golden.errors.harvest", "Could not harvest golden cases."))}
-					</Alert>
-				) : null}
-
-				{approveMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="golden-approve-error">
-						{errorMessage(approveMutation.error, t("pages.agents.golden.errors.approve", "Could not approve the golden case."))}
-					</Alert>
 				) : null}
 
 				{goldenQuery.isLoading ? (

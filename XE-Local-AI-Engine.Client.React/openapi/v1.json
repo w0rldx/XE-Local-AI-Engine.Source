@@ -5961,6 +5961,12 @@
               "type": "string"
             }
           },
+          "isReasoningCapable": {
+            "type": "boolean"
+          },
+          "isToolCapable": {
+            "type": "boolean"
+          },
           "isOverridden": {
             "type": "boolean"
           }
@@ -6251,6 +6257,10 @@
             "nullable": true
           },
           "agentName": {
+            "type": "string",
+            "nullable": true
+          },
+          "reasoningEffort": {
             "type": "string",
             "nullable": true
           }
@@ -6675,7 +6685,9 @@
           "Unexpected",
           "AgentToolCall",
           "HashMismatch",
-          "ModelUnavailable"
+          "ModelUnavailable",
+          "ModelCapabilityUnsupported",
+          "ModelLoadFailed"
         ],
         "enum": [
           "Cancelled",
@@ -6685,7 +6697,9 @@
           "Unexpected",
           "AgentToolCall",
           "HashMismatch",
-          "ModelUnavailable"
+          "ModelUnavailable",
+          "ModelCapabilityUnsupported",
+          "ModelLoadFailed"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationHistoryResponse": {

@@ -204,6 +204,23 @@ describe("node chat mapper", () => {
 		expect(message.feedbackComment).toBeUndefined();
 	});
 
+	it("maps the persisted reasoningEffort onto the message model", () => {
+		expect(mapSingleMessage({ reasoningEffort: "medium" }).reasoningEffort).toBe("medium");
+		expect(mapSingleMessage({ reasoningEffort: "none" }).reasoningEffort).toBe("none");
+		expect(mapSingleMessage({ reasoningEffort: "high" }).reasoningEffort).toBe("high");
+	});
+
+	it("maps a null reasoningEffort (legacy turn) to undefined", () => {
+		expect(mapSingleMessage({ reasoningEffort: null }).reasoningEffort).toBeUndefined();
+	});
+
+	it("maps an unknown/malformed reasoningEffort value (e.g. 'None', 'turbo') to undefined", () => {
+		// The narrowing guard rejects anything outside the known union so a stale server value cannot
+		// corrupt the client model. PascalCase "None" and invented values must both fall back to undefined.
+		expect(mapSingleMessage({ reasoningEffort: "None" }).reasoningEffort).toBeUndefined();
+		expect(mapSingleMessage({ reasoningEffort: "turbo" }).reasoningEffort).toBeUndefined();
+	});
+
 	it("maps the persisted ordered parts into the message's interleave", () => {
 		const message = mapSingleMessage({
 			reasoning: "flat blob",

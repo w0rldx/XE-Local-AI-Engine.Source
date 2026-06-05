@@ -60,6 +60,141 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    public async Task CreateAsync_WhenSupportsThinkingFalse_SendsThinkFalseToSuppressTemplateReasoning()
+    {
+        var definition = new InvocationAgentDefinition("gemma:12b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: null,
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+
+        // A non-thinking model gets think:FALSE (not an omitted key). think:false is accepted by Ollama (only
+        // think:true/<level> 400s) and suppresses the reasoning some GGUF templates emit by default; omitting the
+        // field would let that reasoning through and surface a reasoning block even with reasoning off.
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
+        AssertEx.Equal(false, thinkValue);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSupportsThinkingFalseAndReasoningOn_OmitsThinkOption()
+    {
+        var definition = new InvocationAgentDefinition("gemma:12b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: "on",
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+
+        // Binary reasoning ON for a non-thinking model: the think key is OMITTED entirely so the model's default
+        // (template) reasoning runs. Sending think:true / a level would 400; only omission lets it through.
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey("think"));
+    }
+
+    [Test]
+    [Arguments("low")]
+    [Arguments("medium")]
+    [Arguments("high")]
+    public async Task CreateAsync_WhenSupportsThinkingFalseAndGradedEffort_OmitsThinkOption(string effort)
+    {
+        var definition = new InvocationAgentDefinition("gemma:12b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: effort,
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+
+        // A graded effort carried onto a NON-thinking model (an agent definition pins it, or the composer keeps a
+        // stale "medium" across a model switch) still means "reason": the think key is OMITTED so the model's built-in
+        // template reasoning runs, NOT think:false which would suppress it. Sending think:<level> would 400.
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey("think"));
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSupportsThinkingFalseAndReasoningNone_SendsThinkFalse()
+    {
+        var definition = new InvocationAgentDefinition("gemma:12b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: "none",
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+
+        // Explicit OFF ("none") on a non-thinking model: think:FALSE is sent to suppress the template reasoning.
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
+        AssertEx.Equal(false, thinkValue);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSupportsThinkingTrue_IncludesThinkOption()
+    {
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: "high",
+            SupportsThinking: true);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var runOptions = context.RunOptions as ChatClientAgentRunOptions
+                         ?? throw new AssertionException("Expected ChatClientAgentRunOptions.");
+        var chatOptions = runOptions.ChatOptions
+                          ?? throw new AssertionException("Expected ChatOptions to be populated.");
+
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<string>("think", out var thinkValue));
+        AssertEx.Equal("high", thinkValue);
+    }
+
+    [Test]
     public async Task CreateAsync_WithOfferedNameInRegistry_EnablesToolsAndResolvesExecutable()
     {
         var registry = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));

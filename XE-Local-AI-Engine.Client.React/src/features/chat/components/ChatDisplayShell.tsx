@@ -20,6 +20,7 @@ export function ChatDisplayShell({
 	selectedModel,
 	reasoningEffort,
 	availableReasoningEfforts,
+	activeModelToolCapable = false,
 	toolsEnabled = false,
 	contextUsage,
 	streamingMessage,
@@ -161,6 +162,7 @@ export function ChatDisplayShell({
 					sendDisabled={inputStatus.sendDisabled}
 					selectedModel={selectedModel}
 					reasoningEffort={reasoningEffort}
+					activeModelToolCapable={activeModelToolCapable}
 					toolsEnabled={toolsEnabled}
 					agentControlsAvailable={agentControlsAvailable}
 					agentModeEnabled={agentModeEnabled}

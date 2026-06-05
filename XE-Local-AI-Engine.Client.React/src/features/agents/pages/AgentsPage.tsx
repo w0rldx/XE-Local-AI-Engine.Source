@@ -10,6 +10,7 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
+import { toast } from "@/core/ui/notifications/Toast";
 import {
 	AgentDefinitionForm,
 	type AgentDefinitionFormHandle,
@@ -179,7 +180,9 @@ export function AgentsPage() {
 			});
 
 			if (confirmed) {
-				deleteMutation.mutate(definition.id);
+				deleteMutation.mutate(definition.id, {
+					onError: (error) => toast.error(errorMessage(error, t("pages.agents.errors.delete", "Could not delete the agent."))),
+				});
 			}
 		},
 		[confirm, deleteMutation, t],
@@ -221,12 +224,6 @@ export function AgentsPage() {
 						</Button>
 					</Group>
 				</Group>
-
-				{deleteMutation.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-delete-error">
-						{errorMessage(deleteMutation.error, t("pages.agents.errors.delete", "Could not delete the agent."))}
-					</Alert>
-				) : null}
 
 				{/* The list always renders underneath; the editor opens as a dialog on top (no more page-takeover). */}
 				<Card withBorder={true} radius="md" p="lg">

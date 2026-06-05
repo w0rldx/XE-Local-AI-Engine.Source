@@ -16,8 +16,11 @@ if (enableHostAgentRuntimeFidelity)
     hostAgentMode = "runtime-fidelity";
 }
 
+// Pin a concrete Ollama version (>= 0.30.3) instead of "latest": the floating tag drifted to a cached
+// 0.24.0 image that cannot load the gemma-4-12b ("gemma4") architecture, surfacing as an opaque 500.
+// Bump this deliberately when adopting a newer Ollama. WithDataVolume keeps pulled models across recreation.
 var ollama = builder.AddOllama("ollama")
-                    .WithImageTag("latest")
+                    .WithImageTag("0.30.5")
                     .WithDataVolume();
 
 var chatModel = ollama.AddModel("chat", "qwen3.5:0.8b");

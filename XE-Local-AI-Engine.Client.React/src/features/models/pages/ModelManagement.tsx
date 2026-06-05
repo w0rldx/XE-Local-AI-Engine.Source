@@ -17,6 +17,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
+import { toast } from "@/core/ui/notifications/Toast";
 import { InstalledModelsTable } from "@/features/models/components/InstalledModelsTable";
 import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDialog";
 import { PullModelDialog } from "@/features/models/components/PullModelDialog";
@@ -35,7 +36,6 @@ export function ModelManagement() {
 	// The model whose details dialog is open (also the only model whose details endpoint is fetched).
 	const [detailsModelName, setDetailsModelName] = useState<string | undefined>();
 	const [pullModelName, setPullModelName] = useState("");
-	const [message, setMessage] = useState<string | undefined>();
 	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
 	const [pullModalOpened, { open: openPullModal, close: closePullModal }] = useDisclosure(false);
 	// Shared single pull engine (invariant §3.3): the dialog's submit + live progress run through this hook, the same
@@ -73,19 +73,21 @@ export function ModelManagement() {
 	const selectMutation = useMutation({
 		...withResponseValidation(selectLocalModelMutation()),
 		onSuccess: async (selection) => {
-			setMessage(`Default local model set to ${selection.selectedModelName ?? ""}.`);
+			toast.success(`Default local model set to ${selection.selectedModelName ?? ""}.`);
 			await invalidateListAndDetails();
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
 	const deleteMutation = useMutation({
 		...withResponseValidation(deleteLocalModelMutation()),
 		onSuccess: async (response) => {
-			setMessage(`Model ${response.modelName ?? ""} deleted.`);
+			toast.success(`Model ${response.modelName ?? ""} deleted.`);
 			closeDetailsModal();
 			setDetailsModelName(undefined);
 			await invalidateListAndDetails();
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
 	const setKindMutation = useMutation({
@@ -96,6 +98,7 @@ export function ModelManagement() {
 		onSuccess: async () => {
 			await invalidateList();
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
 	const resetKindMutation = useMutation({
@@ -103,10 +106,11 @@ export function ModelManagement() {
 		onSuccess: async () => {
 			await invalidateList();
 		},
+		onError: (error) => toast.error(errorMessage(error)),
 	});
 
-	// Pull errors now surface through the shared hook's progress toast (not this banner), so pull is excluded here.
-	const actionError = selectMutation.error ?? deleteMutation.error ?? setKindMutation.error ?? resetKindMutation.error;
+	// Pull errors surface through the shared hook's progress toast; the other action errors surface via each
+	// mutation's onError toast above (no inline banner).
 	const isActionPending =
 		selectMutation.isPending ||
 		modelPull.isPulling ||
@@ -186,14 +190,6 @@ export function ModelManagement() {
 						{modelsResponse.error ?? "Local Ollama is not available. Start Ollama to list and manage models."}
 					</Alert>
 				) : null}
-
-				{actionError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(actionError)}
-					</Alert>
-				) : null}
-
-				{message ? <Alert color="green">{message}</Alert> : null}
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">

@@ -520,6 +520,59 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    [Arguments("registry.ollama.ai/library/gemma:12b does not support thinking", "This model does not support reasoning.")]
+    [Arguments("this model does not support tools", "This model does not support tool calling.")]
+    public async Task RunAsync_WhenModelRejectsCapability_MapsModelCapabilityUnsupportedFailureCategory(string providerMessage, string expectedError)
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, null, HttpStatusCode.BadRequest)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelCapabilityUnsupported)
+                                                                         && failure.Error == expectedError);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenModelLoadFailsWith500_MapsModelLoadFailedFailureCategory()
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        // The blob path in the message must never reach the surfaced error; the status code alone drives the mapping.
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(
+                   "unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null, HttpStatusCode.InternalServerError)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelLoadFailed)
+                                                                         && failure.Error == "The model could not be loaded or run on the provider.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenModelLoadFailsWith500_DoesNotLeakBlobPath()
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(
+                   "unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null, HttpStatusCode.InternalServerError)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => !failure.Error.Contains("blobs", StringComparison.Ordinal)
+                                                                         && !failure.Error.Contains(".ollama", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task RunAsync_WhenUnexpected_MapsFailureCategory()
     {
         var sender = new MockHubMessageSender();

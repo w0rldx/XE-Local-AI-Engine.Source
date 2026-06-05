@@ -7,6 +7,7 @@ import type {
 	ChatTimelineEntry,
 	ChatToolCall,
 	MessageStatus,
+	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import {
 	buildMessageParts,
@@ -307,6 +308,7 @@ export function appendOptimisticNodeChatSend(
 	nowIso: string,
 	model?: string,
 	agentName?: string,
+	reasoningEffort?: ReasoningEffort,
 ): ChatConversationModel {
 	const nextSortOrder = maxSortOrder(conversation.messages) + 1;
 	const userMessage: ChatMessageModel = {
@@ -329,9 +331,10 @@ export function appendOptimisticNodeChatSend(
 		updatedAt: nowIso,
 		sortOrder: nextSortOrder + 1,
 		model,
-		// Optimistically stamp the agent name so the attribution row is visible during streaming.
-		// The persisted name (from metadata_json) replaces this on the post-stream refetch.
+		// Optimistically stamp the agent name and reasoning effort so the attribution row is fully visible
+		// during streaming. The persisted values (from metadata_json) replace these on the post-stream refetch.
 		agentName,
+		reasoningEffort,
 	};
 
 	return {
@@ -432,11 +435,12 @@ export function applyNodeChatStreamEvent(
 		updatedAt: eventTime,
 		sortOrder: existing?.sortOrder ?? maxSortOrder(conversation.messages) + 1,
 		model: event.model ?? existing?.model,
-		// Stream events carry no agent attribution, so always carry it forward from the optimistic message
-		// (stamped in appendOptimisticNodeChatSend) — otherwise the rebuild drops it and the attribution row
-		// falls back to "Default Assistant" until the post-stream refetch reloads the persisted name.
+		// Stream events carry no agent attribution or reasoning effort, so always carry both forward from the
+		// optimistic message (stamped in appendOptimisticNodeChatSend) — otherwise the rebuild drops them and
+		// the attribution row falls back to "Default Assistant" until the post-stream refetch.
 		agentName: existing?.agentName,
 		agentDefinitionId: existing?.agentDefinitionId,
+		reasoningEffort: existing?.reasoningEffort,
 		error: event.error ?? undefined,
 		inputTokens: event.inputTokens ?? existing?.inputTokens,
 		outputTokens: event.outputTokens ?? existing?.outputTokens,
@@ -494,9 +498,11 @@ export function markNodeChatStreamTerminated(
 		updatedAt: nowIso,
 		sortOrder: existing?.sortOrder ?? maxSortOrder(conversation.messages) + 1,
 		model: existing?.model,
-		// Carry agent attribution forward so a cancelled/failed/interrupted terminal state keeps the agent name.
+		// Carry agent attribution and reasoning effort forward so a cancelled/failed/interrupted terminal state
+		// keeps the full attribution row intact until the post-stream refetch loads the persisted values.
 		agentName: existing?.agentName,
 		agentDefinitionId: existing?.agentDefinitionId,
+		reasoningEffort: existing?.reasoningEffort,
 		error,
 		inputTokens: existing?.inputTokens,
 		outputTokens: existing?.outputTokens,

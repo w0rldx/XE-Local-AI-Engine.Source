@@ -555,6 +555,8 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	kind?: string;
 	detectedKind?: string;
 	capabilities?: Array<string>;
+	isReasoningCapable?: boolean;
+	isToolCapable?: boolean;
 	isOverridden?: boolean;
 };
 
@@ -637,6 +639,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	parts?: Array<XeLocalAiEngineClientServicesChatNodeChatMessagePart> | null;
 	agentDefinitionId?: string | null;
 	agentName?: string | null;
+	reasoningEffort?: string | null;
 };
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {
@@ -793,7 +796,9 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "Unexpected"
 	| "AgentToolCall"
 	| "HashMismatch"
-	| "ModelUnavailable";
+	| "ModelUnavailable"
+	| "ModelCapabilityUnsupported"
+	| "ModelLoadFailed";
 
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = {
 	invocationId?: string;

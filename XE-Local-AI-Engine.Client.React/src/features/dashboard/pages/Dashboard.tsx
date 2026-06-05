@@ -19,6 +19,7 @@ import {
 	getConnectionStatusQueryKey,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toast } from "@/core/ui/notifications/Toast";
 import { toConnectionStatusViewModel } from "@/features/dashboard/models/ConnectionMappers";
 import { type ConnectionStatusViewModel, connectionStatusColor } from "@/features/dashboard/models/ConnectionStatusModel";
 
@@ -54,26 +55,34 @@ export function Dashboard() {
 		await queryClient.invalidateQueries({ queryKey: getConnectionStatusQueryKey() });
 	};
 
+	// Connection action failures surface as a transient toast (the kept inline Alerts are the persistent
+	// status-load error and the connection's lastError).
+	const onActionError = (error: unknown): void => {
+		toast.error(error instanceof Error ? error.message : t("pages.dashboard.unexpectedError"));
+	};
+
 	const connectMutation = useMutation({
 		...withResponseValidation(connectConnectionMutation()),
 		onSuccess: onActionSuccess,
+		onError: onActionError,
 	});
 	const disconnectMutation = useMutation({
 		...withResponseValidation(disconnectConnectionMutation()),
 		onSuccess: onActionSuccess,
+		onError: onActionError,
 	});
 	const enableAutoConnectMutationResult = useMutation({
 		...withResponseValidation(enableAutoConnectMutation()),
 		onSuccess: onActionSuccess,
+		onError: onActionError,
 	});
 	const disableAutoConnectMutationResult = useMutation({
 		...withResponseValidation(disableAutoConnectMutation()),
 		onSuccess: onActionSuccess,
+		onError: onActionError,
 	});
 
 	const status = statusQuery.data;
-	const actionError =
-		connectMutation.error ?? disconnectMutation.error ?? enableAutoConnectMutationResult.error ?? disableAutoConnectMutationResult.error;
 	const isActionPending =
 		connectMutation.isPending ||
 		disconnectMutation.isPending ||
@@ -127,12 +136,6 @@ export function Dashboard() {
 				{statusQuery.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
 						{getErrorMessage(statusQuery.error)}
-					</Alert>
-				) : null}
-
-				{actionError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{getErrorMessage(actionError)}
 					</Alert>
 				) : null}
 

@@ -22,7 +22,10 @@ public sealed class DeleteModelKindEndpoint(
 
     public override async Task HandleAsync(ResetModelKindRequest req, CancellationToken ct)
     {
-        var validationError = _modelNameValidator.GetValidationError(req.ModelName);
+        // Decode FIRST: the bound route value may still contain literal %2F (see ModelRouteName), so validate and reset
+        // the decoded canonical name.
+        var decodedModelName = ModelRouteName.Decode(req.ModelName);
+        var validationError = _modelNameValidator.GetValidationError(decodedModelName);
         if (validationError is not null)
         {
             AddError(validationError);
@@ -30,9 +33,9 @@ public sealed class DeleteModelKindEndpoint(
             return;
         }
 
-        // The validator's pattern rejects whitespace, so the validated name is already the persisted key — pass it through
-        // unchanged so the key that was validated and the key that is reset are provably identical.
-        var result = await _classificationService.ResetOverrideAsync(req.ModelName!, ct).ConfigureAwait(false);
+        // The validator's pattern rejects whitespace, so the validated (decoded) name is already the persisted key — pass it
+        // through unchanged so the key that was validated and the key that is reset are provably identical.
+        var result = await _classificationService.ResetOverrideAsync(decodedModelName!, ct).ConfigureAwait(false);
         await Send.OkAsync(result.ToKindResponse(), ct).ConfigureAwait(false);
     }
 }

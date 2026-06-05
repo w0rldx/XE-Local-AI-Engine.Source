@@ -45,10 +45,11 @@ describe("StreamingIndicator", () => {
 		expect(screen.queryByTestId("chat-stream-queued-indicator")).toBeNull();
 	});
 
-	it("renders an error with its failure category over any queued/streaming state", () => {
-		renderWithProviders(<StreamingIndicator isActive={true} isQueued={true} error="timed out" failureCategory="inter-chunk-stall" />);
+	// Errors moved out of the footer: a failed turn now renders its error block inside the assistant bubble
+	// (ChatMessage) so it shows exactly once and survives reload. The footer never renders an error here.
+	it("never renders an error in the footer", () => {
+		renderWithProviders(<StreamingIndicator isActive={false} isQueued={false} hasContent={false} />);
 
-		expect(screen.getByTestId("chat-stream-error")).toBeTruthy();
-		expect(screen.queryByTestId("chat-stream-queued-indicator")).toBeNull();
+		expect(screen.queryByTestId("chat-stream-error")).toBeNull();
 	});
 });
