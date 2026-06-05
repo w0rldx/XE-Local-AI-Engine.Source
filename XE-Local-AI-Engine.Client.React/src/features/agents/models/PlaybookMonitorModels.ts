@@ -1,4 +1,4 @@
-// Playbook P5 — read-only cohort-monitoring view for an agent's Enabled playbook actions plus the relevance-
+// Read-only cohort-monitoring view for an agent's Enabled playbook actions plus the relevance-
 // retrieval config. This is a pure analytics read over feedback already persisted node-locally (the windowed
 // down-vote query keyed on EnabledAtUtc). NO mutations, no AI generation: it only surfaces, per Enabled action,
 // the before/after down-vote rates and a derived verdict so an operator can flag a dead/harmful action for

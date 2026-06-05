@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// The six llmfit-supported use cases (server-enforced allowlist, Marker 0). The recommendations page lets the
+// The six llmfit-supported use cases (server-enforced allowlist). The recommendations page lets the
 // operator pick one and re-queries; the backend validates the value again and is authoritative. Stored as a
 // string literal union so the selector and query key stay type-safe.
 export type ModelFitUseCase = "general" | "coding" | "reasoning" | "chat" | "multimodal" | "embedding";

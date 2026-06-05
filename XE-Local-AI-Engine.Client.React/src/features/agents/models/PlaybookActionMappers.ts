@@ -95,7 +95,7 @@ function toEvalResult(
 }
 
 // Project a generated playbook-action response into the immutable domain view-model. Manual actions carry both
-// analysis fields null; an analysis-proposed action (Playbook P3) carries source=Analysis with sourceFeedbackIds +
+// analysis fields null; an analysis-proposed action carries source=Analysis with sourceFeedbackIds +
 // confidence populated.
 export function toPlaybookAction(dto: XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse): PlaybookAction {
 	return {

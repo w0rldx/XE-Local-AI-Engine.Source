@@ -29,7 +29,7 @@ export interface AgentDefinition {
 	readonly allowedToolNames: readonly string[];
 	readonly toolApprovals: Readonly<Record<string, boolean>>;
 	readonly orchestrationTopologyJson: string | null;
-	// Playbook P1: when true the agent's enabled playbook actions are appended to its instructions at resolve
+	// When true the agent's enabled playbook actions are appended to its instructions at resolve
 	// time. Gates injection only — it is NOT a config-affecting field for the agent's own version bump (the
 	// injected content drives the runtime config hash directly).
 	readonly playbookEnabled: boolean;
@@ -52,7 +52,7 @@ export interface AgentDefinitionFormValues {
 	allowedToolNames: string[];
 	toolApprovals: Record<string, boolean>;
 	orchestration: OrchestrationTopology;
-	// Playbook P1: toggles whether this agent's enabled playbook actions are injected into its instructions.
+	// Toggles whether this agent's enabled playbook actions are injected into its instructions.
 	playbookEnabled: boolean;
 }
 

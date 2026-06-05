@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Playbook P4 — per-agent golden conversation set. A golden case is an operator-authored input conversation plus
+// Per-agent golden conversation set. A golden case is an operator-authored input conversation plus
 // the expected-good signal used to score a candidate playbook action: a deterministic assertion (required /
 // forbidden phrases) and/or a judge rubric (≥1 of the two is required). The eval runner replays the case against
 // the baseline and candidate prompts and gates promotion on no-regression. Free text is encrypted at rest on the
@@ -22,7 +22,7 @@ export interface GoldenAssertion {
 	readonly forbiddenPhrases: readonly string[];
 }
 
-// Provenance of a golden case. `manual` = operator-authored via the add form (Playbook P4); `harvested` = built
+// Provenance of a golden case. `manual` = operator-authored via the add form; `harvested` = built
 // by the on-demand harvester from a thumbs-up assistant turn (harvest follow-up #2). A `source` discriminator is a
 // lowercase literal, matching the wire convention; harvested cases also carry the source message/conversation ids.
 export type GoldenConversationSource = "manual" | "harvested";
@@ -115,9 +115,9 @@ export function findGoldenFieldOverLimit(request: CreateGoldenConversationReques
 	return field === "title" || field === "inputTurns" || field === "assertion" || field === "rubric" ? field : null;
 }
 
-// Playbook P4/P5 — the 409 body returned when a blocked promote is attempted: a machine status + a human-readable
+// The 409 body returned when a blocked promote is attempted: a machine status + a human-readable
 // reason. `EvalRequired` = no eval has run; `EvalRegressed` = the latest eval failed (a prior-good case broke);
-// `EvalStale` = the action was edited since the last passing eval; `CapReached` (Playbook P5) = the agent is
+// `EvalStale` = the action was edited since the last passing eval; `CapReached` = the agent is
 // already at its MaxEnabledActions bound, so the operator must archive/disable an Enabled action before promoting.
 // Consumed by PlaybookActionMappers (the promote flow), not the golden CRUD — kept here with the golden governance
 // types it co-evolved with.

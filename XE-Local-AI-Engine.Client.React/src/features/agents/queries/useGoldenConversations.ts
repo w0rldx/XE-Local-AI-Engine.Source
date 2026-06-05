@@ -15,7 +15,7 @@ import {
 } from "@/features/agents/models/GoldenConversationMappers";
 import type { CreateGoldenConversationRequestDto, GoldenHarvestResult } from "@/features/agents/models/GoldenConversationModels";
 
-// Server state for an agent's golden conversation set (Playbook P4 + harvest follow-up). The read uses the generated
+// Server state for an agent's golden conversation set (with harvested candidates). The read uses the generated
 // hey-api `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal automatically) and a
 // TanStack `select` that maps the optional-field generated response into the stricter domain view-model. Every
 // generated options object is wrapped in withResponseValidation so a zod response-shape failure surfaces as an

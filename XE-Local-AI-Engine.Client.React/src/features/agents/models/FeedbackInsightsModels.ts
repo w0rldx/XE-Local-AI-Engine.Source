@@ -1,4 +1,4 @@
-// Playbook P2 — read-only feedback insights for one agent. This is a pure analytics view over the feedback
+// Read-only feedback insights for one agent. This is a pure analytics view over the feedback
 // already persisted node-locally (message_feedback ⋈ conversations ⋈ tool_events). NO mutations, no AI
 // generation, no PlaybookAction writes — it only aggregates existing up/down ratings + verbatim comment
 // exemplars so an operator can read where an agent is doing well or poorly.

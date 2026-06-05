@@ -104,7 +104,7 @@ export function useDeletePlaybookAction(agentDefinitionId: string) {
 	});
 }
 
-// Playbook P3 — analysis governance mutations. analyze runs the analysis agent (returning the freshly proposed
+// Analysis governance mutations. analyze runs the analysis agent (returning the freshly proposed
 // Suggested actions so the panel can react to an empty result); promote/reject move a single Suggested action.
 // All invalidate the per-agent action list so the Suggested section reflects the new state.
 
@@ -121,7 +121,7 @@ export function useAnalyzePlaybook(agentDefinitionId: string) {
 	});
 }
 
-// Promote a Suggested analysis action to Enabled (operator approves the proposal). Playbook P4/P5 — the promote is
+// Promote a Suggested analysis action to Enabled (operator approves the proposal). The promote is
 // eval-gated AND enabled-set-cap-gated: when the eval has not passed (or the cap is reached) the backend returns
 // 409 with a typed { status, reason } body. The shared interceptor wraps it into an ApiError; toPromoteError
 // recovers the typed PromoteConflictError so the panel can show the precise reason. Uses onSettled (not onSuccess)
@@ -144,7 +144,7 @@ export function usePromoteSuggestedAction(agentDefinitionId: string) {
 	});
 }
 
-// Playbook P4 — run the eval gate for a single Suggested action against the agent's golden set. The mutation
+// Run the eval gate for a single Suggested action against the agent's golden set. The mutation
 // records the EvalResult; invalidating the per-agent list refreshes the Suggested row's eval badge + the Approve
 // gate (Approve stays disabled until evalResult.passed).
 export function useRunEval(agentDefinitionId: string) {
