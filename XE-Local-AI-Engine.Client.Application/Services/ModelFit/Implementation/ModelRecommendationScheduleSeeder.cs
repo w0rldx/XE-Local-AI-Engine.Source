@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.ModelFit;
+namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;

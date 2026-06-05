@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.Persistence;
+namespace XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
