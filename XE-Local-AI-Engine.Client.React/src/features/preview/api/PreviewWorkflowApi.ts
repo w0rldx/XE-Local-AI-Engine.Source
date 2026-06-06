@@ -74,7 +74,10 @@ export async function deletePreviewWorkflow(workflowId: string): Promise<void> {
 // AbortSignal lets a caller cancel the in-flight request (e.g. the mutation is torn down on unmount), mirroring the
 // reads above.
 export async function executeSavedPreviewWorkflow(workflowId: string, signal?: GenericAbortSignal): Promise<PreviewRunStartedResponse> {
-	const response = await axiosInstance.post(buildLocalApiUrl(`preview/workflows/${workflowId}/execute`), undefined, { signal });
+	// Send an empty object body so axios sets `Content-Type: application/json`. These endpoints bind only the route
+	// param, but a body-less POST omits the Content-Type, which FastEndpoints answers with 415. The backend binder
+	// also tolerates a missing body; the `{}` here keeps every client (incl. raw fetch) on the happy path.
+	const response = await axiosInstance.post(buildLocalApiUrl(`preview/workflows/${workflowId}/execute`), {}, { signal });
 	return previewRunStartedResponseSchema.parse(response.data);
 }
 
@@ -86,10 +89,14 @@ export async function executeUnsavedPreviewWorkflow(graph: PreviewWorkflowGraph,
 
 // Resume a Paused run. 404 unknown/expired, 409 wrong state (both surfaced as ApiError); 202 accepted.
 export async function continuePreviewRun(runId: string, signal?: GenericAbortSignal): Promise<void> {
-	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/continue`), undefined, { signal });
+	// Empty object body → axios sets `Content-Type: application/json`, avoiding the FastEndpoints 415 on a body-less
+	// route-only POST (the backend binder tolerates the missing body too; this keeps raw-fetch clients working).
+	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/continue`), {}, { signal });
 }
 
 // Request cancellation of an active run. 404 unknown, 409 wrong state (both surfaced as ApiError); 202 accepted.
 export async function cancelPreviewRun(runId: string, signal?: GenericAbortSignal): Promise<void> {
-	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/cancel`), undefined, { signal });
+	// Empty object body → axios sets `Content-Type: application/json`, avoiding the FastEndpoints 415 on a body-less
+	// route-only POST (the backend binder tolerates the missing body too; this keeps raw-fetch clients working).
+	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/cancel`), {}, { signal });
 }
