@@ -38,6 +38,7 @@
 		"@tanstack/react-pacer": "^0.22.1",
 		"@tanstack/react-query": "^5.100.14",
 		"@tanstack/react-router": "^1.70.0",
+		"@xyflow/react": "12.11.0",
 		"axios": "^1.16.0",
 		"clsx": "^2.1.1",
 		"dayjs": "^1.11.20",

@@ -76,7 +76,8 @@
 		"adminPanelAiModels": "KI-Modelle",
 		"adminPanelFeedback": "Feedback",
 		"adminPanelAppKeys": "App-Schlüssel",
-		"skills": "Skills"
+		"skills": "Skills",
+		"preview": "Open Canvas"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -1668,6 +1669,101 @@
 			"appointmentCreated": "Termin erfolgreich erstellt",
 			"appointmentUpdated": "Termin erfolgreich aktualisiert",
 			"appointmentDeleted": "Termin erfolgreich gelöscht"
+		},
+		"preview": {
+			"eyebrow": "Worker-Knoten",
+			"title": "Open Canvas",
+			"subtitle": "Ziehen Sie Start-, Agent-, Debug-, Pause- und End-Blöcke auf die Arbeitsfläche, verbinden Sie sie zu einer linearen Kette und führen Sie den Workflow mit Live-Ausgabe pro Knoten aus.",
+			"createButton": "Neuer Workflow",
+			"back": "Zurück zur Liste",
+			"saved": "Workflow gespeichert.",
+			"defaultName": "Unbenannter Workflow",
+			"list": {
+				"empty": "Noch keine gespeicherten Workflows. Erstellen Sie einen, um zu beginnen.",
+				"openAria": "Workflow öffnen",
+				"deleteAria": "Workflow löschen",
+				"columns": {
+					"name": "Name",
+					"version": "Version",
+					"updated": "Aktualisiert",
+					"actions": "Aktionen"
+				}
+			},
+			"nodes": {
+				"start": "Start",
+				"agent": "Agent",
+				"debug": "Debug",
+				"pause": "Pause",
+				"end": "Ende",
+				"agentNeedsModel": "Modell festlegen",
+				"debugHint": "Live-Ausgabe des vorgelagerten Knotens",
+				"pausedHere": "Pausiert – über die Symbolleiste fortsetzen"
+			},
+			"startText": {
+				"label": "Start-Eingabe",
+				"placeholder": "Ausgangstext, den der Start-Knoten ausgibt…"
+			},
+			"toolbar": {
+				"execute": "Ausführen",
+				"cancel": "Abbrechen",
+				"continue": "Fortsetzen"
+			},
+			"agentForm": {
+				"label": {
+					"label": "Bezeichnung",
+					"placeholder": "Agent"
+				},
+				"import": {
+					"label": "Aus Agent importieren",
+					"placeholder": "Anweisungen kopieren…",
+					"empty": "Keine Agent-Definitionen"
+				},
+				"model": {
+					"label": "Modell",
+					"placeholder": "Chat-fähiges Modell auswählen",
+					"empty": "Keine chat-fähigen Modelle"
+				},
+				"reasoning": {
+					"label": "Denkaufwand",
+					"placeholder": "Anbieter-Standard",
+					"options": {
+						"none": "Keiner",
+						"low": "Niedrig",
+						"medium": "Mittel",
+						"high": "Hoch"
+					}
+				},
+				"instructions": {
+					"label": "Anweisungen",
+					"placeholder": "Systemanweisungen für diesen Agenten…"
+				},
+				"autosaveHint": "Änderungen werden sofort auf die Arbeitsfläche angewendet"
+			},
+			"validation": {
+				"empty": "Der Workflow muss mindestens einen Start- und einen End-Knoten enthalten.",
+				"emptyId": "Jeder Knoten muss eine nicht-leere ID haben.",
+				"duplicateId": "Knoten-IDs müssen eindeutig sein.",
+				"startCount": "Der Workflow muss genau einen Start-Knoten haben.",
+				"endCount": "Der Workflow muss genau einen End-Knoten haben.",
+				"unknownEdge": "Eine Kante verweist auf einen unbekannten Knoten.",
+				"notLinear": "Der Workflow muss eine lineare Kette sein (eine Verbindung ein- und ausgehend pro Knoten).",
+				"agentModel": "Jeder Agent-Knoten muss ein Modell angeben.",
+				"agentInstructions": "Jeder Agent-Knoten muss Anweisungen angeben.",
+				"endUnreachable": "Der End-Knoten muss vom Start-Knoten aus erreichbar sein.",
+				"noAgent": "Der Workflow muss mindestens einen Agent-Knoten zwischen Start und Ende enthalten."
+			},
+			"delete": {
+				"title": "Workflow löschen",
+				"description": "Diesen Workflow löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"save": "Der Workflow konnte nicht gespeichert werden.",
+				"delete": "Der Workflow konnte nicht gelöscht werden.",
+				"execute": "Der Lauf konnte nicht gestartet werden.",
+				"continue": "Der Lauf konnte nicht fortgesetzt werden.",
+				"cancel": "Der Lauf konnte nicht abgebrochen werden.",
+				"conflict": "Dieser Workflow wurde an anderer Stelle geändert. Laden Sie neu und wenden Sie Ihre Änderungen erneut an."
+			}
 		},
 		"notFound": {
 			"subtitleSecret": "Du hast einen geheimen Bereich gefunden.",

@@ -29,6 +29,7 @@ export interface NodeCapabilityConfig {
 	readonly scheduler: boolean;
 	readonly modelFit: boolean;
 	readonly loadedModels: boolean;
+	readonly preview: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -72,6 +73,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Loaded-models live overview + eject surface. On by default; polls the runtime's in-memory model set (RAM/VRAM)
 	// and offers a graceful eject (unload from memory after any in-flight generation finishes — never disk delete).
 	loadedModels: true,
+	// Open Canvas (Preview) workflow builder surface. On by default; node-local SQLite-backed workflow CRUD with
+	// live per-node run output streamed over the preview SignalR hub. Workflows persist; run output is transient
+	// (never logged/indexed) and the run-output store is empty on every page load.
+	preview: true,
 };
 
 export const nodeRoutePaths = {
@@ -100,6 +105,8 @@ export const nodeRoutePaths = {
 	approvedImages: "/approved-images",
 	// loaded-models live overview + eject page — gated on nodeCapabilities.loadedModels
 	loadedModels: "/loaded-models",
+	// Open Canvas (Preview) workflow builder page — gated on nodeCapabilities.preview
+	preview: "/preview",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;

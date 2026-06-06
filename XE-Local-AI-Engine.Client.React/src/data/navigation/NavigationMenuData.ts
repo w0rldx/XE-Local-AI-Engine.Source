@@ -1,5 +1,6 @@
 import type { IconProps } from "@tabler/icons-react";
 import {
+	IconBinaryTree2,
 	IconCpu,
 	IconDashboard,
 	IconHome,
@@ -16,7 +17,7 @@ import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilitie
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
 // capability is always shown; a link with a capability is shown only when that node capability is on.
-type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit" | "loadedModels";
+type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit" | "loadedModels" | "preview";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -94,6 +95,14 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler" },
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
 		],
+	},
+	// Open Canvas (Preview) workflow builder — a standalone top-level entry gated on the preview capability.
+	{
+		id: "preview",
+		icon: IconBinaryTree2,
+		translationKey: "navigation.preview",
+		to: nodeRoutePaths.preview,
+		capability: "preview",
 	},
 	// Manager group: runtime overview (always) plus the approved-images page, which is gated on the static
 	// modelFit capability. With modelFit off the group keeps just Overview.

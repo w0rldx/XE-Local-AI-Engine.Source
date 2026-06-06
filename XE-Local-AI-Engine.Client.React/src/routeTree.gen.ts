@@ -16,6 +16,7 @@ import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
 import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
+import { Route as LayoutPreviewRouteImport } from './routes/_layout/preview'
 import { Route as LayoutNodeSettingsRouteImport } from './routes/_layout/node-settings'
 import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-binding'
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
@@ -62,6 +63,11 @@ const LayoutSkillsRoute = LayoutSkillsRouteImport.update({
 const LayoutSchedulerRoute = LayoutSchedulerRouteImport.update({
   id: '/scheduler',
   path: '/scheduler',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutPreviewRoute = LayoutPreviewRouteImport.update({
+  id: '/preview',
+  path: '/preview',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutNodeSettingsRoute = LayoutNodeSettingsRouteImport.update({
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
+  '/preview': typeof LayoutPreviewRoute
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/models': typeof LayoutModelsRoute
   '/node-binding': typeof LayoutNodeBindingRoute
   '/node-settings': typeof LayoutNodeSettingsRoute
+  '/preview': typeof LayoutPreviewRoute
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/_layout/models': typeof LayoutModelsRoute
   '/_layout/node-binding': typeof LayoutNodeBindingRoute
   '/_layout/node-settings': typeof LayoutNodeSettingsRoute
+  '/_layout/preview': typeof LayoutPreviewRoute
   '/_layout/scheduler': typeof LayoutSchedulerRoute
   '/_layout/skills': typeof LayoutSkillsRoute
   '/_layout/tools': typeof LayoutToolsRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/node-binding'
     | '/node-settings'
+    | '/preview'
     | '/scheduler'
     | '/skills'
     | '/tools'
@@ -235,6 +245,7 @@ export interface FileRouteTypes {
     | '/models'
     | '/node-binding'
     | '/node-settings'
+    | '/preview'
     | '/scheduler'
     | '/skills'
     | '/tools'
@@ -257,6 +268,7 @@ export interface FileRouteTypes {
     | '/_layout/models'
     | '/_layout/node-binding'
     | '/_layout/node-settings'
+    | '/_layout/preview'
     | '/_layout/scheduler'
     | '/_layout/skills'
     | '/_layout/tools'
@@ -318,6 +330,13 @@ declare module '@tanstack/react-router' {
       path: '/scheduler'
       fullPath: '/scheduler'
       preLoaderRoute: typeof LayoutSchedulerRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/preview': {
+      id: '/_layout/preview'
+      path: '/preview'
+      fullPath: '/preview'
+      preLoaderRoute: typeof LayoutPreviewRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/node-settings': {
@@ -428,6 +447,7 @@ interface LayoutRouteChildren {
   LayoutModelsRoute: typeof LayoutModelsRoute
   LayoutNodeBindingRoute: typeof LayoutNodeBindingRoute
   LayoutNodeSettingsRoute: typeof LayoutNodeSettingsRoute
+  LayoutPreviewRoute: typeof LayoutPreviewRoute
   LayoutSchedulerRoute: typeof LayoutSchedulerRoute
   LayoutSkillsRoute: typeof LayoutSkillsRoute
   LayoutToolsRoute: typeof LayoutToolsRoute
@@ -448,6 +468,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutModelsRoute: LayoutModelsRoute,
   LayoutNodeBindingRoute: LayoutNodeBindingRoute,
   LayoutNodeSettingsRoute: LayoutNodeSettingsRoute,
+  LayoutPreviewRoute: LayoutPreviewRoute,
   LayoutSchedulerRoute: LayoutSchedulerRoute,
   LayoutSkillsRoute: LayoutSkillsRoute,
   LayoutToolsRoute: LayoutToolsRoute,
