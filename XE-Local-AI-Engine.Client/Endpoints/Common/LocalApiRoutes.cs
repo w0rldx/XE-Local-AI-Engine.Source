@@ -237,6 +237,32 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Open Canvas (Preview) workflow builder routes and hub path. Workflows persist (encrypted graph library); runs
+    ///     are one-shot, in-memory, never persisted.
+    /// </summary>
+    public static class Preview
+    {
+        // Workflow library: GET list (summaries, no graph) + POST create; individual workflow resource GET/PUT/DELETE.
+        public const string Workflows = "preview/workflows";
+        public const string WorkflowById = "preview/workflows/{workflowId}";
+
+        // Execute a saved workflow by id. The literal "execute" segment follows the id so it cannot be parsed as one.
+        public const string WorkflowExecute = "preview/workflows/{workflowId}/execute";
+
+        // Execute an unsaved (inline) graph. A distinct top-level "runs/execute" literal keeps it off the workflow-id
+        // surface; persists nothing.
+        public const string RunExecute = "preview/runs/execute";
+
+        // Run lifecycle actions, run-scoped. Literal action segments follow the run id.
+        public const string RunContinue = "preview/runs/{runId}/continue";
+        public const string RunCancel = "preview/runs/{runId}/cancel";
+
+        // SignalR push hub for run events. Full path (mapped via MapHub, not the FastEndpoints prefix), mirroring the
+        // other local hubs.
+        public const string Hub = "/api/local/v1/preview/hub";
+    }
+
+    /// <summary>
     ///     MCP server registration and tool-catalog routes.
     /// </summary>
     public static class Mcp

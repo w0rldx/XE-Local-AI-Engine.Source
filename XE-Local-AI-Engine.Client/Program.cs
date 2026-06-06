@@ -142,6 +142,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<PreviewWorkflowHub>(LocalApiRoutes.Preview.Hub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
     if (!app.Environment.IsProduction())
     {
