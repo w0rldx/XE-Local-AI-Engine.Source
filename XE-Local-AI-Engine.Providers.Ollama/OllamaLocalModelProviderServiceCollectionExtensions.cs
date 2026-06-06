@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public static class OllamaLocalModelProviderServiceCollectionExtensions
 {
     /// <summary>
-    ///     Registers a singleton Ollama API client plus the provider-neutral local-model abstraction.
+    ///     Registers a singleton Ollama API client plus the provider-neutral local-model and capability abstractions.
     /// </summary>
     /// <remarks>
     ///     The created <see cref="HttpClient" /> is intentionally owned by the singleton Ollama client. The five-minute
@@ -42,6 +42,7 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
         });
 
         _ = services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
+        _ = services.AddSingleton<IModelCapabilityClient, OllamaModelCapabilityClient>();
         return services;
     }
 }
