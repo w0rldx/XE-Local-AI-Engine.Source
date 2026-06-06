@@ -19,6 +19,11 @@ public sealed class CancelPreviewRunEndpoint(IPreviewWorkflowExecutionService ex
     {
         Post(LocalApiRoutes.Preview.RunCancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST: RunId comes from the route, so a well-behaved client sends no body — and therefore no
+        // Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
+        // with 415 when the header is absent. Overriding Accepts to accept any content-type lets a body-less request
+        // through (the runId still binds from the route).
+        Description(x => x.Accepts<PreviewRunRouteRequest>());
     }
 
     public override async Task HandleAsync(PreviewRunRouteRequest req, CancellationToken ct)

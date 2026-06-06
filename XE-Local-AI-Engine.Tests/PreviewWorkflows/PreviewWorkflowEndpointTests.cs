@@ -91,5 +91,27 @@ public sealed class PreviewWorkflowEndpointTests
         AssertEx.Equal(0, items.GetArrayLength());
     }
 
+    [Test]
+    [Arguments("cancel")]
+    [Arguments("continue")]
+    public async Task PreviewRunControl_BodyLessPost_IsAcceptedNot415(string action)
+    {
+        // Regression for the live 415: these route-only POSTs bind the runId from the route, so a well-behaved client
+        // sends no body — and therefore no Content-Type. The endpoints must accept that instead of answering 415
+        // Unsupported Media Type. An unknown run yields 404 (authorized, body accepted, run simply not found), which
+        // proves the request was bound and dispatched rather than rejected at the media-type gate.
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/preview/runs/{Guid.NewGuid()}/{action}");
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, $"Body-less POST to {action} must not return 415.");
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"An unknown run on body-less {action} must report 404 (authorized + bound), not 415.");
+    }
+
     private sealed record PreviewRunStartedResponse(Guid RunId);
 }
