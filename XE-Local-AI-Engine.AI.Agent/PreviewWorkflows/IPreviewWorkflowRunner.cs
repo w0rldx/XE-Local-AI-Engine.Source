@@ -3,21 +3,23 @@ namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     Builds and runs an Open Canvas (Preview) workflow as a MAF graph in-process over a caller-supplied
-///     <strong>node-local</strong> <see cref="IChatClient" /> (invariant #1 — the runner NEVER resolves DI; Lane C
-///     resolves <c>ILocalModelProvider.CreateChatClient</c> and hands the client in). All
+///     Builds and runs an Open Canvas (Preview) workflow as a MAF graph in-process over caller-supplied
+///     <strong>node-local</strong> <see cref="IChatClient" />s (invariant #1 — the runner NEVER resolves DI; Lane C
+///     resolves <c>ILocalModelProvider.CreateChatClient</c> per distinct model and hands a resolver in). All
 ///     <c>Microsoft.Agents.AI.Workflows</c> usage is confined behind this seam (invariant #3).
 /// </summary>
 public interface IPreviewWorkflowRunner
 {
     /// <summary>
-    ///     Builds the workflow from <paramref name="definition" />, starts it over the supplied node-local
-    ///     <paramref name="chatClient" /> (shared by every agent in the graph; the runner does NOT dispose it — the
-    ///     caller owns it), and returns a live session whose <see cref="IPreviewWorkflowRunSession.WatchAsync" />
-    ///     drains the run to completion/pause/failure.
+    ///     Builds the workflow from <paramref name="definition" />, starts it resolving each agent node's node-local
+    ///     <see cref="IChatClient" /> via <paramref name="resolveChatClient" /> (keyed by the agent node's
+    ///     <c>ModelId</c>, so each agent runs on its OWN selected model; the caller is expected to return ONE shared
+    ///     client per distinct model id), and returns a live session whose
+    ///     <see cref="IPreviewWorkflowRunSession.WatchAsync" /> drains the run to completion/pause/failure.
+    ///     The runner does NOT dispose any resolved client — the caller owns and disposes every client it hands out.
     /// </summary>
     Task<IPreviewWorkflowRunSession> StartAsync(PreviewWorkflowDefinition definition,
-        IChatClient chatClient,
+        Func<string, IChatClient> resolveChatClient,
         CancellationToken cancellationToken = default);
 }
 

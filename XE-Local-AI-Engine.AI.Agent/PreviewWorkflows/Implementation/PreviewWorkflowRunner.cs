@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     MAF-native implementation of <see cref="IPreviewWorkflowRunner" />. Builds a raw <see cref="WorkflowBuilder" />
-///     from a <see cref="PreviewWorkflowDefinition" /> (Start → Agent → transform → Agent → Debug/Pause → End) over a
-///     caller-supplied node-local <see cref="IChatClient" /> (invariant #1) and runs it via
-///     <see cref="InProcessExecution.RunStreamingAsync" />. All MAF types are confined to this class + the session
+///     from a <see cref="PreviewWorkflowDefinition" /> (Start → Agent → transform → Agent → Debug/Pause → End), resolving
+///     each agent node's caller-supplied node-local <see cref="IChatClient" /> by its model id (invariant #1) and runs it
+///     via <see cref="InProcessExecution.RunStreamingAsync" />. All MAF types are confined to this class + the session
 ///     (invariant #3). Linearity (in/out-degree ≤ 1) is enforced by Lane C's validator before this runs; the runner
 ///     trusts a linear definition and walks it as an ordered chain.
 /// </summary>
@@ -30,11 +30,11 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
     }
 
     public async Task<IPreviewWorkflowRunSession> StartAsync(PreviewWorkflowDefinition definition,
-        IChatClient chatClient,
+        Func<string, IChatClient> resolveChatClient,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        ArgumentNullException.ThrowIfNull(chatClient);
+        ArgumentNullException.ThrowIfNull(resolveChatClient);
         cancellationToken.ThrowIfCancellationRequested();
 
         var ordered = OrderLinearChain(definition);
@@ -58,7 +58,14 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
                 case PreviewNodeKind.Agent:
                 {
                     var agentNode = (PreviewAgentNode)node;
-                    var agent = BuildAgent(agentNode, chatClient);
+
+                    // Resolve THIS agent's node-local client by its own model id (invariant #1). The caller returns one
+                    // shared client per distinct model, so two agents on the same model share a client while an agent on
+                    // a different model gets its own — each agent runs on the model the operator selected for it.
+                    var agentClient = resolveChatClient(agentNode.ModelId)
+                        ?? throw new InvalidOperationException(
+                            $"No node-local chat client was resolved for model '{agentNode.ModelId}' (node '{agentNode.Id}').");
+                    var agent = BuildAgent(agentNode, agentClient);
 
                     // The executor id MAF registers for an AIAgent binding is "{name}_{agentId}" — NOT bare agent.Id —
                     // so resolve it from the materialized ExecutorBinding (its .Id), which is what events surface and
