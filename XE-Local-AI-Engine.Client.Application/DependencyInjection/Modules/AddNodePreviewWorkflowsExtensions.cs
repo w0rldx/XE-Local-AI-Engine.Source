@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 
@@ -31,8 +33,14 @@ internal static class AddNodePreviewWorkflowsExtensions
         builder.Services.AddSingleton<PreviewWorkflowExecutionService>();
         builder.Services.AddSingleton<IPreviewWorkflowExecutionService>(sp => sp.GetRequiredService<PreviewWorkflowExecutionService>());
 
-        // Idle-TTL + wall-clock sweeper. Paused runs are exempt (idle clock suspended).
-        builder.Services.AddHostedService<PreviewWorkflowIdleSweeper>();
+        // Idle-TTL + wall-clock sweeper. Paused runs are exempt (idle clock suspended). Registered via a factory so the
+        // sweeper's internal ctor (it depends on the internal concrete execution service) need not be made public —
+        // DI's default activator requires a PUBLIC ctor, which would force leaking the impl type.
+        builder.Services.AddHostedService(sp => new PreviewWorkflowIdleSweeper(
+            sp.GetRequiredService<PreviewWorkflowExecutionService>(),
+            sp.GetRequiredService<IOptions<PreviewWorkflowExecutionOptions>>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<PreviewWorkflowIdleSweeper>>()));
 
         return builder;
     }
