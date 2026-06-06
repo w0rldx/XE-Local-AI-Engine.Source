@@ -145,7 +145,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     public Task UnloadModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        return _ollamaClient.RequestModelUnloadAsync(modelName, ct);
+        return OllamaModelUnloader.UnloadAsync(_ollamaClient, modelName, ct);
     }
 
     /// <inheritdoc />

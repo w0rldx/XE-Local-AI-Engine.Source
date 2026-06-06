@@ -67,6 +67,20 @@ public sealed class OllamaLocalModelProviderTests
     }
 
     [Test]
+    public async Task UnloadModelAsync_WhenInvoked_PostsGenerateWithRequestedModelToEvict()
+    {
+        // The shared client's SelectedModel is "chat"; the eject targets a different model. The fix must send the
+        // REQUESTED model (not the client's SelectedModel) to /api/generate so Ollama evicts the right model. The
+        // previous OllamaSharp RequestModelUnloadAsync extension recorded "chat" here, which never freed "qwen3:8b".
+        await using var context = await CreateContextAsync("chat", "qwen3:8b");
+
+        await context.Provider.UnloadModelAsync("qwen3:8b", CancellationToken.None);
+
+        AssertEx.ContainsSingle(context.Server.RecordedRequests,
+            request => request.Path == "/api/generate" && request.ModelName == "qwen3:8b");
+    }
+
+    [Test]
     public async Task CreateChatClient_WhenProviderMatches_ReturnsOllamaChatClientForModel()
     {
         await using var context = await CreateContextAsync("chat");

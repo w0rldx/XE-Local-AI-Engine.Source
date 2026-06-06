@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal static class LocalModelsMapper
 {
@@ -36,6 +37,38 @@ internal static class LocalModelsMapper
             IsAvailable = false,
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
+            Error = error,
+            Items = []
+        };
+    }
+
+    public static RunningLocalModelsResponse ToRunningResponse(IEnumerable<RunningModelSnapshot> runningModels)
+    {
+        ArgumentNullException.ThrowIfNull(runningModels);
+
+        return new RunningLocalModelsResponse
+        {
+            IsAvailable = true,
+            Items = runningModels
+                    .Select(static snapshot => (Name: ReadRunningModelName(snapshot), Snapshot: snapshot))
+                    .Where(static entry => !string.IsNullOrWhiteSpace(entry.Name))
+                    .Select(static entry => new RunningLocalModelResponse
+                    {
+                        ModelName = entry.Name,
+                        SizeBytes = entry.Snapshot.SizeBytes,
+                        SizeVramBytes = entry.Snapshot.SizeVramBytes,
+                        ExpiresAtUtc = entry.Snapshot.ExpiresAt?.ToUnixTimeMilliseconds()
+                    })
+                    .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+        };
+    }
+
+    public static RunningLocalModelsResponse ToUnavailableRunningResponse(string error)
+    {
+        return new RunningLocalModelsResponse
+        {
+            IsAvailable = false,
             Error = error,
             Items = []
         };
@@ -123,5 +156,12 @@ internal static class LocalModelsMapper
         return !string.IsNullOrWhiteSpace(model.ModelName)
             ? model.ModelName
             : model.Name ?? string.Empty;
+    }
+
+    private static string ReadRunningModelName(RunningModelSnapshot snapshot)
+    {
+        return !string.IsNullOrWhiteSpace(snapshot.ModelName)
+            ? snapshot.ModelName
+            : snapshot.Name ?? string.Empty;
     }
 }

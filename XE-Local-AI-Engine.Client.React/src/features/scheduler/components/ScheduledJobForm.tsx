@@ -1,5 +1,5 @@
 import { Alert, Group, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -31,6 +31,8 @@ interface ScheduledJobFormProps {
 	 * drive the close-guard and route-guard.
 	 */
 	onDirtyChange?: (isDirty: boolean) => void;
+	/** Imperative handle ref — pass a useRef<ScheduledJobFormHandle> to call submit() from outside. */
+	ref?: Ref<ScheduledJobFormHandle>;
 }
 
 // Flatten a Zod issue path to a stable string key so per-field errors can be looked up by the input that owns
@@ -54,22 +56,20 @@ function computeIsDirty(current: ScheduledJobFormValues, initial: ScheduledJobFo
 // supplies the defaults the form pre-fills on a fresh template selection. Fields are shown conditionally per the
 // chosen schedule kind. The enabled flag is NOT edited here — a job is created disabled and enabling is a
 // separate, deliberate row action. parameters is a write-only plaintext-JSON textarea; the backend re-validates.
-export const ScheduledJobForm = forwardRef<ScheduledJobFormHandle, ScheduledJobFormProps>(function ScheduledJobForm(
-	{
-		initialValues,
-		templates,
-		isEditing,
-		// isSubmitting and onCancel are kept in the interface for callers that render
-		// the form standalone (outside a DialogShell footer), but the dialog variant
-		// drives these from the footer — mark as unused here with underscore prefix.
-		isSubmitting: _isSubmitting,
-		submitError,
-		onSubmit,
-		onCancel: _onCancel,
-		onDirtyChange,
-	},
+export function ScheduledJobForm({
+	initialValues,
+	templates,
+	isEditing,
+	// isSubmitting and onCancel are kept in the interface for callers that render
+	// the form standalone (outside a DialogShell footer), but the dialog variant
+	// drives these from the footer — mark as unused here with underscore prefix.
+	isSubmitting: _isSubmitting,
+	submitError,
+	onSubmit,
+	onCancel: _onCancel,
+	onDirtyChange,
 	ref,
-) {
+}: ScheduledJobFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<ScheduledJobFormValues>(initialValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
@@ -360,4 +360,4 @@ export const ScheduledJobForm = forwardRef<ScheduledJobFormHandle, ScheduledJobF
 			) : null}
 		</Stack>
 	);
-});
+}

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.Ollama;
 
-using System.Globalization;
 using OllamaSharp;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -46,7 +45,7 @@ public sealed class OllamaModelCapabilityClient : IModelCapabilityClient
     {
         var runningModels = await _ollamaClient.ListRunningModelsAsync(ct).ConfigureAwait(false);
         return runningModels
-               .Select(model => new RunningModelSnapshot(model.Name, model.ModelName, NormalizeExpiresAt(model.ExpiresAt)))
+               .Select(RunningModelSnapshotMapper.ToSnapshot)
                .ToArray();
     }
 
@@ -61,16 +60,5 @@ public sealed class OllamaModelCapabilityClient : IModelCapabilityClient
             : (int?)null;
 
         return new ModelCapabilityDetail(maxContextTokens);
-    }
-
-    private static DateTimeOffset? NormalizeExpiresAt(object? expiresAt)
-    {
-        return expiresAt switch
-        {
-            DateTimeOffset value => value,
-            DateTime value => new DateTimeOffset(value),
-            string value when DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) => parsed,
-            _ => null
-        };
     }
 }

@@ -47,9 +47,12 @@ export function AgentToolSelector({
 	const rows = useMemo<ToolCatalogEntry[]>(() => {
 		const catalog = catalogQuery.data ?? [];
 		const catalogNames = new Set(catalog.map((tool) => tool.name));
-		const orphanSelected = selectedToolNames
-			.filter((name) => !catalogNames.has(name))
-			.map((name) => unknownToolEntry(name));
+		const orphanSelected: ToolCatalogEntry[] = [];
+		for (const name of selectedToolNames) {
+			if (!catalogNames.has(name)) {
+				orphanSelected.push(unknownToolEntry(name));
+			}
+		}
 		return [...catalog, ...orphanSelected];
 	}, [catalogQuery.data, selectedToolNames]);
 

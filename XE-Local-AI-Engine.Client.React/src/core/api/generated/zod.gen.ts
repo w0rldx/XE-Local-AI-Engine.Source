@@ -701,6 +701,31 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = z.object({
+	modelName: z.string().optional(),
+	sizeBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	sizeVramBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	expiresAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = z.object({
+	isAvailable: z.boolean().optional(),
+	error: z.string().nullish(),
+	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse).optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
 	modelName: z.string().optional(),
 	sizeBytes: z.coerce
@@ -763,6 +788,13 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRespons
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = z.object({
 	modelName: z.string().min(0).max(100),
 });
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse = z.object({
+	modelName: z.string().optional(),
+	unloaded: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse = z.object({
 	conversationId: z.guid().optional(),
@@ -1869,6 +1901,11 @@ export const zGetLocalModelDetailsResponse = zXeLocalAiEngineClientEndpointsLoca
 /**
  * Success
  */
+export const zGetRunningLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
+
+/**
+ * Success
+ */
 export const zListLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
 
 export const zPullLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelRequest;
@@ -1884,6 +1921,15 @@ export const zSelectLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV
  * Success
  */
 export const zSelectLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse;
+
+export const zUnloadLocalModelPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zUnloadLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse;
 
 export const zCancelNodeChatMessageBody = zXeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest;
 

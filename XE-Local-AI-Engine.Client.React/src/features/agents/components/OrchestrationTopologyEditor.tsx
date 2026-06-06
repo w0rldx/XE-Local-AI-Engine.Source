@@ -45,13 +45,15 @@ export function OrchestrationTopologyEditor({
 	const { t } = useTranslation();
 
 	// Specialist candidates exclude self (the orchestrator is the triage, never its own specialist).
-	const participantOptions = useMemo(
-		() =>
-			candidateDefinitions
-				.filter((definition) => definition.id !== selfId)
-				.map((definition) => ({ value: definition.id, label: definition.name })),
-		[candidateDefinitions, selfId],
-	);
+	const participantOptions = useMemo(() => {
+		const options: { value: string; label: string }[] = [];
+		for (const definition of candidateDefinitions) {
+			if (definition.id !== selfId) {
+				options.push({ value: definition.id, label: definition.name });
+			}
+		}
+		return options;
+	}, [candidateDefinitions, selfId]);
 
 	const definitionsById = useMemo(() => {
 		const map = new Map<string, AgentDefinition>();

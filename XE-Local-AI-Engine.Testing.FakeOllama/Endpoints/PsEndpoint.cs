@@ -22,7 +22,8 @@ internal static class PsEndpoint
                 name = model.Name,
                 model = model.Name,
                 expires_at = model.ExpiresAt,
-                size_vram = 0,
+                size = model.SizeBytes,
+                size_vram = model.SizeVramBytes,
                 context_length = 4096
             })
         }, FakeOllamaEndpointMapper.SerializerOptions);

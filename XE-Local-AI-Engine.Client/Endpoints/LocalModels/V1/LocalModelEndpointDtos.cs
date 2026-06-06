@@ -144,6 +144,49 @@ public sealed class DeleteLocalModelResponse
 }
 
 /// <summary>
+///     Response for <c>GET models/running</c>: the models the runtime currently holds in memory. Mirrors the
+///     availability/error shape of <see cref="ListLocalModelsResponse" /> so the page degrades gracefully when the
+///     provider is unreachable (empty list, <see cref="IsAvailable" /> false).
+/// </summary>
+public sealed class RunningLocalModelsResponse
+{
+    public required bool IsAvailable { get; init; }
+
+    public string? Error { get; init; }
+
+    public required IReadOnlyList<RunningLocalModelResponse> Items { get; init; }
+}
+
+/// <summary>A single loaded model, with its memory footprint and eviction time when the runtime reports them.</summary>
+public sealed class RunningLocalModelResponse
+{
+    public required string ModelName { get; init; }
+
+    /// <summary>Total resident size in bytes (RAM + VRAM); null when the runtime did not report it.</summary>
+    public long? SizeBytes { get; init; }
+
+    /// <summary>Portion resident in GPU VRAM in bytes; null when the runtime did not report it.</summary>
+    public long? SizeVramBytes { get; init; }
+
+    /// <summary>Scheduled eviction time as Unix epoch milliseconds (UTC); null when the runtime did not report it.</summary>
+    public long? ExpiresAtUtc { get; init; }
+}
+
+/// <summary>Request DTO for <c>POST models/{modelName}/unload</c>. <see cref="ModelName" /> is bound from the route.</summary>
+public sealed class UnloadLocalModelRequest
+{
+    public string? ModelName { get; init; }
+}
+
+/// <summary>Response for a graceful in-memory unload. Idempotent: a model that was not loaded still reports success.</summary>
+public sealed class UnloadLocalModelResponse
+{
+    public required string ModelName { get; init; }
+
+    public required bool Unloaded { get; init; }
+}
+
+/// <summary>
 ///     A single sanitized progress event emitted by <c>POST models/pull/stream</c>.  Contains only the four safe
 ///     fields — no paths, tokens, or raw Ollama payloads are forwarded to the client.  <see cref="Error" /> is set
 ///     only on the terminal failure line (<c>Status == "error"</c>) and carries a short, sanitized reason.

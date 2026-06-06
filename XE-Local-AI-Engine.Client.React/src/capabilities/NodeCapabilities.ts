@@ -28,6 +28,7 @@ export interface NodeCapabilityConfig {
 	readonly mcpServers: boolean;
 	readonly scheduler: boolean;
 	readonly modelFit: boolean;
+	readonly loadedModels: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -68,6 +69,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// are cache-only (never run llmfit), refreshes delegate to the scheduler. Approved image references are
 	// code/seed-owned and never editable from the browser.
 	modelFit: true,
+	// Loaded-models live overview + eject surface. On by default; polls the runtime's in-memory model set (RAM/VRAM)
+	// and offers a graceful eject (unload from memory after any in-flight generation finishes — never disk delete).
+	loadedModels: true,
 };
 
 export const nodeRoutePaths = {
@@ -92,6 +96,8 @@ export const nodeRoutePaths = {
 	modelRecommendations: "/model-recommendations",
 	// llmfit approved reference images page (read-only) — gated on nodeCapabilities.modelFit
 	approvedImages: "/approved-images",
+	// loaded-models live overview + eject page — gated on nodeCapabilities.loadedModels
+	loadedModels: "/loaded-models",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;

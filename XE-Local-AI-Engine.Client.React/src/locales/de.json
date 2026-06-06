@@ -1,1944 +1,1975 @@
 {
-  "basicFormatOption": "de-DE",
-  "common": {
-    "loading": "Lädt...",
-    "refreshing": "Aktualisiere...",
-    "filterReset": "Filter zurücksetzen",
-    "close": "Schließen",
-    "confirm": "Bestätigen",
-    "cancel": "Abbrechen",
-    "ok": "Ok",
-    "edit": "Bearbeiten",
-    "view": "Anzeigen",
-    "delete": "Löschen",
-    "density": "Dichte",
-    "densityCompact": "Kompakt",
-    "densityComfortable": "Komfortabel",
-    "densitySpacious": "Geräumig",
-    "create": "Erstellen",
-    "search": "Suchen",
-    "filters": "Filter",
-    "save": "Speichern",
-    "discard": "Verwerfen",
-    "keepEditing": "Weiter bearbeiten",
-    "noData": "Keine Einträge gefunden",
-    "entries": "Einträge",
-    "error": "Fehler",
-    "fetchError": "Beim Laden der Tabellendaten ist ein Problem aufgetreten.",
-    "providers": {
-      "cloudflareAccess": "Cloudflare Access"
-    },
-    "pagination": {
-      "rowsPerPage": "Zeilen pro Seite",
-      "showingRange": "{{from}}–{{to}} von {{total}}"
-    }
-  },
-  "theme": {
-    "title": "Design",
-    "light": "Hell",
-    "dark": "Dunkel",
-    "switchToLight": "Zum hellen Modus wechseln",
-    "switchToDark": "Zum dunklen Modus wechseln",
-    "toggleColorScheme": "Farbschema umschalten"
-  },
-  "navigation": {
-    "home": "Start",
-    "chat": "Chat",
-    "dashboard": "Dashboard",
-    "binding": "Node-Bindung",
-    "nodeSettings": "Node-Einstellungen",
-    "cloudSettings": "Cloud-Einstellungen",
-    "settingsGroup": "Einstellungen",
-    "automationGroup": "Automatisierung",
-    "models": "Modelle",
-    "modelsInstalled": "Installiert",
-    "recommendations": "Empfehlungen",
-    "overview": "Übersicht",
-    "tools": "Tools",
-    "agents": "Agenten",
-    "mcp": "MCP",
-    "scheduler": "Planer",
-    "modelRecommendations": "Modellempfehlungen",
-    "approvedImages": "Freigegebene Images",
-    "manager": "Manager",
-    "invocations": "Aufrufe",
-    "schedule": "Terminplaner",
-    "user": "Benutzer",
-    "adminPanel": "Adminbereich",
-    "adminPanelUsers": "Benutzer",
-    "adminPanelRoles": "Rollen",
-    "adminPanelPermissions": "Berechtigungen",
-    "adminPanelPairingTokens": "Pairing-Tokens",
-    "adminPanelAgentDefinitions": "Agent-Definitionen",
-    "adminPanelToolDefinitions": "Tool-Definitionen",
-    "adminPanelClientNodes": "Client-Nodes",
-    "adminPanelAiModels": "KI-Modelle",
-    "adminPanelFeedback": "Feedback",
-    "adminPanelAppKeys": "App-Schlüssel"
-  },
-  "chat": {
-    "thoughts": "Gedanken",
-    "words": "Wörter",
-    "thinking": "denkt…",
-    "reasoningMode": "Reasoning-Modus",
-    "toolCall": {
-      "sending": "Sende",
-      "inFlight": "Aktiv",
-      "done": "Fertig",
-      "failed": "Fehlgeschlagen",
-      "thinkingLive": "Denke…",
-      "thoughtFor": "Gedacht für {{s}}s",
-      "name": "Tool",
-      "live": "live",
-      "argsLabel": "Argumente",
-      "resultLabel": "Ergebnis",
-      "errorLabel": "Fehler",
-      "noOutput": "(keine Ausgabe)"
-    }
-  },
-  "pages": {
-    "about": {
-      "title": "Über",
-      "applicationTab": "Anwendung",
-      "licensesTab": "Lizenzen",
-      "version": "Version",
-      "website": "Webseite",
-      "repository": "Repository",
-      "licensesIntro": "Drittanbieter-Pakete, die mit dieser Anwendung gebündelt sind.",
-      "searchPackages": "Pakete suchen",
-      "packageName": "Paket",
-      "packageVersion": "Version",
-      "packageLicense": "Lizenz",
-      "noPackagesFound": "Keine Pakete gefunden."
-    },
-    "chat": {
-      "windowTitle": "Chatfenster",
-      "lockedState": "Diese Unterhaltung ist gesperrt. Entsperre sie, um Nachrichten anzuzeigen.",
-      "inputPlaceholder": "Nachricht eingeben",
-      "send": "Senden",
-      "modelLabel": "Modell",
-      "modelPlaceholder": "Modell auswählen",
-      "modelLoaded": "Aktuell geladen",
-      "modelAvailable": "Verfügbar",
-      "modelUnloadingIn": "Entladen in {{time}}",
-      "modelExpired": "Nicht geladen",
-      "modelSelector": {
-        "availableModels": "Verfügbare Modelle",
-        "hint": "Wähle ein auf dem ausgewählten Node installiertes Modell.",
-        "noChatModels": "Keine chat-fähigen Modelle",
-        "search": "Modelle suchen...",
-        "noResults": "Keine Modelle gefunden",
-        "unavailableModels": "Nicht verfügbare Modelle"
-      },
-      "reasoningEffortLabel": "Reasoning-Effort",
-      "reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
-      "localToolsLabel": "Lokale Tools",
-      "localToolsEnabled": "Lokale Tools aktiviert",
-      "localToolsDisabled": "Lokale Tools deaktiviert",
-      "localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
-      "cloudToolsLabel": "Cloud-Tools",
-      "cloudToolsEnabled": "Cloud-Tools aktiviert",
-      "cloudToolsDisabled": "Cloud-Tools deaktiviert",
-      "cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
-      "cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Provider senden",
-      "reasoningEffortOptions": {
-        "none": "Aus",
-        "on": "An",
-        "low": "Niedrig",
-        "medium": "Mittel",
-        "high": "Hoch"
-      },
-      "newConversation": "Neuer normaler Chat",
-      "newEncryptedConversation": "Neuer verschlüsselter Chat",
-      "storageMode": {
-        "plain": "Normal",
-        "encrypted": "Verschlüsselt",
-        "plainTooltip": "Wird als lesbarer Chatverlauf für dein Konto gespeichert.",
-        "encryptedTooltip": "Wird verschlüsselt gespeichert. Mit deinem Passwort für verschlüsselte Synchronisierung entsperren."
-      },
-      "encryptedConversation": {
-        "lockedTitle": "Verschlüsselter Chat gesperrt",
-        "lockedDescription": "Gib dein Passwort für verschlüsselte Synchronisierung ein, um verschlüsselte Chats zu entsperren."
-      },
-      "activeNode": {
-        "label": "Aktiver Knoten",
-        "sessionHint": "Aktiv für diesen Browser-Tab/diese Sitzung. Freigeben, um zu wechseln.",
-        "rememberDefault": "Als Standard merken",
-        "release": "Aktiven Knoten freigeben"
-      },
-      "noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Kopple und verbinde zuerst einen Worker-Node, bevor du Unterhaltungen erstellst.",
-      "waitingForStreamedResponse": "Warte auf gestreamte Antwort",
-      "waitingForResponse": "Warte auf Antwort",
-      "queued": "In Warteschlange — warte auf aktuelle Aufgabe",
-      "remoteViewOnlyTitle": "Remote-Unterhaltung",
-      "remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
-      "streamErrors": {
-        "epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuche es erneut.",
-        "eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuche es erneut oder aktualisiere die Unterhaltung."
-      },
-      "thoughts": "Gedanken",
-      "words": "Wörter",
-      "thinking": "denkt…",
-      "reasoningMode": "Reasoning-Modus",
-      "emptyState": "Erstelle oder wähle eine Unterhaltung, um zu chatten.",
-      "noMessages": "Noch keine Nachrichten.",
-      "pendingApprovalLabel": "Ausstehende Freigabe",
-      "activityTimeline": "Aktivitätsverlauf",
-      "activityDetails": {
-        "arguments": "Argumente",
-        "result": "Ergebnis"
-      },
-      "activityTimelineTypes": {
-        "ToolCall": "Tool-Aufruf",
-        "ToolResult": "Tool-Ergebnis",
-        "ContextRetrieval": "Kontextabruf",
-        "WorkflowStepStarted": "Workflow-Schritt gestartet",
-        "WorkflowStepCompleted": "Workflow-Schritt abgeschlossen",
-        "WorkflowStepFailed": "Workflow-Schritt fehlgeschlagen",
-        "AgentHandoff": "Agent-Übergabe",
-        "ContentGeneration": "Inhaltserstellung",
-        "Error": "Fehler",
-        "Unknown": "Typ {{type}}"
-      },
-      "roles": {
-        "system": "System",
-        "user": "Benutzer",
-        "assistant": "Assistent",
-        "tool": "Tool",
-        "unknown": "Rolle {{role}}"
-      },
-      "clientSelector": {
-        "label": "Client-Node",
-        "placeholder": "Einen Online-Client auswählen",
-        "activeSessionHint": "Durch die Auswahl wird der Node für diese Browser-Sitzung aktiv. Freigeben, um zu wechseln.",
-        "activeOnceChosen": "Aktiv für diesen Tab"
-      },
-      "conversationList": {
-        "title": "Unterhaltungen",
-        "show": "Seitenleiste ausklappen",
-        "hide": "Seitenleiste einklappen",
-        "expandAria": "Seitenleiste ausklappen",
-        "collapseAria": "Seitenleiste einklappen",
-        "untitled": "Unbenannte Unterhaltung",
-        "archived": "Archiviert",
-        "remote": "Remote",
-        "remoteTooltip": "Von einem gekoppelten Client gestartet. Auf diesem Knoten nur lesbar.",
-        "noClientAssigned": "Kein Client zugewiesen",
-        "empty": "Noch keine Unterhaltungen.",
-        "delete": "Löschen",
-        "deleteConfirm": "Diese Unterhaltung löschen? Das kann nicht rückgängig gemacht werden.",
-        "deleteSuccess": "Unterhaltung gelöscht.",
-        "deleteShiftHint": "Umschalt+Klick überspringt Bestätigung"
-      },
-      "disconnect": {
-        "button": "Trennen",
-        "title": "Client-Node trennen",
-        "descriptionWithName": "\"{{name}}\" trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
-        "descriptionWithoutName": "Den ausgewählten Client-Node trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
-        "confirm": "Trennen"
-      },
-      "release": {
-        "button": "Freigeben",
-        "title": "Node freigeben",
-        "descriptionWithName": "\"{{name}}\" aus deiner aktiven Sitzung freigeben? Der Node bleibt online und kann anschließend wieder ausgewählt werden.",
-        "descriptionWithoutName": "Diesen Node aus deiner aktiven Sitzung freigeben? Der Node bleibt online.",
-        "confirm": "Freigeben"
-      },
-      "nodeInfo": {
-        "button": "Node-Informationen anzeigen",
-        "title": "Node-Informationen",
-        "empty": "Keine Online-Nodes verfügbar.",
-        "emptyTitle": "Keine Nodes verfügbar",
-        "emptyDescription": "Online-Client-Nodes werden hier angezeigt. Stellen Sie sicher, dass ein Node verbunden und online ist.",
-        "searchPlaceholder": "Nodes suchen…",
-        "nodeList": "Nodes",
-        "noMatch": "Keine passenden Nodes",
-        "selectPrompt": "Wählen Sie einen Node für Details",
-        "statusOnline": "Online",
-        "statusBusy": "Beschäftigt",
-        "statusError": "Fehler",
-        "statusOffline": "Offline",
-        "tabOverview": "Übersicht",
-        "tabHardware": "Hardware",
-        "tabModels": "Modelle",
-        "selectNode": "Diesen Node auswählen",
-        "currentNode": "Aktueller Node",
-        "copyInfo": "Info kopieren",
-        "copied": "Kopiert"
-      },
-      "followUpTitle": "Vorgeschlagene Anschlussfragen",
-      "toolApproval": {
-        "title": "Tool-Freigabe erforderlich",
-        "description": "Ein Worker benötigt eine Freigabe, bevor er fortfahren kann.",
-        "reject": "Ablehnen",
-        "approve": "Freigeben"
-      },
-      "sync": {
-        "enableStandard": "Sync aktivieren",
-        "enableEncrypted": "Verschlüsselten Sync aktivieren",
-        "standardEnabledSuccess": "Standard-Sync wurde für diese Unterhaltung aktiviert.",
-        "encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diese Unterhaltung aktiviert.",
-        "confirm": {
-          "keepLocalOnly": "Lokal behalten",
-          "continue": "Weiter",
-          "enableSync": "Sync aktivieren",
-          "enableStandardTitle": "Standard-Sync aktivieren?",
-          "enableEncryptedTitle": "Verschlüsselten Sync aktivieren?",
-          "standardDescription": "Dadurch kann diese TrustedLocal-Unterhaltung mit der Plattform synchronisiert werden. Fahre nur fort, wenn diese Unterhaltung von diesem Gerät hochgeladen werden soll.",
-          "encryptedDescription": "Dadurch wird diese TrustedLocal-Unterhaltung in verschlüsselten Sync umgewandelt. Du musst diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind."
-        }
-      },
-      "encryptedSync": {
-        "unlock": {
-          "title": "Verschlüsselten Sync entsperren",
-          "description": "Gib dein eigenes Sync-Passwort ein, um deine verschlüsselten Unterhaltungen auf diesem Gerät zu entsperren.",
-          "passwordDescription": "Dieses Passwort ist getrennt von deinem Kontopasswort.",
-          "passwordLabel": "Sync-Passwort",
-          "passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort eingeben",
-          "recoveryAction": "Passwort vergessen? Recovery-Key verwenden",
-          "submit": "Entsperren",
-          "errors": {
-            "notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
-            "incorrectPassword": "Sync-Passwort ist falsch"
-          },
-          "unlockingTitle": "Verschlüsselter Chat wird entsperrt",
-          "unlockingSubtitle": "Dein Chat-Passwort wird überprüft.",
-          "preparingTitle": "Verschlüsselter Chat wird vorbereitet",
-          "preparingSubtitle": "Verschlüsselter Verlauf wird geladen.",
-          "errorTitle": "Verschlüsselter Chat nicht verfügbar",
-          "errorSubtitle": "Der verschlüsselte Chat konnte nicht vollständig vorbereitet werden."
-        },
-        "setup": {
-          "title": "Verschlüsselten Sync einrichten",
-          "description": "Dies ist ein separates Passwort zu deinem Kontopasswort. Die Plattform kann deine verschlüsselten Chats nicht lesen.",
-          "ssoPasswordDescription": "Dies ist ein separates Passwort zu deiner Kontoanmeldung.",
-          "passwordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
-          "passwordLabel": "Sync-Passwort",
-          "passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort erstellen",
-          "passwordStrength": "Passwortstärke",
-          "strength": {
-            "empty": "Ein eigenes Sync-Passwort hinzufügen",
-            "weak": "Schwach",
-            "reasonable": "Akzeptabel",
-            "strong": "Stark"
-          },
-          "recoveryKeyTitle": "Recovery-Key",
-          "recoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
-          "copy": "Kopieren",
-          "copySuccess": "Recovery-Key wurde in die Zwischenablage kopiert.",
-          "acknowledgement": "Ich habe meinen Recovery-Key sicher notiert oder gespeichert. Mir ist klar, dass er nicht erneut angezeigt werden kann.",
-          "submit": "Recovery-Key generieren",
-          "complete": "Ich habe den Recovery-Key gespeichert",
-          "ready": "Verschlüsselter Sync ist bereit.",
-          "errors": {
-            "shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
-            "setupFailed": "Die Einrichtung des verschlüsselten Syncs ist fehlgeschlagen. Bitte versuche es erneut."
-          }
-        },
-        "recovery": {
-          "title": "Verschlüsselten Sync wiederherstellen",
-          "description": "Verwende deinen einmaligen Recovery-Key, um ein neues Sync-Passwort festzulegen, ohne deine gespeicherten Chats neu zu verschlüsseln.",
-          "recoveryKeyDescription": "Leerzeichen und Bindestriche werden automatisch ignoriert.",
-          "recoveryKeyLabel": "Recovery-Key",
-          "recoveryKeyPlaceholder": "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z1234-56789",
-          "newPasswordDescription": "Verwende ein neues eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
-          "newPasswordLabel": "Neues Sync-Passwort",
-          "newPasswordPlaceholder": "Neues verschlüsseltes Sync-Passwort erstellen",
-          "confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
-          "confirmPasswordPlaceholder": "Dein neues verschlüsseltes Sync-Passwort bestätigen",
-          "submit": "Sync-Passwort zurücksetzen",
-          "resetSuccess": "Dein Sync-Passwort wurde zurückgesetzt.",
-          "newRecoveryKeyTitle": "Dein neuer Recovery-Key",
-          "newRecoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
-          "acknowledgement": "Ich habe meinen neuen Recovery-Key sicher notiert oder gespeichert.",
-          "complete": "Ich habe den Recovery-Key gespeichert",
-          "validation": {
-            "tooShort": "Der Recovery-Key ist zu kurz.",
-            "invalidCharacters": "Der Recovery-Key enthält ungültige Zeichen.",
-            "missingCheckCharacter": "Dem Recovery-Key fehlt ein Prüfzeichen.",
-            "invalidCheckDigit": "Die Prüfziffer des Recovery-Keys ist ungültig.",
-            "invalidLength": "Der Recovery-Key hat eine ungültige Länge.",
-            "invalid": "Der Recovery-Key ist ungültig."
-          },
-          "errors": {
-            "shortPassword": "Dein neues Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
-            "passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
-            "notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
-            "recoveryKeyIncorrect": "Der Recovery-Key ist falsch.",
-            "recoveryFailed": "Die Wiederherstellung ist fehlgeschlagen. Bitte prüfe deinen Recovery-Key und versuche es erneut."
-          }
-        },
-        "reset": {
-          "trigger": "Passwort und Recovery-Key verloren? Tresor löschen",
-          "title": "Verschlüsselten Tresor löschen?",
-          "description": "Dadurch werden dein verschlüsselter Tresor und ALLE Unterhaltungen auf allen Geräten dauerhaft gelöscht. Eine Wiederherstellung ist nicht möglich. Du musst den verschlüsselten Chat danach erneut einrichten.",
-          "confirm": "Alles löschen",
-          "success": "Verschlüsselter Tresor gelöscht. Richte den verschlüsselten Chat erneut ein, um fortzufahren.",
-          "errors": {
-            "apiFailed": "Der verschlüsselte Tresor konnte auf dem Server nicht gelöscht werden.",
-            "wrongPassword": "Falsches Konto-Passwort."
-          },
-          "passwordLabel": "Konto-Passwort",
-          "passwordDescription": "Gib dein Konto-Passwort ein, um die Löschung zu bestätigen.",
-          "passwordPlaceholder": "Dein Konto-Passwort"
-        },
-        "changePassword": {
-          "title": "Sync-Passwort ändern",
-          "description": "Ändere dein verschlüsseltes Sync-Passwort. Deine gespeicherten Chats bleiben weiterhin zugänglich.",
-          "button": "Sync-Passwort ändern",
-          "newPasswordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
-          "newPasswordLabel": "Neues Sync-Passwort",
-          "newPasswordPlaceholder": "Dein neues Sync-Passwort eingeben",
-          "passwordStrength": "Passwortstärke",
-          "strength": {
-            "empty": "Neues Sync-Passwort hinzufügen",
-            "weak": "Schwach",
-            "reasonable": "Akzeptabel",
-            "strong": "Stark"
-          },
-          "confirmPasswordDescription": "Gib dein neues Sync-Passwort zur Bestätigung erneut ein.",
-          "confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
-          "confirmPasswordPlaceholder": "Neues Sync-Passwort bestätigen",
-          "submit": "Passwort ändern",
-          "success": "Sync-Passwort erfolgreich geändert.",
-          "errors": {
-            "shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
-            "passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
-            "notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
-            "changeFailed": "Passwortänderung fehlgeschlagen. Bitte versuche es erneut."
-          }
-        }
-      },
-      "actions": {
-        "branch": "Unterhaltung verzweigen",
-        "branchSuccess": "Verzweigte Unterhaltung wurde erstellt.",
-        "copy": "Nachricht kopieren",
-        "copyCode": "Code kopieren",
-        "copyCodeSuccess": "Kopiert",
-        "copySuccess": "Nachricht wurde in die Zwischenablage kopiert.",
-        "feedback": "Feedback geben",
-        "regenerate": "Antwort neu generieren",
-        "regenerateUnavailable": "Diese Nachricht kann nicht neu generiert werden."
-      },
-      "feedback": {
-        "title": "Nachrichtenfeedback",
-        "description": "Hilf dabei, zukünftige Antworten zu verbessern, indem du diese Assistenten-Nachricht bewertest.",
-        "positive": "Positiv",
-        "negative": "Negativ",
-        "additionalFeedback": "Zusätzliches Feedback",
-        "additionalFeedbackPlaceholder": "Was war gut oder was sollte verbessert werden?",
-        "submit": "Feedback senden",
-        "success": "Feedback wurde erfolgreich gesendet."
-      },
-      "revisions": {
-        "position": "Revision {{current}} von {{total}}",
-        "previous": "Vorherige Revision",
-        "next": "Nächste Revision"
-      },
-      "streaming": "Antwort wird empfangen",
-      "defaultAgentName": "Standard-Assistent",
-      "agentSelector": {
-        "search": "Agenten suchen...",
-        "hint": "Einen auf diesem Knoten definierten Agenten auswählen.",
-        "noResults": "Keine Agenten gefunden",
-        "orchestratorBadge": "Orchestrator",
-        "pinnedModelHint": "Verwendet Modell: {{model}}",
-        "triggerLabel": "Agent",
-        "offOptionHint": "Kein Agent — verwendet die Knoten-Standardeinstellung"
-      },
-      "nodeReply": "Knoten-Antwort",
-      "error": {
-        "title": "Antwort fehlgeschlagen"
-      },
-      "reasoning": {
-        "label": "Denken: {{effort}}",
-        "effort": {
-          "none": "Aus",
-          "on": "An",
-          "low": "Niedrig",
-          "medium": "Mittel",
-          "high": "Hoch"
-        }
-      },
-      "menu": {
-        "label": "Nachrichtenoptionen",
-        "showTokensPerSecond": "Tokens/Sek. anzeigen"
-      },
-      "tokensPerSecond": "{{value}} Tok/s",
-      "samplingOptions": {
-        "title": "Erweiterte Sampling-Optionen",
-        "description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert und nicht pro Konversation persistiert.",
-        "groupSampling": "Sampling",
-        "groupPenalties": "Strafen",
-        "groupLimits": "Limits",
-        "temperature": "Temperatur",
-        "temperatureDescription": "Steuert die Zufälligkeit. Niedrigere Werte sind deterministischer; höhere Werte sind kreativer.",
-        "topP": "Top P",
-        "topPDescription": "Schwellenwert für Nucleus-Sampling. Nur Tokens, deren kumulierte Wahrscheinlichkeit diesen Wert erreicht, werden berücksichtigt.",
-        "topK": "Top K",
-        "topKDescription": "Begrenzt das Sampling auf die Top-K wahrscheinlichsten Tokens.",
-        "minP": "Min P",
-        "minPDescription": "Mindestwahrscheinlichkeit für ein Token relativ zum wahrscheinlichsten Token.",
-        "repeatPenalty": "Wiederholungsstrafe",
-        "repeatPenaltyDescription": "Bestraft Wiederholungen. Werte über 1 verhindern, dass das Modell sich wiederholt.",
-        "repeatLastN": "Letzte N wiederholen",
-        "repeatLastNDescription": "Anzahl der Tokens, die bei der Wiederholungsstrafe berücksichtigt werden. -1 verwendet den gesamten Kontext.",
-        "presencePenalty": "Präsenzstrafe",
-        "presencePenaltyDescription": "Bestraft Tokens, die bereits in der Ausgabe erschienen sind, unabhängig von der Häufigkeit.",
-        "frequencyPenalty": "Häufigkeitsstrafe",
-        "frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
-        "maxOutputTokens": "Max. Ausgabe-Tokens",
-        "maxOutputTokensDescription": "Maximale Anzahl der zu generierenden Tokens. Wird auf die Modellkontextlänge begrenzt, wenn gesetzt.",
-        "seed": "Seed",
-        "seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
-        "numCtx": "Kontextlänge (num_ctx)",
-        "numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens.",
-        "stop": "Stop-Sequenzen",
-        "stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
-        "modelDefault": "Modellstandard",
-        "reset": "Auf Standard zurücksetzen",
-        "close": "Schließen",
-        "resetField": "{{field}} zurücksetzen"
-      },
-      "composer": {
-        "samplingOptions": "Erweiterte Sampling-Optionen"
-      }
-    },
-    "clientNodes": {
-      "fields": {
-        "hardware": "Hardware",
-        "systemScore": "System-Score",
-        "capabilities": "Fähigkeiten",
-        "models": "Installierte Modelle"
-      },
-      "settings": {
-        "title": "Node-Einstellungen",
-        "provider": "KI-Anbieter",
-        "providerNone": "Lokal (Ollama)",
-        "azureEndpoint": "Azure-Endpunkt",
-        "azureApiKey": "Azure-API-Schlüssel",
-        "azureDeploymentName": "Deployment-Name"
-      },
-      "none": "Keine angegeben"
-    },
-    "admin": {
-      "agentDefinitions": {
-        "title": "Agent-Definitionen",
-        "note": "Konfiguriere Anzeige-Metadaten, AI-Modell-Auswahl, Reasoning-Effort, Tools und Richtlinien für Agenten.",
-        "create": "Agent-Definition erstellen",
-        "edit": "Bearbeiten",
-        "save": "Speichern",
-        "setDefault": "Als Standard setzen",
-        "created": "Agent-Definition erfolgreich erstellt",
-        "updated": "Agent-Definition erfolgreich aktualisiert",
-        "deleted": "Agent-Definition erfolgreich gelöscht",
-        "defaultSet": "Standard-Agent-Definition erfolgreich aktualisiert",
-        "invalidPolicies": "Policies müssen gültiges JSON sein.",
-        "loadDetailsError": "Agent-Definition-Details konnten nicht geladen werden.",
-        "loadAiModelsError": "AI-Modelle konnten nicht geladen werden.",
-        "loadToolsError": "Tool-Definitionen konnten nicht geladen werden.",
-        "nameLabel": "Name",
-        "displayNameLabel": "Anzeigename",
-        "descriptionLabel": "Beschreibung",
-        "systemPromptLabel": "System-Prompt",
-        "aiModelLabel": "AI-Modell",
-        "aiModelPlaceholder": "AI-Modell auswählen",
-        "reasoningEffortLabel": "Reasoning-Effort",
-        "reasoningEffortPlaceholder": "Reasoning-Effort auswählen",
-        "workflowTypeLabel": "Workflow-Typ",
-        "workflowTypePlaceholder": "z. B. default, research, coding",
-        "defaultModelProfileLabel": "Modellprofil",
-        "defaultModelProfilePlaceholder": "z. B. llama3:8b",
-        "allowedToolsLabel": "Erlaubte Tools",
-        "policiesLabel": "Richtlinien (JSON)",
-        "policiesPlaceholder": "{\n  \"approvalMode\": \"manual\"\n}",
-        "reasoningEffortOptions": {
-          "low": "Niedrig",
-          "medium": "Mittel",
-          "high": "Hoch"
-        },
-        "defaultBadge": "Standard",
-        "createDialogTitle": "Agent-Definition erstellen",
-        "editDialogTitle": "Agent-Definition bearbeiten",
-        "deleteDialogTitle": "Agent-Definition löschen",
-        "deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
-        "columns": {
-          "name": "Name",
-          "description": "Beschreibung",
-          "version": "Version",
-          "default": "Standard",
-          "actions": "Aktionen"
-        }
-      },
-      "toolDefinitions": {
-        "title": "Tool Definitions",
-        "note": "Bearbeiten wird verschoben, bis das Backend vollständige Tool-Definition-Details inklusive Endpoint/Handler bereitstellt.",
-        "create": "Tool Definition erstellen",
-        "created": "Tool Definition erfolgreich erstellt",
-        "deleted": "Tool Definition erfolgreich gelöscht",
-        "nameLabel": "Name",
-        "descriptionLabel": "Beschreibung",
-        "locationLabel": "Ort",
-        "endpointOrHandlerLabel": "Endpoint oder Handler",
-        "parameterSchemaLabel": "Parameter Schema",
-        "requiresApprovalLabel": "Benötigt Freigabe",
-        "createDialogTitle": "Tool Definition erstellen",
-        "deleteDialogTitle": "Tool Definition löschen",
-        "deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
-        "apiSide": "API Side",
-        "clientLocal": "Client Local",
-        "columns": {
-          "name": "Name",
-          "description": "Beschreibung",
-          "location": "Ort",
-          "approval": "Freigabe",
-          "actions": "Aktionen"
-        }
-      },
-      "clientNodes": {
-        "title": "Client Nodes",
-        "deleted": "Client Node erfolgreich gelöscht",
-        "deleteDialogTitle": "Client Node löschen",
-        "deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
-        "columns": {
-          "name": "Name",
-          "userId": "User ID",
-          "status": "Status",
-          "systemScore": "System Score",
-          "lastSeen": "Zuletzt gesehen",
-          "actions": "Aktionen"
-        },
-        "status": {
-          "offline": "Offline",
-          "online": "Online",
-          "disconnecting": "Disconnecting",
-          "error": "Error"
-        }
-      },
-      "aiModels": {
-        "title": "KI-Modelle",
-        "create": "KI-Modell erstellen",
-        "save": "Speichern",
-        "edit": "Bearbeiten",
-        "created": "KI-Modell erfolgreich erstellt",
-        "updated": "KI-Modell erfolgreich aktualisiert",
-        "deleted": "KI-Modell erfolgreich gelöscht",
-        "modelIdLabel": "Modell-ID",
-        "displayNameLabel": "Anzeigename",
-        "descriptionLabel": "Beschreibung",
-        "typeLabel": "Modelltyp",
-        "typeOptions": {
-          "llm": "LLM",
-          "embedding": "Embedding"
-        },
-        "isReasoningModelLabel": "Reasoning-Modell",
-        "supportsToolCallingLabel": "Unterstützt Tool-Aufrufe",
-        "isPublicLabel": "Öffentlich für Chat-Nutzer",
-        "reasoningEffortNamesLabel": "Erlaubte Reasoning-Efforts",
-        "defaultReasoningEffortNameLabel": "Standard-Reasoning-Effort",
-        "createDialogTitle": "KI-Modell erstellen",
-        "editDialogTitle": "KI-Modell bearbeiten",
-        "deleteDialogTitle": "KI-Modell löschen",
-        "deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
-        "activeBadge": "Aktiv",
-        "publicBadge": "Öffentlich",
-        "reasoningBadge": "Reasoning",
-        "toolCallingBadge": "Tools",
-        "columns": {
-          "modelId": "Modell-ID",
-          "displayName": "Anzeigename",
-          "type": "Typ",
-          "reasoning": "Reasoning",
-          "tools": "Tools",
-          "public": "Öffentlich",
-          "active": "Aktiv",
-          "actions": "Aktionen"
-        }
-      },
-      "feedback": {
-        "title": "Feedback",
-        "all": "Alle",
-        "solved": "Gelöst",
-        "unsolved": "Ungelöst",
-        "markSolved": "Als gelöst markieren",
-        "solvedSuccess": "Feedback als gelöst markiert",
-        "solveDialogTitle": "Feedback als gelöst markieren",
-        "solveNoteLabel": "Lösungsnotiz",
-        "columns": {
-          "conversation": "Konversation",
-          "message": "Nachrichtenvorschau",
-          "sentiment": "Stimmung",
-          "status": "Status",
-          "createdAt": "Erstellt",
-          "actions": "Aktionen"
-        },
-        "positive": "Positiv",
-        "negative": "Negativ",
-        "open": "Offen",
-        "resolved": "Gelöst"
-      },
-      "pairingTokens": {
-        "title": "Pairing Tokens",
-        "legacyNotice": "Pairing-Tokens sind für das normale Worker-Onboarding veraltet. Verwenden Sie standardmäßig die Gerätecode-Node-Bindung und erstellen Sie Tokens nur vorübergehend für Legacy-Kompatibilität.",
-        "labelLabel": "Bezeichnung",
-        "labelPlaceholder": "z. B. Arbeitsplatz Büro",
-        "create": "Pairing Token erstellen",
-        "created": "Pairing Token erfolgreich erstellt",
-        "rotated": "Pairing Token erfolgreich rotiert",
-        "revoked": "Pairing Token erfolgreich widerrufen",
-        "revokeDialogTitle": "Pairing Token widerrufen",
-        "revokeDialogText": "Möchten Sie '{{name}}' wirklich widerrufen?",
-        "rotate": "Rotieren",
-        "rotateConfirmTitle": "Pairing-Token rotieren?",
-        "rotateConfirmDescription": "Dies erzeugt ein neues Pairing-Geheimnis für diesen Token. Das alte Geheimnis funktioniert ab sofort nicht mehr. Bereits gekoppelte Clients behalten ihre Sitzungen — das neue Geheimnis wird nur beim nächsten Pairing oder Login benötigt. Diese Aktion kann nicht rückgängig gemacht werden.",
-        "rotateConfirmLabel": "Rotieren",
-        "secretModalTitle": "Diesen Pairing Token jetzt speichern",
-        "secretWarning": "Der Pairing Token wird nur einmal angezeigt. Bitte sicher speichern.",
-        "tokenLabel": "Pairing Token",
-        "copyToken": "Token kopieren",
-        "tokenCopied": "Pairing Token in Zwischenablage kopiert",
-        "expirationOption_one": "{{count}} Tag",
-        "expirationOption_other": "{{count}} Tage",
-        "durationBadge_one": "Gültig für {{count}} Tag",
-        "durationBadge_other": "Gültig für {{count}} Tage",
-        "statusOpen": "Offen",
-        "statusUsed": "Verwendet",
-        "statusExpired": "Abgelaufen",
-        "columns": {
-          "label": "Bezeichnung",
-          "duration": "Gültigkeitsdauer",
-          "status": "Status",
-          "assignedTo": "Zugewiesen an",
-          "usedBy": "Verwendet von Client",
-          "createdAt": "Erstellt",
-          "expiresAt": "Läuft ab",
-          "actions": "Aktionen"
-        }
-      },
-      "appKeys": {
-        "title": "App Keys",
-        "nameLabel": "Name",
-        "namePlaceholder": "z. B. API-Client Produktion",
-        "appsLabel": "Apps",
-        "create": "App Key erstellen",
-        "created": "App Key erfolgreich erstellt",
-        "deleted": "App Key erfolgreich gelöscht",
-        "enabled": "App Key aktiviert",
-        "disabled": "App Key deaktiviert",
-        "validation": "Name und mindestens eine App sind erforderlich",
-        "deleteDialogTitle": "App Key löschen",
-        "deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.",
-        "secretModalTitle": "Secret jetzt speichern",
-        "secretWarning": "Das Client Secret wird nur einmal angezeigt. Bitte sicher speichern.",
-        "copySecret": "Secret kopieren",
-        "secretCopied": "Secret in Zwischenablage kopiert",
-        "clientSecretLabel": "Client Secret",
-        "columns": {
-          "name": "Name",
-          "clientId": "Client ID",
-          "apps": "Apps",
-          "createdAt": "Erstellt",
-          "lastUsedAt": "Zuletzt verwendet",
-          "enabled": "Aktiv",
-          "actions": "Aktionen"
-        }
-      },
-      "permissions": {
-        "title": "Berechtigungen",
-        "tablePermissions": "Berechtigungen",
-        "permissionUpdated": "Berechtigung erfolgreich aktualisiert",
-        "noRolesAvailable": "Keine Rollen verfügbar"
-      },
-      "roles": {
-        "title": "Rollen",
-        "deleteDialogTitle": "Rolle löschen",
-        "deleteDialogText": "Möchten Sie diese Rolle wirklich löschen?",
-        "tableTooltipEdit": "Bearbeiten",
-        "tableTooltipDelete": "Löschen",
-        "protectedAdminRoleTooltip": "Die Administratorrolle kann weder umbenannt noch gelöscht werden.",
-        "protectedDefaultRoleTooltip": "Die Standardkontorolle kann weder umbenannt noch gelöscht werden.",
-        "administratorBadge": "Administrator",
-        "defaultAccountRoleBadge": "Standardkontorolle",
-        "createRole": "Rolle erstellen",
-        "roleDeleted": "Rolle erfolgreich gelöscht"
-      },
-      "users": {
-        "title": "Benutzer",
-        "tableHeaders": {
-          "username": "Benutzername",
-          "firstName": "Vorname",
-          "lastName": "Nachname"
-        },
-        "deleteDialogTitle": "Benutzer löschen",
-        "deleteDialogText": "Möchten Sie diesen Benutzer wirklich löschen?",
-        "tableTooltipEdit": "Bearbeiten",
-        "tableTooltipView": "Anzeigen",
-        "tableTooltipDelete": "Löschen",
-        "deleteSuccess": "Benutzer erfolgreich gelöscht",
-        "createUser": "Benutzer erstellen"
-      }
-    },
-    "home": {
-      "title": {
-        "welcome": "Willkommen!"
-      }
-    },
-    "dashboard": {
-      "placeholder": {
-        "title": "Dashboard",
-        "description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
-      },
-      "eyebrow": "Worker-Node",
-      "title": "Dashboard",
-      "subtitle": "Lokale Worker-Verbindung überwachen und Verbindungsverhalten beim Start steuern.",
-      "loadingStatus": "Verbindungsstatus wird geladen…",
-      "unexpectedError": "Unerwarteter Fehler bei der Verbindungsaktion",
-      "notPairedHint": "Binde diesen Node, bevor du dich mit der zentralen Plattform verbindest.",
-      "platformConnection": {
-        "title": "Plattformverbindung",
-        "connect": "Verbinden",
-        "disconnect": "Trennen",
-        "refresh": "Aktualisieren"
-      },
-      "startupConnection": {
-        "title": "Startverbindung",
-        "enabled": "Aktiviert",
-        "disabled": "Deaktiviert",
-        "hint": "Auto-Verbindung bleibt nach dem Binden standardmäßig deaktiviert, bis du sie explizit aktivierst.",
-        "enableAutoConnect": "Auto-Verbindung aktivieren",
-        "disableAutoConnect": "Auto-Verbindung deaktivieren"
-      },
-      "nodeCredentials": {
-        "title": "Node-Anmeldedaten",
-        "binding": "Bindung",
-        "paired": "Gebunden",
-        "notPaired": "Nicht gebunden",
-        "bindingMethod": "Bindungsmethode",
-        "nodeName": "Node-Name",
-        "tokenExpires": "Token läuft ab",
-        "notAvailable": "Nicht verfügbar",
-        "tokenExpiredBadge": "Abgelaufen"
-      },
-      "lastUpdate": {
-        "title": "Letzte Aktualisierung",
-        "privacyNote": "Verbindungssteuerung gibt keine Zugriffs- oder Refresh-Tokens an den Browser zurück."
-      },
-      "connectionStatus": {
-        "preparingModel": "Modell wird vorbereitet",
-        "reconnecting": "Verbindet erneut",
-        "connecting": "Verbindet",
-        "connected": "Verbunden",
-        "disconnected": "Getrennt",
-        "pairing": "Koppelt",
-        "error": "Fehler",
-        "unknown": "Unbekannt"
-      },
-      "connectionHint": {
-        "reconnecting": "Deaktiviere Auto-Verbindung, um Wiederverbindungsversuche zu stoppen, oder warte, bis der Worker sich erholt.",
-        "autoConnectEnabled": "Auto-Verbindung ist aktiviert. Der Worker verbindet sich beim Start, sobald die Voraussetzungen erfüllt sind.",
-        "autoConnectDisabled": "Auto-Verbindung ist deaktiviert. Nutze Verbinden für eine manuelle Sitzung oder aktiviere die Startverbindung."
-      }
-    },
-    "nodeBinding": {
-      "placeholder": {
-        "title": "Node-Bindung",
-        "description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
-      }
-    },
-    "nodeSettings": {
-      "placeholder": {
-        "title": "Node-Einstellungen",
-        "description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden."
-      },
-      "developerMode": {
-        "title": "Entwicklereinstellungen",
-        "label": "Entwicklermodus",
-        "description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen). Wird nur in diesem Browser gespeichert."
-      }
-    },
-    "cloudSettings": {
-      "placeholder": {
-        "title": "Cloud-Einstellungen",
-        "description": "Provider-Konfiguration nutzt geheimnissichere lokale API-Antworten."
-      }
-    },
-    "models": {
-      "placeholder": {
-        "title": "Modelle",
-        "description": "Lokale Modellauflistung, Auswahl, Pull und Löschen werden hier ergänzt."
-      },
-      "type": {
-        "columnHeader": "Typ",
-        "kind": {
-          "chat": "Chat",
-          "embedding": "Embedding",
-          "unknown": "Unbekannt"
-        },
-        "capability": {
-          "tools": "Werkzeuge",
-          "vision": "Bild",
-          "thinking": "Denken"
-        },
-        "overrideLabel": "Typ überschreiben",
-        "reset": "Auf erkannt zurücksetzen"
-      },
-      "pull": {
-        "title": "Neues Modell herunterladen",
-        "guidance": "Gib einen Ollama-kompatiblen Modell-Tag ein. Verfügbare Modelle findest du in der Ollama-Bibliothek.",
-        "libraryLink": "Ollama-Bibliothek öffnen (ollama.com/library)",
-        "huggingFaceHint": "Du kannst auch ein Hugging-Face-GGUF-Modell mit hf.co/<org>/<repo>:<quant> herunterladen.",
-        "warning": "Ein manueller Pull lädt beliebige, ungeprüfte Modellgewichte herunter und kann sehr groß sein. Bevorzuge die empfohlenen Modelle für diesen Knoten.",
-        "recommendationsLink": "Empfohlene Modelle für diesen Knoten anzeigen",
-        "inputLabel": "Name des herunterzuladenden Modells",
-        "downloadButton": "Modell herunterladen",
-        "inProgress": "Download läuft — lass diesen Dialog geöffnet, bis er abgeschlossen ist.",
-        "toast": {
-          "title": "{{model}} wird heruntergeladen",
-          "preparing": "Download wird vorbereitet…",
-          "successTitle": "Modell heruntergeladen",
-          "success": "{{model}} ist bereit.",
-          "errorTitle": "Download fehlgeschlagen",
-          "error": "{{model}} konnte nicht heruntergeladen werden."
-        }
-      }
-    },
-    "manager": {
-      "placeholder": {
-        "title": "Runtime-Manager",
-        "description": "HostAgent-Laufzeitstatus und Container-Aktionen werden hier ergänzt."
-      }
-    },
-    "invocations": {
-      "placeholder": {
-        "title": "Aufrufe",
-        "description": "Aktuelle und historische Aufrufüberwachung wird hier portiert."
-      }
-    },
-    "agents": {
-      "eyebrow": "Worker-Node",
-      "title": "Agent-Definitionen",
-      "subtitle": "Lokale Agent-Personas erstellen: Anweisungen, Modell, Reasoning-Aufwand und die nutzbaren Tools.",
-      "createButton": "Neuer Agent",
-      "templatesButton": "Starter-Agenten hinzufügen",
-      "templates": {
-        "title": "Starter-Agenten hinzufügen",
-        "subtitle": "Importiere kuratierte Starter-Personas als bearbeitbare Agent-Definitionen. Sie kommen ohne Tools an — Tools nach dem Import vergeben.",
-        "loading": "Starter-Agenten werden geladen…",
-        "loadError": "Starter-Agenten konnten nicht geladen werden.",
-        "importError": "Die ausgewählten Agenten konnten nicht importiert werden.",
-        "empty": "Es sind keine Starter-Agenten verfügbar.",
-        "tokenBadge": "~{{count}} Tokens",
-        "tokenWarning": "Der geschätzte Prompt dieser Persona ist für lokale Modelle groß. Die Schätzung ist eine Zeichen/4-Heuristik.",
-        "alreadyImported": "Importiert",
-        "importButton": "Auswahl importieren ({{count}})",
-        "importSuccess": "{{imported}} hinzugefügt, {{skipped}} übersprungen."
-      },
-      "list": {
-        "loading": "Agent-Definitionen werden geladen…",
-        "empty": "Noch keine Agent-Definitionen. Erstelle eine, um zu beginnen.",
-        "nodeDefault": "Node-Standard",
-        "editAria": "{{name}} bearbeiten",
-        "deleteAria": "{{name}} löschen",
-        "columns": {
-          "name": "Name",
-          "kind": "Typ",
-          "model": "Modell",
-          "tools": "Tools",
-          "version": "Version",
-          "actions": "Aktionen"
-        }
-      },
-      "editor": {
-        "createTitle": "Neuer Agent",
-        "editTitle": "Agent bearbeiten"
-      },
-      "form": {
-        "name": {
-          "label": "Name",
-          "placeholder": "Recherche-Assistent",
-          "required": "Name ist erforderlich"
-        },
-        "description": {
-          "label": "Beschreibung",
-          "placeholder": "Optionale Kurzbeschreibung"
-        },
-        "instructions": {
-          "label": "Anweisungen",
-          "description": "System-Prompt, der das Verhalten dieses Agenten definiert.",
-          "placeholder": "Du bist ein hilfreicher Assistent, der…",
-          "required": "Anweisungen sind erforderlich"
-        },
-        "kind": {
-          "label": "Typ",
-          "options": {
-            "Single": "Einzeln",
-            "Orchestrator": "Orchestrator"
-          }
-        },
-        "modelProfile": {
-          "label": "Modellprofil",
-          "nodeDefault": "Node-Standard"
-        },
-        "reasoningEffort": {
-          "label": "Reasoning-Aufwand",
-          "nodeDefault": "Node-Standard",
-          "options": {
-            "none": "Keiner",
-            "low": "Niedrig",
-            "medium": "Mittel",
-            "high": "Hoch"
-          }
-        },
-        "tools": {
-          "label": "Tools",
-          "requiresApproval": "Freigabe erforderlich",
-          "autoExecute": "automatisch",
-          "notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wähle ein tool-fähiges Modell, um Tools zu aktivieren.",
-          "loading": "Tools werden geladen…",
-          "loadError": "Der Tool-Katalog konnte nicht geladen werden.",
-          "empty": "Keine Tools verfügbar."
-        },
-        "orchestration": {
-          "label": "Orchestrierung",
-          "description": "Dieser Agent fungiert als Triage. Wähle die Spezialisten, an die er übergeben kann, und beschränke optional die Übergabewege.",
-          "thisAgent": "Dieser Agent",
-          "triageOptionLabel": "{{name}} (Triage)",
-          "degradeWarning": "Eines oder mehrere Modelle in dieser Orchestrierung sind nicht tool-fähig ({{models}}). Die Orchestrierungs-Weiterleitung erfordert Tool-Aufrufe, daher läuft diese Definition stattdessen als Einzelagent.",
-          "participants": {
-            "label": "Spezialist-Teilnehmer",
-            "placeholder": "Agenten zum Übergeben auswählen",
-            "empty": "Keine weiteren Agenten verfügbar. Erstelle weitere Agenten, um sie als Teilnehmer zu verwenden."
-          },
-          "handoffs": {
-            "label": "Übergabewege",
-            "add": "Übergabe hinzufügen",
-            "remove": "Übergabe entfernen",
-            "from": "Von",
-            "to": "An",
-            "reason": "Grund (optional)",
-            "meshHint": "Mesh (automatisch): Ohne explizite Wege kann jeder Agent an jeden anderen übergeben.",
-            "twoAgentHint": "Mesh-Routing ist erst ab 3 Agenten sinnvoll; füge bei 2 Agenten einen expliziten Übergabeweg hinzu."
-          },
-          "maxTurns": {
-            "label": "Max. Züge pro Agent",
-            "description": "Begrenzt, wie oft ein Agent erneut aufgerufen wird, bevor die Weiterleitung weitergehen muss."
-          },
-          "returnToPrevious": {
-            "label": "Zum vorherigen Spezialisten zurückkehren",
-            "description": "Leitet den nächsten Nutzer-Zug zurück an den Spezialisten, der den letzten Zug bearbeitet hat, statt über die Triage."
-          }
-        },
-        "playbookEnabled": {
-          "label": "Operating-Playbook aktivieren",
-          "description": "Hängt die aktivierten Playbook-Aktionen dieses Agenten zur Laufzeit an seine Anweisungen an."
-        }
-      },
-      "playbook": {
-        "title": "Operating-Playbook",
-        "subtitle": "Manuelle Playbook-Aktionen, die an die Anweisungen von {{name}} angehängt werden, wenn dessen Playbook aktiviert ist.",
-        "addButton": "Aktion hinzufügen",
-        "analyzeButton": "Feedback analysieren",
-        "noSuggestions": "Keine neuen Vorschläge aus der letzten Analyse.",
-        "suggestedHeading": "Von der Analyse vorgeschlagen",
-        "confidenceLabel": "Konfidenz {{value}}",
-        "evidenceSummary": "Basierend auf {{count}} Feedback-Elementen",
-        "evidenceEmpty": "Keine zitierten Feedback-Elemente.",
-        "evidenceHint": "Prüfe diese Elemente im Feedback-Einblicke-Panel weiter unten.",
-        "approveButton": "Genehmigen",
-        "rejectButton": "Ablehnen",
-        "loading": "Playbook wird geladen…",
-        "empty": "Noch keine Playbook-Aktionen.",
-        "priorityLabel": "Priorität {{priority}}",
-        "triggerLabel": "Wenn: {{trigger}}",
-        "moveUpAria": "Nach oben",
-        "moveDownAria": "Nach unten",
-        "editAria": "Aktion bearbeiten",
-        "deleteAria": "Aktion löschen",
-        "source": {
-          "Manual": "Manuell",
-          "Analysis": "Analyse"
-        },
-        "state": {
-          "enabled": "aktiviert",
-          "disabled": "deaktiviert"
-        },
-        "form": {
-          "behavior": {
-            "label": "Verhalten",
-            "description": "Anweisungstext, der an den System-Prompt des Agenten angehängt wird.",
-            "placeholder": "Gib immer deine Quellen an…",
-            "required": "Verhalten ist erforderlich"
-          },
-          "scope": {
-            "label": "Geltungsbereich",
-            "placeholder": "Optionales Thema/Tool-Tag"
-          },
-          "priority": {
-            "label": "Priorität",
-            "description": "Niedrigere Zahlen werden zuerst eingefügt."
-          },
-          "state": {
-            "label": "Status"
-          },
-          "triggerCondition": {
-            "label": "Auslösebedingung",
-            "description": "Optionaler Hinweis, wann dies gilt (in dieser Phase nur zur Anzeige).",
-            "placeholder": "Wenn der Nutzer nach… fragt"
-          }
-        },
-        "delete": {
-          "title": "Playbook-Aktion löschen",
-          "description": "Diese Playbook-Aktion löschen? Dies kann nicht rückgängig gemacht werden."
-        },
-        "reject": {
-          "title": "Vorschlag ablehnen",
-          "description": "Diese vorgeschlagene Aktion ablehnen? Sie wird archiviert und nicht eingefügt.",
-          "confirm": "Ablehnen"
-        },
-        "errors": {
-          "load": "Das Playbook konnte nicht geladen werden.",
-          "save": "Die Playbook-Aktion konnte nicht gespeichert werden.",
-          "delete": "Die Playbook-Aktion konnte nicht gelöscht werden.",
-          "analyze": "Feedback konnte nicht analysiert werden.",
-          "review": "Der Vorschlag konnte nicht aktualisiert werden."
-        },
-        "eval": {
-          "runButton": "Eval ausführen",
-          "passed": "Eval bestanden",
-          "failed": "Eval fehlgeschlagen",
-          "counts": "{{regressed}} verschlechtert / {{golden}} Golden-Fälle",
-          "truncated": "{{evaluated}} von {{total}} Golden-Fällen ausgewertet.",
-          "regressedToggle": "{{count}} verschlechterte Fälle anzeigen",
-          "regressedCase": "{{id}} (bewertet durch {{scoredBy}})",
-          "scoredBy": {
-            "assertion": "Assertion",
-            "judge": "Judge"
-          },
-          "gate": {
-            "needsEval": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
-            "stale": "Dieser Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus, bevor du genehmigst.",
-            "regressed": "Die Eval hat einen zuvor guten Fall verschlechtert. Behebe die Verschlechterung, bevor du genehmigst."
-          },
-          "conflict": {
-            "EvalRequired": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
-            "EvalRegressed": "Genehmigung blockiert: Die Eval hat einen zuvor guten Fall verschlechtert.",
-            "EvalStale": "Genehmigung blockiert: Der Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus.",
-            "CapReached": "Genehmigung blockiert: Dieser Agent hat sein Limit aktiver Aktionen erreicht. Archiviere oder deaktiviere zuerst eine aktive Aktion."
-          }
-        },
-        "monitor": {
-          "enabledCount": "{{count}} Aktionen aktiv",
-          "relevanceBanner": "Einfügung ist relevanzgesteuert: Top-{{topK}} von {{count}} Aktionen pro Zug.",
-          "rankerEmbedding": "Sortiert nach Embedding-Ähnlichkeit (Modell {{model}}).",
-          "rankerLexical": "Sortiert nach lexikalischer Überschneidung.",
-          "none": "—",
-          "downRateLabel": "Abwertungsrate",
-          "flag": "Prüfung nötig",
-          "status": {
-            "Improved": "Verbessert",
-            "Flat": "Unverändert",
-            "Regressed": "Verschlechtert",
-            "InsufficientData": "Unzureichende Daten"
-          }
-        }
-      },
-      "golden": {
-        "title": "Golden-Konversationen",
-        "subtitle": "Erstelle Golden-Fälle, die die Beförderung absichern: Eine Kandidatenaktion darf sie nicht verschlechtern, bevor {{name}} sie aktivieren kann.",
-        "addButton": "Golden-Fall hinzufügen",
-        "loading": "Golden-Fälle werden geladen…",
-        "empty": "Noch keine Golden-Fälle. Füge einen hinzu, damit die Beförderung Eval-abgesichert werden kann.",
-        "turnCount": "{{count}} Eingabe-Turns",
-        "hasAssertion": "Assertion",
-        "hasRubric": "Rubric",
-        "disabledBadge": "deaktiviert",
-        "harvestedBadge": "geerntet",
-        "deleteAria": "Golden-Fall löschen",
-        "delete": {
-          "title": "Golden-Fall löschen",
-          "description": "'{{title}}' löschen? Dies kann nicht rückgängig gemacht werden."
-        },
-        "harvest": {
-          "button": "Aus 👍 ernten",
-          "success": "{{created}} vorgeschlagen, {{duplicate}} bereits geerntet, {{skipped}} übersprungen."
-        },
-        "pending": {
-          "heading": "Geerntet (Prüfung ausstehend)",
-          "hint": "Prüfe jeden geernteten Kandidaten und genehmige ihn dann in das aktive Golden-Set oder lehne ihn ab.",
-          "turnsPreview": "{{count}} Turns · {{role}}: {{text}}",
-          "turnCount": "{{count}} Eingabe-Turns",
-          "rubric": "Rubric: {{rubric}}",
-          "approve": "Genehmigen",
-          "reject": "Ablehnen"
-        },
-        "form": {
-          "titleRequired": "Titel ist erforderlich.",
-          "turnsRequired": "Mindestens ein Eingabe-Turn ist erforderlich.",
-          "signalRequired": "Füge mindestens eine erforderliche/verbotene Phrase oder eine Rubric hinzu.",
-          "tooLong": {
-            "title": "Der Titel ist zu lang (max. {{max}} Zeichen).",
-            "inputTurns": "Die Eingabe-Turns sind zu lang (max. {{max}} Zeichen).",
-            "assertion": "Die erforderlichen/verbotenen Phrasen sind zu lang (max. {{max}} Zeichen).",
-            "rubric": "Die Rubric ist zu lang (max. {{max}} Zeichen)."
-          },
-          "title": {
-            "label": "Titel",
-            "placeholder": "Kurzes Bedienerlabel"
-          },
-          "turns": {
-            "label": "Eingabe-Turns",
-            "description": "Ein Turn pro Zeile als 'Rolle: Text'. Eine Zeile ohne Doppelpunkt wird als Nutzer-Turn behandelt.",
-            "placeholder": "user: Fasse das Dokument zusammen…"
-          },
-          "required": {
-            "label": "Erforderliche Phrasen",
-            "description": "Eine pro Zeile. Alle müssen vorhanden sein."
-          },
-          "forbidden": {
-            "label": "Verbotene Phrasen",
-            "description": "Eine pro Zeile. Keine darf vorhanden sein."
-          },
-          "rubric": {
-            "label": "Rubric",
-            "description": "Optionale Judge-Rubric (verwendet, wenn keine Assertion zutrifft)."
-          }
-        },
-        "errors": {
-          "load": "Golden-Fälle konnten nicht geladen werden.",
-          "save": "Der Golden-Fall konnte nicht gespeichert werden.",
-          "delete": "Der Golden-Fall konnte nicht gelöscht werden.",
-          "harvest": "Golden-Fälle konnten nicht geerntet werden.",
-          "approve": "Der Golden-Fall konnte nicht genehmigt werden."
-        }
-      },
-      "insights": {
-        "title": "Feedback-Einblicke",
-        "subtitle": "Schreibgeschützte Zusammenfassung des Daumen-hoch/runter-Feedbacks und der Kommentare für {{name}}.",
-        "loading": "Feedback-Einblicke werden geladen…",
-        "empty": "Für diesen Agenten wurde noch kein Feedback gesammelt.",
-        "up": "Positiv {{count}}",
-        "down": "Negativ {{count}}",
-        "downRate": "Negativ-Rate {{rate}}",
-        "perTool": "Nach Tool",
-        "toolsEmpty": "Noch kein tool-bezogenes Feedback.",
-        "toolHeader": "Tool",
-        "upHeader": "Positiv",
-        "downHeader": "Negativ",
-        "countHeader": "Gesamt",
-        "downRateHeader": "Negativ-Rate",
-        "exemplars": "Letzte Kommentare",
-        "exemplarsEmpty": "Noch keine Kommentare vorhanden.",
-        "ratingUp": "positiv",
-        "ratingDown": "negativ",
-        "notEnoughSignal": "nicht genug Signal (n < {{threshold}})",
-        "attributionFootnote": "Tool-Zählungen sind eine Zuordnung auf Konversationsebene: Feedback zu Nachrichten in Konversationen, in denen das Tool verwendet wurde, nicht zur konkreten Nachricht, die es aufgerufen hat.",
-        "errors": {
-          "load": "Feedback-Einblicke konnten nicht geladen werden."
-        }
-      },
-      "delete": {
-        "title": "Agent löschen",
-        "description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
-      },
-      "errors": {
-        "load": "Agent-Definitionen konnten nicht geladen werden.",
-        "save": "Die Agent-Definition konnte nicht gespeichert werden.",
-        "delete": "Der Agent konnte nicht gelöscht werden."
-      }
-    },
-    "mcp": {
-      "eyebrow": "Worker-Node",
-      "title": "MCP-Server",
-      "subtitle": "Lokale MCP-Server registrieren, um den Node-Tool-Katalog zu erweitern. Server sind deaktiviert, bis du sie aktivierst, und jedes erkannte Tool erfordert standardmäßig eine Freigabe.",
-      "createButton": "Server registrieren",
-      "list": {
-        "loading": "MCP-Server werden geladen…",
-        "empty": "Noch keine MCP-Server registriert. Registriere einen, um zu beginnen.",
-        "editAria": "{{name}} bearbeiten",
-        "deleteAria": "{{name}} löschen",
-        "enabledAria": "{{name}} umschalten",
-        "columns": {
-          "name": "Name",
-          "transport": "Transport",
-          "target": "Ziel",
-          "enabled": "Aktiviert",
-          "version": "Version",
-          "actions": "Aktionen"
-        }
-      },
-      "editor": {
-        "createTitle": "MCP-Server registrieren",
-        "editTitle": "MCP-Server bearbeiten"
-      },
-      "form": {
-        "name": {
-          "label": "Name",
-          "placeholder": "Dateisystem-Tools",
-          "required": "Name ist erforderlich"
-        },
-        "description": {
-          "label": "Beschreibung",
-          "placeholder": "Optionale Kurzbeschreibung"
-        },
-        "transport": {
-          "label": "Transport",
-          "description": "Stdio startet einen lokalen Prozess; HTTP verbindet sich mit einem laufenden Loopback-Server.",
-          "options": {
-            "Stdio": "Stdio",
-            "Http": "HTTP"
-          }
-        },
-        "command": {
-          "label": "Befehl",
-          "placeholder": "/usr/bin/my-mcp-server"
-        },
-        "arguments": {
-          "label": "Argumente",
-          "description": "Ein Argument pro Zeile.",
-          "placeholder": "--stdio"
-        },
-        "workingDirectory": {
-          "label": "Arbeitsverzeichnis",
-          "placeholder": "/optional/cwd"
-        },
-        "env": {
-          "label": "Umgebungsvariablen",
-          "add": "Variable hinzufügen",
-          "empty": "Keine Umgebungsvariablen.",
-          "keyPlaceholder": "KEY",
-          "valuePlaceholder": "Wert",
-          "remove": "Variable entfernen"
-        },
-        "url": {
-          "label": "URL",
-          "description": "Nur Loopback (127.0.0.1 / localhost / ::1).",
-          "placeholder": "http://127.0.0.1:3001/sse"
-        }
-      },
-      "tools": {
-        "title": "Erkannte Tools",
-        "inspectLabel": "Erkannte Tools inspizieren",
-        "loading": "Erkannte Tools werden geladen…",
-        "loadError": "Erkannte Tools konnten nicht geladen werden.",
-        "empty": "Keine Tools erkannt. Aktiviere den Server, um ihn zu verbinden und seine Tools aufzulisten.",
-        "requiresApproval": "Freigabe erforderlich",
-        "autoExecute": "automatisch",
-        "status": {
-          "connected": "verbunden",
-          "disabled": "deaktiviert",
-          "error": "Fehler",
-          "connecting": "verbindet…"
-        }
-      },
-      "delete": {
-        "title": "MCP-Server löschen",
-        "description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
-      },
-      "errors": {
-        "load": "MCP-Server konnten nicht geladen werden.",
-        "save": "Der MCP-Server konnte nicht gespeichert werden.",
-        "delete": "Der MCP-Server konnte nicht gelöscht werden.",
-        "enable": "Der Serverstatus konnte nicht geändert werden."
-      }
-    },
-    "scheduler": {
-      "eyebrow": "Worker-Node",
-      "title": "Planer",
-      "subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Aufgaben sind deaktiviert, bis du sie aktivierst, und Parameter werden verschlüsselt gespeichert.",
-      "createButton": "Aufgabe erstellen",
-      "list": {
-        "loading": "Geplante Aufgaben werden geladen…",
-        "empty": "Noch keine geplanten Aufgaben. Erstelle eine, um zu beginnen.",
-        "hasParameters": "Ja",
-        "noParameters": "—",
-        "enabledAria": "{{name}} umschalten",
-        "triggerAria": "{{name}} jetzt ausführen",
-        "editAria": "{{name}} bearbeiten",
-        "deleteAria": "{{name}} löschen",
-        "columns": {
-          "name": "Name",
-          "kind": "Art",
-          "schedule": "Zeitplan",
-          "parameters": "Parameter",
-          "enabled": "Aktiviert",
-          "actions": "Aktionen"
-        }
-      },
-      "editor": {
-        "createTitle": "Geplante Aufgabe erstellen",
-        "editTitle": "Geplante Aufgabe bearbeiten"
-      },
-      "form": {
-        "template": {
-          "label": "Vorlage",
-          "description": "Die Aufgabenvorlage bestimmt, was diese Aufgabe tut.",
-          "placeholder": "Vorlage auswählen"
-        },
-        "displayName": {
-          "label": "Name",
-          "placeholder": "Nächtliche Bereinigung"
-        },
-        "description": {
-          "label": "Beschreibung",
-          "placeholder": "Optionale Kurzbeschreibung"
-        },
-        "scheduleKind": {
-          "label": "Zeitplanart",
-          "manualNote": "Wird nur bei manueller Auslösung ausgeführt.",
-          "options": {
-            "Cron": "Cron",
-            "OneShot": "Einmalig",
-            "SimpleInterval": "Intervall",
-            "Manual": "Bei Bedarf"
-          }
-        },
-        "cronExpression": {
-          "label": "Cron-Ausdruck",
-          "description": "Quartz-Cron-Syntax, z. B. 0 0 3 * * ?"
-        },
-        "intervalSeconds": {
-          "label": "Intervall (Sekunden)"
-        },
-        "repeatCount": {
-          "label": "Wiederholungen",
-          "description": "Leer lassen, um unbegrenzt zu wiederholen."
-        },
-        "startAtUtc": {
-          "label": "Startzeitpunkt"
-        },
-        "timeZoneId": {
-          "label": "Zeitzone"
-        },
-        "misfirePolicy": {
-          "label": "Verpasste-Auslösung-Richtlinie",
-          "description": "Wie eine verpasste Auslösung behandelt wird, wenn der Node nicht verfügbar war.",
-          "options": {
-            "Smart": "Intelligent",
-            "SkipMissed": "Verpasste überspringen",
-            "FireOnceNow": "Einmal jetzt auslösen"
-          }
-        },
-        "maxRuntimeSeconds": {
-          "label": "Maximale Laufzeit (Sekunden)",
-          "description": "Leer lassen für keine Laufzeitbegrenzung."
-        },
-        "preventOverlap": {
-          "label": "Überlappende Ausführungen verhindern"
-        },
-        "parameters": {
-          "label": "Parameter (JSON)",
-          "description": "Optionale Vorlagenparameter als JSON. Verschlüsselt gespeichert und nach dem Speichern nie wieder angezeigt."
-        }
-      },
-      "runs": {
-        "title": "Ausführungsverlauf",
-        "loading": "Ausführungsverlauf wird geladen…",
-        "empty": "Keine Ausführungen entsprechen den aktuellen Filtern.",
-        "viewAria": "Ausführung ansehen",
-        "cancelAria": "Ausführung abbrechen",
-        "columns": {
-          "status": "Status",
-          "trigger": "Auslöser",
-          "fired": "Ausgelöst",
-          "duration": "Dauer",
-          "summary": "Zusammenfassung",
-          "actions": "Aktionen"
-        },
-        "filters": {
-          "job": "Aufgabe",
-          "status": "Status",
-          "allJobs": "Alle Aufgaben",
-          "allStatuses": "Alle Status"
-        },
-        "status": {
-          "Queued": "In Warteschlange",
-          "Running": "Läuft",
-          "Succeeded": "Erfolgreich",
-          "Failed": "Fehlgeschlagen",
-          "Cancelled": "Abgebrochen",
-          "TimedOut": "Zeitüberschreitung",
-          "Skipped": "Übersprungen"
-        },
-        "trigger": {
-          "Schedule": "Zeitplan",
-          "Manual": "Manuell",
-          "Agent": "Agent",
-          "System": "System"
-        },
-        "detail": {
-          "loading": "Ausführung wird geladen…",
-          "empty": "Wähle eine Ausführung, um ihre Details anzuzeigen.",
-          "fired": "Ausgelöst",
-          "completed": "Abgeschlossen",
-          "duration": "Dauer",
-          "summary": "Zusammenfassung"
-        }
-      },
-      "delete": {
-        "title": "Geplante Aufgabe löschen",
-        "description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
-      },
-      "errors": {
-        "load": "Geplante Aufgaben konnten nicht geladen werden.",
-        "loadRuns": "Ausführungsverlauf konnte nicht geladen werden.",
-        "loadRun": "Die Ausführung konnte nicht geladen werden.",
-        "save": "Die geplante Aufgabe konnte nicht gespeichert werden.",
-        "delete": "Die geplante Aufgabe konnte nicht gelöscht werden.",
-        "enable": "Der Aufgabenstatus konnte nicht geändert werden.",
-        "trigger": "Die Aufgabe konnte nicht ausgelöst werden.",
-        "cancel": "Die Ausführung konnte nicht abgebrochen werden."
-      }
-    },
-    "modelFit": {
-      "eyebrow": "Worker Node",
-      "recommendations": {
-        "title": "Modellempfehlungen",
-        "subtitle": "Hardwarebewusste Empfehlungen für lokale Modelle auf diesem Node. Ergebnisse werden zwischengespeichert — mit Jetzt aktualisieren wird über den Planer eine neue Empfehlungsprüfung gestartet.",
-        "refreshButton": "Jetzt aktualisieren",
-        "schedulerLink": "Planer",
-        "modelsLink": "Modellverwaltung",
-        "openScheduler": "Planer öffnen",
-        "noJobGuidance": "Es existiert noch kein model-recommendation-check-Zeitplan. Erstellen Sie einen im Planer, um die Aktualisierung zu aktivieren.",
-        "useCaseLabel": "Anwendungsfall",
-        "lastRefreshed": "Zuletzt aktualisiert: {{time}}",
-        "loading": "Empfehlungen werden geladen…",
-        "noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeichertes Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie Jetzt aktualisieren, falls ein Zeitplan existiert.",
-        "emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
-        "installed": "Installiert",
-        "pullable": "Verfügbar",
-        "pull": "Herunterladen",
-        "pulling": "Wird heruntergeladen…",
-        "catalogOnly": "Nur Katalog",
-        "useCases": {
-          "general": "Allgemein",
-          "coding": "Programmierung",
-          "reasoning": "Schlussfolgern",
-          "chat": "Chat",
-          "multimodal": "Multimodal",
-          "embedding": "Embedding"
-        },
-        "snapshot": {
-          "status": "Status",
-          "useCase": "Anwendungsfall",
-          "provider": "Anbieter",
-          "sourceImage": "Quell-Image"
-        },
-        "columns": {
-          "rank": "Rang",
-          "model": "Modell",
-          "score": "Punktzahl",
-          "fit": "Eignung",
-          "runMode": "Ausführungsmodus",
-          "tps": "Gesch. TPS",
-          "context": "Kontext",
-          "quantization": "Quant",
-          "memory": "Speicher",
-          "released": "Veröffentlicht",
-          "installed": "Installiert",
-          "action": "Aktion"
-        },
-        "errors": {
-          "load": "Empfehlungen konnten nicht geladen werden.",
-          "refresh": "Die Aktualisierung konnte nicht gestartet werden."
-        },
-        "toasts": {
-          "failTitle": "Aktualisierung fehlgeschlagen",
-          "failFallback": "Die Modellempfehlungs-Aktualisierung war nicht erfolgreich.",
-          "successTitle": "Empfehlungen aktualisiert",
-          "success": "Die neuesten Modellempfehlungen sind verfügbar.",
-          "cancelled": "Die Aktualisierung wurde abgebrochen."
-        }
-      },
-      "approvedImages": {
-        "title": "Freigegebene Referenz-Images",
-        "subtitle": "Freigegebene, Digest-gepinnte llmfit-Hilfs-Images, die vom Empfehlungsprüfer verwendet werden. Diese Liste ist schreibgeschützt — Image-Referenzen werden im Code verwaltet.",
-        "loading": "Freigegebene Images werden geladen…",
-        "empty": "Es sind keine freigegebenen Images registriert.",
-        "sourceLink": "Öffnen",
-        "purpose": {
-          "ModelRecommendation": "Empfehlung",
-          "ModelBenchmark": "Benchmark"
-        },
-        "state": {
-          "enabled": "Aktiviert",
-          "disabled": "Deaktiviert",
-          "deprecated": "Veraltet"
-        },
-        "columns": {
-          "id": "Image-ID",
-          "name": "Name",
-          "purpose": "Zweck",
-          "reference": "Gepinnte Referenz",
-          "version": "Version",
-          "source": "Quelle",
-          "state": "Status",
-          "lastUsed": "Zuletzt verwendet",
-          "lastSuccessful": "Letzte erfolgreiche",
-          "diagnostics": "Diagnose"
-        },
-        "errors": {
-          "load": "Freigegebene Images konnten nicht geladen werden."
-        }
-      }
-    },
-    "schedule": {
-      "title": "Terminplaner",
-      "createAppointment": "Termin erstellen",
-      "viewAppointment": "Termindetails",
-      "editAppointment": "Termin bearbeiten",
-      "deleteAppointment": "Termin löschen",
-      "deleteConfirmTitle": "Termin löschen",
-      "deleteConfirmText": "Möchten Sie diesen Termin wirklich löschen?",
-      "viewOnlyNotice": "Sie können Termine ansehen, aber nicht verwalten.",
-      "fields": {
-        "title": "Titel",
-        "titlePlaceholder": "Titel eingeben",
-        "description": "Beschreibung",
-        "descriptionPlaceholder": "Beschreibung eingeben (optional)",
-        "start": "Beginn",
-        "end": "Ende",
-        "color": "Farbe",
-        "isShared": "Systemtermin (für alle Benutzer sichtbar)",
-        "user": "Benutzer zuweisen"
-      },
-      "validation": {
-        "titleRequired": "Titel ist erforderlich",
-        "titleMaxLength": "Titel darf maximal 200 Zeichen lang sein",
-        "titleTrimmed": "Titel darf nicht mit Leerzeichen beginnen oder enden.",
-        "endAfterStart": "Endzeit muss nach der Startzeit liegen"
-      },
-      "scheduler": {
-        "day": "Tag",
-        "week": "Woche",
-        "month": "Monat",
-        "year": "Jahr",
-        "today": "Heute",
-        "previous": "Zurück",
-        "next": "Weiter",
-        "more": "Mehr"
-      },
-      "adminPanel": {
-        "title": "Benutzertermine",
-        "searchPlaceholder": "Benutzer suchen...",
-        "loadError": "Benutzer konnten nicht geladen werden.",
-        "show": "Benutzertermine anzeigen",
-        "hide": "Benutzertermine ausblenden"
-      },
-      "systemBadge": "System",
-      "appointmentCreated": "Termin erfolgreich erstellt",
-      "appointmentUpdated": "Termin erfolgreich aktualisiert",
-      "appointmentDeleted": "Termin erfolgreich gelöscht"
-    },
-    "notFound": {
-      "subtitleSecret": "Du hast einen geheimen Bereich gefunden.",
-      "subtitleNotFound": "Die Seite, die sie suchen, existiert nicht.",
-      "backToHomeText": "Zurück zur Startseite"
-    },
-    "deviceBinding": {
-      "title": "Gerät freigeben",
-      "description": "Prüfe den Gerätecode deines Worker-Nodes, bevor du den Zugriff auf dein Konto freigibst.",
-      "userCodeLabel": "Gerätecode",
-      "userCodePlaceholder": "Gib den auf deinem Gerät angezeigten Code ein",
-      "approve": "Gerät freigeben",
-      "deny": "Ablehnen",
-      "completeTitle": "Anfrage abgeschlossen",
-      "approvedMessage": "Gerät '{{nodeName}}' wurde freigegeben.",
-      "deniedMessage": "Die Geräteanfrage wurde abgelehnt.",
-      "approvedToast": "Gerät freigegeben.",
-      "deniedToast": "Gerät abgelehnt.",
-      "errorToast": "Geräteanfrage konnte nicht abgeschlossen werden. Prüfe den Code und versuche es erneut."
-    },
-    "userSettings": {
-      "title": "Benutzereinstellungen",
-      "changePassword": "Passwort ändern",
-      "accountInformation": "Account Informationen",
-      "myNodes": {
-        "title": "Meine Nodes",
-        "supportText": "Prüfe gebundene lokale Worker, Verbindungsstatus, aktive Modellnutzung und widerrufe eine Node, wenn sie keinen Kontozugriff mehr haben soll.",
-        "emptyTitle": "Keine Nodes gebunden",
-        "emptyText": "Binde einen lokalen Worker, damit er hier angezeigt wird.",
-        "errorTitle": "Nodes konnten nicht geladen werden",
-        "errorText": "Aktualisiere die Liste oder versuche es später erneut.",
-        "disconnected": "Trennungsanfrage gesendet.",
-        "deleted": "Node erfolgreich entbunden.",
-        "disconnectDialogTitle": "Node trennen",
-        "disconnectDialogText": "'{{name}}' von der aktiven Sitzung trennen? Die Node bleibt gebunden und kann sich erneut verbinden.",
-        "deleteDialogTitle": "Node entbinden",
-        "deleteDialogText": "'{{name}}' entbinden und Worker-Anmeldedaten widerrufen? Danach ist erneutes Binden erforderlich.",
-        "actions": {
-          "settings": "Einstellungen",
-          "disconnect": "Trennen",
-          "unbind": "Entbinden"
-        },
-        "settings": {
-          "title": "Node-Einstellungen",
-          "description": "Konfiguriere die Anfrageverarbeitung für '{{name}}'. Weitere Node-Einstellungen erscheinen später hier.",
-          "maxTimeoutLabel": "Maximales Timeout für Nachrichtenanfragen",
-          "maxTimeoutDescription": "Beendet hängende Nachrichtenanfragen nach der konfigurierten Anzahl von Sekunden.",
-          "maxTimeoutError": "Gib einen Wert zwischen 5 und 3600 Sekunden ein.",
-          "saved": "Node-Einstellungen gespeichert."
-        },
-        "columns": {
-          "name": "Name",
-          "status": "Status",
-          "systemScore": "System-Score",
-          "lastSeen": "Zuletzt gesehen",
-          "activeModel": "Aktives Modell",
-          "keyStatus": "Schlüsselstatus",
-          "actions": "Aktionen"
-        },
-        "status": {
-          "offline": "Offline",
-          "online": "Online",
-          "disconnecting": "Wird getrennt",
-          "error": "Fehler"
-        },
-        "keyStatus": {
-          "active": "Aktiver Schlüssel",
-          "missing": "Schlüssel fehlt",
-          "unbound": "Nicht gebunden"
-        }
-      },
-      "themeConfigurator": {
-        "title": "Theme Konfigurator",
-        "description": "Aktives Theme temporär anpassen, direkt in der Anwendung testen und als JSON exportieren.",
-        "developerHint": "Entwickler können die exportierte JSON in src/theme/theme.json ersetzen und deployen.",
-        "generatorHint": "Generiere komplette Primär- und Sekundär-Farbskalen aus einer Basisfarbe.",
-        "mode": "Modus",
-        "fontFamily": "Schriftfamilie",
-        "breakpoints": "Umbruchpunkte",
-        "baseColor": "Basisfarbe",
-        "generatedScale": "Generierte Skala",
-        "invalidColor": "Bitte eine gültige Farbe eingeben (#RRGGBB oder rgb(r,g,b)).",
-        "primaryPalette": "Primärpalette",
-        "primaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Primärabstufungen automatisch.",
-        "secondaryPalette": "Sekundärpalette",
-        "secondaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Sekundärabstufungen automatisch.",
-        "primaryMain": "Primärfarbe",
-        "primaryHover": "Primärfarbe Hover",
-        "secondaryMain": "Sekundärfarbe",
-        "secondaryHover": "Sekundärfarbe Hover",
-        "variantsPreview": "Variantenvorschau",
-        "variantsPrimary": "Primäre Button-Varianten",
-        "variantsSecondary": "Sekundäre Button-Varianten",
-        "variantFilled": "Gefüllt",
-        "variantLight": "Leicht",
-        "variantOutline": "Outline",
-        "variantSubtle": "Subtil",
-        "applyPreview": "Vorschau anwenden",
-        "resetToSource": "Auf Quelle zurücksetzen",
-        "exportJson": "JSON exportieren",
-        "importJson": "JSON importieren",
-        "previewApplied": "Theme Vorschau angewendet",
-        "previewReset": "Theme Vorschau auf Quelle zurückgesetzt",
-        "exported": "Theme JSON exportiert",
-        "imported": "Theme JSON importiert und angewendet",
-        "importError": "Ungültige JSON Datei"
-      },
-      "passwordAndSecurity": "Passwort und Sicherheit",
-      "deviceSessions": "Gerätesitzungen",
-      "editProfile": "Profil bearbeiten",
-      "saveEdit": "Speichern",
-      "cancelEdit": "Abbrechen",
-      "profileInformationUpdated": "Profil erfolgreich aktualisiert",
-      "labels": {
-        "firstName": "Vorname",
-        "lastName": "Nachname",
-        "email": "Email"
-      }
-    }
-  },
-  "components": {
-    "loginCard": {
-      "signIn": "Anmelden",
-      "noAccount": "Kein Konto? Registrieren",
-      "labels": {
-        "email": "Email",
-        "password": "Passwort"
-      }
-    },
-    "roleCreateModal": {
-      "createRole": "Rolle erstellen",
-      "roleName": "Rollenname",
-      "roleNamePlaceholder": "Rollenname eingeben",
-      "roleCreated": "Rolle erfolgreich erstellt",
-      "create": "Erstellen",
-      "cancel": "Abbrechen"
-    },
-    "roleEditModal": {
-      "editRole": "Rolle bearbeiten",
-      "roleName": "Rollenname",
-      "roleNamePlaceholder": "Rollenname eingeben",
-      "protectedRoleHint": "Geschützte Rollen können nicht umbenannt werden.",
-      "protectedRoleSubmitError": "Geschützte Rollen können nicht umbenannt werden.",
-      "roleUpdated": "Rolle erfolgreich aktualisiert",
-      "save": "Speichern",
-      "cancel": "Abbrechen"
-    },
-    "userCreateModal": {
-      "createUser": "Benutzer erstellen",
-      "username": "Benutzername",
-      "usernamePlaceholder": "Benutzername eingeben",
-      "firstName": "Vorname",
-      "firstNamePlaceholder": "Vornamen eingeben",
-      "lastName": "Nachname",
-      "lastNamePlaceholder": "Nachnamen eingeben",
-      "email": "Email",
-      "emailPlaceholder": "Email eingeben",
-      "password": "Passwort",
-      "passwordPlaceholder": "Passwort eingeben",
-      "roles": "Rollen",
-      "create": "Erstellen",
-      "cancel": "Abbrechen",
-      "createSuccess": "Benutzer erfolgreich erstellt"
-    },
-    "userEditModal": {
-      "editUser": "Benutzer bearbeiten",
-      "username": "Benutzername",
-      "usernamePlaceholder": "Benutzername eingeben",
-      "firstName": "Vorname",
-      "firstNamePlaceholder": "Vornamen eingeben",
-      "lastName": "Nachname",
-      "lastNamePlaceholder": "Nachnamen eingeben",
-      "email": "Email",
-      "emailPlaceholder": "Email eingeben",
-      "password": "Passwort",
-      "passwordPlaceholder": "Passwort eingeben",
-      "passwordHelperText": "Leer lassen, um das Passwort nicht zu ändern",
-      "loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
-      "disabled": "Deaktiviert",
-      "roles": "Rollen",
-      "save": "Speichern",
-      "cancel": "Abbrechen",
-      "userUpdated": "Benutzer erfolgreich aktualisiert"
-    },
-    "userViewModal": {
-      "viewUser": "Benutzer anzeigen",
-      "username": "Benutzername",
-      "firstName": "Vorname",
-      "lastName": "Nachname",
-      "email": "Email",
-      "roles": "Rollen",
-      "loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
-      "ok": "Ok"
-    },
-    "userChangePasswordDialog": {
-      "changePassword": "Passwort ändern",
-      "oldPassword": "Altes Passwort",
-      "oldPasswordPlaceholder": "Altes Passwort eingeben",
-      "currentPassword": "Aktuelles Passwort",
-      "currentPasswordPlaceholder": "Aktuelles Passwort eingeben",
-      "newPassword": "Neues Passwort",
-      "newPasswordPlaceholder": "Neues Passwort eingeben",
-      "confirmPassword": "Passwort bestätigen",
-      "confirmPasswordPlaceholder": "Passwort bestätigen",
-      "passwordChanged": "Passwort erfolgreich geändert",
-      "change": "Ändern",
-      "cancel": "Abbrechen"
-    },
-    "registerCard": {
-      "title": "Registrieren",
-      "email": "Email",
-      "emailPlaceholder": "Email eingeben",
-      "password": "Passwort",
-      "passwordPlaceholder": "Passwort eingeben",
-      "confirmPassword": "Passwort bestätigen",
-      "confirmPasswordPlaceholder": "Passwort bestätigen",
-      "register": "Registrieren",
-      "alreadyHaveAccount": "Bereits ein Konto? Anmelden",
-      "labels": {
-        "email": "Email",
-        "password": "Passwort"
-      }
-    },
-    "sideNavigationBar": {
-      "tooltip": {
-        "collapse": "Einklappen",
-        "expand": "Ausklappen"
-      },
-      "ariaCollapse": "Seitenleiste einklappen",
-      "ariaExpand": "Seitenleiste ausklappen"
-    },
-    "headerBar": {
-      "logout": "Abmelden",
-      "openDrawer": "Navigation öffnen"
-    },
-    "tables": {
-      "button": {
-        "resetFilters": "Filter zurücksetzen"
-      }
-    },
-    "dialogTextTitleBar": {
-      "tooltip": {
-        "close": "Schließen"
-      }
-    },
-    "dialogShell": {
-      "fullscreen": "Vollbild",
-      "exitFullscreen": "Vollbild beenden",
-      "unsavedTitle": "Nicht gespeicherte Änderungen verwerfen?",
-      "unsavedDescription": "Es gibt nicht gespeicherte Änderungen. Wenn Sie jetzt verlassen, gehen sie verloren."
-    },
-    "markdownEditor": {
-      "edit": "Bearbeiten",
-      "preview": "Vorschau"
-    },
-    "userDeviceSessions": {
-      "deviceSessions": "Gerätesitzungen",
-      "activeSessions": "Aktive Sitzungen",
-      "terminateSession": "Sitzung beenden",
-      "terminateSessionConfirmation": "Möchten Sie diese Sitzung wirklich beenden? Sie werden von diesem Gerät abgemeldet.",
-      "terminateAllSessions": "Alle Sitzungen beenden",
-      "terminateOtherSessions": "Andere Sitzungen beenden",
-      "terminateAllSessionsConfirmation": "Möchten Sie wirklich alle anderen Sitzungen beenden? Sie werden von allen anderen Geräten abgemeldet.",
-      "currentSession": "Aktuelle Sitzung",
-      "lastLogin": "Letzter Login",
-      "firstLogin": "Erster Login",
-      "loginProvider": "Login-Anbieter",
-      "manageDeviceSessions": "Gerätesitzungen verwalten",
-      "cannotLogoutCurrentDevice": "Sie können sich nicht von diesem Gerät abmelden, da es Ihre aktuelle Sitzung ist."
-    },
-    "mobileNavigation": {
-      "languageTitle": "Sprache",
-      "userAvatarMenu": {
-        "title": "Benutzer",
-        "signedInAs": "Angemeldet als",
-        "userSettings": "Benutzereinstellungen",
-        "logout": "Abmelden"
-      }
-    },
-    "desktopNavigation": {
-      "userAvatarMenu": {
-        "title": "Benutzer",
-        "signedInAs": "Angemeldet als",
-        "userSettings": "Benutzereinstellungen",
-        "logout": "Abmelden"
-      }
-    },
-    "languageMenu": {
-      "tooltip": "Sprache ändern"
-    },
-    "toolSourceBadge": {
-      "builtin": "integriert",
-      "mcp": "MCP",
-      "mcpServer": "MCP · {{server}}"
-    }
-  },
-  "errorMessages": {
-    "roleNameAlreadyExists": "Der Rollenname existiert bereits",
-    "emailAlreadyInUse": "Die Email wird bereits verwendet",
-    "usernameAlreadyInUse": "Der Benutzername wird bereits verwendet",
-    "requiredField": "Dieses Feld ist erforderlich",
-    "minLength": "Mindestens {{min}} Zeichen erforderlich",
-    "invalidEmail": "Ungültige Email",
-    "invalidName": "Nur Buchstaben, Leerzeichen, Bindestriche und Apostrophe erlaubt",
-    "invalidEmailOrPassword": "Ungültige Email oder Passwort",
-    "loginWithDisabledUser": "Benutzer ist deaktiviert. Wenn Sie denken dass das ein Versehen ist, wenden Sie sich bitte an den Administrator.",
-    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
-    "passwordIncorrect": "Passwort ist falsch",
-    "onlyAlphanumeric": "Nur alphanumerische Zeichen erlaubt",
-    "userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
-    "defaultErrorMessage": "Ein Fehler ist aufgetreten",
-    "tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
-  }
+	"basicFormatOption": "de-DE",
+	"common": {
+		"loading": "Lädt...",
+		"refreshing": "Aktualisiere...",
+		"filterReset": "Filter zurücksetzen",
+		"close": "Schließen",
+		"confirm": "Bestätigen",
+		"cancel": "Abbrechen",
+		"ok": "Ok",
+		"edit": "Bearbeiten",
+		"view": "Anzeigen",
+		"delete": "Löschen",
+		"density": "Dichte",
+		"densityCompact": "Kompakt",
+		"densityComfortable": "Komfortabel",
+		"densitySpacious": "Geräumig",
+		"create": "Erstellen",
+		"search": "Suchen",
+		"filters": "Filter",
+		"save": "Speichern",
+		"discard": "Verwerfen",
+		"keepEditing": "Weiter bearbeiten",
+		"noData": "Keine Einträge gefunden",
+		"entries": "Einträge",
+		"error": "Fehler",
+		"fetchError": "Beim Laden der Tabellendaten ist ein Problem aufgetreten.",
+		"providers": {
+			"cloudflareAccess": "Cloudflare Access"
+		},
+		"pagination": {
+			"rowsPerPage": "Zeilen pro Seite",
+			"showingRange": "{{from}}–{{to}} von {{total}}"
+		}
+	},
+	"theme": {
+		"title": "Design",
+		"light": "Hell",
+		"dark": "Dunkel",
+		"switchToLight": "Zum hellen Modus wechseln",
+		"switchToDark": "Zum dunklen Modus wechseln",
+		"toggleColorScheme": "Farbschema umschalten"
+	},
+	"navigation": {
+		"home": "Start",
+		"chat": "Chat",
+		"dashboard": "Dashboard",
+		"binding": "Node-Bindung",
+		"nodeSettings": "Node-Einstellungen",
+		"cloudSettings": "Cloud-Einstellungen",
+		"settingsGroup": "Einstellungen",
+		"automationGroup": "Automatisierung",
+		"models": "Modelle",
+		"modelsInstalled": "Installiert",
+		"recommendations": "Empfehlungen",
+		"loadedModels": "Geladen",
+		"overview": "Übersicht",
+		"tools": "Tools",
+		"agents": "Agenten",
+		"mcp": "MCP",
+		"scheduler": "Planer",
+		"modelRecommendations": "Modellempfehlungen",
+		"approvedImages": "Freigegebene Images",
+		"manager": "Manager",
+		"invocations": "Aufrufe",
+		"schedule": "Terminplaner",
+		"user": "Benutzer",
+		"adminPanel": "Adminbereich",
+		"adminPanelUsers": "Benutzer",
+		"adminPanelRoles": "Rollen",
+		"adminPanelPermissions": "Berechtigungen",
+		"adminPanelPairingTokens": "Pairing-Tokens",
+		"adminPanelAgentDefinitions": "Agent-Definitionen",
+		"adminPanelToolDefinitions": "Tool-Definitionen",
+		"adminPanelClientNodes": "Client-Nodes",
+		"adminPanelAiModels": "KI-Modelle",
+		"adminPanelFeedback": "Feedback",
+		"adminPanelAppKeys": "App-Schlüssel"
+	},
+	"chat": {
+		"thoughts": "Gedanken",
+		"words": "Wörter",
+		"thinking": "denkt…",
+		"reasoningMode": "Reasoning-Modus",
+		"toolCall": {
+			"sending": "Sende",
+			"inFlight": "Aktiv",
+			"done": "Fertig",
+			"failed": "Fehlgeschlagen",
+			"thinkingLive": "Denke…",
+			"thoughtFor": "Gedacht für {{s}}s",
+			"name": "Tool",
+			"live": "live",
+			"argsLabel": "Argumente",
+			"resultLabel": "Ergebnis",
+			"errorLabel": "Fehler",
+			"noOutput": "(keine Ausgabe)"
+		}
+	},
+	"pages": {
+		"about": {
+			"title": "Über",
+			"applicationTab": "Anwendung",
+			"licensesTab": "Lizenzen",
+			"version": "Version",
+			"website": "Webseite",
+			"repository": "Repository",
+			"licensesIntro": "Drittanbieter-Pakete, die mit dieser Anwendung gebündelt sind.",
+			"searchPackages": "Pakete suchen",
+			"packageName": "Paket",
+			"packageVersion": "Version",
+			"packageLicense": "Lizenz",
+			"noPackagesFound": "Keine Pakete gefunden."
+		},
+		"chat": {
+			"windowTitle": "Chatfenster",
+			"lockedState": "Diese Unterhaltung ist gesperrt. Entsperre sie, um Nachrichten anzuzeigen.",
+			"inputPlaceholder": "Nachricht eingeben",
+			"send": "Senden",
+			"modelLabel": "Modell",
+			"modelPlaceholder": "Modell auswählen",
+			"modelLoaded": "Aktuell geladen",
+			"modelAvailable": "Verfügbar",
+			"modelUnloadingIn": "Entladen in {{time}}",
+			"modelExpired": "Nicht geladen",
+			"modelSelector": {
+				"availableModels": "Verfügbare Modelle",
+				"hint": "Wähle ein auf dem ausgewählten Node installiertes Modell.",
+				"noChatModels": "Keine chat-fähigen Modelle",
+				"search": "Modelle suchen...",
+				"noResults": "Keine Modelle gefunden",
+				"unavailableModels": "Nicht verfügbare Modelle"
+			},
+			"reasoningEffortLabel": "Reasoning-Effort",
+			"reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
+			"localToolsLabel": "Lokale Tools",
+			"localToolsEnabled": "Lokale Tools aktiviert",
+			"localToolsDisabled": "Lokale Tools deaktiviert",
+			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
+			"cloudToolsLabel": "Cloud-Tools",
+			"cloudToolsEnabled": "Cloud-Tools aktiviert",
+			"cloudToolsDisabled": "Cloud-Tools deaktiviert",
+			"cloudToolsUnavailable": "Cloud-Tools sind für das ausgewählte Modell nicht verfügbar",
+			"cloudToolsPrivacyHint": "Cloud-Tools können Daten an den Provider senden",
+			"reasoningEffortOptions": {
+				"none": "Aus",
+				"on": "An",
+				"low": "Niedrig",
+				"medium": "Mittel",
+				"high": "Hoch"
+			},
+			"newConversation": "Neuer normaler Chat",
+			"newEncryptedConversation": "Neuer verschlüsselter Chat",
+			"storageMode": {
+				"plain": "Normal",
+				"encrypted": "Verschlüsselt",
+				"plainTooltip": "Wird als lesbarer Chatverlauf für dein Konto gespeichert.",
+				"encryptedTooltip": "Wird verschlüsselt gespeichert. Mit deinem Passwort für verschlüsselte Synchronisierung entsperren."
+			},
+			"encryptedConversation": {
+				"lockedTitle": "Verschlüsselter Chat gesperrt",
+				"lockedDescription": "Gib dein Passwort für verschlüsselte Synchronisierung ein, um verschlüsselte Chats zu entsperren."
+			},
+			"activeNode": {
+				"label": "Aktiver Knoten",
+				"sessionHint": "Aktiv für diesen Browser-Tab/diese Sitzung. Freigeben, um zu wechseln.",
+				"rememberDefault": "Als Standard merken",
+				"release": "Aktiven Knoten freigeben"
+			},
+			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Kopple und verbinde zuerst einen Worker-Node, bevor du Unterhaltungen erstellst.",
+			"waitingForStreamedResponse": "Warte auf gestreamte Antwort",
+			"waitingForResponse": "Warte auf Antwort",
+			"queued": "In Warteschlange — warte auf aktuelle Aufgabe",
+			"remoteViewOnlyTitle": "Remote-Unterhaltung",
+			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
+			"streamErrors": {
+				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuche es erneut.",
+				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuche es erneut oder aktualisiere die Unterhaltung."
+			},
+			"thoughts": "Gedanken",
+			"words": "Wörter",
+			"thinking": "denkt…",
+			"reasoningMode": "Reasoning-Modus",
+			"emptyState": "Erstelle oder wähle eine Unterhaltung, um zu chatten.",
+			"noMessages": "Noch keine Nachrichten.",
+			"pendingApprovalLabel": "Ausstehende Freigabe",
+			"activityTimeline": "Aktivitätsverlauf",
+			"activityDetails": {
+				"arguments": "Argumente",
+				"result": "Ergebnis"
+			},
+			"activityTimelineTypes": {
+				"ToolCall": "Tool-Aufruf",
+				"ToolResult": "Tool-Ergebnis",
+				"ContextRetrieval": "Kontextabruf",
+				"WorkflowStepStarted": "Workflow-Schritt gestartet",
+				"WorkflowStepCompleted": "Workflow-Schritt abgeschlossen",
+				"WorkflowStepFailed": "Workflow-Schritt fehlgeschlagen",
+				"AgentHandoff": "Agent-Übergabe",
+				"ContentGeneration": "Inhaltserstellung",
+				"Error": "Fehler",
+				"Unknown": "Typ {{type}}"
+			},
+			"roles": {
+				"system": "System",
+				"user": "Benutzer",
+				"assistant": "Assistent",
+				"tool": "Tool",
+				"unknown": "Rolle {{role}}"
+			},
+			"clientSelector": {
+				"label": "Client-Node",
+				"placeholder": "Einen Online-Client auswählen",
+				"activeSessionHint": "Durch die Auswahl wird der Node für diese Browser-Sitzung aktiv. Freigeben, um zu wechseln.",
+				"activeOnceChosen": "Aktiv für diesen Tab"
+			},
+			"conversationList": {
+				"title": "Unterhaltungen",
+				"show": "Seitenleiste ausklappen",
+				"hide": "Seitenleiste einklappen",
+				"expandAria": "Seitenleiste ausklappen",
+				"collapseAria": "Seitenleiste einklappen",
+				"untitled": "Unbenannte Unterhaltung",
+				"archived": "Archiviert",
+				"remote": "Remote",
+				"remoteTooltip": "Von einem gekoppelten Client gestartet. Auf diesem Knoten nur lesbar.",
+				"noClientAssigned": "Kein Client zugewiesen",
+				"empty": "Noch keine Unterhaltungen.",
+				"delete": "Löschen",
+				"deleteConfirm": "Diese Unterhaltung löschen? Das kann nicht rückgängig gemacht werden.",
+				"deleteSuccess": "Unterhaltung gelöscht.",
+				"deleteShiftHint": "Umschalt+Klick überspringt Bestätigung"
+			},
+			"disconnect": {
+				"button": "Trennen",
+				"title": "Client-Node trennen",
+				"descriptionWithName": "\"{{name}}\" trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
+				"descriptionWithoutName": "Den ausgewählten Client-Node trennen? Laufende Aufgaben könnten dabei abgebrochen werden.",
+				"confirm": "Trennen"
+			},
+			"release": {
+				"button": "Freigeben",
+				"title": "Node freigeben",
+				"descriptionWithName": "\"{{name}}\" aus deiner aktiven Sitzung freigeben? Der Node bleibt online und kann anschließend wieder ausgewählt werden.",
+				"descriptionWithoutName": "Diesen Node aus deiner aktiven Sitzung freigeben? Der Node bleibt online.",
+				"confirm": "Freigeben"
+			},
+			"nodeInfo": {
+				"button": "Node-Informationen anzeigen",
+				"title": "Node-Informationen",
+				"empty": "Keine Online-Nodes verfügbar.",
+				"emptyTitle": "Keine Nodes verfügbar",
+				"emptyDescription": "Online-Client-Nodes werden hier angezeigt. Stellen Sie sicher, dass ein Node verbunden und online ist.",
+				"searchPlaceholder": "Nodes suchen…",
+				"nodeList": "Nodes",
+				"noMatch": "Keine passenden Nodes",
+				"selectPrompt": "Wählen Sie einen Node für Details",
+				"statusOnline": "Online",
+				"statusBusy": "Beschäftigt",
+				"statusError": "Fehler",
+				"statusOffline": "Offline",
+				"tabOverview": "Übersicht",
+				"tabHardware": "Hardware",
+				"tabModels": "Modelle",
+				"selectNode": "Diesen Node auswählen",
+				"currentNode": "Aktueller Node",
+				"copyInfo": "Info kopieren",
+				"copied": "Kopiert"
+			},
+			"followUpTitle": "Vorgeschlagene Anschlussfragen",
+			"toolApproval": {
+				"title": "Tool-Freigabe erforderlich",
+				"description": "Ein Worker benötigt eine Freigabe, bevor er fortfahren kann.",
+				"reject": "Ablehnen",
+				"approve": "Freigeben"
+			},
+			"sync": {
+				"enableStandard": "Sync aktivieren",
+				"enableEncrypted": "Verschlüsselten Sync aktivieren",
+				"standardEnabledSuccess": "Standard-Sync wurde für diese Unterhaltung aktiviert.",
+				"encryptedEnabledSuccess": "Verschlüsselter Sync wurde für diese Unterhaltung aktiviert.",
+				"confirm": {
+					"keepLocalOnly": "Lokal behalten",
+					"continue": "Weiter",
+					"enableSync": "Sync aktivieren",
+					"enableStandardTitle": "Standard-Sync aktivieren?",
+					"enableEncryptedTitle": "Verschlüsselten Sync aktivieren?",
+					"standardDescription": "Dadurch kann diese TrustedLocal-Unterhaltung mit der Plattform synchronisiert werden. Fahre nur fort, wenn diese Unterhaltung von diesem Gerät hochgeladen werden soll.",
+					"encryptedDescription": "Dadurch wird diese TrustedLocal-Unterhaltung in verschlüsselten Sync umgewandelt. Du musst diese Änderung bestätigen, bevor verschlüsselte Uploads möglich sind."
+				}
+			},
+			"encryptedSync": {
+				"unlock": {
+					"title": "Verschlüsselten Sync entsperren",
+					"description": "Gib dein eigenes Sync-Passwort ein, um deine verschlüsselten Unterhaltungen auf diesem Gerät zu entsperren.",
+					"passwordDescription": "Dieses Passwort ist getrennt von deinem Kontopasswort.",
+					"passwordLabel": "Sync-Passwort",
+					"passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort eingeben",
+					"recoveryAction": "Passwort vergessen? Recovery-Key verwenden",
+					"submit": "Entsperren",
+					"errors": {
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"incorrectPassword": "Sync-Passwort ist falsch"
+					},
+					"unlockingTitle": "Verschlüsselter Chat wird entsperrt",
+					"unlockingSubtitle": "Dein Chat-Passwort wird überprüft.",
+					"preparingTitle": "Verschlüsselter Chat wird vorbereitet",
+					"preparingSubtitle": "Verschlüsselter Verlauf wird geladen.",
+					"errorTitle": "Verschlüsselter Chat nicht verfügbar",
+					"errorSubtitle": "Der verschlüsselte Chat konnte nicht vollständig vorbereitet werden."
+				},
+				"setup": {
+					"title": "Verschlüsselten Sync einrichten",
+					"description": "Dies ist ein separates Passwort zu deinem Kontopasswort. Die Plattform kann deine verschlüsselten Chats nicht lesen.",
+					"ssoPasswordDescription": "Dies ist ein separates Passwort zu deiner Kontoanmeldung.",
+					"passwordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"passwordLabel": "Sync-Passwort",
+					"passwordPlaceholder": "Dein verschlüsseltes Sync-Passwort erstellen",
+					"passwordStrength": "Passwortstärke",
+					"strength": {
+						"empty": "Ein eigenes Sync-Passwort hinzufügen",
+						"weak": "Schwach",
+						"reasonable": "Akzeptabel",
+						"strong": "Stark"
+					},
+					"recoveryKeyTitle": "Recovery-Key",
+					"recoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
+					"copy": "Kopieren",
+					"copySuccess": "Recovery-Key wurde in die Zwischenablage kopiert.",
+					"acknowledgement": "Ich habe meinen Recovery-Key sicher notiert oder gespeichert. Mir ist klar, dass er nicht erneut angezeigt werden kann.",
+					"submit": "Recovery-Key generieren",
+					"complete": "Ich habe den Recovery-Key gespeichert",
+					"ready": "Verschlüsselter Sync ist bereit.",
+					"errors": {
+						"shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"setupFailed": "Die Einrichtung des verschlüsselten Syncs ist fehlgeschlagen. Bitte versuche es erneut."
+					}
+				},
+				"recovery": {
+					"title": "Verschlüsselten Sync wiederherstellen",
+					"description": "Verwende deinen einmaligen Recovery-Key, um ein neues Sync-Passwort festzulegen, ohne deine gespeicherten Chats neu zu verschlüsseln.",
+					"recoveryKeyDescription": "Leerzeichen und Bindestriche werden automatisch ignoriert.",
+					"recoveryKeyLabel": "Recovery-Key",
+					"recoveryKeyPlaceholder": "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z1234-56789",
+					"newPasswordDescription": "Verwende ein neues eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"newPasswordLabel": "Neues Sync-Passwort",
+					"newPasswordPlaceholder": "Neues verschlüsseltes Sync-Passwort erstellen",
+					"confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
+					"confirmPasswordPlaceholder": "Dein neues verschlüsseltes Sync-Passwort bestätigen",
+					"submit": "Sync-Passwort zurücksetzen",
+					"resetSuccess": "Dein Sync-Passwort wurde zurückgesetzt.",
+					"newRecoveryKeyTitle": "Dein neuer Recovery-Key",
+					"newRecoveryKeyHint": "Speichere diesen Schlüssel jetzt. Er kann nicht erneut angezeigt werden.",
+					"acknowledgement": "Ich habe meinen neuen Recovery-Key sicher notiert oder gespeichert.",
+					"complete": "Ich habe den Recovery-Key gespeichert",
+					"validation": {
+						"tooShort": "Der Recovery-Key ist zu kurz.",
+						"invalidCharacters": "Der Recovery-Key enthält ungültige Zeichen.",
+						"missingCheckCharacter": "Dem Recovery-Key fehlt ein Prüfzeichen.",
+						"invalidCheckDigit": "Die Prüfziffer des Recovery-Keys ist ungültig.",
+						"invalidLength": "Der Recovery-Key hat eine ungültige Länge.",
+						"invalid": "Der Recovery-Key ist ungültig."
+					},
+					"errors": {
+						"shortPassword": "Dein neues Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"recoveryKeyIncorrect": "Der Recovery-Key ist falsch.",
+						"recoveryFailed": "Die Wiederherstellung ist fehlgeschlagen. Bitte prüfe deinen Recovery-Key und versuche es erneut."
+					}
+				},
+				"reset": {
+					"trigger": "Passwort und Recovery-Key verloren? Tresor löschen",
+					"title": "Verschlüsselten Tresor löschen?",
+					"description": "Dadurch werden dein verschlüsselter Tresor und ALLE Unterhaltungen auf allen Geräten dauerhaft gelöscht. Eine Wiederherstellung ist nicht möglich. Du musst den verschlüsselten Chat danach erneut einrichten.",
+					"confirm": "Alles löschen",
+					"success": "Verschlüsselter Tresor gelöscht. Richte den verschlüsselten Chat erneut ein, um fortzufahren.",
+					"errors": {
+						"apiFailed": "Der verschlüsselte Tresor konnte auf dem Server nicht gelöscht werden.",
+						"wrongPassword": "Falsches Konto-Passwort."
+					},
+					"passwordLabel": "Konto-Passwort",
+					"passwordDescription": "Gib dein Konto-Passwort ein, um die Löschung zu bestätigen.",
+					"passwordPlaceholder": "Dein Konto-Passwort"
+				},
+				"changePassword": {
+					"title": "Sync-Passwort ändern",
+					"description": "Ändere dein verschlüsseltes Sync-Passwort. Deine gespeicherten Chats bleiben weiterhin zugänglich.",
+					"button": "Sync-Passwort ändern",
+					"newPasswordDescription": "Verwende ein eigenes Sync-Passwort mit mindestens {{count}} Zeichen.",
+					"newPasswordLabel": "Neues Sync-Passwort",
+					"newPasswordPlaceholder": "Dein neues Sync-Passwort eingeben",
+					"passwordStrength": "Passwortstärke",
+					"strength": {
+						"empty": "Neues Sync-Passwort hinzufügen",
+						"weak": "Schwach",
+						"reasonable": "Akzeptabel",
+						"strong": "Stark"
+					},
+					"confirmPasswordDescription": "Gib dein neues Sync-Passwort zur Bestätigung erneut ein.",
+					"confirmPasswordLabel": "Neues Sync-Passwort bestätigen",
+					"confirmPasswordPlaceholder": "Neues Sync-Passwort bestätigen",
+					"submit": "Passwort ändern",
+					"success": "Sync-Passwort erfolgreich geändert.",
+					"errors": {
+						"shortPassword": "Dein Sync-Passwort muss mindestens {{count}} Zeichen lang sein.",
+						"passwordMismatch": "Deine neuen Passwörter stimmen nicht überein.",
+						"notConfigured": "Verschlüsselter Sync ist für dieses Konto noch nicht eingerichtet.",
+						"changeFailed": "Passwortänderung fehlgeschlagen. Bitte versuche es erneut."
+					}
+				}
+			},
+			"actions": {
+				"branch": "Unterhaltung verzweigen",
+				"branchSuccess": "Verzweigte Unterhaltung wurde erstellt.",
+				"copy": "Nachricht kopieren",
+				"copyCode": "Code kopieren",
+				"copyCodeSuccess": "Kopiert",
+				"copySuccess": "Nachricht wurde in die Zwischenablage kopiert.",
+				"feedback": "Feedback geben",
+				"regenerate": "Antwort neu generieren",
+				"regenerateUnavailable": "Diese Nachricht kann nicht neu generiert werden."
+			},
+			"feedback": {
+				"title": "Nachrichtenfeedback",
+				"description": "Hilf dabei, zukünftige Antworten zu verbessern, indem du diese Assistenten-Nachricht bewertest.",
+				"positive": "Positiv",
+				"negative": "Negativ",
+				"additionalFeedback": "Zusätzliches Feedback",
+				"additionalFeedbackPlaceholder": "Was war gut oder was sollte verbessert werden?",
+				"submit": "Feedback senden",
+				"success": "Feedback wurde erfolgreich gesendet."
+			},
+			"revisions": {
+				"position": "Revision {{current}} von {{total}}",
+				"previous": "Vorherige Revision",
+				"next": "Nächste Revision"
+			},
+			"streaming": "Antwort wird empfangen",
+			"defaultAgentName": "Standard-Assistent",
+			"agentSelector": {
+				"search": "Agenten suchen...",
+				"hint": "Einen auf diesem Knoten definierten Agenten auswählen.",
+				"noResults": "Keine Agenten gefunden",
+				"orchestratorBadge": "Orchestrator",
+				"pinnedModelHint": "Verwendet Modell: {{model}}",
+				"triggerLabel": "Agent",
+				"offOptionHint": "Kein Agent — verwendet die Knoten-Standardeinstellung"
+			},
+			"nodeReply": "Knoten-Antwort",
+			"error": {
+				"title": "Antwort fehlgeschlagen"
+			},
+			"reasoning": {
+				"label": "Denken: {{effort}}",
+				"effort": {
+					"none": "Aus",
+					"on": "An",
+					"low": "Niedrig",
+					"medium": "Mittel",
+					"high": "Hoch"
+				}
+			},
+			"menu": {
+				"label": "Nachrichtenoptionen",
+				"showTokensPerSecond": "Tokens/Sek. anzeigen"
+			},
+			"tokensPerSecond": "{{value}} Tok/s",
+			"samplingOptions": {
+				"title": "Erweiterte Sampling-Optionen",
+				"description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert und nicht pro Konversation persistiert.",
+				"groupSampling": "Sampling",
+				"groupPenalties": "Strafen",
+				"groupLimits": "Limits",
+				"temperature": "Temperatur",
+				"temperatureDescription": "Steuert die Zufälligkeit. Niedrigere Werte sind deterministischer; höhere Werte sind kreativer.",
+				"topP": "Top P",
+				"topPDescription": "Schwellenwert für Nucleus-Sampling. Nur Tokens, deren kumulierte Wahrscheinlichkeit diesen Wert erreicht, werden berücksichtigt.",
+				"topK": "Top K",
+				"topKDescription": "Begrenzt das Sampling auf die Top-K wahrscheinlichsten Tokens.",
+				"minP": "Min P",
+				"minPDescription": "Mindestwahrscheinlichkeit für ein Token relativ zum wahrscheinlichsten Token.",
+				"repeatPenalty": "Wiederholungsstrafe",
+				"repeatPenaltyDescription": "Bestraft Wiederholungen. Werte über 1 verhindern, dass das Modell sich wiederholt.",
+				"repeatLastN": "Letzte N wiederholen",
+				"repeatLastNDescription": "Anzahl der Tokens, die bei der Wiederholungsstrafe berücksichtigt werden. -1 verwendet den gesamten Kontext.",
+				"presencePenalty": "Präsenzstrafe",
+				"presencePenaltyDescription": "Bestraft Tokens, die bereits in der Ausgabe erschienen sind, unabhängig von der Häufigkeit.",
+				"frequencyPenalty": "Häufigkeitsstrafe",
+				"frequencyPenaltyDescription": "Bestraft Tokens proportional zur Häufigkeit ihres Auftretens in der Ausgabe.",
+				"maxOutputTokens": "Max. Ausgabe-Tokens",
+				"maxOutputTokensDescription": "Maximale Anzahl der zu generierenden Tokens. Wird auf die Modellkontextlänge begrenzt, wenn gesetzt.",
+				"seed": "Seed",
+				"seedDescription": "Zufalls-Seed für Reproduzierbarkeit. -1 verwendet einen zufälligen Seed.",
+				"numCtx": "Kontextlänge (num_ctx)",
+				"numCtxDescription": "Größe des Kontextfensters in Tokens für die Generierung des nächsten Tokens.",
+				"stop": "Stop-Sequenzen",
+				"stopDescription": "Eine Stop-Sequenz pro Zeile. Das Modell hält an, wenn es eine dieser Zeichenfolgen ausgibt.",
+				"modelDefault": "Modellstandard",
+				"reset": "Auf Standard zurücksetzen",
+				"close": "Schließen",
+				"resetField": "{{field}} zurücksetzen"
+			},
+			"composer": {
+				"samplingOptions": "Erweiterte Sampling-Optionen"
+			}
+		},
+		"clientNodes": {
+			"fields": {
+				"hardware": "Hardware",
+				"systemScore": "System-Score",
+				"capabilities": "Fähigkeiten",
+				"models": "Installierte Modelle"
+			},
+			"settings": {
+				"title": "Node-Einstellungen",
+				"provider": "KI-Anbieter",
+				"providerNone": "Lokal (Ollama)",
+				"azureEndpoint": "Azure-Endpunkt",
+				"azureApiKey": "Azure-API-Schlüssel",
+				"azureDeploymentName": "Deployment-Name"
+			},
+			"none": "Keine angegeben"
+		},
+		"admin": {
+			"agentDefinitions": {
+				"title": "Agent-Definitionen",
+				"note": "Konfiguriere Anzeige-Metadaten, AI-Modell-Auswahl, Reasoning-Effort, Tools und Richtlinien für Agenten.",
+				"create": "Agent-Definition erstellen",
+				"edit": "Bearbeiten",
+				"save": "Speichern",
+				"setDefault": "Als Standard setzen",
+				"created": "Agent-Definition erfolgreich erstellt",
+				"updated": "Agent-Definition erfolgreich aktualisiert",
+				"deleted": "Agent-Definition erfolgreich gelöscht",
+				"defaultSet": "Standard-Agent-Definition erfolgreich aktualisiert",
+				"invalidPolicies": "Policies müssen gültiges JSON sein.",
+				"loadDetailsError": "Agent-Definition-Details konnten nicht geladen werden.",
+				"loadAiModelsError": "AI-Modelle konnten nicht geladen werden.",
+				"loadToolsError": "Tool-Definitionen konnten nicht geladen werden.",
+				"nameLabel": "Name",
+				"displayNameLabel": "Anzeigename",
+				"descriptionLabel": "Beschreibung",
+				"systemPromptLabel": "System-Prompt",
+				"aiModelLabel": "AI-Modell",
+				"aiModelPlaceholder": "AI-Modell auswählen",
+				"reasoningEffortLabel": "Reasoning-Effort",
+				"reasoningEffortPlaceholder": "Reasoning-Effort auswählen",
+				"workflowTypeLabel": "Workflow-Typ",
+				"workflowTypePlaceholder": "z. B. default, research, coding",
+				"defaultModelProfileLabel": "Modellprofil",
+				"defaultModelProfilePlaceholder": "z. B. llama3:8b",
+				"allowedToolsLabel": "Erlaubte Tools",
+				"policiesLabel": "Richtlinien (JSON)",
+				"policiesPlaceholder": "{\n  \"approvalMode\": \"manual\"\n}",
+				"reasoningEffortOptions": {
+					"low": "Niedrig",
+					"medium": "Mittel",
+					"high": "Hoch"
+				},
+				"defaultBadge": "Standard",
+				"createDialogTitle": "Agent-Definition erstellen",
+				"editDialogTitle": "Agent-Definition bearbeiten",
+				"deleteDialogTitle": "Agent-Definition löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"columns": {
+					"name": "Name",
+					"description": "Beschreibung",
+					"version": "Version",
+					"default": "Standard",
+					"actions": "Aktionen"
+				}
+			},
+			"toolDefinitions": {
+				"title": "Tool Definitions",
+				"note": "Bearbeiten wird verschoben, bis das Backend vollständige Tool-Definition-Details inklusive Endpoint/Handler bereitstellt.",
+				"create": "Tool Definition erstellen",
+				"created": "Tool Definition erfolgreich erstellt",
+				"deleted": "Tool Definition erfolgreich gelöscht",
+				"nameLabel": "Name",
+				"descriptionLabel": "Beschreibung",
+				"locationLabel": "Ort",
+				"endpointOrHandlerLabel": "Endpoint oder Handler",
+				"parameterSchemaLabel": "Parameter Schema",
+				"requiresApprovalLabel": "Benötigt Freigabe",
+				"createDialogTitle": "Tool Definition erstellen",
+				"deleteDialogTitle": "Tool Definition löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"apiSide": "API Side",
+				"clientLocal": "Client Local",
+				"columns": {
+					"name": "Name",
+					"description": "Beschreibung",
+					"location": "Ort",
+					"approval": "Freigabe",
+					"actions": "Aktionen"
+				}
+			},
+			"clientNodes": {
+				"title": "Client Nodes",
+				"deleted": "Client Node erfolgreich gelöscht",
+				"deleteDialogTitle": "Client Node löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"columns": {
+					"name": "Name",
+					"userId": "User ID",
+					"status": "Status",
+					"systemScore": "System Score",
+					"lastSeen": "Zuletzt gesehen",
+					"actions": "Aktionen"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Disconnecting",
+					"error": "Error"
+				}
+			},
+			"aiModels": {
+				"title": "KI-Modelle",
+				"create": "KI-Modell erstellen",
+				"save": "Speichern",
+				"edit": "Bearbeiten",
+				"created": "KI-Modell erfolgreich erstellt",
+				"updated": "KI-Modell erfolgreich aktualisiert",
+				"deleted": "KI-Modell erfolgreich gelöscht",
+				"modelIdLabel": "Modell-ID",
+				"displayNameLabel": "Anzeigename",
+				"descriptionLabel": "Beschreibung",
+				"typeLabel": "Modelltyp",
+				"typeOptions": {
+					"llm": "LLM",
+					"embedding": "Embedding"
+				},
+				"isReasoningModelLabel": "Reasoning-Modell",
+				"supportsToolCallingLabel": "Unterstützt Tool-Aufrufe",
+				"isPublicLabel": "Öffentlich für Chat-Nutzer",
+				"reasoningEffortNamesLabel": "Erlaubte Reasoning-Efforts",
+				"defaultReasoningEffortNameLabel": "Standard-Reasoning-Effort",
+				"createDialogTitle": "KI-Modell erstellen",
+				"editDialogTitle": "KI-Modell bearbeiten",
+				"deleteDialogTitle": "KI-Modell löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen?",
+				"activeBadge": "Aktiv",
+				"publicBadge": "Öffentlich",
+				"reasoningBadge": "Reasoning",
+				"toolCallingBadge": "Tools",
+				"columns": {
+					"modelId": "Modell-ID",
+					"displayName": "Anzeigename",
+					"type": "Typ",
+					"reasoning": "Reasoning",
+					"tools": "Tools",
+					"public": "Öffentlich",
+					"active": "Aktiv",
+					"actions": "Aktionen"
+				}
+			},
+			"feedback": {
+				"title": "Feedback",
+				"all": "Alle",
+				"solved": "Gelöst",
+				"unsolved": "Ungelöst",
+				"markSolved": "Als gelöst markieren",
+				"solvedSuccess": "Feedback als gelöst markiert",
+				"solveDialogTitle": "Feedback als gelöst markieren",
+				"solveNoteLabel": "Lösungsnotiz",
+				"columns": {
+					"conversation": "Konversation",
+					"message": "Nachrichtenvorschau",
+					"sentiment": "Stimmung",
+					"status": "Status",
+					"createdAt": "Erstellt",
+					"actions": "Aktionen"
+				},
+				"positive": "Positiv",
+				"negative": "Negativ",
+				"open": "Offen",
+				"resolved": "Gelöst"
+			},
+			"pairingTokens": {
+				"title": "Pairing Tokens",
+				"legacyNotice": "Pairing-Tokens sind für das normale Worker-Onboarding veraltet. Verwenden Sie standardmäßig die Gerätecode-Node-Bindung und erstellen Sie Tokens nur vorübergehend für Legacy-Kompatibilität.",
+				"labelLabel": "Bezeichnung",
+				"labelPlaceholder": "z. B. Arbeitsplatz Büro",
+				"create": "Pairing Token erstellen",
+				"created": "Pairing Token erfolgreich erstellt",
+				"rotated": "Pairing Token erfolgreich rotiert",
+				"revoked": "Pairing Token erfolgreich widerrufen",
+				"revokeDialogTitle": "Pairing Token widerrufen",
+				"revokeDialogText": "Möchten Sie '{{name}}' wirklich widerrufen?",
+				"rotate": "Rotieren",
+				"rotateConfirmTitle": "Pairing-Token rotieren?",
+				"rotateConfirmDescription": "Dies erzeugt ein neues Pairing-Geheimnis für diesen Token. Das alte Geheimnis funktioniert ab sofort nicht mehr. Bereits gekoppelte Clients behalten ihre Sitzungen — das neue Geheimnis wird nur beim nächsten Pairing oder Login benötigt. Diese Aktion kann nicht rückgängig gemacht werden.",
+				"rotateConfirmLabel": "Rotieren",
+				"secretModalTitle": "Diesen Pairing Token jetzt speichern",
+				"secretWarning": "Der Pairing Token wird nur einmal angezeigt. Bitte sicher speichern.",
+				"tokenLabel": "Pairing Token",
+				"copyToken": "Token kopieren",
+				"tokenCopied": "Pairing Token in Zwischenablage kopiert",
+				"expirationOption_one": "{{count}} Tag",
+				"expirationOption_other": "{{count}} Tage",
+				"durationBadge_one": "Gültig für {{count}} Tag",
+				"durationBadge_other": "Gültig für {{count}} Tage",
+				"statusOpen": "Offen",
+				"statusUsed": "Verwendet",
+				"statusExpired": "Abgelaufen",
+				"columns": {
+					"label": "Bezeichnung",
+					"duration": "Gültigkeitsdauer",
+					"status": "Status",
+					"assignedTo": "Zugewiesen an",
+					"usedBy": "Verwendet von Client",
+					"createdAt": "Erstellt",
+					"expiresAt": "Läuft ab",
+					"actions": "Aktionen"
+				}
+			},
+			"appKeys": {
+				"title": "App Keys",
+				"nameLabel": "Name",
+				"namePlaceholder": "z. B. API-Client Produktion",
+				"appsLabel": "Apps",
+				"create": "App Key erstellen",
+				"created": "App Key erfolgreich erstellt",
+				"deleted": "App Key erfolgreich gelöscht",
+				"enabled": "App Key aktiviert",
+				"disabled": "App Key deaktiviert",
+				"validation": "Name und mindestens eine App sind erforderlich",
+				"deleteDialogTitle": "App Key löschen",
+				"deleteDialogText": "Möchten Sie '{{name}}' wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.",
+				"secretModalTitle": "Secret jetzt speichern",
+				"secretWarning": "Das Client Secret wird nur einmal angezeigt. Bitte sicher speichern.",
+				"copySecret": "Secret kopieren",
+				"secretCopied": "Secret in Zwischenablage kopiert",
+				"clientSecretLabel": "Client Secret",
+				"columns": {
+					"name": "Name",
+					"clientId": "Client ID",
+					"apps": "Apps",
+					"createdAt": "Erstellt",
+					"lastUsedAt": "Zuletzt verwendet",
+					"enabled": "Aktiv",
+					"actions": "Aktionen"
+				}
+			},
+			"permissions": {
+				"title": "Berechtigungen",
+				"tablePermissions": "Berechtigungen",
+				"permissionUpdated": "Berechtigung erfolgreich aktualisiert",
+				"noRolesAvailable": "Keine Rollen verfügbar"
+			},
+			"roles": {
+				"title": "Rollen",
+				"deleteDialogTitle": "Rolle löschen",
+				"deleteDialogText": "Möchten Sie diese Rolle wirklich löschen?",
+				"tableTooltipEdit": "Bearbeiten",
+				"tableTooltipDelete": "Löschen",
+				"protectedAdminRoleTooltip": "Die Administratorrolle kann weder umbenannt noch gelöscht werden.",
+				"protectedDefaultRoleTooltip": "Die Standardkontorolle kann weder umbenannt noch gelöscht werden.",
+				"administratorBadge": "Administrator",
+				"defaultAccountRoleBadge": "Standardkontorolle",
+				"createRole": "Rolle erstellen",
+				"roleDeleted": "Rolle erfolgreich gelöscht"
+			},
+			"users": {
+				"title": "Benutzer",
+				"tableHeaders": {
+					"username": "Benutzername",
+					"firstName": "Vorname",
+					"lastName": "Nachname"
+				},
+				"deleteDialogTitle": "Benutzer löschen",
+				"deleteDialogText": "Möchten Sie diesen Benutzer wirklich löschen?",
+				"tableTooltipEdit": "Bearbeiten",
+				"tableTooltipView": "Anzeigen",
+				"tableTooltipDelete": "Löschen",
+				"deleteSuccess": "Benutzer erfolgreich gelöscht",
+				"createUser": "Benutzer erstellen"
+			}
+		},
+		"home": {
+			"title": {
+				"welcome": "Willkommen!"
+			}
+		},
+		"dashboard": {
+			"placeholder": {
+				"title": "Dashboard",
+				"description": "Remote-Verbindungsstatus und Node-Zustandssteuerung werden hier ergänzt."
+			},
+			"eyebrow": "Worker-Node",
+			"title": "Dashboard",
+			"subtitle": "Lokale Worker-Verbindung überwachen und Verbindungsverhalten beim Start steuern.",
+			"loadingStatus": "Verbindungsstatus wird geladen…",
+			"unexpectedError": "Unerwarteter Fehler bei der Verbindungsaktion",
+			"notPairedHint": "Binde diesen Node, bevor du dich mit der zentralen Plattform verbindest.",
+			"platformConnection": {
+				"title": "Plattformverbindung",
+				"connect": "Verbinden",
+				"disconnect": "Trennen",
+				"refresh": "Aktualisieren"
+			},
+			"startupConnection": {
+				"title": "Startverbindung",
+				"enabled": "Aktiviert",
+				"disabled": "Deaktiviert",
+				"hint": "Auto-Verbindung bleibt nach dem Binden standardmäßig deaktiviert, bis du sie explizit aktivierst.",
+				"enableAutoConnect": "Auto-Verbindung aktivieren",
+				"disableAutoConnect": "Auto-Verbindung deaktivieren"
+			},
+			"nodeCredentials": {
+				"title": "Node-Anmeldedaten",
+				"binding": "Bindung",
+				"paired": "Gebunden",
+				"notPaired": "Nicht gebunden",
+				"bindingMethod": "Bindungsmethode",
+				"nodeName": "Node-Name",
+				"tokenExpires": "Token läuft ab",
+				"notAvailable": "Nicht verfügbar",
+				"tokenExpiredBadge": "Abgelaufen"
+			},
+			"lastUpdate": {
+				"title": "Letzte Aktualisierung",
+				"privacyNote": "Verbindungssteuerung gibt keine Zugriffs- oder Refresh-Tokens an den Browser zurück."
+			},
+			"connectionStatus": {
+				"preparingModel": "Modell wird vorbereitet",
+				"reconnecting": "Verbindet erneut",
+				"connecting": "Verbindet",
+				"connected": "Verbunden",
+				"disconnected": "Getrennt",
+				"pairing": "Koppelt",
+				"error": "Fehler",
+				"unknown": "Unbekannt"
+			},
+			"connectionHint": {
+				"reconnecting": "Deaktiviere Auto-Verbindung, um Wiederverbindungsversuche zu stoppen, oder warte, bis der Worker sich erholt.",
+				"autoConnectEnabled": "Auto-Verbindung ist aktiviert. Der Worker verbindet sich beim Start, sobald die Voraussetzungen erfüllt sind.",
+				"autoConnectDisabled": "Auto-Verbindung ist deaktiviert. Nutze Verbinden für eine manuelle Sitzung oder aktiviere die Startverbindung."
+			}
+		},
+		"nodeBinding": {
+			"placeholder": {
+				"title": "Node-Bindung",
+				"description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
+			}
+		},
+		"nodeSettings": {
+			"placeholder": {
+				"title": "Node-Einstellungen",
+				"description": "Lokale Node-Einstellungen werden über die Node-FastEndpoints-API angebunden."
+			},
+			"developerMode": {
+				"title": "Entwicklereinstellungen",
+				"label": "Entwicklermodus",
+				"description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen). Wird nur in diesem Browser gespeichert."
+			}
+		},
+		"cloudSettings": {
+			"placeholder": {
+				"title": "Cloud-Einstellungen",
+				"description": "Provider-Konfiguration nutzt geheimnissichere lokale API-Antworten."
+			}
+		},
+		"models": {
+			"placeholder": {
+				"title": "Modelle",
+				"description": "Lokale Modellauflistung, Auswahl, Pull und Löschen werden hier ergänzt."
+			},
+			"type": {
+				"columnHeader": "Typ",
+				"kind": {
+					"chat": "Chat",
+					"embedding": "Embedding",
+					"unknown": "Unbekannt"
+				},
+				"capability": {
+					"tools": "Werkzeuge",
+					"vision": "Bild",
+					"thinking": "Denken"
+				},
+				"overrideLabel": "Typ überschreiben",
+				"reset": "Auf erkannt zurücksetzen"
+			},
+			"pull": {
+				"title": "Neues Modell herunterladen",
+				"guidance": "Gib einen Ollama-kompatiblen Modell-Tag ein. Verfügbare Modelle findest du in der Ollama-Bibliothek.",
+				"libraryLink": "Ollama-Bibliothek öffnen (ollama.com/library)",
+				"huggingFaceHint": "Du kannst auch ein Hugging-Face-GGUF-Modell mit hf.co/<org>/<repo>:<quant> herunterladen.",
+				"warning": "Ein manueller Pull lädt beliebige, ungeprüfte Modellgewichte herunter und kann sehr groß sein. Bevorzuge die empfohlenen Modelle für diesen Knoten.",
+				"recommendationsLink": "Empfohlene Modelle für diesen Knoten anzeigen",
+				"inputLabel": "Name des herunterzuladenden Modells",
+				"downloadButton": "Modell herunterladen",
+				"inProgress": "Download läuft — lass diesen Dialog geöffnet, bis er abgeschlossen ist.",
+				"toast": {
+					"title": "{{model}} wird heruntergeladen",
+					"preparing": "Download wird vorbereitet…",
+					"successTitle": "Modell heruntergeladen",
+					"success": "{{model}} ist bereit.",
+					"errorTitle": "Download fehlgeschlagen",
+					"error": "{{model}} konnte nicht heruntergeladen werden."
+				}
+			}
+		},
+		"manager": {
+			"placeholder": {
+				"title": "Runtime-Manager",
+				"description": "HostAgent-Laufzeitstatus und Container-Aktionen werden hier ergänzt."
+			}
+		},
+		"invocations": {
+			"placeholder": {
+				"title": "Aufrufe",
+				"description": "Aktuelle und historische Aufrufüberwachung wird hier portiert."
+			}
+		},
+		"agents": {
+			"eyebrow": "Worker-Node",
+			"title": "Agent-Definitionen",
+			"subtitle": "Lokale Agent-Personas erstellen: Anweisungen, Modell, Reasoning-Aufwand und die nutzbaren Tools.",
+			"createButton": "Neuer Agent",
+			"templatesButton": "Starter-Agenten hinzufügen",
+			"templates": {
+				"title": "Starter-Agenten hinzufügen",
+				"subtitle": "Importiere kuratierte Starter-Personas als bearbeitbare Agent-Definitionen. Sie kommen ohne Tools an — Tools nach dem Import vergeben.",
+				"loading": "Starter-Agenten werden geladen…",
+				"loadError": "Starter-Agenten konnten nicht geladen werden.",
+				"importError": "Die ausgewählten Agenten konnten nicht importiert werden.",
+				"empty": "Es sind keine Starter-Agenten verfügbar.",
+				"tokenBadge": "~{{count}} Tokens",
+				"tokenWarning": "Der geschätzte Prompt dieser Persona ist für lokale Modelle groß. Die Schätzung ist eine Zeichen/4-Heuristik.",
+				"alreadyImported": "Importiert",
+				"importButton": "Auswahl importieren ({{count}})",
+				"importSuccess": "{{imported}} hinzugefügt, {{skipped}} übersprungen."
+			},
+			"list": {
+				"loading": "Agent-Definitionen werden geladen…",
+				"empty": "Noch keine Agent-Definitionen. Erstelle eine, um zu beginnen.",
+				"nodeDefault": "Node-Standard",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"kind": "Typ",
+					"model": "Modell",
+					"tools": "Tools",
+					"version": "Version",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Neuer Agent",
+				"editTitle": "Agent bearbeiten"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Recherche-Assistent",
+					"required": "Name ist erforderlich"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"instructions": {
+					"label": "Anweisungen",
+					"description": "System-Prompt, der das Verhalten dieses Agenten definiert.",
+					"placeholder": "Du bist ein hilfreicher Assistent, der…",
+					"required": "Anweisungen sind erforderlich"
+				},
+				"kind": {
+					"label": "Typ",
+					"options": {
+						"Single": "Einzeln",
+						"Orchestrator": "Orchestrator"
+					}
+				},
+				"modelProfile": {
+					"label": "Modellprofil",
+					"nodeDefault": "Node-Standard"
+				},
+				"reasoningEffort": {
+					"label": "Reasoning-Aufwand",
+					"nodeDefault": "Node-Standard",
+					"options": {
+						"none": "Keiner",
+						"low": "Niedrig",
+						"medium": "Mittel",
+						"high": "Hoch"
+					}
+				},
+				"tools": {
+					"label": "Tools",
+					"requiresApproval": "Freigabe erforderlich",
+					"autoExecute": "automatisch",
+					"notCapableWarning": "Das ausgewählte Modell ist nicht tool-fähig. Die Tool-Auswahl ist deaktiviert. Wähle ein tool-fähiges Modell, um Tools zu aktivieren.",
+					"loading": "Tools werden geladen…",
+					"loadError": "Der Tool-Katalog konnte nicht geladen werden.",
+					"empty": "Keine Tools verfügbar."
+				},
+				"orchestration": {
+					"label": "Orchestrierung",
+					"description": "Dieser Agent fungiert als Triage. Wähle die Spezialisten, an die er übergeben kann, und beschränke optional die Übergabewege.",
+					"thisAgent": "Dieser Agent",
+					"triageOptionLabel": "{{name}} (Triage)",
+					"degradeWarning": "Eines oder mehrere Modelle in dieser Orchestrierung sind nicht tool-fähig ({{models}}). Die Orchestrierungs-Weiterleitung erfordert Tool-Aufrufe, daher läuft diese Definition stattdessen als Einzelagent.",
+					"participants": {
+						"label": "Spezialist-Teilnehmer",
+						"placeholder": "Agenten zum Übergeben auswählen",
+						"empty": "Keine weiteren Agenten verfügbar. Erstelle weitere Agenten, um sie als Teilnehmer zu verwenden."
+					},
+					"handoffs": {
+						"label": "Übergabewege",
+						"add": "Übergabe hinzufügen",
+						"remove": "Übergabe entfernen",
+						"from": "Von",
+						"to": "An",
+						"reason": "Grund (optional)",
+						"meshHint": "Mesh (automatisch): Ohne explizite Wege kann jeder Agent an jeden anderen übergeben.",
+						"twoAgentHint": "Mesh-Routing ist erst ab 3 Agenten sinnvoll; füge bei 2 Agenten einen expliziten Übergabeweg hinzu."
+					},
+					"maxTurns": {
+						"label": "Max. Züge pro Agent",
+						"description": "Begrenzt, wie oft ein Agent erneut aufgerufen wird, bevor die Weiterleitung weitergehen muss."
+					},
+					"returnToPrevious": {
+						"label": "Zum vorherigen Spezialisten zurückkehren",
+						"description": "Leitet den nächsten Nutzer-Zug zurück an den Spezialisten, der den letzten Zug bearbeitet hat, statt über die Triage."
+					}
+				},
+				"playbookEnabled": {
+					"label": "Operating-Playbook aktivieren",
+					"description": "Hängt die aktivierten Playbook-Aktionen dieses Agenten zur Laufzeit an seine Anweisungen an."
+				}
+			},
+			"playbook": {
+				"title": "Operating-Playbook",
+				"subtitle": "Manuelle Playbook-Aktionen, die an die Anweisungen von {{name}} angehängt werden, wenn dessen Playbook aktiviert ist.",
+				"addButton": "Aktion hinzufügen",
+				"analyzeButton": "Feedback analysieren",
+				"noSuggestions": "Keine neuen Vorschläge aus der letzten Analyse.",
+				"suggestedHeading": "Von der Analyse vorgeschlagen",
+				"confidenceLabel": "Konfidenz {{value}}",
+				"evidenceSummary": "Basierend auf {{count}} Feedback-Elementen",
+				"evidenceEmpty": "Keine zitierten Feedback-Elemente.",
+				"evidenceHint": "Prüfe diese Elemente im Feedback-Einblicke-Panel weiter unten.",
+				"approveButton": "Genehmigen",
+				"rejectButton": "Ablehnen",
+				"loading": "Playbook wird geladen…",
+				"empty": "Noch keine Playbook-Aktionen.",
+				"priorityLabel": "Priorität {{priority}}",
+				"triggerLabel": "Wenn: {{trigger}}",
+				"moveUpAria": "Nach oben",
+				"moveDownAria": "Nach unten",
+				"editAria": "Aktion bearbeiten",
+				"deleteAria": "Aktion löschen",
+				"source": {
+					"Manual": "Manuell",
+					"Analysis": "Analyse"
+				},
+				"state": {
+					"enabled": "aktiviert",
+					"disabled": "deaktiviert"
+				},
+				"form": {
+					"behavior": {
+						"label": "Verhalten",
+						"description": "Anweisungstext, der an den System-Prompt des Agenten angehängt wird.",
+						"placeholder": "Gib immer deine Quellen an…",
+						"required": "Verhalten ist erforderlich"
+					},
+					"scope": {
+						"label": "Geltungsbereich",
+						"placeholder": "Optionales Thema/Tool-Tag"
+					},
+					"priority": {
+						"label": "Priorität",
+						"description": "Niedrigere Zahlen werden zuerst eingefügt."
+					},
+					"state": {
+						"label": "Status"
+					},
+					"triggerCondition": {
+						"label": "Auslösebedingung",
+						"description": "Optionaler Hinweis, wann dies gilt (in dieser Phase nur zur Anzeige).",
+						"placeholder": "Wenn der Nutzer nach… fragt"
+					}
+				},
+				"delete": {
+					"title": "Playbook-Aktion löschen",
+					"description": "Diese Playbook-Aktion löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"reject": {
+					"title": "Vorschlag ablehnen",
+					"description": "Diese vorgeschlagene Aktion ablehnen? Sie wird archiviert und nicht eingefügt.",
+					"confirm": "Ablehnen"
+				},
+				"errors": {
+					"load": "Das Playbook konnte nicht geladen werden.",
+					"save": "Die Playbook-Aktion konnte nicht gespeichert werden.",
+					"delete": "Die Playbook-Aktion konnte nicht gelöscht werden.",
+					"analyze": "Feedback konnte nicht analysiert werden.",
+					"review": "Der Vorschlag konnte nicht aktualisiert werden."
+				},
+				"eval": {
+					"runButton": "Eval ausführen",
+					"passed": "Eval bestanden",
+					"failed": "Eval fehlgeschlagen",
+					"counts": "{{regressed}} verschlechtert / {{golden}} Golden-Fälle",
+					"truncated": "{{evaluated}} von {{total}} Golden-Fällen ausgewertet.",
+					"regressedToggle": "{{count}} verschlechterte Fälle anzeigen",
+					"regressedCase": "{{id}} (bewertet durch {{scoredBy}})",
+					"scoredBy": {
+						"assertion": "Assertion",
+						"judge": "Judge"
+					},
+					"gate": {
+						"needsEval": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
+						"stale": "Dieser Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus, bevor du genehmigst.",
+						"regressed": "Die Eval hat einen zuvor guten Fall verschlechtert. Behebe die Verschlechterung, bevor du genehmigst."
+					},
+					"conflict": {
+						"EvalRequired": "Führe die Eval aus, bevor du diesen Vorschlag genehmigst.",
+						"EvalRegressed": "Genehmigung blockiert: Die Eval hat einen zuvor guten Fall verschlechtert.",
+						"EvalStale": "Genehmigung blockiert: Der Vorschlag hat sich seit der letzten Eval geändert. Führe die Eval erneut aus.",
+						"CapReached": "Genehmigung blockiert: Dieser Agent hat sein Limit aktiver Aktionen erreicht. Archiviere oder deaktiviere zuerst eine aktive Aktion."
+					}
+				},
+				"monitor": {
+					"enabledCount": "{{count}} Aktionen aktiv",
+					"relevanceBanner": "Einfügung ist relevanzgesteuert: Top-{{topK}} von {{count}} Aktionen pro Zug.",
+					"rankerEmbedding": "Sortiert nach Embedding-Ähnlichkeit (Modell {{model}}).",
+					"rankerLexical": "Sortiert nach lexikalischer Überschneidung.",
+					"none": "—",
+					"downRateLabel": "Abwertungsrate",
+					"flag": "Prüfung nötig",
+					"status": {
+						"Improved": "Verbessert",
+						"Flat": "Unverändert",
+						"Regressed": "Verschlechtert",
+						"InsufficientData": "Unzureichende Daten"
+					}
+				}
+			},
+			"golden": {
+				"title": "Golden-Konversationen",
+				"subtitle": "Erstelle Golden-Fälle, die die Beförderung absichern: Eine Kandidatenaktion darf sie nicht verschlechtern, bevor {{name}} sie aktivieren kann.",
+				"addButton": "Golden-Fall hinzufügen",
+				"loading": "Golden-Fälle werden geladen…",
+				"empty": "Noch keine Golden-Fälle. Füge einen hinzu, damit die Beförderung Eval-abgesichert werden kann.",
+				"turnCount": "{{count}} Eingabe-Turns",
+				"hasAssertion": "Assertion",
+				"hasRubric": "Rubric",
+				"disabledBadge": "deaktiviert",
+				"harvestedBadge": "geerntet",
+				"deleteAria": "Golden-Fall löschen",
+				"delete": {
+					"title": "Golden-Fall löschen",
+					"description": "'{{title}}' löschen? Dies kann nicht rückgängig gemacht werden."
+				},
+				"harvest": {
+					"button": "Aus 👍 ernten",
+					"success": "{{created}} vorgeschlagen, {{duplicate}} bereits geerntet, {{skipped}} übersprungen."
+				},
+				"pending": {
+					"heading": "Geerntet (Prüfung ausstehend)",
+					"hint": "Prüfe jeden geernteten Kandidaten und genehmige ihn dann in das aktive Golden-Set oder lehne ihn ab.",
+					"turnsPreview": "{{count}} Turns · {{role}}: {{text}}",
+					"turnCount": "{{count}} Eingabe-Turns",
+					"rubric": "Rubric: {{rubric}}",
+					"approve": "Genehmigen",
+					"reject": "Ablehnen"
+				},
+				"form": {
+					"titleRequired": "Titel ist erforderlich.",
+					"turnsRequired": "Mindestens ein Eingabe-Turn ist erforderlich.",
+					"signalRequired": "Füge mindestens eine erforderliche/verbotene Phrase oder eine Rubric hinzu.",
+					"tooLong": {
+						"title": "Der Titel ist zu lang (max. {{max}} Zeichen).",
+						"inputTurns": "Die Eingabe-Turns sind zu lang (max. {{max}} Zeichen).",
+						"assertion": "Die erforderlichen/verbotenen Phrasen sind zu lang (max. {{max}} Zeichen).",
+						"rubric": "Die Rubric ist zu lang (max. {{max}} Zeichen)."
+					},
+					"title": {
+						"label": "Titel",
+						"placeholder": "Kurzes Bedienerlabel"
+					},
+					"turns": {
+						"label": "Eingabe-Turns",
+						"description": "Ein Turn pro Zeile als 'Rolle: Text'. Eine Zeile ohne Doppelpunkt wird als Nutzer-Turn behandelt.",
+						"placeholder": "user: Fasse das Dokument zusammen…"
+					},
+					"required": {
+						"label": "Erforderliche Phrasen",
+						"description": "Eine pro Zeile. Alle müssen vorhanden sein."
+					},
+					"forbidden": {
+						"label": "Verbotene Phrasen",
+						"description": "Eine pro Zeile. Keine darf vorhanden sein."
+					},
+					"rubric": {
+						"label": "Rubric",
+						"description": "Optionale Judge-Rubric (verwendet, wenn keine Assertion zutrifft)."
+					}
+				},
+				"errors": {
+					"load": "Golden-Fälle konnten nicht geladen werden.",
+					"save": "Der Golden-Fall konnte nicht gespeichert werden.",
+					"delete": "Der Golden-Fall konnte nicht gelöscht werden.",
+					"harvest": "Golden-Fälle konnten nicht geerntet werden.",
+					"approve": "Der Golden-Fall konnte nicht genehmigt werden."
+				}
+			},
+			"insights": {
+				"title": "Feedback-Einblicke",
+				"subtitle": "Schreibgeschützte Zusammenfassung des Daumen-hoch/runter-Feedbacks und der Kommentare für {{name}}.",
+				"loading": "Feedback-Einblicke werden geladen…",
+				"empty": "Für diesen Agenten wurde noch kein Feedback gesammelt.",
+				"up": "Positiv {{count}}",
+				"down": "Negativ {{count}}",
+				"downRate": "Negativ-Rate {{rate}}",
+				"perTool": "Nach Tool",
+				"toolsEmpty": "Noch kein tool-bezogenes Feedback.",
+				"toolHeader": "Tool",
+				"upHeader": "Positiv",
+				"downHeader": "Negativ",
+				"countHeader": "Gesamt",
+				"downRateHeader": "Negativ-Rate",
+				"exemplars": "Letzte Kommentare",
+				"exemplarsEmpty": "Noch keine Kommentare vorhanden.",
+				"ratingUp": "positiv",
+				"ratingDown": "negativ",
+				"notEnoughSignal": "nicht genug Signal (n < {{threshold}})",
+				"attributionFootnote": "Tool-Zählungen sind eine Zuordnung auf Konversationsebene: Feedback zu Nachrichten in Konversationen, in denen das Tool verwendet wurde, nicht zur konkreten Nachricht, die es aufgerufen hat.",
+				"errors": {
+					"load": "Feedback-Einblicke konnten nicht geladen werden."
+				}
+			},
+			"delete": {
+				"title": "Agent löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Agent-Definitionen konnten nicht geladen werden.",
+				"save": "Die Agent-Definition konnte nicht gespeichert werden.",
+				"delete": "Der Agent konnte nicht gelöscht werden."
+			}
+		},
+		"mcp": {
+			"eyebrow": "Worker-Node",
+			"title": "MCP-Server",
+			"subtitle": "Lokale MCP-Server registrieren, um den Node-Tool-Katalog zu erweitern. Server sind deaktiviert, bis du sie aktivierst, und jedes erkannte Tool erfordert standardmäßig eine Freigabe.",
+			"createButton": "Server registrieren",
+			"list": {
+				"loading": "MCP-Server werden geladen…",
+				"empty": "Noch keine MCP-Server registriert. Registriere einen, um zu beginnen.",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"enabledAria": "{{name}} umschalten",
+				"columns": {
+					"name": "Name",
+					"transport": "Transport",
+					"target": "Ziel",
+					"enabled": "Aktiviert",
+					"version": "Version",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "MCP-Server registrieren",
+				"editTitle": "MCP-Server bearbeiten"
+			},
+			"form": {
+				"name": {
+					"label": "Name",
+					"placeholder": "Dateisystem-Tools",
+					"required": "Name ist erforderlich"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"transport": {
+					"label": "Transport",
+					"description": "Stdio startet einen lokalen Prozess; HTTP verbindet sich mit einem laufenden Loopback-Server.",
+					"options": {
+						"Stdio": "Stdio",
+						"Http": "HTTP"
+					}
+				},
+				"command": {
+					"label": "Befehl",
+					"placeholder": "/usr/bin/my-mcp-server"
+				},
+				"arguments": {
+					"label": "Argumente",
+					"description": "Ein Argument pro Zeile.",
+					"placeholder": "--stdio"
+				},
+				"workingDirectory": {
+					"label": "Arbeitsverzeichnis",
+					"placeholder": "/optional/cwd"
+				},
+				"env": {
+					"label": "Umgebungsvariablen",
+					"add": "Variable hinzufügen",
+					"empty": "Keine Umgebungsvariablen.",
+					"keyPlaceholder": "KEY",
+					"valuePlaceholder": "Wert",
+					"remove": "Variable entfernen"
+				},
+				"url": {
+					"label": "URL",
+					"description": "Nur Loopback (127.0.0.1 / localhost / ::1).",
+					"placeholder": "http://127.0.0.1:3001/sse"
+				}
+			},
+			"tools": {
+				"title": "Erkannte Tools",
+				"inspectLabel": "Erkannte Tools inspizieren",
+				"loading": "Erkannte Tools werden geladen…",
+				"loadError": "Erkannte Tools konnten nicht geladen werden.",
+				"empty": "Keine Tools erkannt. Aktiviere den Server, um ihn zu verbinden und seine Tools aufzulisten.",
+				"requiresApproval": "Freigabe erforderlich",
+				"autoExecute": "automatisch",
+				"status": {
+					"connected": "verbunden",
+					"disabled": "deaktiviert",
+					"error": "Fehler",
+					"connecting": "verbindet…"
+				}
+			},
+			"delete": {
+				"title": "MCP-Server löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "MCP-Server konnten nicht geladen werden.",
+				"save": "Der MCP-Server konnte nicht gespeichert werden.",
+				"delete": "Der MCP-Server konnte nicht gelöscht werden.",
+				"enable": "Der Serverstatus konnte nicht geändert werden."
+			}
+		},
+		"scheduler": {
+			"eyebrow": "Worker-Node",
+			"title": "Planer",
+			"subtitle": "Plane wiederkehrende und einmalige Aufgaben auf diesem Node. Aufgaben sind deaktiviert, bis du sie aktivierst, und Parameter werden verschlüsselt gespeichert.",
+			"createButton": "Aufgabe erstellen",
+			"list": {
+				"loading": "Geplante Aufgaben werden geladen…",
+				"empty": "Noch keine geplanten Aufgaben. Erstelle eine, um zu beginnen.",
+				"hasParameters": "Ja",
+				"noParameters": "—",
+				"enabledAria": "{{name}} umschalten",
+				"triggerAria": "{{name}} jetzt ausführen",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"kind": "Art",
+					"schedule": "Zeitplan",
+					"parameters": "Parameter",
+					"enabled": "Aktiviert",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Geplante Aufgabe erstellen",
+				"editTitle": "Geplante Aufgabe bearbeiten"
+			},
+			"form": {
+				"template": {
+					"label": "Vorlage",
+					"description": "Die Aufgabenvorlage bestimmt, was diese Aufgabe tut.",
+					"placeholder": "Vorlage auswählen"
+				},
+				"displayName": {
+					"label": "Name",
+					"placeholder": "Nächtliche Bereinigung"
+				},
+				"description": {
+					"label": "Beschreibung",
+					"placeholder": "Optionale Kurzbeschreibung"
+				},
+				"scheduleKind": {
+					"label": "Zeitplanart",
+					"manualNote": "Wird nur bei manueller Auslösung ausgeführt.",
+					"options": {
+						"Cron": "Cron",
+						"OneShot": "Einmalig",
+						"SimpleInterval": "Intervall",
+						"Manual": "Bei Bedarf"
+					}
+				},
+				"cronExpression": {
+					"label": "Cron-Ausdruck",
+					"description": "Quartz-Cron-Syntax, z. B. 0 0 3 * * ?"
+				},
+				"intervalSeconds": {
+					"label": "Intervall (Sekunden)"
+				},
+				"repeatCount": {
+					"label": "Wiederholungen",
+					"description": "Leer lassen, um unbegrenzt zu wiederholen."
+				},
+				"startAtUtc": {
+					"label": "Startzeitpunkt"
+				},
+				"timeZoneId": {
+					"label": "Zeitzone"
+				},
+				"misfirePolicy": {
+					"label": "Verpasste-Auslösung-Richtlinie",
+					"description": "Wie eine verpasste Auslösung behandelt wird, wenn der Node nicht verfügbar war.",
+					"options": {
+						"Smart": "Intelligent",
+						"SkipMissed": "Verpasste überspringen",
+						"FireOnceNow": "Einmal jetzt auslösen"
+					}
+				},
+				"maxRuntimeSeconds": {
+					"label": "Maximale Laufzeit (Sekunden)",
+					"description": "Leer lassen für keine Laufzeitbegrenzung."
+				},
+				"preventOverlap": {
+					"label": "Überlappende Ausführungen verhindern"
+				},
+				"parameters": {
+					"label": "Parameter (JSON)",
+					"description": "Optionale Vorlagenparameter als JSON. Verschlüsselt gespeichert und nach dem Speichern nie wieder angezeigt."
+				}
+			},
+			"runs": {
+				"title": "Ausführungsverlauf",
+				"loading": "Ausführungsverlauf wird geladen…",
+				"empty": "Keine Ausführungen entsprechen den aktuellen Filtern.",
+				"viewAria": "Ausführung ansehen",
+				"cancelAria": "Ausführung abbrechen",
+				"columns": {
+					"status": "Status",
+					"trigger": "Auslöser",
+					"fired": "Ausgelöst",
+					"duration": "Dauer",
+					"summary": "Zusammenfassung",
+					"actions": "Aktionen"
+				},
+				"filters": {
+					"job": "Aufgabe",
+					"status": "Status",
+					"allJobs": "Alle Aufgaben",
+					"allStatuses": "Alle Status"
+				},
+				"status": {
+					"Queued": "In Warteschlange",
+					"Running": "Läuft",
+					"Succeeded": "Erfolgreich",
+					"Failed": "Fehlgeschlagen",
+					"Cancelled": "Abgebrochen",
+					"TimedOut": "Zeitüberschreitung",
+					"Skipped": "Übersprungen"
+				},
+				"trigger": {
+					"Schedule": "Zeitplan",
+					"Manual": "Manuell",
+					"Agent": "Agent",
+					"System": "System"
+				},
+				"detail": {
+					"loading": "Ausführung wird geladen…",
+					"empty": "Wähle eine Ausführung, um ihre Details anzuzeigen.",
+					"fired": "Ausgelöst",
+					"completed": "Abgeschlossen",
+					"duration": "Dauer",
+					"summary": "Zusammenfassung"
+				}
+			},
+			"delete": {
+				"title": "Geplante Aufgabe löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Geplante Aufgaben konnten nicht geladen werden.",
+				"loadRuns": "Ausführungsverlauf konnte nicht geladen werden.",
+				"loadRun": "Die Ausführung konnte nicht geladen werden.",
+				"save": "Die geplante Aufgabe konnte nicht gespeichert werden.",
+				"delete": "Die geplante Aufgabe konnte nicht gelöscht werden.",
+				"enable": "Der Aufgabenstatus konnte nicht geändert werden.",
+				"trigger": "Die Aufgabe konnte nicht ausgelöst werden.",
+				"cancel": "Die Ausführung konnte nicht abgebrochen werden."
+			}
+		},
+		"modelFit": {
+			"eyebrow": "Worker Node",
+			"recommendations": {
+				"title": "Modellempfehlungen",
+				"subtitle": "Hardwarebewusste Empfehlungen für lokale Modelle auf diesem Node. Ergebnisse werden zwischengespeichert — mit Jetzt aktualisieren wird über den Planer eine neue Empfehlungsprüfung gestartet.",
+				"refreshButton": "Jetzt aktualisieren",
+				"schedulerLink": "Planer",
+				"modelsLink": "Modellverwaltung",
+				"openScheduler": "Planer öffnen",
+				"noJobGuidance": "Es existiert noch kein model-recommendation-check-Zeitplan. Erstellen Sie einen im Planer, um die Aktualisierung zu aktivieren.",
+				"useCaseLabel": "Anwendungsfall",
+				"lastRefreshed": "Zuletzt aktualisiert: {{time}}",
+				"loading": "Empfehlungen werden geladen…",
+				"noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeichertes Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie Jetzt aktualisieren, falls ein Zeitplan existiert.",
+				"emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
+				"installed": "Installiert",
+				"pullable": "Verfügbar",
+				"pull": "Herunterladen",
+				"pulling": "Wird heruntergeladen…",
+				"catalogOnly": "Nur Katalog",
+				"useCases": {
+					"general": "Allgemein",
+					"coding": "Programmierung",
+					"reasoning": "Schlussfolgern",
+					"chat": "Chat",
+					"multimodal": "Multimodal",
+					"embedding": "Embedding"
+				},
+				"snapshot": {
+					"status": "Status",
+					"useCase": "Anwendungsfall",
+					"provider": "Anbieter",
+					"sourceImage": "Quell-Image"
+				},
+				"columns": {
+					"rank": "Rang",
+					"model": "Modell",
+					"score": "Punktzahl",
+					"fit": "Eignung",
+					"runMode": "Ausführungsmodus",
+					"tps": "Gesch. TPS",
+					"context": "Kontext",
+					"quantization": "Quant",
+					"memory": "Speicher",
+					"released": "Veröffentlicht",
+					"installed": "Installiert",
+					"action": "Aktion"
+				},
+				"errors": {
+					"load": "Empfehlungen konnten nicht geladen werden.",
+					"refresh": "Die Aktualisierung konnte nicht gestartet werden."
+				},
+				"toasts": {
+					"failTitle": "Aktualisierung fehlgeschlagen",
+					"failFallback": "Die Modellempfehlungs-Aktualisierung war nicht erfolgreich.",
+					"successTitle": "Empfehlungen aktualisiert",
+					"success": "Die neuesten Modellempfehlungen sind verfügbar.",
+					"cancelled": "Die Aktualisierung wurde abgebrochen."
+				}
+			},
+			"approvedImages": {
+				"title": "Freigegebene Referenz-Images",
+				"subtitle": "Freigegebene, Digest-gepinnte llmfit-Hilfs-Images, die vom Empfehlungsprüfer verwendet werden. Diese Liste ist schreibgeschützt — Image-Referenzen werden im Code verwaltet.",
+				"loading": "Freigegebene Images werden geladen…",
+				"empty": "Es sind keine freigegebenen Images registriert.",
+				"sourceLink": "Öffnen",
+				"purpose": {
+					"ModelRecommendation": "Empfehlung",
+					"ModelBenchmark": "Benchmark"
+				},
+				"state": {
+					"enabled": "Aktiviert",
+					"disabled": "Deaktiviert",
+					"deprecated": "Veraltet"
+				},
+				"columns": {
+					"id": "Image-ID",
+					"name": "Name",
+					"purpose": "Zweck",
+					"reference": "Gepinnte Referenz",
+					"version": "Version",
+					"source": "Quelle",
+					"state": "Status",
+					"lastUsed": "Zuletzt verwendet",
+					"lastSuccessful": "Letzte erfolgreiche",
+					"diagnostics": "Diagnose"
+				},
+				"errors": {
+					"load": "Freigegebene Images konnten nicht geladen werden."
+				}
+			}
+		},
+		"loadedModels": {
+			"eyebrow": "Worker-Node",
+			"title": "Geladene Modelle",
+			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei — kontrolliert, nachdem eine laufende Generierung abgeschlossen ist.",
+			"loading": "Geladene Modelle werden geladen…",
+			"empty": "Derzeit sind keine Modelle geladen.",
+			"unavailable": "Die lokale Modell-Laufzeit ist derzeit nicht verfügbar. Diese Ansicht aktualisiert sich, sobald sie erreichbar ist.",
+			"cpuOnly": "Nur CPU",
+			"expired": "Abgelaufen",
+			"sizeUnknown": "Unbekannt",
+			"columns": {
+				"model": "Modell",
+				"memory": "Speicher (RAM)",
+				"vram": "VRAM",
+				"expiresIn": "Läuft ab in",
+				"action": "Aktion"
+			},
+			"errors": {
+				"load": "Geladene Modelle konnten nicht geladen werden."
+			},
+			"eject": {
+				"button": "Auswerfen",
+				"tooltip": "Gibt Speicher frei, nachdem die laufende Generierung abgeschlossen ist",
+				"confirmTitle": "Modell auswerfen",
+				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Der Speicher wird freigegeben, nachdem die laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
+				"confirmAction": "Auswerfen",
+				"success": "'{{modelName}}' wird ausgeworfen — Speicher wird nach der laufenden Generierung frei.",
+				"error": "Das Modell konnte nicht ausgeworfen werden."
+			}
+		},
+		"schedule": {
+			"title": "Terminplaner",
+			"createAppointment": "Termin erstellen",
+			"viewAppointment": "Termindetails",
+			"editAppointment": "Termin bearbeiten",
+			"deleteAppointment": "Termin löschen",
+			"deleteConfirmTitle": "Termin löschen",
+			"deleteConfirmText": "Möchten Sie diesen Termin wirklich löschen?",
+			"viewOnlyNotice": "Sie können Termine ansehen, aber nicht verwalten.",
+			"fields": {
+				"title": "Titel",
+				"titlePlaceholder": "Titel eingeben",
+				"description": "Beschreibung",
+				"descriptionPlaceholder": "Beschreibung eingeben (optional)",
+				"start": "Beginn",
+				"end": "Ende",
+				"color": "Farbe",
+				"isShared": "Systemtermin (für alle Benutzer sichtbar)",
+				"user": "Benutzer zuweisen"
+			},
+			"validation": {
+				"titleRequired": "Titel ist erforderlich",
+				"titleMaxLength": "Titel darf maximal 200 Zeichen lang sein",
+				"titleTrimmed": "Titel darf nicht mit Leerzeichen beginnen oder enden.",
+				"endAfterStart": "Endzeit muss nach der Startzeit liegen"
+			},
+			"scheduler": {
+				"day": "Tag",
+				"week": "Woche",
+				"month": "Monat",
+				"year": "Jahr",
+				"today": "Heute",
+				"previous": "Zurück",
+				"next": "Weiter",
+				"more": "Mehr"
+			},
+			"adminPanel": {
+				"title": "Benutzertermine",
+				"searchPlaceholder": "Benutzer suchen...",
+				"loadError": "Benutzer konnten nicht geladen werden.",
+				"show": "Benutzertermine anzeigen",
+				"hide": "Benutzertermine ausblenden"
+			},
+			"systemBadge": "System",
+			"appointmentCreated": "Termin erfolgreich erstellt",
+			"appointmentUpdated": "Termin erfolgreich aktualisiert",
+			"appointmentDeleted": "Termin erfolgreich gelöscht"
+		},
+		"notFound": {
+			"subtitleSecret": "Du hast einen geheimen Bereich gefunden.",
+			"subtitleNotFound": "Die Seite, die sie suchen, existiert nicht.",
+			"backToHomeText": "Zurück zur Startseite"
+		},
+		"deviceBinding": {
+			"title": "Gerät freigeben",
+			"description": "Prüfe den Gerätecode deines Worker-Nodes, bevor du den Zugriff auf dein Konto freigibst.",
+			"userCodeLabel": "Gerätecode",
+			"userCodePlaceholder": "Gib den auf deinem Gerät angezeigten Code ein",
+			"approve": "Gerät freigeben",
+			"deny": "Ablehnen",
+			"completeTitle": "Anfrage abgeschlossen",
+			"approvedMessage": "Gerät '{{nodeName}}' wurde freigegeben.",
+			"deniedMessage": "Die Geräteanfrage wurde abgelehnt.",
+			"approvedToast": "Gerät freigegeben.",
+			"deniedToast": "Gerät abgelehnt.",
+			"errorToast": "Geräteanfrage konnte nicht abgeschlossen werden. Prüfe den Code und versuche es erneut."
+		},
+		"userSettings": {
+			"title": "Benutzereinstellungen",
+			"changePassword": "Passwort ändern",
+			"accountInformation": "Account Informationen",
+			"myNodes": {
+				"title": "Meine Nodes",
+				"supportText": "Prüfe gebundene lokale Worker, Verbindungsstatus, aktive Modellnutzung und widerrufe eine Node, wenn sie keinen Kontozugriff mehr haben soll.",
+				"emptyTitle": "Keine Nodes gebunden",
+				"emptyText": "Binde einen lokalen Worker, damit er hier angezeigt wird.",
+				"errorTitle": "Nodes konnten nicht geladen werden",
+				"errorText": "Aktualisiere die Liste oder versuche es später erneut.",
+				"disconnected": "Trennungsanfrage gesendet.",
+				"deleted": "Node erfolgreich entbunden.",
+				"disconnectDialogTitle": "Node trennen",
+				"disconnectDialogText": "'{{name}}' von der aktiven Sitzung trennen? Die Node bleibt gebunden und kann sich erneut verbinden.",
+				"deleteDialogTitle": "Node entbinden",
+				"deleteDialogText": "'{{name}}' entbinden und Worker-Anmeldedaten widerrufen? Danach ist erneutes Binden erforderlich.",
+				"actions": {
+					"settings": "Einstellungen",
+					"disconnect": "Trennen",
+					"unbind": "Entbinden"
+				},
+				"settings": {
+					"title": "Node-Einstellungen",
+					"description": "Konfiguriere die Anfrageverarbeitung für '{{name}}'. Weitere Node-Einstellungen erscheinen später hier.",
+					"maxTimeoutLabel": "Maximales Timeout für Nachrichtenanfragen",
+					"maxTimeoutDescription": "Beendet hängende Nachrichtenanfragen nach der konfigurierten Anzahl von Sekunden.",
+					"maxTimeoutError": "Gib einen Wert zwischen 5 und 3600 Sekunden ein.",
+					"saved": "Node-Einstellungen gespeichert."
+				},
+				"columns": {
+					"name": "Name",
+					"status": "Status",
+					"systemScore": "System-Score",
+					"lastSeen": "Zuletzt gesehen",
+					"activeModel": "Aktives Modell",
+					"keyStatus": "Schlüsselstatus",
+					"actions": "Aktionen"
+				},
+				"status": {
+					"offline": "Offline",
+					"online": "Online",
+					"disconnecting": "Wird getrennt",
+					"error": "Fehler"
+				},
+				"keyStatus": {
+					"active": "Aktiver Schlüssel",
+					"missing": "Schlüssel fehlt",
+					"unbound": "Nicht gebunden"
+				}
+			},
+			"themeConfigurator": {
+				"title": "Theme Konfigurator",
+				"description": "Aktives Theme temporär anpassen, direkt in der Anwendung testen und als JSON exportieren.",
+				"developerHint": "Entwickler können die exportierte JSON in src/theme/theme.json ersetzen und deployen.",
+				"generatorHint": "Generiere komplette Primär- und Sekundär-Farbskalen aus einer Basisfarbe.",
+				"mode": "Modus",
+				"fontFamily": "Schriftfamilie",
+				"breakpoints": "Umbruchpunkte",
+				"baseColor": "Basisfarbe",
+				"generatedScale": "Generierte Skala",
+				"invalidColor": "Bitte eine gültige Farbe eingeben (#RRGGBB oder rgb(r,g,b)).",
+				"primaryPalette": "Primärpalette",
+				"primaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Primärabstufungen automatisch.",
+				"secondaryPalette": "Sekundärpalette",
+				"secondaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Sekundärabstufungen automatisch.",
+				"primaryMain": "Primärfarbe",
+				"primaryHover": "Primärfarbe Hover",
+				"secondaryMain": "Sekundärfarbe",
+				"secondaryHover": "Sekundärfarbe Hover",
+				"variantsPreview": "Variantenvorschau",
+				"variantsPrimary": "Primäre Button-Varianten",
+				"variantsSecondary": "Sekundäre Button-Varianten",
+				"variantFilled": "Gefüllt",
+				"variantLight": "Leicht",
+				"variantOutline": "Outline",
+				"variantSubtle": "Subtil",
+				"applyPreview": "Vorschau anwenden",
+				"resetToSource": "Auf Quelle zurücksetzen",
+				"exportJson": "JSON exportieren",
+				"importJson": "JSON importieren",
+				"previewApplied": "Theme Vorschau angewendet",
+				"previewReset": "Theme Vorschau auf Quelle zurückgesetzt",
+				"exported": "Theme JSON exportiert",
+				"imported": "Theme JSON importiert und angewendet",
+				"importError": "Ungültige JSON Datei"
+			},
+			"passwordAndSecurity": "Passwort und Sicherheit",
+			"deviceSessions": "Gerätesitzungen",
+			"editProfile": "Profil bearbeiten",
+			"saveEdit": "Speichern",
+			"cancelEdit": "Abbrechen",
+			"profileInformationUpdated": "Profil erfolgreich aktualisiert",
+			"labels": {
+				"firstName": "Vorname",
+				"lastName": "Nachname",
+				"email": "Email"
+			}
+		}
+	},
+	"components": {
+		"loginCard": {
+			"signIn": "Anmelden",
+			"noAccount": "Kein Konto? Registrieren",
+			"labels": {
+				"email": "Email",
+				"password": "Passwort"
+			}
+		},
+		"roleCreateModal": {
+			"createRole": "Rolle erstellen",
+			"roleName": "Rollenname",
+			"roleNamePlaceholder": "Rollenname eingeben",
+			"roleCreated": "Rolle erfolgreich erstellt",
+			"create": "Erstellen",
+			"cancel": "Abbrechen"
+		},
+		"roleEditModal": {
+			"editRole": "Rolle bearbeiten",
+			"roleName": "Rollenname",
+			"roleNamePlaceholder": "Rollenname eingeben",
+			"protectedRoleHint": "Geschützte Rollen können nicht umbenannt werden.",
+			"protectedRoleSubmitError": "Geschützte Rollen können nicht umbenannt werden.",
+			"roleUpdated": "Rolle erfolgreich aktualisiert",
+			"save": "Speichern",
+			"cancel": "Abbrechen"
+		},
+		"userCreateModal": {
+			"createUser": "Benutzer erstellen",
+			"username": "Benutzername",
+			"usernamePlaceholder": "Benutzername eingeben",
+			"firstName": "Vorname",
+			"firstNamePlaceholder": "Vornamen eingeben",
+			"lastName": "Nachname",
+			"lastNamePlaceholder": "Nachnamen eingeben",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"roles": "Rollen",
+			"create": "Erstellen",
+			"cancel": "Abbrechen",
+			"createSuccess": "Benutzer erfolgreich erstellt"
+		},
+		"userEditModal": {
+			"editUser": "Benutzer bearbeiten",
+			"username": "Benutzername",
+			"usernamePlaceholder": "Benutzername eingeben",
+			"firstName": "Vorname",
+			"firstNamePlaceholder": "Vornamen eingeben",
+			"lastName": "Nachname",
+			"lastNamePlaceholder": "Nachnamen eingeben",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"passwordHelperText": "Leer lassen, um das Passwort nicht zu ändern",
+			"loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
+			"disabled": "Deaktiviert",
+			"roles": "Rollen",
+			"save": "Speichern",
+			"cancel": "Abbrechen",
+			"userUpdated": "Benutzer erfolgreich aktualisiert"
+		},
+		"userViewModal": {
+			"viewUser": "Benutzer anzeigen",
+			"username": "Benutzername",
+			"firstName": "Vorname",
+			"lastName": "Nachname",
+			"email": "Email",
+			"roles": "Rollen",
+			"loginOverExternalProvider": "Anmeldung über {{provider}} Anbieter",
+			"ok": "Ok"
+		},
+		"userChangePasswordDialog": {
+			"changePassword": "Passwort ändern",
+			"oldPassword": "Altes Passwort",
+			"oldPasswordPlaceholder": "Altes Passwort eingeben",
+			"currentPassword": "Aktuelles Passwort",
+			"currentPasswordPlaceholder": "Aktuelles Passwort eingeben",
+			"newPassword": "Neues Passwort",
+			"newPasswordPlaceholder": "Neues Passwort eingeben",
+			"confirmPassword": "Passwort bestätigen",
+			"confirmPasswordPlaceholder": "Passwort bestätigen",
+			"passwordChanged": "Passwort erfolgreich geändert",
+			"change": "Ändern",
+			"cancel": "Abbrechen"
+		},
+		"registerCard": {
+			"title": "Registrieren",
+			"email": "Email",
+			"emailPlaceholder": "Email eingeben",
+			"password": "Passwort",
+			"passwordPlaceholder": "Passwort eingeben",
+			"confirmPassword": "Passwort bestätigen",
+			"confirmPasswordPlaceholder": "Passwort bestätigen",
+			"register": "Registrieren",
+			"alreadyHaveAccount": "Bereits ein Konto? Anmelden",
+			"labels": {
+				"email": "Email",
+				"password": "Passwort"
+			}
+		},
+		"sideNavigationBar": {
+			"tooltip": {
+				"collapse": "Einklappen",
+				"expand": "Ausklappen"
+			},
+			"ariaCollapse": "Seitenleiste einklappen",
+			"ariaExpand": "Seitenleiste ausklappen"
+		},
+		"headerBar": {
+			"logout": "Abmelden",
+			"openDrawer": "Navigation öffnen"
+		},
+		"tables": {
+			"button": {
+				"resetFilters": "Filter zurücksetzen"
+			}
+		},
+		"dialogTextTitleBar": {
+			"tooltip": {
+				"close": "Schließen"
+			}
+		},
+		"dialogShell": {
+			"fullscreen": "Vollbild",
+			"exitFullscreen": "Vollbild beenden",
+			"unsavedTitle": "Nicht gespeicherte Änderungen verwerfen?",
+			"unsavedDescription": "Es gibt nicht gespeicherte Änderungen. Wenn Sie jetzt verlassen, gehen sie verloren."
+		},
+		"markdownEditor": {
+			"edit": "Bearbeiten",
+			"preview": "Vorschau"
+		},
+		"userDeviceSessions": {
+			"deviceSessions": "Gerätesitzungen",
+			"activeSessions": "Aktive Sitzungen",
+			"terminateSession": "Sitzung beenden",
+			"terminateSessionConfirmation": "Möchten Sie diese Sitzung wirklich beenden? Sie werden von diesem Gerät abgemeldet.",
+			"terminateAllSessions": "Alle Sitzungen beenden",
+			"terminateOtherSessions": "Andere Sitzungen beenden",
+			"terminateAllSessionsConfirmation": "Möchten Sie wirklich alle anderen Sitzungen beenden? Sie werden von allen anderen Geräten abgemeldet.",
+			"currentSession": "Aktuelle Sitzung",
+			"lastLogin": "Letzter Login",
+			"firstLogin": "Erster Login",
+			"loginProvider": "Login-Anbieter",
+			"manageDeviceSessions": "Gerätesitzungen verwalten",
+			"cannotLogoutCurrentDevice": "Sie können sich nicht von diesem Gerät abmelden, da es Ihre aktuelle Sitzung ist."
+		},
+		"mobileNavigation": {
+			"languageTitle": "Sprache",
+			"userAvatarMenu": {
+				"title": "Benutzer",
+				"signedInAs": "Angemeldet als",
+				"userSettings": "Benutzereinstellungen",
+				"logout": "Abmelden"
+			}
+		},
+		"desktopNavigation": {
+			"userAvatarMenu": {
+				"title": "Benutzer",
+				"signedInAs": "Angemeldet als",
+				"userSettings": "Benutzereinstellungen",
+				"logout": "Abmelden"
+			}
+		},
+		"languageMenu": {
+			"tooltip": "Sprache ändern"
+		},
+		"toolSourceBadge": {
+			"builtin": "integriert",
+			"mcp": "MCP",
+			"mcpServer": "MCP · {{server}}"
+		}
+	},
+	"errorMessages": {
+		"roleNameAlreadyExists": "Der Rollenname existiert bereits",
+		"emailAlreadyInUse": "Die Email wird bereits verwendet",
+		"usernameAlreadyInUse": "Der Benutzername wird bereits verwendet",
+		"requiredField": "Dieses Feld ist erforderlich",
+		"minLength": "Mindestens {{min}} Zeichen erforderlich",
+		"invalidEmail": "Ungültige Email",
+		"invalidName": "Nur Buchstaben, Leerzeichen, Bindestriche und Apostrophe erlaubt",
+		"invalidEmailOrPassword": "Ungültige Email oder Passwort",
+		"loginWithDisabledUser": "Benutzer ist deaktiviert. Wenn Sie denken dass das ein Versehen ist, wenden Sie sich bitte an den Administrator.",
+		"passwordsDoNotMatch": "Passwörter stimmen nicht überein",
+		"passwordIncorrect": "Passwort ist falsch",
+		"onlyAlphanumeric": "Nur alphanumerische Zeichen erlaubt",
+		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
+		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
+		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
+	}
 }
