@@ -27,7 +27,7 @@ public sealed class PreviewWorkflowRunnerTests
             Agent("beta", "Agent Beta"),
             Debug("debug1"));
 
-        await using var session = await runner.StartAsync(definition, client, CancellationToken.None);
+        await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
         var updates = await Drain(session);
 
         // AgentB's input must be AgentA's output: the recording client logs each invocation's user turns. Beta saw
@@ -52,7 +52,7 @@ public sealed class PreviewWorkflowRunnerTests
             Agent("alpha", "Agent Alpha"),
             Agent("beta", "Agent Beta"));
 
-        await using var session = await runner.StartAsync(definition, client, CancellationToken.None);
+        await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
         _ = await Drain(session);
 
         // NEGATIVE ASSERTION (decision #4 guard): Beta's FIRST inbound is EXACTLY one user message carrying only the
@@ -80,7 +80,7 @@ public sealed class PreviewWorkflowRunnerTests
             Agent("alpha", "Agent Alpha"),
             Debug("debug1"));
 
-        await using var session = await runner.StartAsync(definition, client, CancellationToken.None);
+        await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
         var updates = await Drain(session);
 
         // The debug side-event is emitted exactly once, carrying the upstream agent's output.
@@ -104,7 +104,7 @@ public sealed class PreviewWorkflowRunnerTests
             Agent("alpha", "Agent Alpha"),
             Pause("pause1"));
 
-        await using var session = await runner.StartAsync(definition, client, CancellationToken.None);
+        await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
 
         // First drain halts at the pause: a RunPaused update surfaces BEFORE any RunCompleted.
         var firstPass = await Drain(session);
@@ -122,6 +122,49 @@ public sealed class PreviewWorkflowRunnerTests
             "the resumed run must drive to completion");
     }
 
+    [Test]
+    public async Task PreviewRunner_TwoAgentsDifferentModels_EachRunsOnItsOwnModelClient()
+    {
+        // Two distinct models → two distinct recording clients. The resolver hands each agent the client for ITS model
+        // id, so AgentB must run on model-b's client (NOT AgentA's model-a client).
+        using var clientA = new RecordingStreamingChatClient(("alpha", "ALPHA_OUTPUT"));
+        using var clientB = new RecordingStreamingChatClient(("beta", "BETA_OUTPUT"));
+        var runner = NewRunner();
+
+        var resolvedModelIds = new List<string>();
+        IChatClient Resolve(string modelId)
+        {
+            resolvedModelIds.Add(modelId);
+            return modelId switch
+            {
+                "model-a" => clientA,
+                "model-b" => clientB,
+                _ => throw new InvalidOperationException($"Unexpected model id '{modelId}'.")
+            };
+        }
+
+        var definition = BuildLinear(
+            Agent("alpha", "Agent Alpha", model: "model-a"),
+            Agent("beta", "Agent Beta", model: "model-b"));
+
+        await using var session = await runner.StartAsync(definition, Resolve, CancellationToken.None);
+        var updates = await Drain(session);
+
+        // The resolver was called once per distinct model — and with each agent's OWN model id.
+        AssertEx.True(resolvedModelIds.Contains("model-a"), "the resolver must be asked for AgentA's model id.");
+        AssertEx.True(resolvedModelIds.Contains("model-b"), "the resolver must be asked for AgentB's model id.");
+
+        // AgentB ran on model-b's client (clientB recorded the beta invocation; AgentA's client never saw beta).
+        var betaInbound = clientB.FirstUserTurnFor("beta");
+        AssertEx.Equal("ALPHA_OUTPUT", betaInbound);
+
+        // Each client served exactly its own agent — clientA only ran alpha (its input is the Start seed).
+        AssertEx.Equal("START_SEED_TEXT", clientA.FirstUserTurnFor("alpha"));
+
+        var completed = updates.Single(update => update.Kind == PreviewWorkflowUpdateKind.RunCompleted);
+        AssertEx.Equal("BETA_OUTPUT", completed.Output);
+    }
+
     private static PreviewWorkflowRunner NewRunner() =>
         new(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
 
@@ -136,8 +179,8 @@ public sealed class PreviewWorkflowRunnerTests
         return updates;
     }
 
-    private static PreviewAgentNode Agent(string id, string label) =>
-        new() { Id = id, Kind = PreviewNodeKind.Agent, Label = label, Instructions = $"INSTR_{id}", ModelId = "test-model" };
+    private static PreviewAgentNode Agent(string id, string label, string model = "test-model") =>
+        new() { Id = id, Kind = PreviewNodeKind.Agent, Label = label, Instructions = $"INSTR_{id}", ModelId = model };
 
     private static PreviewWorkflowNode Debug(string id) =>
         new() { Id = id, Kind = PreviewNodeKind.Debug };

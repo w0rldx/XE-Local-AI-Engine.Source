@@ -16,6 +16,8 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
+using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
+using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
@@ -74,6 +76,9 @@ public static class AgentServiceCollectionExtensions
         // Playbook eval gate (golden-conversation runner). Stateless: builds a per-call agent over the
         // caller-supplied node-local IChatClient with an empty tool set and runs it threadless.
         _ = services.AddSingleton<IPlaybookEvalAgentRunner, MafPlaybookEvalAgentRunner>();
+        // Open Canvas (Preview) workflow runner. Builds a raw MAF WorkflowBuilder over the caller-supplied node-local
+        // IChatClient (Lane C resolves and hands it in); confines all Microsoft.Agents.AI.Workflows types to the runner.
+        _ = services.AddSingleton<IPreviewWorkflowRunner, PreviewWorkflowRunner>();
         return services;
     }
 
