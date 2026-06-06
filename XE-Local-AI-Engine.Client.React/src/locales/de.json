@@ -1678,6 +1678,7 @@
 			"back": "Zurück zur Liste",
 			"saved": "Workflow gespeichert.",
 			"defaultName": "Unbenannter Workflow",
+			"deleteHint": "Tipp: Block oder Verbindung auswählen und Entf (oder Rücktaste) drücken, um ihn zu entfernen. Start und Ende können nicht entfernt werden.",
 			"list": {
 				"empty": "Noch keine gespeicherten Workflows. Erstellen Sie einen, um zu beginnen.",
 				"openAria": "Workflow öffnen",

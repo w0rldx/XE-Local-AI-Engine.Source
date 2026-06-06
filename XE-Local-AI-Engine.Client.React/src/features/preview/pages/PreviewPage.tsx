@@ -1,4 +1,4 @@
-import { Button, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Box, Button, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { IconArrowLeft, IconBinaryTree2, IconDeviceFloppy, IconPlus } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -223,9 +223,8 @@ export function PreviewPage() {
 	const handleSaveCurrent = useCallback(() => handleSave(liveGraph ?? canvasGraph), [handleSave, liveGraph, canvasGraph]);
 
 	return (
-		<Container fluid={true} py="lg">
-			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
+		<Stack gap="lg" px="md" py="lg" h="100%" style={{ minHeight: 0 }}>
+			<Group justify="space-between" align="flex-start">
 					<Stack gap={4}>
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
 							{t("pages.preview.eyebrow", "Worker Node")}
@@ -267,6 +266,7 @@ export function PreviewPage() {
 					)}
 				</Group>
 
+				<Box style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
 				{isCanvasOpen ? (
 					openId !== null && detailQuery.isLoading ? (
 						<Loader data-testid="preview-canvas-loading" />
@@ -299,7 +299,7 @@ export function PreviewPage() {
 						onDelete={handleDelete}
 					/>
 				)}
-			</Stack>
-		</Container>
+			</Box>
+		</Stack>
 	);
 }

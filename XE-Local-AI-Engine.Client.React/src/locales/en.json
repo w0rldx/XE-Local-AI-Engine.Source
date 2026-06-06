@@ -1678,6 +1678,7 @@
 			"back": "Back to list",
 			"saved": "Workflow saved.",
 			"defaultName": "Untitled workflow",
+			"deleteHint": "Tip: select a block or connection and press Delete (or Backspace) to remove it. Start and End cannot be removed.",
 			"list": {
 				"empty": "No saved workflows yet. Create one to get started.",
 				"openAria": "Open workflow",

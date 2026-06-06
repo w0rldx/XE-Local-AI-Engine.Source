@@ -232,6 +232,13 @@ export function WorkflowCanvas({
 				data-testid="preview-start-text"
 			/>
 
+			<Text size="xs" c="dimmed" data-testid="preview-delete-hint">
+				{t(
+					"pages.preview.deleteHint",
+					"Tip: select a block or connection and press Delete (or Backspace) to remove it. Start and End cannot be removed.",
+				)}
+			</Text>
+
 			{!validation.isValid ? (
 				<Text size="xs" c="red" data-testid="preview-validation">
 					{validation.errorKeys.map((key) => t(key)).join(" ")}
@@ -250,6 +257,7 @@ export function WorkflowCanvas({
 						onSelectionChange={onSelectionChange}
 						onPaneClick={onPaneClick}
 						fitView={true}
+						deleteKeyCode={["Delete", "Backspace"]}
 						proOptions={{ hideAttribution: true }}
 					>
 						<Background />
