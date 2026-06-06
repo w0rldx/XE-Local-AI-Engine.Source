@@ -1750,6 +1750,7 @@
 				"notLinear": "The workflow must be a linear chain (one connection in and out per node).",
 				"agentModel": "Every Agent node must specify a model.",
 				"agentInstructions": "Every Agent node must specify instructions.",
+				"startText": "The Start node must have input text before the workflow can run.",
 				"endUnreachable": "The End node must be reachable from the Start node.",
 				"noAgent": "The workflow must contain at least one Agent node between Start and End."
 			},
