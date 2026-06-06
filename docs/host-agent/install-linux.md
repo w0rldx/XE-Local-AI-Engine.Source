@@ -96,6 +96,10 @@ Tray: green
 
 Status: `(blocked: clean Ubuntu/Debian runner transcript pending RC package artifact)`. Replace this section with the captured transcript before claiming H1 complete.
 
+## Uninstall
+
+To remove the install (the `xe-host-agent` user systemd unit, manifest-owned Docker containers/network/volumes, the `$XDG_CONFIG/RUNTIME/STATE/xe-host-agent` data, desktop launchers, and the tray icon), run the install-type-aware uninstaller. See [uninstall-linux.md](uninstall-linux.md). In `external` mode it removes only manifest-owned Docker artifacts and never touches the user's Docker daemon, Ollama, or any non-owned container/volume.
+
 ## Troubleshooting pointers
 
 - If rootless Docker cannot start, verify `XDG_RUNTIME_DIR`, `newuidmap/newgidmap`, and the rootless Docker install output.
