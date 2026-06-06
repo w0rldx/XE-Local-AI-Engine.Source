@@ -68,6 +68,7 @@ const domainDefinition = {
 	kind: "Single",
 	allowedToolNames: ["GetCurrentTime"],
 	toolApprovals: { GetCurrentTime: true },
+	allowedSkillIds: [],
 	orchestrationTopologyJson: null,
 	playbookEnabled: false,
 	version: 1,

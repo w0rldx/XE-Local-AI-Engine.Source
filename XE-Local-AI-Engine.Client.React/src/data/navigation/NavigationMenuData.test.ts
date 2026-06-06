@@ -6,9 +6,7 @@ import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMe
 const mockCapabilities = (overrides: Record<string, boolean>) => {
 	vi.resetModules();
 	vi.doMock("@/capabilities/NodeCapabilities", async () => {
-		const actual = await vi.importActual<typeof import("@/capabilities/NodeCapabilities")>(
-			"@/capabilities/NodeCapabilities",
-		);
+		const actual = await vi.importActual<typeof import("@/capabilities/NodeCapabilities")>("@/capabilities/NodeCapabilities");
 		return {
 			...actual,
 			nodeCapabilities: { ...actual.nodeCapabilities, ...overrides },
@@ -60,15 +58,13 @@ describe("navigationLinks", () => {
 		]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.agents,
+			nodeRoutePaths.skills,
 			nodeRoutePaths.mcp,
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
 		]);
 		// Manager group: runtime overview plus the relocated approved-images page.
-		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([
-			nodeRoutePaths.manager,
-			nodeRoutePaths.approvedImages,
-		]);
+		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.manager, nodeRoutePaths.approvedImages]);
 	});
 
 	it("keeps only Installed under Models and only Overview under Manager when modelFit and loadedModels are off", async () => {
@@ -89,7 +85,8 @@ describe("navigationLinks", () => {
 		expect(models?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.models)).toBe(true);
 	});
 
-	it("drops the agents child from Automation when agentManagement is off", async () => {
+	it("drops the agents and skills children from Automation when agentManagement is off", async () => {
+		// Both Agents and Skills are gated on agentManagement (skills are an agent-mode feature), so they drop together.
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ agentManagement: false });
 		const automation = gatedLinks.find((link) => link.id === "automation");
 
@@ -98,6 +95,7 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
 		]);
+		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.skills)).toBe(false);
 	});
 
 	it("drops the mcp child from Automation when mcpServers is off", async () => {

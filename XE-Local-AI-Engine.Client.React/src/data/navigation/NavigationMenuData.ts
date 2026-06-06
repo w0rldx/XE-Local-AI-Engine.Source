@@ -89,6 +89,7 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.automationGroup",
 		links: [
 			{ translationKey: "navigation.agents", to: nodeRoutePaths.agents, capability: "agentManagement" },
+			{ translationKey: "navigation.skills", to: nodeRoutePaths.skills, capability: "agentManagement" },
 			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },
 			{ translationKey: "navigation.scheduler", to: nodeRoutePaths.scheduler, capability: "scheduler" },
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
@@ -128,8 +129,7 @@ export function matchesNavRoute(pathname: string, to: string | undefined): boole
 	return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-const isCapabilityEnabled = (capability?: NavigationCapabilityKey): boolean =>
-	capability ? nodeCapabilities[capability] : true;
+const isCapabilityEnabled = (capability?: NavigationCapabilityKey): boolean => (capability ? nodeCapabilities[capability] : true);
 
 // Capability-gated navigation links: drop any top-level entry whose capability is off, filter each group's
 // children by their capability, then drop a group that ends up with no children. The nav bars render this

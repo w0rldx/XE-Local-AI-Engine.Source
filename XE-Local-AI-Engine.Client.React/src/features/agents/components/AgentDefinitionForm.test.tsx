@@ -22,12 +22,19 @@ vi.mock("react-i18next", () => ({
 
 // The tool selector now fetches the catalog via useToolCatalog (dynamic tool-catalog dynamic catalog). Mock it so the form
 // renders the built-in tool rows deterministically without a QueryClient or a real request.
-const { useToolCatalogMock } = vi.hoisted(() => ({
+const { useToolCatalogMock, useSkillsMock } = vi.hoisted(() => ({
 	useToolCatalogMock: vi.fn(),
+	useSkillsMock: vi.fn(),
 }));
 
 vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: useToolCatalogMock,
+}));
+
+// The skill selector fetches the node skill library via useSkills. Mock it so the form renders without a
+// QueryClient or a real request (the skill rows aren't asserted here — see AgentSkillSelector.test.tsx).
+vi.mock("@/features/skills/queries/useSkills", () => ({
+	useSkills: useSkillsMock,
 }));
 
 import { AgentDefinitionForm, type AgentDefinitionFormHandle } from "@/features/agents/components/AgentDefinitionForm";
@@ -45,6 +52,7 @@ function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefiniti
 		kind: "Single",
 		allowedToolNames: [],
 		toolApprovals: {},
+		allowedSkillIds: [],
 		orchestrationTopologyJson: null,
 		playbookEnabled: false,
 		version: 1,
@@ -110,6 +118,7 @@ const baseValues: AgentDefinitionFormValues = {
 	kind: "Single",
 	allowedToolNames: [],
 	toolApprovals: {},
+	allowedSkillIds: [],
 	orchestration: { participantAgentDefinitionIds: [], handoffs: [], maxTurnsPerAgent: 8, returnToPrevious: false },
 	playbookEnabled: false,
 };
@@ -156,6 +165,7 @@ describe("AgentDefinitionForm", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		useToolCatalogMock.mockReturnValue({ data: catalogTools, isLoading: false, error: null });
+		useSkillsMock.mockReturnValue({ data: [], isLoading: false, error: null });
 	});
 
 	afterEach(() => {

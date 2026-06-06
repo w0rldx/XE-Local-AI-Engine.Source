@@ -75,7 +75,8 @@
 		"adminPanelClientNodes": "Client Nodes",
 		"adminPanelAiModels": "AI Models",
 		"adminPanelFeedback": "Feedback",
-		"adminPanelAppKeys": "App Keys"
+		"adminPanelAppKeys": "App Keys",
+		"skills": "Skills"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -1032,6 +1033,14 @@
 				"playbookEnabled": {
 					"label": "Enable operating playbook",
 					"description": "Append this agent's enabled playbook actions to its instructions at run time."
+				},
+				"skills": {
+					"label": "Skills",
+					"privacyNote": "Assigned skills are loaded by this agent's model on demand. If that model is a cloud provider, the skill content leaves this node.",
+					"loading": "Loading skills…",
+					"loadError": "Could not load the skill library.",
+					"empty": "No skills yet. Create skills on the Skills page to assign them here.",
+					"disabledBadge": "disabled"
 				}
 			},
 			"playbook": {
@@ -1776,6 +1785,66 @@
 				"firstName": "First Name",
 				"lastName": "Last Name",
 				"email": "Email"
+			}
+		},
+		"skills": {
+			"eyebrow": "Worker Node",
+			"title": "Skills",
+			"subtitle": "Author a node-wide library of reusable skills. Assign skills to an agent so its model can load the relevant expertise on demand while it works.",
+			"createButton": "New skill",
+			"list": {
+				"loading": "Loading skills…",
+				"empty": "No skills yet. Create one to give your agents reusable expertise.",
+				"enabledBadge": "Enabled",
+				"disabledBadge": "Disabled",
+				"editAria": "Edit {{name}}",
+				"deleteAria": "Delete {{name}}",
+				"columns": {
+					"name": "Name",
+					"enabled": "Enabled",
+					"version": "Version",
+					"actions": "Actions"
+				}
+			},
+			"editor": {
+				"createTitle": "New skill",
+				"editTitle": "Edit skill",
+				"loading": "Loading skill…"
+			},
+			"form": {
+				"privacyNote": "Skills are sent to the agent's model when it loads them. If that model is a cloud provider, the skill content leaves this node.",
+				"name": {
+					"label": "Name",
+					"description": "Lowercase identifier (e.g. invoice-review).",
+					"placeholder": "invoice-review",
+					"required": "Name is required.",
+					"invalid": "Use lowercase letters, digits and dashes only (no leading or trailing dash)."
+				},
+				"description": {
+					"label": "Description",
+					"description": "Short summary the model sees to decide whether to load this skill.",
+					"placeholder": "How to review supplier invoices.",
+					"required": "Description is required."
+				},
+				"body": {
+					"label": "Body",
+					"description": "The full skill instructions, loaded on demand by the agent's model.",
+					"placeholder": "# How to review an invoice\n\n1. …",
+					"required": "Body is required."
+				},
+				"enabled": {
+					"label": "Enabled",
+					"description": "Disabled skills are never loaded by an agent, even if still assigned."
+				}
+			},
+			"delete": {
+				"title": "Delete skill",
+				"description": "Delete '{{name}}'? This cannot be undone."
+			},
+			"errors": {
+				"load": "Could not load skills.",
+				"save": "Could not save the skill.",
+				"delete": "Could not delete the skill."
 			}
 		}
 	},

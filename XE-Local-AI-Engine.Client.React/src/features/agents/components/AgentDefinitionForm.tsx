@@ -3,6 +3,7 @@ import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useStat
 import { useTranslation } from "react-i18next";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
+import { AgentSkillSelector } from "@/features/agents/components/AgentSkillSelector";
 import { AgentToolSelector } from "@/features/agents/components/AgentToolSelector";
 import { OrchestrationTopologyEditor } from "@/features/agents/components/OrchestrationTopologyEditor";
 import {
@@ -151,6 +152,15 @@ export function AgentDefinitionForm({
 		}));
 	}, []);
 
+	const handleToggleSkill = useCallback((skillId: string, selected: boolean) => {
+		setValues((current) => {
+			const allowedSkillIds = selected
+				? [...current.allowedSkillIds, skillId]
+				: current.allowedSkillIds.filter((id) => id !== skillId);
+			return { ...current, allowedSkillIds };
+		});
+	}, []);
+
 	const handleOrchestrationChange = useCallback((orchestration: OrchestrationTopology) => {
 		setValues((current) => ({ ...current, orchestration }));
 	}, []);
@@ -284,6 +294,7 @@ export function AgentDefinitionForm({
 				onToggleTool={handleToggleTool}
 				onToggleApproval={handleToggleApproval}
 			/>
+			<AgentSkillSelector selectedSkillIds={values.allowedSkillIds} onToggleSkill={handleToggleSkill} />
 			{submitError ? (
 				<Alert color="red" data-testid="agent-form-submit-error">
 					{submitError}
