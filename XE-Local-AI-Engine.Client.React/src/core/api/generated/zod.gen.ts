@@ -2,6 +2,72 @@
 
 import * as z from "zod";
 
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	description: z.string().optional(),
+	body: z.string().optional(),
+	enabled: z.boolean().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	updatedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	body: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	description: z.string().optional(),
+	enabled: z.boolean().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	updatedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	body: z.string().nullish(),
+	enabled: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = z.object({
 	outcome: z.string().optional(),
 	cancellationRequestedAtUtc: z.coerce
@@ -1328,6 +1394,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 	toolApprovals: z.record(z.string(), z.boolean()).optional(),
 	orchestrationTopologyJson: z.string().nullish(),
 	playbookEnabled: z.boolean().optional(),
+	allowedSkillIds: z.array(z.guid()).optional(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -1356,6 +1423,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
 	orchestrationTopologyJson: z.string().nullish(),
 	playbookEnabled: z.boolean().optional(),
+	allowedSkillIds: z.array(z.guid()).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = z.object({
@@ -1590,6 +1658,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest
 	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
 	orchestrationTopologyJson: z.string().nullish(),
 	playbookEnabled: z.boolean().optional(),
+	allowedSkillIds: z.array(z.guid()).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = z.object({
@@ -1614,6 +1683,47 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 });
+
+/**
+ * Success
+ */
+export const zListSkillsResponse = zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse;
+
+export const zCreateSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest;
+
+/**
+ * Success
+ */
+export const zCreateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+
+export const zDeleteSkillPath = z.object({
+	skillId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteSkillResponse = z.void();
+
+export const zGetSkillPath = z.object({
+	skillId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+
+export const zUpdateSkillBody = zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest;
+
+export const zUpdateSkillPath = z.object({
+	skillId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateSkillResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
 
 export const zCancelScheduledJobRunPath = z.object({
 	runId: z.guid(),

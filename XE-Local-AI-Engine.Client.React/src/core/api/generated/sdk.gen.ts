@@ -53,6 +53,9 @@ import type {
 	CreateScheduledJobData,
 	CreateScheduledJobErrors,
 	CreateScheduledJobResponses,
+	CreateSkillData,
+	CreateSkillErrors,
+	CreateSkillResponses,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
@@ -77,6 +80,9 @@ import type {
 	DeleteScheduledJobData,
 	DeleteScheduledJobErrors,
 	DeleteScheduledJobResponses,
+	DeleteSkillData,
+	DeleteSkillErrors,
+	DeleteSkillResponses,
 	DisableAutoConnectData,
 	DisableAutoConnectErrors,
 	DisableAutoConnectResponses,
@@ -146,6 +152,9 @@ import type {
 	GetScheduledJobRunData,
 	GetScheduledJobRunErrors,
 	GetScheduledJobRunResponses,
+	GetSkillData,
+	GetSkillErrors,
+	GetSkillResponses,
 	GetToolCapableModelsData,
 	GetToolCapableModelsErrors,
 	GetToolCapableModelsResponses,
@@ -194,6 +203,9 @@ import type {
 	ListScheduledJobTemplatesData,
 	ListScheduledJobTemplatesErrors,
 	ListScheduledJobTemplatesResponses,
+	ListSkillsData,
+	ListSkillsErrors,
+	ListSkillsResponses,
 	NodeAuthStatusData,
 	NodeAuthStatusResponses,
 	NodeChangePasswordData,
@@ -279,6 +291,9 @@ import type {
 	UpdateScheduledJobData,
 	UpdateScheduledJobErrors,
 	UpdateScheduledJobResponses,
+	UpdateSkillData,
+	UpdateSkillErrors,
+	UpdateSkillResponses,
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionErrors,
 	UpdateSuggestedPlaybookActionResponses,
@@ -319,6 +334,8 @@ import {
 	zCreatePlaybookActionResponse,
 	zCreateScheduledJobBody,
 	zCreateScheduledJobResponse,
+	zCreateSkillBody,
+	zCreateSkillResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
 	zDeleteGoldenConversationPath,
@@ -336,6 +353,8 @@ import {
 	zDeletePlaybookActionResponse,
 	zDeleteScheduledJobPath,
 	zDeleteScheduledJobResponse,
+	zDeleteSkillPath,
+	zDeleteSkillResponse,
 	zDisableAutoConnectResponse,
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
@@ -373,6 +392,8 @@ import {
 	zGetScheduledJobResponse,
 	zGetScheduledJobRunPath,
 	zGetScheduledJobRunResponse,
+	zGetSkillPath,
+	zGetSkillResponse,
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
 	zHarvestGoldenConversationsPath,
@@ -397,6 +418,7 @@ import {
 	zListScheduledJobsQuery,
 	zListScheduledJobsResponse,
 	zListScheduledJobTemplatesResponse,
+	zListSkillsResponse,
 	zNodeAuthStatusResponse,
 	zNodeChangePasswordBody,
 	zNodeChangePasswordResponse,
@@ -460,6 +482,9 @@ import {
 	zUpdateScheduledJobBody,
 	zUpdateScheduledJobPath,
 	zUpdateScheduledJobResponse,
+	zUpdateSkillBody,
+	zUpdateSkillPath,
+	zUpdateSkillResponse,
 	zUpdateSuggestedPlaybookActionBody,
 	zUpdateSuggestedPlaybookActionPath,
 	zUpdateSuggestedPlaybookActionResponse,
@@ -484,6 +509,113 @@ export type Options<
 	 */
 	meta?: Record<string, unknown>;
 };
+
+export const listSkills = <ThrowOnError extends boolean = false>(options?: Options<ListSkillsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListSkillsResponses, ListSkillsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListSkillsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills",
+		...options,
+	});
+
+export const createSkill = <ThrowOnError extends boolean = false>(options: Options<CreateSkillData, ThrowOnError>) =>
+	(options.client ?? client).post<CreateSkillResponses, CreateSkillErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateSkillBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateSkillResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteSkill = <ThrowOnError extends boolean = false>(options: Options<DeleteSkillData, ThrowOnError>) =>
+	(options.client ?? client).delete<DeleteSkillResponses, DeleteSkillErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteSkillPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteSkillResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/{skillId}",
+		...options,
+	});
+
+export const getSkill = <ThrowOnError extends boolean = false>(options: Options<GetSkillData, ThrowOnError>) =>
+	(options.client ?? client).get<GetSkillResponses, GetSkillErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetSkillPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetSkillResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/{skillId}",
+		...options,
+	});
+
+export const updateSkill = <ThrowOnError extends boolean = false>(options: Options<UpdateSkillData, ThrowOnError>) =>
+	(options.client ?? client).put<UpdateSkillResponses, UpdateSkillErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateSkillBody,
+					path: zUpdateSkillPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateSkillResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/skills/{skillId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
 
 export const cancelScheduledJobRun = <ThrowOnError extends boolean = false>(
 	options: Options<CancelScheduledJobRunData, ThrowOnError>,

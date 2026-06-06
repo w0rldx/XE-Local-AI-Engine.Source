@@ -24,6 +24,9 @@ public sealed class CreateAgentDefinitionRequest
     public string? OrchestrationTopologyJson { get; init; }
 
     public bool PlaybookEnabled { get; init; }
+
+    /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
+    public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
 }
 
 /// <summary>Update request for an agent definition. The id travels in the route; the body carries the new field values.</summary>
@@ -50,6 +53,9 @@ public sealed class UpdateAgentDefinitionRequest
     public string? OrchestrationTopologyJson { get; init; }
 
     public bool PlaybookEnabled { get; init; }
+
+    /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
+    public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
 }
 
 public sealed class GetAgentDefinitionRequest
@@ -89,6 +95,9 @@ public sealed class AgentDefinitionResponse
     public string? OrchestrationTopologyJson { get; init; }
 
     public required bool PlaybookEnabled { get; init; }
+
+    /// <summary>The per-agent skill picklist (skill ids). Always present; empty when no skills are assigned.</summary>
+    public required IReadOnlyList<Guid> AllowedSkillIds { get; init; }
 
     public required int Version { get; init; }
 
