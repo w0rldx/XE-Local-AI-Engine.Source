@@ -19,6 +19,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.modelFit).toBe(true);
 	});
 
+	it("enables the Open Canvas (preview) surface by default", () => {
+		expect(nodeCapabilities.preview).toBe(true);
+	});
+
 	it("keeps node chat local-first and approval-gated for initial parity", () => {
 		expect(nodeCapabilities.chat).toEqual({
 			localRuntime: true,
@@ -54,6 +58,7 @@ describe("nodeCapabilities", () => {
 			modelRecommendations: "/model-recommendations",
 			approvedImages: "/approved-images",
 			loadedModels: "/loaded-models",
+			preview: "/preview",
 		});
 	});
 });

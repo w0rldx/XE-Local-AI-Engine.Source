@@ -1,0 +1,46 @@
+.node {
+	min-width: 180px;
+	max-width: 260px;
+	border-radius: var(--mantine-radius-md);
+	border: 1px solid var(--mantine-color-default-border);
+	background: var(--mantine-color-body);
+	padding: var(--mantine-spacing-sm);
+	box-shadow: var(--mantine-shadow-xs);
+}
+
+.node-selected {
+	border-color: var(--mantine-color-blue-5);
+	box-shadow: 0 0 0 1px var(--mantine-color-blue-5);
+}
+
+.node-running {
+	border-color: var(--mantine-color-blue-6);
+}
+
+.node-completed {
+	border-color: var(--mantine-color-teal-6);
+}
+
+.node-failed {
+	border-color: var(--mantine-color-red-6);
+}
+
+.node-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+}
+
+.output-box {
+	margin-top: 6px;
+	max-height: 140px;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	font-family: var(--mantine-font-family-monospace);
+	font-size: var(--mantine-font-size-xs);
+	background: var(--mantine-color-default-hover);
+	border-radius: var(--mantine-radius-sm);
+	padding: 6px;
+}

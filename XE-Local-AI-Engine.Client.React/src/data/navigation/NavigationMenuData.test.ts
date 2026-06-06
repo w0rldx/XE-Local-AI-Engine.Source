@@ -31,6 +31,7 @@ describe("navigationLinks", () => {
 			"models",
 			"settings",
 			"automation",
+			"preview",
 			"manager",
 			"invocations",
 		]);

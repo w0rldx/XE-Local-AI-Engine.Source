@@ -76,7 +76,8 @@
 		"adminPanelAiModels": "AI Models",
 		"adminPanelFeedback": "Feedback",
 		"adminPanelAppKeys": "App Keys",
-		"skills": "Skills"
+		"skills": "Skills",
+		"preview": "Open Canvas"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -1668,6 +1669,101 @@
 			"appointmentCreated": "Appointment created successfully",
 			"appointmentUpdated": "Appointment updated successfully",
 			"appointmentDeleted": "Appointment deleted successfully"
+		},
+		"preview": {
+			"eyebrow": "Worker Node",
+			"title": "Open Canvas",
+			"subtitle": "Drag Start, Agent, Debug, Pause, and End blocks onto the canvas, wire them into a linear chain, and run the workflow with live per-node output.",
+			"createButton": "New workflow",
+			"back": "Back to list",
+			"saved": "Workflow saved.",
+			"defaultName": "Untitled workflow",
+			"list": {
+				"empty": "No saved workflows yet. Create one to get started.",
+				"openAria": "Open workflow",
+				"deleteAria": "Delete workflow",
+				"columns": {
+					"name": "Name",
+					"version": "Version",
+					"updated": "Updated",
+					"actions": "Actions"
+				}
+			},
+			"nodes": {
+				"start": "Start",
+				"agent": "Agent",
+				"debug": "Debug",
+				"pause": "Pause",
+				"end": "End",
+				"agentNeedsModel": "Set a model",
+				"debugHint": "Live upstream output",
+				"pausedHere": "Paused — continue from the toolbar"
+			},
+			"startText": {
+				"label": "Start input",
+				"placeholder": "Seed text the Start node emits…"
+			},
+			"toolbar": {
+				"execute": "Execute",
+				"cancel": "Cancel",
+				"continue": "Continue"
+			},
+			"agentForm": {
+				"label": {
+					"label": "Label",
+					"placeholder": "Agent"
+				},
+				"import": {
+					"label": "Import from agent",
+					"placeholder": "Copy instructions…",
+					"empty": "No agent definitions"
+				},
+				"model": {
+					"label": "Model",
+					"placeholder": "Select a chat-capable model",
+					"empty": "No chat-capable models"
+				},
+				"reasoning": {
+					"label": "Reasoning effort",
+					"placeholder": "Provider default",
+					"options": {
+						"none": "None",
+						"low": "Low",
+						"medium": "Medium",
+						"high": "High"
+					}
+				},
+				"instructions": {
+					"label": "Instructions",
+					"placeholder": "System instructions for this agent…"
+				},
+				"autosaveHint": "Changes apply to the canvas immediately"
+			},
+			"validation": {
+				"empty": "The workflow must contain at least a Start and an End node.",
+				"emptyId": "Every node must have a non-empty id.",
+				"duplicateId": "Node ids must be unique.",
+				"startCount": "The workflow must have exactly one Start node.",
+				"endCount": "The workflow must have exactly one End node.",
+				"unknownEdge": "An edge references an unknown node.",
+				"notLinear": "The workflow must be a linear chain (one connection in and out per node).",
+				"agentModel": "Every Agent node must specify a model.",
+				"agentInstructions": "Every Agent node must specify instructions.",
+				"endUnreachable": "The End node must be reachable from the Start node.",
+				"noAgent": "The workflow must contain at least one Agent node between Start and End."
+			},
+			"delete": {
+				"title": "Delete workflow",
+				"description": "Delete this workflow? This cannot be undone."
+			},
+			"errors": {
+				"save": "Could not save the workflow.",
+				"delete": "Could not delete the workflow.",
+				"execute": "Could not start the run.",
+				"continue": "Could not continue the run.",
+				"cancel": "Could not cancel the run.",
+				"conflict": "This workflow changed elsewhere. Reload and reapply your edits."
+			}
 		},
 		"notFound": {
 			"subtitleSecret": "You have found a secret place.",
