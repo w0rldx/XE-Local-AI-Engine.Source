@@ -89,6 +89,10 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Node-local agent definitions. Instructions and descriptions are encrypted at rest; the resolver/service
         // projects a bound definition into runtime-package inputs.
         builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();
+        // Node-local agent skill library. Skill description and SKILL.md body are encrypted at rest; the resolver loads
+        // an agent's enabled, assigned skills and the factory attaches them via MAF progressive disclosure, while the
+        // CRUD service owns operator authoring. Scoped to match the scoped, DbContext-backed store.
+        builder.Services.AddScoped<IAgentSkillStore, AgentSkillStore>();
         // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
         // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
@@ -122,6 +126,10 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Playbook action service: validates manual authoring, owns agent existence checks, and delegates
         // persistence/versioning to the store. The resolver folds enabled actions into the prompt.
         builder.Services.AddScoped<IPlaybookActionService, PlaybookActionService>();
+        // Agent skill service: validates skill content (MAF-safe Name, NOCASE-unique, length caps) and delegates
+        // persistence/versioning to the store. The resolver resolves an agent's assigned skills into the runtime package
+        // for MAF progressive disclosure.
+        builder.Services.AddScoped<IAgentSkillService, AgentSkillService>();
         // Feedback-insights service: shapes raw aggregates into the operator read model, including derived down-rate,
         // single-sample guard flags, and privacy-capped exemplars.
         builder.Services.AddScoped<IFeedbackInsightsService, FeedbackInsightsService>();

@@ -189,7 +189,8 @@ public sealed class NodeChatRegenerationService(
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
             OrchestrationSpec: orchestration?.Spec,
-            SupportsThinking: resolution.SupportsThinking));
+            SupportsThinking: resolution.SupportsThinking,
+            Skills: resolved?.Skills));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,

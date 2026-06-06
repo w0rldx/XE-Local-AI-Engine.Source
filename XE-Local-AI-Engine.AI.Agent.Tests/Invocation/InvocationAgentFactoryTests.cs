@@ -547,6 +547,48 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal(-1L, chatOptions.Seed);
     }
 
+    // MAAI001: AgentSkillsProvider/AgentInlineSkill are [Experimental] in Microsoft.Agents.AI 1.8.0; the factory adopts
+    // them deliberately for progressive disclosure (agent-skills plan §7.7), so this test references them under the same
+    // scoped suppression the production code uses.
+#pragma warning disable MAAI001
+    [Test]
+    public async Task Factory_WithSkills_AttachesSkillsProvider_EmptyKeepsPositionalCtor()
+    {
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        // No skills: the agent is built via the positional constructor, so no context providers are attached
+        // (AIContextProviders is null per MAF when none are configured) — byte-identical to the pre-skills build.
+        var noSkills = new InvocationAgentDefinition("qwen3.5:0.8b", "Be helpful.", [], []);
+        await using var noSkillsContext = await sut.CreateAsync(noSkills);
+        var noSkillsAgent = noSkillsContext.Agent as ChatClientAgent
+                            ?? throw new AssertionException("Expected a ChatClientAgent.");
+        AssertEx.True(noSkillsAgent.AIContextProviders is null or { Count: 0 },
+            "A no-skills agent must attach no context providers.");
+
+        // With skills: the agent is built via the options constructor with an AgentSkillsProvider attached, and the
+        // instructions/name still flow through (proving the options path wires them, since MAF 1.8.0 has no Instructions
+        // property on ChatClientAgentOptions — they ride ChatOptions.Instructions).
+        var withSkills = new InvocationAgentDefinition("qwen3.5:0.8b",
+            "Be helpful.",
+            [],
+            [],
+            Skills:
+            [
+                new InvocationSkill("kubernetes-debug", "Debug k8s issues", "## Body"),
+                new InvocationSkill("log-triage", "Triage logs", "## Logs")
+            ]);
+        await using var withSkillsContext = await sut.CreateAsync(withSkills);
+        var withSkillsAgent = withSkillsContext.Agent as ChatClientAgent
+                              ?? throw new AssertionException("Expected a ChatClientAgent.");
+        var providers = AssertEx.NotNull(withSkillsAgent.AIContextProviders, "A skills agent must attach a context provider.");
+        AssertEx.Equal(1, providers.Count);
+        AssertEx.True(providers[0] is AgentSkillsProvider, "The attached provider must be an AgentSkillsProvider.");
+        AssertEx.Equal("Be helpful.", withSkillsAgent.Instructions);
+        AssertEx.Equal("XeInvocation-qwen3.5:0.8b", withSkillsAgent.Name);
+    }
+#pragma warning restore MAAI001
+
     private static ChatOptions ResolveChatOptions(InvocationAgentContext context)
     {
         var runOptions = context.RunOptions as ChatClientAgentRunOptions

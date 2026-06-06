@@ -116,7 +116,24 @@ public sealed partial class InvocationRunner
             messages,
             package.ReasoningEffort,
             package.SupportsThinking,
-            MapSamplingOptions(package.SamplingOptions));
+            MapSamplingOptions(package.SamplingOptions),
+            MapSkills(package.Skills));
+    }
+
+    /// <summary>
+    ///     Maps the resolved client-side <see cref="ResolvedSkill" /> set onto the provider-agnostic
+    ///     <see cref="InvocationSkill" /> records the factory builds into a MAF <c>AgentSkillsProvider</c> (.AI.Agent
+    ///     cannot reference Client.Models). Returns null for a null/empty set so the no-skills path stays byte-identical
+    ///     (the factory keeps the existing positional constructor and attaches no context provider).
+    /// </summary>
+    private static IReadOnlyList<InvocationSkill>? MapSkills(IReadOnlyList<ResolvedSkill>? skills)
+    {
+        if (skills is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        return [.. skills.Select(static skill => new InvocationSkill(skill.Name, skill.Description, skill.Body))];
     }
 
     /// <summary>

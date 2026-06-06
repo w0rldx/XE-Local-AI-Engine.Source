@@ -40,7 +40,8 @@ public static class RuntimePackageConfigHash
         string? modelProfile,
         TimeoutSettings timeouts,
         string? reasoningEffort = null,
-        OrchestrationSpec? orchestrationSpec = null)
+        OrchestrationSpec? orchestrationSpec = null,
+        IReadOnlyList<ResolvedSkill>? skills = null)
     {
         var canonicalJson = SerializeCanonicalJson(agentDefinitionVersion,
             resolvedSystemPrompt,
@@ -48,7 +49,8 @@ public static class RuntimePackageConfigHash
             modelProfile,
             timeouts,
             reasoningEffort,
-            orchestrationSpec);
+            orchestrationSpec,
+            skills);
 
         return FormatLowercaseHex(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
     }
@@ -59,7 +61,8 @@ public static class RuntimePackageConfigHash
         string? modelProfile,
         TimeoutSettings timeouts,
         string? reasoningEffort = null,
-        OrchestrationSpec? orchestrationSpec = null)
+        OrchestrationSpec? orchestrationSpec = null,
+        IReadOnlyList<ResolvedSkill>? skills = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resolvedSystemPrompt);
         ArgumentNullException.ThrowIfNull(allowedTools);
@@ -92,10 +95,43 @@ public static class RuntimePackageConfigHash
             // It is emitted with WhenWritingNull so a single-agent loopback or the encrypted/server path (which never
             // sets it) serializes BYTE-IDENTICALLY to the pre-P5 payload — the cross-repo round-trip digest depends on
             // this. The per-property condition overrides the type-wide DefaultIgnoreCondition=Never.
-            Orchestration = BuildOrchestrationHashPayload(orchestrationSpec)
+            Orchestration = BuildOrchestrationHashPayload(orchestrationSpec),
+            // The resolved skill set is folded deterministically (sorted by Id, body HASHED not embedded) ONLY when
+            // non-empty. Like Orchestration it is emitted WhenWritingNull, so the no-skills loopback and the
+            // encrypted/server path (which never carries skills) serialize BYTE-IDENTICALLY to the pre-skills payload.
+            // Skills use MAF progressive disclosure (bodies are NOT in the resolved prompt), so a body/rename/picklist
+            // change would not move ResolvedSystemPrompt — folding the set here is what makes those changes invalidate
+            // resume. The body HASH (not the body) keeps the canonical JSON free of plaintext skill bodies.
+            Skills = BuildSkillsHashPayload(skills)
         };
 
         return JsonSerializer.Serialize(payload, SerializerOptions);
+    }
+
+    private static List<SkillHashPayload>? BuildSkillsHashPayload(IReadOnlyList<ResolvedSkill>? skills)
+    {
+        if (skills is null || skills.Count == 0)
+        {
+            return null;
+        }
+
+        return
+        [
+            .. skills
+               .OrderBy(static skill => skill.Id.ToString("N"), StringComparer.Ordinal)
+               .Select(static skill => new SkillHashPayload
+               {
+                   Name = skill.Name,
+                   Description = skill.Description,
+                   BodyHash = HashBody(skill.Body),
+                   Version = skill.Version
+               })
+        ];
+    }
+
+    private static string HashBody(string body)
+    {
+        return FormatLowercaseHex(SHA256.HashData(Encoding.UTF8.GetBytes(body)));
     }
 
     private static OrchestrationHashPayload? BuildOrchestrationHashPayload(OrchestrationSpec? spec)
@@ -192,11 +228,32 @@ public static class RuntimePackageConfigHash
         [JsonPropertyOrder(6)]
         public required TimeoutSettingsHashPayload Timeouts { get; init; }
 
-        // Last field, omitted entirely when null so the pre-P5 payload is byte-identical (the cross-repo round-trip
+        // Omitted entirely when null so the pre-P5 payload is byte-identical (the cross-repo round-trip
         // digest depends on this). Only the loopback orchestration path sets it.
         [JsonPropertyOrder(7)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public OrchestrationHashPayload? Orchestration { get; init; }
+
+        // Last field, omitted entirely when null so the pre-skills payload is byte-identical (same posture as
+        // Orchestration). Only the loopback path with a non-empty resolved skill set populates it.
+        [JsonPropertyOrder(8)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<SkillHashPayload>? Skills { get; init; }
+    }
+
+    private sealed record SkillHashPayload
+    {
+        [JsonPropertyOrder(1)]
+        public required string Name { get; init; }
+
+        [JsonPropertyOrder(2)]
+        public required string Description { get; init; }
+
+        [JsonPropertyOrder(3)]
+        public required string BodyHash { get; init; }
+
+        [JsonPropertyOrder(4)]
+        public required int Version { get; init; }
     }
 
     private sealed record TimeoutSettingsHashPayload

@@ -960,6 +960,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider(offeredTool);
         var resolver = new AgentDefinitionResolver(store,
             CreateEmptyPlaybookStore(),
+            CreateEmptySkillStore(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -1058,6 +1059,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider(offeredTool);
         var resolver = new AgentDefinitionResolver(store,
             CreateEmptyPlaybookStore(),
+            CreateEmptySkillStore(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
@@ -1124,6 +1126,14 @@ public sealed class NodeChatStreamServiceTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         return playbookStore;
+    }
+
+    private static IAgentSkillStore CreateEmptySkillStore()
+    {
+        var skillStore = Substitute.For<IAgentSkillStore>();
+        skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([]));
+        return skillStore;
     }
 
     private static string LoadEmbeddedChatPrompt()

@@ -60,6 +60,104 @@ public sealed class RuntimePackageConfigHashTests
         AssertEx.Equal("a532bda9b1fbae5b0cb6982317a98450be90a5694bb91e492a552cfed4fdd4ae", digest);
     }
 
+    // CENTRAL regression for the agent-skills feature: a null OR empty resolved skill set must yield the EXACT legacy
+    // canonical JSON and digest the pre-skills payload produced (and that the server MixedEnvelopeConfigHashService
+    // still reproduces). The skill field is emitted WhenWritingNull, so the JSON ends at "timeouts" exactly as the
+    // shared vector above. If this drifts, every encrypted invocation fails runtime-package-config-hash-mismatch.
+    [Test]
+    public void ConfigHash_NoSkills_ByteIdenticalToPreSkillsDigest()
+    {
+        var nullSkillsJson = SerializeSharedVector(skills: null);
+        var emptySkillsJson = SerializeSharedVector(skills: []);
+        var nullSkillsDigest = ComputeSharedVector(skills: null);
+        var emptySkillsDigest = ComputeSharedVector(skills: []);
+
+        const string ExpectedJson =
+            "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"You are a helpful local AI assistant.\",\"allowedTools\":[{\"name\":\"open_url\",\"description\":\"Open a URL in the worker browser\",\"schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"url\\\":{\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"url\\\"]}\",\"location\":0,\"requiresApproval\":false}],\"modelProfile\":null,\"reasoningEffort\":null,\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}";
+
+        AssertEx.Equal(ExpectedJson, nullSkillsJson);
+        AssertEx.Equal(ExpectedJson, emptySkillsJson);
+        AssertEx.Equal("a532bda9b1fbae5b0cb6982317a98450be90a5694bb91e492a552cfed4fdd4ae", nullSkillsDigest);
+        AssertEx.Equal("a532bda9b1fbae5b0cb6982317a98450be90a5694bb91e492a552cfed4fdd4ae", emptySkillsDigest);
+    }
+
+    // Resume invalidation: a non-empty skill set must change the digest off the no-skills baseline, and EACH of a body
+    // edit, a rename, and a picklist change (an added/removed skill) must move it again. The body is HASHED into the
+    // payload — never embedded — so a body edit changes the digest without placing plaintext in the canonical JSON.
+    [Test]
+    public void ConfigHash_SkillBodyEdit_RenameOrPicklistChange_ChangesDigest()
+    {
+        var skillId = Guid.NewGuid();
+        var secondSkillId = Guid.NewGuid();
+
+        var baseline = ComputeSharedVector(skills: null);
+        var withSkill = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1)]);
+        var bodyEdited = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v2", 1)]);
+        var renamed = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "k8s-debug", "Debug k8s", "## Body v1", 1)]);
+        var descriptionEdited = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug Kubernetes clusters", "## Body v1", 1)]);
+        var versionBumped = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 2)]);
+        var picklistAdded = ComputeSharedVector(skills:
+        [
+            new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1),
+            new ResolvedSkill(secondSkillId, "log-triage", "Triage logs", "## Logs", 1)
+        ]);
+
+        AssertEx.True(withSkill != baseline, "Adding a skill must change the digest off the no-skills baseline.");
+        AssertEx.True(bodyEdited != withSkill, "A skill body edit must change the digest.");
+        AssertEx.True(renamed != withSkill, "A skill rename must change the digest.");
+        AssertEx.True(descriptionEdited != withSkill, "A skill description edit must change the digest.");
+        AssertEx.True(versionBumped != withSkill, "A skill version bump must change the digest.");
+        AssertEx.True(picklistAdded != withSkill, "Adding a skill to the picklist must change the digest.");
+    }
+
+    private static string SerializeSharedVector(IReadOnlyList<ResolvedSkill>? skills)
+    {
+        return RuntimePackageConfigHash.SerializeCanonicalJson(7,
+            "You are a helpful local AI assistant.",
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = "open_url",
+                    Description = "Open a URL in the worker browser",
+                    Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
+                }
+            ],
+            null,
+            new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30
+            },
+            reasoningEffort: null,
+            orchestrationSpec: null,
+            skills: skills);
+    }
+
+    private static string ComputeSharedVector(IReadOnlyList<ResolvedSkill>? skills)
+    {
+        return RuntimePackageConfigHash.Compute(7,
+            "You are a helpful local AI assistant.",
+            [
+                new MixedEnvelopeAllowedToolDto
+                {
+                    Name = "open_url",
+                    Description = "Open a URL in the worker browser",
+                    Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
+                }
+            ],
+            null,
+            new TimeoutSettings
+            {
+                InvocationTimeoutSeconds = 300,
+                ToolCallTimeoutSeconds = 60,
+                StreamIdleTimeoutSeconds = 30
+            },
+            reasoningEffort: null,
+            orchestrationSpec: null,
+            skills: skills);
+    }
+
     // Cross-repo round-trip guard (worker half): a ClientLocal tool carrying RequiresApproval must canonicalize to
     // the SAME bytes/digest the server MixedEnvelopeConfigHashService produces for the identical fixture vector. The
     // matching server assertion lives in C0re.Tests.UnitTests MixedEnvelopeConfigHashServiceTests; if these two golden

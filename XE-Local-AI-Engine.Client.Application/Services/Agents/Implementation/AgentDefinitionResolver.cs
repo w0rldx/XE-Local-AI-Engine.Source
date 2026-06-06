@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
+    private readonly IAgentSkillStore _agentSkillStore;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionResolver> _logger;
     private readonly IPlaybookActionStore _playbookActionStore;
@@ -16,6 +17,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 
     public AgentDefinitionResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
+        IAgentSkillStore agentSkillStore,
         ILocalToolOfferProvider localToolOfferProvider,
         IPlaybookRetrievalRanker retrievalRanker,
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
@@ -23,6 +25,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
+        _agentSkillStore = agentSkillStore ?? throw new ArgumentNullException(nameof(agentSkillStore));
         _localToolOfferProvider = localToolOfferProvider ?? throw new ArgumentNullException(nameof(localToolOfferProvider));
         _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
         ArgumentNullException.ThrowIfNull(retrievalOptions);
@@ -54,6 +57,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         var effectiveModel = definition.ModelProfile ?? activeModelId;
         var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools);
         var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        var skills = await ResolveSkillsAsync(definition, cancellationToken).ConfigureAwait(false);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
@@ -61,7 +65,41 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             definition.ReasoningEffort,
             definition.Version,
             definition.Id,
-            definition.Name);
+            definition.Name,
+            skills);
+    }
+
+    /// <summary>
+    ///     Resolves the definition's per-agent skill picklist into the enabled, decrypted skills MAF progressive
+    ///     disclosure will offer. The store's fast-path filters to Enabled==true and omits missing ids; any assigned id
+    ///     absent from the result (the skill was deleted or disabled) is dropped and logged by id only — never the body
+    ///     or description (privacy: dropped-skill warnings carry no encrypted content). An empty/null picklist short-
+    ///     circuits with no store call so the no-skills path stays byte-identical to the pre-skills resolve.
+    /// </summary>
+    private async Task<IReadOnlyList<ResolvedSkill>> ResolveSkillsAsync(AgentDefinitionRecord definition, CancellationToken cancellationToken)
+    {
+        var assignedIds = definition.AllowedSkillIds;
+        if (assignedIds is null || assignedIds.Count == 0)
+        {
+            return [];
+        }
+
+        var enabled = await _agentSkillStore.ListEnabledByIdsAsync(assignedIds, cancellationToken).ConfigureAwait(false);
+
+        var resolvedIds = new HashSet<Guid>(enabled.Select(static skill => skill.Id));
+        var droppedIds = assignedIds.Where(id => !resolvedIds.Contains(id)).ToArray();
+        if (droppedIds.Length > 0)
+        {
+            _logger.LogWarning("Agent definition {AgentDefinitionId} assigns {DroppedCount} skill(s) that are missing or disabled ({DroppedSkillIds}); they were dropped.",
+                definition.Id,
+                droppedIds.Length,
+                string.Join(", ", droppedIds));
+        }
+
+        return
+        [
+            .. enabled.Select(static skill => new ResolvedSkill(skill.Id, skill.Name, skill.Description, skill.Body, skill.Version))
+        ];
     }
 
     /// <summary>

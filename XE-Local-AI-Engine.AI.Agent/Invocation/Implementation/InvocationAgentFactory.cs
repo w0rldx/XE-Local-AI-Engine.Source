@@ -65,13 +65,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         _logger.LogDebug("Creating invocation agent context for model {ModelId}.", definition.ModelId);
 
-        var agent = new ChatClientAgent(_chatClient,
-            $"{_options.AgentNamePrefix}-{definition.ModelId}",
-            definition.Instructions,
-            "XE Local AI Engine worker invocation agent.",
-            tools,
-            _loggerFactory,
-            _serviceProvider);
+        var agent = BuildAgent(definition, tools);
 
         var seedMessages = BuildSeedMessages(definition);
 
@@ -131,6 +125,69 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         context.Items["toolsEnabled"] = tools.Count > 0;
 
         return Task.FromResult(context);
+    }
+
+    /// <summary>
+    ///     Builds the turn's <see cref="ChatClientAgent" />. With NO resolved skills this keeps the existing positional
+    ///     constructor verbatim, so the no-skills agent build is byte-identical to the pre-skills path. With one or more
+    ///     resolved skills it builds a MAF <see cref="AgentSkillsProvider" /> from <see cref="AgentInlineSkill" /> records
+    ///     (name + description + body-as-instructions; no scripts/resources in v1) and constructs the agent through the
+    ///     <see cref="ChatClientAgentOptions" /> constructor with that provider attached via
+    ///     <see cref="ChatClientAgentOptions.AIContextProviders" />. The provider serves each skill's body on demand
+    ///     (progressive disclosure); its skill-discovery tools are serviced by the same FunctionInvokingChatClient that
+    ///     already services the agent's own tools. Note: MAF 1.8.0 has NO <c>Instructions</c> property on
+    ///     <see cref="ChatClientAgentOptions" /> — the system instructions live on <see cref="ChatOptions.Instructions" />
+    ///     (verified against Microsoft.Agents.AI.xml 1.8.0), which is where the positional constructor's
+    ///     <c>instructions</c> argument also lands.
+    /// </summary>
+    private ChatClientAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
+    {
+        var agentName = $"{_options.AgentNamePrefix}-{definition.ModelId}";
+        const string agentDescription = "XE Local AI Engine worker invocation agent.";
+
+        if (definition.Skills is not { Count: > 0 } skills)
+        {
+            // No-skills path: unchanged positional constructor (byte-identical to the pre-skills build).
+            return new ChatClientAgent(_chatClient,
+                agentName,
+                definition.Instructions,
+                agentDescription,
+                tools,
+                _loggerFactory,
+                _serviceProvider);
+        }
+
+        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) ship as [Experimental] in Microsoft.Agents.AI
+        // 1.8.0. The surface (3-arg AgentInlineSkill + AgentSkill[] provider ctor) is verified against the 1.8.0 .xml
+        // and is the documented progressive-disclosure path; the no-skills path above stays on the stable ctor, so the
+        // experimental surface is reached only when an agent has assigned skills. Suppress is scoped to this block.
+#pragma warning disable MAAI001
+        var inlineSkills = new AgentInlineSkill[skills.Count];
+        for (var index = 0; index < skills.Count; index++)
+        {
+            var skill = skills[index];
+            inlineSkills[index] = new AgentInlineSkill(skill.Name, skill.Description, skill.Body);
+        }
+
+        var skillsProvider = new AgentSkillsProvider(inlineSkills);
+#pragma warning restore MAAI001
+
+        return new ChatClientAgent(_chatClient,
+            new ChatClientAgentOptions
+            {
+                Name = agentName,
+                Description = agentDescription,
+                // Instructions + the agent's own tools ride ChatOptions (MAF moves them here under the hood on the
+                // positional path too); the per-turn RunOptions.ChatOptions still carries model id / think / sampling.
+                ChatOptions = new ChatOptions
+                {
+                    Instructions = definition.Instructions,
+                    Tools = tools
+                },
+                AIContextProviders = [skillsProvider]
+            },
+            _loggerFactory,
+            _serviceProvider);
     }
 
     /// <summary>

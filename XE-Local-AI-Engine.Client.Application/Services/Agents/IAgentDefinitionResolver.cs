@@ -38,6 +38,9 @@ public interface IAgentDefinitionResolver
 ///     <see cref="AgentDefinitionId" /> and <see cref="AgentName" /> carry the resolved agent's provenance + display-name
 ///     snapshot so the stream service stamps per-response attribution without a second fetch. The attribution members are
 ///     trailing (with defaults) so they never participate in the config hash and never affect positional construction.
+///     <see cref="Skills" /> is likewise trailing (defaults to null/empty): the enabled+assigned skill set used for MAF
+///     progressive disclosure. It is NOT folded into <see cref="ResolvedSystemPrompt" /> (bodies load on demand), so the
+///     runtime-package builder folds it into the config hash separately and threads it to the invocation factory.
 /// </summary>
 public sealed record ResolvedAgentRuntime(
     string ResolvedSystemPrompt,
@@ -46,4 +49,5 @@ public sealed record ResolvedAgentRuntime(
     string? ReasoningEffort,
     int AgentDefinitionVersion,
     Guid AgentDefinitionId = default,
-    string AgentName = "");
+    string AgentName = "",
+    IReadOnlyList<ResolvedSkill>? Skills = null);
