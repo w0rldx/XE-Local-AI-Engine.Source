@@ -82,6 +82,11 @@ export function validatePreviewGraph(graph: PreviewWorkflowGraph): PreviewWorkfl
 		}
 	}
 
+	// The Start node must carry non-empty seed text — it is the first agent's user input; an empty run is rejected.
+	if (graph.startText.trim().length === 0) {
+		errorKeys.add(`${KEY_PREFIX}startText`);
+	}
+
 	// Every Agent node must carry a model and instructions.
 	for (const agent of nodes.filter((node) => node.kind === "Agent")) {
 		if ((agent.model ?? "").trim().length === 0) {

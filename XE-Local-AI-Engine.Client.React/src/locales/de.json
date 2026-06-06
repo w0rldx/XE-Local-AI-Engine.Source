@@ -1750,6 +1750,7 @@
 				"notLinear": "Der Workflow muss eine lineare Kette sein (eine Verbindung ein- und ausgehend pro Knoten).",
 				"agentModel": "Jeder Agent-Knoten muss ein Modell angeben.",
 				"agentInstructions": "Jeder Agent-Knoten muss Anweisungen angeben.",
+				"startText": "Der Start-Knoten muss einen Eingabetext haben, bevor der Workflow ausgeführt werden kann.",
 				"endUnreachable": "Der End-Knoten muss vom Start-Knoten aus erreichbar sein.",
 				"noAgent": "Der Workflow muss mindestens einen Agent-Knoten zwischen Start und Ende enthalten."
 			},

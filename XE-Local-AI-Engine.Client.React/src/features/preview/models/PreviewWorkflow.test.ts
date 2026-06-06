@@ -85,7 +85,7 @@ describe("validatePreviewGraph", () => {
 
 	it("rejects a Start → End chain with no agent", () => {
 		const result = validatePreviewGraph({
-			startText: "",
+			startText: "hello",
 			nodes: [
 				{ id: "start", kind: "Start" },
 				{ id: "end", kind: "End" },
@@ -94,6 +94,12 @@ describe("validatePreviewGraph", () => {
 		});
 		expect(result.isValid).toBe(false);
 		expect(result.errorKeys).toContain("pages.preview.validation.noAgent");
+	});
+
+	it("rejects an otherwise-valid chain when the Start input is empty", () => {
+		const result = validatePreviewGraph({ ...LINEAR_GRAPH, startText: "   " });
+		expect(result.isValid).toBe(false);
+		expect(result.errorKeys).toContain("pages.preview.validation.startText");
 	});
 
 	it("rejects an Agent node missing a model", () => {

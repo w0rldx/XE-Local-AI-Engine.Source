@@ -119,6 +119,12 @@ public static class PreviewWorkflowGraphValidator
             }
         }
 
+        // The Start node must carry non-empty seed text (the first agent's user input); an empty run is rejected.
+        if (string.IsNullOrWhiteSpace(graph.StartText))
+        {
+            errors.Add("The Start node must have non-empty input text.");
+        }
+
         // The reachability + "≥ 1 Agent between Start and End" rules only make sense once the structural rules hold.
         if (errors.Count == 0)
         {

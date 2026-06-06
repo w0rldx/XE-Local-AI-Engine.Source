@@ -18,6 +18,14 @@ public sealed class PreviewWorkflowValidatorTests
     }
 
     [Test]
+    public void PreviewValidator_RejectsEmptyStartText()
+    {
+        var graph = PreviewGraphBuilder.Linear() with { StartText = "   " };
+
+        AssertEx.False(PreviewWorkflowGraphValidator.Validate(graph).IsValid);
+    }
+
+    [Test]
     public void PreviewValidator_RejectsNoStart()
     {
         var graph = new PreviewWorkflowGraph
