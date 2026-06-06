@@ -49,6 +49,7 @@ const emptyFormValues: AgentDefinitionFormValues = {
 	kind: "Single",
 	allowedToolNames: [],
 	toolApprovals: {},
+	allowedSkillIds: [],
 	orchestration: emptyOrchestrationTopology(),
 	playbookEnabled: false,
 };
@@ -63,6 +64,7 @@ function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
 		kind: definition.kind,
 		allowedToolNames: [...definition.allowedToolNames],
 		toolApprovals: { ...definition.toolApprovals },
+		allowedSkillIds: [...definition.allowedSkillIds],
 		// Round-trip the persisted topology back into the editor (strips the triage from the specialist list).
 		orchestration: deserializeOrchestrationTopology(definition.orchestrationTopologyJson).topology,
 		playbookEnabled: definition.playbookEnabled,

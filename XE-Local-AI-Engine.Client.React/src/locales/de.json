@@ -75,7 +75,8 @@
 		"adminPanelClientNodes": "Client-Nodes",
 		"adminPanelAiModels": "KI-Modelle",
 		"adminPanelFeedback": "Feedback",
-		"adminPanelAppKeys": "App-Schlüssel"
+		"adminPanelAppKeys": "App-Schlüssel",
+		"skills": "Skills"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -1032,6 +1033,14 @@
 				"playbookEnabled": {
 					"label": "Operating-Playbook aktivieren",
 					"description": "Hängt die aktivierten Playbook-Aktionen dieses Agenten zur Laufzeit an seine Anweisungen an."
+				},
+				"skills": {
+					"label": "Skills",
+					"privacyNote": "Zugewiesene Skills werden vom Modell dieses Agenten bei Bedarf geladen. Ist dieses Modell ein Cloud-Anbieter, verlässt der Skill-Inhalt diesen Knoten.",
+					"loading": "Skills werden geladen…",
+					"loadError": "Die Skill-Bibliothek konnte nicht geladen werden.",
+					"empty": "Noch keine Skills. Erstellen Sie Skills auf der Skills-Seite, um sie hier zuzuweisen.",
+					"disabledBadge": "deaktiviert"
 				}
 			},
 			"playbook": {
@@ -1776,6 +1785,66 @@
 				"firstName": "Vorname",
 				"lastName": "Nachname",
 				"email": "Email"
+			}
+		},
+		"skills": {
+			"eyebrow": "Worker-Node",
+			"title": "Skills",
+			"subtitle": "Erstellen Sie eine knotenweite Bibliothek wiederverwendbarer Skills. Weisen Sie einem Agenten Skills zu, damit sein Modell das passende Fachwissen bei der Arbeit bei Bedarf laden kann.",
+			"createButton": "Neuer Skill",
+			"list": {
+				"loading": "Skills werden geladen…",
+				"empty": "Noch keine Skills. Erstellen Sie einen, um Ihren Agenten wiederverwendbares Wissen zu geben.",
+				"enabledBadge": "Aktiviert",
+				"disabledBadge": "Deaktiviert",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen",
+				"columns": {
+					"name": "Name",
+					"enabled": "Aktiviert",
+					"version": "Version",
+					"actions": "Aktionen"
+				}
+			},
+			"editor": {
+				"createTitle": "Neuer Skill",
+				"editTitle": "Skill bearbeiten",
+				"loading": "Skill wird geladen…"
+			},
+			"form": {
+				"privacyNote": "Skills werden an das Modell des Agenten gesendet, wenn es sie lädt. Ist dieses Modell ein Cloud-Anbieter, verlässt der Skill-Inhalt diesen Knoten.",
+				"name": {
+					"label": "Name",
+					"description": "Kleingeschriebener Bezeichner (z. B. invoice-review).",
+					"placeholder": "invoice-review",
+					"required": "Name ist erforderlich.",
+					"invalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche verwenden (kein führender oder abschließender Bindestrich)."
+				},
+				"description": {
+					"label": "Beschreibung",
+					"description": "Kurze Zusammenfassung, die das Modell sieht, um zu entscheiden, ob dieser Skill geladen wird.",
+					"placeholder": "So prüfen Sie Lieferantenrechnungen.",
+					"required": "Beschreibung ist erforderlich."
+				},
+				"body": {
+					"label": "Inhalt",
+					"description": "Die vollständigen Skill-Anweisungen, vom Modell des Agenten bei Bedarf geladen.",
+					"placeholder": "# So prüfen Sie eine Rechnung\n\n1. …",
+					"required": "Inhalt ist erforderlich."
+				},
+				"enabled": {
+					"label": "Aktiviert",
+					"description": "Deaktivierte Skills werden nie von einem Agenten geladen, auch wenn sie weiterhin zugewiesen sind."
+				}
+			},
+			"delete": {
+				"title": "Skill löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Skills konnten nicht geladen werden.",
+				"save": "Skill konnte nicht gespeichert werden.",
+				"delete": "Skill konnte nicht gelöscht werden."
 			}
 		}
 	},

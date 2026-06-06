@@ -43,6 +43,7 @@ export function toAgentDefinition(dto: XeLocalAiEngineClientEndpointsAgentsV1Age
 		kind: normalizeKind(dto.kind),
 		allowedToolNames: [...(dto.allowedToolNames ?? [])],
 		toolApprovals: { ...(dto.toolApprovals ?? {}) },
+		allowedSkillIds: [...(dto.allowedSkillIds ?? [])],
 		orchestrationTopologyJson: dto.orchestrationTopologyJson ?? null,
 		playbookEnabled: dto.playbookEnabled ?? false,
 		version: dto.version ?? 0,
@@ -79,6 +80,7 @@ export function toSaveAgentDefinitionRequest(
 		toolApprovals: Object.fromEntries(
 			Object.entries(form.toolApprovals).filter(([toolName]) => form.allowedToolNames.includes(toolName)),
 		),
+		allowedSkillIds: [...form.allowedSkillIds],
 		orchestrationTopologyJson:
 			form.kind === "Orchestrator" ? serializeOrchestrationTopology(form.orchestration, triageAgentDefinitionId) : null,
 		playbookEnabled: form.playbookEnabled,

@@ -73,6 +73,12 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 }));
 // The agent form's tool selector fetches the catalog via useToolCatalog (dynamic tool-catalog). Mock it so opening the
 // editor never issues a real request and renders deterministically.
+// The agent form's skill selector fetches the node skill library via useSkills. Mock it so opening the editor in
+// these tests is deterministic and never hits the network (the skill rows aren't asserted here).
+vi.mock("@/features/skills/queries/useSkills", () => ({
+	useSkills: () => ({ data: [], isLoading: false, error: null }),
+}));
+
 vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: () => ({ data: [], isLoading: false, error: null }),
 }));
@@ -89,6 +95,7 @@ const sampleDefinition: AgentDefinition = {
 	kind: "Single",
 	allowedToolNames: ["GetCurrentTime"],
 	toolApprovals: { GetCurrentTime: true },
+	allowedSkillIds: [],
 	orchestrationTopologyJson: null,
 	playbookEnabled: false,
 	version: 1,

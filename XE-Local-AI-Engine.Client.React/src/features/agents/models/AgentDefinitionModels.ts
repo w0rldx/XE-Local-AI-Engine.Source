@@ -28,6 +28,9 @@ export interface AgentDefinition {
 	readonly kind: AgentDefinitionKind;
 	readonly allowedToolNames: readonly string[];
 	readonly toolApprovals: Readonly<Record<string, boolean>>;
+	// Per-agent skill picklist: ids of the node skills this agent may load on demand (MAF progressive disclosure).
+	// Treated exactly like allowedToolNames — optional, defaults to []. Config-affecting (bumps the agent version).
+	readonly allowedSkillIds: readonly string[];
 	readonly orchestrationTopologyJson: string | null;
 	// When true the agent's enabled playbook actions are appended to its instructions at resolve
 	// time. Gates injection only — it is NOT a config-affecting field for the agent's own version bump (the
@@ -51,6 +54,9 @@ export interface AgentDefinitionFormValues {
 	kind: AgentDefinitionKind;
 	allowedToolNames: string[];
 	toolApprovals: Record<string, boolean>;
+	// Per-agent skill picklist (node skill ids). Mirrors allowedToolNames in posture: an empty list is byte-identical
+	// to the pre-skills payload at resolve time.
+	allowedSkillIds: string[];
 	orchestration: OrchestrationTopology;
 	// Toggles whether this agent's enabled playbook actions are injected into its instructions.
 	playbookEnabled: boolean;
@@ -73,13 +79,14 @@ export const agentDefinitionFormSchema = z
 		kind: kindSchema,
 		allowedToolNames: z.array(z.string()),
 		toolApprovals: z.record(z.string(), z.boolean()),
+		allowedSkillIds: z.array(z.string()),
 		orchestration: orchestrationTopologyShapeSchema,
 		playbookEnabled: z.boolean(),
 	})
-	.refine(
-		(value) => Object.keys(value.toolApprovals).every((toolName) => value.allowedToolNames.includes(toolName)),
-		{ message: "toolApprovals keys must be a subset of allowedToolNames", path: ["toolApprovals"] },
-	)
+	.refine((value) => Object.keys(value.toolApprovals).every((toolName) => value.allowedToolNames.includes(toolName)), {
+		message: "toolApprovals keys must be a subset of allowedToolNames",
+		path: ["toolApprovals"],
+	})
 	.superRefine((value, ctx) => {
 		// Orchestration validity is only required for Orchestrator definitions. A Single definition may carry a
 		// stale/empty topology that must not block submit, so re-run the topology rules only when kind=Orchestrator.

@@ -48,6 +48,7 @@ describe("nodeCapabilities", () => {
 			invocations: "/invocations",
 			tools: "/tools",
 			agents: "/agents",
+			skills: "/skills",
 			mcp: "/mcp",
 			scheduler: "/scheduler",
 			modelRecommendations: "/model-recommendations",
