@@ -4,6 +4,52 @@ export type ClientOptions = {
 	baseURL: "https://localhost:50722" | (string & {});
 };
 
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillResponse = {
+	id?: string;
+	name?: string;
+	description?: string;
+	body?: string;
+	enabled?: boolean;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = {
+	name?: string | null;
+	description?: string | null;
+	body?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = {
+	id?: string;
+	name?: string;
+	description?: string;
+	enabled?: boolean;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = {
+	name?: string | null;
+	description?: string | null;
+	body?: string | null;
+	enabled?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = {
 	outcome?: string;
 	cancellationRequestedAtUtc?: number | null;
@@ -998,6 +1044,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	};
 	orchestrationTopologyJson?: string | null;
 	playbookEnabled?: boolean;
+	allowedSkillIds?: Array<string>;
 	version?: number;
 	createdAtUtc?: number;
 	updatedAtUtc?: number;
@@ -1018,6 +1065,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	} | null;
 	orchestrationTopologyJson?: string | null;
 	playbookEnabled?: boolean;
+	allowedSkillIds?: Array<string> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1CreateGoldenConversationRequest = {
@@ -1193,6 +1241,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	} | null;
 	orchestrationTopologyJson?: string | null;
 	playbookEnabled?: boolean;
+	allowedSkillIds?: Array<string> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1UpdatePlaybookActionRequest = {
@@ -1209,6 +1258,147 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	scope?: string | null;
 	priority?: number;
 };
+
+export type ListSkillsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills";
+};
+
+export type ListSkillsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListSkillsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse;
+};
+
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
+
+export type CreateSkillData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/skills";
+};
+
+export type CreateSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+};
+
+export type CreateSkillResponse = CreateSkillResponses[keyof CreateSkillResponses];
+
+export type DeleteSkillData = {
+	body?: never;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}";
+};
+
+export type DeleteSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteSkillResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteSkillResponse = DeleteSkillResponses[keyof DeleteSkillResponses];
+
+export type GetSkillData = {
+	body?: never;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}";
+};
+
+export type GetSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+};
+
+export type GetSkillResponse = GetSkillResponses[keyof GetSkillResponses];
+
+export type UpdateSkillData = {
+	body: XeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest;
+	path: {
+		skillId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/{skillId}";
+};
+
+export type UpdateSkillErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdateSkillResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResponse;
+};
+
+export type UpdateSkillResponse = UpdateSkillResponses[keyof UpdateSkillResponses];
 
 export type CancelScheduledJobRunData = {
 	body?: never;

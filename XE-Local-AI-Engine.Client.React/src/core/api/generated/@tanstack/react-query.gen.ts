@@ -21,6 +21,7 @@ import {
 	createNodeChatMessageRevision,
 	createPlaybookAction,
 	createScheduledJob,
+	createSkill,
 	deleteAgentDefinition,
 	deleteGoldenConversation,
 	deleteLocalModel,
@@ -29,6 +30,7 @@ import {
 	deleteNodeChatConversation,
 	deletePlaybookAction,
 	deleteScheduledJob,
+	deleteSkill,
 	disableAutoConnect,
 	disableScheduledJob,
 	disconnectConnection,
@@ -52,6 +54,7 @@ import {
 	getRuntimeManagerStatus,
 	getScheduledJob,
 	getScheduledJobRun,
+	getSkill,
 	getToolCapableModels,
 	getToolCatalog,
 	harvestGoldenConversations,
@@ -68,6 +71,7 @@ import {
 	listScheduledJobRuns,
 	listScheduledJobs,
 	listScheduledJobTemplates,
+	listSkills,
 	nodeAuthStatus,
 	nodeChangePassword,
 	nodeLogin,
@@ -98,6 +102,7 @@ import {
 	updateMcpServer,
 	updatePlaybookAction,
 	updateScheduledJob,
+	updateSkill,
 	updateSuggestedPlaybookAction,
 	validationProblemProbe,
 } from "../sdk.gen";
@@ -136,6 +141,8 @@ import type {
 	CreatePlaybookActionResponse,
 	CreateScheduledJobData,
 	CreateScheduledJobResponse,
+	CreateSkillData,
+	CreateSkillResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
 	DeleteGoldenConversationData,
@@ -154,6 +161,8 @@ import type {
 	DeletePlaybookActionResponse,
 	DeleteScheduledJobData,
 	DeleteScheduledJobResponse,
+	DeleteSkillData,
+	DeleteSkillResponse,
 	DisableAutoConnectData,
 	DisableAutoConnectResponse,
 	DisableScheduledJobData,
@@ -202,6 +211,8 @@ import type {
 	GetScheduledJobResponse,
 	GetScheduledJobRunData,
 	GetScheduledJobRunResponse,
+	GetSkillData,
+	GetSkillResponse,
 	GetToolCapableModelsData,
 	GetToolCapableModelsResponse,
 	GetToolCatalogData,
@@ -235,6 +246,8 @@ import type {
 	ListScheduledJobsResponse,
 	ListScheduledJobTemplatesData,
 	ListScheduledJobTemplatesResponse,
+	ListSkillsData,
+	ListSkillsResponse,
 	NodeAuthStatusData,
 	NodeAuthStatusResponse,
 	NodeChangePasswordData,
@@ -302,32 +315,14 @@ import type {
 	UpdatePlaybookActionResponse,
 	UpdateScheduledJobData,
 	UpdateScheduledJobResponse,
+	UpdateSkillData,
+	UpdateSkillResponse,
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionResponse,
 	ValidationProblemProbeData,
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
 } from "../types.gen";
-
-export const cancelScheduledJobRunMutation = (
-	options?: Partial<Options<CancelScheduledJobRunData>>,
-): UseMutationOptions<CancelScheduledJobRunResponse, AxiosError<DefaultError>, Options<CancelScheduledJobRunData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelScheduledJobRunResponse,
-		AxiosError<DefaultError>,
-		Options<CancelScheduledJobRunData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelScheduledJobRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export type QueryKey<TOptions extends Options> = [
 	Pick<TOptions, "baseURL" | "body" | "headers" | "path" | "query"> & {
@@ -366,6 +361,106 @@ const createQueryKey = <TOptions extends Options>(
 		params.query = options.query;
 	}
 	return [params];
+};
+
+export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options);
+
+export const listSkillsOptions = (options?: Options<ListSkillsData>) =>
+	queryOptions<ListSkillsResponse, AxiosError<DefaultError>, ListSkillsResponse, ReturnType<typeof listSkillsQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listSkills({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listSkillsQueryKey(options),
+	});
+
+export const createSkillMutation = (
+	options?: Partial<Options<CreateSkillData>>,
+): UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> => {
+	const mutationOptions: UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createSkill({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteSkillMutation = (
+	options?: Partial<Options<DeleteSkillData>>,
+): UseMutationOptions<DeleteSkillResponse, AxiosError<DefaultError>, Options<DeleteSkillData>> => {
+	const mutationOptions: UseMutationOptions<DeleteSkillResponse, AxiosError<DefaultError>, Options<DeleteSkillData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteSkill({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getSkillQueryKey = (options: Options<GetSkillData>) => createQueryKey("getSkill", options);
+
+export const getSkillOptions = (options: Options<GetSkillData>) =>
+	queryOptions<GetSkillResponse, AxiosError<DefaultError>, GetSkillResponse, ReturnType<typeof getSkillQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getSkill({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getSkillQueryKey(options),
+	});
+
+export const updateSkillMutation = (
+	options?: Partial<Options<UpdateSkillData>>,
+): UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> => {
+	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateSkill({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelScheduledJobRunMutation = (
+	options?: Partial<Options<CancelScheduledJobRunData>>,
+): UseMutationOptions<CancelScheduledJobRunResponse, AxiosError<DefaultError>, Options<CancelScheduledJobRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelScheduledJobRunResponse,
+		AxiosError<DefaultError>,
+		Options<CancelScheduledJobRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelScheduledJobRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
 };
 
 export const listScheduledJobsQueryKey = (options: Options<ListScheduledJobsData>) =>

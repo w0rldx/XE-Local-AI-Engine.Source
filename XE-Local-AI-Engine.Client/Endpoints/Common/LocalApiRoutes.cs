@@ -177,6 +177,18 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Node-wide agent skill library routes. Skills are SKILL.md documents (name + description + markdown body)
+    ///     that agent definitions select into via <c>AllowedSkillIds</c> and load on demand at runtime.
+    /// </summary>
+    public static class Skills
+    {
+        // Skill collection (GET list — body omitted; POST create) and the individual skill resource (GET full incl.
+        // body, PUT, DELETE).
+        public const string Definitions = "skills";
+        public const string DefinitionById = "skills/{skillId}";
+    }
+
+    /// <summary>
     ///     Scheduler management, run history, cancellation, and hub routes.
     /// </summary>
     public static class Scheduler
