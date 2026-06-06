@@ -52,6 +52,7 @@ describe("nodeCapabilities", () => {
 			scheduler: "/scheduler",
 			modelRecommendations: "/model-recommendations",
 			approvedImages: "/approved-images",
+			loadedModels: "/loaded-models",
 		});
 	});
 });

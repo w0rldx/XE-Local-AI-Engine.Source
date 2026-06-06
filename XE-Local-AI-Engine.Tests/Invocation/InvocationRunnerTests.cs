@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -1088,7 +1089,7 @@ public sealed class InvocationRunnerTests
             new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
             resolvedOrchestrationFactory,
-            new EnvelopeCryptoService(),
+            new EnvelopeCryptoService(new AesGcmNodeAeadCipher()),
             resolvedValidator,
             resolvedCapabilityReporter,
             Substitute.For<IDeadLetterStore>(),

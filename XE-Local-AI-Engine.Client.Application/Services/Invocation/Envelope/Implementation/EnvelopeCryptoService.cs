@@ -7,13 +7,19 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Parameters;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
 {
     private const int EpochKeyLength = 32;
-    private const int NonceLength = 12;
-    private const int TagLength = 16;
     private static readonly byte[] NodeWrapInfo = Encoding.UTF8.GetBytes("c0re-node-wrap|v1");
+
+    private readonly INodeAeadCipher _cipher;
+
+    public EnvelopeCryptoService(INodeAeadCipher cipher)
+    {
+        _cipher = cipher ?? throw new ArgumentNullException(nameof(cipher));
+    }
 
     public EnvelopeDecryptionResult DecryptRuntimePackage(EncryptedRuntimePackageDto package, Key nodePrivateKey)
     {
@@ -103,7 +109,7 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         };
     }
 
-    private static EnvelopeDecryptionResult DecryptEnvelope(Guid conversationId,
+    private EnvelopeDecryptionResult DecryptEnvelope(Guid conversationId,
         Guid messageId,
         int epochVersion,
         string providedAad,
@@ -139,17 +145,17 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         }
     }
 
-    private static void ValidateWrappedPayload(ReadOnlySpan<byte> nonce,
+    private void ValidateWrappedPayload(ReadOnlySpan<byte> nonce,
         ReadOnlySpan<byte> ciphertext,
         ReadOnlySpan<byte> wrappedEpochKey,
         ReadOnlySpan<byte> clientEphemeralPublicKey)
     {
-        if (nonce.Length != NonceLength)
+        if (nonce.Length != _cipher.NonceSize)
         {
-            throw new InvalidOperationException($"Envelope nonce must be {NonceLength} bytes.");
+            throw new InvalidOperationException($"Envelope nonce must be {_cipher.NonceSize} bytes.");
         }
 
-        if (ciphertext.Length <= TagLength)
+        if (ciphertext.Length <= _cipher.TagSize)
         {
             throw new InvalidOperationException("Envelope ciphertext must include at least one byte of plaintext plus the authentication tag.");
         }
@@ -207,37 +213,30 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         return epochKey;
     }
 
-    private static (byte[] Nonce, byte[] Ciphertext) EncryptPayload(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> epochKey, byte[] aad)
+    private (byte[] Nonce, byte[] Ciphertext) EncryptPayload(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> epochKey, byte[] aad)
     {
         ValidateEpochKey(epochKey);
 
-        var nonce = new byte[NonceLength];
-        var ciphertext = new byte[plaintext.Length];
-        var tag = new byte[TagLength];
-        var combined = new byte[ciphertext.Length + tag.Length];
-
+        var nonce = new byte[_cipher.NonceSize];
         RandomNumberGenerator.Fill(nonce);
 
-        using var aesGcm = new AesGcm(epochKey, TagLength);
-        aesGcm.Encrypt(nonce, plaintext, ciphertext, tag, aad);
+        var (ciphertext, tag) = _cipher.Encrypt(epochKey, nonce, plaintext, aad);
 
+        var combined = new byte[ciphertext.Length + tag.Length];
         ciphertext.CopyTo(combined, 0);
         tag.CopyTo(combined, ciphertext.Length);
         return (nonce, combined);
     }
 
-    private static byte[] DecryptPayload(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> ciphertextWithTag, ReadOnlySpan<byte> epochKey, byte[] aad)
+    private byte[] DecryptPayload(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> ciphertextWithTag, ReadOnlySpan<byte> epochKey, byte[] aad)
     {
         ValidateEpochKey(epochKey);
 
-        var ciphertextLength = ciphertextWithTag.Length - TagLength;
-        var plaintext = new byte[ciphertextLength];
+        var ciphertextLength = ciphertextWithTag.Length - _cipher.TagSize;
         var ciphertext = ciphertextWithTag[..ciphertextLength];
-        var tag = ciphertextWithTag[^TagLength..];
+        var tag = ciphertextWithTag[^_cipher.TagSize..];
 
-        using var aesGcm = new AesGcm(epochKey, TagLength);
-        aesGcm.Decrypt(nonce, ciphertext, tag, plaintext, aad);
-        return plaintext;
+        return _cipher.Decrypt(epochKey, nonce, ciphertext, tag, aad);
     }
 
     private static void ValidateEpochKey(ReadOnlySpan<byte> epochKey)

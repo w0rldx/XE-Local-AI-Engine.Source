@@ -85,6 +85,10 @@ Open Web UI: browser launched React Web UI URL
 
 Status: `(blocked: clean Windows 11 runner transcript pending RC MSI artifact)`. Replace this section with the captured transcript before claiming H1 complete.
 
+## Uninstall
+
+To remove the install (processes, the `xe-engine-runtime` WSL distro, data, secrets, binaries, and shortcuts), run the install-type-aware uninstaller. See [uninstall-windows.md](uninstall-windows.md). It never touches the WSL feature/platform or any other distro, and in external mode it removes only manifest-owned Docker artifacts.
+
 ## Troubleshooting pointers
 
 - `WSL_BLOCKED_BY_POLICY`: collect `wsl --status` output and corporate policy diagnostics.

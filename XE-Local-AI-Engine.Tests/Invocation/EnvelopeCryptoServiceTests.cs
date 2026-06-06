@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -11,7 +12,7 @@ public sealed class EnvelopeCryptoServiceTests
     [Test]
     public void EncryptChunk_WhenContentKind_UsesC0reContentChunkAad()
     {
-        var service = new EnvelopeCryptoService();
+        var service = new EnvelopeCryptoService(new AesGcmNodeAeadCipher());
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
         var epochKey = CreateEpochKey();
@@ -30,7 +31,7 @@ public sealed class EnvelopeCryptoServiceTests
     [Test]
     public void EncryptChunk_WhenReasoningKind_UsesC0reReasoningChunkAad()
     {
-        var service = new EnvelopeCryptoService();
+        var service = new EnvelopeCryptoService(new AesGcmNodeAeadCipher());
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
         var epochKey = CreateEpochKey();
@@ -55,7 +56,7 @@ public sealed class EnvelopeCryptoServiceTests
     [Test]
     public void EncryptCompleted_WhenReasoningProvided_UsesC0reMessageAads()
     {
-        var service = new EnvelopeCryptoService();
+        var service = new EnvelopeCryptoService(new AesGcmNodeAeadCipher());
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
         var epochKey = CreateEpochKey();

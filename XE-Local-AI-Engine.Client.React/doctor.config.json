@@ -4,7 +4,9 @@
 		"files": [
 			"src/core/api/generated/**",
 			"src/routeTree.gen.ts",
-			"**/*.gen.ts"
+			"**/*.gen.ts",
+			"src/core/api/Generated.runtime.ts",
+			"src/core/api/axios/AxiosInstance.ts"
 		]
 	}
 }
