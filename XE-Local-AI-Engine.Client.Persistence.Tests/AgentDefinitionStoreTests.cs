@@ -351,6 +351,86 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     }
 
     [Test]
+    public async Task AddAsync_DefaultAllowedSkillIds_RoundTripsAsEmpty()
+    {
+        var databasePath = GetDatabasePath("skills-default.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        Guid definitionId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var store = new AgentDefinitionStore(context, TimeProvider.System);
+            // CreateInput() supplies no AllowedSkillIds, so the picklist must default to an empty (never null) list.
+            var added = await store.AddAsync(CreateInput());
+            AssertEx.NotNull(added.AllowedSkillIds, "AllowedSkillIds should never be null on a stored record.");
+            AssertEx.Empty(added.AllowedSkillIds!, "A definition with no assigned skills should round-trip an empty list.");
+            definitionId = added.Id;
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var readStore = new AgentDefinitionStore(readContext, TimeProvider.System);
+
+        var record = AssertEx.NotNull(await readStore.GetByIdAsync(definitionId), "Definition should be found by id.");
+        AssertEx.Empty(record.AllowedSkillIds!, "The empty picklist should survive a read in a new context.");
+    }
+
+    [Test]
+    public async Task AddAndUpdate_AllowedSkillIds_RoundTripsAndChangeBumpsVersion()
+    {
+        var databasePath = GetDatabasePath("skills-assigned.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(5_000);
+        var firstSkill = Guid.NewGuid();
+        var secondSkill = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentDefinitionStore(context, clock);
+
+        var added = await store.AddAsync(CreateInput() with
+        {
+            AllowedSkillIds = new[]
+            {
+                firstSkill,
+                secondSkill
+            }
+        });
+        AssertEx.Equal(2, added.AllowedSkillIds!.Count);
+        AssertEx.Equal(firstSkill, added.AllowedSkillIds![0]);
+        AssertEx.Equal(secondSkill, added.AllowedSkillIds![1]);
+        AssertEx.Equal(1, added.Version);
+
+        // Changing the assigned skill set is config-affecting (same class as the tool list) and must bump Version.
+        clock.Advance(10);
+        var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
+            {
+                AllowedSkillIds = new[]
+                {
+                    firstSkill
+                }
+            }),
+            "Update should find the definition.");
+        AssertEx.Equal(1, updated.AllowedSkillIds!.Count);
+        AssertEx.Equal(firstSkill, updated.AllowedSkillIds![0]);
+        AssertEx.Equal(2, updated.Version);
+
+        // Re-applying the same skill set is not a config change and must not bump Version again.
+        clock.Advance(10);
+        var unchanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
+            {
+                AllowedSkillIds = new[]
+                {
+                    firstSkill
+                }
+            }),
+            "Update should find the definition.");
+        AssertEx.Equal(2, unchanged.Version);
+    }
+
+    [Test]
     public async Task GetByIdAsync_WhenInstructionsTampered_FailsAuthenticatedDecryption()
     {
         var databasePath = GetDatabasePath("tamper.sqlite");

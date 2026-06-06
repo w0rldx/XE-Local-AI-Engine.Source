@@ -92,6 +92,15 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 
+        // Agent skills are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
+        // skill's own id plus the column name — same layout as agent definitions. Both the description and the SKILL.md
+        // body are required encrypted columns.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentSkill>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Body), Guid.Empty, entry.Entity.Id, "body", trackedProperties);
+        }
+
         // Playbook actions are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
         // action's own id plus the column name — same layout as agent definitions. Behavior is required; the optional
         // trigger condition only encrypts when present.

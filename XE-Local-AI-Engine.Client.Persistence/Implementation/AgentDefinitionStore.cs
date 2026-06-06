@@ -30,6 +30,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             ReasoningEffort = input.ReasoningEffort,
             Kind = (int)input.Kind,
             AllowedToolNamesJson = SerializeToolNames(input.AllowedToolNames),
+            AllowedSkillIdsJson = SerializeSkillIds(input.AllowedSkillIds),
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
@@ -60,6 +61,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             ReasoningEffort = input.ReasoningEffort,
             Kind = (int)input.Kind,
             AllowedToolNamesJson = SerializeToolNames(input.AllowedToolNames),
+            AllowedSkillIdsJson = SerializeSkillIds(input.AllowedSkillIds),
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
@@ -94,6 +96,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         }
 
         var allowedToolNamesJson = SerializeToolNames(input.AllowedToolNames);
+        var allowedSkillIdsJson = SerializeSkillIds(input.AllowedSkillIds);
         var toolApprovalsJson = SerializeApprovals(input.ToolApprovals);
 
         // AllowedToolNames stays order-sensitive (order feeds the offer list and thus the config hash), but
@@ -108,6 +111,9 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
                             || !string.Equals(entity.ReasoningEffort, input.ReasoningEffort, StringComparison.Ordinal)
                             || entity.Kind != (int)input.Kind
                             || !string.Equals(entity.AllowedToolNamesJson, allowedToolNamesJson, StringComparison.Ordinal)
+                            // Changing the assigned skill set is config-affecting for the agent — same class as the tool
+                            // list (order-sensitive ordinal compare of the serialized id array).
+                            || !string.Equals(entity.AllowedSkillIdsJson, allowedSkillIdsJson, StringComparison.Ordinal)
                             || approvalsChanged
                             || !string.Equals(entity.OrchestrationTopologyJson, input.OrchestrationTopologyJson, StringComparison.Ordinal);
 
@@ -118,6 +124,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         entity.ReasoningEffort = input.ReasoningEffort;
         entity.Kind = (int)input.Kind;
         entity.AllowedToolNamesJson = allowedToolNamesJson;
+        entity.AllowedSkillIdsJson = allowedSkillIdsJson;
         entity.ToolApprovalsJson = toolApprovalsJson;
         entity.OrchestrationTopologyJson = input.OrchestrationTopologyJson;
         // PlaybookEnabled only gates injection; the injected playbook content drives the config hash directly, so it is
@@ -216,7 +223,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.UpdatedAtUtc,
             entity.PlaybookEnabled,
             (AgentDefinitionSource)entity.Source,
-            entity.SeedSlug);
+            entity.SeedSlug,
+            DeserializeSkillIds(entity.AllowedSkillIdsJson));
     }
 
     private static byte[]? EncodeOptional(string? value)
@@ -232,6 +240,13 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
     private static string SerializeToolNames(IReadOnlyList<string> toolNames)
     {
         return JsonSerializer.Serialize(toolNames, SerializerOptions);
+    }
+
+    private static string SerializeSkillIds(IReadOnlyList<Guid>? skillIds)
+    {
+        // Null (no assignment supplied) serializes to '[]' so a pre-skills caller persists an empty picklist, matching
+        // the column default/backfill.
+        return JsonSerializer.Serialize(skillIds ?? [], SerializerOptions);
     }
 
     private static string SerializeApprovals(IReadOnlyDictionary<string, bool> approvals)
@@ -253,6 +268,11 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
     private static IReadOnlyList<string> DeserializeToolNames(string json)
     {
         return JsonSerializer.Deserialize<List<string>>(json, SerializerOptions) ?? [];
+    }
+
+    private static IReadOnlyList<Guid> DeserializeSkillIds(string json)
+    {
+        return JsonSerializer.Deserialize<List<Guid>>(json, SerializerOptions) ?? [];
     }
 
     private static IReadOnlyDictionary<string, bool> DeserializeApprovals(string json)

@@ -36,6 +36,12 @@ internal sealed class AgentDefinitionConfiguration : IEntityTypeConfiguration<Ag
         builder.Property(entity => entity.AllowedToolNamesJson)
                .HasColumnName("allowed_tool_names_json");
 
+        // Per-agent skill picklist — additive structural column. Plaintext (skill ids only), JSON-array shaped; default
+        // and backfill '[]' so a pre-skills definition reads as an empty assignment. Mirrors allowed_tool_names_json.
+        builder.Property(entity => entity.AllowedSkillIdsJson)
+               .HasColumnName("allowed_skill_ids_json")
+               .HasDefaultValue("[]");
+
         builder.Property(entity => entity.ToolApprovalsJson)
                .HasColumnName("tool_approvals_json");
 

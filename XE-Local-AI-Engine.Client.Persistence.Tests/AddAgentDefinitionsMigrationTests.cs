@@ -46,9 +46,9 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         AssertEx.True(await TableExistsAsync(connection, "agent_definitions").ConfigureAwait(false),
             "Migration should create the agent_definitions table.");
 
-        // MigrateAsync applies every migration, so the column set reflects later additive migrations too
-        // (playbook_enabled lands in AddPlaybookActions; source/seed_slug land in AddAgentDefinitionSeedProvenance).
-        // This asserts the post-full-migrate shape.
+        // MigrateAsync applies every migration, so the column set reflects later additive migrations too: playbook
+        // enabled is added by AddPlaybookActions, source and seed slug by AddAgentDefinitionSeedProvenance, and the
+        // allowed skill ids json column by AddAgentSkills. This asserts the post-full-migrate shape.
         var definitionColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);
         AssertEx.True(definitionColumns.SetEquals(new[]
         {
@@ -60,6 +60,7 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             "reasoning_effort",
             "kind",
             "allowed_tool_names_json",
+            "allowed_skill_ids_json",
             "tool_approvals_json",
             "orchestration_topology_json",
             "version",
