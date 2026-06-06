@@ -11,15 +11,18 @@ import {
 	branchNodeChatConversation,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
+	cancelPreviewRun,
 	cancelScheduledJobRun,
 	clearCloudSettings,
 	connectConnection,
+	continuePreviewRun,
 	createAgentDefinition,
 	createGoldenConversation,
 	createMcpServer,
 	createNodeChatConversation,
 	createNodeChatMessageRevision,
 	createPlaybookAction,
+	createPreviewWorkflow,
 	createScheduledJob,
 	createSkill,
 	deleteAgentDefinition,
@@ -29,6 +32,7 @@ import {
 	deleteModelKind,
 	deleteNodeChatConversation,
 	deletePlaybookAction,
+	deletePreviewWorkflow,
 	deleteScheduledJob,
 	deleteSkill,
 	disableAutoConnect,
@@ -37,6 +41,8 @@ import {
 	enableAutoConnect,
 	enableScheduledJob,
 	executeRuntimeContainerAction,
+	executeSavedPreviewWorkflow,
+	executeUnsavedPreviewWorkflow,
 	getAgentDefinition,
 	getAgentFeedbackInsights,
 	getAgentPlaybookMonitor,
@@ -50,6 +56,7 @@ import {
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
+	getPreviewWorkflow,
 	getRunningLocalModels,
 	getRuntimeManagerStatus,
 	getScheduledJob,
@@ -68,6 +75,7 @@ import {
 	listMcpServers,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
+	listPreviewWorkflows,
 	listScheduledJobRuns,
 	listScheduledJobs,
 	listScheduledJobTemplates,
@@ -101,6 +109,7 @@ import {
 	updateAgentDefinition,
 	updateMcpServer,
 	updatePlaybookAction,
+	updatePreviewWorkflow,
 	updateScheduledJob,
 	updateSkill,
 	updateSuggestedPlaybookAction,
@@ -120,12 +129,16 @@ import type {
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageError,
 	CancelNodeChatMessageResponse,
+	CancelPreviewRunData,
+	CancelPreviewRunResponse,
 	CancelScheduledJobRunData,
 	CancelScheduledJobRunResponse,
 	ClearCloudSettingsData,
 	ClearCloudSettingsResponse,
 	ConnectConnectionData,
 	ConnectConnectionResponse,
+	ContinuePreviewRunData,
+	ContinuePreviewRunResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
 	CreateGoldenConversationData,
@@ -139,6 +152,8 @@ import type {
 	CreateNodeChatMessageRevisionResponse,
 	CreatePlaybookActionData,
 	CreatePlaybookActionResponse,
+	CreatePreviewWorkflowData,
+	CreatePreviewWorkflowResponse,
 	CreateScheduledJobData,
 	CreateScheduledJobResponse,
 	CreateSkillData,
@@ -159,6 +174,8 @@ import type {
 	DeleteNodeChatConversationResponse,
 	DeletePlaybookActionData,
 	DeletePlaybookActionResponse,
+	DeletePreviewWorkflowData,
+	DeletePreviewWorkflowResponse,
 	DeleteScheduledJobData,
 	DeleteScheduledJobResponse,
 	DeleteSkillData,
@@ -175,6 +192,10 @@ import type {
 	EnableScheduledJobResponse,
 	ExecuteRuntimeContainerActionData,
 	ExecuteRuntimeContainerActionResponse,
+	ExecuteSavedPreviewWorkflowData,
+	ExecuteSavedPreviewWorkflowResponse,
+	ExecuteUnsavedPreviewWorkflowData,
+	ExecuteUnsavedPreviewWorkflowResponse,
 	GetAgentDefinitionData,
 	GetAgentDefinitionResponse,
 	GetAgentFeedbackInsightsData,
@@ -203,6 +224,8 @@ import type {
 	GetNodeChatMessageFeedbackResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
+	GetPreviewWorkflowData,
+	GetPreviewWorkflowResponse,
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsResponse,
 	GetRuntimeManagerStatusData,
@@ -240,6 +263,8 @@ import type {
 	ListNodeChatConversationsResponse,
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsResponse,
+	ListPreviewWorkflowsData,
+	ListPreviewWorkflowsResponse,
 	ListScheduledJobRunsData,
 	ListScheduledJobRunsResponse,
 	ListScheduledJobsData,
@@ -313,6 +338,8 @@ import type {
 	UpdateMcpServerResponse,
 	UpdatePlaybookActionData,
 	UpdatePlaybookActionResponse,
+	UpdatePreviewWorkflowData,
+	UpdatePreviewWorkflowResponse,
 	UpdateScheduledJobData,
 	UpdateScheduledJobResponse,
 	UpdateSkillData,
@@ -737,6 +764,194 @@ export const getRuntimeManagerStatusOptions = (options?: Options<GetRuntimeManag
 		},
 		queryKey: getRuntimeManagerStatusQueryKey(options),
 	});
+
+export const cancelPreviewRunMutation = (
+	options?: Partial<Options<CancelPreviewRunData>>,
+): UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> => {
+	const mutationOptions: UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelPreviewRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const continuePreviewRunMutation = (
+	options?: Partial<Options<ContinuePreviewRunData>>,
+): UseMutationOptions<ContinuePreviewRunResponse, AxiosError<DefaultError>, Options<ContinuePreviewRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		ContinuePreviewRunResponse,
+		AxiosError<DefaultError>,
+		Options<ContinuePreviewRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await continuePreviewRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listPreviewWorkflowsQueryKey = (options?: Options<ListPreviewWorkflowsData>) =>
+	createQueryKey("listPreviewWorkflows", options);
+
+export const listPreviewWorkflowsOptions = (options?: Options<ListPreviewWorkflowsData>) =>
+	queryOptions<
+		ListPreviewWorkflowsResponse,
+		AxiosError<DefaultError>,
+		ListPreviewWorkflowsResponse,
+		ReturnType<typeof listPreviewWorkflowsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listPreviewWorkflows({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listPreviewWorkflowsQueryKey(options),
+	});
+
+export const createPreviewWorkflowMutation = (
+	options?: Partial<Options<CreatePreviewWorkflowData>>,
+): UseMutationOptions<CreatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<CreatePreviewWorkflowData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreatePreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<CreatePreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createPreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deletePreviewWorkflowMutation = (
+	options?: Partial<Options<DeletePreviewWorkflowData>>,
+): UseMutationOptions<DeletePreviewWorkflowResponse, AxiosError<DefaultError>, Options<DeletePreviewWorkflowData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeletePreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<DeletePreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deletePreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getPreviewWorkflowQueryKey = (options: Options<GetPreviewWorkflowData>) =>
+	createQueryKey("getPreviewWorkflow", options);
+
+export const getPreviewWorkflowOptions = (options: Options<GetPreviewWorkflowData>) =>
+	queryOptions<
+		GetPreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		GetPreviewWorkflowResponse,
+		ReturnType<typeof getPreviewWorkflowQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getPreviewWorkflow({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getPreviewWorkflowQueryKey(options),
+	});
+
+export const updatePreviewWorkflowMutation = (
+	options?: Partial<Options<UpdatePreviewWorkflowData>>,
+): UseMutationOptions<UpdatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<UpdatePreviewWorkflowData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdatePreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<UpdatePreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updatePreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const executeSavedPreviewWorkflowMutation = (
+	options?: Partial<Options<ExecuteSavedPreviewWorkflowData>>,
+): UseMutationOptions<
+	ExecuteSavedPreviewWorkflowResponse,
+	AxiosError<DefaultError>,
+	Options<ExecuteSavedPreviewWorkflowData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ExecuteSavedPreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<ExecuteSavedPreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await executeSavedPreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const executeUnsavedPreviewWorkflowMutation = (
+	options?: Partial<Options<ExecuteUnsavedPreviewWorkflowData>>,
+): UseMutationOptions<
+	ExecuteUnsavedPreviewWorkflowResponse,
+	AxiosError<DefaultError>,
+	Options<ExecuteUnsavedPreviewWorkflowData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ExecuteUnsavedPreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<ExecuteUnsavedPreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await executeUnsavedPreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
 

@@ -23,6 +23,9 @@ import type {
 	CancelNodeChatMessageData,
 	CancelNodeChatMessageErrors,
 	CancelNodeChatMessageResponses,
+	CancelPreviewRunData,
+	CancelPreviewRunErrors,
+	CancelPreviewRunResponses,
 	CancelScheduledJobRunData,
 	CancelScheduledJobRunErrors,
 	CancelScheduledJobRunResponses,
@@ -32,6 +35,9 @@ import type {
 	ConnectConnectionData,
 	ConnectConnectionErrors,
 	ConnectConnectionResponses,
+	ContinuePreviewRunData,
+	ContinuePreviewRunErrors,
+	ContinuePreviewRunResponses,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
@@ -50,6 +56,9 @@ import type {
 	CreatePlaybookActionData,
 	CreatePlaybookActionErrors,
 	CreatePlaybookActionResponses,
+	CreatePreviewWorkflowData,
+	CreatePreviewWorkflowErrors,
+	CreatePreviewWorkflowResponses,
 	CreateScheduledJobData,
 	CreateScheduledJobErrors,
 	CreateScheduledJobResponses,
@@ -77,6 +86,9 @@ import type {
 	DeletePlaybookActionData,
 	DeletePlaybookActionErrors,
 	DeletePlaybookActionResponses,
+	DeletePreviewWorkflowData,
+	DeletePreviewWorkflowErrors,
+	DeletePreviewWorkflowResponses,
 	DeleteScheduledJobData,
 	DeleteScheduledJobErrors,
 	DeleteScheduledJobResponses,
@@ -101,6 +113,12 @@ import type {
 	ExecuteRuntimeContainerActionData,
 	ExecuteRuntimeContainerActionErrors,
 	ExecuteRuntimeContainerActionResponses,
+	ExecuteSavedPreviewWorkflowData,
+	ExecuteSavedPreviewWorkflowErrors,
+	ExecuteSavedPreviewWorkflowResponses,
+	ExecuteUnsavedPreviewWorkflowData,
+	ExecuteUnsavedPreviewWorkflowErrors,
+	ExecuteUnsavedPreviewWorkflowResponses,
 	GetAgentDefinitionData,
 	GetAgentDefinitionErrors,
 	GetAgentDefinitionResponses,
@@ -140,6 +158,9 @@ import type {
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
+	GetPreviewWorkflowData,
+	GetPreviewWorkflowErrors,
+	GetPreviewWorkflowResponses,
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsErrors,
 	GetRunningLocalModelsResponses,
@@ -194,6 +215,9 @@ import type {
 	ListNodeChatMessageRevisionsData,
 	ListNodeChatMessageRevisionsErrors,
 	ListNodeChatMessageRevisionsResponses,
+	ListPreviewWorkflowsData,
+	ListPreviewWorkflowsErrors,
+	ListPreviewWorkflowsResponses,
 	ListScheduledJobRunsData,
 	ListScheduledJobRunsErrors,
 	ListScheduledJobRunsResponses,
@@ -288,6 +312,9 @@ import type {
 	UpdatePlaybookActionData,
 	UpdatePlaybookActionErrors,
 	UpdatePlaybookActionResponses,
+	UpdatePreviewWorkflowData,
+	UpdatePreviewWorkflowErrors,
+	UpdatePreviewWorkflowResponses,
 	UpdateScheduledJobData,
 	UpdateScheduledJobErrors,
 	UpdateScheduledJobResponses,
@@ -314,10 +341,14 @@ import {
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
 	zCancelNodeChatMessageResponse,
+	zCancelPreviewRunPath,
+	zCancelPreviewRunResponse,
 	zCancelScheduledJobRunPath,
 	zCancelScheduledJobRunResponse,
 	zClearCloudSettingsResponse,
 	zConnectConnectionResponse,
+	zContinuePreviewRunPath,
+	zContinuePreviewRunResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
 	zCreateGoldenConversationBody,
@@ -332,6 +363,8 @@ import {
 	zCreatePlaybookActionBody,
 	zCreatePlaybookActionPath,
 	zCreatePlaybookActionResponse,
+	zCreatePreviewWorkflowBody,
+	zCreatePreviewWorkflowResponse,
 	zCreateScheduledJobBody,
 	zCreateScheduledJobResponse,
 	zCreateSkillBody,
@@ -351,6 +384,8 @@ import {
 	zDeleteNodeChatConversationResponse,
 	zDeletePlaybookActionPath,
 	zDeletePlaybookActionResponse,
+	zDeletePreviewWorkflowPath,
+	zDeletePreviewWorkflowResponse,
 	zDeleteScheduledJobPath,
 	zDeleteScheduledJobResponse,
 	zDeleteSkillPath,
@@ -364,6 +399,10 @@ import {
 	zEnableScheduledJobResponse,
 	zExecuteRuntimeContainerActionBody,
 	zExecuteRuntimeContainerActionResponse,
+	zExecuteSavedPreviewWorkflowPath,
+	zExecuteSavedPreviewWorkflowResponse,
+	zExecuteUnsavedPreviewWorkflowBody,
+	zExecuteUnsavedPreviewWorkflowResponse,
 	zGetAgentDefinitionPath,
 	zGetAgentDefinitionResponse,
 	zGetAgentFeedbackInsightsPath,
@@ -386,6 +425,8 @@ import {
 	zGetNodeChatMessageFeedbackPath,
 	zGetNodeChatMessageFeedbackResponse,
 	zGetNodeSettingsResponse,
+	zGetPreviewWorkflowPath,
+	zGetPreviewWorkflowResponse,
 	zGetRunningLocalModelsResponse,
 	zGetRuntimeManagerStatusResponse,
 	zGetScheduledJobPath,
@@ -413,6 +454,7 @@ import {
 	zListNodeChatConversationsResponse,
 	zListNodeChatMessageRevisionsPath,
 	zListNodeChatMessageRevisionsResponse,
+	zListPreviewWorkflowsResponse,
 	zListScheduledJobRunsQuery,
 	zListScheduledJobRunsResponse,
 	zListScheduledJobsQuery,
@@ -479,6 +521,9 @@ import {
 	zUpdatePlaybookActionBody,
 	zUpdatePlaybookActionPath,
 	zUpdatePlaybookActionResponse,
+	zUpdatePreviewWorkflowBody,
+	zUpdatePreviewWorkflowPath,
+	zUpdatePreviewWorkflowResponse,
 	zUpdateScheduledJobBody,
 	zUpdateScheduledJobPath,
 	zUpdateScheduledJobResponse,
@@ -929,6 +974,211 @@ export const getRuntimeManagerStatus = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/runtime/status",
 		...options,
+	});
+
+export const cancelPreviewRun = <ThrowOnError extends boolean = false>(options: Options<CancelPreviewRunData, ThrowOnError>) =>
+	(options.client ?? client).post<CancelPreviewRunResponses, CancelPreviewRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelPreviewRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zCancelPreviewRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/{runId}/cancel",
+		...options,
+	});
+
+export const continuePreviewRun = <ThrowOnError extends boolean = false>(
+	options: Options<ContinuePreviewRunData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ContinuePreviewRunResponses, ContinuePreviewRunErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zContinuePreviewRunPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zContinuePreviewRunResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/{runId}/continue",
+		...options,
+	});
+
+export const listPreviewWorkflows = <ThrowOnError extends boolean = false>(
+	options?: Options<ListPreviewWorkflowsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListPreviewWorkflowsResponses, ListPreviewWorkflowsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListPreviewWorkflowsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/workflows",
+		...options,
+	});
+
+export const createPreviewWorkflow = <ThrowOnError extends boolean = false>(
+	options: Options<CreatePreviewWorkflowData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CreatePreviewWorkflowResponses, CreatePreviewWorkflowErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreatePreviewWorkflowBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreatePreviewWorkflowResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/workflows",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deletePreviewWorkflow = <ThrowOnError extends boolean = false>(
+	options: Options<DeletePreviewWorkflowData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeletePreviewWorkflowResponses, DeletePreviewWorkflowErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeletePreviewWorkflowPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeletePreviewWorkflowResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/workflows/{workflowId}",
+		...options,
+	});
+
+export const getPreviewWorkflow = <ThrowOnError extends boolean = false>(
+	options: Options<GetPreviewWorkflowData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetPreviewWorkflowResponses, GetPreviewWorkflowErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetPreviewWorkflowPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetPreviewWorkflowResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/workflows/{workflowId}",
+		...options,
+	});
+
+export const updatePreviewWorkflow = <ThrowOnError extends boolean = false>(
+	options: Options<UpdatePreviewWorkflowData, ThrowOnError>,
+) =>
+	(options.client ?? client).put<UpdatePreviewWorkflowResponses, UpdatePreviewWorkflowErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdatePreviewWorkflowBody,
+					path: zUpdatePreviewWorkflowPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdatePreviewWorkflowResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/workflows/{workflowId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const executeSavedPreviewWorkflow = <ThrowOnError extends boolean = false>(
+	options: Options<ExecuteSavedPreviewWorkflowData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ExecuteSavedPreviewWorkflowResponses, ExecuteSavedPreviewWorkflowErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zExecuteSavedPreviewWorkflowPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zExecuteSavedPreviewWorkflowResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/workflows/{workflowId}/execute",
+		...options,
+	});
+
+export const executeUnsavedPreviewWorkflow = <ThrowOnError extends boolean = false>(
+	options: Options<ExecuteUnsavedPreviewWorkflowData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ExecuteUnsavedPreviewWorkflowResponses, ExecuteUnsavedPreviewWorkflowErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zExecuteUnsavedPreviewWorkflowBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zExecuteUnsavedPreviewWorkflowResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/preview/runs/execute",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getNodeSettings = <ThrowOnError extends boolean = false>(options?: Options<GetNodeSettingsData, ThrowOnError>) =>

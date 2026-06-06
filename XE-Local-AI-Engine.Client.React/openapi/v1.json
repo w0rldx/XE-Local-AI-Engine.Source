@@ -861,6 +861,390 @@
         ]
       }
     },
+    "/api/local/v1/preview/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "cancelPreviewRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/preview/runs/{runId}/continue": {
+      "post": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "continuePreviewRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/preview/workflows": {
+      "post": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "createPreviewWorkflow",
+        "requestBody": {
+          "x-name": "CreatePreviewWorkflowRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "listPreviewWorkflows",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/preview/workflows/{workflowId}": {
+      "delete": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "deletePreviewWorkflow",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "getPreviewWorkflow",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "updatePreviewWorkflow",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdatePreviewWorkflowRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/preview/workflows/{workflowId}/execute": {
+      "post": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "executeSavedPreviewWorkflow",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1PreviewRunStartedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/preview/runs/execute": {
+      "post": {
+        "tags": [
+          "Preview"
+        ],
+        "operationId": "executeUnsavedPreviewWorkflow",
+        "requestBody": {
+          "x-name": "ExecuteUnsavedPreviewWorkflowRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1PreviewRunStartedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/node-settings": {
       "get": {
         "tags": [
@@ -5591,6 +5975,209 @@
           },
           "readOnly": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1PreviewRunRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraph"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraph": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "startText": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Start",
+          "Agent",
+          "Debug",
+          "Pause",
+          "End"
+        ],
+        "enum": [
+          "Start",
+          "Agent",
+          "Debug",
+          "Pause",
+          "End"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraph"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1PreviewRunStartedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraph"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPreviewWorkflowsPreviewWorkflowGraph"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

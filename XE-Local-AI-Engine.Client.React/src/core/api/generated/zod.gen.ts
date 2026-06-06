@@ -465,6 +465,107 @@ export const zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManagerStatus
 	manifest: zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManifestResponse.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = z.enum([
+	"Start",
+	"Agent",
+	"Debug",
+	"Pause",
+	"End",
+]);
+
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode = z.object({
+	id: z.string().optional(),
+	kind: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind.optional(),
+	label: z.string().nullish(),
+	instructions: z.string().nullish(),
+	model: z.string().nullish(),
+	modelProfile: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge = z.object({
+	sourceId: z.string().optional(),
+	targetId: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph = z.object({
+	startText: z.string().optional(),
+	nodes: z.array(zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode).optional(),
+	edges: z.array(zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph.optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	updatedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = z.object({
+	name: z.string().optional(),
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = z.object({
+	runId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = z.object({
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	updatedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest = z.object({
+	name: z.string().optional(),
+	graph: zXeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph.optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = z.object({
 	maxMessageRequestTimeoutSeconds: z
 		.int()
@@ -1852,6 +1953,81 @@ export const zExecuteRuntimeContainerActionResponse =
  * Success
  */
 export const zGetRuntimeManagerStatusResponse = zXeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManagerStatusResponse;
+
+export const zCancelPreviewRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zCancelPreviewRunResponse = z.void();
+
+export const zContinuePreviewRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zContinuePreviewRunResponse = z.void();
+
+/**
+ * Success
+ */
+export const zListPreviewWorkflowsResponse = zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse;
+
+export const zCreatePreviewWorkflowBody = zXeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest;
+
+/**
+ * Success
+ */
+export const zCreatePreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+
+export const zDeletePreviewWorkflowPath = z.object({
+	workflowId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeletePreviewWorkflowResponse = z.void();
+
+export const zGetPreviewWorkflowPath = z.object({
+	workflowId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+
+export const zUpdatePreviewWorkflowBody = zXeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest;
+
+export const zUpdatePreviewWorkflowPath = z.object({
+	workflowId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdatePreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+
+export const zExecuteSavedPreviewWorkflowPath = z.object({
+	workflowId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zExecuteSavedPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+
+export const zExecuteUnsavedPreviewWorkflowBody = zXeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest;
+
+/**
+ * Success
+ */
+export const zExecuteUnsavedPreviewWorkflowResponse = zXeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
 
 /**
  * Success
