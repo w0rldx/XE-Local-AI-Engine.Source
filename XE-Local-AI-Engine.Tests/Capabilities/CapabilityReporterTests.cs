@@ -387,7 +387,9 @@ public sealed class CapabilityReporterTests
         var cloudCredentialStore = new StubCloudCredentialStore(cloudCredentials);
         var nodeSettingsStore = new StubNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
         var timeProvider = new FakeTimeProvider();
-        var reporter = new CapabilityReporter(capabilityClient, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        var prober = new ModelCapabilityProber(capabilityClient, configuration, timeProvider, NullLogger<ModelCapabilityProber>.Instance);
+        var composer = new CapabilityReportComposer(configuration, NullLogger<CapabilityReportComposer>.Instance);
+        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
         return new CapabilityReporterTestContext(server, chatClient, capabilityClient, hubConnection, reporter, timeProvider);
     }
 
