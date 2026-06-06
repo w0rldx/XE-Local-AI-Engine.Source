@@ -318,6 +318,77 @@ export type XeLocalAiEngineClientEndpointsRuntimeManagerV1RuntimeManifestVolumeR
 	readOnly?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = {
+	id?: string;
+	name?: string;
+	graph?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph = {
+	startText?: string;
+	nodes?: Array<XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode>;
+	edges?: Array<XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge>;
+};
+
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNode = {
+	id?: string;
+	kind?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind;
+	label?: string | null;
+	instructions?: string | null;
+	model?: string | null;
+	modelProfile?: string | null;
+	reasoningEffort?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = "Start" | "Agent" | "Debug" | "Pause" | "End";
+
+export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphEdge = {
+	sourceId?: string;
+	targetId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = {
+	name?: string;
+	graph?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse = {
+	runId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest = {
+	graph?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryResponse = {
+	id?: string;
+	name?: string;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest = {
+	name?: string;
+	graph?: XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraph;
+	version?: number;
+};
+
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	maxMessageRequestTimeoutSeconds?: number;
 	defaultModelName?: string | null;
@@ -1801,6 +1872,263 @@ export type GetRuntimeManagerStatusResponses = {
 };
 
 export type GetRuntimeManagerStatusResponse = GetRuntimeManagerStatusResponses[keyof GetRuntimeManagerStatusResponses];
+
+export type CancelPreviewRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/runs/{runId}/cancel";
+};
+
+export type CancelPreviewRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelPreviewRunResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type CancelPreviewRunResponse = CancelPreviewRunResponses[keyof CancelPreviewRunResponses];
+
+export type ContinuePreviewRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/runs/{runId}/continue";
+};
+
+export type ContinuePreviewRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ContinuePreviewRunResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type ContinuePreviewRunResponse = ContinuePreviewRunResponses[keyof ContinuePreviewRunResponses];
+
+export type ListPreviewWorkflowsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/workflows";
+};
+
+export type ListPreviewWorkflowsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListPreviewWorkflowsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse;
+};
+
+export type ListPreviewWorkflowsResponse = ListPreviewWorkflowsResponses[keyof ListPreviewWorkflowsResponses];
+
+export type CreatePreviewWorkflowData = {
+	body: XeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/workflows";
+};
+
+export type CreatePreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreatePreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+};
+
+export type CreatePreviewWorkflowResponse = CreatePreviewWorkflowResponses[keyof CreatePreviewWorkflowResponses];
+
+export type DeletePreviewWorkflowData = {
+	body?: never;
+	path: {
+		workflowId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/workflows/{workflowId}";
+};
+
+export type DeletePreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeletePreviewWorkflowResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeletePreviewWorkflowResponse = DeletePreviewWorkflowResponses[keyof DeletePreviewWorkflowResponses];
+
+export type GetPreviewWorkflowData = {
+	body?: never;
+	path: {
+		workflowId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/workflows/{workflowId}";
+};
+
+export type GetPreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetPreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+};
+
+export type GetPreviewWorkflowResponse = GetPreviewWorkflowResponses[keyof GetPreviewWorkflowResponses];
+
+export type UpdatePreviewWorkflowData = {
+	body: XeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowRequest;
+	path: {
+		workflowId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/workflows/{workflowId}";
+};
+
+export type UpdatePreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UpdatePreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse;
+};
+
+export type UpdatePreviewWorkflowResponse = UpdatePreviewWorkflowResponses[keyof UpdatePreviewWorkflowResponses];
+
+export type ExecuteSavedPreviewWorkflowData = {
+	body?: never;
+	path: {
+		workflowId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/preview/workflows/{workflowId}/execute";
+};
+
+export type ExecuteSavedPreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ExecuteSavedPreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+};
+
+export type ExecuteSavedPreviewWorkflowResponse =
+	ExecuteSavedPreviewWorkflowResponses[keyof ExecuteSavedPreviewWorkflowResponses];
+
+export type ExecuteUnsavedPreviewWorkflowData = {
+	body: XeLocalAiEngineClientEndpointsPreviewV1ExecuteUnsavedPreviewWorkflowRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/preview/runs/execute";
+};
+
+export type ExecuteUnsavedPreviewWorkflowErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ExecuteUnsavedPreviewWorkflowResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsPreviewV1PreviewRunStartedResponse;
+};
+
+export type ExecuteUnsavedPreviewWorkflowResponse =
+	ExecuteUnsavedPreviewWorkflowResponses[keyof ExecuteUnsavedPreviewWorkflowResponses];
 
 export type GetNodeSettingsData = {
 	body?: never;
