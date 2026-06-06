@@ -44,6 +44,9 @@ export function graphToCanvas(graph: PreviewWorkflowGraph): {
 		id: node.id,
 		type: previewNodeTypeByKind[node.kind],
 		position: { x: LAYOUT_X, y: LAYOUT_Y_START + index * LAYOUT_Y_STEP },
+		// Start and End are structural anchors (exactly one of each) — block deletion so a stray Delete keypress
+		// cannot break the graph; Agent/Debug/Pause stay freely removable.
+		deletable: node.kind !== "Start" && node.kind !== "End",
 		data: {
 			kind: node.kind,
 			label: node.label ?? undefined,
