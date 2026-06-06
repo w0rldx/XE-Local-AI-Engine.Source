@@ -6,10 +6,10 @@ using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -381,28 +381,30 @@ public sealed class CapabilityReporterTests
 
         var server = await FakeOllamaServer.StartAsync();
         var chatClient = new OllamaApiClient(server.BaseAddress);
-        var modelService = new OllamaModelService(chatClient);
+        var capabilityClient = new OllamaModelCapabilityClient(chatClient);
 
         var hubConnection = new MockWorkerHubConnection();
         var cloudCredentialStore = new StubCloudCredentialStore(cloudCredentials);
         var nodeSettingsStore = new StubNodeSettingsStore(nodeSettings ?? new StoredNodeSettings());
         var timeProvider = new FakeTimeProvider();
-        var reporter = new CapabilityReporter(chatClient, modelService, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
-        return new CapabilityReporterTestContext(server, chatClient, modelService, hubConnection, reporter, timeProvider);
+        var prober = new ModelCapabilityProber(capabilityClient, configuration, timeProvider, NullLogger<ModelCapabilityProber>.Instance);
+        var composer = new CapabilityReportComposer(configuration, NullLogger<CapabilityReportComposer>.Instance);
+        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        return new CapabilityReporterTestContext(server, chatClient, capabilityClient, hubConnection, reporter, timeProvider);
     }
 
     private sealed class CapabilityReporterTestContext : IAsyncDisposable
     {
         public CapabilityReporterTestContext(FakeOllamaServer server,
             OllamaApiClient chatClient,
-            OllamaModelService modelService,
+            OllamaModelCapabilityClient capabilityClient,
             MockWorkerHubConnection hubConnection,
             CapabilityReporter reporter,
             FakeTimeProvider timeProvider)
         {
             Server = server;
             ChatClient = chatClient;
-            ModelService = modelService;
+            CapabilityClient = capabilityClient;
             HubConnection = hubConnection;
             Reporter = reporter;
             TimeProvider = timeProvider;
@@ -416,7 +418,7 @@ public sealed class CapabilityReporterTests
 
         public OllamaApiClient ChatClient { get; }
 
-        public OllamaModelService ModelService { get; }
+        public OllamaModelCapabilityClient CapabilityClient { get; }
 
         public MockWorkerHubConnection HubConnection { get; }
 
@@ -426,8 +428,6 @@ public sealed class CapabilityReporterTests
 
         public async ValueTask DisposeAsync()
         {
-            ModelService.Dispose();
-
             if (ChatClient is IDisposable disposableChatClient)
             {
                 disposableChatClient.Dispose();

@@ -135,7 +135,6 @@ export function useModelPull(): UseModelPullResult {
 					// Never surface the raw error.message to the user (it may carry internal/implementation detail and is
 					// fragile to transport changes). Show a fixed, model-scoped i18n message; the detail goes to the console
 					// for diagnostics only.
-					// biome-ignore lint/suspicious/noConsole: developer-facing diagnostic for a user-tolerated pull failure.
 					console.warn(`model pull failed for "${trimmed}"`, error);
 					toast.error(translate("pages.models.pull.toast.error", "Could not pull {{model}}.", { model: trimmed }), {
 						id: toastId,

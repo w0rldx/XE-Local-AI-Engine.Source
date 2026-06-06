@@ -5,6 +5,7 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -262,6 +263,16 @@ public sealed class ModelFitQueryServiceTests
         }
 
         public Task DeleteModelAsync(string modelName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task UnloadModelAsync(string modelName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }

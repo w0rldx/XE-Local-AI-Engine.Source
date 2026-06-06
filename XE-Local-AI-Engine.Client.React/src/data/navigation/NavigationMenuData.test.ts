@@ -52,6 +52,7 @@ describe("navigationLinks", () => {
 		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.models,
 			nodeRoutePaths.modelRecommendations,
+			nodeRoutePaths.loadedModels,
 		]);
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
@@ -70,13 +71,22 @@ describe("navigationLinks", () => {
 		]);
 	});
 
-	it("keeps only Installed under Models and only Overview under Manager when modelFit is off", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ modelFit: false });
+	it("keeps only Installed under Models and only Overview under Manager when modelFit and loadedModels are off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ modelFit: false, loadedModels: false });
 		const models = gatedLinks.find((link) => link.id === "models");
 		const manager = gatedLinks.find((link) => link.id === "manager");
 
 		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.models]);
 		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.manager]);
+	});
+
+	it("drops the loaded-models child from Models when loadedModels is off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ loadedModels: false });
+		const models = gatedLinks.find((link) => link.id === "models");
+
+		expect(models?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.loadedModels)).toBe(false);
+		// Installed is ungated, so the group never collapses to empty.
+		expect(models?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.models)).toBe(true);
 	});
 
 	it("drops the agents child from Automation when agentManagement is off", async () => {

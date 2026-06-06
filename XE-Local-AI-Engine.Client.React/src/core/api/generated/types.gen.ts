@@ -536,6 +536,19 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsReque
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = {
+	isAvailable?: boolean;
+	error?: string | null;
+	items?: Array<XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = {
+	modelName?: string;
+	sizeBytes?: number | null;
+	sizeVramBytes?: number | null;
+	expiresAtUtc?: number | null;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse = {
 	isAvailable?: boolean;
 	selectedModelName?: string | null;
@@ -581,6 +594,15 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelResponse 
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest = {
 	modelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse = {
+	modelName?: string;
+	unloaded?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse = {
@@ -2169,6 +2191,33 @@ export type GetLocalModelDetailsResponses = {
 
 export type GetLocalModelDetailsResponse = GetLocalModelDetailsResponses[keyof GetLocalModelDetailsResponses];
 
+export type GetRunningLocalModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/models/running";
+};
+
+export type GetRunningLocalModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetRunningLocalModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse;
+};
+
+export type GetRunningLocalModelsResponse = GetRunningLocalModelsResponses[keyof GetRunningLocalModelsResponses];
+
 export type ListLocalModelsData = {
 	body?: never;
 	path?: never;
@@ -2261,6 +2310,41 @@ export type SelectLocalModelResponses = {
 };
 
 export type SelectLocalModelResponse = SelectLocalModelResponses[keyof SelectLocalModelResponses];
+
+export type UnloadLocalModelData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/models/{modelName}/unload";
+};
+
+export type UnloadLocalModelErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UnloadLocalModelError = UnloadLocalModelErrors[keyof UnloadLocalModelErrors];
+
+export type UnloadLocalModelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalModelsV1UnloadLocalModelResponse;
+};
+
+export type UnloadLocalModelResponse = UnloadLocalModelResponses[keyof UnloadLocalModelResponses];
 
 export type CancelNodeChatMessageData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest;

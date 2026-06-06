@@ -65,7 +65,6 @@ export function useSchedulerHub(): void {
 			}
 			// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
 			// best-effort live invalidation, so a connection failure is surfaced only to the console, never the user.
-			// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
 			console.warn("scheduler hub failed to start", error);
 		});
 
@@ -79,7 +78,6 @@ export function useSchedulerHub(): void {
 			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
 			startPromise.finally(() => {
 				connection.stop().catch((error: unknown) => {
-					// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
 					console.warn("scheduler hub failed to stop", error);
 				});
 			});

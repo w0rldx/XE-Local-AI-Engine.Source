@@ -10,7 +10,7 @@ internal sealed record HostGitResult(int ExitCode, string StandardOutput, string
 
 /// <summary>
 ///     Runs host-side <c>git</c> commands for the host patch apply flow. Mirrors the only existing
-///     <see cref="Process" /> use in this assembly (<c>CapabilityReporter</c>): a CA2000-clean <c>using var</c> process
+///     <see cref="Process" /> use in this assembly (<c>CapabilityReportComposer</c>): a CA2000-clean <c>using var</c> process
 ///     with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> (never a joined string, so paths with
 ///     spaces are safe), and a <see cref="System.Threading.Tasks.Task" />-based read + wait. The hardened <c>-c</c> flags
 ///     come from <see cref="AgentHomeGit" /> so a host global hook or <c>.gitattributes</c> cannot interfere with the

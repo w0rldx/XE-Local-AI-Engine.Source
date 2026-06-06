@@ -139,7 +139,7 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 
 	const select = (value: string): void => {
 		const option = modelOptions.find((modelOption) => modelOption.value === value);
-		if (!option || !option.isAvailable) {
+		if (!option?.isAvailable) {
 			return;
 		}
 

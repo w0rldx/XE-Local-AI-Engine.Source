@@ -134,6 +134,9 @@ import type {
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
+	GetRunningLocalModelsData,
+	GetRunningLocalModelsErrors,
+	GetRunningLocalModelsResponses,
 	GetRuntimeManagerStatusData,
 	GetRuntimeManagerStatusErrors,
 	GetRuntimeManagerStatusResponses,
@@ -261,6 +264,9 @@ import type {
 	TriggerScheduledJobData,
 	TriggerScheduledJobErrors,
 	TriggerScheduledJobResponses,
+	UnloadLocalModelData,
+	UnloadLocalModelErrors,
+	UnloadLocalModelResponses,
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionErrors,
 	UpdateAgentDefinitionResponses,
@@ -361,6 +367,7 @@ import {
 	zGetNodeChatMessageFeedbackPath,
 	zGetNodeChatMessageFeedbackResponse,
 	zGetNodeSettingsResponse,
+	zGetRunningLocalModelsResponse,
 	zGetRuntimeManagerStatusResponse,
 	zGetScheduledJobPath,
 	zGetScheduledJobResponse,
@@ -439,6 +446,8 @@ import {
 	zStartNodeBindingResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
+	zUnloadLocalModelPath,
+	zUnloadLocalModelResponse,
 	zUpdateAgentDefinitionBody,
 	zUpdateAgentDefinitionPath,
 	zUpdateAgentDefinitionResponse,
@@ -1227,6 +1236,28 @@ export const getLocalModelDetails = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getRunningLocalModels = <ThrowOnError extends boolean = false>(
+	options?: Options<GetRunningLocalModelsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetRunningLocalModelsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/running",
+		...options,
+	});
+
 export const listLocalModels = <ThrowOnError extends boolean = false>(options?: Options<ListLocalModelsData, ThrowOnError>) =>
 	(options?.client ?? client).get<ListLocalModelsResponses, ListLocalModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -1293,6 +1324,26 @@ export const selectLocalModel = <ThrowOnError extends boolean = false>(options: 
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const unloadLocalModel = <ThrowOnError extends boolean = false>(options: Options<UnloadLocalModelData, ThrowOnError>) =>
+	(options.client ?? client).post<UnloadLocalModelResponses, UnloadLocalModelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zUnloadLocalModelPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUnloadLocalModelResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/models/{modelName}/unload",
+		...options,
 	});
 
 export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
