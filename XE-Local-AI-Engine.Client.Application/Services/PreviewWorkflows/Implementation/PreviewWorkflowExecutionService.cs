@@ -229,12 +229,18 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             handle.SetState(PreviewRunState.Cancelled);
             await CancelTokenSourceAsync(handle).ConfigureAwait(false);
 
+            // Publish the terminal cancelled event NOW so the UI reflects the cancel immediately on the 202. A Running
+            // run's drain may be blocked in a model call that observes the cancelled token only slowly (or never), so
+            // relying on the drain to publish leaves the UI stuck "running". This is the single authoritative publish
+            // for both the Running and Paused paths.
+            await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, nodeId: null, output: null,
+                error: null, requestId: null, CancellationToken.None).ConfigureAwait(false);
+
             if (wasPaused)
             {
-                // A Paused run has NO active drain observing the CTS (the drain ended when the run paused), so the
-                // cancel must publish the terminal event and dispose here. A Running run's drain observes the cancelled
-                // token, throws OperationCanceledException, and runs CancelRunAsync itself.
-                await CancelRunAsync(handle).ConfigureAwait(false);
+                // A Paused run has NO active drain observing the CTS (the drain ended when the run paused) — dispose
+                // here. A Running run's drain observes the cancelled token, unwinds, and disposes itself (no re-publish).
+                await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
             }
 
             return PreviewRunCommandOutcome.Accepted;
@@ -312,7 +318,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         }
         catch (OperationCanceledException) when (handle.GetState() == PreviewRunState.Cancelled)
         {
-            await CancelRunAsync(handle).ConfigureAwait(false);
+            // CancelAsync already set Cancelled and published RunCancelled; the drain just disposes once it unwinds.
+            await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -422,14 +429,6 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         handle.SetState(PreviewRunState.Faulted);
         await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null, error,
             requestId: null, CancellationToken.None).ConfigureAwait(false);
-        await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
-    }
-
-    private async Task CancelRunAsync(PreviewWorkflowRunHandle handle)
-    {
-        handle.SetState(PreviewRunState.Cancelled);
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, nodeId: null, output: null,
-            error: null, requestId: null, CancellationToken.None).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
     }
 
