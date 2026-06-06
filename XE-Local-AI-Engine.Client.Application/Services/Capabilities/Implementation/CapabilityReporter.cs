@@ -4,13 +4,12 @@ using System.ComponentModel;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
-using OllamaSharp;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Represents capability reporter.
@@ -59,16 +58,13 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     private readonly Dictionary<ModelContextCacheKey, int?> _modelContextCache = new();
     private readonly object _modelContextCacheSync = new();
     private readonly INodeSettingsStore _nodeSettingsStore;
-
-    private readonly IOllamaApiClient _ollamaClient;
-    private readonly IOllamaModelService _ollamaModelService;
+    private readonly IModelCapabilityClient _modelCapabilityClient;
     private readonly SemaphoreSlim _reportSync = new(1, 1);
     private readonly TimeProvider _timeProvider;
     private CachedInstalledModels? _installedModelsCache;
     private DateTimeOffset? _lastReportStartedAt;
 
-    public CapabilityReporter(IOllamaApiClient ollamaClient,
-        IOllamaModelService ollamaModelService,
+    public CapabilityReporter(IModelCapabilityClient modelCapabilityClient,
         ICloudCredentialStore cloudCredentialStore,
         INodeSettingsStore nodeSettingsStore,
         IConfiguration configuration,
@@ -76,8 +72,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         TimeProvider timeProvider,
         ILogger<CapabilityReporter> logger)
     {
-        _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
-        _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
+        _modelCapabilityClient = modelCapabilityClient ?? throw new ArgumentNullException(nameof(modelCapabilityClient));
         _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         ArgumentNullException.ThrowIfNull(configuration);
@@ -183,7 +178,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
         try
         {
-            if (!await _ollamaClient.IsRunningAsync(cancellationToken).ConfigureAwait(false))
+            if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken).ConfigureAwait(false))
             {
                 _logger.LogWarning("Ollama is not reachable during capability preflight.");
                 return false;
@@ -292,7 +287,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
         try
         {
-            var models = await _ollamaClient.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
+            var models = await _modelCapabilityClient.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
             var discoveredModels = models
                                    .Select(model => new
                                    {
@@ -363,7 +358,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
         try
         {
-            var details = await _ollamaModelService.ShowModelDetailsAsync(installedModel.Name, cancellationToken).ConfigureAwait(false);
+            var details = await _modelCapabilityClient.GetModelDetailAsync(installedModel.Name, cancellationToken).ConfigureAwait(false);
             if (details.MaxContextTokens is null)
             {
                 _logger.LogWarning("Ollama /api/show for model '{ModelName}' succeeded but did not include a supported *.context_length model_info key.",
@@ -390,13 +385,13 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
         try
         {
-            if (!await _ollamaClient.IsRunningAsync(cancellationToken).ConfigureAwait(false))
+            if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken).ConfigureAwait(false))
             {
                 diagnostics.Add(DiagnosticOllamaUnreachable);
                 return new OllamaRuntimeStatus(false, null, diagnostics);
             }
 
-            var version = await _ollamaClient.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+            var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken).ConfigureAwait(false);
             return new OllamaRuntimeStatus(true, NormalizeModelName(version), diagnostics);
         }
         catch (HttpRequestException exception)
@@ -449,8 +444,8 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
         try
         {
-            var runningModels = await _ollamaClient.ListRunningModelsAsync(cancellationToken).ConfigureAwait(false);
-            var active = runningModels.FirstOrDefault();
+            var runningModels = await _modelCapabilityClient.ListRunningModelsAsync(cancellationToken).ConfigureAwait(false);
+            var active = runningModels.Count > 0 ? runningModels[0] : null;
             if (active is null)
             {
                 return ActiveModelInfo.None;
@@ -462,7 +457,7 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
                 return ActiveModelInfo.None;
             }
 
-            return new ActiveModelInfo(modelName, NormalizeExpiresAt(active.ExpiresAt));
+            return new ActiveModelInfo(modelName, active.ExpiresAt);
         }
         catch (HttpRequestException exception)
         {
@@ -475,17 +470,6 @@ public sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     {
         var normalized = modelName?.Trim();
         return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
-    }
-
-    private static DateTimeOffset? NormalizeExpiresAt(object? expiresAt)
-    {
-        return expiresAt switch
-        {
-            DateTimeOffset value => value,
-            DateTime value => new DateTimeOffset(value),
-            string value when DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) => parsed,
-            _ => null
-        };
     }
 
     private IReadOnlyList<InstalledModelInfo>? TryGetCachedInstalledModels()
