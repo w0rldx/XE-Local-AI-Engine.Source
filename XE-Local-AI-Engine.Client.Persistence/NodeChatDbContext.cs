@@ -30,6 +30,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<AgentDefinition> AgentDefinitions => Set<AgentDefinition>();
 
+    internal DbSet<AgentSkill> AgentSkills => Set<AgentSkill>();
+
     internal DbSet<PlaybookAction> PlaybookActions => Set<PlaybookAction>();
 
     internal DbSet<GoldenConversation> GoldenConversations => Set<GoldenConversation>();
@@ -65,6 +67,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new NodeMessageFeedbackConfiguration());
         modelBuilder.ApplyConfiguration(new NodeSelectedFolderConfiguration());
         modelBuilder.ApplyConfiguration(new AgentDefinitionConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentSkillConfiguration());
         modelBuilder.ApplyConfiguration(new PlaybookActionConfiguration());
         modelBuilder.ApplyConfiguration(new GoldenConversationConfiguration());
         modelBuilder.ApplyConfiguration(new McpServerRegistrationConfiguration());

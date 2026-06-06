@@ -24,4 +24,5 @@ public sealed record AgentDefinitionRecord(
     long UpdatedAtUtc,
     bool PlaybookEnabled = false,
     AgentDefinitionSource Source = AgentDefinitionSource.Manual,
-    string? SeedSlug = null);
+    string? SeedSlug = null,
+    IReadOnlyList<Guid>? AllowedSkillIds = null);

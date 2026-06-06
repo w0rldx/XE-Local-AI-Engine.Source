@@ -33,6 +33,10 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 definition.Instructions = NodePayloadProtector.Decrypt(definition.Instructions, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "instructions");
                 definition.Description = DecryptIfPresent(definition.Description, context.NodeEncryptionKey.Span, Guid.Empty, definition.Id, "description");
                 break;
+            case AgentSkill skill:
+                skill.Description = NodePayloadProtector.Decrypt(skill.Description, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "description");
+                skill.Body = NodePayloadProtector.Decrypt(skill.Body, context.NodeEncryptionKey.Span, Guid.Empty, skill.Id, "body");
+                break;
             case PlaybookAction action:
                 action.Behavior = NodePayloadProtector.Decrypt(action.Behavior, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "behavior");
                 action.TriggerCondition = DecryptIfPresent(action.TriggerCondition, context.NodeEncryptionKey.Span, Guid.Empty, action.Id, "trigger_condition");

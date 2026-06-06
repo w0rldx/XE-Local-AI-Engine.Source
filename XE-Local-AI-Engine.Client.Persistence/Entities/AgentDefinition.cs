@@ -33,6 +33,12 @@ internal sealed record class AgentDefinition
     /// <summary>JSON array of allowed tool names. Plaintext (structural).</summary>
     public string AllowedToolNamesJson { get; set; } = "[]";
 
+    /// <summary>
+    ///     JSON array of assigned skill Guids (the per-agent skill picklist). Plaintext (structural — ids only). Changing
+    ///     it is config-affecting (bumps <see cref="Version" />), same class as <see cref="AllowedToolNamesJson" />.
+    /// </summary>
+    public string AllowedSkillIdsJson { get; set; } = "[]";
+
     /// <summary>JSON map of tool name to required-approval flag. Plaintext (structural).</summary>
     public string ToolApprovalsJson { get; set; } = "{}";
 
