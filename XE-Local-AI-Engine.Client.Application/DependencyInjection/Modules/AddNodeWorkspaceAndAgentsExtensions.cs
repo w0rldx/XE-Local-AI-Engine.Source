@@ -89,6 +89,9 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Node-local agent definitions. Instructions and descriptions are encrypted at rest; the resolver/service
         // projects a bound definition into runtime-package inputs.
         builder.Services.AddScoped<IAgentDefinitionStore, AgentDefinitionStore>();
+        // Node-local canvas (Open Canvas preview) workflows. The serialized graph (carrying agent instructions and Start
+        // text) is encrypted at rest; the store owns id/version/timestamp stamping and optimistic-concurrency updates.
+        builder.Services.AddScoped<ICanvasWorkflowStore, CanvasWorkflowStore>();
         // Node-local agent skill library. Skill description and SKILL.md body are encrypted at rest; the resolver loads
         // an agent's enabled, assigned skills and the factory attaches them via MAF progressive disclosure, while the
         // CRUD service owns operator authoring. Scoped to match the scoped, DbContext-backed store.
