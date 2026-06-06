@@ -17,6 +17,9 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
 
         List<AllowedToolDto> allowedTools = request.AllowedTools is null ? [] : [.. request.AllowedTools];
         var timeouts = request.Timeouts ?? new TimeoutSettings();
+        // Collapse a null/empty assigned-skill set to null so the no-skills path carries no skill payload and hashes
+        // byte-identically to the pre-skills digest (the config-hash payload omits skills entirely when null).
+        var skills = request.Skills is { Count: > 0 } resolvedSkills ? resolvedSkills : null;
 
         return new RuntimePackage
         {
@@ -39,13 +42,20 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             RequestedCapabilities = request.RequestedCapabilities is null ? null : [.. request.RequestedCapabilities],
             Timeouts = timeouts,
             OrchestrationSpec = request.OrchestrationSpec,
+            // Normalize an empty assigned-skill set to null so the no-skills loopback package carries no skill payload
+            // and the config hash below stays byte-identical to the pre-skills digest (the cross-repo round-trip guard).
+            Skills = skills,
+            // UNLIKE SupportsThinking/Sampling above, the resolved skill set IS fed into the config hash: skill bodies
+            // ride MAF progressive disclosure (NOT in ResolvedSystemPrompt), so a body edit/rename/picklist change would
+            // not move the prompt — folding the set (body HASHED, WhenWritingNull) is what invalidates resume.
             ConfigHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
                 request.ResolvedSystemPrompt,
                 MapAllowedTools(allowedTools),
                 request.ModelProfile,
                 timeouts,
                 request.ReasoningEffort,
-                request.OrchestrationSpec)
+                request.OrchestrationSpec,
+                skills)
         };
     }
 

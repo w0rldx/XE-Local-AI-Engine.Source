@@ -21,6 +21,12 @@ using Microsoft.Extensions.AI;
 ///     byte-identical: the factory sets no extra chat options. When present, the factory applies only the non-null
 ///     fields as native chat options or Ollama additional properties.
 /// </param>
+/// <param name="Skills">
+///     Optional resolved node skills for MAF progressive disclosure. Empty/null (the default) keeps the no-skills path
+///     byte-identical: the factory builds the agent with the existing positional <see cref="IChatClient" /> constructor
+///     and attaches no context provider. When non-empty, the factory builds an <c>AgentSkillsProvider</c> from these
+///     skills and constructs the agent through the options constructor with that provider attached.
+/// </param>
 public sealed record InvocationAgentDefinition(
     string ModelId,
     string Instructions,
@@ -28,4 +34,5 @@ public sealed record InvocationAgentDefinition(
     IReadOnlyList<ChatMessage> ConversationContext,
     string? ReasoningEffort = null,
     bool SupportsThinking = true,
-    InvocationSamplingOptions? Sampling = null);
+    InvocationSamplingOptions? Sampling = null,
+    IReadOnlyList<InvocationSkill>? Skills = null);

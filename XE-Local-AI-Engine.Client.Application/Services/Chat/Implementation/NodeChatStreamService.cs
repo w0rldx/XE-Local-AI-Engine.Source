@@ -180,7 +180,8 @@ public sealed class NodeChatStreamService(
             ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
             OrchestrationSpec: orchestration?.Spec,
             SupportsThinking: resolution.SupportsThinking,
-            SamplingOptions: request.SamplingOptions));
+            SamplingOptions: request.SamplingOptions,
+            Skills: resolved?.Skills));
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,

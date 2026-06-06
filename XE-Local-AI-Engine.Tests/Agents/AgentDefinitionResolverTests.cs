@@ -99,6 +99,52 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task Resolver_ResolvesEnabledAssignedSkills_DropsDisabledAndMissing()
+    {
+        // The picklist names three skills; the store's enabled-by-ids fast path returns only the one that is still
+        // present AND enabled. The resolver must surface exactly that one, dropping the deleted and disabled ids (the
+        // store already omits them) without fabricating anything.
+        var resolver = CreateResolverWithSkills(out var store, out var skillStore);
+        var enabledId = Guid.NewGuid();
+        var disabledId = Guid.NewGuid();
+        var deletedId = Guid.NewGuid();
+        var definition = CreateDefinition(allowedSkillIds: [enabledId, disabledId, deletedId]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(
+                      [SkillRecord(enabledId, "kubernetes-debug", "Debug k8s issues", "## Body", version: 3)]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.NotNull(resolved!.Skills);
+        AssertEx.Equal(1, resolved.Skills!.Count);
+        var skill = resolved.Skills[0];
+        AssertEx.Equal(enabledId, skill.Id);
+        AssertEx.Equal("kubernetes-debug", skill.Name);
+        AssertEx.Equal("Debug k8s issues", skill.Description);
+        AssertEx.Equal("## Body", skill.Body);
+        AssertEx.Equal(3, skill.Version);
+    }
+
+    [Test]
+    public async Task Resolver_WhenNoSkillsAssigned_SkipsStoreAndResolvesEmptySkillSet()
+    {
+        // The empty-picklist short-circuit: the resolver returns an empty skill set without ever calling the store, so
+        // the no-skills resolve stays byte-identical to the pre-skills path.
+        var resolver = CreateResolverWithSkills(out var store, out var skillStore);
+        var definition = CreateDefinition(allowedSkillIds: []);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.NotNull(resolved!.Skills);
+        AssertEx.Equal(0, resolved.Skills!.Count);
+        await skillStore.DidNotReceive().ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenSeededSlugButNotDefaultAssistant_StaysIntersected()
     {
         // The full-offer branch is keyed strictly on the default-assistant slug: any other seeded row stays intersected,
@@ -568,6 +614,33 @@ public sealed class AgentDefinitionResolverTests
         return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools);
     }
 
+    // Exposes both the definition store and a real (stubbable) skill store so the skill-resolution tests can configure
+    // the enabled-by-ids fast path and assert the resolver drops missing/disabled assignments.
+    private static AgentDefinitionResolver CreateResolverWithSkills(out IAgentDefinitionStore store,
+        out IAgentSkillStore skillStore)
+    {
+        store = Substitute.For<IAgentDefinitionStore>();
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns([]);
+        offerProvider.GetKnownToolNames().Returns([]);
+        skillStore = Substitute.For<IAgentSkillStore>();
+        return new AgentDefinitionResolver(store,
+            playbookStore,
+            skillStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            NullLogger<AgentDefinitionResolver>.Instance);
+    }
+
+    private static AgentSkillRecord SkillRecord(Guid id, string name, string description, string body, int version = 1)
+    {
+        return new AgentSkillRecord(id, name, description, body, Enabled: true, version, CreatedAtUtc: 10, UpdatedAtUtc: 10);
+    }
+
     private static AgentDefinitionResolver BuildResolver(out IAgentDefinitionStore store,
         out IPlaybookActionStore playbookStore,
         Action<string?>? onGetOffered,
@@ -591,10 +664,21 @@ public sealed class AgentDefinitionResolverTests
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
         return new AgentDefinitionResolver(store,
             playbookStore,
+            CreateEmptySkillStore(),
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             NullLogger<AgentDefinitionResolver>.Instance);
+    }
+
+    // The skill picklist is empty for these tool/playbook/retrieval tests, so a skill store that returns no enabled
+    // skills keeps the resolved set empty (the resolver only calls ListEnabledByIdsAsync for a non-empty picklist).
+    private static IAgentSkillStore CreateEmptySkillStore()
+    {
+        var skillStore = Substitute.For<IAgentSkillStore>();
+        skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([]));
+        return skillStore;
     }
 
     // Builds a resolver with a caller-supplied ranker + explicit retrieval threshold/top-k, so the retrieval-gate tests
@@ -626,7 +710,7 @@ public sealed class AgentDefinitionResolverTests
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new AgentDefinitionResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, NullLogger<AgentDefinitionResolver>.Instance);
+        return new AgentDefinitionResolver(store, playbookStore, CreateEmptySkillStore(), offerProvider, ranker, retrievalOptions, NullLogger<AgentDefinitionResolver>.Instance);
     }
 
     private static AgentDefinitionRecord CreateDefinition(string name = "Agent",
@@ -636,7 +720,8 @@ public sealed class AgentDefinitionResolverTests
         int version = 1,
         string? modelProfile = "qwen3:8b",
         string? reasoningEffort = null,
-        bool playbookEnabled = false)
+        bool playbookEnabled = false,
+        IReadOnlyList<Guid>? allowedSkillIds = null)
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             name,
@@ -651,7 +736,8 @@ public sealed class AgentDefinitionResolverTests
             version,
             10,
             10,
-            playbookEnabled);
+            playbookEnabled,
+            AllowedSkillIds: allowedSkillIds);
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)

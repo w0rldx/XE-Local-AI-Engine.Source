@@ -51,5 +51,15 @@ public sealed record RuntimePackage
     /// </summary>
     public OrchestrationSpec? OrchestrationSpec { get; init; }
 
+    /// <summary>
+    ///     OPTIONAL resolved, decrypted skill set for MAF progressive disclosure (agent skills). Non-empty only on the
+    ///     loopback path when the bound definition assigns enabled skills; the invocation factory builds these into an
+    ///     <c>AgentSkillsProvider</c>. Null/empty on the no-skills loopback path and on the encrypted/server path, where
+    ///     the config hash stays byte-identical to the pre-skills payload (folded WhenWritingNull, same posture as
+    ///     <see cref="OrchestrationSpec" />). The bodies are NOT in <see cref="ResolvedSystemPrompt" /> (progressive
+    ///     disclosure loads them on demand), so the runtime-package builder folds this set into the config hash.
+    /// </summary>
+    public IReadOnlyList<ResolvedSkill>? Skills { get; init; }
+
     public required string ConfigHash { get; init; }
 }
