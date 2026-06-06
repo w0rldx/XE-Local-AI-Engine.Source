@@ -92,6 +92,14 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.Description), Guid.Empty, entry.Entity.Id, "description", trackedProperties);
         }
 
+        // Canvas workflows are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
+        // workflow's own id plus the column name — same layout as agent definitions. The serialized graph (which carries
+        // agent instructions and Start text) is a required encrypted column.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<CanvasWorkflow>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), Guid.Empty, entry.Entity.Id, "graph_json", trackedProperties);
+        }
+
         // Agent skills are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the
         // skill's own id plus the column name — same layout as agent definitions. Both the description and the SKILL.md
         // body are required encrypted columns.
