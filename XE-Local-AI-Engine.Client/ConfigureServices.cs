@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
@@ -57,6 +58,10 @@ public static class ConfigureServices
         // Hub-backed scheduler event publisher — supersedes the no-op default registered in AddNodeScheduler so
         // run/definition lifecycle events broadcast to connected SignalR clients (SchedulerHub mapped in Program).
         builder.Services.AddSingleton<ISchedulerEventPublisher, SchedulerEventPublisher>();
+
+        // Hub-backed preview-workflow event publisher — supersedes the no-op default registered in AddNodePreviewWorkflows
+        // so run/node lifecycle events broadcast to the connected operator (PreviewWorkflowHub mapped in Program).
+        builder.Services.AddSingleton<IPreviewWorkflowEventPublisher, PreviewWorkflowEventPublisher>();
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.

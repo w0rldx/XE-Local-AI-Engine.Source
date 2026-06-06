@@ -25,6 +25,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeWorkerInfrastructure(configuration);
         builder.AddNodeModelCapabilitiesAndMcp(configuration);
         builder.AddNodeAgentHome(configuration);
+        builder.AddNodePreviewWorkflows(configuration);
         builder.AddNodeChat(configuration);
         builder.AddNodeModelRuntime(configuration);
 
