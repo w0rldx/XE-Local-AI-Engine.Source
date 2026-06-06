@@ -42,3 +42,13 @@ public sealed class PullLocalModelRequestValidator : Validator<PullLocalModelReq
             .MaximumLength(100);
     }
 }
+
+public sealed class UnloadLocalModelRequestValidator : Validator<UnloadLocalModelRequest>
+{
+    public UnloadLocalModelRequestValidator()
+    {
+        RuleFor(static request => request.ModelName)
+            .NotEmpty()
+            .MaximumLength(100);
+    }
+}

@@ -183,7 +183,6 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 				}
 				// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
 				// best-effort live invalidation + feedback, so a connection failure is surfaced only to the console.
-				// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
 				console.warn("model-fit scheduler hub failed to start", error);
 			},
 		);
@@ -197,7 +196,6 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
 			startPromise.finally(() => {
 				connection.stop().catch((error: unknown) => {
-					// biome-ignore lint/suspicious/noConsole: intentional best-effort warning for a tolerated hub failure.
 					console.warn("model-fit scheduler hub failed to stop", error);
 				});
 			});

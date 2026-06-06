@@ -16,7 +16,7 @@ import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilitie
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
 // capability is always shown; a link with a capability is shown only when that node capability is on.
-type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit";
+type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit" | "loadedModels";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -68,6 +68,7 @@ const allNavigationLinks: INavigationLink[] = [
 		links: [
 			{ translationKey: "navigation.modelsInstalled", to: nodeRoutePaths.models },
 			{ translationKey: "navigation.recommendations", to: nodeRoutePaths.modelRecommendations, capability: "modelFit" },
+			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels" },
 		],
 	},
 	// Settings group: node + cloud settings. Neither child is capability-gated, so the group always renders.

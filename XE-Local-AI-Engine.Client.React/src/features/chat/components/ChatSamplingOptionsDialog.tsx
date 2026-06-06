@@ -197,8 +197,11 @@ export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens }:
 					placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
 					value={(options.stop ?? []).join("\n")}
 					onChange={(e) => {
-						const lines = e.currentTarget.value.split("\n");
-						const sequences = lines.map((l) => l.trimEnd()).filter((l) => l.length > 0);
+						const sequences: string[] = [];
+						for (const l of e.currentTarget.value.split("\n")) {
+							const trimmed = l.trimEnd();
+							if (trimmed.length > 0) { sequences.push(trimmed); }
+						}
 						setField("stop", sequences.length > 0 ? sequences : undefined);
 					}}
 					autosize={true}

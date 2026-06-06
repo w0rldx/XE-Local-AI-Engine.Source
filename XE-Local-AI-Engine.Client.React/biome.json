@@ -105,7 +105,6 @@
 				"noCatchAssign": "error",
 				"noClassAssign": "error",
 				"noCompareNegZero": "error",
-				"noConsole": "warn",
 				"noConstantBinaryExpressions": "error",
 				"noControlCharactersInRegex": "error",
 				"noDebugger": "error",
@@ -131,6 +130,12 @@
 				"noUselessRegexBackrefs": "error",
 				"noWith": "error",
 				"useErrorMessage": "error",
+				"noConsole": {
+					"level": "error",
+					"options": {
+						"allow": ["warn", "error", "info"]
+					}
+				},
 				"useGetterReturn": "error",
 				"useNumberToFixedDigitsArgument": "error",
 				"noExplicitAny": "error"
@@ -279,7 +284,7 @@
 						"useImportType": "error"
 					},
 					"suspicious": {
-						"noAlert": "warn",
+						"noAlert": "error",
 						"noConfusingLabels": "error",
 						"noDoubleEquals": "error",
 						"noEmptyBlockStatements": "error",
@@ -318,7 +323,7 @@
 						"noExtraBooleanCast": "error"
 					},
 					"correctness": {
-						"noConstantCondition": "warn",
+						"noConstantCondition": "error",
 						"noEmptyCharacterClassInRegex": "error",
 						"noGlobalObjectCalls": "error",
 						"noInnerDeclarations": "error",
@@ -341,7 +346,12 @@
 						"noAsyncPromiseExecutor": "error",
 						"noCatchAssign": "error",
 						"noCompareNegZero": "error",
-						"noConsole": "warn",
+						"noConsole": {
+							"level": "error",
+							"options": {
+								"allow": ["warn", "error", "info"]
+							}
+						},
 						"noConstantBinaryExpressions": "off",
 						"noControlCharactersInRegex": "error",
 						"noDebugger": "error",
@@ -471,7 +481,7 @@
 					"correctness": {
 						"noInvalidUseBeforeDeclaration": "error",
 						"noUndeclaredVariables": "error",
-						"noUnusedVariables": "warn"
+						"noUnusedVariables": "error"
 					},
 					"style": {
 						"noRestrictedGlobals": {
@@ -684,7 +694,7 @@
 					},
 					"security": {
 						"noBlankTarget": "error",
-						"noDangerouslySetInnerHtml": "warn",
+						"noDangerouslySetInnerHtml": "error",
 						"noDangerouslySetInnerHtmlWithChildren": "error"
 					},
 					"style": {
@@ -883,12 +893,12 @@
 						"noUselessThisAlias": "error",
 						"noUselessTypeConstraint": "error",
 						"useLiteralKeys": "off",
-						"useOptionalChain": "off"
+						"useOptionalChain": "error"
 					},
 					"correctness": {
 						"noInvalidUseBeforeDeclaration": "error",
 						"noUnusedPrivateClassMembers": "off",
-						"noUnusedVariables": "warn"
+						"noUnusedVariables": "error"
 					},
 					"style": {
 						"noCommonJs": "error",
@@ -998,7 +1008,7 @@
 				"rules": {
 					"complexity": {
 						"useLiteralKeys": "off",
-						"useOptionalChain": "off"
+						"useOptionalChain": "error"
 					},
 					"style": {
 						"useExportType": "off",

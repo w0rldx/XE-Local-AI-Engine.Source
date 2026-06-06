@@ -1542,6 +1542,40 @@
         ]
       }
     },
+    "/api/local/v1/models/running": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "getRunningLocalModels",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1RunningLocalModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/models": {
       "get": {
         "tags": [
@@ -1659,6 +1693,60 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1SelectLocalModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/models/{modelName}/unload": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "operationId": "unloadLocalModel",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1UnloadLocalModelResponse"
                 }
               }
             }
@@ -5890,6 +5978,49 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1RunningLocalModelsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "isAvailable": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1RunningLocalModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1RunningLocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "sizeVramBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "expiresAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalModelsV1ListLocalModelsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -6042,6 +6173,22 @@
             "nullable": false
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1UnloadLocalModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "unloaded": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalModelsV1UnloadLocalModelRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse": {
         "type": "object",

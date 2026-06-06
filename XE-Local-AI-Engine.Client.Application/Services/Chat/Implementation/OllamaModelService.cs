@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Runtime.CompilerServices;
 using OllamaSharp;
 using OllamaSharp.Models;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 public sealed class OllamaModelService : IOllamaModelService, IDisposable
 {
@@ -67,6 +69,24 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         return _ollamaClient.DeleteModelAsync(modelName, ct);
+    }
+
+    public async Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct = default)
+    {
+        var runningModels = await _ollamaClient.ListRunningModelsAsync(ct).ConfigureAwait(false);
+        return runningModels
+               .Select(RunningModelSnapshotMapper.ToSnapshot)
+               .ToArray();
+    }
+
+    public Task UnloadModelAsync(string modelName, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        // keep_alive=0 sets the requested model's expiry timer to zero. Per Ollama's scheduler, an in-flight generation
+        // completes before the model is evicted, so this is graceful. Unloading a model the runtime does not currently
+        // hold is a harmless no-op, which keeps the eject action idempotent.
+        return OllamaModelUnloader.UnloadAsync(_ollamaClient, modelName, ct);
     }
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)

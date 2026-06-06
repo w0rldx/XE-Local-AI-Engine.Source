@@ -48,6 +48,7 @@ import {
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
+	getRunningLocalModels,
 	getRuntimeManagerStatus,
 	getScheduledJob,
 	getScheduledJobRun,
@@ -92,6 +93,7 @@ import {
 	setNodeChatSelectedPath,
 	startNodeBinding,
 	triggerScheduledJob,
+	unloadLocalModel,
 	updateAgentDefinition,
 	updateMcpServer,
 	updatePlaybookAction,
@@ -192,6 +194,8 @@ import type {
 	GetNodeChatMessageFeedbackResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
+	GetRunningLocalModelsData,
+	GetRunningLocalModelsResponse,
 	GetRuntimeManagerStatusData,
 	GetRuntimeManagerStatusResponse,
 	GetScheduledJobData,
@@ -287,6 +291,9 @@ import type {
 	StartNodeBindingResponse,
 	TriggerScheduledJobData,
 	TriggerScheduledJobResponse,
+	UnloadLocalModelData,
+	UnloadLocalModelError,
+	UnloadLocalModelResponse,
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
 	UpdateMcpServerData,
@@ -1015,6 +1022,28 @@ export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetail
 		queryKey: getLocalModelDetailsQueryKey(options),
 	});
 
+export const getRunningLocalModelsQueryKey = (options?: Options<GetRunningLocalModelsData>) =>
+	createQueryKey("getRunningLocalModels", options);
+
+export const getRunningLocalModelsOptions = (options?: Options<GetRunningLocalModelsData>) =>
+	queryOptions<
+		GetRunningLocalModelsResponse,
+		AxiosError<DefaultError>,
+		GetRunningLocalModelsResponse,
+		ReturnType<typeof getRunningLocalModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getRunningLocalModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getRunningLocalModelsQueryKey(options),
+	});
+
 export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) => createQueryKey("listLocalModels", options);
 
 export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =>
@@ -1066,6 +1095,26 @@ export const selectLocalModelMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await selectLocalModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const unloadLocalModelMutation = (
+	options?: Partial<Options<UnloadLocalModelData>>,
+): UseMutationOptions<UnloadLocalModelResponse, AxiosError<UnloadLocalModelError>, Options<UnloadLocalModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		UnloadLocalModelResponse,
+		AxiosError<UnloadLocalModelError>,
+		Options<UnloadLocalModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await unloadLocalModel({
 				...options,
 				...fnOptions,
 				throwOnError: true,

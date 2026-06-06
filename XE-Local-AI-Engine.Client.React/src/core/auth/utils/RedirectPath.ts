@@ -1,5 +1,5 @@
 export function getSafeRedirectPath(value: string | undefined, fallback = "/"): string {
-	if (!value || !value.startsWith("/")) {
+	if (!value?.startsWith("/")) {
 		return fallback;
 	}
 

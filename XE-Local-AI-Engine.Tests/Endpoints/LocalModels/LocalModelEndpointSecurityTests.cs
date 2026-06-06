@@ -35,6 +35,10 @@ public sealed class LocalModelEndpointSecurityTests
             Kind = "Chat"
         }).ConfigureAwait(false);
         using var resetKindResponse = await client.DeleteAsync("/api/local/v1/models/llama3:8b/kind").ConfigureAwait(false);
+        using var runningResponse = await client.GetAsync("/api/local/v1/models/running").ConfigureAwait(false);
+        using var unloadResponse = await client.PostAsJsonAsync("/api/local/v1/models/llama3:8b/unload", new
+        {
+        }).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, detailsResponse.StatusCode);
@@ -43,8 +47,12 @@ public sealed class LocalModelEndpointSecurityTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, deleteResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, setKindResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.Unauthorized, resetKindResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, runningResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, unloadResponse.StatusCode);
         await modelService.DidNotReceiveWithAnyArgs().ListLocalModelsAsync(Arg.Any<CancellationToken>());
         modelService.DidNotReceiveWithAnyArgs().PullModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await modelService.DidNotReceiveWithAnyArgs().ListRunningModelsAsync(Arg.Any<CancellationToken>());
+        await modelService.DidNotReceiveWithAnyArgs().UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService)
