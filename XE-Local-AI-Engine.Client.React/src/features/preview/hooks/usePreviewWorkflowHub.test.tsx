@@ -11,8 +11,15 @@ import { usePreviewRunStore } from "@/features/preview/stores/PreviewRunStore";
 const registeredHandlers = new Map<string, (payload: unknown) => void>();
 const stopSpy = vi.fn(() => Promise.resolve());
 const startSpy = vi.fn(() => Promise.resolve());
+const invokeSpy = vi.fn(() => Promise.resolve());
+// The hook registers a reconnected callback; capture it so a test can simulate a transient drop + reconnect.
+let reconnectedCallback: (() => void) | undefined;
+// Drives the mock connection's reported state — Disconnected until start resolves, so the hook only invokes group
+// joins on a Connected hub (mirrors the production guard).
+let connectionState = "Disconnected";
 
-// Mock the SignalR client so the hook builds a fake connection: `on` captures handlers, `start`/`stop` resolve.
+// Mock the SignalR client so the hook builds a fake connection: `on` captures handlers, `start`/`stop` resolve,
+// `invoke` is spied, and `state`/`onreconnected` model the connect lifecycle the subscribe logic guards on.
 vi.mock("@microsoft/signalr", () => {
 	class FakeBuilder {
 		withUrl() {
@@ -26,15 +33,28 @@ vi.mock("@microsoft/signalr", () => {
 		}
 		build() {
 			return {
+				get state() {
+					return connectionState;
+				},
 				on: (name: string, handler: (payload: unknown) => void) => registeredHandlers.set(name, handler),
 				off: (name: string) => registeredHandlers.delete(name),
-				onreconnected: () => undefined,
-				start: startSpy,
+				onreconnected: (callback: () => void) => {
+					reconnectedCallback = callback;
+				},
+				start: () => {
+					connectionState = "Connected";
+					return startSpy();
+				},
 				stop: stopSpy,
+				invoke: invokeSpy,
 			};
 		}
 	}
-	return { HubConnectionBuilder: FakeBuilder, LogLevel: { Warning: 3 } };
+	return {
+		HubConnectionBuilder: FakeBuilder,
+		HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
+		LogLevel: { Warning: 3 },
+	};
 });
 
 vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
@@ -51,6 +71,9 @@ describe("usePreviewWorkflowHub", () => {
 		registeredHandlers.clear();
 		startSpy.mockClear();
 		stopSpy.mockClear();
+		invokeSpy.mockClear();
+		reconnectedCallback = undefined;
+		connectionState = "Disconnected";
 		usePreviewRunStore.getState().actions.reset();
 	});
 
@@ -91,5 +114,43 @@ describe("usePreviewWorkflowHub", () => {
 		// The PAGE owns reset-on-unmount (the store reset), simulated here — after it, the store is empty.
 		usePreviewRunStore.getState().actions.reset();
 		expect(usePreviewRunStore.getState().runs).toEqual({});
+	});
+
+	it("subscribes to a run that was already active when the connection started", async () => {
+		usePreviewRunStore.getState().actions.registerRun("run-1");
+		renderHook(() => usePreviewWorkflowHub());
+
+		// After start resolves, the hook re-applies the desired set and joins the active run's group.
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+	});
+
+	it("subscribes to a run that becomes active after the connection started", async () => {
+		renderHook(() => usePreviewWorkflowHub());
+		await waitFor(() => expect(startSpy).toHaveBeenCalled());
+
+		// A new run registered while connected triggers a Subscribe via the store subscription.
+		usePreviewRunStore.getState().actions.registerRun("run-2");
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-2"));
+	});
+
+	it("unsubscribes from a run when it is removed from the store", async () => {
+		usePreviewRunStore.getState().actions.registerRun("run-1");
+		renderHook(() => usePreviewWorkflowHub());
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+
+		// Clearing the store (page reset) leaves the run's group.
+		usePreviewRunStore.getState().actions.reset();
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Unsubscribe", "run-1"));
+	});
+
+	it("re-subscribes to active runs after a reconnect", async () => {
+		usePreviewRunStore.getState().actions.registerRun("run-1");
+		renderHook(() => usePreviewWorkflowHub());
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
+		invokeSpy.mockClear();
+
+		// A transient drop + automatic reconnect loses server-side group membership; the hook re-joins every active run.
+		reconnectedCallback?.();
+		await waitFor(() => expect(invokeSpy).toHaveBeenCalledWith("Subscribe", "run-1"));
 	});
 });
