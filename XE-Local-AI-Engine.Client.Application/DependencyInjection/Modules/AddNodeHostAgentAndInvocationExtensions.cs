@@ -101,6 +101,8 @@ internal static class AddNodeHostAgentAndInvocationExtensions
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
+        builder.Services.AddSingleton<ModelCapabilityProber>();
+        builder.Services.AddSingleton<CapabilityReportComposer>();
         builder.Services.AddSingleton<ICapabilityReporter, CapabilityReporter>();
         builder.Services.AddSingleton(sp => new Lazy<ICapabilityReporter>(() => sp.GetRequiredService<ICapabilityReporter>()));
         builder.Services.AddSingleton<IDeadLetterStore, FileDeadLetterStore>();
