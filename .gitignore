@@ -372,8 +372,11 @@ tmp/
 # C# Dev Kit for Visual Studio Code
 *.lscache
 
-# Worker Credentials
+# Encrypted runtime secret files — OAuth tokens, cloud credentials, worker creds. NEVER commit these.
+*.enc
 *worker-credentials.enc
+codex-oauth-tokens.enc
+cloud-credentials.enc
 
 # Local runtime artifacts (machine-specific, not for version control)
 .claude/scheduled_tasks.lock
