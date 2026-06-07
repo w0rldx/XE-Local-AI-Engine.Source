@@ -10,7 +10,9 @@ export type ChatOrigin = "local" | "remote";
 // "on" is the binary-reasoning ON state for a model WITHOUT that capability that still reasons by default
 // (e.g. some GGUF chat templates): it maps to "omit the think field" so the model's built-in reasoning runs,
 // while "none" maps to think:false (suppress). Graded models never use "on"; binary models only use "on"/"none".
-export type ReasoningEffort = "none" | "on" | "low" | "medium" | "high";
+// "minimal" and "xhigh" are Codex/cloud-only graded levels mapped to OpenAI Responses reasoning.effort — they
+// are NEVER offered for Ollama models and must not leak to the Ollama `think` wire.
+export type ReasoningEffort = "none" | "on" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export type ToolCallState = "requesting" | "waiting" | "received" | "failed";
 

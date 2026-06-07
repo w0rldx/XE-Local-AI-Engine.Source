@@ -27,6 +27,18 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     private const string OllamaRepeatLastNKey = "repeat_last_n";
     private const string OllamaNumCtxKey = "num_ctx";
 
+    /// <summary>
+    ///     Codex-only side channel carrying the RAW normalized reasoning-effort string
+    ///     (minimal/low/medium/high/xhigh) for a thinking-capable model, so the Codex Responses boundary can map
+    ///     it to <c>ResponseReasoningEffortLevel</c> with full fidelity. The Ollama <c>think</c> key cannot carry
+    ///     <c>minimal</c>/<c>xhigh</c> (Ollama 400s on an unknown think level), so those collapse to
+    ///     <c>think:true</c> there; this key preserves the distinction without affecting the Ollama wire — the
+    ///     OllamaSharp AbstractionMapper reads only its fixed option allowlist and ignores unknown keys. The key
+    ///     is added ONLY when a graded/explicit effort is present, so the no-effort path stays byte-identical
+    ///     (single <c>think</c> entry).
+    /// </summary>
+    internal const string CodexReasoningEffortKey = "codex_reasoning_effort";
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<InvocationAgentFactory> _logger;
@@ -82,8 +94,20 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         var additionalProperties = new AdditionalPropertiesDictionary();
         if (definition.SupportsThinking)
         {
-            // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high").
+            // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high"). minimal/xhigh
+            // collapse to think:true here because Ollama 400s on an unknown think level (see ResolveThinkOption).
             additionalProperties["think"] = ResolveThinkOption(definition.ReasoningEffort);
+
+            // Codex-only side channel: when a graded/explicit effort is present, also carry the RAW normalized effort
+            // string so the Codex Responses boundary can map minimal/xhigh distinctly (the think key above cannot —
+            // it would 400 Ollama). Added only for a recognized non-blank effort so the no-effort/blank/on path keeps
+            // the single-think dictionary (byte-identical no-override guarantee). Inert on the Ollama wire: the
+            // OllamaSharp AbstractionMapper reads only its fixed option allowlist and ignores this unknown key.
+            var codexEffort = ResolveCodexReasoningEffort(definition.ReasoningEffort);
+            if (codexEffort is not null)
+            {
+                additionalProperties[CodexReasoningEffortKey] = codexEffort;
+            }
         }
         else if (IsReasoningRequested(definition.ReasoningEffort))
         {
@@ -329,11 +353,43 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             return "high";
         }
 
+        // minimal / xhigh are Codex (OpenAI Responses) reasoning levels that Ollama does NOT understand — sending
+        // think:"minimal"/"xhigh" returns HTTP 400 ("unknown think level"). They are only offered for Codex models in
+        // the composer, but should an agent definition pin one (or a stale composer selection carry one onto an Ollama
+        // thinking model) we map them to think:true (reason) so the Ollama path stays safe. The Codex boundary reads
+        // the un-collapsed level from the CodexReasoningEffortKey side channel instead.
         // Default to think:true (reason). This also intentionally covers the "on" binary-reasoning sentinel
         // (<see cref="BinaryReasoningOn" />): it is normally handled in the !SupportsThinking branch, and only reaches
         // this graded path defensively (the React clamp keeps "on" off thinking-capable models) — where "reason" is the
         // right meaning for a model that can think.
         return true;
+    }
+
+    /// <summary>
+    ///     Returns the canonical reasoning effort to carry on the Codex-only <see cref="CodexReasoningEffortKey" />
+    ///     side channel, or <see langword="null" /> to omit it. Recognizes the OpenAI Responses graded levels
+    ///     (<c>minimal</c>/<c>low</c>/<c>medium</c>/<c>high</c>/<c>xhigh</c>) and explicit <c>none</c>; blank, the
+    ///     binary <c>on</c> sentinel, and any unrecognized value return <see langword="null" /> so the Codex boundary
+    ///     falls back to interpreting the Ollama <c>think</c> value (true → its default effort). The input is expected
+    ///     already normalized upstream by the Application layer's reasoning-effort normalizer.
+    /// </summary>
+    private static string? ResolveCodexReasoningEffort(string? reasoningEffort)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return null;
+        }
+
+        return reasoningEffort.Trim().ToUpperInvariant() switch
+        {
+            "NONE" => "none",
+            "MINIMAL" => "minimal",
+            "LOW" => "low",
+            "MEDIUM" => "medium",
+            "HIGH" => "high",
+            "XHIGH" => "xhigh",
+            _ => null
+        };
     }
 
     /// <summary>

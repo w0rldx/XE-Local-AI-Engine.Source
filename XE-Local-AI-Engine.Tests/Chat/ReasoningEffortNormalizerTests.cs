@@ -8,9 +8,11 @@ public sealed class ReasoningEffortNormalizerTests
     [Test]
     [Arguments("none")]
     [Arguments("on")]
+    [Arguments("minimal")]
     [Arguments("low")]
     [Arguments("medium")]
     [Arguments("high")]
+    [Arguments("xhigh")]
     public void Normalize_WhenCanonicalEffort_ReturnsSameValue(string effort)
     {
         AssertEx.Equal(effort, ReasoningEffortNormalizer.Normalize(effort));
@@ -21,6 +23,8 @@ public sealed class ReasoningEffortNormalizerTests
     [Arguments("ON", "on")]
     [Arguments("  High  ", "high")]
     [Arguments("NONE", "none")]
+    [Arguments("Minimal", "minimal")]
+    [Arguments("XHIGH", "xhigh")]
     public void Normalize_WhenMixedCaseOrPadded_ReturnsCanonicalLowercase(string input, string expected)
     {
         AssertEx.Equal(expected, ReasoningEffortNormalizer.Normalize(input));
@@ -44,9 +48,11 @@ public sealed class ReasoningEffortNormalizerTests
     [Arguments("   ")]
     [Arguments("none")]
     [Arguments("on")]
+    [Arguments("minimal")]
     [Arguments("low")]
     [Arguments("medium")]
     [Arguments("high")]
+    [Arguments("xhigh")]
     [Arguments("HIGH")]
     public void IsValid_WhenBlankOrRecognized_ReturnsTrue(string? input)
     {

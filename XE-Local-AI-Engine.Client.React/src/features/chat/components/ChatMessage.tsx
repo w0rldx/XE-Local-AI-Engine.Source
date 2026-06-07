@@ -19,7 +19,13 @@ import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
 import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import { MessageParts } from "@/features/chat/components/MessageParts";
-import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel, ChatMessagePart, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type {
+	ChatFeedbackRating,
+	ChatMessageFeedback,
+	ChatMessageModel,
+	ChatMessagePart,
+	ReasoningEffort,
+} from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 const EMPTY_PARTS: ChatMessagePart[] = [];
@@ -126,6 +132,13 @@ export function ChatMessage({
 	const agentDisplayName = assistantMessage
 		? (message.agentName ?? t("pages.chat.defaultAgentName", "Default Assistant"))
 		: undefined;
+	// Model that produced the turn (ground truth from the persisted message — Ollama id or Codex/cloud id).
+	// Shown on every assistant turn that carries a model so multiple-provider threads stay auditable. Absent for
+	// legacy turns with no persisted model and for user turns → omitted.
+	const modelLabel =
+		assistantMessage && message.model != null && message.model.trim().length > 0
+			? t("pages.chat.messageModelLabel", "Model: {{model}}", { model: message.model })
+			: undefined;
 	// Reasoning effort used at generation time (ground truth from persisted metadata_json). Shown on every
 	// assistant turn where it is present, including "none" → "off". Absent for legacy/user turns → omitted.
 	const reasoningLabel =
@@ -145,7 +158,9 @@ export function ChatMessage({
 			? Math.round(message.outputTokens / (message.generationDurationMs / 1000))
 			: undefined;
 	const tpsLabel =
-		tps != null && Number.isFinite(tps) && tps > 0 ? t("pages.chat.tokensPerSecond", "{{value}} tok/s", { value: tps }) : undefined;
+		tps != null && Number.isFinite(tps) && tps > 0
+			? t("pages.chat.tokensPerSecond", "{{value}} tok/s", { value: tps })
+			: undefined;
 	const hasContentStarted = message.content.trim().length > 0;
 	const parts = assistantMessage ? resolveParts(message, streamingParts) : EMPTY_PARTS;
 	// A failed assistant turn carries an `error`. Render it as a highlighted block inside the bubble —
@@ -392,17 +407,15 @@ export function ChatMessage({
 				) : null}
 				{assistantMessage && (agentDisplayName || time) ? (
 					// Attribution row: left side holds action icons (real empty Box when null, so space-between pins
-					// right side even during streaming when actions is null). Right side = agentName · Reasoning: X ·
-					// [NN tok/s ·] time. The tps segment sits before time (when the toggle is on) so the clock stays right-most.
+					// right side even during streaming when actions is null). Right side = agentName · Model: X ·
+					// Reasoning: X · [NN tok/s ·] time. The tps segment sits before time (when the toggle is on) so the
+					// clock stays right-most.
 					<Group justify="space-between" align="center" wrap="nowrap" gap={4}>
 						<Box>{actions}</Box>
-						<Text
-							size="xs"
-							c="dimmed"
-							data-testid={`chat-message-agent-${message.id}`}
-							style={{ flexShrink: 0 }}
-						>
-							{[agentDisplayName, reasoningLabel, showTokensPerSecond ? tpsLabel : undefined, time].filter(Boolean).join(" · ")}
+						<Text size="xs" c="dimmed" data-testid={`chat-message-agent-${message.id}`} style={{ flexShrink: 0 }}>
+							{[agentDisplayName, modelLabel, reasoningLabel, showTokensPerSecond ? tpsLabel : undefined, time]
+								.filter(Boolean)
+								.join(" · ")}
 						</Text>
 					</Group>
 				) : (

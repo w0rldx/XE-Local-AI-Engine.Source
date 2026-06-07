@@ -61,7 +61,12 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
 
     private ChatOptions ApplyStoreDisabled(ChatOptions? options)
     {
-        var result = CodexResponseStoreDisabling.WithStoredOutputDisabled(options?.Clone());
+        // Resolve the per-send reasoning effort from the INCOMING options' AdditionalProperties (the Codex side channel,
+        // falling back to the Ollama-shaped think value) so the store-disabling base options also request reasoning
+        // summaries at that effort. Codex-only: the local/Ollama path does not pass through this wrapper.
+        var reasoningEffort = CodexResponseStoreDisabling.ResolveReasoningEffort(options);
+
+        var result = CodexResponseStoreDisabling.WithStoredOutputDisabled(options?.Clone(), reasoningEffort);
 
         // Pin to a valid Codex model id, overwriting any local model name the agent send path forwarded (400 fix).
         result.ModelId = _modelId;

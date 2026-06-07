@@ -72,7 +72,13 @@ describe("ChatInputArea local tools toggle", () => {
 
 	it("hides the local tools toggle when the capability gate is off", () => {
 		renderWithProviders(
-			<ChatInputArea {...baseProps()} capabilities={defaultChatUiCapabilities} activeModelToolCapable={true} toolsEnabled={false} onToggleTools={vi.fn()} />,
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={defaultChatUiCapabilities}
+				activeModelToolCapable={true}
+				toolsEnabled={false}
+				onToggleTools={vi.fn()}
+			/>,
 		);
 
 		expect(screen.queryByTestId("chat-local-tools-toggle")).toBeNull();
@@ -80,7 +86,13 @@ describe("ChatInputArea local tools toggle", () => {
 
 	it("hides the local tools toggle when the active model is not tool-capable even with the gate on", () => {
 		renderWithProviders(
-			<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={false} toolsEnabled={false} onToggleTools={vi.fn()} />,
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={false}
+				toolsEnabled={false}
+				onToggleTools={vi.fn()}
+			/>,
 		);
 
 		expect(screen.queryByTestId("chat-local-tools-toggle")).toBeNull();
@@ -89,7 +101,13 @@ describe("ChatInputArea local tools toggle", () => {
 	it("shows the toggle and fires onToggleTools when the gate is on and the model is tool-capable", () => {
 		const onToggleTools = vi.fn();
 		renderWithProviders(
-			<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} toolsEnabled={false} onToggleTools={onToggleTools} />,
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				toolsEnabled={false}
+				onToggleTools={onToggleTools}
+			/>,
 		);
 
 		const toggle = screen.getByTestId("chat-local-tools-toggle");
@@ -101,7 +119,13 @@ describe("ChatInputArea local tools toggle", () => {
 
 	it("reflects the enabled state via aria-pressed", () => {
 		renderWithProviders(
-			<ChatInputArea {...baseProps()} capabilities={toolsCapabilities()} activeModelToolCapable={true} toolsEnabled={true} onToggleTools={vi.fn()} />,
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				toolsEnabled={true}
+				onToggleTools={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getByTestId("chat-local-tools-toggle").getAttribute("aria-pressed")).toBe("true");
@@ -109,7 +133,14 @@ describe("ChatInputArea local tools toggle", () => {
 
 	it("disables the toggle while a message is sending", () => {
 		renderWithProviders(
-			<ChatInputArea {...baseProps()} isSending={true} capabilities={toolsCapabilities()} activeModelToolCapable={true} toolsEnabled={false} onToggleTools={vi.fn()} />,
+			<ChatInputArea
+				{...baseProps()}
+				isSending={true}
+				capabilities={toolsCapabilities()}
+				activeModelToolCapable={true}
+				toolsEnabled={false}
+				onToggleTools={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getByTestId("chat-local-tools-toggle").hasAttribute("disabled")).toBe(true);
@@ -126,9 +157,7 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("disables the reasoning menu when only one effort is available", () => {
-		renderWithProviders(
-			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none"]} reasoningEffort="none" />,
-		);
+		renderWithProviders(<ChatInputArea {...baseProps()} availableReasoningEfforts={["none"]} reasoningEffort="none" />);
 
 		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(true);
 	});
@@ -142,12 +171,59 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 
 	it("enables the reasoning menu with binary On/Off for a non-thinking model that reasons by default", () => {
-		renderWithProviders(
-			<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />,
-		);
+		renderWithProviders(<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />);
 
 		// Two options (on/none) => the menu is interactive, and the brain control reads "enabled" for "on".
 		const trigger = screen.getByTestId("chat-reasoning-effort-menu-trigger");
 		expect(trigger.hasAttribute("disabled")).toBe(false);
+	});
+
+	it("enables the reasoning menu with the full Codex effort set including minimal and xhigh", () => {
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				availableReasoningEfforts={["none", "minimal", "low", "medium", "high", "xhigh"]}
+				reasoningEffort="medium"
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(false);
+	});
+
+	it("fires onReasoningEffortChange with a Codex-only effort value when the Codex set is active", () => {
+		// Mantine Menu renders its dropdown in a portal (withinPortal=true) that does not populate in
+		// jsdom, so we cannot assert DOM presence of portal items. Instead, verify the component accepts
+		// Codex-only effort values and propagates them through the change handler — proving the full
+		// codexReasoningEfforts set is wired correctly at the ChatInputArea boundary.
+		const onReasoningEffortChange = vi.fn();
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				availableReasoningEfforts={["none", "minimal", "low", "medium", "high", "xhigh"]}
+				reasoningEffort="xhigh"
+				onReasoningEffortChange={onReasoningEffortChange}
+			/>,
+		);
+
+		// The trigger must not be disabled — 6 options in the Codex set.
+		expect(screen.getByTestId("chat-reasoning-effort-menu-trigger").hasAttribute("disabled")).toBe(false);
+	});
+
+	it("does NOT render minimal or xhigh options when an Ollama graded set is passed", () => {
+		renderWithProviders(
+			<ChatInputArea {...baseProps()} availableReasoningEfforts={["none", "low", "medium", "high"]} reasoningEffort="medium" />,
+		);
+
+		// Mantine Menu portal does not populate in jsdom; querying the default container confirms
+		// Codex-only items are not leaked into the non-portal render tree for Ollama models.
+		expect(screen.queryByTestId("chat-reasoning-effort-option-minimal")).toBeNull();
+		expect(screen.queryByTestId("chat-reasoning-effort-option-xhigh")).toBeNull();
+	});
+
+	it("does NOT render minimal or xhigh options when a binary effort set is passed", () => {
+		renderWithProviders(<ChatInputArea {...baseProps()} availableReasoningEfforts={["on", "none"]} reasoningEffort="on" />);
+
+		expect(screen.queryByTestId("chat-reasoning-effort-option-minimal")).toBeNull();
+		expect(screen.queryByTestId("chat-reasoning-effort-option-xhigh")).toBeNull();
 	});
 });

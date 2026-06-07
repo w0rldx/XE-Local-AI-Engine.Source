@@ -20,8 +20,8 @@ function toCloudModelOption(modelName: string): ModelOption {
 		value: modelName,
 		label: modelName,
 		displayName: modelName,
-		// Cloud (Codex) models do not surface Ollama capability flags — treat as chat-only.
-		isReasoningModel: false,
+		// Codex models support the full OpenAI Responses reasoning.effort vocabulary (none/minimal/low/medium/high/xhigh).
+		isReasoningModel: true,
 		isToolCapable: false,
 		isAvailable: true,
 		isCloud: true,

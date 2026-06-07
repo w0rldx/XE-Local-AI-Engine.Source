@@ -193,6 +193,59 @@ public sealed class InvocationAgentFactoryTests
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<string>("think", out var thinkValue));
         AssertEx.Equal("high", thinkValue);
+
+        // The Codex side channel carries the raw effort for a graded level too (read only on the Codex boundary).
+        AssertEx.True(additionalProperties.TryGetValue<string>("codex_reasoning_effort", out var codexEffort));
+        AssertEx.Equal("high", codexEffort);
+    }
+
+    [Test]
+    [Arguments("minimal")]
+    [Arguments("xhigh")]
+    public async Task CreateAsync_WhenSupportsThinkingTrueAndCodexLevel_SendsThinkTrue_AndRawCodexSideChannel(string effort)
+    {
+        // minimal/xhigh are Codex-only OpenAI Responses levels. Ollama 400s on them as a think level, so the factory
+        // collapses think to TRUE (safe on the Ollama path) while preserving the un-collapsed level on the Codex side
+        // channel so the Codex boundary can map it with full fidelity.
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: effort,
+            SupportsThinking: true);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
+        AssertEx.Equal(true, thinkValue);
+        AssertEx.True(additionalProperties.TryGetValue<string>("codex_reasoning_effort", out var codexEffort));
+        AssertEx.Equal(effort, codexEffort);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenSupportsThinkingTrueAndNoEffort_OmitsCodexSideChannel()
+    {
+        // Blank/unspecified effort: only `think` is set (no side channel). Guards the no-override byte-identical path.
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            ReasoningEffort: null,
+            SupportsThinking: true);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.ContainsKey("think"));
+        AssertEx.False(additionalProperties.ContainsKey("codex_reasoning_effort"));
+        AssertEx.Equal(1, additionalProperties.Count);
     }
 
     [Test]

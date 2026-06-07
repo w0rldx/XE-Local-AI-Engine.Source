@@ -149,9 +149,11 @@
 			"reasoningEffortOptions": {
 				"none": "Off",
 				"on": "On",
+				"minimal": "Minimal",
 				"low": "Low",
 				"medium": "Medium",
-				"high": "High"
+				"high": "High",
+				"xhigh": "Highest"
 			},
 			"newConversation": "New plain chat",
 			"newEncryptedConversation": "New encrypted chat",
@@ -470,6 +472,7 @@
 				"showTokensPerSecond": "Show tokens/sec"
 			},
 			"tokensPerSecond": "{{value}} tok/s",
+			"messageModelLabel": "Model: {{model}}",
 			"samplingOptions": {
 				"title": "Advanced sampling options",
 				"description": "These parameters override the model defaults for the next message send. They are stored in this browser only and are not persisted per-conversation.",

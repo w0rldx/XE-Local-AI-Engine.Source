@@ -73,15 +73,43 @@ describe("NodeChatPreferencesStore", () => {
 		expect(useStore.getState().reasoningEffort).toBe("on");
 	});
 
-	it("keeps the graded + binary effort lists in sync with the persistable validation set", async () => {
+	it("keeps the graded + binary + codex effort lists in sync with the persistable validation set", async () => {
 		// persistableReasoningEfforts is the validation source of truth for both store hydrate and the wire mapper, so
-		// it must equal the union of the graded (menu) and binary (menu) lists — otherwise a value offered in the UI
-		// could be silently dropped on reload/round-trip. Pins the three hand-maintained lists against desync.
-		const { reasoningEfforts, binaryReasoningEfforts, persistableReasoningEfforts } = await import(
+		// it must equal the union of all three menu lists (Ollama graded, binary, Codex) — otherwise a value offered in
+		// the UI could be silently dropped on reload/round-trip. Pins the four hand-maintained lists against desync.
+		const { reasoningEfforts, binaryReasoningEfforts, codexReasoningEfforts, persistableReasoningEfforts } = await import(
 			"@/features/chat/stores/NodeChatPreferencesStore"
 		);
 
-		expect(new Set(persistableReasoningEfforts)).toEqual(new Set([...reasoningEfforts, ...binaryReasoningEfforts]));
+		expect(new Set(persistableReasoningEfforts)).toEqual(
+			new Set([...reasoningEfforts, ...binaryReasoningEfforts, ...codexReasoningEfforts]),
+		);
+	});
+
+	it("hydrates a persisted Codex-only 'minimal' reasoning effort (a valid persistable value)", async () => {
+		const useStore = await loadStore({ [REASONING_EFFORT_STORAGE_KEY]: "minimal" });
+
+		expect(useStore.getState().reasoningEffort).toBe("minimal");
+	});
+
+	it("hydrates a persisted Codex-only 'xhigh' reasoning effort (a valid persistable value)", async () => {
+		const useStore = await loadStore({ [REASONING_EFFORT_STORAGE_KEY]: "xhigh" });
+
+		expect(useStore.getState().reasoningEffort).toBe("xhigh");
+	});
+
+	it("codexReasoningEfforts contains minimal and xhigh but Ollama lists do not", async () => {
+		// Guard that Codex-only levels never leak into the Ollama pickers.
+		const { reasoningEfforts, binaryReasoningEfforts, codexReasoningEfforts } = await import(
+			"@/features/chat/stores/NodeChatPreferencesStore"
+		);
+
+		expect(codexReasoningEfforts).toContain("minimal");
+		expect(codexReasoningEfforts).toContain("xhigh");
+		expect(reasoningEfforts).not.toContain("minimal");
+		expect(reasoningEfforts).not.toContain("xhigh");
+		expect(binaryReasoningEfforts).not.toContain("minimal");
+		expect(binaryReasoningEfforts).not.toContain("xhigh");
 	});
 
 	it("persists selections to localStorage when set", async () => {
