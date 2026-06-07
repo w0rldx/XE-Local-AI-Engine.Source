@@ -676,6 +676,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse =
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	modelName?: string;
+	provider?: string;
 	sizeBytes?: number | null;
 	modifiedAtUtc?: number | null;
 	family?: string | null;
@@ -981,6 +982,17 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsReques
 	endpoint: string;
 	apiKey: string;
 	deploymentName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = {
+	authorizeUrl?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = {
+	signedIn?: boolean;
+	accountId?: string | null;
+	expiresAtUtc?: string | null;
+	loginPending?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
@@ -3559,6 +3571,87 @@ export type SaveCloudSettingsResponses = {
 };
 
 export type SaveCloudSettingsResponse = SaveCloudSettingsResponses[keyof SaveCloudSettingsResponses];
+
+export type CodexLoginData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud/codex/login";
+};
+
+export type CodexLoginErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CodexLoginResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse;
+};
+
+export type CodexLoginResponse = CodexLoginResponses[keyof CodexLoginResponses];
+
+export type CodexLogoutData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud/codex/logout";
+};
+
+export type CodexLogoutErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CodexLogoutResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
+};
+
+export type CodexLogoutResponse = CodexLogoutResponses[keyof CodexLogoutResponses];
+
+export type CodexStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud/codex/status";
+};
+
+export type CodexStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CodexStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
+};
+
+export type CodexStatusResponse = CodexStatusResponses[keyof CodexStatusResponses];
 
 export type NodeAuthStatusData = {
 	body?: never;

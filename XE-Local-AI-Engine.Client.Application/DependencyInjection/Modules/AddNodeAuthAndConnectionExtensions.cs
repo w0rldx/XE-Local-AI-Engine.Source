@@ -110,6 +110,7 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
         builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
+        builder.AddCodexOAuthProvider(configuration);
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
         builder.Services.AddSingleton<IWorkerTokenRefreshService, WorkerTokenRefreshService>();

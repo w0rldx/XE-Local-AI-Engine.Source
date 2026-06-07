@@ -79,4 +79,87 @@ describe("ModelSelectorCard", () => {
 		await screen.findByTestId("chat-model-selector-option-llama3:8b");
 		expect(screen.queryByTestId("chat-model-selector-no-chat-models")).toBeNull();
 	});
+
+	// Cloud (Codex) group tests
+
+	it("does not render the cloud group when cloudModelOptions is absent", async () => {
+		renderWithProviders(
+			<ModelSelectorCard modelOptions={[localDefaultOption()]} selectedModel={localDefaultModelValue} onModelChange={vi.fn()} />,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		await screen.findByTestId("chat-model-selector-no-chat-models");
+		expect(screen.queryByTestId("chat-model-selector-option-codex-mini-latest")).toBeNull();
+	});
+
+	it("does not render the cloud group when cloudModelOptions is an empty array", async () => {
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[localDefaultOption()]}
+				cloudModelOptions={[]}
+				selectedModel={localDefaultModelValue}
+				onModelChange={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		await screen.findByTestId("chat-model-selector-no-chat-models");
+		expect(screen.queryByTestId("chat-model-selector-option-codex-mini-latest")).toBeNull();
+	});
+
+	it("renders the cloud group with options and egress cue when cloudModelOptions is provided", async () => {
+		const cloudOption: ModelOption = {
+			value: "codex-mini-latest",
+			label: "Codex Mini",
+			displayName: "Codex Mini",
+			isAvailable: true,
+			isCloud: true,
+		};
+
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[localDefaultOption()]}
+				cloudModelOptions={[cloudOption]}
+				selectedModel={localDefaultModelValue}
+				onModelChange={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		const option = await screen.findByTestId("chat-model-selector-option-codex-mini-latest");
+		expect(option).toBeTruthy();
+
+		const egressCue = await screen.findByTestId("chat-model-selector-cloud-egress-codex-mini-latest");
+		expect(egressCue.textContent).toContain("Sent to OpenAI");
+	});
+
+	it("calls onModelChange with the cloud model id when a cloud option is selected", async () => {
+		const onModelChange = vi.fn();
+		const cloudOption: ModelOption = {
+			value: "o4-mini",
+			label: "o4-mini",
+			displayName: "o4-mini",
+			isAvailable: true,
+			isCloud: true,
+		};
+
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[localDefaultOption()]}
+				cloudModelOptions={[cloudOption]}
+				selectedModel={localDefaultModelValue}
+				onModelChange={onModelChange}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		const option = await screen.findByTestId("chat-model-selector-option-o4-mini");
+		fireEvent.click(option);
+
+		expect(onModelChange).toHaveBeenCalledWith("o4-mini");
+	});
 });

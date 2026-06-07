@@ -135,29 +135,14 @@ internal static class AddNodeModelRuntimeExtensions
             var chatConnectionSettings = ResolveChatConnectionSettings(configuration);
             return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
         });
+        // C2 fix (plan §0/§7.2): register a runtime-re-selecting IChatClient rather than capturing the
+        // cloud-vs-local choice once at startup. The wrapper re-evaluates the active provider per send via
+        // IActiveCloudChatClientFactory, so signing in/out at runtime takes effect without a node restart.
+        // The local model client is stable, so it is resolved lazily once and reused as the non-cloud path.
         builder.Services.AddSingleton<IChatClient>(sp =>
         {
-            var credentialStore = sp.GetRequiredService<ICloudCredentialStore>();
-            var credentials = credentialStore.LoadAsync().GetAwaiter().GetResult();
-
-            if (credentials is not null
-                && string.Equals(credentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
-            {
-                return sp.GetRequiredService<IAzureFoundryChatClientFactory>().Create(credentials);
-            }
-
-            var chatConnectionSettings = ResolveChatConnectionSettings(configuration);
-            if (UseLocalModelProvider(configuration))
-            {
-                return sp.GetRequiredService<ILocalModelProvider>().CreateChatClient(new LocalModelSelection
-                {
-                    ModelName = chatConnectionSettings.Model,
-                    ProviderName = OllamaLocalModelProvider.OllamaProviderName
-                });
-            }
-
-            return sp.GetRequiredService<IOllamaApiClient>() as IChatClient
-                   ?? throw new InvalidOperationException("The configured local Ollama client must implement IChatClient.");
+            var activeCloudFactory = sp.GetRequiredService<IActiveCloudChatClientFactory>();
+            return new RuntimeChatClient(activeCloudFactory, () => CreateLocalChatClient(sp, configuration));
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
@@ -166,6 +151,22 @@ internal static class AddNodeModelRuntimeExtensions
     }
 
     private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
+
+    private static IChatClient CreateLocalChatClient(IServiceProvider serviceProvider, IConfiguration configuration)
+    {
+        var chatConnectionSettings = ResolveChatConnectionSettings(configuration);
+        if (UseLocalModelProvider(configuration))
+        {
+            return serviceProvider.GetRequiredService<ILocalModelProvider>().CreateChatClient(new LocalModelSelection
+            {
+                ModelName = chatConnectionSettings.Model,
+                ProviderName = OllamaLocalModelProvider.OllamaProviderName
+            });
+        }
+
+        return serviceProvider.GetRequiredService<IOllamaApiClient>() as IChatClient
+               ?? throw new InvalidOperationException("The configured local Ollama client must implement IChatClient.");
+    }
 
     private static void DispatchSafely(Task dispatchTask, ILogger logger, string operationName)
     {

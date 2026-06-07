@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.CodexOAuth;
 
 public sealed class GetLocalModelDetailsEndpoint(
     IOllamaModelService modelService,
@@ -31,6 +32,17 @@ public sealed class GetLocalModelDetailsEndpoint(
         }
 
         var modelName = decodedModelName!.Trim();
+
+        // A Codex cloud model id (e.g. gpt-5.5) is NOT a local Ollama model: probing the local runtime's /api/show
+        // for it 500s (Ollama has no such model). Model details (context window, template, license) are a
+        // local-runtime concept, so a cloud id has no local details — return a clean 404 instead of a 500. The chat
+        // UI should not request local details for a cloud model at all.
+        if (CodexModelCatalog.IsCodexModel(modelName))
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
         var details = await _modelService.ShowModelDetailsAsync(modelName, ct).ConfigureAwait(false);
         await Send.OkAsync(details.ToResponse(modelName), ct).ConfigureAwait(false);
     }

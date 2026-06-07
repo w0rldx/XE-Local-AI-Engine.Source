@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -208,6 +209,23 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal("{{ .Prompt }}", details.Template);
         AssertEx.False(body.Contains("apiKey", StringComparison.OrdinalIgnoreCase));
         AssertEx.Contains(context.Server.RecordedRequests, recorded => recorded.Path == "/api/show" && recorded.ModelName == "llama3:8b");
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenCodexCloudModel_Returns404_AndNeverProbesLocalRuntime()
+    {
+        // A Codex cloud id has no LOCAL details — the endpoint must short-circuit to 404 instead of probing Ollama
+        // /api/show (which 500s because the local runtime has no such model). Regression for the details-500 noise.
+        await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-5.5/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var probedLocalRuntime = context.Server!.RecordedRequests
+            .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.5");
+        AssertEx.False(probedLocalRuntime, "a Codex cloud id must not probe the local Ollama /api/show endpoint");
     }
 
     [Test]
@@ -529,6 +547,7 @@ public sealed class LocalModelEndpointTests
                     services.AddSingleton(modelService);
                     services.RemoveAll<INodeSettingsStore>();
                     services.AddSingleton<INodeSettingsStore>(settingsStore);
+                    StubNoCodexSession(services);
                 }
             };
         }
@@ -543,8 +562,20 @@ public sealed class LocalModelEndpointTests
                     services.AddSingleton(classificationService);
                     services.RemoveAll<INodeSettingsStore>();
                     services.AddSingleton<INodeSettingsStore>(settingsStore);
+                    StubNoCodexSession(services);
                 }
             };
+        }
+
+        // These tests cover the LOCAL model surface, so the Codex token store is stubbed to "no session" — otherwise an
+        // ambient Codex session on the dev machine would add cloud models to the list and make the local assertions
+        // (e.g. empty-when-unavailable) non-deterministic. The dedicated cloud-model mapping tests cover the cloud path.
+        private static void StubNoCodexSession(IServiceCollection services)
+        {
+            var codexTokenStore = Substitute.For<ICodexTokenStore>();
+            codexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+            services.RemoveAll<ICodexTokenStore>();
+            services.AddSingleton(codexTokenStore);
         }
     }
 }

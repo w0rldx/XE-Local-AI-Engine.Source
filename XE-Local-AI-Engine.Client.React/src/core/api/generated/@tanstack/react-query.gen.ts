@@ -14,6 +14,9 @@ import {
 	cancelPreviewRun,
 	cancelScheduledJobRun,
 	clearCloudSettings,
+	codexLogin,
+	codexLogout,
+	codexStatus,
 	connectConnection,
 	continuePreviewRun,
 	createAgentDefinition,
@@ -135,6 +138,12 @@ import type {
 	CancelScheduledJobRunResponse,
 	ClearCloudSettingsData,
 	ClearCloudSettingsResponse,
+	CodexLoginData,
+	CodexLoginResponse,
+	CodexLogoutData,
+	CodexLogoutResponse,
+	CodexStatusData,
+	CodexStatusResponse,
 	ConnectConnectionData,
 	ConnectConnectionResponse,
 	ContinuePreviewRunData,
@@ -1931,6 +1940,54 @@ export const saveCloudSettingsMutation = (
 	};
 	return mutationOptions;
 };
+
+export const codexLoginMutation = (
+	options?: Partial<Options<CodexLoginData>>,
+): UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> => {
+	const mutationOptions: UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await codexLogin({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const codexLogoutMutation = (
+	options?: Partial<Options<CodexLogoutData>>,
+): UseMutationOptions<CodexLogoutResponse, AxiosError<DefaultError>, Options<CodexLogoutData>> => {
+	const mutationOptions: UseMutationOptions<CodexLogoutResponse, AxiosError<DefaultError>, Options<CodexLogoutData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await codexLogout({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const codexStatusQueryKey = (options?: Options<CodexStatusData>) => createQueryKey("codexStatus", options);
+
+export const codexStatusOptions = (options?: Options<CodexStatusData>) =>
+	queryOptions<CodexStatusResponse, AxiosError<DefaultError>, CodexStatusResponse, ReturnType<typeof codexStatusQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await codexStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: codexStatusQueryKey(options),
+	});
 
 export const nodeAuthStatusQueryKey = (options?: Options<NodeAuthStatusData>) => createQueryKey("nodeAuthStatus", options);
 

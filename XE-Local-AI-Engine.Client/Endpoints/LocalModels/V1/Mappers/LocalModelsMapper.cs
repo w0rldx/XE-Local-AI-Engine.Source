@@ -4,41 +4,79 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.CodexOAuth;
 
 internal static class LocalModelsMapper
 {
     public static ListLocalModelsResponse ToListResponse(IEnumerable<Model> models,
         string? selectedModelName,
         string? configuredDefaultModelName,
-        IReadOnlyDictionary<string, ModelClassificationResult> classifications)
+        IReadOnlyDictionary<string, ModelClassificationResult> classifications,
+        IReadOnlyList<LocalModelResponse>? cloudModels = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(classifications);
+
+        var localItems = models
+                         .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
+                         .Select(model => model.ToResponse(selectedModelName, classifications))
+                         .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase);
+
+        // Cloud (Codex) models are appended AFTER the sorted local models as a distinct group, in their catalog
+        // (strongest-first) order — the picker groups by Provider, so the two families stay separated in the UI.
+        var items = cloudModels is { Count: > 0 }
+            ? localItems.Concat(cloudModels).ToArray()
+            : localItems.ToArray();
 
         return new ListLocalModelsResponse
         {
             IsAvailable = true,
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
-            Items = models
-                    .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
-                    .Select(model => model.ToResponse(selectedModelName, classifications))
-                    .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
-                    .ToArray()
+            Items = items
         };
+    }
+
+    /// <summary>
+    ///     Maps the offered Codex cloud models (<see cref="CodexModelCatalog.ModelIds"/>) to model-list entries tagged
+    ///     <see cref="LocalModelProviders.CodexOAuth"/>. The endpoint passes these only when a Codex session is
+    ///     present. Each entry advertises the Codex provider's declared capability matrix
+    ///     (<see cref="CodexProviderCapabilities.V0"/>) rather than an Ollama classification (the local runtime has
+    ///     never seen these ids). Size/quantization fields stay null — they are local-runtime concepts.
+    /// </summary>
+    public static IReadOnlyList<LocalModelResponse> ToCodexCloudModelResponses(string? selectedModelName)
+    {
+        return CodexModelCatalog.ModelIds
+               .Select(modelId => new LocalModelResponse
+               {
+                   ModelName = modelId,
+                   Provider = LocalModelProviders.CodexOAuth,
+                   IsSelected = string.Equals(modelId, selectedModelName, StringComparison.OrdinalIgnoreCase),
+                   Kind = ModelKind.Chat.ToString(),
+                   DetectedKind = ModelKind.Chat.ToString(),
+                   Capabilities = [],
+                   IsReasoningCapable = true,
+                   IsToolCapable = CodexProviderCapabilities.V0.SupportsToolCalling,
+                   IsOverridden = false,
+               })
+               .ToArray();
     }
 
     public static ListLocalModelsResponse ToUnavailableListResponse(string? selectedModelName,
         string? configuredDefaultModelName,
-        string error)
+        string error,
+        IReadOnlyList<LocalModelResponse>? cloudModels = null)
     {
         return new ListLocalModelsResponse
         {
+            // The LOCAL provider is unavailable, but a present Codex session still offers cloud models — surface
+            // them so the operator can chat over Codex even when Ollama is down. IsAvailable reflects the local
+            // runtime; Items carries any cloud models.
             IsAvailable = false,
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
             Error = error,
-            Items = []
+            Items = cloudModels is { Count: > 0 } ? cloudModels : []
         };
     }
 

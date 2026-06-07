@@ -1,0 +1,199 @@
+namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
+using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+/// <summary>
+/// Contract for persisting the encrypted Codex OAuth session.
+/// </summary>
+public interface ICodexTokenStore
+{
+    /// <summary>Loads the stored session, or <see langword="null"/> if none / undecryptable.</summary>
+    Task<CodexTokens?> LoadAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Encrypts and persists the session with user-only file permissions.</summary>
+    Task SaveAsync(CodexTokens tokens, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes any stored session (logout).</summary>
+    Task ClearAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Encrypted token store mirroring <c>CloudCredentialStore</c> (plan §3.1/D4): DataProtection at rest,
+/// Windows user-only <see cref="FileSecurity"/>, *nix <c>0600</c>. Uses a dedicated protector purpose and a
+/// separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
+/// Never logs token values (plan §9).
+/// </summary>
+public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
+{
+    private const string TokensFileName = "codex-oauth-tokens.enc";
+    private const string ProtectorPurpose = "WorkerNode.CodexOAuth.Tokens.v1";
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly string _tokensPath;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ILogger<CodexTokenStore> _logger;
+    private readonly IDataProtector _protector;
+
+    public CodexTokenStore(IDataProtectionProvider dataProtectionProvider,
+        IHostEnvironment hostEnvironment,
+        ILogger<CodexTokenStore> logger)
+    {
+        ArgumentNullException.ThrowIfNull(dataProtectionProvider);
+        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _protector = dataProtectionProvider.CreateProtector(ProtectorPurpose);
+        _tokensPath = Path.Combine(hostEnvironment.ContentRootPath, TokensFileName);
+        _logger = logger;
+    }
+
+    public async Task<CodexTokens?> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!File.Exists(_tokensPath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var protectedPayload = await File.ReadAllBytesAsync(_tokensPath, cancellationToken).ConfigureAwait(false);
+                var payload = _protector.Unprotect(protectedPayload);
+                return DeserializeTokens(payload);
+            }
+            catch (CryptographicException exception)
+            {
+                _logger.LogWarning(exception, "Codex token decryption failed. Clearing stored Codex tokens.");
+                ClearTokensFileBestEffort();
+                return null;
+            }
+            catch (JsonException exception)
+            {
+                _logger.LogWarning(exception, "Codex tokens could not be deserialized. Clearing stored Codex tokens.");
+                ClearTokensFileBestEffort();
+                return null;
+            }
+            catch (IOException exception)
+            {
+                _logger.LogWarning(exception, "Codex tokens could not be read from disk.");
+                return null;
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task SaveAsync(CodexTokens tokens, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(tokens);
+        ValidateTokens(tokens);
+
+        var payload = JsonSerializer.SerializeToUtf8Bytes(tokens, SerializerOptions);
+        var protectedPayload = _protector.Protect(payload);
+
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await File.WriteAllBytesAsync(_tokensPath, protectedPayload, cancellationToken).ConfigureAwait(false);
+            ApplyPlatformFileSecurity();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task ClearAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (File.Exists(_tokensPath))
+            {
+                File.Delete(_tokensPath);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public void Dispose() => _lock.Dispose();
+
+    private static CodexTokens DeserializeTokens(byte[] payload)
+    {
+        var tokens = JsonSerializer.Deserialize<CodexTokens>(payload, SerializerOptions);
+        return tokens ?? throw new InvalidOperationException("Stored Codex tokens could not be deserialized.");
+    }
+
+    private static void ValidateTokens(CodexTokens tokens)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tokens.AccessToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tokens.RefreshToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(tokens.AccountId);
+    }
+
+    private void ApplyPlatformFileSecurity()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            ApplyWindowsFileSecurity();
+            return;
+        }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            File.SetUnixFileMode(_tokensPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private void ApplyWindowsFileSecurity()
+    {
+        var fileSecurity = new FileSecurity();
+        fileSecurity.SetAccessRuleProtection(true, false);
+
+        var currentIdentity = WindowsIdentity.GetCurrent();
+        if (currentIdentity.User is not null)
+        {
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(currentIdentity.User,
+                FileSystemRights.FullControl,
+                AccessControlType.Allow));
+        }
+
+        var fileInfo = new FileInfo(_tokensPath);
+        fileInfo.SetAccessControl(fileSecurity);
+    }
+
+    private void ClearTokensFileBestEffort()
+    {
+        try
+        {
+            if (File.Exists(_tokensPath))
+            {
+                File.Delete(_tokensPath);
+            }
+        }
+        catch (IOException exception)
+        {
+            _logger.LogWarning(exception, "Failed to delete Codex tokens file.");
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            _logger.LogWarning(exception, "Failed to delete Codex tokens file.");
+        }
+    }
+}

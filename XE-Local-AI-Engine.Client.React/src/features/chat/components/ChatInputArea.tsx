@@ -1,5 +1,13 @@
 import { ActionIcon, Box, Button, Group, Menu, Textarea, Tooltip } from "@mantine/core";
-import { IconAdjustments, IconBrain, IconDeviceDesktop, IconPaperclip, IconPhoto, IconPlayerStopFilled, IconSend } from "@tabler/icons-react";
+import {
+	IconAdjustments,
+	IconBrain,
+	IconDeviceDesktop,
+	IconPaperclip,
+	IconPhoto,
+	IconPlayerStopFilled,
+	IconSend,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,7 +17,13 @@ import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSampli
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { AgentOption, ChatUiCapabilities, ContextUsageModel, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import type {
+	AgentOption,
+	ChatUiCapabilities,
+	ContextUsageModel,
+	ModelOption,
+	ReasoningEffort,
+} from "@/features/chat/models/ChatModels";
 
 // The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+). The section has a fixed
 // height driven by --input-bottom-section-height (28px default); we override it to fit the 36px control row and
@@ -31,6 +45,8 @@ interface ChatInputAreaProps {
 	disabled?: boolean;
 	isSending: boolean;
 	modelOptions: ModelOption[];
+	// Cloud (Codex) model options forwarded to ModelSelectorCard. Optional; absent hides the cloud section.
+	cloudModelOptions?: ModelOption[];
 	modelSelectorDisabled?: boolean;
 	sendDisabled?: boolean;
 	selectedModel: string;
@@ -63,6 +79,7 @@ export function ChatInputArea({
 	disabled = false,
 	isSending,
 	modelOptions,
+	cloudModelOptions,
 	modelSelectorDisabled = false,
 	sendDisabled: sendDisabledProp = false,
 	selectedModel,
@@ -100,7 +117,9 @@ export function ChatInputArea({
 			return;
 		}
 
-		const safeEffort = isEffortAvailable(reasoningEffort, availableReasoningEfforts) ? reasoningEffort : (availableReasoningEfforts[0] ?? "none");
+		const safeEffort = isEffortAvailable(reasoningEffort, availableReasoningEfforts)
+			? reasoningEffort
+			: (availableReasoningEfforts[0] ?? "none");
 		onSend(trimmed, safeEffort, selectedModel);
 		setContent("");
 	};
@@ -112,6 +131,7 @@ export function ChatInputArea({
 			<Group gap={4} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
 				<ModelSelectorCard
 					modelOptions={modelOptions}
+					cloudModelOptions={cloudModelOptions}
 					selectedModel={selectedModel}
 					disabled={modelSelectorDisabled || isSending || modelOptions.length === 0}
 					onModelChange={onModelChange}
@@ -134,14 +154,25 @@ export function ChatInputArea({
 					<Menu.Dropdown>
 						<Menu.Label>{t("pages.chat.reasoningEffortLabel", "Reasoning effort")}</Menu.Label>
 						{availableReasoningEfforts.map((effort) => (
-							<Menu.Item key={effort} data-testid={`chat-reasoning-effort-option-${effort}`} onClick={() => onReasoningEffortChange(effort)} color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}>
+							<Menu.Item
+								key={effort}
+								data-testid={`chat-reasoning-effort-option-${effort}`}
+								onClick={() => onReasoningEffortChange(effort)}
+								color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}
+							>
 								{t(`pages.chat.reasoningEffortOptions.${effort}`, effort)}
 							</Menu.Item>
 						))}
 					</Menu.Dropdown>
 				</Menu>
 				{showLocalToolControls ? (
-					<Tooltip label={toolsEnabled ? t("pages.chat.localToolsEnabled", "Local tools enabled") : t("pages.chat.localToolsDisabled", "Local tools disabled")}>
+					<Tooltip
+						label={
+							toolsEnabled
+								? t("pages.chat.localToolsEnabled", "Local tools enabled")
+								: t("pages.chat.localToolsDisabled", "Local tools disabled")
+						}
+					>
 						<ActionIcon
 							size={36}
 							variant={toolsEnabled ? "light" : "subtle"}

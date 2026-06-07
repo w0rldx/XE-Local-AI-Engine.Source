@@ -12,10 +12,12 @@ import {
 	TextInput,
 	Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconCloud, IconDeviceFloppy, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import type { ClearCloudSettingsResponse, SaveCloudSettingsResponse } from "@/core/api/generated";
 import {
 	clearCloudSettingsMutation,
@@ -25,6 +27,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toast } from "@/core/ui/notifications/Toast";
+import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
 import { type CloudSettingsFormValues, validateCloudSettingsForm } from "@/features/cloud-settings/models/CloudSettingsModel";
 
 // The generated cloud-settings responses share one shape, so both the save and clear mutations resolve the same
@@ -42,11 +45,19 @@ const emptyFormValues: CloudSettingsFormValues = {
 };
 
 export function CloudSettings() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(withResponseValidation(getCloudSettingsOptions()));
 	const [formValues, setFormValues] = useState<CloudSettingsFormValues>(emptyFormValues);
 	const [touchedFields, setTouchedFields] = useState<Partial<Record<keyof CloudSettingsFormValues, true>>>({});
 	const [submitted, setSubmitted] = useState(false);
+
+	// Tracks whether the Codex OAuth session is active (reported by CodexSignInCard).
+	// When signed in, Codex is the active chat provider — no CloudSettings save needed.
+	const [codexSignedIn, setCodexSignedIn] = useState(false);
+	const handleCodexSignedInChange = useCallback((signedIn: boolean) => {
+		setCodexSignedIn(signedIn);
+	}, []);
 
 	useEffect(() => {
 		if (settingsQuery.data) {
@@ -137,6 +148,46 @@ export function CloudSettings() {
 					</Alert>
 				) : null}
 
+				{/* Persistent egress banner — shown whenever a Codex session is active */}
+				{codexSignedIn ? (
+					<Alert color="orange" icon={<IconAlertTriangle size={16} />}>
+						<Text size="sm" fw={500}>
+							{t("pages.cloudSettings.provider.activeEgressBanner")}
+						</Text>
+					</Alert>
+				) : null}
+
+				{/* Active provider indicator (read-only) — gated on cloud capability.
+				    Priority: Codex session active > Azure credentials stored > None. */}
+				{nodeCapabilities.cloudSettings ? (
+					<Card withBorder={true} padding="md" radius="md">
+						<Group justify="space-between" align="center">
+							<Stack gap={2}>
+								<Text fw={600}>{t("pages.cloudSettings.provider.label")}</Text>
+								<Text size="sm" c="dimmed">
+									{t("pages.cloudSettings.provider.egressNotice")}
+								</Text>
+							</Stack>
+							{codexSignedIn ? (
+								<Badge color="orange" variant="light" size="lg">
+									{t("pages.cloudSettings.provider.codexOAuth")}
+								</Badge>
+							) : settings?.hasStoredApiKey ? (
+								<Badge color="blue" variant="light" size="lg">
+									{t("pages.cloudSettings.provider.azureFoundry")}
+								</Badge>
+							) : (
+								<Badge color="gray" variant="light" size="lg">
+									{t("pages.cloudSettings.provider.none")}
+								</Badge>
+							)}
+						</Group>
+					</Card>
+				) : null}
+
+				{/* Codex OAuth sign-in card — gated on cloud capability */}
+				{nodeCapabilities.cloudSettings ? <CodexSignInCard onSignedInChange={handleCodexSignedInChange} /> : null}
+
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
 						<Group justify="space-between" align="center">
@@ -153,7 +204,10 @@ export function CloudSettings() {
 							label="Azure OpenAI endpoint"
 							placeholder="https://example.openai.azure.com/"
 							value={formValues.endpoint}
-							onChange={(event) => { const value = event.currentTarget.value; setFormValues((current) => ({ ...current, endpoint: value })); }}
+							onChange={(event) => {
+								const value = event.currentTarget.value;
+								setFormValues((current) => ({ ...current, endpoint: value }));
+							}}
 							onBlur={() => setTouchedFields((current) => ({ ...current, endpoint: true }))}
 							error={visibleErrors.endpoint}
 						/>
@@ -161,7 +215,10 @@ export function CloudSettings() {
 							label="Deployment name"
 							placeholder="gpt-4o"
 							value={formValues.deploymentName}
-							onChange={(event) => { const value = event.currentTarget.value; setFormValues((current) => ({ ...current, deploymentName: value })); }}
+							onChange={(event) => {
+								const value = event.currentTarget.value;
+								setFormValues((current) => ({ ...current, deploymentName: value }));
+							}}
 							onBlur={() => setTouchedFields((current) => ({ ...current, deploymentName: true }))}
 							error={visibleErrors.deploymentName}
 						/>
@@ -173,7 +230,10 @@ export function CloudSettings() {
 									: "The key is sent only to the local worker API."
 							}
 							value={formValues.apiKey}
-							onChange={(event) => { const value = event.currentTarget.value; setFormValues((current) => ({ ...current, apiKey: value })); }}
+							onChange={(event) => {
+								const value = event.currentTarget.value;
+								setFormValues((current) => ({ ...current, apiKey: value }));
+							}}
 							onBlur={() => setTouchedFields((current) => ({ ...current, apiKey: true }))}
 							error={visibleErrors.apiKey}
 						/>
@@ -214,12 +274,6 @@ export function CloudSettings() {
 							>
 								Reload
 							</Button>
-						</Group>
-						<Group gap="xs">
-							<IconCloud size={16} />
-							<Text size="sm" c="dimmed">
-								Provider: AzureFoundry. Runtime provider switching is not changed by this page.
-							</Text>
 						</Group>
 					</Stack>
 				</Card>

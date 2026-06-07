@@ -1245,6 +1245,66 @@ public sealed class NodeChatStreamServiceTests
         offerProvider.Received().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenActiveModelIsCodexCloudModel_SkipsOllamaClassificationForCapabilities()
+    {
+        // T2 capability gating: a Codex cloud model is not an Ollama model. The capability gate must use the Codex
+        // provider's declared matrix (CodexProviderCapabilities.V0), NOT the Ollama /api/show classification — so the
+        // classification service is never consulted for a Codex model id (which the local runtime has never seen).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider();
+        var classificationService = CreateModelClassificationService();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            classificationService,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           Model: "gpt-5.5",
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+
+        // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
+        await classificationService.DidNotReceive()
+            .ClassifyAsync(Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(
+                models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
+                Arg.Any<CancellationToken>());
+
+        // Codex V0 keeps tool-calling OFF, so the local tool offer is gated off — GetOfferedTools is never called for
+        // the Codex model even though the send requested tools (UseLocalTools: true).
+        offerProvider.DidNotReceive().GetOfferedTools("gpt-5.5");
+    }
+
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
