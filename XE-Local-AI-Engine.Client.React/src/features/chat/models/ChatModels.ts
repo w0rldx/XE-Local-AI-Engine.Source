@@ -205,6 +205,9 @@ export interface ModelOption {
 	isToolCapable?: boolean;
 	isAvailable: boolean;
 	statusLabel?: string;
+	// True for cloud-provider models (e.g. Codex/OpenAI). Drives the "Cloud (Codex)" section in the picker
+	// and the egress cue badge. Local models never set this; absence is equivalent to false.
+	isCloud?: boolean;
 }
 
 export interface ContextUsageModel {
@@ -255,6 +258,9 @@ export interface ChatDisplayShellProps {
 	conversations: ChatConversationModel[];
 	selectedConversationId: string;
 	modelOptions: ModelOption[];
+	// Cloud (Codex) model options forwarded from Chat.tsx → ChatDisplayShell → ChatInputArea → ModelSelectorCard.
+	// Optional; absent or empty hides the cloud section in the picker.
+	cloudModelOptions?: ModelOption[];
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
 	availableReasoningEfforts: ReasoningEffort[];

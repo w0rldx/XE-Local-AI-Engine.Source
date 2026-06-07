@@ -20,6 +20,7 @@ export function ChatDisplayShell({
 	conversations,
 	selectedConversationId,
 	modelOptions,
+	cloudModelOptions,
 	selectedModel,
 	reasoningEffort,
 	availableReasoningEfforts,
@@ -132,9 +133,7 @@ export function ChatDisplayShell({
 				flexDirection: "column",
 				minHeight: 0,
 				minWidth: 0,
-				borderRadius: isMobile
-					? "var(--mantine-radius-md)"
-					: "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
+				borderRadius: isMobile ? "var(--mantine-radius-md)" : "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
 			}}
 		>
 			<Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
@@ -161,6 +160,7 @@ export function ChatDisplayShell({
 					disabled={inputStatus.chatInputDisabled}
 					isSending={inputStatus.isSending}
 					modelOptions={modelOptions}
+					cloudModelOptions={cloudModelOptions}
 					modelSelectorDisabled={inputStatus.modelSelectorDisabled}
 					sendDisabled={inputStatus.sendDisabled}
 					selectedModel={selectedModel}

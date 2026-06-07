@@ -15,7 +15,7 @@ public sealed class CloudProviderOptionsValidator : IValidateOptions<CloudProvid
 
         var errors = Enumerable.Empty<string>()
                                .AppendIf(!IsKnownProvider(providerName),
-                                   $"CloudProvider:ProviderName must be '{CloudProviderOptions.ProviderNone}' or '{CloudProviderOptions.ProviderAzureFoundry}'.")
+                                   $"CloudProvider:ProviderName must be '{CloudProviderOptions.ProviderNone}', '{CloudProviderOptions.ProviderAzureFoundry}', or '{CloudProviderOptions.ProviderCodexOAuth}'.")
                                .AppendIf(isAzureFoundry && !IsHttpsAbsoluteUri(options.AzureEndpoint),
                                    "CloudProvider:AzureEndpoint must be an absolute HTTPS URL when ProviderName is AzureFoundry.")
                                .AppendIf(isAzureFoundry && string.IsNullOrWhiteSpace(options.AzureApiKey),
@@ -30,7 +30,8 @@ public sealed class CloudProviderOptionsValidator : IValidateOptions<CloudProvid
     private static bool IsKnownProvider(string providerName)
     {
         return string.Equals(providerName, CloudProviderOptions.ProviderNone, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(providerName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase);
+               || string.Equals(providerName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(providerName, CloudProviderOptions.ProviderCodexOAuth, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsHttpsAbsoluteUri(string? endpoint)

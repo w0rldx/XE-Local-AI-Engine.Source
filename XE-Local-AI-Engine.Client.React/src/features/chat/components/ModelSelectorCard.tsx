@@ -1,15 +1,19 @@
 import { Badge, Box, Divider, Group, Paper, Popover, ScrollArea, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
-import { IconChevronDown, IconChevronRight, IconCpu, IconSearch, IconSparkles } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronRight, IconCloud, IconCpu, IconSearch, IconSparkles } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cx, display } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
+
 import classes from "./ModelSelectorCard.module.css";
 
 interface ModelSelectorCardProps {
 	modelOptions: ModelOption[];
+	// Cloud (Codex) model options shown in a separate section. Only rendered when non-empty
+	// (i.e. when the user is signed into Codex). Absent or empty = section hidden entirely.
+	cloudModelOptions?: ModelOption[];
 	selectedModel: string;
 	disabled?: boolean;
 	onModelChange: (model: string) => void;
@@ -32,17 +36,32 @@ function ModelSelectorOption({ option, selected, reasoningLabel, statusFallback,
 			data-testid={`chat-model-selector-option-${option.value}`}
 			disabled={!option.isAvailable}
 			onClick={() => onSelect(option.value)}
-			className={cx(classes["option-button"], selected && classes["option-button-selected"], !option.isAvailable && classes["option-button-disabled"])}
+			className={cx(
+				classes["option-button"],
+				selected && classes["option-button-selected"],
+				!option.isAvailable && classes["option-button-disabled"],
+			)}
 		>
 			<Group gap="sm" wrap="nowrap" align="flex-start">
-				<Box className={cx(classes["status-accent"], option.isAvailable ? classes["status-accent-available"] : classes["status-accent-unavailable"])} />
+				<Box
+					className={cx(
+						classes["status-accent"],
+						option.isAvailable ? classes["status-accent-available"] : classes["status-accent-unavailable"],
+					)}
+				/>
 				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 					<Group gap={6} wrap="nowrap">
 						<Text size="sm" fw={600} lineClamp={1}>
 							{label}
 						</Text>
 						{option.isReasoningModel ? (
-							<Badge size="xs" variant="light" color="violet" leftSection={<IconSparkles size={10} />} className={classes["reasoning-badge"]}>
+							<Badge
+								size="xs"
+								variant="light"
+								color="violet"
+								leftSection={<IconSparkles size={10} />}
+								className={classes["reasoning-badge"]}
+							>
 								{reasoningLabel}
 							</Badge>
 						) : null}
@@ -58,9 +77,63 @@ function ModelSelectorOption({ option, selected, reasoningLabel, statusFallback,
 						) : null}
 					</Group>
 				</Stack>
-				<IconChevronRight size={12} color="var(--mantine-color-dimmed)" className={cx(classes["option-chevron"], selected && classes["option-chevron-visible"])} />
+				<IconChevronRight
+					size={12}
+					color="var(--mantine-color-dimmed)"
+					className={cx(classes["option-chevron"], selected && classes["option-chevron-visible"])}
+				/>
 			</Group>
 		</UnstyledButton>
+	);
+}
+
+interface CloudModelSectionProps {
+	items: ModelOption[];
+	title: string;
+	egressCue: string;
+	selectedModel: string;
+	onSelect: (value: string) => void;
+}
+
+function CloudModelSection({ items, title, egressCue, selectedModel, onSelect }: CloudModelSectionProps) {
+	if (items.length === 0) {
+		return null;
+	}
+
+	return (
+		<Box>
+			<Group gap={6} px="sm" py={6} wrap="nowrap">
+				<Text size="xs" fw={700} c="dimmed" tt="uppercase" className={classes["dropdown-label"]} style={{ flex: 1 }}>
+					{`${title} (${items.length})`}
+				</Text>
+				<IconCloud size={12} color="var(--mantine-color-dimmed)" />
+			</Group>
+			{items.map((option) => (
+				<UnstyledButton
+					key={option.value}
+					data-testid={`chat-model-selector-option-${option.value}`}
+					onClick={() => onSelect(option.value)}
+					className={cx(classes["option-button"], option.value === selectedModel && classes["option-button-selected"])}
+				>
+					<Group gap="sm" wrap="nowrap" align="flex-start">
+						<Box className={cx(classes["status-accent"], classes["status-accent-available"])} />
+						<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+							<Text size="sm" fw={600} lineClamp={1}>
+								{option.displayName ?? option.label}
+							</Text>
+							<Text size="xs" c="orange.6" lineClamp={1} data-testid={`chat-model-selector-cloud-egress-${option.value}`}>
+								{egressCue}
+							</Text>
+						</Stack>
+						<IconChevronRight
+							size={12}
+							color="var(--mantine-color-dimmed)"
+							className={cx(classes["option-chevron"], option.value === selectedModel && classes["option-chevron-visible"])}
+						/>
+					</Group>
+				</UnstyledButton>
+			))}
+		</Box>
 	);
 }
 
@@ -73,7 +146,14 @@ interface ModelSelectorSectionProps {
 	onSelect: (value: string) => void;
 }
 
-function ModelSelectorSection({ items, title, reasoningLabel, selectedModel, statusFallback, onSelect }: ModelSelectorSectionProps) {
+function ModelSelectorSection({
+	items,
+	title,
+	reasoningLabel,
+	selectedModel,
+	statusFallback,
+	onSelect,
+}: ModelSelectorSectionProps) {
 	if (items.length === 0) {
 		return null;
 	}
@@ -97,12 +177,22 @@ function ModelSelectorSection({ items, title, reasoningLabel, selectedModel, sta
 	);
 }
 
-export function ModelSelectorCard({ modelOptions, selectedModel, disabled = false, onModelChange }: ModelSelectorCardProps) {
+export function ModelSelectorCard({
+	modelOptions,
+	cloudModelOptions = [],
+	selectedModel,
+	disabled = false,
+	onModelChange,
+}: ModelSelectorCardProps) {
 	const { t } = useTranslation();
 	const [pickerOpened, setPickerOpened] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 
-	const selected = modelOptions.find((option) => option.value === selectedModel);
+	const hasCloudOptions = cloudModelOptions.length > 0;
+	// Look up the selected option in both local and cloud lists so the trigger label reflects
+	// whichever group the active selection belongs to.
+	const allOptions = useMemo(() => [...modelOptions, ...cloudModelOptions], [modelOptions, cloudModelOptions]);
+	const selected = allOptions.find((option) => option.value === selectedModel);
 	const placeholder = t("pages.chat.modelPlaceholder", "Select model");
 	const selectedLabel = display(selected, placeholder);
 	const hasOptions = modelOptions.length > 0;
@@ -129,6 +219,22 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 		);
 	}, [modelOptions, searchQuery]);
 
+	// Cloud options are also filtered by the search query so a user typing "codex" or a model name
+	// narrows both sections simultaneously.
+	const filteredCloud = useMemo(() => {
+		const query = searchQuery.trim().toLowerCase();
+		if (!query) {
+			return cloudModelOptions;
+		}
+
+		return cloudModelOptions.filter(
+			(option) =>
+				option.value.toLowerCase().includes(query) ||
+				option.label.toLowerCase().includes(query) ||
+				option.displayName?.toLowerCase().includes(query),
+		);
+	}, [cloudModelOptions, searchQuery]);
+
 	const availableOptions = filtered.filter((option) => option.isAvailable);
 	const unavailableOptions = filtered.filter((option) => !option.isAvailable);
 
@@ -138,8 +244,9 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 	};
 
 	const select = (value: string): void => {
-		const option = modelOptions.find((modelOption) => modelOption.value === value);
-		if (!option?.isAvailable) {
+		// Accept selections from either local or cloud lists; cloud options are always available.
+		const localOption = modelOptions.find((o) => o.value === value);
+		if (localOption !== undefined && !localOption.isAvailable) {
 			return;
 		}
 
@@ -187,7 +294,11 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 							<Text size="xs" fw={600} lineClamp={1} className={classes["trigger-label"]} style={{ flex: 1, minWidth: 0 }}>
 								{selectedLabel}
 							</Text>
-							<IconChevronDown size={12} color="var(--mantine-color-dimmed)" className={cx(classes["chevron"], pickerOpened && classes["chevron-open"])} />
+							<IconChevronDown
+								size={12}
+								color="var(--mantine-color-dimmed)"
+								className={cx(classes["chevron"], pickerOpened && classes["chevron-open"])}
+							/>
 						</Group>
 					</UnstyledButton>
 				</Paper>
@@ -226,7 +337,7 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 									statusFallback={statusFallback}
 									onSelect={select}
 								/>
-								{filtered.length === 0 ? (
+								{filtered.length === 0 && filteredCloud.length === 0 ? (
 									<Text size="sm" c="dimmed" px="sm" py="xs" ta="center">
 										{t("pages.chat.modelSelector.noResults", "No models found")}
 									</Text>
@@ -235,6 +346,18 @@ export function ModelSelectorCard({ modelOptions, selectedModel, disabled = fals
 									<Text size="sm" c="dimmed" px="sm" py="xs" ta="center" data-testid="chat-model-selector-no-chat-models">
 										{t("pages.chat.modelSelector.noChatModels", "No chat-capable models")}
 									</Text>
+								) : null}
+								{hasCloudOptions ? (
+									<>
+										<Divider my={4} />
+										<CloudModelSection
+											items={filteredCloud}
+											title={t("pages.chat.modelSelector.cloudGroup", "Cloud (Codex)")}
+											egressCue={t("pages.chat.modelSelector.cloudEgressCue", "Sent to OpenAI")}
+											selectedModel={selectedModel}
+											onSelect={select}
+										/>
+									</>
 								) : null}
 							</Stack>
 						</ScrollArea.Autosize>

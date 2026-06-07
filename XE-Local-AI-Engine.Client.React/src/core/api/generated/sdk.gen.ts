@@ -32,6 +32,15 @@ import type {
 	ClearCloudSettingsData,
 	ClearCloudSettingsErrors,
 	ClearCloudSettingsResponses,
+	CodexLoginData,
+	CodexLoginErrors,
+	CodexLoginResponses,
+	CodexLogoutData,
+	CodexLogoutErrors,
+	CodexLogoutResponses,
+	CodexStatusData,
+	CodexStatusErrors,
+	CodexStatusResponses,
 	ConnectConnectionData,
 	ConnectConnectionErrors,
 	ConnectConnectionResponses,
@@ -346,6 +355,9 @@ import {
 	zCancelScheduledJobRunPath,
 	zCancelScheduledJobRunResponse,
 	zClearCloudSettingsResponse,
+	zCodexLoginResponse,
+	zCodexLogoutResponse,
+	zCodexStatusResponse,
 	zConnectConnectionResponse,
 	zContinuePreviewRunPath,
 	zContinuePreviewRunResponse,
@@ -2260,6 +2272,66 @@ export const saveCloudSettings = <ThrowOnError extends boolean = false>(options:
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const codexLogin = <ThrowOnError extends boolean = false>(options?: Options<CodexLoginData, ThrowOnError>) =>
+	(options?.client ?? client).post<CodexLoginResponses, CodexLoginErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCodexLoginResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud/codex/login",
+		...options,
+	});
+
+export const codexLogout = <ThrowOnError extends boolean = false>(options?: Options<CodexLogoutData, ThrowOnError>) =>
+	(options?.client ?? client).post<CodexLogoutResponses, CodexLogoutErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCodexLogoutResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud/codex/logout",
+		...options,
+	});
+
+export const codexStatus = <ThrowOnError extends boolean = false>(options?: Options<CodexStatusData, ThrowOnError>) =>
+	(options?.client ?? client).get<CodexStatusResponses, CodexStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCodexStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud/codex/status",
+		...options,
 	});
 
 export const nodeAuthStatus = <ThrowOnError extends boolean = false>(options?: Options<NodeAuthStatusData, ThrowOnError>) =>

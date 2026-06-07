@@ -131,7 +131,9 @@
 				"noChatModels": "No chat-capable models",
 				"search": "Search models...",
 				"noResults": "No models found",
-				"unavailableModels": "Unavailable models"
+				"unavailableModels": "Unavailable models",
+				"cloudGroup": "Cloud (Codex)",
+				"cloudEgressCue": "Sent to OpenAI"
 			},
 			"reasoningEffortLabel": "Reasoning effort",
 			"reasoningEffortUnavailable": "Reasoning is unavailable for the selected model",
@@ -863,6 +865,39 @@
 			"placeholder": {
 				"title": "Cloud settings",
 				"description": "Provider configuration will use secret-safe local API responses."
+			},
+			"provider": {
+				"label": "Active cloud provider",
+				"none": "None (local Ollama)",
+				"azureFoundry": "Azure OpenAI (Foundry)",
+				"codexOAuth": "ChatGPT / Codex (OAuth)",
+				"egressNotice": "Messages sent with this provider leave your device to OpenAI.",
+				"activeEgressBanner": "Cloud (OpenAI) active — your messages leave your device. Use the sign-out button to return to local."
+			},
+			"codex": {
+				"title": "Sign in with ChatGPT (Codex)",
+				"subtitle": "Authenticate with your OpenAI ChatGPT subscription via OAuth to use Codex as the cloud chat provider.",
+				"badge": {
+					"signedIn": "Signed in",
+					"signedOut": "Not signed in"
+				},
+				"signIn": "Sign in with ChatGPT",
+				"signOut": "Sign out",
+				"accountId": "Account",
+				"unknownAccount": "Unknown",
+				"expires": "Session expires",
+				"pendingHint": "Complete sign-in in the browser window that opened, or use the link below.",
+				"authorizeUrlLabel": "Authorization URL",
+				"authorizeUrlDescription": "If no browser opened, click or copy this link to sign in.",
+				"copy": "Copy link",
+				"copied": "Copied!",
+				"openLink": "Open in browser",
+				"polling": "Waiting for sign-in to complete…",
+				"timeout": "Sign-in timed out. The authorization window has expired.",
+				"retry": "Try again",
+				"loginError": "Failed to start sign-in. Please try again.",
+				"statusError": "Failed to check sign-in status.",
+				"egressNotice": "Messages sent with this provider leave your device to OpenAI. Server-side response storage is disabled on every call."
 			}
 		},
 		"models": {

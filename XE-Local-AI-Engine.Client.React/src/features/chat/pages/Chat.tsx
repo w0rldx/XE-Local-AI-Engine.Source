@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
@@ -21,7 +22,6 @@ import {
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import type {
 	AgentOption,
 	ChatConversationModel,
@@ -32,14 +32,19 @@ import type {
 	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
+import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
+import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
-import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
-import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
-import { binaryReasoningEfforts, reasoningEfforts, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import {
+	binaryReasoningEfforts,
+	reasoningEfforts,
+	useNodeChatPreferencesStore,
+} from "@/features/chat/stores/NodeChatPreferencesStore";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
 
@@ -192,9 +197,13 @@ export function Chat() {
 
 		return [localDefaultModelOption, ...toChatModelOptions(response.items ?? [], response.isAvailable ?? false)];
 	}, [localModelsQuery.data]);
+	// Cloud (Codex) model options — empty array when signed out; non-empty only when Codex session active.
+	const cloudModelOptions = useCodexModelOptions();
 	const selectedModelOption = useMemo(
-		() => modelOptions.find((option) => option.value === selectedModel),
-		[modelOptions, selectedModel],
+		() =>
+			modelOptions.find((option) => option.value === selectedModel) ??
+			cloudModelOptions.find((option) => option.value === selectedModel),
+		[cloudModelOptions, modelOptions, selectedModel],
 	);
 	// Per-model capability gating (plan §6.6): only offer the reasoning-effort menu when the active model
 	// advertises the Ollama `thinking` capability — otherwise collapse to ["none"] so the composer disables the
@@ -249,15 +258,17 @@ export function Chat() {
 	// stored model that no longer exists (renamed/removed on the node) falls back to the local default so the
 	// composer never points at a phantom model. Guarded on loaded data so the initial default-only list
 	// (before the query settles) does not clobber a still-valid persisted concrete model.
+	// Also exempt cloud model selections — they are not in the local list and must not be evicted.
 	useEffect(() => {
 		if (!localModelsQuery.data) {
 			return;
 		}
 
-		if (!modelOptions.some((option) => option.value === selectedModel)) {
+		const isCloudSelection = cloudModelOptions.some((option) => option.value === selectedModel);
+		if (!isCloudSelection && !modelOptions.some((option) => option.value === selectedModel)) {
 			setSelectedModel(localDefaultModelValue);
 		}
-	}, [localModelsQuery.data, modelOptions, selectedModel, setSelectedModel]);
+	}, [cloudModelOptions, localModelsQuery.data, modelOptions, selectedModel, setSelectedModel]);
 	// Keep the selected reasoning effort valid for the active model's reasoning mode so the composer never SENDS an
 	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none. When
 	// the current effort isn't in the active model's set (a graded "medium" carried onto a binary model, or a binary
@@ -273,9 +284,13 @@ export function Chat() {
 		return requestModel ?? localModelsQuery.data?.selectedModelName ?? localModelsQuery.data?.configuredDefaultModelName ?? "";
 	}, [localModelsQuery.data?.configuredDefaultModelName, localModelsQuery.data?.selectedModelName, selectedModel]);
 
+	// getLocalModelDetails is Ollama-only — cloud (CodexOAuth) model ids are not in Ollama
+	// and the endpoint 500s for them. Guard with !isCloud so we never fire the request for
+	// a cloud selection. worker-be also short-circuits it server-side, but belt-and-suspenders.
+	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
 	const selectedModelDetailsQuery = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
-		enabled: selectedConcreteModelName.length > 0,
+		enabled: selectedConcreteModelName.length > 0 && !selectedModelIsCloud,
 	});
 
 	const createConversationMutation = useMutation({
@@ -453,9 +468,7 @@ export function Chat() {
 			// Compute effective agentDefinitionId: only stamp when mode is on, an agent is selected, AND the
 			// selected agent still exists in the live list (stale/deleted ids fall back to Default Assistant).
 			const effectiveAgentId =
-				agentModeEnabled && selectedAgentId && agentOptions.some((a) => a.id === selectedAgentId)
-					? selectedAgentId
-					: undefined;
+				agentModeEnabled && selectedAgentId && agentOptions.some((a) => a.id === selectedAgentId) ? selectedAgentId : undefined;
 			const effectiveAgentName = effectiveAgentId
 				? (agentOptions.find((a) => a.id === effectiveAgentId)?.name ?? undefined)
 				: undefined;
@@ -979,6 +992,7 @@ export function Chat() {
 				conversations={displayConversations}
 				selectedConversationId={selectedConversationId}
 				modelOptions={modelOptions}
+				cloudModelOptions={cloudModelOptions}
 				selectedModel={selectedModel}
 				reasoningEffort={reasoningEffort}
 				availableReasoningEfforts={availableReasoningEfforts}

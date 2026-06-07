@@ -22,12 +22,18 @@ const { generatedMock } = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
-	getCloudSettingsOptions: generatedMock.getCloudSettingsOptions,
-	getCloudSettingsQueryKey: generatedMock.getCloudSettingsQueryKey,
-	saveCloudSettingsMutation: generatedMock.saveCloudSettingsMutation,
-	clearCloudSettingsMutation: generatedMock.clearCloudSettingsMutation,
-}));
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => {
+	// Spread the real module so codex symbols (used by CodexSignInCard via useCodexAuth)
+	// are present; override only the cloud-settings symbols this test controls.
+	const actual = await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>();
+	return {
+		...actual,
+		getCloudSettingsOptions: generatedMock.getCloudSettingsOptions,
+		getCloudSettingsQueryKey: generatedMock.getCloudSettingsQueryKey,
+		saveCloudSettingsMutation: generatedMock.saveCloudSettingsMutation,
+		clearCloudSettingsMutation: generatedMock.clearCloudSettingsMutation,
+	};
+});
 
 import { CloudSettings } from "@/features/cloud-settings/pages/CloudSettings";
 

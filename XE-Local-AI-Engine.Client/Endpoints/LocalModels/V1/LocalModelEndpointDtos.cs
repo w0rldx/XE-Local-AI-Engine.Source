@@ -1,5 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
+/// <summary>Provider tags for <see cref="LocalModelResponse.Provider"/> (chat picker grouping + egress hint).</summary>
+public static class LocalModelProviders
+{
+    /// <summary>A node-local Ollama model (default; stays entirely on the node).</summary>
+    public const string Ollama = "Ollama";
+
+    /// <summary>A ChatGPT-subscription Codex cloud model (egress to the Codex backend).</summary>
+    public const string CodexOAuth = "CodexOAuth";
+}
+
 public sealed class ListLocalModelsResponse
 {
     public required bool IsAvailable { get; init; }
@@ -36,6 +46,13 @@ public sealed class PullLocalModelRequest
 public sealed class LocalModelResponse
 {
     public required string ModelName { get; init; }
+
+    /// <summary>
+    ///     The provider this model is served by: <c>"Ollama"</c> for a node-local model (the default), or
+    ///     <c>"CodexOAuth"</c> for a ChatGPT-subscription Codex cloud model. The chat picker groups by this and shows
+    ///     an egress hint for cloud models. Defaults to <c>"Ollama"</c> so existing local entries are unchanged.
+    /// </summary>
+    public string Provider { get; init; } = LocalModelProviders.Ollama;
 
     public long? SizeBytes { get; init; }
 

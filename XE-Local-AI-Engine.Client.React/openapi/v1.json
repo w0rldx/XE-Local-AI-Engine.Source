@@ -3525,6 +3525,108 @@
         ]
       }
     },
+    "/api/local/v1/cloud/codex/login": {
+      "post": {
+        "tags": [
+          "Cloud"
+        ],
+        "operationId": "codexLogin",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudCodexV1CodexLoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/cloud/codex/logout": {
+      "post": {
+        "tags": [
+          "Cloud"
+        ],
+        "operationId": "codexLogout",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudCodexV1CodexStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/cloud/codex/status": {
+      "get": {
+        "tags": [
+          "Cloud"
+        ],
+        "operationId": "codexStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudCodexV1CodexStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/auth/status": {
       "get": {
         "tags": [
@@ -6982,6 +7084,9 @@
           "modelName": {
             "type": "string"
           },
+          "provider": {
+            "type": "string"
+          },
           "sizeBytes": {
             "type": "integer",
             "format": "int64",
@@ -7929,6 +8034,36 @@
             "maxLength": 128,
             "minLength": 0,
             "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudCodexV1CodexLoginResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "authorizeUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudCodexV1CodexStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "signedIn": {
+            "type": "boolean"
+          },
+          "accountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "loginPending": {
+            "type": "boolean"
           }
         }
       },

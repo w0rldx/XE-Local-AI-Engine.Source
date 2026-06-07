@@ -895,6 +895,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsRespo
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
 	modelName: z.string().optional(),
+	provider: z.string().optional(),
 	sizeBytes: z.coerce
 		.bigint()
 		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
@@ -1300,6 +1301,17 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequ
 	endpoint: z.string().min(1),
 	apiKey: z.string().min(1),
 	deploymentName: z.string().min(0).max(128),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
+	authorizeUrl: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse = z.object({
+	signedIn: z.boolean().optional(),
+	accountId: z.string().nullish(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
+	loginPending: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
@@ -2407,6 +2419,21 @@ export const zSaveCloudSettingsBody = zXeLocalAiEngineClientEndpointsCloudSettin
  * Success
  */
 export const zSaveCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
+
+/**
+ * Success
+ */
+export const zCodexLoginResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse;
+
+/**
+ * Success
+ */
+export const zCodexLogoutResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
+
+/**
+ * Success
+ */
+export const zCodexStatusResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexStatusResponse;
 
 /**
  * Success

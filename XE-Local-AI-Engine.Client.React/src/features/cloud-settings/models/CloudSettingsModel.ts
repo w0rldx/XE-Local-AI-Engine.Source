@@ -12,7 +12,9 @@ export function isHttpsAbsoluteUrl(value: string): boolean {
 	}
 }
 
-export function validateCloudSettingsForm(values: CloudSettingsFormValues): Partial<Record<keyof CloudSettingsFormValues, string>> {
+export function validateCloudSettingsForm(
+	values: CloudSettingsFormValues,
+): Partial<Record<keyof CloudSettingsFormValues, string>> {
 	const errors: Partial<Record<keyof CloudSettingsFormValues, string>> = {};
 
 	if (!isHttpsAbsoluteUrl(values.endpoint.trim())) {

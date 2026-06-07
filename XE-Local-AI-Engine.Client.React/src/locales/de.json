@@ -131,7 +131,9 @@
 				"noChatModels": "Keine chat-fähigen Modelle",
 				"search": "Modelle suchen...",
 				"noResults": "Keine Modelle gefunden",
-				"unavailableModels": "Nicht verfügbare Modelle"
+				"unavailableModels": "Nicht verfügbare Modelle",
+				"cloudGroup": "Cloud (Codex)",
+				"cloudEgressCue": "An OpenAI gesendet"
 			},
 			"reasoningEffortLabel": "Reasoning-Effort",
 			"reasoningEffortUnavailable": "Reasoning ist für das ausgewählte Modell nicht verfügbar",
@@ -863,6 +865,39 @@
 			"placeholder": {
 				"title": "Cloud-Einstellungen",
 				"description": "Provider-Konfiguration nutzt geheimnissichere lokale API-Antworten."
+			},
+			"provider": {
+				"label": "Aktiver Cloud-Anbieter",
+				"none": "Keiner (lokales Ollama)",
+				"azureFoundry": "Azure OpenAI (Foundry)",
+				"codexOAuth": "ChatGPT / Codex (OAuth)",
+				"egressNotice": "Nachrichten, die mit diesem Anbieter gesendet werden, verlassen dein Gerät in Richtung OpenAI.",
+				"activeEgressBanner": "Cloud (OpenAI) aktiv — deine Nachrichten verlassen dein Gerät. Melde dich ab, um zu lokalem Betrieb zurückzukehren."
+			},
+			"codex": {
+				"title": "Mit ChatGPT (Codex) anmelden",
+				"subtitle": "Authentifiziere dich mit deinem OpenAI-ChatGPT-Abonnement per OAuth, um Codex als Cloud-Chat-Anbieter zu nutzen.",
+				"badge": {
+					"signedIn": "Angemeldet",
+					"signedOut": "Nicht angemeldet"
+				},
+				"signIn": "Mit ChatGPT anmelden",
+				"signOut": "Abmelden",
+				"accountId": "Konto",
+				"unknownAccount": "Unbekannt",
+				"expires": "Sitzung läuft ab",
+				"pendingHint": "Schließe die Anmeldung im geöffneten Browser-Fenster ab oder nutze den Link unten.",
+				"authorizeUrlLabel": "Autorisierungs-URL",
+				"authorizeUrlDescription": "Falls kein Browser geöffnet wurde, klicke oder kopiere diesen Link zur Anmeldung.",
+				"copy": "Link kopieren",
+				"copied": "Kopiert!",
+				"openLink": "Im Browser öffnen",
+				"polling": "Warte auf den Abschluss der Anmeldung…",
+				"timeout": "Anmeldung abgelaufen. Das Autorisierungsfenster ist nicht mehr gültig.",
+				"retry": "Erneut versuchen",
+				"loginError": "Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.",
+				"statusError": "Anmeldestatus konnte nicht abgerufen werden.",
+				"egressNotice": "Nachrichten, die mit diesem Anbieter gesendet werden, verlassen dein Gerät in Richtung OpenAI. Die serverseitige Antwortspeicherung ist bei jedem Aufruf deaktiviert."
 			}
 		},
 		"models": {
