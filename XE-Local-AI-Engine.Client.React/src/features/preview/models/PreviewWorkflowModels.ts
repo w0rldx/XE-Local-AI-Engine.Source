@@ -10,14 +10,12 @@ import { z } from "zod";
 // which serializes as its string name via JsonStringEnumConverter.
 export type PreviewNodeKind = "Start" | "Agent" | "Debug" | "Pause" | "End";
 
-export const previewNodeKinds: readonly PreviewNodeKind[] = ["Start", "Agent", "Debug", "Pause", "End"];
-
-export const previewNodeKindSchema = z.enum(["Start", "Agent", "Debug", "Pause", "End"]);
+const previewNodeKindSchema = z.enum(["Start", "Agent", "Debug", "Pause", "End"]);
 
 // One graph node. Only Agent nodes populate the agent fields (label/instructions/model/modelProfile/
 // reasoningEffort); the others need only `id` (Start seed text lives on the graph, not the node).
 // Modeled as one flat object (not a discriminated union) so it mirrors the single C# record shape.
-export const previewWorkflowGraphNodeSchema = z.object({
+const previewWorkflowGraphNodeSchema = z.object({
 	id: z.string(),
 	kind: previewNodeKindSchema,
 	label: z.string().nullish(),
@@ -30,7 +28,7 @@ export const previewWorkflowGraphNodeSchema = z.object({
 export type PreviewWorkflowGraphNode = z.infer<typeof previewWorkflowGraphNodeSchema>;
 
 // A directed edge — mirrors PreviewWorkflowGraphEdge { SourceId, TargetId }.
-export const previewWorkflowGraphEdgeSchema = z.object({
+const previewWorkflowGraphEdgeSchema = z.object({
 	sourceId: z.string(),
 	targetId: z.string(),
 });
@@ -38,7 +36,7 @@ export const previewWorkflowGraphEdgeSchema = z.object({
 export type PreviewWorkflowGraphEdge = z.infer<typeof previewWorkflowGraphEdgeSchema>;
 
 // The full graph — mirrors PreviewWorkflowGraph { StartText, Nodes, Edges }.
-export const previewWorkflowGraphSchema = z.object({
+const previewWorkflowGraphSchema = z.object({
 	startText: z.string(),
 	nodes: z.array(previewWorkflowGraphNodeSchema),
 	edges: z.array(previewWorkflowGraphEdgeSchema),
@@ -48,7 +46,7 @@ export type PreviewWorkflowGraph = z.infer<typeof previewWorkflowGraphSchema>;
 
 // List-row projection (no graph) — mirrors PreviewWorkflowSummaryResponse(Id, Name, Version,
 // CreatedAtUtc, UpdatedAtUtc). Timestamps are epoch milliseconds (long on the wire).
-export const previewWorkflowSummarySchema = z.object({
+const previewWorkflowSummarySchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	version: z.number(),

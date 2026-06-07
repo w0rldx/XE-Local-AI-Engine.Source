@@ -5,7 +5,6 @@ import type {
 	NodeAccessTokenResponse,
 	NodeAuthStatusResponse,
 	NodeLoginRequest,
-	NodeMeResponse,
 	NodeSetupRequest,
 } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -64,9 +63,4 @@ export async function refreshNodeAuthToken(): Promise<NodeAccessTokenResponse> {
 
 export async function logoutNodeAuth(config?: AxiosRequestConfig): Promise<void> {
 	await authClient.post(buildLocalApiUrl("auth/logout"), {}, withBearer(config));
-}
-
-export async function getNodeAuthMe(config?: AxiosRequestConfig): Promise<NodeMeResponse> {
-	const { data } = await authClient.get<NodeMeResponse>(buildLocalApiUrl("auth/me"), withBearer(config));
-	return data;
 }

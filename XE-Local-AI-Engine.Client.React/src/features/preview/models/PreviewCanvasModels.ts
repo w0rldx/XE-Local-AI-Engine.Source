@@ -21,7 +21,7 @@ export type PreviewCanvasEdge = Edge;
 
 // React Flow type keys — must match the keys registered in the canvas `nodeTypes` map and the
 // PreviewNodeKind union (one node component per kind).
-export const previewNodeTypeByKind: Record<PreviewNodeKind, string> = {
+const previewNodeTypeByKind: Record<PreviewNodeKind, string> = {
 	Start: "start",
 	Agent: "agent",
 	Debug: "debug",
