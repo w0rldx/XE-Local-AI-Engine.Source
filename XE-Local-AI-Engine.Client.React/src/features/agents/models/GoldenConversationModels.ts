@@ -128,7 +128,7 @@ export interface PromoteConflictBody {
 	readonly reason: string;
 }
 
-export const promoteConflictStatusSchema = z.enum(["EvalRequired", "EvalRegressed", "EvalStale", "CapReached"]);
+const promoteConflictStatusSchema = z.enum(["EvalRequired", "EvalRegressed", "EvalStale", "CapReached"]);
 
 const promoteConflictBodySchema = z.object({
 	status: promoteConflictStatusSchema,

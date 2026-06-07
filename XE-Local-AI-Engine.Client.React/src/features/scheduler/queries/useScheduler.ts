@@ -7,7 +7,6 @@ import {
 	deleteScheduledJobMutation,
 	disableScheduledJobMutation,
 	enableScheduledJobMutation,
-	getScheduledJobOptions,
 	getScheduledJobRunOptions,
 	listScheduledJobRunsOptions,
 	listScheduledJobsOptions,
@@ -58,14 +57,6 @@ export function useScheduledJobs(includeDeleted = false) {
 }
 
 // One job definition. Disabled until an id is supplied so the detail query only fires when a job is selected.
-export function useScheduledJob(id: string | null) {
-	return useQuery({
-		...withResponseValidation(getScheduledJobOptions({ path: { scheduledJobId: id ?? "" } })),
-		enabled: id !== null,
-		select: toScheduledJob,
-	});
-}
-
 interface ScheduledJobRunsQueryOptions {
 	readonly enabled?: boolean;
 	readonly refetchInterval?: number | false;
@@ -119,11 +110,11 @@ function invalidateJobs(queryClient: ReturnType<typeof useQueryClient>): Promise
 	return queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) });
 }
 
-function invalidateRuns(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
-	return Promise.all([
+async function invalidateRuns(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
+	await Promise.all([
 		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listRuns) }),
 		queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) }),
-	]).then(() => undefined);
+	]);
 }
 
 export function useCreateScheduledJob() {

@@ -22,7 +22,7 @@ import type { PreviewWorkflowGraph } from "@/features/preview/models/PreviewWork
 // mutations — the live run state arrives over the hub (usePreviewWorkflowHub), not these caches — so they do not
 // invalidate any query.
 
-export const previewWorkflowQueryKeys = {
+const previewWorkflowQueryKeys = {
 	all: ["preview", "workflows"] as const,
 	list: () => [...previewWorkflowQueryKeys.all, "list"] as const,
 	detail: (workflowId: string) => [...previewWorkflowQueryKeys.all, "detail", workflowId] as const,
