@@ -149,9 +149,11 @@
 			"reasoningEffortOptions": {
 				"none": "Aus",
 				"on": "An",
+				"minimal": "Minimal",
 				"low": "Niedrig",
 				"medium": "Mittel",
-				"high": "Hoch"
+				"high": "Hoch",
+				"xhigh": "Höchste"
 			},
 			"newConversation": "Neuer normaler Chat",
 			"newEncryptedConversation": "Neuer verschlüsselter Chat",
@@ -470,6 +472,7 @@
 				"showTokensPerSecond": "Tokens/Sek. anzeigen"
 			},
 			"tokensPerSecond": "{{value}} Tok/s",
+			"messageModelLabel": "Modell: {{model}}",
 			"samplingOptions": {
 				"title": "Erweiterte Sampling-Optionen",
 				"description": "Diese Parameter überschreiben die Modellstandards für die nächste Nachricht. Sie werden nur in diesem Browser gespeichert und nicht pro Konversation persistiert.",

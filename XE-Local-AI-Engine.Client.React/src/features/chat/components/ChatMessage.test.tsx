@@ -86,7 +86,9 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("hides actions while the assistant message is streaming", () => {
-		renderWithProviders(<ChatMessage message={assistantMessage({ status: "streaming" })} isStreaming={true} onRegenerate={vi.fn()} />);
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ status: "streaming" })} isStreaming={true} onRegenerate={vi.fn()} />,
+		);
 
 		expect(screen.queryByLabelText("Copy message")).toBeNull();
 		expect(screen.queryByLabelText("Regenerate response")).toBeNull();
@@ -94,7 +96,12 @@ describe("ChatMessage actions", () => {
 
 	it("does not offer regenerate on user messages", () => {
 		const onRegenerate = vi.fn();
-		renderWithProviders(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} onRegenerate={onRegenerate} />);
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })}
+				onRegenerate={onRegenerate}
+			/>,
+		);
 
 		expect(screen.queryByLabelText("Regenerate response")).toBeNull();
 		expect(screen.getByLabelText("Copy message")).toBeTruthy();
@@ -111,7 +118,9 @@ describe("ChatMessage actions", () => {
 
 	it("renders revision navigation and pages between siblings", () => {
 		const onPrevious = vi.fn();
-		renderWithProviders(<ChatMessage message={assistantMessage()} revisionNav={{ activeIndex: 1, total: 3, onPrevious, onNext: vi.fn() }} />);
+		renderWithProviders(
+			<ChatMessage message={assistantMessage()} revisionNav={{ activeIndex: 1, total: 3, onPrevious, onNext: vi.fn() }} />,
+		);
 
 		expect(screen.getByTestId("message-revision-count-assistant-1").textContent).toBe("2/3");
 		fireEvent.click(screen.getByLabelText("Previous revision"));
@@ -119,7 +128,9 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("hides feedback controls unless enabled", () => {
-		const { rerender } = renderWithProviders(<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={false} />);
+		const { rerender } = renderWithProviders(
+			<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={false} />,
+		);
 		expect(screen.queryByLabelText("Good response")).toBeNull();
 
 		rerender(
@@ -133,7 +144,9 @@ describe("ChatMessage actions", () => {
 
 	it("submits feedback with the chosen rating and comment", async () => {
 		const onSubmitFeedback = vi.fn();
-		renderWithProviders(<ChatMessage message={assistantMessage()} onSubmitFeedback={onSubmitFeedback} showFeedbackControls={true} />);
+		renderWithProviders(
+			<ChatMessage message={assistantMessage()} onSubmitFeedback={onSubmitFeedback} showFeedbackControls={true} />,
+		);
 
 		fireEvent.click(screen.getByLabelText("Good response"));
 		const comment = (await screen.findByTestId("message-feedback-comment-assistant-1")) as HTMLTextAreaElement;
@@ -184,9 +197,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("does not render the attribution testid on user messages", () => {
-		renderWithProviders(
-			<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />,
-		);
+		renderWithProviders(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />);
 
 		expect(screen.queryByTestId("chat-message-agent-user-1")).toBeNull();
 	});
@@ -204,6 +215,24 @@ describe("ChatMessage actions", () => {
 		expect(attribution).toContain("Reasoning:");
 		// Three-segment row: agentName · Reasoning: … · time.
 		expect(attribution).toContain("·");
+	});
+
+	it("includes the model name segment in the attribution row when message.model is present", () => {
+		// Audit cue: multi-provider threads must show which model produced each assistant turn. The outer
+		// fallback "Model: {{model}}" is not interpolated in the test env, but the model id is passed as a var
+		// and the "Model:" prefix proves the segment rendered.
+		renderWithProviders(<ChatMessage message={assistantMessage({ model: "gpt-5.5", createdAt: "2026-06-08T10:00:00.000Z" })} />);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).toContain("Model:");
+		expect(attribution).toContain("·");
+	});
+
+	it("omits the model segment when message.model is absent", () => {
+		renderWithProviders(<ChatMessage message={assistantMessage({ model: undefined })} />);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
+		expect(attribution).not.toContain("Model:");
 	});
 
 	it("includes the reasoning label for effort 'none' — it is never silently omitted", () => {
@@ -287,7 +316,9 @@ describe("ChatMessage actions", () => {
 		// the turn had any content, so a partial-stream failure showed truncated text with no error indicator.
 		// The error Alert must render AFTER the content Paper regardless of whether content is present.
 		renderWithProviders(
-			<ChatMessage message={assistantMessage({ content: "Partial answer so far…", status: "failed", error: "Stream failed mid-response." })} />,
+			<ChatMessage
+				message={assistantMessage({ content: "Partial answer so far…", status: "failed", error: "Stream failed mid-response." })}
+			/>,
 		);
 
 		// Both the content and the error block are present.
@@ -360,9 +391,7 @@ describe("ChatMessage actions", () => {
 
 	it("hides tokens/sec when the toggle is on but the turn has no recorded duration (legacy turn)", () => {
 		useNodeChatPreferencesStore.getState().actions.setShowTokensPerSecond(true);
-		renderWithProviders(
-			<ChatMessage message={assistantMessage({ outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })} />,
-		);
+		renderWithProviders(<ChatMessage message={assistantMessage({ outputTokens: 84, createdAt: "2026-06-05T10:00:00.000Z" })} />);
 
 		const attribution = screen.getByTestId("chat-message-agent-assistant-1").textContent ?? "";
 		expect(attribution).not.toContain("tok/s");

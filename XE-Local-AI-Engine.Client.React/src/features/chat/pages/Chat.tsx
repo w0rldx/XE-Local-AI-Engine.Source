@@ -42,6 +42,7 @@ import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptio
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import {
 	binaryReasoningEfforts,
+	codexReasoningEfforts,
 	reasoningEfforts,
 	useNodeChatPreferencesStore,
 } from "@/features/chat/stores/NodeChatPreferencesStore";
@@ -211,14 +212,22 @@ export function Chat() {
 	// gate on the model's `tools` capability (combined with the node-wide gate inside ChatInputArea).
 	const activeModelReasoningCapable = selectedModelOption?.isReasoningModel ?? false;
 	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
-	// A model that advertises the Ollama `thinking` capability gets the graded efforts (none/low/medium/high).
-	// Every other chat model gets a binary On/Off (["on","none"]): On omits the think field so a model that reasons
-	// by default (e.g. some GGUF templates) runs its built-in reasoning; Off sends think:false to suppress it. We
-	// can't send think:true / a level to a non-thinking model (Ollama 400s), so graded levels are withheld.
-	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(
-		() => (activeModelReasoningCapable ? [...reasoningEfforts] : [...binaryReasoningEfforts]),
-		[activeModelReasoningCapable],
-	);
+	// Pick the right reasoning-effort set based on the active model's provider:
+	// - Cloud (Codex) models get the full OpenAI Responses vocabulary: none/minimal/low/medium/high/xhigh.
+	//   "minimal" and "xhigh" are Codex-only and must NEVER be offered for Ollama models.
+	// - Ollama models that advertise the `thinking` capability get the graded Ollama set: none/low/medium/high.
+	// - Every other model (non-thinking Ollama, local default) gets binary On/Off: on/none.
+	//   On omits think so a model that reasons by default runs its built-in reasoning; Off sends think:false.
+	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
+	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(() => {
+		if (selectedModelIsCloud) {
+			return [...codexReasoningEfforts];
+		}
+		if (activeModelReasoningCapable) {
+			return [...reasoningEfforts];
+		}
+		return [...binaryReasoningEfforts];
+	}, [activeModelReasoningCapable, selectedModelIsCloud]);
 
 	const agentDefinitionsQuery = useAgentDefinitions();
 	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
@@ -287,7 +296,6 @@ export function Chat() {
 	// getLocalModelDetails is Ollama-only — cloud (CodexOAuth) model ids are not in Ollama
 	// and the endpoint 500s for them. Guard with !isCloud so we never fire the request for
 	// a cloud selection. worker-be also short-circuits it server-side, but belt-and-suspenders.
-	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
 	const selectedModelDetailsQuery = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
 		enabled: selectedConcreteModelName.length > 0 && !selectedModelIsCloud,

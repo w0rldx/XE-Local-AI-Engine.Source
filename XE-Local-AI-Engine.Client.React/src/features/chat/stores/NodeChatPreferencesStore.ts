@@ -23,9 +23,21 @@ export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "med
 // suppresses it (think:false). "on" is first so it is the safe fallback default when a stale graded effort is
 // clamped onto a binary model — restoring the model's natural reasoning, which the user can then switch off.
 export const binaryReasoningEfforts: readonly ReasoningEffort[] = ["on", "none"];
+// Full graded effort set for Codex/cloud models (OpenAI Responses API reasoning.effort vocabulary).
+// "minimal" and "xhigh" are Codex-only — NEVER offered for Ollama models. The Chat.tsx model-switch clamp
+// resets any carryover Codex effort (e.g. "xhigh") when the user switches back to an Ollama model.
+export const codexReasoningEfforts: readonly ReasoningEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh"];
 // Every persistable reasoning-effort value — used to validate the hydrated localStorage value and persisted
 // wire values so a binary "on" survives reload/round-trip instead of being narrowed away.
-export const persistableReasoningEfforts: readonly ReasoningEffort[] = ["none", "on", "low", "medium", "high"];
+export const persistableReasoningEfforts: readonly ReasoningEffort[] = [
+	"none",
+	"on",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+];
 
 interface NodeChatPreferencesStore {
 	selectedModel: string;
