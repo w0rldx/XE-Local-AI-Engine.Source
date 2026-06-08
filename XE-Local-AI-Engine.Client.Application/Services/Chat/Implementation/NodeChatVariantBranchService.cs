@@ -146,8 +146,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
 
                 await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 insertCommand.CommandText = """
-                                            INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
-                                            VALUES ($message_id, $conversation_id, $sequence, $role, '', $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, NULL, $origin, $parent_message_id, $variant_group_id);
+                                            INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
+                                            VALUES ($message_id, $conversation_id, $sequence, $role, '', $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, NULL, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
                                             """;
                 AddParameter(insertCommand, "$message_id", request.NewMessageId);
                 AddParameter(insertCommand, "$conversation_id", request.ConversationId);
@@ -161,6 +161,9 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 AddParameter(insertCommand, "$origin", NodeChatOriginValues.Local);
                 AddParameter(insertCommand, "$parent_message_id", request.OriginalMessageId);
                 AddParameter(insertCommand, "$variant_group_id", variantGroupId);
+                // Plaintext per-message agent attribution (regenerate + branch siblings): mirrors the send-placeholder
+                // insert so per-variant feedback aggregates by the resolved agent without decrypting metadata.
+                AddParameter(insertCommand, "$agent_definition_id", request.AgentDefinitionId);
                 await OpenIfNeededAsync(insertCommand.Connection, token).ConfigureAwait(false);
                 await insertCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 

@@ -51,6 +51,12 @@ public sealed class NodeChatRemotePersistenceCoordinator(
                 cancellationToken).ConfigureAwait(false);
         }
 
+        // No AgentDefinitionId is stamped here (unlike the local NodeChatStreamService send path): a
+        // platform/worker-dispatched RuntimePackage carries only AgentDefinitionVersion + ResolvedSystemPrompt, never
+        // the agent definition id — that id lives in the cross-repo server envelope contract, not on this payload — so
+        // there is nothing to attribute by without a server/envelope contract change. Feedback on these remote-origin
+        // turns therefore aggregates as unbound, by design. (User-initiated Codex/cloud-model chat sends still attribute
+        // correctly: those run through NodeChatStreamService, which resolves and stamps the effective agent id.)
         await _persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(package.ConversationId,
                 assistantMessageId,
                 package.InvocationId,

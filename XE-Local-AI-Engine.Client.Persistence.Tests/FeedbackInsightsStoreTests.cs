@@ -52,13 +52,14 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         var m2 = Guid.NewGuid();
         var m3 = Guid.NewGuid();
         var m4 = Guid.NewGuid();
-        await InsertFeedbackAsync(connection, m1, cA1, Up, comment: null, createdAtUtc: 50);
-        await InsertFeedbackAsync(connection, m2, cA1, Down, comment: "slow", createdAtUtc: 100);
-        await InsertFeedbackAsync(connection, m3, cA1, Down, comment: "wrong", createdAtUtc: 200);
-        await InsertFeedbackAsync(connection, m4, cA2, Up, comment: "great", createdAtUtc: 150);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, comment: "excluded", createdAtUtc: 300);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, comment: "b-down", createdAtUtc: 120);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cUnbound, Down, comment: "unbound", createdAtUtc: 130);
+        await InsertFeedbackAsync(connection, m1, cA1, Up, comment: null, createdAtUtc: 50, agentDefinitionId: agentA);
+        await InsertFeedbackAsync(connection, m2, cA1, Down, comment: "slow", createdAtUtc: 100, agentDefinitionId: agentA);
+        await InsertFeedbackAsync(connection, m3, cA1, Down, comment: "wrong", createdAtUtc: 200, agentDefinitionId: agentA);
+        await InsertFeedbackAsync(connection, m4, cA2, Up, comment: "great", createdAtUtc: 150, agentDefinitionId: agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, comment: "excluded", createdAtUtc: 300, agentDefinitionId: agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, comment: "b-down", createdAtUtc: 120, agentDefinitionId: agentB);
+        // Unbound message: no per-message agent → must not leak into any named agent's aggregate.
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cUnbound, Down, comment: "unbound", createdAtUtc: 130, agentDefinitionId: null);
 
         // "search" fires three times in cA1: COUNT(DISTINCT message_id) must keep search at 2 up / 2 down (the rated
         // messages), NOT inflate by the conversation x tool cartesian. This makes the DISTINCT load-bearing.
@@ -101,6 +102,47 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     }
 
     [Test]
+    public async Task GetAgentFeedbackAggregateAsync_AttributesByPerMessageAgent_NotConversationBinding()
+    {
+        // Regression for the analyze-always-empty bug: attribution must key on the per-message agent
+        // (messages.agent_definition_id), NOT the conversation binding. The chat UI creates conversations with
+        // no agent binding, so per-message attribution is the only signal that surfaces feedback.
+        var databasePath = GetDatabasePath("per-message.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var agentA = await SeedAgentAsync(context, "Agent A");
+        var agentB = await SeedAgentAsync(context, "Agent B");
+        var connection = await OpenConnectionAsync(context);
+
+        // One unbound conversation (mirrors production) holding messages from BOTH agents, plus a conversation that
+        // is BOUND to agent B but whose rated message was produced by agent A — proving the conversation binding is
+        // ignored in favour of the per-message agent.
+        var unbound = Guid.NewGuid();
+        var boundToB = Guid.NewGuid();
+        await InsertConversationAsync(connection, unbound, agentDefinitionId: null, purged: false, archived: false);
+        await InsertConversationAsync(connection, boundToB, agentB, purged: false, archived: false);
+
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), unbound, Up, comment: "a-up", createdAtUtc: 10, agentDefinitionId: agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), unbound, Down, comment: "b-down", createdAtUtc: 20, agentDefinitionId: agentB);
+        // Conversation bound to B, but this message was produced by A: it must count under A, not B.
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), boundToB, Up, comment: "a-in-b-conv", createdAtUtc: 30, agentDefinitionId: agentA);
+
+        var store = new FeedbackInsightsStore(context);
+
+        var aggregateA = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentA, exemplarCap: 5), "Agent A should aggregate.");
+        AssertEx.Equal(2, aggregateA.UpCount);
+        AssertEx.Equal(0, aggregateA.DownCount);
+
+        var aggregateB = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentB, exemplarCap: 5), "Agent B should aggregate.");
+        AssertEx.Equal(0, aggregateB.UpCount);
+        AssertEx.Equal(1, aggregateB.DownCount);
+    }
+
+    [Test]
     public async Task GetAgentFeedbackAggregateAsync_WhenAgentMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("missing.sqlite");
@@ -130,9 +172,9 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
 
         var conversation = Guid.NewGuid();
         await InsertConversationAsync(connection, conversation, agent, purged: false, archived: false);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, comment: "oldest", createdAtUtc: 10);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, comment: "middle", createdAtUtc: 20);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, comment: "newest", createdAtUtc: 30);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, comment: "oldest", createdAtUtc: 10, agentDefinitionId: agent);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, comment: "middle", createdAtUtc: 20, agentDefinitionId: agent);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, comment: "newest", createdAtUtc: 30, agentDefinitionId: agent);
 
         var store = new FeedbackInsightsStore(context);
         var aggregate = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agent, exemplarCap: 2), "Existing agent should aggregate.");
@@ -182,24 +224,26 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         _ = await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task InsertMessageAsync(DbConnection connection, Guid messageId, Guid conversationId, long createdAtUtc)
+    private static async Task InsertMessageAsync(DbConnection connection, Guid messageId, Guid conversationId, long createdAtUtc, Guid? agentDefinitionId)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-                              INSERT INTO messages (message_id, conversation_id, sequence, role, content, created_at_utc, updated_at_utc)
-                              VALUES ($message_id, $conversation_id, 0, 'assistant', 'answer', $created_at_utc, $created_at_utc);
+                              INSERT INTO messages (message_id, conversation_id, sequence, role, content, created_at_utc, updated_at_utc, agent_definition_id)
+                              VALUES ($message_id, $conversation_id, 0, 'assistant', 'answer', $created_at_utc, $created_at_utc, $agent_definition_id);
                               """;
         AddParameter(command, "$message_id", messageId);
         AddParameter(command, "$conversation_id", conversationId);
         AddParameter(command, "$created_at_utc", createdAtUtc);
+        AddParameter(command, "$agent_definition_id", agentDefinitionId);
         _ = await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task InsertFeedbackAsync(DbConnection connection, Guid messageId, Guid conversationId, string rating, string? comment, long createdAtUtc)
+    private static async Task InsertFeedbackAsync(DbConnection connection, Guid messageId, Guid conversationId, string rating, string? comment, long createdAtUtc, Guid? agentDefinitionId)
     {
         // A feedback row FKs to its message (FK enforcement is on for this context), so the rated message must exist
-        // first — mirroring production, where the assistant placeholder precedes the feedback upsert.
-        await InsertMessageAsync(connection, messageId, conversationId, createdAtUtc).ConfigureAwait(false);
+        // first — mirroring production, where the assistant placeholder precedes the feedback upsert. The per-message
+        // agent id (not the conversation's) is what attribution keys on, so each rated message carries it explicitly.
+        await InsertMessageAsync(connection, messageId, conversationId, createdAtUtc, agentDefinitionId).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
         command.CommandText = """

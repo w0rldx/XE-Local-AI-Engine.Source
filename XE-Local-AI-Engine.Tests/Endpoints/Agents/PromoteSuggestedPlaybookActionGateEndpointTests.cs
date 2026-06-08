@@ -40,6 +40,33 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     }
 
     [Test]
+    public async Task Promote_BodyLessPost_IsAcceptedNot415()
+    {
+        // Regression for the live 415 ("convert playbook → empty notification"): this route-only POST binds the agent
+        // and action ids from the route, so the hey-api client sends no body — and therefore no Content-Type. The
+        // endpoint must accept that instead of answering 415 Unsupported Media Type. A seeded suggestion with no eval
+        // yields 409 EvalRequired, which proves the request was bound and dispatched rather than rejected at the
+        // media-type gate.
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
+        var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
+
+        // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
+        using var request = new HttpRequestMessage(HttpMethod.Post, PromoteRoute(agentId, actionId));
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less promote POST must not return 415.");
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var document = JsonDocument.Parse(payload);
+        AssertEx.Equal("EvalRequired", document.RootElement.GetProperty("status").GetString());
+    }
+
+    [Test]
     public async Task Promote_WhenSuggestionHasNoEvalResult_ReturnsConflictEvalRequired()
     {
         await using var factory = new TestingWebAppFactory();

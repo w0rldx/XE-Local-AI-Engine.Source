@@ -38,5 +38,13 @@ internal sealed record class NodeMessage
     /// </summary>
     public Guid? VariantGroupId { get; set; }
 
+    /// <summary>
+    ///     The agent that produced this assistant turn (the resolved effective agent at send/regenerate time:
+    ///     request agent ?? conversation agent ?? Default Assistant). Stored as a plaintext, SQL-queryable column
+    ///     — the agent id is non-secret — so feedback can be aggregated per agent without decrypting the metadata
+    ///     blob. Null for user turns and for assistant turns written before this column existed.
+    /// </summary>
+    public Guid? AgentDefinitionId { get; set; }
+
     public NodeConversation? Conversation { get; set; }
 }

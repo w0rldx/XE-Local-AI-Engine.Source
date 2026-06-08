@@ -49,8 +49,9 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         command.CommandText = """
                               SELECT f.rating, COUNT(*) AS cnt
                               FROM message_feedback f
+                              JOIN messages m ON m.message_id = f.message_id
                               JOIN conversations c ON c.conversation_id = f.conversation_id
-                              WHERE c.agent_definition_id = $agent_id AND c.purged = 0
+                              WHERE m.agent_definition_id = $agent_id AND c.purged = 0
                               GROUP BY f.rating;
                               """;
         AddParameter(command, "$agent_id", agentDefinitionId);
@@ -81,9 +82,10 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         command.CommandText = """
                               SELECT te.tool_name, f.rating, COUNT(DISTINCT f.message_id) AS cnt
                               FROM message_feedback f
+                              JOIN messages m ON m.message_id = f.message_id
                               JOIN conversations c ON c.conversation_id = f.conversation_id
                               JOIN tool_events te ON te.conversation_id = c.conversation_id
-                              WHERE c.agent_definition_id = $agent_id AND c.purged = 0
+                              WHERE m.agent_definition_id = $agent_id AND c.purged = 0
                               GROUP BY te.tool_name, f.rating;
                               """;
         AddParameter(command, "$agent_id", agentDefinitionId);
@@ -121,8 +123,9 @@ public sealed class FeedbackInsightsStore(NodeChatDbContext dbContext) : IFeedba
         command.CommandText = """
                               SELECT f.rating, f.comment, f.message_id, f.conversation_id, f.created_at_utc
                               FROM message_feedback f
+                              JOIN messages m ON m.message_id = f.message_id
                               JOIN conversations c ON c.conversation_id = f.conversation_id
-                              WHERE c.agent_definition_id = $agent_id AND c.purged = 0
+                              WHERE m.agent_definition_id = $agent_id AND c.purged = 0
                                 AND f.comment IS NOT NULL AND TRIM(f.comment) <> ''
                               ORDER BY (f.rating = 'down') DESC, f.created_at_utc DESC, f.message_id DESC
                               LIMIT $cap;

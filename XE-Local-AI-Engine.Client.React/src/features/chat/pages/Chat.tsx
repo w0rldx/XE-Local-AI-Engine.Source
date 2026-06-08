@@ -42,6 +42,7 @@ import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptio
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import {
 	binaryReasoningEfforts,
+	clampReasoningEffort,
 	codexReasoningEfforts,
 	reasoningEfforts,
 	useNodeChatPreferencesStore,
@@ -279,13 +280,15 @@ export function Chat() {
 		}
 	}, [cloudModelOptions, localModelsQuery.data, modelOptions, selectedModel, setSelectedModel]);
 	// Keep the selected reasoning effort valid for the active model's reasoning mode so the composer never SENDS an
-	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none. When
-	// the current effort isn't in the active model's set (a graded "medium" carried onto a binary model, or a binary
-	// "on" carried onto a graded model) fall back to its first available effort — "on" for binary (reason by default,
-	// switch off to suppress), "none" for graded. Runs on every model switch and on first load.
+	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none; Codex
+	// models add minimal/xhigh. When the current effort isn't in the active model's set (a Codex "xhigh" carried onto
+	// a graded model, or a binary "on" carried onto a graded model) clampReasoningEffort maps to the nearest valid
+	// level that PRESERVES reasoning intent — xhigh→high, minimal→low, graded→"on" for binary — instead of collapsing
+	// reasoning OFF. Only "none" maps to "none". Runs on every model switch and on first load.
 	useEffect(() => {
-		if (!availableReasoningEfforts.includes(reasoningEffort)) {
-			setReasoningEffort(availableReasoningEfforts[0] ?? "none");
+		const clamped = clampReasoningEffort(reasoningEffort, availableReasoningEfforts);
+		if (clamped !== reasoningEffort) {
+			setReasoningEffort(clamped);
 		}
 	}, [availableReasoningEfforts, reasoningEffort, setReasoningEffort]);
 	const selectedConcreteModelName = useMemo(() => {
