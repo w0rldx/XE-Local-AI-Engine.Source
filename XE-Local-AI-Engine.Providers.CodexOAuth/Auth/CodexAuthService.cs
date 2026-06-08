@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
@@ -17,15 +16,15 @@ public interface ICodexAuthService
 {
     /// <summary>
     /// Starts the interactive PKCE (S256) loopback login: binds the loopback callback listener, builds the
-    /// authorize URL, best-effort opens the system browser, and begins waiting for the callback in the
-    /// background. The returned <see cref="CodexLoginHandle"/> exposes the authorize URL <em>immediately</em>
-    /// (so the endpoint can hand it to the UI as a copyable/clickable link, plan §2/§8) and a
+    /// authorize URL, and begins waiting for the callback in the background. The returned
+    /// <see cref="CodexLoginHandle"/> exposes the authorize URL <em>immediately</em> so the React client can render
+    /// it as a user-clicked link, and a
     /// <see cref="CodexLoginHandle.Completion"/> task that resolves once the code is exchanged and persisted.
     /// </summary>
     CodexLoginHandle BeginLogin(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs the interactive PKCE (S256) browser login against a loopback callback listener,
+    /// Runs the interactive PKCE (S256) login against a loopback callback listener,
     /// exchanges the authorization code, persists the session, and returns it. Convenience wrapper over
     /// <see cref="BeginLogin"/> that awaits completion.
     /// </summary>
@@ -91,7 +90,6 @@ public sealed class CodexAuthService : ICodexAuthService
         }
 
         var authorizeUrl = BuildAuthorizeUrl(challenge, state);
-        OpenBrowser(authorizeUrl);
 
         // The callback wait + code exchange runs in the background; the endpoint returns the URL immediately.
         var completion = CompleteLoginAsync(listener, verifier, state, cancellationToken);
@@ -274,23 +272,6 @@ public sealed class CodexAuthService : ICodexAuthService
                 $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value ?? string.Empty)}")),
         };
         return builder.Uri;
-    }
-
-    private void OpenBrowser(Uri url)
-    {
-        try
-        {
-            using var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = url.ToString(),
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            // Headless or no default browser: surface the URL via logs (no secrets in it) so the operator can open it.
-            _logger.LogInformation("Open the Codex authorization URL in a browser to continue login: {AuthorizeUrl}", url);
-        }
     }
 
     private static async Task WriteCallbackResponseAsync(HttpListenerResponse response, string message)

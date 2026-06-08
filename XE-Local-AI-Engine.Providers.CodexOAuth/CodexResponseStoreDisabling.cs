@@ -32,6 +32,17 @@ using OpenAI.Responses;
 /// output and do NOT require <c>store=true</c>, so the store=false invariant above is preserved. When no effort is
 /// resolvable the request still asks for summaries at the model's default effort (effort omitted).
 /// </para>
+///
+/// <para>
+/// <b>Encrypted reasoning include (tool calling, de-risk plan <c>Plans/2026-06-08-codex-tool-calling-derisk.md</c>
+/// D3):</b> because reasoning is always requested on the Codex boundary, the same base options also add
+/// <see cref="IncludedResponseProperty.ReasoningEncryptedContent"/> to
+/// <see cref="CreateResponseOptions.IncludedProperties"/> (serializes to <c>include:[reasoning.encrypted_content]</c>).
+/// This is REQUIRED for the stateless tool loop: with <c>store=false</c> each follow-up turn must replay the prior
+/// reasoning item with its <c>encrypted_content</c> immediately before the <c>function_call</c> it produced. The
+/// include makes the backend emit that encrypted blob; MEAI then round-trips it verbatim. It is harmless when no tool
+/// is offered, so it rides whenever reasoning is on. Tools themselves are NOT stripped on this boundary.
+/// </para>
 /// </summary>
 public static class CodexResponseStoreDisabling
 {
@@ -61,6 +72,17 @@ public static class CodexResponseStoreDisabling
                     // makes reasoning text flow back as TextReasoningContent for the React reasoning pipeline.
                     ReasoningSummaryVerbosity = ResponseReasoningSummaryVerbosity.Auto,
                 },
+                // D3: reasoning is always on here, so always ask the backend to emit the encrypted reasoning blob
+                // (include:[reasoning.encrypted_content]). Required for the stateless (store=false) tool loop — each
+                // follow-up turn replays the prior reasoning item with its encrypted_content before its function_call.
+                // Harmless when no tool is offered.
+                IncludedProperties = { IncludedResponseProperty.ReasoningEncryptedContent },
+
+                // D2 (single-call first): disable parallel tool calls on the wire (serializes parallel_tool_calls:false).
+                // The Codex capability matrix declares SupportsParallelToolCalls=false; this is the request-level
+                // enforcement of that decision so the model emits at most one tool call per turn. Harmless when no tool
+                // is offered.
+                ParallelToolCallsEnabled = false,
             };
 
             if (reasoningEffort is { } effort)
