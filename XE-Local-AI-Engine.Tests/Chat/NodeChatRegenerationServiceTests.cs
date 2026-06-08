@@ -724,6 +724,71 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task RegenerateAsync_WhenOriginalModelIsCodexCloudModel_OffersToolsAndSkipsOllamaClassification()
+    {
+        // Parity with NodeChatStreamServiceTests.SendMessageAsync_WhenActiveModelIsCodexCloudModel_*: regenerating a
+        // turn whose original model is a Codex cloud id must resolve capabilities from the Codex matrix (thinking on +
+        // tools per V0=true), NOT the Ollama /api/show classification — so the classifier is never consulted for the
+        // Codex id, and the requested local tool offer IS honored (regression guard for the regen-path Codex gate).
+        await using var provider = await BuildProviderAsync("regeneration-codex-capabilities.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        const string CodexModel = "gpt-5.5";
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Codex regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        // The original assistant turn was produced by the Codex cloud model, so the regenerate resolves that model.
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12, CodexModel))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four", Model: CodexModel))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenCompletingRunner(dispatcher);
+        var offerProvider = CreateOfferProvider();
+        var classificationService = CreateModelClassificationService();
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            classificationService,
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+
+        // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
+        await classificationService.DidNotReceive()
+            .ClassifyAsync(Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(
+                models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
+                Arg.Any<CancellationToken>())
+            .ConfigureAwait(false);
+
+        // Tool calling is enabled for all Codex ids (V0=true), so the requested local tool offer is honored on regenerate.
+        offerProvider.Received().GetOfferedTools(CodexModel);
+    }
+
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);

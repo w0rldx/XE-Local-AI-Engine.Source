@@ -504,9 +504,9 @@ public sealed class NodeChatStreamService(
 
         // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
         // mis-detect it (the runtime has never seen it). Use the Codex provider's declared capability matrix
-        // instead. Codex models reason by default, so thinking is on; tool calling tracks the V0 matrix (off until
-        // the Phase-2 backend tool round-trip is proven). Cloud providers ignore the unknown think property, so the
-        // reasoning gate stays inert on the wire.
+        // instead. Codex models reason by default, so thinking is on; tool calling tracks the V0 matrix, which now
+        // ENABLES tools for all Codex ids (de-risk verified — encrypted reasoning round-trips through the stateless
+        // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
         if (CodexModelCatalog.IsCodexModel(activeModel))
         {
             return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);

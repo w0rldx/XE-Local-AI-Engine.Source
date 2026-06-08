@@ -15,14 +15,16 @@ import type { ModelOption } from "@/features/chat/models/ChatModels";
 
 const CODEX_PROVIDER = "CodexOAuth";
 
-function toCloudModelOption(modelName: string): ModelOption {
+export function toCloudModelOption(modelName: string): ModelOption {
 	return {
 		value: modelName,
 		label: modelName,
 		displayName: modelName,
 		// Codex models support the full OpenAI Responses reasoning.effort vocabulary (none/minimal/low/medium/high/xhigh).
 		isReasoningModel: true,
-		isToolCapable: false,
+		// Codex (gpt-5.x / OpenAI Responses) supports function tools; the backend capability gate
+		// (CodexProviderCapabilities.SupportsToolCalling) is the authoritative runtime guard.
+		isToolCapable: true,
 		isAvailable: true,
 		isCloud: true,
 	};

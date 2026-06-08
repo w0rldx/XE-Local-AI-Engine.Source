@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.CodexOAuth;
 
 /// <summary>
 ///     Default <see cref="INodeChatRegenerationService" />. Reuses the shared runner/pump/dispatcher the local send
@@ -497,6 +498,16 @@ public sealed class NodeChatRegenerationService(
         if (string.IsNullOrWhiteSpace(activeModel))
         {
             return (false, false);
+        }
+
+        // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
+        // mis-detect it (the runtime has never seen it). Use the Codex provider's declared capability matrix
+        // instead. Codex models reason by default, so thinking is on; tool calling tracks the V0 matrix, which now
+        // ENABLES tools for all Codex ids (de-risk verified — encrypted reasoning round-trips through the stateless
+        // tool loop). Mirrors NodeChatStreamService.ResolveModelCapabilitiesAsync so regenerate matches the send path.
+        if (CodexModelCatalog.IsCodexModel(activeModel))
+        {
+            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
         }
 
         var classifications = await modelClassificationService

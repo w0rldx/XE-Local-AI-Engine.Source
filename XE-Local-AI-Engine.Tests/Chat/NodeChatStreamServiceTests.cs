@@ -1300,9 +1300,10 @@ public sealed class NodeChatStreamServiceTests
                 models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
                 Arg.Any<CancellationToken>());
 
-        // Codex V0 keeps tool-calling OFF, so the local tool offer is gated off — GetOfferedTools is never called for
-        // the Codex model even though the send requested tools (UseLocalTools: true).
-        offerProvider.DidNotReceive().GetOfferedTools("gpt-5.5");
+        // Tool calling is now enabled for ALL Codex ids (de-risk plan D1), so the requested local tool offer
+        // (UseLocalTools: true) is honored for the Codex model — capabilities still come from the Codex matrix, not
+        // the Ollama classifier.
+        offerProvider.Received().GetOfferedTools("gpt-5.5");
     }
 
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
