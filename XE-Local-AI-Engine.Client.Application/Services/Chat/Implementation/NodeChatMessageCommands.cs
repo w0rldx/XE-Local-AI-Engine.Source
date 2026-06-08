@@ -192,8 +192,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                                      INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
-                                      VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
+                                      INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
+                                      VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
                                       """;
                 AddParameter(command, "$message_id", messageId);
                 AddParameter(command, "$conversation_id", conversationId);
@@ -209,6 +209,9 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 AddParameter(command, "$origin", origin);
                 AddParameter(command, "$parent_message_id", parentMessageId);
                 AddParameter(command, "$variant_group_id", variantGroupId);
+                // Plaintext per-message agent attribution: lets feedback aggregate by the resolved agent without
+                // decrypting the metadata blob. Stamped once at insert; later flush/terminalize never touch it.
+                AddParameter(command, "$agent_definition_id", agentDefinitionId);
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 

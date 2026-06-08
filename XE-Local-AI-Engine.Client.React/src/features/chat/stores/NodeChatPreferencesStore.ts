@@ -39,6 +39,56 @@ export const persistableReasoningEfforts: readonly ReasoningEffort[] = [
 	"xhigh",
 ];
 
+// Reasoning intensity rank, used to clamp a carried-over effort onto a different model's available set without
+// collapsing reasoning intent. Codex-only "minimal"/"xhigh" sit at the extremes; "on" is the binary reasoning-ON
+// sentinel and ranks alongside "low" so a binary "on" maps to a sensible graded level (and any graded-ON level
+// maps back to "on"). "none" is the only reasoning-OFF value.
+const reasoningEffortRank: Readonly<Record<ReasoningEffort, number>> = {
+	none: 0,
+	minimal: 1,
+	low: 2,
+	on: 2,
+	medium: 3,
+	high: 4,
+	xhigh: 5,
+};
+
+// Map an effort onto a target model's available set, preserving reasoning intent instead of always falling back to
+// the set's first entry. Returns `current` unchanged when it is already valid (byte-identical no-op). Otherwise:
+// a reasoning-OFF source ("none") maps to "none" when offered; any reasoning-ON source maps to the available
+// reasoning-ON level (rank > 0) with the nearest intensity rank — so xhigh→high, minimal→low onto a graded set, and
+// any graded level→"on" onto a binary set. Falls back to the set's first entry only when no comparable level exists.
+export function clampReasoningEffort(
+	current: ReasoningEffort,
+	available: readonly ReasoningEffort[],
+): ReasoningEffort {
+	if (available.includes(current)) {
+		return current;
+	}
+
+	const fallback = available[0] ?? "none";
+	if (current === "none") {
+		return available.includes("none") ? "none" : fallback;
+	}
+
+	const targetRank = reasoningEffortRank[current];
+	let nearest: ReasoningEffort | undefined;
+	let nearestDistance = Number.POSITIVE_INFINITY;
+	for (const candidate of available) {
+		if (reasoningEffortRank[candidate] === 0) {
+			continue;
+		}
+
+		const distance = Math.abs(reasoningEffortRank[candidate] - targetRank);
+		if (distance < nearestDistance) {
+			nearest = candidate;
+			nearestDistance = distance;
+		}
+	}
+
+	return nearest ?? fallback;
+}
+
 interface NodeChatPreferencesStore {
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;

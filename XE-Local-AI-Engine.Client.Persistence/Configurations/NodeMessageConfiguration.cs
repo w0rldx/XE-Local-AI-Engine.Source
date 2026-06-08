@@ -55,8 +55,12 @@ internal sealed class NodeMessageConfiguration : IEntityTypeConfiguration<NodeMe
         builder.Property(entity => entity.VariantGroupId)
                .HasColumnName("variant_group_id");
 
+        builder.Property(entity => entity.AgentDefinitionId)
+               .HasColumnName("agent_definition_id");
+
         builder.HasIndex(entity => entity.RequestId);
         builder.HasIndex(entity => entity.ParentMessageId);
         builder.HasIndex(entity => entity.VariantGroupId);
+        builder.HasIndex(entity => entity.AgentDefinitionId);
     }
 }

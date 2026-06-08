@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 ///     Runs golden-conversation evaluation over one agent's golden set for a pending Suggested/Analysis action and
 ///     persists the resulting <c>EvalResult</c> on the action (the promote route reads it back). Returns the updated
 ///     action (now carrying <c>evalResult</c>); 404 when the action is missing, belongs to another agent, or is not a
-///     pending suggestion. The route carries the ids so the body is empty <c>{}</c> (FastEndpoints 415s a route-only POST
-///     with no body). Operator-gated.
+///     pending suggestion. The route carries the ids so the request is body-less (Configure overrides Accepts so the
+///     missing Content-Type is not answered with 415). Operator-gated.
 /// </summary>
 public sealed class RunPlaybookActionEvalEndpoint(IPlaybookEvalService playbookEvalService)
     : Endpoint<SuggestedPlaybookActionRouteRequest, PlaybookActionResponse>
@@ -22,6 +22,11 @@ public sealed class RunPlaybookActionEvalEndpoint(IPlaybookEvalService playbookE
     {
         Post(LocalApiRoutes.Agents.PlaybookActionEval);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST: the agent and action ids come from the route, so a well-behaved client sends no body — and
+        // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
+        // FastEndpoints answers with 415 when the header is absent. Overriding Accepts to accept any content-type lets a
+        // body-less request through (the ids still bind from the route).
+        Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>());
     }
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)

@@ -20,6 +20,11 @@ public sealed class AnalyzePlaybookEndpoint(IPlaybookAnalysisService analysisSer
     {
         Post(LocalApiRoutes.Agents.PlaybookAnalyze);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST: the agent id comes from the route, so a well-behaved client sends no body — and therefore no
+        // Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
+        // with 415 when the header is absent. Overriding Accepts to accept any content-type lets a body-less request
+        // through (the agentDefinitionId still binds from the route).
+        Description(x => x.Accepts<AnalyzePlaybookRequest>());
     }
 
     public override async Task HandleAsync(AnalyzePlaybookRequest req, CancellationToken ct)

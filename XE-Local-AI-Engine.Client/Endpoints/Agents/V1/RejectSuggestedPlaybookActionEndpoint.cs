@@ -19,6 +19,11 @@ public sealed class RejectSuggestedPlaybookActionEndpoint(IPlaybookActionService
     {
         Post(LocalApiRoutes.Agents.PlaybookActionReject);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST: the agent and action ids come from the route, so a well-behaved client sends no body — and
+        // therefore no Content-Type. The default POST "Accepts" metadata only allows application/json, which
+        // FastEndpoints answers with 415 when the header is absent. Overriding Accepts to accept any content-type lets a
+        // body-less request through (the ids still bind from the route).
+        Description(x => x.Accepts<SuggestedPlaybookActionRouteRequest>());
     }
 
     public override async Task HandleAsync(SuggestedPlaybookActionRouteRequest req, CancellationToken ct)

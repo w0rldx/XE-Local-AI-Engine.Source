@@ -39,20 +39,26 @@ public sealed class RunPlaybookActionEvalEndpointTests
     }
 
     [Test]
-    public async Task RunEval_WhenRouteOnlyPostHasNoBody_ReturnsUnsupportedMediaType()
+    public async Task RunEval_BodyLessPost_IsAcceptedNot415()
     {
+        // Regression for the live 415 ("convert playbook → empty notification"): this route-only POST binds the agent
+        // and action ids from the route, so the hey-api client sends no body — and therefore no Content-Type. The
+        // endpoint must accept that instead of answering 415 Unsupported Media Type. A seeded suggestion with no golden
+        // cases yields 200 with a failing eval result, which proves the request was bound and dispatched rather than
+        // rejected at the media-type gate.
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
         var actionId = await SeedSuggestionAsync(factory, agentId).ConfigureAwait(false);
 
-        // A route-only POST with no body: FastEndpoints requires a JSON body or it 415s. The client must send "{}".
+        // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
         using var request = new HttpRequestMessage(HttpMethod.Post, EvalRoute(agentId, actionId));
         factory.AddNodeBearerToken(request);
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less eval POST must not return 415.");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Test]

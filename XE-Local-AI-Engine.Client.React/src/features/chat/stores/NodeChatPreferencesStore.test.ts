@@ -2,6 +2,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+	binaryReasoningEfforts,
+	clampReasoningEffort,
+	reasoningEfforts,
+} from "@/features/chat/stores/NodeChatPreferencesStore";
+
 const SELECTED_MODEL_STORAGE_KEY = "xe-node-chat-selected-model";
 const REASONING_EFFORT_STORAGE_KEY = "xe-node-chat-reasoning-effort";
 const TOOLS_ENABLED_STORAGE_KEY = "xe-node-chat-tools-enabled";
@@ -231,5 +237,47 @@ describe("NodeChatPreferencesStore", () => {
 		useStore.getState().actions.setShowTokensPerSecond(false);
 		expect(useStore.getState().showTokensPerSecond).toBe(false);
 		expect(localStorage.getItem(SHOW_TOKENS_PER_SECOND_STORAGE_KEY)).toBe("false");
+	});
+});
+
+describe("clampReasoningEffort", () => {
+	// reasoningEfforts = ["none", "low", "medium", "high"] (graded Ollama set).
+	// binaryReasoningEfforts = ["on", "none"].
+
+	it("returns the current effort unchanged when it is already in the available set", () => {
+		expect(clampReasoningEffort("medium", reasoningEfforts)).toBe("medium");
+		expect(clampReasoningEffort("none", reasoningEfforts)).toBe("none");
+		expect(clampReasoningEffort("on", binaryReasoningEfforts)).toBe("on");
+	});
+
+	it("maps Codex-only 'xhigh' onto a graded set's nearest reasoning-ON level (high)", () => {
+		expect(clampReasoningEffort("xhigh", reasoningEfforts)).toBe("high");
+	});
+
+	it("maps Codex-only 'minimal' onto a graded set's nearest reasoning-ON level (low)", () => {
+		expect(clampReasoningEffort("minimal", reasoningEfforts)).toBe("low");
+	});
+
+	it("preserves 'none' when switching onto a graded set (reasoning stays off)", () => {
+		expect(clampReasoningEffort("none", reasoningEfforts)).toBe("none");
+	});
+
+	it("maps any reasoning-ON graded level onto a binary set's 'on'", () => {
+		expect(clampReasoningEffort("high", binaryReasoningEfforts)).toBe("on");
+		expect(clampReasoningEffort("medium", binaryReasoningEfforts)).toBe("on");
+		expect(clampReasoningEffort("low", binaryReasoningEfforts)).toBe("on");
+	});
+
+	it("maps Codex-only levels onto a binary set's 'on'", () => {
+		expect(clampReasoningEffort("xhigh", binaryReasoningEfforts)).toBe("on");
+		expect(clampReasoningEffort("minimal", binaryReasoningEfforts)).toBe("on");
+	});
+
+	it("preserves 'none' when switching onto a binary set", () => {
+		expect(clampReasoningEffort("none", binaryReasoningEfforts)).toBe("none");
+	});
+
+	it("falls back to the first available effort when the set offers no reasoning-ON level", () => {
+		expect(clampReasoningEffort("high", ["none"])).toBe("none");
 	});
 });

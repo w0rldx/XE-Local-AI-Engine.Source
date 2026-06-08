@@ -34,7 +34,7 @@ public sealed class AnalyzePlaybookEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route(Guid.NewGuid()))
         {
-            // The route carries the agent id; FastEndpoints still requires a JSON body for a POST (else 415).
+            // A JSON body is still accepted (the body-less shape is covered separately by Analyze_BodyLessPost_*).
             Content = JsonContent.Create(new
             {
             })
@@ -43,6 +43,31 @@ public sealed class AnalyzePlaybookEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    public async Task Analyze_BodyLessPost_IsAcceptedNot415()
+    {
+        // Regression for the live 415 ("convert playbook → empty notification"): this route-only POST binds the agent
+        // id from the route, so the hey-api client sends no body — and therefore no Content-Type. The endpoint must
+        // accept that instead of answering 415 Unsupported Media Type. A seeded agent with no feedback yields 200 with
+        // empty items, which proves the request was bound and dispatched rather than rejected at the media-type gate.
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        var agentId = await SeedAgentAsync(factory, "Body-less Analysis Agent").ConfigureAwait(false);
+
+        // No HttpContent at all → the request carries no Content-Type header (the exact shape of a body-less fetch).
+        using var request = new HttpRequestMessage(HttpMethod.Post, Route(agentId));
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.NotEqual(HttpStatusCode.UnsupportedMediaType, response.StatusCode, "Body-less analyze POST must not return 415.");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var document = JsonDocument.Parse(payload);
+        AssertEx.Equal(0, document.RootElement.GetProperty("items").GetArrayLength());
     }
 
     [Test]
