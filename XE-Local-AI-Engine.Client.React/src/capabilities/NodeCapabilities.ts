@@ -20,6 +20,8 @@ export interface NodeCapabilityConfig {
 	readonly binding: boolean;
 	readonly dashboard: boolean;
 	readonly nodeSettings: boolean;
+	// When false the Cloud Settings nav entry is hidden and the /cloud-settings route is inaccessible.
+	// Set to false for local-only (LocalTester) builds where no CentralPlatform:BaseUrl is configured.
 	readonly cloudSettings: boolean;
 	readonly modelManagement: boolean;
 	readonly runtimeManager: boolean;
@@ -54,7 +56,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	binding: true,
 	dashboard: true,
 	nodeSettings: true,
-	cloudSettings: true,
+	// false = local-only (LocalTester) profile: no CentralPlatform:BaseUrl configured, Cloud Settings hidden.
+	// Set to true when the node is paired to a central platform instance.
+	cloudSettings: false,
 	modelManagement: true,
 	runtimeManager: true,
 	invocationMonitor: true,

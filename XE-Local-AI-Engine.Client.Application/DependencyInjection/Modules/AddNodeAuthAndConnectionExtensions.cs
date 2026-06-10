@@ -81,25 +81,31 @@ internal static class AddNodeAuthAndConnectionExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var centralPlatformBaseUrl = configuration.GetValue<string>("CentralPlatform:BaseUrl")
-                                     ?? throw new InvalidOperationException("CentralPlatform:BaseUrl is required.");
+        // CentralPlatform:BaseUrl is optional for local-only deployments (LocalTester release profile).
+        // When absent the node runs fully local: no platform HTTP client, no cloud-provider registration,
+        // and the Cloud Settings UI surface is hidden via the cloudSettings capability flag (NodeCapabilities.ts).
+        var centralPlatformBaseUrl = configuration.GetValue<string>("CentralPlatform:BaseUrl");
+        var hasCentralPlatform = !string.IsNullOrWhiteSpace(centralPlatformBaseUrl);
 
-        if (!centralPlatformBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        if (hasCentralPlatform)
         {
-            if (builder.Environment.IsDevelopment())
+            if (!centralPlatformBaseUrl!.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                Console.Error.WriteLine("WARNING: CentralPlatform:BaseUrl is not HTTPS. Tokens may be transmitted in plaintext.");
+                if (builder.Environment.IsDevelopment())
+                {
+                    Console.Error.WriteLine("WARNING: CentralPlatform:BaseUrl is not HTTPS. Tokens may be transmitted in plaintext.");
+                }
+                else
+                {
+                    throw new InvalidOperationException("CentralPlatform:BaseUrl must use HTTPS in non-development environments.");
+                }
             }
-            else
+
+            builder.Services.AddHttpClient("CentralPlatformApi", client =>
             {
-                throw new InvalidOperationException("CentralPlatform:BaseUrl must use HTTPS in non-development environments.");
-            }
+                client.BaseAddress = new Uri(centralPlatformBaseUrl, UriKind.Absolute);
+            }).AddStandardResilienceHandler();
         }
-
-        builder.Services.AddHttpClient("CentralPlatformApi", client =>
-        {
-            client.BaseAddress = new Uri(centralPlatformBaseUrl, UriKind.Absolute);
-        }).AddStandardResilienceHandler();
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
         builder.Services.AddSingleton<INodeOperatorSecretProvider, NodeOperatorSecretProvider>();

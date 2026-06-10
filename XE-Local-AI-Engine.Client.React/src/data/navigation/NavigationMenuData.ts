@@ -17,7 +17,7 @@ import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilitie
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
 // capability is always shown; a link with a capability is shown only when that node capability is on.
-type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit" | "loadedModels" | "preview";
+type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit" | "loadedModels" | "preview" | "cloudSettings";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -72,14 +72,16 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels" },
 		],
 	},
-	// Settings group: node + cloud settings. Neither child is capability-gated, so the group always renders.
+	// Settings group: node settings (always) + cloud settings (gated on cloudSettings capability — hidden in
+	// local-only/LocalTester builds where no CentralPlatform:BaseUrl is configured). When cloudSettings is
+	// off the group collapses to just Node Settings and still renders (group never becomes empty).
 	{
 		id: "settings",
 		icon: IconSettings,
 		translationKey: "navigation.settingsGroup",
 		links: [
 			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings },
-			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings },
+			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings, capability: "cloudSettings" },
 		],
 	},
 	// Automation group: agents / MCP servers / scheduler are each gated on their own capability; tools is

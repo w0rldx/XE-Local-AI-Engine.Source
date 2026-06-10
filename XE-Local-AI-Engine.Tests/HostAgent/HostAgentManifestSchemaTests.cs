@@ -37,9 +37,7 @@ public sealed class HostAgentManifestSchemaTests
     {
         var schema = await LoadSchemaAsync();
         var yaml = await File.ReadAllTextAsync(GetFixturePath(SampleManifestFixturePaths[0]));
-        var latestTagYaml = yaml.Replace("ollama/ollama:0.11.10@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "ollama/ollama:latest@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            StringComparison.Ordinal);
+        var latestTagYaml = ReplaceOllamaImage(yaml, "ollama/ollama:latest@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
         var errors = ValidateYaml(schema, latestTagYaml);
 
@@ -51,13 +49,25 @@ public sealed class HostAgentManifestSchemaTests
     {
         var schema = await LoadSchemaAsync();
         var yaml = await File.ReadAllTextAsync(GetFixturePath(SampleManifestFixturePaths[0]));
-        var missingDigestYaml = yaml.Replace("ollama/ollama:0.11.10@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "ollama/ollama:0.11.10",
-            StringComparison.Ordinal);
+        var missingDigestYaml = ReplaceOllamaImage(yaml, "ollama/ollama:0.30.5");
 
         var errors = ValidateYaml(schema, missingDigestYaml);
 
         AssertHasImagePatternError(errors);
+    }
+
+    /// <summary>
+    ///     Rewrites the ollama container image reference in the sample manifest without depending on the
+    ///     exact version/digest currently pinned there, so digest/version bumps don't break the negative tests.
+    /// </summary>
+    private static string ReplaceOllamaImage(string yaml, string replacementImage)
+    {
+        var mutated = System.Text.RegularExpressions.Regex.Replace(
+            yaml,
+            "ollama/ollama:[^\"@]+@sha256:[0-9a-f]{64}",
+            replacementImage);
+        AssertEx.True(!string.Equals(mutated, yaml, StringComparison.Ordinal), "Expected the sample manifest to contain a pinned ollama image to mutate.");
+        return mutated;
     }
 
     private static async Task<JsonSchema> LoadSchemaAsync()
