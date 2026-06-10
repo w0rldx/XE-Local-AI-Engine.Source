@@ -33,11 +33,14 @@ public static class RunningModelSnapshotMapper
     }
 
     // A running model's expiry is a UTC instant; the default DateTime means the runtime did not report one, so surface
-    // null rather than the .NET epoch. The kind is forced to UTC because Ollama reports the eviction time in UTC.
+    // null rather than the .NET epoch. STJ deserializes RFC3339 timestamps into DateTime with Kind==Utc when the
+    // offset is Z/+00:00, but into Kind==Local on hosts whose local TZ is non-UTC (the offset is applied and the
+    // result is expressed in local time). SpecifyKind(Local, Utc) would stamp the wrong instant on non-UTC hosts.
+    // ToUniversalTime() preserves the instant regardless of Kind: Utc→no-op, Local→converts, Unspecified→treats as Local.
     private static DateTimeOffset? NormalizeExpiresAt(DateTime expiresAt)
     {
         return expiresAt == default
             ? null
-            : new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc));
+            : new DateTimeOffset(expiresAt.ToUniversalTime());
     }
 }

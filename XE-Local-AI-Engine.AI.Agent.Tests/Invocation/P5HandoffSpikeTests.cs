@@ -21,6 +21,14 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Deterministic probe for the MAF 1.8.0 handoff workflow + in-workflow tool approval.
 /// </summary>
+/// <remarks>
+///     Marked <c>[NotInParallel]</c> because the MAF workflow engine uses process-wide static
+///     state and the WatchStreamAsync drain loop is timing-sensitive. Running these tests
+///     concurrently with other suites on the same machine causes intermittent drain timeouts.
+///     Backend test suites must not be invoked in parallel on one machine; run them sequentially
+///     (e.g. <c>dotnet test</c> one project at a time).
+/// </remarks>
+[NotInParallel(nameof(P5HandoffSpikeTests))]
 public sealed class P5HandoffSpikeTests
 {
     private const string TriageInstructions =
@@ -92,7 +100,7 @@ public sealed class P5HandoffSpikeTests
         // WatchStreamAsync only ends on RequestHaltEvent; in non-autonomous mode a handoff run goes IDLE
         // (awaiting the next user turn) after yielding output, so we bound the watch with a timeout and stop
         // once the terminal WorkflowOutputEvent (the full conversation) has been observed.
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await foreach (var evt in run.WatchStreamAsync(timeout.Token))
         {
             Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), 200)}");
@@ -192,7 +200,7 @@ public sealed class P5HandoffSpikeTests
         // ToolApprovalRequestContent) or the watch times out.
         RequestInfoEvent? approvalRequestEvent = null;
         ToolApprovalRequestContent? approvalContentFromAgentEvent = null;
-        using (var pauseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+        using (var pauseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
         {
             await foreach (var evt in run.WatchStreamAsync(pauseTimeout.Token))
             {
@@ -234,7 +242,7 @@ public sealed class P5HandoffSpikeTests
         // additional supersteps that stream AFTER SendResponseAsync; we keep consuming until the workflow
         // yields its terminal WorkflowOutputEvent (or idles out via the timeout) before checking the marker.
         var sawTerminalOutput = false;
-        using (var resumeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+        using (var resumeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
         {
             try
             {
@@ -356,7 +364,7 @@ public sealed class P5HandoffSpikeTests
 
         // --- Step 1: drain until approval RequestInfoEvent appears ---
         RequestInfoEvent? approvalEvent = null;
-        using (var ph1Cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+        using (var ph1Cts = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
         {
             await foreach (var evt in run.WatchStreamAsync(ph1Cts.Token))
             {
