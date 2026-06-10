@@ -104,6 +104,8 @@ Also publish/build the Node Web Server container image and record the immutable 
 
 Windows and Linux installer packaging are release-blocking artifacts:
 
+> **RC1 note (supersedes this section for RC1, 2026-06-10):** Decision D1 (locked 2026-06-10, `Plans/2026-06-10-first-rc-readiness-plan.md §8`) changed the RC1 Windows distribution format to a **self-contained ZIP + PowerShell install script** (no MSI/deb/rpm). MSI and deb/rpm packaging remain the GA target and the requirements below still apply from RC2 onward. The RC1 ZIP prerequisite approach is documented in `Plans/2026-06-10-rc-zip-prereq-decision-note.md`.
+
 - **Windows:** MSI must contain HostAgent.Windows, the Tray, rootfs tarball, scripts, manifests, icons, and normal/log-mode shortcuts. The MSI may run elevated once for install-time Windows-admin work, but it must exit with no process running.
 - **Linux:** deb/rpm must contain HostAgent.Linux, the Tray, systemd user-unit template, desktop launchers, icons, static Docker/rootless-extra tarballs, scripts, and manifests. It must not start user services during `postinst`, enable linger, or create autostart entries.
 
