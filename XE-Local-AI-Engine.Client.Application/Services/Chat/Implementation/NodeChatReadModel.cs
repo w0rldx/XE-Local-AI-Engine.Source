@@ -42,8 +42,14 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     return null;
                 }
 
+                // Title is stored as an encrypted BLOB; read raw bytes and decrypt via the db-context gateway
+                // (mirrors ReadConversationSummariesAsync in NodeChatPersistenceSql).
+                var titleBytes = await conversationReader.IsDBNullAsync(1, token).ConfigureAwait(false)
+                    ? null
+                    : await conversationReader.GetFieldValueAsync<byte[]>(1, token).ConfigureAwait(false);
+
                 var dto = new NodeChatConversationDto(Guid.Parse(conversationReader.GetString(0)),
-                    await conversationReader.IsDBNullAsync(1, token).ConfigureAwait(false) ? null : conversationReader.GetString(1),
+                    DecryptTitle(titleBytes, dbContext, conversationId),
                     await conversationReader.IsDBNullAsync(2, token).ConfigureAwait(false) ? null : conversationReader.GetString(2),
                     conversationReader.GetInt64(3),
                     conversationReader.GetInt64(4),

@@ -445,6 +445,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         var loaded = await service.GetConversationAsync(conversationId).ConfigureAwait(false);
         AssertEx.Equal(NodeChatOriginValues.Remote, AssertEx.NotNull(loaded).Origin);
+        // Title is encrypted at rest; the single-conversation read path must decrypt it back to plaintext.
+        AssertEx.Equal("Remote thread", AssertEx.NotNull(loaded).Title);
     }
 
     [Test]
