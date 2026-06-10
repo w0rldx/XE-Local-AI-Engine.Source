@@ -31,6 +31,14 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 - HF model delete 400 (`encodeURIComponent` slash encoding in model-name-path endpoints).
 - OpenAPI client drift gate (`client.gen.ts` 1-line Biome formatting diff resolved).
 
+### Known issues / RC1-accepted behavior
+- Conversation titles are now encrypted at rest; pre-existing titles (including operator renames) are
+  re-derived from the first user message by a one-time startup backfill. Custom renames from before the
+  migration are not preserved; conversations without a user message keep a `NULL` title.
+- Local-only mode (no `CentralPlatform:BaseUrl`): cloud services remain registered and fail with a generic
+  HTTP error if invoked directly; the UI surface is capability-gated off. Proper fail-fast messaging is an
+  RC2 follow-up.
+
 ## [0.1.0-rc.1] — first release candidate (target: 2026-06-10)
 
 This is the first developer RC. It targets Windows 11 external testers via a self-contained ZIP
