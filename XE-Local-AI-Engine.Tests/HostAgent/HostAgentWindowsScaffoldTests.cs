@@ -28,11 +28,16 @@ public sealed class HostAgentWindowsScaffoldTests
         var packagingDirectory = GetWindowsProjectPath("Packaging", "Windows");
         var scripts = Directory.EnumerateFiles(packagingDirectory, "*.ps1", SearchOption.TopDirectoryOnly);
 
+        // The install script copies the host-agent binary by its full .exe filename; the uninstaller
+        // references process names WITHOUT the .exe extension (Stop-Process -Name accepts bare names).
+        // Assert the .exe reference only on the install script, not on every packaging script.
+        var installScript = await File.ReadAllTextAsync(GetWindowsProjectPath("Packaging", "Windows", "install-host-agent.ps1"));
+        AssertEx.Contains(installScript, "XE-Local-AI-Engine.HostAgent.Windows.exe");
+
         foreach (var scriptPath in scripts)
         {
             var script = await File.ReadAllTextAsync(scriptPath);
 
-            AssertEx.Contains(script, "XE-Local-AI-Engine.HostAgent.Windows.exe");
             AssertEx.False(ContainsExecutableLine(script, "sc.exe"));
             AssertEx.False(ContainsExecutableLine(script, "New-Service"));
             AssertEx.False(ContainsExecutableLine(script, "schtasks"));
@@ -53,7 +58,7 @@ public sealed class HostAgentWindowsScaffoldTests
         AssertEx.Contains(installScript, "XE-Local-AI-Engine.lnk");
         AssertEx.Contains(installScript, "XE-Local-AI-Engine — Log Mode.lnk");
         AssertEx.Contains(installScript, "--log");
-        AssertEx.Contains(uninstallScript, "XE-Local-AI-Engine.Tray.exe");
+        AssertEx.Contains(uninstallScript, "XE-Local-AI-Engine.Tray");
         AssertEx.Contains(uninstallScript, "XE-Local-AI-Engine — Log Mode.lnk");
         AssertEx.False(ContainsExecutableLine(installScript, "schtasks"));
         AssertEx.False(ContainsExecutableLine(installScript, "Register-ScheduledTask"));
