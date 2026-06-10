@@ -5,6 +5,8 @@ XE Local AI Engine is the node-side runtime for running local AI workloads while
 
 The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
+> **RC branch:** `feature/agent-mode-foundation` is the RC1 branch (decision D4, locked 2026-06-10). Merge into `develop` is post-RC. The `develop` branch is 208 commits behind and is not the active development line until after RC1 ships.
+
 ## What ships from this repo
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
