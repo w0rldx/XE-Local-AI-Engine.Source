@@ -53,10 +53,9 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.modelRecommendations,
 			nodeRoutePaths.loadedModels,
 		]);
-		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
-			nodeRoutePaths.nodeSettings,
-			nodeRoutePaths.cloudSettings,
-		]);
+		// cloudSettings capability is false in the default nodeCapabilities (local-only profile),
+		// so the settings group shows only Node Settings; Cloud Settings is filtered out.
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.nodeSettings]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.agents,
 			nodeRoutePaths.skills,
@@ -104,6 +103,25 @@ describe("navigationLinks", () => {
 		const automation = gatedLinks.find((link) => link.id === "automation");
 
 		expect(automation?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.mcp)).toBe(false);
+	});
+
+	it("shows Cloud Settings in the settings group when cloudSettings capability is on", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: true });
+		const settings = gatedLinks.find((link) => link.id === "settings");
+
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.cloudSettings,
+		]);
+	});
+
+	it("hides Cloud Settings and keeps Node Settings when cloudSettings capability is off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: false });
+		const settings = gatedLinks.find((link) => link.id === "settings");
+
+		// Settings group still renders (nodeSettings is ungated); cloud settings child is dropped.
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.nodeSettings]);
+		expect(settings?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.cloudSettings)).toBe(false);
 	});
 
 	it("drops the scheduler child from Automation when scheduler is off", async () => {
