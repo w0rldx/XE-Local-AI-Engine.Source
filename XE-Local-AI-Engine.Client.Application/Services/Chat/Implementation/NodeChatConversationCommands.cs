@@ -29,7 +29,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                                       VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id);
                                       """;
                 AddParameter(command, "$conversation_id", conversationId);
-                AddParameter(command, "$title", request.Title);
+                AddParameter(command, "$title", EncryptTitle(request.Title, dbContext, conversationId));
                 AddParameter(command, "$user_id", request.UserId);
                 AddParameter(command, "$created_at_utc", createdAtUtc);
                 AddParameter(command, "$last_seen_utc", createdAtUtc);
@@ -72,7 +72,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                                       VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin);
                                       """;
                 AddParameter(command, "$conversation_id", request.ConversationId);
-                AddParameter(command, "$title", request.Title);
+                AddParameter(command, "$title", EncryptTitle(request.Title, dbContext, request.ConversationId));
                 AddParameter(command, "$user_id", request.UserId);
                 AddParameter(command, "$created_at_utc", request.CreatedAtUtc);
                 AddParameter(command, "$last_seen_utc", request.CreatedAtUtc);
@@ -203,10 +203,10 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
             {
                 // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared title writes a NULL column, and EF's raw-SQL
                 // parameter builder has no store-type mapping for DBNull, so a typed DbParameter via AddParameter
-                // is required.
+                // is required. The title is encrypted before writing; null stays null.
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = "UPDATE conversations SET title = $title, last_seen_utc = $last_seen_utc WHERE conversation_id = $conversation_id AND purged = 0;";
-                AddParameter(command, "$title", title);
+                AddParameter(command, "$title", EncryptTitle(title, dbContext, request.ConversationId));
                 AddParameter(command, "$last_seen_utc", request.UpdatedAtUtc);
                 AddParameter(command, "$conversation_id", request.ConversationId);
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);

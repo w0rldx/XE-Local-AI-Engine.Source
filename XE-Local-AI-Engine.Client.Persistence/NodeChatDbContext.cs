@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Configurations;
+using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
@@ -57,6 +59,48 @@ public sealed class NodeChatDbContext : DbContext
     internal DbSet<ModelFitBenchmark> ModelFitBenchmarks => Set<ModelFitBenchmark>();
 
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
+
+    /// <summary>
+    ///     Encrypts a conversation title string for raw-SQL persistence. Returns null when the title is null so the
+    ///     database column writes NULL. AAD mirrors the interceptor: conversationId appears as both conversation and
+    ///     record id, column name is "title".
+    /// </summary>
+    public byte[]? EncryptConversationTitle(string? title, Guid conversationId)
+    {
+        if (title is null)
+        {
+            return null;
+        }
+
+        var plaintext = Encoding.UTF8.GetBytes(title);
+        return NodePayloadProtector.Encrypt(plaintext, NodeEncryptionKey.Span, conversationId, conversationId, "title");
+    }
+
+    /// <summary>
+    ///     Decrypts a raw title blob back to a string. Returns null when the blob is null. AAD mirrors the interceptor:
+    ///     conversationId appears as both conversation and record id, column name is "title".
+    /// </summary>
+    public string? DecryptConversationTitle(byte[]? encrypted, Guid conversationId)
+    {
+        if (encrypted is null)
+        {
+            return null;
+        }
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, conversationId, "title");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
+    ///     Decrypts a raw message content blob back to a string. Used by the title backfill service to re-derive titles
+    ///     from the first user message after the EncryptConversationTitle migration. AAD = conversationId + messageId +
+    ///     "content", matching the interceptor.
+    /// </summary>
+    public string DecryptMessageContent(byte[] encrypted, Guid conversationId, Guid messageId)
+    {
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, messageId, "content");
+        return Encoding.UTF8.GetString(plaintext);
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -47,7 +47,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             writeContext.Conversations.Add(new NodeConversation
             {
                 ConversationId = conversationId,
-                Title = "Encrypted chat",
+                Title = Encoding.UTF8.GetBytes("Encrypted chat"),
                 UserId = "worker-node",
                 CreatedAtUtc = 1,
                 LastSeenUtc = 2,
@@ -132,6 +132,102 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(messageContentText)), "The SQLite file should not contain plaintext message content.");
         AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(metadataText)), "The SQLite file should not contain plaintext metadata.");
+    }
+
+    [Test]
+    public async Task ConversationTitle_WhenSavedViaEfInterceptor_IsNotPlaintextAtRest()
+    {
+        // Arrange — write a conversation with a known title via EF (the interceptor path).
+        var databasePath = GetDatabasePath("title-ef.sqlite");
+        var conversationId = Guid.NewGuid();
+        const string titleText = "ef-path-title-sentinel";
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            context.Conversations.Add(new NodeConversation
+            {
+                ConversationId = conversationId,
+                Title = Encoding.UTF8.GetBytes(titleText),
+                UserId = "worker-node",
+                CreatedAtUtc = 1,
+                LastSeenUtc = 2,
+                Purged = false
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        // Assert — raw file bytes must not contain the plaintext title sentinel.
+        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
+            "The SQLite file should not contain the plaintext conversation title (EF interceptor path).");
+
+        // Assert — reading back via the materialization interceptor must decrypt correctly.
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var saved = await readContext.Conversations.SingleAsync();
+        AssertEx.NotNull(saved.Title, "Title should not be null after round-trip.");
+        AssertEx.True(Encoding.UTF8.GetString(saved.Title!) == titleText,
+            "Title should round-trip correctly through EF encrypt/decrypt.");
+    }
+
+    [Test]
+    public async Task ConversationTitle_WhenSavedViaRawSql_IsNotPlaintextAtRest()
+    {
+        // Arrange — write a conversation title via the raw-SQL path (NodeChatDbContext.EncryptConversationTitle),
+        // then assert the file bytes do not contain the plaintext sentinel.
+        var databasePath = GetDatabasePath("title-rawsql.sqlite");
+        var conversationId = Guid.NewGuid();
+        const string titleText = "raw-sql-path-title-sentinel";
+
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+
+            // Insert the conversation row first (no title).
+            await context.Database.ExecuteSqlRawAsync(
+                "INSERT INTO conversations (conversation_id, user_id, created_at_utc, last_seen_utc, purged, origin) VALUES ({0}, {1}, {2}, {3}, 0, {4});",
+                [conversationId, "worker-node", 1L, 2L, "local"]);
+
+            // Encrypt the title exactly as the raw-SQL write path does.
+            var encryptedTitle = context.EncryptConversationTitle(titleText, conversationId);
+
+            await context.Database.ExecuteSqlRawAsync(
+                "UPDATE conversations SET title = {0} WHERE conversation_id = {1};",
+                [(encryptedTitle is null ? (object)DBNull.Value : encryptedTitle), conversationId]);
+        }
+
+        // Assert — raw file bytes must not contain the plaintext title sentinel.
+        var fileBytes = await File.ReadAllBytesAsync(databasePath);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(titleText)),
+            "The SQLite file should not contain the plaintext conversation title (raw-SQL path).");
+
+        // Assert — reading back via DecryptConversationTitle must decrypt correctly.
+        // Use raw ADO.NET to read the BLOB column — EF's SqlQueryRaw cannot materialize scalar byte[] values.
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        await readContext.Database.OpenConnectionAsync();
+        byte[]? raw;
+        await using (var cmd = readContext.Database.GetDbConnection().CreateCommand())
+        {
+            cmd.CommandText = "SELECT title FROM conversations WHERE conversation_id = $id;";
+            var p = cmd.CreateParameter();
+            p.ParameterName = "$id";
+            p.Value = conversationId;
+            cmd.Parameters.Add(p);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            await reader.ReadAsync();
+            raw = await reader.IsDBNullAsync(0) ? null : (byte[])reader.GetValue(0);
+        }
+        var decrypted = readContext.DecryptConversationTitle(raw, conversationId);
+        AssertEx.True(decrypted == titleText,
+            "Title should decrypt correctly via DecryptConversationTitle (raw-SQL path).");
     }
 
     [Test]

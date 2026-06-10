@@ -4,7 +4,12 @@ internal sealed record class NodeConversation
 {
     public Guid ConversationId { get; set; }
 
-    public string? Title { get; set; }
+    /// <summary>
+    ///     Conversation title as UTF-8 bytes (verbatim first 120 chars of first user message). Plaintext while tracked
+    ///     in memory; encrypted at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
+    ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>title</c>. Optional.
+    /// </summary>
+    public byte[]? Title { get; set; }
 
     public string? UserId { get; set; }
 

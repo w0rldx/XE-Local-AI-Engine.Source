@@ -191,7 +191,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
         context.Conversations.Add(new NodeConversation
         {
             ConversationId = conversationId,
-            Title = title,
+            Title = System.Text.Encoding.UTF8.GetBytes(title),
             UserId = "node",
             CreatedAtUtc = 10,
             LastSeenUtc = 10,

@@ -100,8 +100,11 @@ internal static class NodeChatPersistenceSql
             return null;
         }
 
+        var titleBytes = await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false)
+            ? null
+            : await reader.GetFieldValueAsync<byte[]>(1, cancellationToken).ConfigureAwait(false);
         return new NodeChatConversationDto(Guid.Parse(reader.GetString(0)),
-            await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
+            DecryptTitle(titleBytes, dbContext, conversationId),
             await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(2),
             reader.GetInt64(3),
             reader.GetInt64(4),
@@ -175,7 +178,7 @@ internal static class NodeChatPersistenceSql
         return messages;
     }
 
-    internal static async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ReadConversationSummariesAsync(DbCommand command, int? limit, CancellationToken cancellationToken)
+    internal static async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ReadConversationSummariesAsync(DbCommand command, NodeChatDbContext dbContext, int? limit, CancellationToken cancellationToken)
     {
         AddParameter(command, "$limit", limit is > 0 ? limit.Value : int.MaxValue);
 
@@ -184,11 +187,15 @@ internal static class NodeChatPersistenceSql
         var conversations = new List<NodeChatConversationSummaryDto>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            var convId = Guid.Parse(reader.GetString(0));
+            var titleBytes = await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false)
+                ? null
+                : await reader.GetFieldValueAsync<byte[]>(1, cancellationToken).ConfigureAwait(false);
             var content = await reader.IsDBNullAsync(5, cancellationToken).ConfigureAwait(false)
                 ? null
                 : Decode(await reader.GetFieldValueAsync<byte[]>(5, cancellationToken).ConfigureAwait(false));
-            conversations.Add(new NodeChatConversationSummaryDto(Guid.Parse(reader.GetString(0)),
-                await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
+            conversations.Add(new NodeChatConversationSummaryDto(convId,
+                DecryptTitle(titleBytes, dbContext, convId),
                 reader.GetInt64(2),
                 reader.GetInt64(3),
                 Preview(content),
@@ -224,6 +231,20 @@ internal static class NodeChatPersistenceSql
                || string.Equals(status, NodeChatMessageStatusValues.Failed, StringComparison.Ordinal)
                || string.Equals(status, NodeChatMessageStatusValues.Interrupted, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    ///     Encrypts a conversation title string for raw-SQL persistence via the db context. Returns null when the title
+    ///     is null so the database column writes NULL.
+    /// </summary>
+    internal static byte[]? EncryptTitle(string? title, NodeChatDbContext dbContext, Guid conversationId)
+        => dbContext.EncryptConversationTitle(title, conversationId);
+
+    /// <summary>
+    ///     Decrypts a raw title blob read from the database back to a string via the db context. Returns null when the
+    ///     blob is null.
+    /// </summary>
+    internal static string? DecryptTitle(byte[]? encrypted, NodeChatDbContext dbContext, Guid conversationId)
+        => dbContext.DecryptConversationTitle(encrypted, conversationId);
 
     private static object DbValue(object? value)
     {

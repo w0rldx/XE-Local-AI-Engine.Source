@@ -81,9 +81,12 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            rows.Add(new ThumbsUpRow(Guid.Parse(reader.GetString(0)),
-                Guid.Parse(reader.GetString(1)),
-                await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(2)));
+            var conversationId = Guid.Parse(reader.GetString(1));
+            var titleBytes = await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false)
+                ? null
+                : (byte[])reader.GetValue(2);
+            var titleText = _dbContext.DecryptConversationTitle(titleBytes, conversationId);
+            rows.Add(new ThumbsUpRow(Guid.Parse(reader.GetString(0)), conversationId, titleText));
         }
 
         return rows;
