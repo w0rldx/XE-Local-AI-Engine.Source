@@ -29,11 +29,22 @@ jobs:
       - name: Build solution
         run: dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
 
+      # Backend test suites run SEQUENTIALLY — concurrent runs cause timeout failures on shared runners.
+      # TZ=Europe/Berlin exposes non-UTC time-zone bugs (e.g. CapabilityReporterTests :176).
       - name: Run client persistence tests (fences included)
+        env:
+          TZ: Europe/Berlin
         run: dotnet test --project XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj --configuration Release --no-build
 
       - name: Run worker node tests
+        env:
+          TZ: Europe/Berlin
         run: dotnet test --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release --no-build
+
+      - name: Run AI agent tests
+        env:
+          TZ: Europe/Berlin
+        run: dotnet test --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj --configuration Release --no-build
 
   client-react:
     runs-on: ubuntu-latest
@@ -68,3 +79,9 @@ jobs:
 
       - name: Test
         run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod
