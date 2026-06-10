@@ -199,17 +199,30 @@ If you have already built the image under tag '$ImageTag', pass -SkipImageBuild.
 "@
     }
 
+    # The docker build CONTEXT must be the PARENT C0re repo root, NOT $RepoRoot (the app repo
+    # at Apps/XE-Local-AI-Engine).  XE-Local-AI-Engine.Client references the out-of-app project
+    # ..\..\..\C0re.AI.Shared.Contracts, and MSBuild walks up to the parent Directory.Build.props /
+    # Directory.Packages.props (central package management).  Only the parent root contains both the
+    # app tree and the shared contracts + parent props, so the Dockerfile COPYs resolve there.
+    # Context pruning is handled by docker/Dockerfile.xe-node.dockerignore (BuildKit auto-loads it).
+    $ContextRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot '../..'))
+    Write-Evidence 'build context' $ContextRoot
+
     # Build with --provenance=false --sbom=false so BuildKit does not attach OCI attestation
     # blobs that can cause the config Id to diverge between the Windows build daemon and the
     # in-distro rootless daemon (§14 W1 spike gate, locked decision).
-    Write-Evidence 'build flags' '--provenance=false --sbom=false --platform linux/amd64'
+    # DOCKER_BUILDKIT=1 is required: Dockerfile.xe-node.dockerignore uses an include-only
+    # strategy ("*" then "!<path>") that only works with BuildKit.  The classic builder
+    # silently sends an empty context instead of honouring negation of a wildcard-all rule.
+    $env:DOCKER_BUILDKIT = '1'
+    Write-Evidence 'build flags' '--provenance=false --sbom=false --platform linux/amd64 (BuildKit=1)'
     docker build `
         --provenance=false `
         --sbom=false `
         --platform linux/amd64 `
         --tag $ImageTag `
         --file $Dockerfile `
-        $RepoRoot
+        $ContextRoot
     if ($LASTEXITCODE -ne 0) { throw "docker build failed (exit $LASTEXITCODE)" }
 } else {
     Write-Step "Skipping image build (SkipImageBuild set) — using existing tag: $ImageTag"
@@ -356,6 +369,16 @@ $ManifestContent  = $ManifestContent -replace `
 $ManifestDest = Join-Path $ManifestDir 'managed.yaml'
 [IO.File]::WriteAllText($ManifestDest, $ManifestContent, [Text.Encoding]::UTF8)
 Write-Evidence 'ManifestImageRef' $ManifestImageRef
+
+# Guard: the manifest written to the bundle MUST carry the same config Id that
+# docker inspect just returned for the built image tag.  A mismatch means the
+# substitution pattern failed to match (e.g. tag format changed) and the shipped
+# manifest would brick install via ManifestReconciler.cs:99.
+$WrittenManifest = Get-Content $ManifestDest -Raw -Encoding UTF8
+if (-not $WrittenManifest.Contains($AppImageConfigId)) {
+    throw "Manifest Id assertion failed: '$AppImageConfigId' not found in $ManifestDest.  Check the substitution regex."
+}
+Write-Evidence 'manifest Id assertion' 'PASS'
 
 # ── Vendored PowerShell scripts ───────────────────────────────────────────────
 
