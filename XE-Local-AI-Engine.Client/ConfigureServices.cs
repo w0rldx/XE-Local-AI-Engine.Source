@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
@@ -210,6 +211,9 @@ public static class ConfigureServices
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
         builder.Services.AddHostedService<DefaultAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
+        // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
+        // (migrations cannot access the node key; this service runs once per startup and is idempotent).
+        builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);

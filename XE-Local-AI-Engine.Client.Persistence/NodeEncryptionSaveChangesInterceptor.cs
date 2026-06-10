@@ -65,6 +65,14 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
 
         var trackedProperties = new List<TrackedEncryptedProperty>();
 
+        // Conversation titles are conversation-scoped: AAD binds the conversation's own id as both the
+        // conversation id and the record id, plus the column name. Title is optional (null until the first
+        // user message is received).
+        foreach (var entry in nodeContext.ChangeTracker.Entries<NodeConversation>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Title), entry.Entity.ConversationId, entry.Entity.ConversationId, "title", trackedProperties);
+        }
+
         foreach (var entry in nodeContext.ChangeTracker.Entries<NodeMessage>())
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.ConversationId, entry.Entity.MessageId, "content", trackedProperties);

@@ -18,6 +18,9 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
 
         switch (entity)
         {
+            case NodeConversation conversation:
+                conversation.Title = DecryptIfPresent(conversation.Title, context.NodeEncryptionKey.Span, conversation.ConversationId, conversation.ConversationId, "title");
+                break;
             case NodeMessage message:
                 message.Content = NodePayloadProtector.Decrypt(message.Content, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "content");
                 message.MetadataJson = DecryptIfPresent(message.MetadataJson, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "metadata_json");

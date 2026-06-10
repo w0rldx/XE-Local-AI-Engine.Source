@@ -65,7 +65,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                                                   VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id);
                                                   """;
                 AddParameter(conversationCommand, "$conversation_id", branchedConversationId);
-                AddParameter(conversationCommand, "$title", source.Title);
+                AddParameter(conversationCommand, "$title", EncryptTitle(source.Title, dbContext, branchedConversationId));
                 AddParameter(conversationCommand, "$user_id", source.UserId);
                 AddParameter(conversationCommand, "$created_at_utc", request.CreatedAtUtc);
                 AddParameter(conversationCommand, "$last_seen_utc", request.CreatedAtUtc);

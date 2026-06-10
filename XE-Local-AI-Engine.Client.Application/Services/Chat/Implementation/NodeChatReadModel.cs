@@ -79,7 +79,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
-                return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
+                return await ReadConversationSummariesAsync(command, dbContext, request.Limit, token).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -102,7 +102,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                                       ORDER BY c.is_pinned DESC, c.last_seen_utc DESC
                                       LIMIT $limit;
                                       """;
-                return await ReadConversationSummariesAsync(command, request.Limit, token).ConfigureAwait(false);
+                return await ReadConversationSummariesAsync(command, dbContext, request.Limit, token).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
     }
