@@ -24,12 +24,19 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
 
     private const string UtilityLabelValue = "1";
 
-    private readonly DockerClient _client;
+    private readonly IDockerClient _client;
 
     public DockerRuntimeClient(IOptions<HostAgentDockerOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
         _client = new DockerClientBuilder().WithEndpoint(new Uri(options.Value.Endpoint)).Build();
+    }
+
+    /// <summary>Test seam: injects a pre-built <see cref="IDockerClient" /> directly (e.g. a substitute).</summary>
+    internal DockerRuntimeClient(IDockerClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        _client = client;
     }
 
     public void Dispose()
@@ -108,7 +115,22 @@ public sealed class DockerRuntimeClient : IDockerRuntimeClient, IDisposable
         var repoDigest = response.RepoDigests?.FirstOrDefault(digest =>
             digest.StartsWith($"{image.Repository}@sha256:", StringComparison.Ordinal));
 
-        return repoDigest is null ? null : repoDigest[(repoDigest.LastIndexOf(':') + 1)..];
+        if (repoDigest is not null)
+        {
+            // Pulled image: return the registry RepoDigest hex (repo@sha256:<hex> → strip up to last ':').
+            return repoDigest[(repoDigest.LastIndexOf(':') + 1)..];
+        }
+
+        // Locally loaded image (docker load of a docker save tar): RepoDigests is empty because no registry
+        // push/pull has occurred.  Fall back to the image config Id, which is stable across save/load and is
+        // the identity scheme used for bundled managed images (§7.6).  The config Id has the same
+        // "sha256:<hex>" shape as a RepoDigest entry, so the same LastIndexOf slice applies.
+        if (response.ID is not null)
+        {
+            return response.ID[(response.ID.LastIndexOf(':') + 1)..];
+        }
+
+        return null;
     }
 
     public async Task<IReadOnlyList<DockerContainerStatus>> ListContainersAsync(CancellationToken cancellationToken)
