@@ -33,8 +33,30 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppBinaryManager>(static sp =>
             new LlamaCppBinaryManager(sp.GetRequiredService<HttpClient>()));
 
-        // SEAM: ILlamaServerProcessSupervisor (T2) and the llamacpp ILocalModelProvider (T3) register here once
-        // implemented; T4 binds LlamaServerSupervisorOptions from node config and adds them to the provider resolver.
+        // Options default here so the supervisor is resolvable today; T4 overrides them from node config.
+        services.TryAddSingleton(new LlamaServerSupervisorOptions());
+        services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
+
+        // Process-supervision seams (T2): the OS-aware launcher (tree-kill) + the /health readiness probe.
+        services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
+        services.TryAddSingleton<ILlamaServerHealthProbe>(static sp =>
+            new LlamaServerHealthProbe(sp.GetRequiredService<HttpClient>()));
+
+        // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
+        // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
+        services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(
+            sp.GetRequiredService<ILlamaCppBinaryManager>(),
+            sp.GetRequiredService<IGpuVariantSelector>(),
+            sp.GetRequiredService<IGgufModelStore>(),
+            sp.GetRequiredService<ILlamaServerProcessLauncher>(),
+            sp.GetRequiredService<ILlamaServerHealthProbe>(),
+            sp.GetRequiredService<LlamaServerSupervisorOptions>(),
+            sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
+            sp.GetService<TimeProvider>()));
+        services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
+            sp.GetRequiredService<LlamaServerProcessSupervisor>());
+
+        // SEAM: the llamacpp ILocalModelProvider (T3) registers here once implemented; T4 adds it to the resolver.
         return services;
     }
 }
