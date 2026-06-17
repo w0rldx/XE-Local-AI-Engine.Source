@@ -241,10 +241,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
         catch
         {
-            // Launch/readiness failed: tree-kill the half-started child and free its port before bubbling up.
+            // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
+            // admission gate, since the reserved-port set backs the cap count) before bubbling up.
             handle?.TreeKill();
             handle?.Dispose();
-            ReleasePort(port);
+            await ReleaseReservedPortAsync(port).ConfigureAwait(false);
             throw;
         }
     }
@@ -253,6 +254,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     Reserves a slot under the loaded-cap (evicting an idle LRU process to make room when possible) and allocates
     ///     a free localhost port. The admission gate serializes the cap decision so it can never be raced past.
     /// </summary>
+    /// <remarks>
+    ///     The cap is measured by the <em>reserved-port</em> count, not the registered-process count. A port is
+    ///     allocated here (under the gate) and held until the process registers, fails, or is evicted — so the count
+    ///     already includes in-flight spawns. Counting registered processes instead would let two concurrent distinct
+    ///     <c>(model, role)</c> spawns (which take distinct ensure-gates) both pass the check at count <c>N</c> before
+    ///     either registers, overrunning the cap.
+    /// </remarks>
     private async Task<int> AdmitAndAllocatePortAsync(CancellationToken ct)
     {
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
@@ -261,7 +269,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses();
 
-            if (_processes.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed())
+            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed())
             {
                 throw CapReached();
             }
@@ -424,6 +432,23 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     private void ReleasePort(int port) => _allocatedPorts.Remove(port);
+
+    /// <summary>
+    ///     Releases a reserved port for a spawn that never registered (launch/readiness failure), taking the admission
+    ///     gate so the reserved-port set (which backs the cap count) is mutated under the same lock as allocation.
+    /// </summary>
+    private async Task ReleaseReservedPortAsync(int port)
+    {
+        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            ReleasePort(port);
+        }
+        finally
+        {
+            _admissionGate.Release();
+        }
+    }
 
     private static bool IsPortFree(int port)
     {

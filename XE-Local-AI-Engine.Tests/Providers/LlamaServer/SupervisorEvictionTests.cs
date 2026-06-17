@@ -33,6 +33,56 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
+    public async Task EnsureRunning_ConcurrentDistinctModels_NeverExceedCap()
+    {
+        // Regression for the cap-overrun race: distinct (model, role) take distinct ensure-gates, so without a
+        // reservation under the admission gate two concurrent spawns could both pass the cap check before either
+        // registers. The readiness probe parks every spawn in-flight so all admissions race simultaneously.
+        const int cap = 3;
+        const int distinctModels = 8;
+        var launcher = new FakeProcessLauncher();
+        var probe = new GatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(
+            launcher: launcher,
+            healthProbe: probe,
+            options: CapOf(cap, ttl: TimeSpan.FromHours(1)));
+
+        var calls = Enumerable.Range(0, distinctModels)
+            .Select(i => Task.Run(async () =>
+            {
+                try
+                {
+                    await supervisor.EnsureRunningAsync($"model-{i}", ModelRole.Chat, CancellationToken.None);
+                    return true; // admitted
+                }
+                catch (LlamaRuntimeException)
+                {
+                    return false; // cap-rejected at admit
+                }
+            }))
+            .ToArray();
+
+        // Settle: exactly `cap` spawns park in readiness and the remaining (distinctModels - cap) are cap-rejected.
+        await AssertEx.EventuallyAsync(
+            () => probe.Waiting == cap && RejectedCount(calls) == distinctModels - cap,
+            TimeSpan.FromSeconds(5),
+            "Admissions did not settle at the cap.");
+
+        AssertEx.Equal(cap, probe.Waiting); // never more than `cap` concurrently admitted.
+        AssertEx.True(launcher.LaunchCount <= cap, $"Launched {launcher.LaunchCount} processes, cap is {cap}.");
+
+        probe.Release();
+        var results = await Task.WhenAll(calls);
+
+        AssertEx.Equal(cap, results.Count(admitted => admitted));
+        AssertEx.Equal(distinctModels - cap, results.Count(admitted => !admitted));
+        AssertEx.Equal(cap, launcher.LaunchCount); // the cap was never exceeded by the race.
+    }
+
+    private static int RejectedCount(IEnumerable<Task<bool>> calls) =>
+        calls.Count(t => t.IsCompletedSuccessfully && !t.Result);
+
+    [Test]
     public async Task EnsureRunning_CapFull_ButLruIsIdlePastTtl_EvictsLru_AndAdmitsNewModel()
     {
         var launcher = new FakeProcessLauncher();

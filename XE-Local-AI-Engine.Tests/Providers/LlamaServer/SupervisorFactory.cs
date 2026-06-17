@@ -7,7 +7,7 @@ internal static class SupervisorFactory
 {
     public static LlamaServerProcessSupervisor Create(
         FakeProcessLauncher? launcher = null,
-        FakeHealthProbe? healthProbe = null,
+        ILlamaServerHealthProbe? healthProbe = null,
         FakeModelStore? modelStore = null,
         LlamaServerSupervisorOptions? options = null,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,

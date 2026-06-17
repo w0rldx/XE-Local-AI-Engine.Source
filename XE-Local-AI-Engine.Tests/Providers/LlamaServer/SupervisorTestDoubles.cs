@@ -74,6 +74,38 @@ internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true)
         Task.FromResult(Responsive);
 }
 
+/// <summary>
+///     Health probe whose readiness wait blocks on a gate the test releases, so multiple distinct-model spawns can be
+///     held in-flight simultaneously to exercise the concurrent-cap race.
+/// </summary>
+internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
+{
+    private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _waiting;
+
+    /// <summary>Number of spawns currently parked in the readiness wait.</summary>
+    public int Waiting => Volatile.Read(ref _waiting);
+
+    /// <summary>Releases every parked (and future) readiness wait.</summary>
+    public void Release() => _release.TrySetResult();
+
+    public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _waiting);
+        try
+        {
+            await _release.Task.WaitAsync(ct).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _waiting);
+        }
+    }
+
+    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) => Task.FromResult(true);
+}
+
 /// <summary>Binary manager returning a fixed fake server path for whatever variant is requested; never downloads.</summary>
 internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
 {
