@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -23,7 +24,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     private readonly ConcurrentDictionary<Guid, PreviewWorkflowRunHandle> _runs = new();
     private readonly ConcurrentDictionary<Guid, Task> _drainTasks = new();
 
-    private readonly ILocalModelProvider _localModelProvider;
+    private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IPreviewWorkflowRunner _runner;
     private readonly IPreviewWorkflowEventPublisher _eventPublisher;
     private readonly PreviewWorkflowExecutionOptions _options;
@@ -32,7 +33,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     private readonly ILogger<PreviewWorkflowExecutionService> _logger;
     private readonly CancellationTokenSource _shutdownCts = new();
 
-    public PreviewWorkflowExecutionService(ILocalModelProvider localModelProvider,
+    public PreviewWorkflowExecutionService(ILocalModelProviderResolver providerResolver,
         IPreviewWorkflowRunner runner,
         IPreviewWorkflowEventPublisher eventPublisher,
         IOptions<PreviewWorkflowExecutionOptions> options,
@@ -40,7 +41,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         ILoggerFactory loggerFactory,
         IHostApplicationLifetime? applicationLifetime = null)
     {
-        _localModelProvider = localModelProvider ?? throw new ArgumentNullException(nameof(localModelProvider));
+        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
@@ -81,13 +82,19 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
         var runId = Guid.NewGuid();
 
-        // Resolve a NODE-LOCAL chat client per DISTINCT model used by the graph's agent nodes (invariant #1 — only the
-        // local provider; there is no path here to a shared/cloud client or an Azure Foundry factory). Each agent runs
-        // on its OWN selected model: agents sharing a model share one client (OllamaApiClient is cheap, but building N
-        // identical clients for the same model is pointless), while agents on different models each get their own.
+        // Resolve the PROVIDER for each DISTINCT agent model up front (the §6.1 map read is async; client/process
+        // creation stays lazy). This also enforces the loaded-cap reject-at-start (decision #18, plan §7.6): if the
+        // graph's distinct-model count exceeds the supervisor cap, throw NOW — before spawning any process — rather
+        // than evict-reload thrashing mid-run.
+        var providersByModel = await ResolveProvidersPerDistinctModelAsync(graph, cancellationToken).ConfigureAwait(false);
+
+        // One lazily-created NODE-LOCAL chat client per distinct model (invariant #1 — only the local provider; no path
+        // here to a shared/cloud client or an Azure Foundry factory). The client (and, for llama-server, its backing
+        // process) is created on FIRST use inside the drain loop, not up front: a deferred llama-server client spawns
+        // its process on the first model call; an Ollama client is cheap. Agents sharing a model share one client.
         // CreateChatClient does NO health check — a model-down/not-installed failure surfaces on the first model call
         // inside the drain loop and becomes preview.node.failed + preview.run.failed there.
-        var clientsByModel = CreateClientsPerDistinctModel(graph);
+        var clientsByModel = new ConcurrentDictionary<string, IChatClient>(StringComparer.Ordinal);
 
         PreviewWorkflowRunHandle handle;
         try
@@ -95,7 +102,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             var definition = PreviewWorkflowGraphMapper.ToDefinition(graph);
             var session = await _runner.StartAsync(definition, ResolveClient, cancellationToken).ConfigureAwait(false);
             handle = new PreviewWorkflowRunHandle(runId,
-                clientsByModel.Values,
+                new LiveClientCollection(clientsByModel),
                 session,
                 connectionId,
                 _timeProvider,
@@ -103,7 +110,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         }
         catch
         {
-            // The session never came up — dispose every client we created so none leak.
+            // The session never came up — dispose every client we lazily created so none leak.
             foreach (var client in clientsByModel.Values)
             {
                 client.Dispose();
@@ -114,10 +121,23 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
         IChatClient ResolveClient(string modelId)
         {
-            return clientsByModel.TryGetValue(modelId, out var client)
-                ? client
-                : throw new InvalidOperationException(
-                    $"No node-local chat client was created for model '{modelId}'.");
+            // Lazy per-model resolution: build the client (and, for llama-server, ensure-run its process) on first use,
+            // then cache it for the run so agents sharing a model share one client. The provider was resolved up front
+            // within the cap; an unexpected model id (not in the validated graph) is a defensive error.
+            return clientsByModel.GetOrAdd(modelId, id =>
+            {
+                if (!providersByModel.TryGetValue(id, out var provider))
+                {
+                    throw new InvalidOperationException(
+                        $"No node-local provider was resolved for model '{id}'.");
+                }
+
+                return provider.CreateChatClient(new LocalModelSelection
+                {
+                    ModelName = id,
+                    ProviderName = provider.ProviderName
+                });
+            });
         }
 
         if (!_runs.TryAdd(runId, handle))
@@ -441,12 +461,18 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     }
 
     /// <summary>
-    ///     Creates one node-local <see cref="IChatClient" /> per DISTINCT agent model in the graph, keyed by model id.
-    ///     Validation guarantees at least one Agent node; an Agent node without a model is rejected upstream.
+    ///     Resolves the node-local PROVIDER for each DISTINCT agent model in the graph (keyed by model id), and enforces
+    ///     the loaded-process cap reject-at-start (decision #18, plan §7.6): if the distinct-model count exceeds the
+    ///     supervisor cap, throws BEFORE any client/process is created. Provider resolution reads the §6.1 map (async)
+    ///     but starts no process — that is deferred to first use. Validation guarantees at least one Agent node; an
+    ///     Agent node without a model is rejected upstream.
     /// </summary>
-    private Dictionary<string, IChatClient> CreateClientsPerDistinctModel(PreviewWorkflowGraph graph)
+    private async Task<IReadOnlyDictionary<string, ILocalModelProvider>> ResolveProvidersPerDistinctModelAsync(
+        PreviewWorkflowGraph graph,
+        CancellationToken cancellationToken)
     {
-        var clientsByModel = new Dictionary<string, IChatClient>(StringComparer.Ordinal);
+        var distinctModels = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var node in graph.Nodes)
         {
@@ -459,25 +485,48 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
                           ?? throw new InvalidOperationException(
                               $"Agent node '{node.Id}' has no node-local model to resolve a chat client from.");
 
-            if (clientsByModel.ContainsKey(modelId))
+            if (seen.Add(modelId))
             {
-                continue;
+                distinctModels.Add(modelId);
             }
-
-            var selection = new LocalModelSelection
-            {
-                ModelName = modelId,
-                ProviderName = _localModelProvider.ProviderName
-            };
-            clientsByModel[modelId] = _localModelProvider.CreateChatClient(selection);
         }
 
-        if (clientsByModel.Count == 0)
+        if (distinctModels.Count == 0)
         {
             throw new InvalidOperationException("The workflow has no Agent node to resolve a node-local model from.");
         }
 
-        return clientsByModel;
+        // Reject at start (decision #18): refuse a graph that would need more concurrent (model) processes than the
+        // shared loaded-cap allows, rather than evict-reload thrashing mid-run or doing partial work. Each distinct
+        // model is at least one process; embeddings are not used here so distinct-model count is the relevant bound.
+        var cap = _providerResolver.MaxLoadedProcesses;
+        if (distinctModels.Count > cap)
+        {
+            throw new PreviewWorkflowModelCapExceededException(distinctModels.Count, cap);
+        }
+
+        var providersByModel = new Dictionary<string, ILocalModelProvider>(StringComparer.Ordinal);
+        foreach (var modelId in distinctModels)
+        {
+            providersByModel[modelId] = await _providerResolver
+                                              .ResolveProviderForModelAsync(modelId, cancellationToken)
+                                              .ConfigureAwait(false);
+        }
+
+        return providersByModel;
+    }
+
+    /// <summary>
+    ///     A live read-only view over the run's lazily-populated <see cref="IChatClient" /> cache, so the run handle
+    ///     disposes exactly the clients created during the run (the cache grows as agents first touch their models).
+    /// </summary>
+    private sealed class LiveClientCollection(ConcurrentDictionary<string, IChatClient> clients) : IReadOnlyCollection<IChatClient>
+    {
+        public int Count => clients.Count;
+
+        public IEnumerator<IChatClient> GetEnumerator() => clients.Values.GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private Task PublishRunAsync(string eventType, Guid runId, CancellationToken cancellationToken)

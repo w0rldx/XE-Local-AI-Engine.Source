@@ -28,9 +28,13 @@ public sealed class PreviewWorkflowExecutionServiceTests
     private static PreviewWorkflowExecutionService CreateService(FakePreviewWorkflowRunner runner,
         RecordingPreviewEventPublisher publisher,
         FakeLocalModelProvider provider,
-        PreviewWorkflowExecutionOptions? options = null)
+        PreviewWorkflowExecutionOptions? options = null,
+        int maxLoadedProcesses = 8)
     {
-        return new PreviewWorkflowExecutionService(provider,
+        // Wrap the single fake provider in the real resolver (default = the fake provider, unmapped models route to it),
+        // so the service exercises the production lazy-per-model + cap-reject path.
+        var resolver = SingleProviderResolverFactory.Create(provider, maxLoadedProcesses);
+        return new PreviewWorkflowExecutionService(resolver,
             runner,
             publisher,
             Options.Create(options ?? DefaultOptions()),
@@ -278,6 +282,69 @@ public sealed class PreviewWorkflowExecutionServiceTests
             async () => await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false))
                           .ConfigureAwait(false);
     }
+
+    [Test]
+    public async Task PreviewWorkflow_TwoAgentsTwoModels_ReachTwoProcesses_RespectsCap()
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        // A run that pauses so the handle stays in-flight and the resolver closure is observable.
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "x", "req")]));
+
+        await using var service = CreateService(runner, publisher, provider, maxLoadedProcesses: 8);
+        _ = await service.StartAsync(TwoAgentTwoModelGraph(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        var resolve = AssertEx.NotNull(runner.LastResolver, "The runner must have received the per-model resolver closure.");
+
+        // Resolving two distinct models reaches two DISTINCT per-model clients (two processes), lazily — and resolving
+        // the same model again returns the cached client (one client per (provider, model), not one per call).
+        var clientA = resolve("model-a");
+        var clientB = resolve("model-b");
+        var clientASecond = resolve("model-a");
+
+        AssertEx.False(ReferenceEquals(clientA, clientB), "Two distinct models must resolve to two distinct clients.");
+        AssertEx.True(ReferenceEquals(clientA, clientASecond), "The same model must resolve to one cached client.");
+        // Two distinct models => two created clients (lazy: nothing eager beyond what was resolved).
+        AssertEx.Equal(2, provider.CreatedClients.Count);
+    }
+
+    [Test]
+    public async Task PreviewWorkflow_WhenDistinctModelsExceedLoadedCap_RejectsAtStart()
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var runner = new FakePreviewWorkflowRunner((_, _) => new ScriptedPreviewRunSession([]));
+
+        // Cap of 1 with a two-distinct-model graph => reject at start, before any client/process is created.
+        await using var service = CreateService(runner, publisher, provider, maxLoadedProcesses: 1);
+
+        _ = await AssertEx.ThrowsAsync<PreviewWorkflowModelCapExceededException>(
+            async () => await service.StartAsync(TwoAgentTwoModelGraph(), connectionId: null).ConfigureAwait(false))
+                          .ConfigureAwait(false);
+
+        AssertEx.Equal(0, provider.CreatedClients.Count);
+    }
+
+    private static PreviewWorkflowGraph TwoAgentTwoModelGraph() =>
+        new()
+        {
+            StartText = "hello",
+            Nodes =
+            [
+                PreviewGraphBuilder.Start(),
+                PreviewGraphBuilder.Agent("agentA", model: "model-a"),
+                PreviewGraphBuilder.Agent("agentB", model: "model-b"),
+                PreviewGraphBuilder.End()
+            ],
+            Edges =
+            [
+                PreviewGraphBuilder.Edge("start", "agentA"),
+                PreviewGraphBuilder.Edge("agentA", "agentB"),
+                PreviewGraphBuilder.Edge("agentB", "end")
+            ]
+        };
 
     [Test]
     public async Task PreviewExec_InvalidGraph_ThrowsValidation()
