@@ -5,6 +5,7 @@ using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -31,19 +32,19 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
     private readonly LexicalPlaybookRetrievalRanker _lexical;
     private readonly ILogger<EmbeddingPlaybookRetrievalRanker> _logger;
     private readonly PlaybookRetrievalOptions _options;
-    private readonly ILocalModelProvider _provider;
+    private readonly ILocalModelProviderResolver _providerResolver;
 
-    public EmbeddingPlaybookRetrievalRanker(ILocalModelProvider provider,
+    public EmbeddingPlaybookRetrievalRanker(ILocalModelProviderResolver providerResolver,
         IOptions<PlaybookRetrievalOptions> options,
         LexicalPlaybookRetrievalRanker lexical,
         ILogger<EmbeddingPlaybookRetrievalRanker> logger)
     {
-        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(lexical);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _provider = provider;
+        _providerResolver = providerResolver;
         _options = options.Value;
         _lexical = lexical;
         _logger = logger;
@@ -79,10 +80,13 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             // Never swallow cancellation — let the send's own cancellation propagate.
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
         {
-            // Any node-local embedding hiccup (model not pulled, Ollama down, transport error) degrades gracefully to
-            // the deterministic lexical ranker so the send still completes.
+            // Any node-local embedding hiccup degrades gracefully to the deterministic lexical ranker so the send still
+            // completes: model not pulled / Ollama or llama-server down / transport error (HttpRequestException,
+            // IOException — the llama-server deferred generator wraps its LlamaRuntimeException to IOException — or
+            // OllamaException), or a misconfigured/unregistered EmbeddingProviderName (InvalidOperationException from
+            // the resolver). None of these are a reason to break the send.
             return await FallBackToLexicalAsync(query, candidates, k, exception, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -130,7 +134,13 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         var queryBatchIndex = batchTexts.Count;
         batchTexts.Add(query);
 
-        using var generator = _provider.CreateEmbeddingGenerator(new LocalModelSelection
+        // Route the embedding model to the runtime named by EmbeddingProviderName (ollama or llamacpp). For "llamacpp"
+        // the provider stands up a non-none-pooling embedding process on first use; an unavailable process throws a
+        // caught transport type (the deferred generator wraps LlamaRuntimeException -> IOException) so retrieval still
+        // degrades to lexical (plan §7.7). A misconfigured/unregistered provider name throws InvalidOperationException,
+        // also caught below as a degrade rather than a hard send failure.
+        var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
+        using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = model,
             ProviderName = _options.EmbeddingProviderName

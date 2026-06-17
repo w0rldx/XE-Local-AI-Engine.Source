@@ -3,25 +3,27 @@ namespace XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Default <see cref="IPlaybookAnalysisAgent" />: runs a <b>node-local</b> model (resolved via
-///     <see cref="ILocalModelProvider" />, never the shared <see cref="IChatClient" /> singleton which can be a cloud
-///     client) and forces a structured JSON response so each proposal carries its cited evidence + confidence. Feedback
-///     comments are read into the model on-node only — they never cross the node boundary (Playbook doc §7). This type
-///     is intentionally not unit-tested against a live model; tests substitute a fake <see cref="IPlaybookAnalysisAgent" />.
+///     Default <see cref="IPlaybookAnalysisAgent" />: runs a <b>node-local</b> model (resolved per-model via
+///     <see cref="ILocalModelProviderResolver" />, never the shared <see cref="IChatClient" /> singleton which can be a
+///     cloud client) and forces a structured JSON response so each proposal carries its cited evidence + confidence.
+///     Feedback comments are read into the model on-node only — they never cross the node boundary (Playbook doc §7).
+///     This type is intentionally not unit-tested against a live model; tests substitute a fake
+///     <see cref="IPlaybookAnalysisAgent" />.
 /// </summary>
 internal sealed class OllamaPlaybookAnalysisAgent(
-    ILocalModelProvider localModelProvider,
+    ILocalModelProviderResolver providerResolver,
     IOptions<PlaybookAnalysisOptions> options,
     ILogger<OllamaPlaybookAnalysisAgent> logger) : IPlaybookAnalysisAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly ILocalModelProvider _localModelProvider = localModelProvider ?? throw new ArgumentNullException(nameof(localModelProvider));
+    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ILogger<OllamaPlaybookAnalysisAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
@@ -29,14 +31,17 @@ internal sealed class OllamaPlaybookAnalysisAgent(
     {
         ArgumentNullException.ThrowIfNull(aggregate);
 
+        // Route the configured analysis model to the runtime that serves it (persisted map, else the §6.1 default =
+        // ollama, so an un-repointed model behaves exactly as before). Node-local only — never the cloud singleton.
+        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
         var selection = new LocalModelSelection
         {
             ModelName = _options.ModelName,
-            ProviderName = _localModelProvider.ProviderName
+            ProviderName = provider.ProviderName
         };
 
         // IChatClient is IDisposable — dispose the per-run node-local client.
-        using var chatClient = _localModelProvider.CreateChatClient(selection);
+        using var chatClient = provider.CreateChatClient(selection);
 
         List<ChatMessage> messages =
         [

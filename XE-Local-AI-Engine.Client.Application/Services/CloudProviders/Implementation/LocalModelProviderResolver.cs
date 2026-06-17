@@ -49,7 +49,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
             throw new InvalidOperationException("No ILocalModelProvider is registered; cannot resolve a local model runtime.");
         }
 
-        if (!byName.ContainsKey(defaultProviderName))
+        if (!byName.TryGetValue(defaultProviderName, out var defaultProvider))
         {
             throw new InvalidOperationException(
                 $"The configured default local model provider '{defaultProviderName}' is not registered.");
@@ -57,11 +57,15 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 
         _providersByName = byName;
         _defaultProviderName = defaultProviderName;
+        DefaultProvider = defaultProvider;
         MaxLoadedProcesses = maxLoadedProcesses;
     }
 
     /// <inheritdoc />
     public int MaxLoadedProcesses { get; }
+
+    /// <inheritdoc />
+    public ILocalModelProvider DefaultProvider { get; }
 
     /// <inheritdoc />
     public async Task<string> ResolveProviderNameForModelAsync(string modelName, CancellationToken cancellationToken = default)

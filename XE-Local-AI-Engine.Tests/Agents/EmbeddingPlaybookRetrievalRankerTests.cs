@@ -190,17 +190,54 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         AssertEx.Equal(0, provider.CreateGeneratorCallCount, "A non-positive k short-circuits before any embedding.");
     }
 
+    [Test]
+    public async Task ModelRoutingEmbeddings_RoutesByModelId_ToPoolingProcess()
+    {
+        // EmbeddingProviderName routes the embedding model to its provider; the resolved provider's generator embeds
+        // the batch (candidate(s) + query). This is the resolver-routed equivalent of the llama-server embedding
+        // (pooling) process — here a fake stands in so no Ollama/llama-server is needed.
+        var candidates = SampleCandidates();
+        var provider = new FakeEmbeddingProvider();
+        var ranker = BuildRanker(provider, EmbeddingModel);
+
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+
+        AssertEx.Equal(2, result.Count);
+        AssertEx.True(provider.CreateGeneratorCallCount > 0, "The configured embedding provider was routed to and embedded the batch.");
+        AssertEx.Equal(candidates.Count + 1, provider.TotalEmbeddedTexts, "Routing embeds every candidate plus the query in one batch.");
+    }
+
+    [Test]
+    public async Task SelectTopK_WhenEmbeddingProviderUnregistered_FallsBackToLexical()
+    {
+        // A misconfigured EmbeddingProviderName the resolver can't resolve must degrade to lexical (the resolver throws
+        // InvalidOperationException, now in the ranker's caught-degrade set), never breaking the send.
+        var candidates = SampleCandidates();
+        var provider = new FakeEmbeddingProvider();
+        var ranker = BuildRanker(provider, EmbeddingModel, embeddingProviderName: "not-registered");
+
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+
+        var expected = await new LexicalPlaybookRetrievalRanker().SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        AssertEx.Equal(expected.Count, result.Count, "An unregistered embedding provider degrades to lexical.");
+        AssertEx.Equal(0, provider.CreateGeneratorCallCount, "An unresolved provider never reaches the fake generator.");
+    }
+
     private static EmbeddingPlaybookRetrievalRanker BuildRanker(FakeEmbeddingProvider provider,
         string? embeddingModel,
-        int cacheMaxEntries = 512)
+        int cacheMaxEntries = 512,
+        string embeddingProviderName = FakeEmbeddingProvider.ProviderKey)
     {
         var options = Options.Create(new PlaybookRetrievalOptions
         {
             EmbeddingModelName = embeddingModel,
-            EmbeddingProviderName = FakeEmbeddingProvider.ProviderKey,
+            EmbeddingProviderName = embeddingProviderName,
             EmbeddingCacheMaxEntries = cacheMaxEntries
         });
-        return new EmbeddingPlaybookRetrievalRanker(provider,
+        // The ranker now resolves its embedding provider by EmbeddingProviderName via the resolver; wrap the fake as the
+        // single registered + default provider so routing resolves it (and an unregistered name degrades to lexical).
+        var resolver = SingleProviderResolverFactory.Create(provider);
+        return new EmbeddingPlaybookRetrievalRanker(resolver,
             options,
             new LexicalPlaybookRetrievalRanker(),
             NullLogger<EmbeddingPlaybookRetrievalRanker>.Instance);

@@ -22,6 +22,14 @@ public interface ILocalModelProviderResolver
     int MaxLoadedProcesses { get; }
 
     /// <summary>
+    ///     The provider that unmapped models route to (§6.1 default — <c>ollama</c> by configuration). Consumers that
+    ///     operate provider-wide rather than per-model (for example a node health/inventory snapshot) resolve through
+    ///     this so they keep a single, deterministic default provider under the multi-provider registration instead of
+    ///     binding to whichever <see cref="ILocalModelProvider" /> happened to be registered last.
+    /// </summary>
+    ILocalModelProvider DefaultProvider { get; }
+
+    /// <summary>
     ///     Resolves the provider key that serves <paramref name="modelName" />: the persisted map entry when present,
     ///     otherwise the configured default provider (§6.1). Never returns <c>null</c>.
     /// </summary>
