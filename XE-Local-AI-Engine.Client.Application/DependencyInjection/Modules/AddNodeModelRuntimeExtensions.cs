@@ -32,8 +32,6 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
-using XE_Local_AI_Engine.Client.Services.Embeddings;
-using XE_Local_AI_Engine.Client.Services.Embeddings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -82,7 +80,6 @@ internal static class AddNodeModelRuntimeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        builder.Services.AddSingleton<ILocalEmbeddingService, LocalEmbeddingService>();
         builder.Services.AddSingleton<WorkerHubConnection>(sp =>
         {
             var connection = ActivatorUtilities.CreateInstance<WorkerHubConnection>(sp);
@@ -128,16 +125,11 @@ internal static class AddNodeModelRuntimeExtensions
                 sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable));
         });
 
-        // Standalone DI IEmbeddingGenerator: intentionally Ollama-wired and NOT provider-routed (Lane A §7.7). The real
-        // playbook-retrieval path is routed — EmbeddingPlaybookRetrievalRanker resolves the embedding provider by
-        // PlaybookRetrievalOptions.EmbeddingProviderName via ILocalModelProviderResolver and builds/owns its own
-        // generator per send. This registration feeds only the thin LocalEmbeddingService adapter (currently no
-        // injectors) plus an Ollama-gated integration smoke test, so routing it through the resolver would buy no
-        // production behavior change while pinning a llama-server embedding process for the app lifetime and inverting
-        // the "caller owns the embedding generator" contract. Injecting ILocalEmbeddingService is therefore NOT
-        // provider-routed today; route through the resolver if that ever changes.
-        builder.AddOllamaApiClient("embeddings")
-               .AddEmbeddingGenerator();
+        // Embeddings are provider-routed (Lane A §7.7): EmbeddingPlaybookRetrievalRanker resolves the embedding provider
+        // by PlaybookRetrievalOptions.EmbeddingProviderName via ILocalModelProviderResolver and builds/owns its own
+        // generator per send (node-local; ollama or llamacpp). There is intentionally no standalone DI-registered
+        // IEmbeddingGenerator — the previous Ollama hardwire and its only consumer (the unused LocalEmbeddingService
+        // adapter) were removed so nothing contradicts the multi-provider design.
 
         builder.Services.AddOllamaLocalModelProvider(_ =>
         {

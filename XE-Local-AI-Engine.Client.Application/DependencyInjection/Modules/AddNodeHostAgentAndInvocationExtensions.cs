@@ -33,8 +33,6 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
-using XE_Local_AI_Engine.Client.Services.Embeddings;
-using XE_Local_AI_Engine.Client.Services.Embeddings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
