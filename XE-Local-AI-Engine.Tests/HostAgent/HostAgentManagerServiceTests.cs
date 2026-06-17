@@ -18,8 +18,8 @@ public sealed class HostAgentManagerServiceTests
     public async Task LoadSnapshotAsync_WithMockHostAgent_ReturnsStatusModelsAndSanitizedManifest()
     {
         var hostAgent = CreateHostAgentClient();
-        var localModelProvider = CreateModelProvider();
-        var service = new HostAgentManagerService(hostAgent, localModelProvider, CreateConfigurationWithManifest());
+        var resolver = SingleProviderResolverFactory.Create(CreateModelProvider());
+        var service = new HostAgentManagerService(hostAgent, resolver, CreateConfigurationWithManifest());
 
         var snapshot = await service.LoadSnapshotAsync(CancellationToken.None);
 
@@ -39,7 +39,7 @@ public sealed class HostAgentManagerServiceTests
     public async Task ExecuteContainerActionAsync_WhenRestartRequested_CallsHostAgentRestart()
     {
         var hostAgent = CreateHostAgentClient();
-        var service = new HostAgentManagerService(hostAgent, CreateModelProvider(), CreateConfigurationWithManifest());
+        var service = new HostAgentManagerService(hostAgent, SingleProviderResolverFactory.Create(CreateModelProvider()), CreateConfigurationWithManifest());
 
         var report = await service.ExecuteContainerActionAsync("ollama",
             HostAgentContainerAction.Restart,
@@ -56,7 +56,7 @@ public sealed class HostAgentManagerServiceTests
         var hostAgent = CreateHostAgentClient();
         hostAgent.StreamLogsAsync("ollama", 25, false, Arg.Any<CancellationToken>())
                  .Returns(CreateLogStream("ollama"));
-        var service = new HostAgentManagerService(hostAgent, CreateModelProvider(), CreateConfigurationWithManifest());
+        var service = new HostAgentManagerService(hostAgent, SingleProviderResolverFactory.Create(CreateModelProvider()), CreateConfigurationWithManifest());
         var lines = new List<HostAgentLogLineDto>();
 
         await foreach (var line in service.StreamLogsAsync("ollama", 25, false, CancellationToken.None))

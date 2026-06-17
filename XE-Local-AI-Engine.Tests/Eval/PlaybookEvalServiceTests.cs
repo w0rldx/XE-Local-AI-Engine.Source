@@ -275,6 +275,7 @@ public sealed class PlaybookEvalServiceTests
         var localModelProvider = Substitute.For<ILocalModelProvider>();
         localModelProvider.ProviderName.Returns("ollama");
         localModelProvider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(Substitute.For<IChatClient>());
+        var providerResolver = SingleProviderResolverFactory.Create(localModelProvider);
 
         return new PlaybookEvalService(actionService,
             actionStore,
@@ -282,7 +283,7 @@ public sealed class PlaybookEvalServiceTests
             goldenStore,
             runner,
             judge,
-            localModelProvider,
+            providerResolver,
             TimeProvider.System,
             Options.Create(new PlaybookEvalOptions
             {

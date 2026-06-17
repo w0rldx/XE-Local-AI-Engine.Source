@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Eval;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -25,7 +26,7 @@ internal sealed class PlaybookEvalService(
     IGoldenConversationStore goldenConversationStore,
     IPlaybookEvalAgentRunner evalAgentRunner,
     IPlaybookEvalJudge evalJudge,
-    ILocalModelProvider localModelProvider,
+    ILocalModelProviderResolver providerResolver,
     TimeProvider timeProvider,
     IOptions<PlaybookEvalOptions> options,
     ILogger<PlaybookEvalService> logger) : IPlaybookEvalService
@@ -35,7 +36,7 @@ internal sealed class PlaybookEvalService(
     private readonly IPlaybookEvalAgentRunner _evalAgentRunner = evalAgentRunner ?? throw new ArgumentNullException(nameof(evalAgentRunner));
     private readonly IPlaybookEvalJudge _evalJudge = evalJudge ?? throw new ArgumentNullException(nameof(evalJudge));
     private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
-    private readonly ILocalModelProvider _localModelProvider = localModelProvider ?? throw new ArgumentNullException(nameof(localModelProvider));
+    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ILogger<PlaybookEvalService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly PlaybookEvalOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
@@ -92,14 +93,17 @@ internal sealed class PlaybookEvalService(
             goldenCases = [.. goldenCases.Take(_options.MaxGoldenCases)];
         }
 
+        // Route the configured eval model to the runtime that serves it (persisted map, else §6.1 default = ollama —
+        // an un-repointed model behaves exactly as before). Node-local only — never the shared/cloud singleton.
+        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
         var selection = new LocalModelSelection
         {
             ModelName = _options.ModelName,
-            ProviderName = _localModelProvider.ProviderName
+            ProviderName = provider.ProviderName
         };
 
         // One node-local client for the whole run (IChatClient is IDisposable — dispose it; never the shared singleton).
-        using var chatClient = _localModelProvider.CreateChatClient(selection);
+        using var chatClient = provider.CreateChatClient(selection);
 
         var caseResults = new List<PlaybookEvalCaseResult>(goldenCases.Count);
         foreach (var goldenCase in goldenCases)

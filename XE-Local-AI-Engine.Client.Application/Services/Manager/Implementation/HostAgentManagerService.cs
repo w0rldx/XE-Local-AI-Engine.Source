@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Manifest;
@@ -26,11 +27,17 @@ public sealed class HostAgentManagerService : IHostAgentManagerService
     private readonly ILocalModelProvider _localModelProvider;
 
     public HostAgentManagerService(IHostAgentClient hostAgentClient,
-        ILocalModelProvider localModelProvider,
+        ILocalModelProviderResolver providerResolver,
         IConfiguration configuration)
     {
+        ArgumentNullException.ThrowIfNull(providerResolver);
+
         _hostAgentClient = hostAgentClient;
-        _localModelProvider = localModelProvider;
+        // Node-status snapshot stays single-provider: report the §6.1 default runtime (ollama) so the snapshot shape
+        // and React surface are unchanged under the multi-provider registration. Per-model llama-server processes
+        // surface through their own health later (Lane C Advisor); a bare ILocalModelProvider injection here would
+        // non-deterministically bind to whichever provider was registered last.
+        _localModelProvider = providerResolver.DefaultProvider;
         _configuration = configuration;
     }
 

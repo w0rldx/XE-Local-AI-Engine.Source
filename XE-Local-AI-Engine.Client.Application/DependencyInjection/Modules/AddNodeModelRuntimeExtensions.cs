@@ -128,6 +128,14 @@ internal static class AddNodeModelRuntimeExtensions
                 sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable));
         });
 
+        // Standalone DI IEmbeddingGenerator: intentionally Ollama-wired and NOT provider-routed (Lane A §7.7). The real
+        // playbook-retrieval path is routed — EmbeddingPlaybookRetrievalRanker resolves the embedding provider by
+        // PlaybookRetrievalOptions.EmbeddingProviderName via ILocalModelProviderResolver and builds/owns its own
+        // generator per send. This registration feeds only the thin LocalEmbeddingService adapter (currently no
+        // injectors) plus an Ollama-gated integration smoke test, so routing it through the resolver would buy no
+        // production behavior change while pinning a llama-server embedding process for the app lifetime and inverting
+        // the "caller owns the embedding generator" contract. Injecting ILocalEmbeddingService is therefore NOT
+        // provider-routed today; route through the resolver if that ever changes.
         builder.AddOllamaApiClient("embeddings")
                .AddEmbeddingGenerator();
 
