@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>XE_Local_AI_Engine.Providers.LlamaServer</RootNamespace>
+    <!-- Required by LibraryImport source-gen marshalling stubs (Linux killpg + Windows Job Object P/Invoke). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

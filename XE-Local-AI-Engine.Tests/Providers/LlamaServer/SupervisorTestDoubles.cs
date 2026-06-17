@@ -1,0 +1,114 @@
+namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
+
+using System.Collections.Concurrent;
+using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+
+/// <summary>
+///     Shared fakes for the <see cref="LlamaServerProcessSupervisor" /> tests: a process launcher that records the
+///     exact launch specs and hands back controllable in-memory process handles (no real <c>llama-server</c>), a
+///     deterministic health probe, a fixed binary manager / variant selector, and a time provider whose clock can be
+///     advanced while delays still use real (tiny) timers.
+/// </summary>
+internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
+{
+    private readonly Func<LlamaServerLaunchSpec, FakeProcessHandle>? _onLaunch;
+    private int _nextPid = 1000;
+
+    public FakeProcessLauncher(Func<LlamaServerLaunchSpec, FakeProcessHandle>? onLaunch = null) => _onLaunch = onLaunch;
+
+    public ConcurrentQueue<LlamaServerLaunchSpec> Launches { get; } = new();
+
+    public ConcurrentBag<FakeProcessHandle> Handles { get; } = new();
+
+    public int LaunchCount => Launches.Count;
+
+    public ILlamaServerProcessHandle Launch(LlamaServerLaunchSpec spec)
+    {
+        Launches.Enqueue(spec);
+#pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
+        var handle = _onLaunch?.Invoke(spec) ?? new FakeProcessHandle(Interlocked.Increment(ref _nextPid));
+#pragma warning restore CA2000
+        Handles.Add(handle);
+        return handle;
+    }
+}
+
+/// <summary>An in-memory process handle whose exit + tree-kill are directly controllable by the test.</summary>
+internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
+{
+    private int _exited;
+    private int _killed;
+
+    public int ProcessId { get; } = pid;
+
+    public bool HasExited => Volatile.Read(ref _exited) != 0;
+
+    public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
+
+    public bool WasDisposed { get; private set; }
+
+    /// <summary>Simulates a process crash/exit so the next ensure-running sees a dead process.</summary>
+    public void SimulateExit() => Interlocked.Exchange(ref _exited, 1);
+
+    public void TreeKill()
+    {
+        Interlocked.Exchange(ref _killed, 1);
+        Interlocked.Exchange(ref _exited, 1);
+    }
+
+    public void Dispose() => WasDisposed = true;
+}
+
+/// <summary>Health probe with controllable readiness; defaults to immediately-ready + responsive.</summary>
+internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true) : ILlamaServerHealthProbe
+{
+    public bool Ready { get; set; } = ready;
+
+    public bool Responsive { get; set; } = responsive;
+
+    public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct) =>
+        Task.FromResult(Ready);
+
+    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) =>
+        Task.FromResult(Responsive);
+}
+
+/// <summary>Binary manager returning a fixed fake server path for whatever variant is requested; never downloads.</summary>
+internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
+{
+    public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
+        Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", variant, IsPinnedFallback: true));
+}
+
+/// <summary>Variant selector returning a fixed variant; never probes hardware.</summary>
+internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) : IGpuVariantSelector
+{
+    public Task<GpuVariant> SelectVariantAsync(CancellationToken ct) => Task.FromResult(variant);
+}
+
+/// <summary>GGUF store resolving a model name to a fixed path; null means "not installed".</summary>
+internal sealed class FakeModelStore(string? fixedPath = "/fake/models/model.gguf") : IGgufModelStore
+{
+    public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct) =>
+        Task.FromResult(fixedPath);
+
+    public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]);
+}
+
+/// <summary>
+///     Time provider whose <see cref="GetUtcNow" /> is advanceable (drives idle-TTL/LRU comparisons deterministically)
+///     while timer creation falls through to the real provider so <c>Task.Delay</c> still completes.
+/// </summary>
+internal sealed class AdvanceableTimeProvider : TimeProvider
+{
+    private long _utcTicks = DateTimeOffset.UtcNow.UtcTicks;
+
+    public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _utcTicks), TimeSpan.Zero);
+
+    public void Advance(TimeSpan delta) => Interlocked.Add(ref _utcTicks, delta.Ticks);
+
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+        System.CreateTimer(callback, state, dueTime, period);
+}
