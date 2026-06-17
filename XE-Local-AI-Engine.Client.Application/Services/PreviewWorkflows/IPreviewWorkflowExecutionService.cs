@@ -60,3 +60,16 @@ public sealed class PreviewWorkflowCapReachedException(int maxConcurrentRuns)
 {
     public int MaxConcurrentRuns { get; } = maxConcurrentRuns;
 }
+
+/// <summary>
+///     Thrown by <see cref="IPreviewWorkflowExecutionService.StartAsync" /> when a graph needs more distinct node-local
+///     model processes than the shared loaded-process cap allows (reject-at-start, decision #18 / Lane A plan §7.6 → 409).
+/// </summary>
+public sealed class PreviewWorkflowModelCapExceededException(int distinctModelCount, int maxLoadedProcesses)
+    : Exception(
+        $"The workflow uses {distinctModelCount} distinct models, exceeding the maximum of {maxLoadedProcesses} concurrently loaded model processes. Reduce the number of distinct models or raise the loaded-model cap.")
+{
+    public int DistinctModelCount { get; } = distinctModelCount;
+
+    public int MaxLoadedProcesses { get; } = maxLoadedProcesses;
+}

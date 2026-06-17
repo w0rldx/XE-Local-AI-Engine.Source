@@ -39,4 +39,16 @@ internal static class PreviewExecuteHelper
             maxConcurrentRuns = exception.MaxConcurrentRuns
         });
     }
+
+    public static IResult ModelCapExceeded(PreviewWorkflowModelCapExceededException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return Results.Conflict(new
+        {
+            conflictType = "ModelCapExceeded",
+            message = exception.Message,
+            distinctModelCount = exception.DistinctModelCount,
+            maxLoadedProcesses = exception.MaxLoadedProcesses
+        });
+    }
 }

@@ -60,5 +60,9 @@ public sealed class ExecuteSavedPreviewWorkflowEndpoint(
         {
             await Send.ResultAsync(PreviewExecuteHelper.CapReached(exception)).ConfigureAwait(false);
         }
+        catch (PreviewWorkflowModelCapExceededException exception)
+        {
+            await Send.ResultAsync(PreviewExecuteHelper.ModelCapExceeded(exception)).ConfigureAwait(false);
+        }
     }
 }
