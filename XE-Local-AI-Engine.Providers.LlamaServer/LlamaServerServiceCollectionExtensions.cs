@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     DI wiring for the llama-server local-model provider stack (binary manager + GPU probe/selector + the
@@ -56,7 +57,18 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
-        // SEAM: the llamacpp ILocalModelProvider (T3) registers here once implemented; T4 adds it to the resolver.
+        // SEAM: the llamacpp ILocalModelProvider (T3). Registered over the supervisor + the caller-supplied
+        // IGgufModelStore (Lane B's real store, or FixedPathGgufModelStore until Lane B lands). Added to the
+        // ILocalModelProvider set alongside Ollama (decision #14); T4 introduces the per-model→provider resolver that
+        // dispatches across both registrations. Singleton — it holds no per-request state; the deferred chat/embedding
+        // clients it hands out own the cold-start.
+        services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
+            new LlamaServerLocalModelProvider(
+                sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+                sp.GetRequiredService<IGgufModelStore>()));
+        services.AddSingleton<ILocalModelProvider>(static sp =>
+            sp.GetRequiredService<LlamaServerLocalModelProvider>());
+
         return services;
     }
 }
