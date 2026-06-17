@@ -40,6 +40,7 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
     <ProjectReference Include="..\..\..\C0re.AI.Shared.Contracts\C0re.AI.Shared.Contracts.csproj"/>
