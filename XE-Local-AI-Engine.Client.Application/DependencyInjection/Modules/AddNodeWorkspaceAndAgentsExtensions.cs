@@ -107,6 +107,11 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // service reads/writes through it to resolve the effective kind that filters the chat picker. Scoped to match
         // the scoped, DbContext-backed store.
         builder.Services.AddScoped<IModelClassificationStore, ModelClassificationStore>();
+        // Per-model→provider routing map. Resolves which local runtime (llamacpp / ollama) serves a given model so the
+        // model-routing chat client and the preview/embeddings resolvers dispatch correctly and resume-safe across node
+        // restarts (Lane A plan §6.1). Unencrypted — model names and provider keys are not secrets. Scoped to match the
+        // scoped, DbContext-backed store; the singleton resolver reads it through a fresh scope per lookup.
+        builder.Services.AddScoped<IModelProviderMapStore, ModelProviderMapStore>();
         // Feedback-insights read store. Pure analytics over node-local feedback/tool-event rows; it reads only
         // plaintext columns and writes nothing.
         builder.Services.AddScoped<IFeedbackInsightsStore, FeedbackInsightsStore>();

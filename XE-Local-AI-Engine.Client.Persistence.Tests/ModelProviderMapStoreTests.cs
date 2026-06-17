@@ -1,0 +1,138 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Tests;
+
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+
+public sealed class ModelProviderMapStoreTests : IDisposable
+{
+    private readonly INodeSqliteKeyHolder _keyHolder = new NullNodeSqliteKeyHolder();
+    private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_rootPath))
+        {
+            Directory.Delete(_rootPath, true);
+        }
+
+        _keyHolder.Dispose();
+    }
+
+    [Test]
+    public async Task UpsertAsync_ThenReadBackInNewContext_RoundTripsProviderMapping()
+    {
+        var databasePath = GetDatabasePath("roundtrip.sqlite");
+
+        await using (var writeContext = CreateContext(databasePath))
+        {
+            await writeContext.Database.EnsureDeletedAsync();
+            await writeContext.Database.EnsureCreatedAsync();
+
+            var store = new ModelProviderMapStore(writeContext, TimeProvider.System);
+            var mapped = await store.UpsertAsync("llama3.1-gguf", "llamacpp");
+
+            AssertEx.Equal("llama3.1-gguf", mapped.ModelName);
+            AssertEx.Equal("llamacpp", mapped.ProviderName);
+            AssertEx.True(mapped.UpdatedAtUtc > 0, "Upsert should stamp an updated-at time.");
+        }
+
+        await using var readContext = CreateContext(databasePath);
+        var readStore = new ModelProviderMapStore(readContext, TimeProvider.System);
+
+        var provider = await readStore.GetProviderForModelAsync("llama3.1-gguf");
+        AssertEx.Equal("llamacpp", provider);
+    }
+
+    [Test]
+    public async Task GetProviderForModelAsync_WhenUnmapped_ReturnsNull()
+    {
+        var databasePath = GetDatabasePath("unmapped.sqlite");
+
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+        var provider = await store.GetProviderForModelAsync("never-mapped");
+
+        AssertEx.Null(provider, "An unmapped model returns null so the caller can apply its routing default.");
+    }
+
+    [Test]
+    public async Task UpsertAsync_WhenModelAlreadyMapped_RepointsToNewProvider()
+    {
+        var databasePath = GetDatabasePath("repoint.sqlite");
+
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+        _ = await store.UpsertAsync("mistral", "ollama");
+        var repointed = await store.UpsertAsync("mistral", "llamacpp");
+
+        AssertEx.Equal("llamacpp", repointed.ProviderName);
+
+        var all = await store.ListAsync();
+        AssertEx.Equal(1, all.Count);
+        AssertEx.Equal("llamacpp", all[0].ProviderName);
+    }
+
+    [Test]
+    public async Task GetProviderForModelAsync_MatchesNameCaseInsensitively()
+    {
+        var databasePath = GetDatabasePath("nocase.sqlite");
+
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+        _ = await store.UpsertAsync("Phi-3-Mini", "llamacpp");
+
+        // The model_name primary key uses NOCASE collation, so a differently-cased lookup resolves the same row, and a
+        // second upsert with a differently-cased name updates that same row rather than inserting a duplicate.
+        var lookedUp = await store.GetProviderForModelAsync("phi-3-mini");
+        AssertEx.Equal("llamacpp", lookedUp);
+
+        _ = await store.UpsertAsync("PHI-3-MINI", "ollama");
+
+        var all = await store.ListAsync();
+        AssertEx.Equal(1, all.Count);
+        AssertEx.Equal("ollama", all[0].ProviderName);
+    }
+
+    [Test]
+    public async Task ListAsync_ReturnsAllRowsOrderedByName()
+    {
+        var databasePath = GetDatabasePath("list.sqlite");
+
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new ModelProviderMapStore(context, TimeProvider.System);
+
+        _ = await store.UpsertAsync("zephyr", "ollama");
+        _ = await store.UpsertAsync("alpaca", "llamacpp");
+        _ = await store.UpsertAsync("mistral", "llamacpp");
+
+        var all = await store.ListAsync();
+
+        AssertEx.Equal(3, all.Count);
+        AssertEx.Equal("alpaca", all[0].ModelName);
+        AssertEx.Equal("mistral", all[1].ModelName);
+        AssertEx.Equal("zephyr", all[2].ModelName);
+    }
+
+    private NodeChatDbContext CreateContext(string databasePath)
+    {
+        // The model_provider_map table holds no encrypted columns, so the non-encrypting migration factory is used.
+        return AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+    }
+
+    private string GetDatabasePath(string fileName)
+    {
+        Directory.CreateDirectory(_rootPath);
+        return Path.Combine(_rootPath, fileName);
+    }
+}
