@@ -1,49 +1,27 @@
 import type {
-	XeLocalAiEngineClientEndpointsModelFitV1ApprovedImageResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse,
 } from "@/core/api/generated";
-import type {
-	ApprovedImage,
-	ModelFitImagePurpose,
-	ModelFitLatestRecommendations,
-	ModelFitRecommendation,
+import {
+	type GgufRepository,
+	type HardwareGpuVendor,
+	hardwareGpuVendors,
+	type HardwareProfile,
+	type LlamaCppVersion,
+	type ModelFitLatestRecommendations,
+	type ModelFitRecommendation,
+	type RunningModel,
 } from "@/features/model-fit/models/ModelFitModels";
 
 // Maps the generated (OpenAPI) model-fit response types to the stricter domain view-models the pages depend on.
 // The generated types are the single source of truth for the wire shape; their fields are all optional (`x?: T`),
 // so each mapper coalesces every field to a required value with a safe default. The DTOs carry only sanitized
-// fields (no raw llmfit JSON / stderr / diagnostics blobs); redaction is the backend's — the mapper only surfaces
-// what the API returns and never reconstructs a dropped field.
-
-// The two members of the wire [Flags] enum. Used to narrow the generated `string[]` projection of `purpose` back
-// to the domain union with a runtime guard, so a future backend enum addition is dropped rather than smuggled in
-// as an out-of-union value (which a downstream badge map / exhaustive switch would mishandle silently).
-const MODEL_FIT_IMAGE_PURPOSES: readonly ModelFitImagePurpose[] = ["ModelRecommendation", "ModelBenchmark"];
-
-function isModelFitImagePurpose(value: string): value is ModelFitImagePurpose {
-	return (MODEL_FIT_IMAGE_PURPOSES as readonly string[]).includes(value);
-}
-
-export function toApprovedImage(dto: XeLocalAiEngineClientEndpointsModelFitV1ApprovedImageResponse): ApprovedImage {
-	return {
-		approvedImageId: dto.approvedImageId ?? "",
-		displayName: dto.displayName ?? "",
-		description: dto.description ?? null,
-		// purpose is a [Flags] enum projected to a string array on the wire; the generated type widens it to
-		// string[], so filter through the value guard — identical values pass, an unknown future member is dropped.
-		purpose: (dto.purpose ?? []).filter(isModelFitImagePurpose),
-		imageReference: dto.imageReference ?? "",
-		sourceUrl: dto.sourceUrl ?? null,
-		upstreamVersion: dto.upstreamVersion ?? null,
-		enabled: dto.enabled ?? false,
-		deprecatedAtUtc: dto.deprecatedAtUtc ?? null,
-		replacementApprovedImageId: dto.replacementApprovedImageId ?? null,
-		lastUsedAtUtc: dto.lastUsedAtUtc ?? null,
-		lastSuccessfulRunAtUtc: dto.lastSuccessfulRunAtUtc ?? null,
-		diagnostics: dto.diagnostics ?? null,
-	};
-}
+// fields (no raw advisor JSON / stderr / diagnostics blobs, no HF token); redaction is the backend's — the mapper
+// only surfaces what the API returns and never reconstructs a dropped field.
 
 function toModelFitRecommendation(
 	dto: XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse,
@@ -73,11 +51,63 @@ export function toLatestRecommendations(
 		hasCache: dto.hasCache ?? false,
 		snapshotId: dto.snapshotId ?? null,
 		status: dto.status ?? null,
-		sourceImageId: dto.sourceImageId ?? null,
 		useCase: dto.useCase ?? null,
-		providerName: dto.providerName ?? null,
 		lastRefreshedAtUtc: dto.lastRefreshedAtUtc ?? null,
 		// hasCache:false carries an empty recommendations array; coalesce defensively in case it is omitted.
 		recommendations: (dto.recommendations ?? []).map(toModelFitRecommendation),
+	};
+}
+
+// Narrows the generated `gpuVendor` string back to the domain union with a runtime guard, so a future backend
+// vendor value is normalized to "unknown" rather than smuggled in as an out-of-union value (which a downstream
+// badge map / exhaustive switch would mishandle silently).
+function toGpuVendor(value: string | undefined): HardwareGpuVendor {
+	return (hardwareGpuVendors as readonly string[]).includes(value ?? "") ? (value as HardwareGpuVendor) : "unknown";
+}
+
+export function toHardwareProfile(
+	dto: XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse,
+): HardwareProfile {
+	return {
+		totalRamBytes: dto.totalRamBytes ?? 0,
+		availableRamBytes: dto.availableRamBytes ?? 0,
+		vramBytes: dto.vramBytes ?? null,
+		vramKnown: dto.vramKnown ?? false,
+		gpuVendor: toGpuVendor(dto.gpuVendor),
+		gpuAccelAvailable: dto.gpuAccelAvailable ?? false,
+		cpuCores: dto.cpuCores ?? 0,
+		freeDiskBytes: dto.freeDiskBytes ?? 0,
+	};
+}
+
+export function toGgufRepository(dto: XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse): GgufRepository {
+	return {
+		repoId: dto.repoId ?? "",
+		isGated: dto.isGated ?? false,
+		downloads: dto.downloads ?? 0,
+		likes: dto.likes ?? 0,
+		lastModifiedAtUtc: dto.lastModifiedAtUtc ?? null,
+		license: dto.license ?? null,
+		hasUsableGguf: dto.hasUsableGguf ?? false,
+	};
+}
+
+export function toRunningModel(dto: XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse): RunningModel {
+	return {
+		modelName: dto.modelName ?? "",
+		role: dto.role ?? "",
+		isResponsive: dto.isResponsive ?? false,
+		detail: dto.detail ?? "",
+	};
+}
+
+export function toLlamaCppVersion(
+	dto: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse,
+): LlamaCppVersion {
+	return {
+		version: dto.version ?? "",
+		variant: dto.variant ?? "",
+		isPinnedFallback: dto.isPinnedFallback ?? false,
+		pinnedTag: dto.pinnedTag ?? "",
 	};
 }

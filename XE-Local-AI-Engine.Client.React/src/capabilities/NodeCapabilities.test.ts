@@ -56,7 +56,6 @@ describe("nodeCapabilities", () => {
 			mcp: "/mcp",
 			scheduler: "/scheduler",
 			modelRecommendations: "/model-recommendations",
-			approvedImages: "/approved-images",
 			loadedModels: "/loaded-models",
 			preview: "/preview",
 		});

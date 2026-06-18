@@ -60,7 +60,6 @@
 		"mcp": "MCP",
 		"scheduler": "Scheduler",
 		"modelRecommendations": "Model Recommendations",
-		"approvedImages": "Approved Images",
 		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
@@ -1541,8 +1540,8 @@
 		"modelFit": {
 			"eyebrow": "Worker Node",
 			"recommendations": {
-				"title": "Model recommendations",
-				"subtitle": "Hardware-aware local model guidance for this node. Results are cached — use Refresh now to run a new recommendation check through the scheduler.",
+				"title": "Local model advisor",
+				"subtitle": "Hardware-aware local model guidance for this node. Detect hardware, browse and download GGUF models, manage the llama.cpp runtime, and eject running models.",
 				"refreshButton": "Refresh now",
 				"schedulerLink": "Scheduler",
 				"modelsLink": "Model management",
@@ -1554,9 +1553,6 @@
 				"noCache": "No cached recommendation snapshot for this use case yet. Run a recommendation check from the scheduler, or use Refresh now if a schedule exists.",
 				"emptyList": "The latest snapshot returned no recommendations.",
 				"installed": "Installed",
-				"pullable": "Pullable",
-				"pull": "Pull",
-				"pulling": "Pulling…",
 				"catalogOnly": "Catalog only",
 				"useCases": {
 					"general": "General",
@@ -1568,23 +1564,21 @@
 				},
 				"snapshot": {
 					"status": "Status",
-					"useCase": "Use case",
-					"provider": "Provider",
-					"sourceImage": "Source image"
+					"useCase": "Use case"
 				},
 				"columns": {
 					"rank": "Rank",
 					"model": "Model",
 					"score": "Score",
 					"fit": "Fit",
-					"runMode": "Run mode",
 					"tps": "Est. TPS",
 					"context": "Context",
 					"quantization": "Quant",
-					"memory": "Memory",
 					"released": "Released",
 					"installed": "Installed",
-					"action": "Action"
+					"action": "Action",
+					"ram": "Req. RAM",
+					"vram": "Req. VRAM"
 				},
 				"errors": {
 					"load": "Could not load recommendations.",
@@ -1596,38 +1590,112 @@
 					"successTitle": "Recommendations refreshed",
 					"success": "The latest model recommendations are ready.",
 					"cancelled": "The refresh was cancelled."
+				},
+				"available": "Available",
+				"download": "Download",
+				"downloading": "Downloading…",
+				"cpuMode": "CPU mode"
+			},
+			"hardware": {
+				"title": "Hardware profile",
+				"cpuMode": "CPU mode",
+				"refresh": "Refresh hardware",
+				"loading": "Detecting hardware…",
+				"error": "Could not detect hardware.",
+				"totalRam": "Total RAM",
+				"availableRam": "Available RAM",
+				"vram": "VRAM",
+				"vramUnknown": "VRAM unknown",
+				"gpuVendor": "GPU vendor",
+				"cpuCores": "CPU cores",
+				"freeDisk": "Free disk",
+				"vendors": {
+					"nvidia": "NVIDIA",
+					"amd": "AMD",
+					"intel": "Intel",
+					"none": "None",
+					"unknown": "Unknown"
 				}
 			},
-			"approvedImages": {
-				"title": "Approved reference images",
-				"subtitle": "Approved, digest-pinned llmfit utility images used by the recommendation checker. This list is read-only — image references are managed in code.",
-				"loading": "Loading approved images…",
-				"empty": "No approved images are registered.",
-				"sourceLink": "Open",
-				"purpose": {
-					"ModelRecommendation": "Recommendation",
-					"ModelBenchmark": "Benchmark"
-				},
-				"state": {
-					"enabled": "Enabled",
-					"disabled": "Disabled",
-					"deprecated": "Deprecated"
-				},
+			"download": {
+				"title": "Downloads in progress",
+				"inProgress": "Downloading…",
+				"cancel": "Cancel",
+				"started": "Download started.",
+				"alreadyInFlight": "That download is already in progress.",
+				"error": "Could not start the download.",
+				"cancelled": "Download cancelled.",
+				"cancelError": "Could not cancel the download."
+			},
+			"running": {
+				"title": "Running models",
+				"loading": "Loading running models…",
+				"error": "Could not load running models.",
+				"empty": "No models are currently running.",
+				"responsive": "Responsive",
+				"unresponsive": "Starting / unresponsive",
+				"eject": "Eject",
+				"ejected": "Model ejected.",
+				"ejectError": "Could not eject the model.",
 				"columns": {
-					"id": "Image ID",
-					"name": "Name",
-					"purpose": "Purpose",
-					"reference": "Pinned reference",
-					"version": "Version",
-					"source": "Source",
-					"state": "State",
-					"lastUsed": "Last used",
-					"lastSuccessful": "Last successful",
-					"diagnostics": "Diagnostics"
-				},
-				"errors": {
-					"load": "Could not load approved images."
+					"model": "Model",
+					"role": "Role",
+					"status": "Status",
+					"action": "Action"
 				}
+			},
+			"llamaCpp": {
+				"title": "llama.cpp runtime",
+				"loading": "Resolving llama.cpp binary…",
+				"error": "Could not resolve the llama.cpp binary.",
+				"version": "Version",
+				"variant": "Variant",
+				"selectVariant": "Variant",
+				"pinned": "Pinned fallback",
+				"check": "Check version",
+				"idle": "Not checked yet. Checking resolves the llama.cpp binary and may download it on first use.",
+				"ensure": "Ensure / select",
+				"ensured": "llama.cpp binary ready.",
+				"ensureError": "Could not ensure the llama.cpp binary.",
+				"variants": {
+					"cpu": "CPU",
+					"cuda": "CUDA",
+					"vulkan": "Vulkan"
+				}
+			},
+			"browse": {
+				"title": "Browse Hugging Face GGUF",
+				"searchLabel": "Search repositories",
+				"searchPlaceholder": "e.g. llama 3.1 8b",
+				"search": "Search",
+				"loading": "Searching…",
+				"error": "Could not search repositories.",
+				"empty": "No GGUF repositories matched that search.",
+				"gated": "Gated",
+				"download": "Download",
+				"noGguf": "No GGUF",
+				"columns": {
+					"repo": "Repository",
+					"downloads": "Downloads",
+					"likes": "Likes",
+					"updated": "Updated",
+					"license": "License",
+					"action": "Action"
+				}
+			},
+			"hfToken": {
+				"title": "Hugging Face token",
+				"configured": "Token configured",
+				"none": "No token",
+				"description": "A Hugging Face access token is required to download gated GGUF repositories. The token is stored encrypted and never displayed.",
+				"inputLabel": "Access token",
+				"placeholder": "hf_…",
+				"save": "Save token",
+				"clear": "Clear token",
+				"saved": "Token saved.",
+				"saveError": "Could not save the token.",
+				"cleared": "Token cleared.",
+				"clearError": "Could not clear the token."
 			}
 		},
 		"loadedModels": {

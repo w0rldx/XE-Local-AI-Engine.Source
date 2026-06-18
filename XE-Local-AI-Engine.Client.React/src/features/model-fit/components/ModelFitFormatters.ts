@@ -1,18 +1,15 @@
 // Presentation helpers shared by the model-fit pages. Kept in a non-component module so the page components can
 // import them without tripping the "components-only export" lint rule.
 
-// Badge color for a recommendation fit level (llmfit values: Perfect / Good / Marginal / Too Tight). Unknown or
-// missing levels fall back to grey.
+// Badge color for a recommendation fit level. The advisor emits a run-mode fit level of "GPU" (the model fits the
+// VRAM budget and runs GPU-accelerated) or "CPU" (estimated against the RAM budget). GPU is the desirable outcome
+// (teal); CPU is surfaced separately by the dedicated CPU-mode badge, so anything else falls back to grey.
 export function fitLevelColor(fitLevel: string | null): string {
 	switch (fitLevel) {
-		case "Perfect":
-			return "green";
-		case "Good":
+		case "GPU":
 			return "teal";
-		case "Marginal":
-			return "yellow";
-		case "Too Tight":
-			return "red";
+		case "CPU":
+			return "orange";
 		default:
 			return "gray";
 	}
@@ -50,4 +47,13 @@ export function formatContextTokens(tokens: number | null): string {
 		return "—";
 	}
 	return tokens.toLocaleString();
+}
+
+// Formats a raw byte count as a compact GB string (one decimal), or a dash when absent. Used by the hardware-profile
+// card for RAM / VRAM / disk figures (the wire reports bytes).
+export function formatBytesAsGb(bytes: number | null): string {
+	if (bytes === null) {
+		return "—";
+	}
+	return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }

@@ -1,25 +1,46 @@
 import { Alert, Anchor, Badge, Button, Card, Container, Group, Loader, Select, Stack, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCpu, IconExternalLink, IconInfoCircle, IconRefresh } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { toast } from "@/core/ui/notifications/Toast";
+import { DownloadProgressPanel } from "@/features/model-fit/components/DownloadProgressPanel";
+import { GgufBrowsePanel } from "@/features/model-fit/components/GgufBrowsePanel";
+import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
+import { HfTokenPanel } from "@/features/model-fit/components/HfTokenPanel";
+import { LlamaCppVersionPanel } from "@/features/model-fit/components/LlamaCppVersionPanel";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
+import { RunningModelsPanel } from "@/features/model-fit/components/RunningModelsPanel";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
-	defaultModelFitProviderName,
+	defaultGgufQuant,
+	type GgufRepository,
+	type LlamaCppVariant,
 	type ModelFitRecommendation,
 	type ModelFitUseCase,
 	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 	recommendationRefreshLimit,
+	type RunningModel,
 } from "@/features/model-fit/models/ModelFitModels";
-import { useLatestRecommendations, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
+import {
+	useBrowseGgufRepositories,
+	useCancelGgufDownload,
+	useEjectRunningModel,
+	useEnsureLlamaCppBinary,
+	useHardwareProfile,
+	useHfTokenStatus,
+	useLatestRecommendations,
+	useLlamaCppVersion,
+	useRefreshRecommendations,
+	useRunningModels,
+	useSetHfToken,
+	useStartGgufDownload,
+} from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
-import { useModelPull } from "@/features/models/hooks/useModelPull";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -32,29 +53,46 @@ export function ModelRecommendationsPage() {
 
 	const useCase = useModelFitManagementStore((state) => state.useCase);
 	const setUseCase = useModelFitManagementStore((state) => state.actions.setUseCase);
+	const browseQuery = useModelFitManagementStore((state) => state.browseQuery);
+	const setBrowseQuery = useModelFitManagementStore((state) => state.actions.setBrowseQuery);
+	const tokenDraft = useModelFitManagementStore((state) => state.tokenDraft);
+	const setTokenDraft = useModelFitManagementStore((state) => state.actions.setTokenDraft);
+	const clearTokenDraft = useModelFitManagementStore((state) => state.actions.clearTokenDraft);
 
-	const filters = useMemo(() => ({ useCase, providerName: defaultModelFitProviderName }), [useCase]);
+	// Forced hardware re-probe flag — flipped on by the refresh action so the next profile query re-detects the box.
+	const [hardwareRefresh, setHardwareRefresh] = useState(false);
+	// Names of GGUF downloads started this session — there is no byte-level progress from the backend, so the page
+	// tracks which downloads it kicked off to surface them (indeterminate + cancel) in the download panel.
+	const [inFlightDownloads, setInFlightDownloads] = useState<readonly string[]>([]);
+	// The llama.cpp version GET may trigger the first prebuilt binary download backend-side, so it must not run on
+	// mount. Flipped on only when the operator explicitly clicks "Check version" in the llama.cpp panel.
+	const [versionChecked, setVersionChecked] = useState(false);
+
+	const filters = useMemo(() => ({ useCase }), [useCase]);
 	const latestQuery = useLatestRecommendations(filters);
-	// Reuse the scheduler job-list query to discover an existing model-recommendation-check job. The refresh
-	// endpoint fires an EXISTING job; it never creates one — so refresh is gated on such a job being present.
 	const jobsQuery = useScheduledJobs();
 	const refreshMutation = useRefreshRecommendations();
-	// Shared single pull engine (invariant §3.3) — the same hook the ModelManagement dialog uses.
-	const modelPull = useModelPull();
+
+	const hardwareQuery = useHardwareProfile(hardwareRefresh);
+	const runningQuery = useRunningModels();
+	const versionQuery = useLlamaCppVersion(versionChecked);
+	const hfTokenQuery = useHfTokenStatus();
+	const browseQueryResult = useBrowseGgufRepositories(browseQuery, true);
+
+	const startDownload = useStartGgufDownload();
+	const cancelDownload = useCancelGgufDownload();
+	const ejectModel = useEjectRunningModel();
+	const ensureBinary = useEnsureLlamaCppBinary();
+	const setHfToken = useSetHfToken();
 
 	const latest = latestQuery.data;
 
-	// The first ENABLED model-recommendation-check job (or the first of any state if none enabled). Refresh is only
-	// offered when at least one such job exists; otherwise the operator must create one in the Scheduler UI (job
-	// definition CRUD lives there, not here).
 	const refreshJob = useMemo(() => {
 		const jobs = jobsQuery.data ?? [];
 		const matching = jobs.filter((job) => job.templateId === modelRecommendationCheckTemplateId);
 		return matching.find((job) => job.enabled) ?? matching[0];
 	}, [jobsQuery.data]);
 
-	// Live invalidation + the SignalR-push toast, with a one-shot on-(re)connect REST catch-up keyed to the discovered
-	// job so a result that fired before the hub connected (or during a reconnect gap) still surfaces — no polling.
 	useModelFitSchedulerEvents(refreshJob?.id);
 
 	const canRefresh = refreshJob !== undefined && !refreshMutation.isPending;
@@ -63,9 +101,6 @@ export function ModelRecommendationsPage() {
 		if (refreshJob === undefined) {
 			return;
 		}
-		// Send the currently-selected use case so the run targets what the operator is viewing (server validates it
-		// against the fixed allowlist), instead of the use case baked into the job definition. Also widen the breadth
-		// (--limit) so more pullable/installed candidates surface than the definition's baked default (Lane H1).
 		refreshMutation.mutate(
 			{ scheduledJobId: refreshJob.id, useCase, limit: recommendationRefreshLimit },
 			{
@@ -81,12 +116,116 @@ export function ModelRecommendationsPage() {
 		}
 	};
 
-	// The table only renders a Pull button for rows with a non-null pullModelName, but guard here too — the hook
-	// pulls the Ollama tag (pullModelName), not the llmfit display name.
-	const handlePull = (recommendation: ModelFitRecommendation): void => {
+	const handleHardwareRefresh = (): void => {
+		// Latch the re-probe flag so the hardware query (keyed on `refresh`) re-detects, then refetch.
+		setHardwareRefresh(true);
+		hardwareQuery.refetch().catch(() => undefined);
+	};
+
+	// Marks a model as in-flight (deduped) so the download panel surfaces it.
+	const markInFlight = useCallback((modelName: string): void => {
+		setInFlightDownloads((current) => (current.includes(modelName) ? current : [...current, modelName]));
+	}, []);
+
+	const removeInFlight = useCallback((modelName: string): void => {
+		setInFlightDownloads((current) => current.filter((name) => name !== modelName));
+	}, []);
+
+	// Starts a GGUF download by repo id (the model name the backend resolves rides the response). On success the model
+	// is tracked as in-flight; alreadyInFlight responses are surfaced too (the download was already running).
+	const startGgufDownload = useCallback(
+		(repoId: string, fileName?: string, quant?: string): void => {
+			startDownload.mutate(
+				{ repoId, fileName, quant },
+				{
+					onSuccess: (response) => {
+						const modelName = response?.modelName ?? repoId;
+						markInFlight(modelName);
+						if (response?.alreadyInFlight) {
+							toast.info(t("pages.modelFit.download.alreadyInFlight", "That download is already in progress."));
+						} else {
+							toast.success(t("pages.modelFit.download.started", "Download started."));
+						}
+					},
+					onError: (error) =>
+						toast.error(errorMessage(error, t("pages.modelFit.download.error", "Could not start the download."))),
+				},
+			);
+		},
+		[startDownload, markInFlight, t],
+	);
+
+	const handleRecommendationDownload = (recommendation: ModelFitRecommendation): void => {
+		// The recommendation row carries the pullable model name (the repo/model the advisor chose) + its quant.
 		if (recommendation.pullModelName) {
-			modelPull.pull(recommendation.pullModelName);
+			startGgufDownload(recommendation.pullModelName, undefined, recommendation.quantization ?? defaultGgufQuant);
 		}
+	};
+
+	const handleBrowseDownload = (repository: GgufRepository): void => {
+		startGgufDownload(repository.repoId, undefined, defaultGgufQuant);
+	};
+
+	const handleCancelDownload = (modelName: string): void => {
+		cancelDownload.mutate(modelName, {
+			onSuccess: () => {
+				removeInFlight(modelName);
+				toast.success(t("pages.modelFit.download.cancelled", "Download cancelled."));
+			},
+			onError: (error) =>
+				toast.error(errorMessage(error, t("pages.modelFit.download.cancelError", "Could not cancel the download."))),
+		});
+	};
+
+	const handleEject = (model: RunningModel): void => {
+		ejectModel.mutate(
+			{ modelName: model.modelName, role: model.role || undefined },
+			{
+				onSuccess: () => {
+					removeInFlight(model.modelName);
+					toast.success(t("pages.modelFit.running.ejected", "Model ejected."));
+				},
+				onError: (error) => toast.error(errorMessage(error, t("pages.modelFit.running.ejectError", "Could not eject the model."))),
+			},
+		);
+	};
+
+	// Operator-initiated llama.cpp version probe. Latches the flag so the (possibly download-triggering) GET fires
+	// once on demand; a subsequent click re-fetches the now-enabled query.
+	const handleCheckVersion = (): void => {
+		if (!versionChecked) {
+			setVersionChecked(true);
+			return;
+		}
+		versionQuery.refetch().catch(() => undefined);
+	};
+
+	const handleEnsureBinary = (variant: LlamaCppVariant): void => {
+		ensureBinary.mutate(variant, {
+			onSuccess: () => toast.success(t("pages.modelFit.llamaCpp.ensured", "llama.cpp binary ready.")),
+			onError: (error) =>
+				toast.error(errorMessage(error, t("pages.modelFit.llamaCpp.ensureError", "Could not ensure the llama.cpp binary."))),
+		});
+	};
+
+	const handleSaveToken = (): void => {
+		setHfToken.mutate(tokenDraft.trim(), {
+			onSuccess: () => {
+				clearTokenDraft();
+				toast.success(t("pages.modelFit.hfToken.saved", "Token saved."));
+			},
+			onError: (error) => toast.error(errorMessage(error, t("pages.modelFit.hfToken.saveError", "Could not save the token."))),
+		});
+	};
+
+	const handleClearToken = (): void => {
+		setHfToken.mutate(undefined, {
+			onSuccess: () => {
+				clearTokenDraft();
+				toast.success(t("pages.modelFit.hfToken.cleared", "Token cleared."));
+			},
+			onError: (error) => toast.error(errorMessage(error, t("pages.modelFit.hfToken.clearError", "Could not clear the token."))),
+		});
 	};
 
 	const useCaseData = modelFitUseCases.map((value) => ({
@@ -95,6 +234,7 @@ export function ModelRecommendationsPage() {
 	}));
 
 	const hasCache = latest?.hasCache ?? false;
+	const downloadingModelName = startDownload.isPending ? (startDownload.variables?.repoId ?? null) : null;
 
 	return (
 		<Container fluid={true} py="lg">
@@ -106,12 +246,12 @@ export function ModelRecommendationsPage() {
 						</Text>
 						<Group gap="xs" align="center">
 							<IconCpu size={24} />
-							<Title order={2}>{t("pages.modelFit.recommendations.title", "Model recommendations")}</Title>
+							<Title order={2}>{t("pages.modelFit.recommendations.title", "Local model advisor")}</Title>
 						</Group>
 						<Text c="dimmed">
 							{t(
 								"pages.modelFit.recommendations.subtitle",
-								"Hardware-aware local model guidance for this node. Results are cached — use Refresh now to run a new recommendation check through the scheduler.",
+								"Hardware-aware local model guidance for this node. Detect hardware, browse and download GGUF models, manage the llama.cpp runtime, and eject running models.",
 							)}
 						</Text>
 					</Stack>
@@ -143,6 +283,20 @@ export function ModelRecommendationsPage() {
 						</Button>
 					</Group>
 				</Group>
+
+				<HardwareProfileCard
+					profile={hardwareQuery.data}
+					isLoading={hardwareQuery.isLoading}
+					isFetching={hardwareQuery.isFetching}
+					error={hardwareQuery.error}
+					onRefresh={handleHardwareRefresh}
+				/>
+
+				<DownloadProgressPanel
+					inFlight={inFlightDownloads}
+					onCancel={handleCancelDownload}
+					cancellingModelName={cancelDownload.isPending ? (cancelDownload.variables ?? null) : null}
+				/>
 
 				{refreshJob === undefined && !jobsQuery.isLoading ? (
 					<Alert color="blue" icon={<IconInfoCircle size={16} />} data-testid="model-fit-no-job-guidance">
@@ -218,27 +372,13 @@ export function ModelRecommendationsPage() {
 											{latest.useCase ? t(`pages.modelFit.recommendations.useCases.${latest.useCase}`, latest.useCase) : "—"}
 										</Text>
 									</Stack>
-									<Stack gap={0}>
-										<Text size="xs" c="dimmed">
-											{t("pages.modelFit.recommendations.snapshot.provider", "Provider")}
-										</Text>
-										<Text size="sm">{latest.providerName ?? "—"}</Text>
-									</Stack>
-									<Stack gap={0}>
-										<Text size="xs" c="dimmed">
-											{t("pages.modelFit.recommendations.snapshot.sourceImage", "Source image")}
-										</Text>
-										<Text size="sm" ff="monospace">
-											{latest.sourceImageId ?? "—"}
-										</Text>
-									</Stack>
 								</Group>
 
 								{latest.recommendations.length > 0 ? (
 									<RecommendationTable
 										recommendations={latest.recommendations}
-										onPull={handlePull}
-										pullingModelName={modelPull.pullingModelName}
+										onDownload={handleRecommendationDownload}
+										downloadingModelName={downloadingModelName}
 									/>
 								) : (
 									<Text c="dimmed" data-testid="model-fit-recommendations-empty-list">
@@ -258,6 +398,46 @@ export function ModelRecommendationsPage() {
 						) : null}
 					</Stack>
 				</Card>
+
+				<GgufBrowsePanel
+					repositories={browseQueryResult.data ?? []}
+					isLoading={browseQueryResult.isLoading && browseQuery.trim().length > 0}
+					error={browseQueryResult.error}
+					hasSearched={browseQuery.trim().length > 0}
+					onSearch={setBrowseQuery}
+					onDownload={handleBrowseDownload}
+					downloadingRepoId={downloadingModelName}
+				/>
+
+				<RunningModelsPanel
+					runningModels={runningQuery.data ?? []}
+					isLoading={runningQuery.isLoading}
+					error={runningQuery.error}
+					onEject={handleEject}
+					ejectingModelName={ejectModel.isPending ? (ejectModel.variables?.modelName ?? null) : null}
+				/>
+
+				<LlamaCppVersionPanel
+					version={versionQuery.data}
+					// `isLoading` is true while a DISABLED query idles, so gate the spinner on an actual in-flight fetch — the
+					// panel shows its idle "not checked yet" state until the operator triggers the (download-capable) probe.
+					isLoading={versionChecked && versionQuery.isFetching}
+					error={versionChecked ? versionQuery.error : null}
+					hasChecked={versionChecked}
+					onCheck={handleCheckVersion}
+					onEnsure={handleEnsureBinary}
+					isEnsuring={ensureBinary.isPending}
+				/>
+
+				<HfTokenPanel
+					hasToken={hfTokenQuery.data ?? false}
+					isLoading={hfTokenQuery.isLoading}
+					tokenDraft={tokenDraft}
+					onTokenDraftChange={setTokenDraft}
+					onSave={handleSaveToken}
+					onClear={handleClearToken}
+					isSaving={setHfToken.isPending}
+				/>
 			</Stack>
 		</Container>
 	);

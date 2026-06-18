@@ -14,9 +14,18 @@ const { mutationMock } = vi.hoisted(() => ({
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	refreshRecommendationsMutation: vi.fn(() => ({ mutationFn: mutationMock.mutationFn })),
-	// Read options are imported by the module under test but unused in these mutation tests.
-	listApprovedImagesOptions: vi.fn(),
+	// Read/mutation options are imported by the module under test but unused in these refresh-mutation tests.
 	getLatestRecommendationsOptions: vi.fn(),
+	getHardwareProfileOptions: vi.fn(),
+	listRunningModelsOptions: vi.fn(),
+	getLlamaCppVersionOptions: vi.fn(),
+	getHfTokenStatusOptions: vi.fn(),
+	browseGgufRepositoriesOptions: vi.fn(),
+	startGgufDownloadMutation: vi.fn(),
+	cancelGgufDownloadMutation: vi.fn(),
+	ejectRunningModelMutation: vi.fn(),
+	ensureLlamaCppBinaryMutation: vi.fn(),
+	setHfTokenMutation: vi.fn(),
 }));
 
 import { modelFitInvalidationKey, modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";
@@ -60,8 +69,9 @@ describe("useRefreshRecommendations", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
 		// TanStack v5 calls mutationFn(variables, context) — assert the variables via the first call arg only
-		// (a toHaveBeenCalledWith({...}) would fail on the 2nd context argument). With no override, useCase is undefined.
-		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1", useCase: undefined } });
+		// (a toHaveBeenCalledWith({...}) would fail on the 2nd context argument). The hook spreads the domain variables
+		// into the body, so with no overrides the body carries just the job id.
+		expect(mutationMock.mutationFn.mock.calls[0]?.[0]).toEqual({ body: { scheduledJobId: "job-1" } });
 		expect(invalidatedKeys).toContainEqual(LATEST_KEY);
 	});
 

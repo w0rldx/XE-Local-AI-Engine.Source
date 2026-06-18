@@ -7,43 +7,22 @@ export type ModelFitUseCase = "general" | "coding" | "reasoning" | "chat" | "mul
 
 export const modelFitUseCases: readonly ModelFitUseCase[] = ["general", "coding", "reasoning", "chat", "multimodal", "embedding"];
 
-// Default use case the page opens on (matches the scheduler template default). The backend defaults providerName
-// to "ollama"; the page only ever queries the single supported provider, so it is a constant here.
+// Default use case the page opens on (matches the scheduler template default).
 export const defaultModelFitUseCase: ModelFitUseCase = "coding";
-export const defaultModelFitProviderName = "ollama";
 
 // Breadth (--limit) the manual "Refresh now" sends per run. Set high enough to fetch the whole use-case catalog
-// (llmfit caps at the catalog size — ~166 for coding — regardless of a larger value), so the table can show the full
-// selection with client-side pagination. Validated server-side against the 1..500 allowlist (Lane H1).
+// (the advisor caps at the candidate-list size regardless of a larger value), so the table can show the full
+// selection with client-side pagination. Validated server-side against the 1..500 allowlist.
 export const recommendationRefreshLimit = 500;
 
-// llmfit utility-image purposes (a [Flags] enum on the wire, projected to a string array). An image may serve
-// recommendation, benchmark, or both. Surfaced as purpose badges on the read-only approved-images page.
-export type ModelFitImagePurpose = "ModelRecommendation" | "ModelBenchmark";
-
-// Domain view-model for one approved llmfit utility image. Read-only on the wire: imageReference is pinned by
-// code-seed/migration and never editable from the browser, so the model carries it purely for display. All
-// optional metadata fields are nullable (the wire omits them; the mapper coalesces to null). Timestamps are
-// epoch milliseconds.
-export interface ApprovedImage {
-	readonly approvedImageId: string;
-	readonly displayName: string;
-	readonly description: string | null;
-	readonly purpose: readonly ModelFitImagePurpose[];
-	readonly imageReference: string;
-	readonly sourceUrl: string | null;
-	readonly upstreamVersion: string | null;
-	readonly enabled: boolean;
-	readonly deprecatedAtUtc: number | null;
-	readonly replacementApprovedImageId: string | null;
-	readonly lastUsedAtUtc: number | null;
-	readonly lastSuccessfulRunAtUtc: number | null;
-	readonly diagnostics: string | null;
-}
+// Default quant the advisor recommends when the operator does not override it (HF policy, Q4_K_M). Surfaced here so
+// the GGUF download flow can default the requested quant without re-deriving it from a recommendation row.
+export const defaultGgufQuant = "Q4_K_M";
 
 // Domain view-model for one ranked recommendation row. Sanitized projection of the normalized
-// model_fit_recommendations row — it never carries raw llmfit JSON. Numeric fit metrics are nullable because
-// llmfit may omit them (e.g. no separate VRAM figure). isInstalled / pullModelName drive the install indicator.
+// model_fit_recommendations row — it never carries raw advisor JSON. Numeric fit metrics are nullable because the
+// advisor may omit them (e.g. no separate VRAM figure when running CPU-only). The advisor now fills file + quant +
+// the memory-fit estimate (requiredRamMb / requiredVramMb / contextTokens), and runMode carries the CPU/GPU mode.
 export interface ModelFitRecommendation {
 	readonly rank: number;
 	readonly modelName: string;
@@ -58,31 +37,83 @@ export interface ModelFitRecommendation {
 	readonly contextTokens: number | null;
 	readonly isInstalled: boolean;
 	readonly pullModelName: string | null;
-	// The model's release date (ISO date string) when llmfit reports one; null otherwise. A "newer model" signal.
+	// The model's release date (ISO date string) when the advisor reports one; null otherwise. A "newer model" signal.
 	readonly releaseDate: string | null;
 }
 
 // Domain view-model for the latest cached recommendation snapshot. hasCache:false is the explicit empty /
 // diagnostics state — when it is false every snapshot field is null and recommendations is empty (the backend
-// returns 200 on a cache miss, not a 404). Reads never run llmfit; the cache is refreshed only via the scheduler.
+// returns 200 on a cache miss, not a 404). Reads never run the advisor; the cache is refreshed only via the scheduler.
 export interface ModelFitLatestRecommendations {
 	readonly hasCache: boolean;
 	readonly snapshotId: string | null;
 	readonly status: string | null;
-	readonly sourceImageId: string | null;
 	readonly useCase: ModelFitUseCase | string | null;
-	readonly providerName: string | null;
 	readonly lastRefreshedAtUtc: number | null;
 	readonly recommendations: readonly ModelFitRecommendation[];
 }
 
-// Filters for the latest-recommendations query. providerName is optional (server defaults to "ollama").
+// Filters for the latest-recommendations query. Only the use case scopes the cache read (the advisor no longer
+// carries a provider param — local llama.cpp is the only target).
 export interface ModelFitRecommendationFilters {
 	readonly useCase: ModelFitUseCase;
-	readonly providerName?: string;
 }
 
 const modelFitUseCaseSchema = z.enum(["general", "coding", "reasoning", "chat", "multimodal", "embedding"]);
+
+// Known GPU-vendor values the hardware profile reports. Anything outside this set (a future vendor) maps to "unknown".
+export type HardwareGpuVendor = "nvidia" | "amd" | "intel" | "none" | "unknown";
+
+export const hardwareGpuVendors: readonly HardwareGpuVendor[] = ["nvidia", "amd", "intel", "none", "unknown"];
+
+// Domain view-model for the node hardware profile. Carries only aggregate RAM/VRAM/vendor/CPU/disk figures (the
+// backend redacts machine identifiers). vramKnown is the explicit "VRAM undetectable" flag — when false the advisor
+// degrades to a CPU/RAM-only fit budget and the profile card shows "VRAM unknown". gpuAccelAvailable false ⇒ CPU mode.
+export interface HardwareProfile {
+	readonly totalRamBytes: number;
+	readonly availableRamBytes: number;
+	readonly vramBytes: number | null;
+	readonly vramKnown: boolean;
+	readonly gpuVendor: HardwareGpuVendor;
+	readonly gpuAccelAvailable: boolean;
+	readonly cpuCores: number;
+	readonly freeDiskBytes: number;
+}
+
+// Domain view-model for one HF GGUF repository candidate the browse search returns. Sanitized metadata only — no
+// download URL or token. hasUsableGguf flags whether the repo actually exposes a downloadable GGUF file.
+export interface GgufRepository {
+	readonly repoId: string;
+	readonly isGated: boolean;
+	readonly downloads: number;
+	readonly likes: number;
+	readonly lastModifiedAtUtc: number | null;
+	readonly license: string | null;
+	readonly hasUsableGguf: boolean;
+}
+
+// Domain view-model for one running (loaded) local model the supervisor reports. role distinguishes chat/embedding
+// roles; isResponsive + detail surface liveness for the eject UI.
+export interface RunningModel {
+	readonly modelName: string;
+	readonly role: string;
+	readonly isResponsive: boolean;
+	readonly detail: string;
+}
+
+// Known llama.cpp binary variants. cpu is the always-available fallback; cuda/vulkan are GPU-accelerated.
+export type LlamaCppVariant = "cpu" | "cuda" | "vulkan";
+
+export const llamaCppVariants: readonly LlamaCppVariant[] = ["cpu", "cuda", "vulkan"];
+
+// Domain view-model for the resolved llama.cpp binary. isPinnedFallback flags that the active binary is the pinned
+// fallback tag rather than a freshly resolved upstream release.
+export interface LlamaCppVersion {
+	readonly version: string;
+	readonly variant: LlamaCppVariant | string;
+	readonly isPinnedFallback: boolean;
+	readonly pinnedTag: string;
+}
 
 // Reserved scheduler template id the refresh-now action fires. The refresh endpoint triggers an EXISTING
 // model-recommendation-check job (it does not create one), so the page filters the scheduler job list by this
