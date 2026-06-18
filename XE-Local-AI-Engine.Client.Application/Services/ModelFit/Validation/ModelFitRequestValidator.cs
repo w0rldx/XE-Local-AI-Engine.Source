@@ -16,11 +16,11 @@ public sealed class ModelFitRequestValidator
     public const int MinLimit = 1;
 
     /// <summary>
-    ///     The inclusive upper bound for the recommend limit. Set high enough to fetch the whole use-case catalog (llmfit
-    ///     returns at most the catalog size — ~166 for coding — regardless of a larger limit), so the UI can show the full
-    ///     selection with client-side pagination rather than a hidden subset.
+    ///     The inclusive upper bound for the recommend limit. The advisor only inspects a small fixed window of repos
+    ///     (<c>DefaultRepoSearchLimit = 12</c>), so a low ceiling is realistic; it is kept identical to the handler's
+    ///     JSON-schema <c>maximum</c> (50) so the endpoint/trigger/validator and the scheduled-run schema agree on one bound.
     /// </summary>
-    public const int MaxLimit = 500;
+    public const int MaxLimit = 50;
 
     /// <summary>The six llmfit-supported use-case values. Matched ordinally and case-sensitively.</summary>
     public static readonly IReadOnlySet<string> AllowedUseCases =
@@ -34,11 +34,16 @@ public sealed class ModelFitRequestValidator
             "embedding"
         };
 
-    /// <summary>The allowlisted providers (initially ollama only). Matched ordinally and case-sensitively.</summary>
+    /// <summary>
+    ///     The allowlisted providers. <c>llama.cpp</c> is the local advisor's in-process target (Lane C runtime
+    ///     re-architecture); <c>ollama</c> is retained for back-compat with any legacy recommendation snapshot key.
+    ///     Matched ordinally and case-sensitively.
+    /// </summary>
     public static readonly IReadOnlySet<string> AllowedProviders =
         new HashSet<string>(StringComparer.Ordinal)
         {
-            "ollama"
+            "ollama",
+            "llama.cpp"
         };
 
     private readonly ModelNameValidator _modelNameValidator;

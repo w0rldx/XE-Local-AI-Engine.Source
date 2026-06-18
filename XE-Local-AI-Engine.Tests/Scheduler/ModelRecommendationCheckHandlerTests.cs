@@ -22,7 +22,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ModelRecommendationCheckHandlerTests
 {
     private const string ValidParameters =
-        """{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "ollama" }""";
+        """{ "operation": "Recommend", "useCase": "coding", "limit": 5 }""";
+
+    private const string ValidParametersWithOverrides =
+        """{ "operation": "Recommend", "useCase": "coding", "limit": 5, "quantOverride": "Q5_K_M", "ctxTarget": 16384 }""";
 
     [Test]
     public void Descriptor_ClaimsReservedTemplateIdAndSafeDefaults()
@@ -41,13 +44,11 @@ public sealed class ModelRecommendationCheckHandlerTests
     }
 
     [Test]
-    [Arguments("""{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Benchmark", "useCase": "coding", "limit": 5, "providerName": "ollama" }""")]
-    [Arguments("""{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "garbage", "useCase": "coding", "limit": 5, "providerName": "ollama" }""")]
-    [Arguments("""{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "astrology", "limit": 5, "providerName": "ollama" }""")]
-    [Arguments("""{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 0, "providerName": "ollama" }""")]
-    [Arguments("""{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 9999, "providerName": "ollama" }""")]
-    [Arguments("""{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "azure" }""")]
-    [Arguments("""{ "approvedImageId": "", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "ollama" }""")]
+    [Arguments("""{ "operation": "Benchmark", "useCase": "coding", "limit": 5 }""")]
+    [Arguments("""{ "operation": "garbage", "useCase": "coding", "limit": 5 }""")]
+    [Arguments("""{ "operation": "Recommend", "useCase": "astrology", "limit": 5 }""")]
+    [Arguments("""{ "operation": "Recommend", "useCase": "coding", "limit": 0 }""")]
+    [Arguments("""{ "operation": "Recommend", "useCase": "coding", "limit": 9999 }""")]
     [Arguments("not json")]
     [Arguments("")]
     public async Task ExecuteAsync_WhenParametersInvalid_ThrowsValidationExceptionWithoutRunningRefresh(string parametersJson)
@@ -60,6 +61,37 @@ public sealed class ModelRecommendationCheckHandlerTests
     }
 
     [Test]
+    public void Handler_ParamSchema_RejectsApprovedImageId_AcceptsNewSchema()
+    {
+        var (handler, _) = CreateHandler();
+
+        // The new parameter schema drops approvedImageId + providerName and adds quantOverride/ctxTarget.
+        var schema = handler.Descriptor.ParameterSchema!;
+        AssertEx.False(schema.Contains("approvedImageId", StringComparison.Ordinal), "approvedImageId must be gone from the schema.");
+        AssertEx.False(schema.Contains("providerName", StringComparison.Ordinal), "providerName must be gone from the schema.");
+        AssertEx.Contains(schema, "quantOverride");
+        AssertEx.Contains(schema, "ctxTarget");
+
+        // The default parameters carry no approved-image / provider fields either.
+        var defaults = handler.Descriptor.DefaultParameters!;
+        AssertEx.False(defaults.Contains("approvedImageId", StringComparison.Ordinal));
+        AssertEx.False(defaults.Contains("providerName", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenOverridesSupplied_PassesQuantAndCtxToRefresh()
+    {
+        var (handler, refresh) = CreateHandler();
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, 1, null);
+
+        await handler.ExecuteAsync(Context(ValidParametersWithOverrides), CancellationToken.None);
+
+        AssertEx.NotNull(refresh.LastRequest);
+        AssertEx.Equal("Q5_K_M", refresh.LastRequest!.QuantOverride!);
+        AssertEx.Equal(16384, refresh.LastRequest.CtxTarget ?? 0);
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenRefreshSucceeds_InvokesRefreshExactlyOnce()
     {
         var (handler, refresh) = CreateHandler();
@@ -69,11 +101,9 @@ public sealed class ModelRecommendationCheckHandlerTests
 
         AssertEx.Equal(1, refresh.CallCount);
         AssertEx.NotNull(refresh.LastRequest);
-        AssertEx.Equal("llmfit-recommender-0-9-30", refresh.LastRequest!.ApprovedImageId);
-        AssertEx.Equal(ModelFitOperation.Recommend, refresh.LastRequest.Operation);
+        AssertEx.Equal(ModelFitOperation.Recommend, refresh.LastRequest!.Operation);
         AssertEx.Equal("coding", refresh.LastRequest.UseCase!);
         AssertEx.Equal(5, refresh.LastRequest.Limit);
-        AssertEx.Equal("ollama", refresh.LastRequest.ProviderName);
     }
 
     [Test]

@@ -3,9 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Orchestrates a single model-fit refresh: it resolves the approved image, validates the intent
-///     params, computes node hardware overrides, opens a snapshot run, invokes the narrow HostAgent utility runner,
-///     tolerantly parses the recommendation JSON and replaces the cached normalized recommendation snapshot.
+///     Orchestrates a single model-fit refresh: it profiles the node hardware (Lane C1), discovers candidate GGUF files
+///     from Hugging Face (Lane B), estimates each file's memory fit, drops the non-fitting / insufficient-metadata ones,
+///     ranks the survivors, tolerantly serializes them to recommendation rows and replaces the cached recommendation
+///     snapshot — all node-local except the HF discovery egress. No Docker, no approved image, no provider name.
 ///     <para>
 ///         This service is invoked solely by the scheduler handler — there is no bypass execution path. It NEVER touches
 ///         scheduler run rows or publishes SignalR (the dispatcher owns those). It re-throws
@@ -27,21 +28,22 @@ public interface IModelFitRefreshService
 }
 
 /// <summary>
-///     Intent-level request for one model-fit refresh. Carries no command/argv/image-name — the approved image id is
-///     resolved to a pinned reference server-side.
+///     Intent-level request for one model-fit refresh. Carries no command/argv/image-name and no provider — the local
+///     advisor runs box-aware GGUF recommendation entirely in-process (the only egress is the Lane B HF discovery call).
+///     <see cref="QuantOverride" /> replaces the default <c>Q4_K_M</c> quant when supplied; <see cref="CtxTarget" />
+///     overrides the context window the KV-cache fit is sized against.
 /// </summary>
 public sealed record ModelFitRefreshRequest(
-    string ApprovedImageId,
     ModelFitOperation Operation,
     string? UseCase,
     int Limit,
-    string ProviderName,
-    string? ModelName);
+    string? QuantOverride = null,
+    int? CtxTarget = null);
 
 /// <summary>
 ///     Outcome of a model-fit refresh. <see cref="SanitizedError" /> is an operator-safe one-liner that never carries
 ///     secrets or raw utility output; <see cref="SnapshotId" /> is <c>null</c> only when the refresh failed pre-run
-///     validation (resolver/validator rejection) before any snapshot row was created.
+///     validation (validator rejection) before any snapshot row was created.
 /// </summary>
 public sealed record ModelFitRefreshResult(
     Guid? SnapshotId,

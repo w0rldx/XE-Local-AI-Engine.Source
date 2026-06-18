@@ -52,6 +52,43 @@ public sealed class RecommendationJsonParserTests
     }
 
     [Test]
+    public void RecommendationParser_Adapted_MapsAdvisorJson()
+    {
+        // The advisor emits the same {models:[],system:{}} shape with vram_required_gb + repo_id/file_name; the reused
+        // scaffold maps name→PullModelName, best_quant→Quantization, vram_required_gb→RequiredVramMb (was always null).
+        const string json = """
+                            {
+                              "models": [
+                                {
+                                  "name": "org/qwen-GGUF:Q4_K_M",
+                                  "best_quant": "Q4_K_M",
+                                  "fit_level": "GPU",
+                                  "run_mode": "Gpu",
+                                  "score": 12.5,
+                                  "memory_required_gb": 8.0,
+                                  "vram_required_gb": 8.0,
+                                  "repo_id": "org/qwen-GGUF",
+                                  "file_name": "qwen.Q4_K_M.gguf",
+                                  "installed": false
+                                }
+                              ],
+                              "system": { "gpu_accel": true, "gpu_vendor": "Nvidia", "vram_known": true }
+                            }
+                            """;
+
+        var result = RecommendationJsonParser.Parse(json);
+
+        AssertEx.True(result.IsSuccess);
+        var row = result.Recommendations.Single();
+        AssertEx.Equal("org/qwen-GGUF:Q4_K_M", row.ModelName);
+        AssertEx.Equal("org/qwen-GGUF:Q4_K_M", row.PullModelName!);
+        AssertEx.Equal("Q4_K_M", row.Quantization!);
+        AssertEx.Equal(8.0 * 1024d, row.RequiredVramMb!.Value);
+        AssertEx.Equal(8.0 * 1024d, row.RequiredRamMb!.Value);
+        AssertEx.NotNull(result.SystemDiagnosticsJson);
+    }
+
+    [Test]
     public void Parse_WhenReleaseDatePresent_CarriesItIntoDiagnostics()
     {
         // Lane H3: release_date rides the existing diagnostics blob (no new column) so the read mapper can surface it.

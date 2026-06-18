@@ -26,12 +26,21 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     private const string SeedDisplayName = "Model recommendation refresh (on demand)";
 
     private const string SeedDescription =
-        "Runs the approved llmfit recommend image on demand to refresh the cached model recommendation snapshot. " +
+        "Runs the local model advisor on demand to refresh the cached box-aware GGUF recommendation snapshot. " +
         "This is a manual, on-demand schedule (no automatic firing) — use Refresh now to run it.";
 
     private const string SeedTimeZoneId = "UTC";
 
     private const int SeedMaxRuntimeSeconds = 600;
+
+    /// <summary>
+    ///     The default parameter JSON for the seeded schedule: the Recommend operation, the coding use case and the top-5
+    ///     limit. No approved-image or provider-name fields (the advisor runs box-aware GGUF recommendation in-process).
+    ///     Mirrors the handler's own <c>DefaultParameters</c> so the seeded job runs the same recommendation as a
+    ///     hand-created one.
+    /// </summary>
+    private const string SeedParametersJson = """{"operation":"Recommend","useCase":"coding","limit":5}""";
+
     private readonly ILogger<ModelRecommendationScheduleSeeder> _logger;
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -70,7 +79,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
                 MisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
                 PreventOverlap: true,
                 MaxRuntimeSeconds: SeedMaxRuntimeSeconds,
-                Parameters: BuildSeedParameters());
+                Parameters: SeedParametersJson);
 
             // CreateJobAsync persists the definition enabled, then registers the durable Manual Quartz job (no trigger).
             var created = await managementService.CreateJobAsync(input, cancellationToken).ConfigureAwait(false);
@@ -95,17 +104,5 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    ///     The catalog-default parameter JSON for the seeded schedule: the approved llmfit recommender image, the
-    ///     Recommend operation, the coding use case, the top-5 limit, and the ollama provider. Mirrors the handler's own
-    ///     <c>DefaultParameters</c> so the seeded job runs the same recommendation as a hand-created one.
-    /// </summary>
-    private static string BuildSeedParameters()
-    {
-        return $$"""
-                 {"approvedImageId":"{{ApprovedUtilityImageCatalog.LlmfitRecommenderImageId}}","operation":"Recommend","useCase":"coding","limit":5,"providerName":"ollama"}
-                 """;
     }
 }

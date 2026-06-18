@@ -50,9 +50,6 @@ using XE_Local_AI_Engine.Client.Services.Manager;
 using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
-using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Monitoring;
 using XE_Local_AI_Engine.Client.Services.Monitoring.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -97,13 +94,6 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         builder.Services.AddSingleton<IMcpClientFactory, McpClientFactory>();
         builder.Services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
         builder.Services.AddHostedService<McpServerStartupConnector>();
-        // Model-fit image-reference validator (security boundary): validates that a reference is already in the
-        // strict canonical repository:tag@sha256:<64 lowercase hex> form against the approved-repository allowlist, never
-        // rewriting an untrusted reference into a trusted one. Stateless → singleton. The startup seeder re-validates every
-        // code-defined catalog descriptor through it and skips any whose reference fails, then upserts the rest into the
-        // registry (preserving the operator Enabled toggle). Hosted so it runs once off the hot path.
-        builder.Services.AddSingleton<ApprovedImageReferenceValidator>();
-        builder.Services.AddHostedService<ApprovedUtilityImageSeeder>();
         // MCP registration service: validates transport fields, loopback URL, and unique names, then republishes the
         // live tool snapshot after enabled-set changes.
         builder.Services.AddScoped<IMcpServerService, McpServerService>();
