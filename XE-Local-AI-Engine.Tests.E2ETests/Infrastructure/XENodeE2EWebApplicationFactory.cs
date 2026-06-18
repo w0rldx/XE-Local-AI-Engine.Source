@@ -259,7 +259,17 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.DecorateChatClientPipeline();
 
             services.RemoveAll<IHttpClientFactory>();
-            services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());
+            services.AddSingleton<IHttpClientFactory>(_ =>
+            {
+                // Return a real (but un-routed) HttpClient for ANY named client so DI factories that construct an
+                // HttpClient at resolve time (e.g. the Lane B HF discovery/download clients reached by the model-fit
+                // advisor endpoints, instantiated by FastEndpoints at MapFastEndpoints/startup) can be built. No real
+                // request is made in these E2E flows — the consuming endpoints catch transport failures and degrade —
+                // so this never performs network I/O. Mirrors TestingWebAppFactory's unit-side factory.
+                var factory = Substitute.For<IHttpClientFactory>();
+                factory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
+                return factory;
+            });
         });
 
         base.ConfigureWebHost(builder);
