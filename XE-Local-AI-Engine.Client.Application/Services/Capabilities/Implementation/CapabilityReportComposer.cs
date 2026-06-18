@@ -28,7 +28,7 @@ internal sealed class CapabilityReportComposer
     private static readonly string[] AgentHomeCapabilities =
     [
         "agent-home",
-        "sandbox-local-container",
+        "sandbox-process",
         "runtime-dotnet-agent-home",
         "workspace-copy",
         "patch-export",
