@@ -65,23 +65,50 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var isPinnedFallback = string.Equals(_activeTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", _activeTag, VariantSlug(variant));
-        var serverPath = Path.GetFullPath(Path.Combine(variantDir, pin.ServerRelativePath));
 
         // Offline / already-cached path: reuse a present binary without re-download.
-        if (File.Exists(serverPath))
+        var cachedServer = ResolveServerPath(variantDir, pin);
+        if (cachedServer is not null)
         {
-            return new LlamaBinary(serverPath, _activeTag, variant, isPinnedFallback);
+            return new LlamaBinary(cachedServer, _activeTag, variant, isPinnedFallback);
         }
 
         await DownloadVerifyExtractAsync(pin, variantDir, ct).ConfigureAwait(false);
 
-        if (!File.Exists(serverPath))
+        var serverPath = ResolveServerPath(variantDir, pin);
+        if (serverPath is null)
         {
             throw new LlamaRuntimeException(
                 "The downloaded llama.cpp runtime did not contain the expected server executable.");
         }
 
         return new LlamaBinary(serverPath, _activeTag, variant, isPinnedFallback);
+    }
+
+    /// <summary>
+    ///     Locates the <c>llama-server</c> executable inside an extracted variant directory. The pinned relative path
+    ///     is tried first (fast path); if the upstream archive layout differs from the pin — llama.cpp release archives
+    ///     have shipped the binary under both <c>build/bin/</c> and a top-level <c>llama-{tag}/</c> folder — fall back
+    ///     to a recursive search by file name so an upstream layout change does not silently break acquisition. Returns
+    ///     <see langword="null" /> when no executable of that name exists under the directory.
+    /// </summary>
+    private static string? ResolveServerPath(string variantDir, LlamaCppAssetPin pin)
+    {
+        var pinned = Path.GetFullPath(Path.Combine(variantDir, pin.ServerRelativePath));
+        if (File.Exists(pinned))
+        {
+            return pinned;
+        }
+
+        if (!Directory.Exists(variantDir))
+        {
+            return null;
+        }
+
+        var serverFileName = Path.GetFileName(pin.ServerRelativePath);
+        return Directory
+            .EnumerateFiles(variantDir, serverFileName, SearchOption.AllDirectories)
+            .FirstOrDefault();
     }
 
     private async Task DownloadVerifyExtractAsync(LlamaCppAssetPin pin, string variantDir, CancellationToken ct)
