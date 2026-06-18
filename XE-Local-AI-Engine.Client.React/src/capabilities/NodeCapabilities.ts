@@ -103,10 +103,8 @@ export const nodeRoutePaths = {
 	mcp: "/mcp",
 	// Quartz scheduler management page — gated on nodeCapabilities.scheduler
 	scheduler: "/scheduler",
-	// llmfit model recommendations page — gated on nodeCapabilities.modelFit
+	// local model advisor page (recommendations + hardware profile + GGUF browse/download) — gated on nodeCapabilities.modelFit
 	modelRecommendations: "/model-recommendations",
-	// llmfit approved reference images page (read-only) — gated on nodeCapabilities.modelFit
-	approvedImages: "/approved-images",
 	// loaded-models live overview + eject page — gated on nodeCapabilities.loadedModels
 	loadedModels: "/loaded-models",
 	// Open Canvas (Preview) workflow builder page — gated on nodeCapabilities.preview

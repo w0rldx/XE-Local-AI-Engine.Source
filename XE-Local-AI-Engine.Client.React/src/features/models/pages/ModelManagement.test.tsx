@@ -53,7 +53,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: fakeQueryKey("getLatestRecommendations"),
 		queryFn: queryFns.getLatestRecommendations,
 	}),
-	listApprovedImagesOptions: () => ({ queryKey: fakeQueryKey("listApprovedImages"), queryFn: vi.fn() }),
 	refreshRecommendationsMutation: () => ({ mutationFn: vi.fn() }),
 }));
 

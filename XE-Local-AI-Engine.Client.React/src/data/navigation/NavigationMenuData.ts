@@ -106,16 +106,13 @@ const allNavigationLinks: INavigationLink[] = [
 		to: nodeRoutePaths.preview,
 		capability: "preview",
 	},
-	// Manager group: runtime overview (always) plus the approved-images page, which is gated on the static
-	// modelFit capability. With modelFit off the group keeps just Overview.
+	// Manager group: runtime overview (always). The former approved-images entry was removed with the approved-image
+	// concept (Lane C — the advisor replaces the Docker-llmfit recommendation backend).
 	{
 		id: "manager",
 		icon: IconServerCog,
 		translationKey: "navigation.manager",
-		links: [
-			{ translationKey: "navigation.overview", to: nodeRoutePaths.manager },
-			{ translationKey: "navigation.approvedImages", to: nodeRoutePaths.approvedImages, capability: "modelFit" },
-		],
+		links: [{ translationKey: "navigation.overview", to: nodeRoutePaths.manager }],
 	},
 	{
 		id: "invocations",

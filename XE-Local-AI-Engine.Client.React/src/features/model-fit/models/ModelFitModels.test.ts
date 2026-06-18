@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	defaultModelFitProviderName,
+	defaultGgufQuant,
 	defaultModelFitUseCase,
 	modelFitUseCaseSchema,
 	modelFitUseCases,
@@ -13,9 +13,12 @@ describe("model-fit use cases", () => {
 		expect([...modelFitUseCases]).toEqual(["general", "coding", "reasoning", "chat", "multimodal", "embedding"]);
 	});
 
-	it("defaults to coding / ollama matching the scheduler template defaults", () => {
+	it("defaults to the coding use case matching the scheduler template default", () => {
 		expect(defaultModelFitUseCase).toBe("coding");
-		expect(defaultModelFitProviderName).toBe("ollama");
+	});
+
+	it("defaults the GGUF quant to the HF policy default Q4_K_M", () => {
+		expect(defaultGgufQuant).toBe("Q4_K_M");
 	});
 
 	it("validates each supported use case and rejects an unknown one", () => {

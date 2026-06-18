@@ -60,7 +60,6 @@
 		"mcp": "MCP",
 		"scheduler": "Planer",
 		"modelRecommendations": "Modellempfehlungen",
-		"approvedImages": "Freigegebene Images",
 		"manager": "Manager",
 		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
@@ -1541,8 +1540,8 @@
 		"modelFit": {
 			"eyebrow": "Worker Node",
 			"recommendations": {
-				"title": "Modellempfehlungen",
-				"subtitle": "Hardwarebewusste Empfehlungen für lokale Modelle auf diesem Node. Ergebnisse werden zwischengespeichert — mit Jetzt aktualisieren wird über den Planer eine neue Empfehlungsprüfung gestartet.",
+				"title": "Lokaler Modell-Advisor",
+				"subtitle": "Hardwarebewusste Empfehlungen für lokale Modelle auf diesem Node. Hardware erkennen, GGUF-Modelle durchsuchen und herunterladen, die llama.cpp-Laufzeit verwalten und laufende Modelle entladen.",
 				"refreshButton": "Jetzt aktualisieren",
 				"schedulerLink": "Planer",
 				"modelsLink": "Modellverwaltung",
@@ -1554,9 +1553,6 @@
 				"noCache": "Für diesen Anwendungsfall ist noch kein zwischengespeichertes Empfehlungs-Snapshot vorhanden. Führen Sie eine Empfehlungsprüfung über den Planer aus oder verwenden Sie Jetzt aktualisieren, falls ein Zeitplan existiert.",
 				"emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
 				"installed": "Installiert",
-				"pullable": "Verfügbar",
-				"pull": "Herunterladen",
-				"pulling": "Wird heruntergeladen…",
 				"catalogOnly": "Nur Katalog",
 				"useCases": {
 					"general": "Allgemein",
@@ -1568,23 +1564,21 @@
 				},
 				"snapshot": {
 					"status": "Status",
-					"useCase": "Anwendungsfall",
-					"provider": "Anbieter",
-					"sourceImage": "Quell-Image"
+					"useCase": "Anwendungsfall"
 				},
 				"columns": {
 					"rank": "Rang",
 					"model": "Modell",
 					"score": "Punktzahl",
 					"fit": "Eignung",
-					"runMode": "Ausführungsmodus",
 					"tps": "Gesch. TPS",
 					"context": "Kontext",
 					"quantization": "Quant",
-					"memory": "Speicher",
 					"released": "Veröffentlicht",
 					"installed": "Installiert",
-					"action": "Aktion"
+					"action": "Aktion",
+					"ram": "Erf. RAM",
+					"vram": "Erf. VRAM"
 				},
 				"errors": {
 					"load": "Empfehlungen konnten nicht geladen werden.",
@@ -1596,38 +1590,112 @@
 					"successTitle": "Empfehlungen aktualisiert",
 					"success": "Die neuesten Modellempfehlungen sind verfügbar.",
 					"cancelled": "Die Aktualisierung wurde abgebrochen."
+				},
+				"available": "Verfügbar",
+				"download": "Herunterladen",
+				"downloading": "Wird heruntergeladen…",
+				"cpuMode": "CPU-Modus"
+			},
+			"hardware": {
+				"title": "Hardware-Profil",
+				"cpuMode": "CPU-Modus",
+				"refresh": "Hardware aktualisieren",
+				"loading": "Hardware wird erkannt…",
+				"error": "Hardware konnte nicht erkannt werden.",
+				"totalRam": "Gesamter RAM",
+				"availableRam": "Verfügbarer RAM",
+				"vram": "VRAM",
+				"vramUnknown": "VRAM unbekannt",
+				"gpuVendor": "GPU-Hersteller",
+				"cpuCores": "CPU-Kerne",
+				"freeDisk": "Freier Speicher",
+				"vendors": {
+					"nvidia": "NVIDIA",
+					"amd": "AMD",
+					"intel": "Intel",
+					"none": "Keine",
+					"unknown": "Unbekannt"
 				}
 			},
-			"approvedImages": {
-				"title": "Freigegebene Referenz-Images",
-				"subtitle": "Freigegebene, Digest-gepinnte llmfit-Hilfs-Images, die vom Empfehlungsprüfer verwendet werden. Diese Liste ist schreibgeschützt — Image-Referenzen werden im Code verwaltet.",
-				"loading": "Freigegebene Images werden geladen…",
-				"empty": "Es sind keine freigegebenen Images registriert.",
-				"sourceLink": "Öffnen",
-				"purpose": {
-					"ModelRecommendation": "Empfehlung",
-					"ModelBenchmark": "Benchmark"
-				},
-				"state": {
-					"enabled": "Aktiviert",
-					"disabled": "Deaktiviert",
-					"deprecated": "Veraltet"
-				},
+			"download": {
+				"title": "Laufende Downloads",
+				"inProgress": "Wird heruntergeladen…",
+				"cancel": "Abbrechen",
+				"started": "Download gestartet.",
+				"alreadyInFlight": "Dieser Download läuft bereits.",
+				"error": "Der Download konnte nicht gestartet werden.",
+				"cancelled": "Download abgebrochen.",
+				"cancelError": "Der Download konnte nicht abgebrochen werden."
+			},
+			"running": {
+				"title": "Laufende Modelle",
+				"loading": "Laufende Modelle werden geladen…",
+				"error": "Laufende Modelle konnten nicht geladen werden.",
+				"empty": "Derzeit laufen keine Modelle.",
+				"responsive": "Reagiert",
+				"unresponsive": "Startet / reagiert nicht",
+				"eject": "Entladen",
+				"ejected": "Modell entladen.",
+				"ejectError": "Das Modell konnte nicht entladen werden.",
 				"columns": {
-					"id": "Image-ID",
-					"name": "Name",
-					"purpose": "Zweck",
-					"reference": "Gepinnte Referenz",
-					"version": "Version",
-					"source": "Quelle",
-					"state": "Status",
-					"lastUsed": "Zuletzt verwendet",
-					"lastSuccessful": "Letzte erfolgreiche",
-					"diagnostics": "Diagnose"
-				},
-				"errors": {
-					"load": "Freigegebene Images konnten nicht geladen werden."
+					"model": "Modell",
+					"role": "Rolle",
+					"status": "Status",
+					"action": "Aktion"
 				}
+			},
+			"llamaCpp": {
+				"title": "llama.cpp-Laufzeit",
+				"loading": "llama.cpp-Binärdatei wird ermittelt…",
+				"error": "Die llama.cpp-Binärdatei konnte nicht ermittelt werden.",
+				"version": "Version",
+				"variant": "Variante",
+				"selectVariant": "Variante",
+				"pinned": "Gepinnter Fallback",
+				"check": "Version prüfen",
+				"idle": "Noch nicht geprüft. Beim Prüfen wird die llama.cpp-Binärdatei ermittelt und bei der ersten Verwendung ggf. heruntergeladen.",
+				"ensure": "Bereitstellen / auswählen",
+				"ensured": "llama.cpp-Binärdatei bereit.",
+				"ensureError": "Die llama.cpp-Binärdatei konnte nicht bereitgestellt werden.",
+				"variants": {
+					"cpu": "CPU",
+					"cuda": "CUDA",
+					"vulkan": "Vulkan"
+				}
+			},
+			"browse": {
+				"title": "Hugging Face GGUF durchsuchen",
+				"searchLabel": "Repositories durchsuchen",
+				"searchPlaceholder": "z. B. llama 3.1 8b",
+				"search": "Suchen",
+				"loading": "Wird gesucht…",
+				"error": "Repositories konnten nicht durchsucht werden.",
+				"empty": "Keine GGUF-Repositories entsprachen der Suche.",
+				"gated": "Gesperrt",
+				"download": "Herunterladen",
+				"noGguf": "Kein GGUF",
+				"columns": {
+					"repo": "Repository",
+					"downloads": "Downloads",
+					"likes": "Likes",
+					"updated": "Aktualisiert",
+					"license": "Lizenz",
+					"action": "Aktion"
+				}
+			},
+			"hfToken": {
+				"title": "Hugging-Face-Token",
+				"configured": "Token konfiguriert",
+				"none": "Kein Token",
+				"description": "Für den Download gesperrter GGUF-Repositories ist ein Hugging-Face-Zugriffstoken erforderlich. Das Token wird verschlüsselt gespeichert und niemals angezeigt.",
+				"inputLabel": "Zugriffstoken",
+				"placeholder": "hf_…",
+				"save": "Token speichern",
+				"clear": "Token löschen",
+				"saved": "Token gespeichert.",
+				"saveError": "Das Token konnte nicht gespeichert werden.",
+				"cleared": "Token gelöscht.",
+				"clearError": "Das Token konnte nicht gelöscht werden."
 			}
 		},
 		"loadedModels": {

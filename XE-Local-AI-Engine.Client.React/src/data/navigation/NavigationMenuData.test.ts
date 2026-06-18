@@ -63,8 +63,8 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
 		]);
-		// Manager group: runtime overview plus the relocated approved-images page.
-		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.manager, nodeRoutePaths.approvedImages]);
+		// Manager group: runtime overview only (the approved-images page was removed with the approved-image concept).
+		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.manager]);
 	});
 
 	it("keeps only Installed under Models and only Overview under Manager when modelFit and loadedModels are off", async () => {

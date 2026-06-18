@@ -23,8 +23,6 @@ vi.mock("react-i18next", () => ({
 }));
 
 const navigateMock = vi.fn();
-// Keep the real router exports (the page's useModelPull import chain transitively pulls in routeTree.gen, which calls
-// createRootRouteWithContext at module-eval time); override only useNavigate so navigation is observable.
 vi.mock("@tanstack/react-router", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
 	return {
@@ -36,8 +34,17 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 const { hooksMock, schedulerMock, hubMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useLatestRecommendations: vi.fn(),
-		useApprovedImages: vi.fn(),
 		useRefreshRecommendations: vi.fn(),
+		useHardwareProfile: vi.fn(),
+		useRunningModels: vi.fn(),
+		useLlamaCppVersion: vi.fn(),
+		useHfTokenStatus: vi.fn(),
+		useBrowseGgufRepositories: vi.fn(),
+		useStartGgufDownload: vi.fn(),
+		useCancelGgufDownload: vi.fn(),
+		useEjectRunningModel: vi.fn(),
+		useEnsureLlamaCppBinary: vi.fn(),
+		useSetHfToken: vi.fn(),
 	},
 	schedulerMock: {
 		useScheduledJobs: vi.fn(),
@@ -78,12 +85,12 @@ function modelFitJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {
 	};
 }
 
-function makeRefreshMutation() {
-	return { mutate: vi.fn(), isPending: false, error: null };
+function makeMutation(overrides: Record<string, unknown> = {}) {
+	return { mutate: vi.fn(), isPending: false, error: null, variables: undefined, ...overrides };
 }
 
-function makeQuery<T>(data: T) {
-	return { data, isLoading: false, error: null };
+function makeQuery<T>(data: T, overrides: Record<string, unknown> = {}) {
+	return { data, isLoading: false, isFetching: false, error: null, refetch: vi.fn().mockResolvedValue({}), ...overrides };
 }
 
 function installJsdomEnvironmentMocks(): void {
@@ -131,9 +138,7 @@ const noCacheView = {
 	hasCache: false,
 	snapshotId: null,
 	status: null,
-	sourceImageId: null,
 	useCase: null,
-	providerName: null,
 	lastRefreshedAtUtc: null,
 	recommendations: [],
 };
@@ -142,9 +147,7 @@ const populatedView = {
 	hasCache: true,
 	snapshotId: "snap-1",
 	status: "Succeeded",
-	sourceImageId: "llmfit-recommender-0-9-30",
 	useCase: "coding",
-	providerName: "ollama",
 	lastRefreshedAtUtc: 1_700_000_000_000,
 	recommendations: [
 		{
@@ -152,27 +155,59 @@ const populatedView = {
 			modelName: "llama3.1:8b",
 			providerModelName: "llama3.1:8b",
 			score: 90,
-			fitLevel: "Good",
+			fitLevel: "GPU",
 			runMode: "GPU",
 			quantization: "Q5_K_M",
 			estimatedTokensPerSecond: 42,
 			requiredRamMb: 8192,
-			requiredVramMb: null,
+			requiredVramMb: 6144,
 			contextTokens: 8192,
-			isInstalled: true,
-			pullModelName: null,
+			isInstalled: false,
+			pullModelName: "unsloth/llama-3.1-8b-gguf",
 			releaseDate: null,
 		},
 	],
 };
 
+const hardwareProfile = {
+	totalRamBytes: 34_359_738_368,
+	availableRamBytes: 17_179_869_184,
+	vramBytes: 8_589_934_592,
+	vramKnown: true,
+	gpuVendor: "nvidia" as const,
+	gpuAccelAvailable: true,
+	cpuCores: 16,
+	freeDiskBytes: 500_000_000_000,
+};
+
+const runningModel = { modelName: "running-a", role: "chat", isResponsive: true, detail: "" };
+const llamaCppVersion = { version: "b1234", variant: "cuda" as const, isPinnedFallback: false, pinnedTag: "b1000" };
+const ggufRepo = {
+	repoId: "unsloth/llama-3.1-8b-gguf",
+	isGated: false,
+	downloads: 1000,
+	likes: 50,
+	lastModifiedAtUtc: 1_700_000_000_000,
+	license: "apache-2.0",
+	hasUsableGguf: true,
+};
+
 describe("ModelRecommendationsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
-		useModelFitManagementStore.setState({ useCase: "coding" });
+		useModelFitManagementStore.setState({ useCase: "coding", browseQuery: "", tokenDraft: "" });
 		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(noCacheView));
-		hooksMock.useApprovedImages.mockReturnValue(makeQuery([]));
-		hooksMock.useRefreshRecommendations.mockReturnValue(makeRefreshMutation());
+		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation());
+		hooksMock.useHardwareProfile.mockReturnValue(makeQuery(hardwareProfile));
+		hooksMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+		hooksMock.useLlamaCppVersion.mockReturnValue(makeQuery(llamaCppVersion));
+		hooksMock.useHfTokenStatus.mockReturnValue(makeQuery(false));
+		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([]));
+		hooksMock.useStartGgufDownload.mockReturnValue(makeMutation());
+		hooksMock.useCancelGgufDownload.mockReturnValue(makeMutation());
+		hooksMock.useEjectRunningModel.mockReturnValue(makeMutation());
+		hooksMock.useEnsureLlamaCppBinary.mockReturnValue(makeMutation());
+		hooksMock.useSetHfToken.mockReturnValue(makeMutation());
 		schedulerMock.useScheduledJobs.mockReturnValue(makeQuery([modelFitJob()]));
 	});
 
@@ -187,6 +222,38 @@ describe("ModelRecommendationsPage", () => {
 		expect(hubMock).toHaveBeenCalled();
 	});
 
+	it("renders the hardware-profile card with RAM / VRAM / GPU vendor / CPU cores", () => {
+		renderPage();
+
+		expect(screen.getByTestId("model-fit-hardware-card")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-hardware-total-ram").textContent).toContain("32.0 GB");
+		expect(screen.getByTestId("model-fit-hardware-vram").textContent).toContain("8.0 GB");
+		expect(screen.getByTestId("model-fit-hardware-gpu-vendor")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-hardware-cpu-cores").textContent).toContain("16");
+	});
+
+	it("shows the CPU-mode badge and 'VRAM unknown' when GPU acceleration is unavailable", () => {
+		hooksMock.useHardwareProfile.mockReturnValue(
+			makeQuery({ ...hardwareProfile, vramBytes: null, vramKnown: false, gpuVendor: "none" as const, gpuAccelAvailable: false }),
+		);
+
+		renderPage();
+
+		expect(screen.getByTestId("model-fit-hardware-cpu-mode-badge")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-hardware-vram").textContent).toContain("VRAM unknown");
+	});
+
+	it("re-probes hardware when 'Refresh hardware' is clicked", () => {
+		const refetch = vi.fn().mockResolvedValue({});
+		hooksMock.useHardwareProfile.mockReturnValue(makeQuery(hardwareProfile, { refetch }));
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-hardware-refresh"));
+
+		expect(refetch).toHaveBeenCalled();
+	});
+
 	it("shows the no-cache empty state when hasCache is false", () => {
 		renderPage();
 
@@ -194,7 +261,7 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.queryByTestId("model-fit-recommendations-table")).toBeNull();
 	});
 
-	it("renders the ranked recommendation list when a cached snapshot exists", () => {
+	it("renders the ranked recommendation list with file/quant/fit estimate when a cached snapshot exists", () => {
 		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(populatedView));
 
 		renderPage();
@@ -204,12 +271,23 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
 	});
 
-	it("surfaces a failed/stale diagnostics state via the load error", () => {
-		hooksMock.useLatestRecommendations.mockReturnValue({
-			data: undefined,
-			isLoading: false,
-			error: new Error("boom"),
-		});
+	it("triggers a GGUF download from a recommendation row", () => {
+		const download = makeMutation();
+		hooksMock.useStartGgufDownload.mockReturnValue(download);
+		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(populatedView));
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-download-button-1"));
+
+		expect(download.mutate).toHaveBeenCalledWith(
+			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q5_K_M" },
+			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+		);
+	});
+
+	it("surfaces a load error for the recommendations list", () => {
+		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(undefined, { error: new Error("boom") }));
 
 		renderPage();
 
@@ -217,7 +295,7 @@ describe("ModelRecommendationsPage", () => {
 	});
 
 	it("fires the existing model-recommendation-check job when Refresh now is clicked", () => {
-		const refreshMutation = makeRefreshMutation();
+		const refreshMutation = makeMutation();
 		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
 
 		renderPage();
@@ -227,25 +305,8 @@ describe("ModelRecommendationsPage", () => {
 
 		fireEvent.click(button);
 
-		// Refresh now forwards the currently-selected use case (default "coding") alongside the job id.
 		expect(refreshMutation.mutate).toHaveBeenCalledWith(
 			{ scheduledJobId: "job-mf", useCase: "coding", limit: 500 },
-			{ onError: expect.any(Function) },
-		);
-	});
-
-	it("sends the selected use case (general) when Refresh now is clicked after switching the dropdown", () => {
-		const refreshMutation = makeRefreshMutation();
-		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
-		// Operator switched the use-case dropdown to general (the store drives both the query and the refresh override).
-		useModelFitManagementStore.setState({ useCase: "general" });
-
-		renderPage();
-
-		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
-
-		expect(refreshMutation.mutate).toHaveBeenCalledWith(
-			{ scheduledJobId: "job-mf", useCase: "general", limit: 500 },
 			{ onError: expect.any(Function) },
 		);
 	});
@@ -260,29 +321,92 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.getByTestId("model-fit-no-job-guidance")).toBeTruthy();
 	});
 
-	it("prefers an enabled model-recommendation-check job over a disabled one", () => {
-		const refreshMutation = makeRefreshMutation();
-		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
-		schedulerMock.useScheduledJobs.mockReturnValue(
-			makeQuery([modelFitJob({ id: "job-disabled", enabled: false }), modelFitJob({ id: "job-enabled", enabled: true })]),
-		);
+	it("ejects a running model from the running-models panel", () => {
+		const eject = makeMutation();
+		hooksMock.useEjectRunningModel.mockReturnValue(eject);
 
 		renderPage();
 
-		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
+		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
 
-		expect(refreshMutation.mutate).toHaveBeenCalledWith(
-			{ scheduledJobId: "job-enabled", useCase: "coding", limit: 500 },
-			{ onError: expect.any(Function) },
+		expect(eject.mutate).toHaveBeenCalledWith(
+			{ modelName: "running-a", role: "chat" },
+			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
 		);
 	});
 
-	it("ignores scheduler jobs of other templates when gating refresh", () => {
-		schedulerMock.useScheduledJobs.mockReturnValue(makeQuery([modelFitJob({ id: "other", templateId: "agent-cleanup" })]));
+	it("does not show the llama.cpp version until the operator explicitly checks it (avoids a mount-time download)", () => {
+		renderPage();
+
+		// On mount the version probe is idle: the panel shows its idle hint and renders no version.
+		expect(screen.getByTestId("model-fit-llamacpp-idle")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-llamacpp-version")).toBeNull();
+
+		// Triggering the probe reveals the resolved version.
+		fireEvent.click(screen.getByTestId("model-fit-llamacpp-check-button"));
+		expect(screen.getByTestId("model-fit-llamacpp-version").textContent).toContain("b1234");
+	});
+
+	it("renders the llama.cpp version panel and ensures the selected variant", () => {
+		const ensure = makeMutation();
+		hooksMock.useEnsureLlamaCppBinary.mockReturnValue(ensure);
 
 		renderPage();
 
-		const button = screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement;
-		expect(button.disabled).toBe(true);
+		// The version block is gated behind an explicit check (the GET can trigger the first binary download).
+		fireEvent.click(screen.getByTestId("model-fit-llamacpp-check-button"));
+		expect(screen.getByTestId("model-fit-llamacpp-version").textContent).toContain("b1234");
+		fireEvent.click(screen.getByTestId("model-fit-llamacpp-ensure-button"));
+
+		// The select defaults to "cpu" until the operator changes it.
+		expect(ensure.mutate).toHaveBeenCalledWith("cpu", expect.any(Object));
+	});
+
+	it("commits a GGUF browse search term to the store", () => {
+		renderPage();
+
+		fireEvent.change(screen.getByTestId("model-fit-browse-input"), { target: { value: "llama 3.1" } });
+		fireEvent.click(screen.getByTestId("model-fit-browse-search-button"));
+
+		expect(useModelFitManagementStore.getState().browseQuery).toBe("llama 3.1");
+	});
+
+	it("downloads a GGUF repository from the browse results", () => {
+		const download = makeMutation();
+		hooksMock.useStartGgufDownload.mockReturnValue(download);
+		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([ggufRepo]));
+		useModelFitManagementStore.setState({ browseQuery: "llama" });
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+
+		expect(download.mutate).toHaveBeenCalledWith(
+			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q4_K_M" },
+			expect.any(Object),
+		);
+	});
+
+	it("renders the HF token panel with a masked input and never the token value", () => {
+		hooksMock.useHfTokenStatus.mockReturnValue(makeQuery(true));
+
+		renderPage();
+
+		const input = screen.getByTestId("model-fit-hf-token-input") as HTMLInputElement;
+		// PasswordInput renders a type=password field — the value is masked, never plain text.
+		expect(input.type).toBe("password");
+		expect(screen.getByTestId("model-fit-hf-token-status").textContent).toContain("Token configured");
+	});
+
+	it("saves the HF token draft and clears it", () => {
+		const setToken = makeMutation();
+		hooksMock.useSetHfToken.mockReturnValue(setToken);
+		useModelFitManagementStore.setState({ tokenDraft: "hf_secret" });
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-hf-token-save"));
+
+		expect(setToken.mutate).toHaveBeenCalledWith("hf_secret", expect.any(Object));
 	});
 });

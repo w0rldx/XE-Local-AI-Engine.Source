@@ -31,7 +31,7 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		modelName: "model-a",
 		providerModelName: null,
 		score: 8,
-		fitLevel: "Good",
+		fitLevel: "GPU",
 		runMode: "gpu",
 		quantization: "Q4_0",
 		estimatedTokensPerSecond: 42,
@@ -79,9 +79,14 @@ describe("RecommendationTable", () => {
 		cleanup();
 	});
 
-	it("shows a Pull button only for a not-installed row with a pullModelName and calls onPull with that row", () => {
-		const onPull = vi.fn();
-		const pullable = makeRecommendation({ rank: 1, modelName: "pullable", isInstalled: false, pullModelName: "pullable:latest" });
+	it("shows a Download button only for a not-installed row with a model name and calls onDownload with that row", () => {
+		const onDownload = vi.fn();
+		const available = makeRecommendation({
+			rank: 1,
+			modelName: "available",
+			isInstalled: false,
+			pullModelName: "available:latest",
+		});
 		const installed = makeRecommendation({
 			rank: 2,
 			modelName: "installed",
@@ -90,54 +95,99 @@ describe("RecommendationTable", () => {
 		});
 		const noTag = makeRecommendation({ rank: 3, modelName: "no-tag", isInstalled: false, pullModelName: null });
 
-		renderTable(<RecommendationTable recommendations={[pullable, installed, noTag]} onPull={onPull} />);
+		renderTable(<RecommendationTable recommendations={[available, installed, noTag]} onDownload={onDownload} />);
 
-		// Only the pullable row (rank 1) exposes a Pull button.
-		const pullButton = screen.getByTestId("model-fit-pull-button-1");
-		expect(pullButton).toBeTruthy();
-		// Installed row and the null-tag row carry no Pull button.
-		expect(screen.queryByTestId("model-fit-pull-button-2")).toBeNull();
-		expect(screen.queryByTestId("model-fit-pull-button-3")).toBeNull();
+		// Only the available row (rank 1) exposes a Download button.
+		const downloadButton = screen.getByTestId("model-fit-download-button-1");
+		expect(downloadButton).toBeTruthy();
+		// Installed row and the null-tag row carry no Download button.
+		expect(screen.queryByTestId("model-fit-download-button-2")).toBeNull();
+		expect(screen.queryByTestId("model-fit-download-button-3")).toBeNull();
 
-		fireEvent.click(pullButton);
-		expect(onPull).toHaveBeenCalledTimes(1);
-		expect(onPull).toHaveBeenCalledWith(pullable);
+		fireEvent.click(downloadButton);
+		expect(onDownload).toHaveBeenCalledTimes(1);
+		expect(onDownload).toHaveBeenCalledWith(available);
 	});
 
-	it("disables the in-flight row's Pull button when pullingModelName matches its tag", () => {
-		const onPull = vi.fn();
-		const pullable = makeRecommendation({ rank: 1, modelName: "pullable", isInstalled: false, pullModelName: "pullable:latest" });
+	it("disables the in-flight row's Download button when downloadingModelName matches its tag", () => {
+		const onDownload = vi.fn();
+		const available = makeRecommendation({
+			rank: 1,
+			modelName: "available",
+			isInstalled: false,
+			pullModelName: "available:latest",
+		});
 
-		renderTable(<RecommendationTable recommendations={[pullable]} onPull={onPull} pullingModelName="pullable:latest" />);
+		renderTable(
+			<RecommendationTable recommendations={[available]} onDownload={onDownload} downloadingModelName="available:latest" />,
+		);
 
-		const pullButton = screen.getByTestId("model-fit-pull-button-1") as HTMLButtonElement;
-		expect(pullButton.disabled).toBe(true);
+		const downloadButton = screen.getByTestId("model-fit-download-button-1") as HTMLButtonElement;
+		expect(downloadButton.disabled).toBe(true);
 	});
 
-	it("renders no action column when onPull is not provided (pure-presentation mode)", () => {
-		const pullable = makeRecommendation({ rank: 1, isInstalled: false, pullModelName: "pullable:latest" });
+	it("renders no action column when onDownload is not provided (pure-presentation mode)", () => {
+		const available = makeRecommendation({ rank: 1, isInstalled: false, pullModelName: "available:latest" });
 
-		renderTable(<RecommendationTable recommendations={[pullable]} />);
+		renderTable(<RecommendationTable recommendations={[available]} />);
 
-		expect(screen.queryByTestId("model-fit-pull-button-1")).toBeNull();
+		expect(screen.queryByTestId("model-fit-download-button-1")).toBeNull();
 	});
 
-	it("shows every row including catalog-only ones (no hiding) and marks the non-pullable ones", () => {
-		const onPull = vi.fn();
-		const pullable = makeRecommendation({ rank: 1, modelName: "pullable", isInstalled: false, pullModelName: "pullable:latest" });
+	it("renders a CPU-mode badge for a row whose run mode is CPU", () => {
+		const cpuRow = makeRecommendation({ rank: 1, runMode: "cpu", isInstalled: true, pullModelName: null });
+		const gpuRow = makeRecommendation({ rank: 2, runMode: "gpu", isInstalled: true, pullModelName: null });
+
+		renderTable(<RecommendationTable recommendations={[cpuRow, gpuRow]} />);
+
+		expect(screen.getByTestId("model-fit-cpu-mode-badge-1")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-cpu-mode-badge-2")).toBeNull();
+	});
+
+	it("renders a GPU fit badge for a GPU row and drops the redundant fit badge for a CPU row", () => {
+		// A GPU run shows its "GPU" fit badge; a CPU run shows only the CPU-mode badge (the duplicate "CPU" fit badge is dropped).
+		const gpuRow = makeRecommendation({ rank: 1, fitLevel: "GPU", runMode: "gpu", isInstalled: true, pullModelName: null });
+		const cpuRow = makeRecommendation({ rank: 2, fitLevel: "CPU", runMode: "cpu", isInstalled: true, pullModelName: null });
+
+		renderTable(<RecommendationTable recommendations={[gpuRow, cpuRow]} />);
+
+		// The GPU row surfaces a single "GPU" badge text.
+		expect(screen.getByText("GPU")).toBeTruthy();
+		// The CPU row never renders a "CPU" fit badge — only the "CPU mode" badge stands in.
+		expect(screen.queryByText("CPU")).toBeNull();
+		expect(screen.getByTestId("model-fit-cpu-mode-badge-2")).toBeTruthy();
+	});
+
+	it("surfaces both the required RAM and required VRAM fit estimates", () => {
+		const row = makeRecommendation({ rank: 1, requiredRamMb: 6144, requiredVramMb: 4096, isInstalled: true, pullModelName: null });
+
+		renderTable(<RecommendationTable recommendations={[row]} />);
+
+		// 6144 MB → 6.0 GB, 4096 MB → 4.0 GB (formatMemoryMb).
+		expect(screen.getByText("6.0 GB")).toBeTruthy();
+		expect(screen.getByText("4.0 GB")).toBeTruthy();
+	});
+
+	it("shows every row including catalog-only ones (no hiding) and marks the non-downloadable ones", () => {
+		const onDownload = vi.fn();
+		const available = makeRecommendation({
+			rank: 1,
+			modelName: "available",
+			isInstalled: false,
+			pullModelName: "available:latest",
+		});
 		const installed = makeRecommendation({ rank: 2, modelName: "installed", isInstalled: true, pullModelName: null });
-		// Neither pullable nor installed — a catalog-only name. It is no longer hidden; it renders with a badge + no action.
+		// Neither downloadable nor installed — a catalog-only name. It renders with a badge + no action.
 		const catalogOnly = makeRecommendation({ rank: 3, modelName: "catalog-only", isInstalled: false, pullModelName: null });
 
-		renderTable(<RecommendationTable recommendations={[pullable, installed, catalogOnly]} onPull={onPull} />);
+		renderTable(<RecommendationTable recommendations={[available, installed, catalogOnly]} onDownload={onDownload} />);
 
 		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-recommendation-row-2")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-recommendation-row-3")).toBeTruthy();
-		// The catalog-only row is labelled and carries no Pull button; the legacy hidden-count note is gone.
+		// The catalog-only row is labelled and carries no Download button.
 		expect(screen.getByText("Catalog only")).toBeTruthy();
-		expect(screen.queryByTestId("model-fit-pull-button-3")).toBeNull();
-		expect(screen.queryByTestId("model-fit-hidden-count-note")).toBeNull();
+		expect(screen.queryByTestId("model-fit-download-button-3")).toBeNull();
 	});
 
 	it("paginates a large result set to the default page size and renders the pagination footer", () => {
@@ -153,7 +203,7 @@ describe("RecommendationTable", () => {
 		expect(screen.getByTestId("model-fit-recommendations-pagination")).toBeTruthy();
 	});
 
-	it("renders the release date for a row that has one (Lane H3)", () => {
+	it("renders the release date for a row that has one", () => {
 		const dated = makeRecommendation({ rank: 1, isInstalled: true, pullModelName: "dated:latest", releaseDate: "2026-01-15" });
 
 		renderTable(<RecommendationTable recommendations={[dated]} />);
