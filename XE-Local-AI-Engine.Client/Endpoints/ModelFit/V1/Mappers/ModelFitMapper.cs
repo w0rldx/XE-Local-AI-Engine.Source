@@ -3,40 +3,18 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Extension methods that translate the application-layer model-fit records into sanitized endpoint DTOs. This is the
-///     sole point in the Client project that references those record member names. Every projection is sanitized: the
-///     recommendation view never carries raw output / stderr / diagnostics.
+///     Extension methods that translate the application-layer model-fit / advisor records into sanitized endpoint DTOs.
+///     This is the sole point in the Client project that references those record member names. Every projection is
+///     sanitized: the recommendation view never carries raw output / stderr / diagnostics; the hardware profile carries
+///     no machine identifiers; running/version projections carry no internal paths.
 /// </summary>
 internal static class ModelFitMapper
 {
-    // -----------------------------------------------------------------------
-    // Approved image record → response
-    // -----------------------------------------------------------------------
-
-    public static ApprovedImageResponse ToResponse(this ApprovedUtilityImageRecord record)
-    {
-        ArgumentNullException.ThrowIfNull(record);
-
-        return new ApprovedImageResponse
-        {
-            ApprovedImageId = record.ApprovedImageId,
-            DisplayName = record.DisplayName,
-            Description = record.Description,
-            Purpose = MapPurpose(record.Purpose),
-            ImageReference = record.ImageReference,
-            SourceUrl = record.SourceUrl,
-            UpstreamVersion = record.UpstreamVersion,
-            Enabled = record.Enabled,
-            DeprecatedAtUtc = record.DeprecatedAtUtc,
-            ReplacementApprovedImageId = record.ReplacementApprovedImageId,
-            LastUsedAtUtc = record.LastUsedAtUtc,
-            LastSuccessfulRunAtUtc = record.LastSuccessfulRunAtUtc,
-            Diagnostics = record.DiagnosticsJson
-        };
-    }
-
     // -----------------------------------------------------------------------
     // Latest recommendations view → response
     // -----------------------------------------------------------------------
@@ -50,9 +28,7 @@ internal static class ModelFitMapper
             HasCache = true,
             SnapshotId = view.SnapshotId,
             Status = view.Status.ToString(),
-            SourceImageId = view.ApprovedImageId,
             UseCase = view.UseCase,
-            ProviderName = view.ProviderName,
             LastRefreshedAtUtc = view.CompletedAtUtc,
             Recommendations = [.. view.Recommendations.Select(static r => r.ToResponse())]
         };
@@ -66,9 +42,7 @@ internal static class ModelFitMapper
             HasCache = false,
             SnapshotId = null,
             Status = null,
-            SourceImageId = null,
             UseCase = null,
-            ProviderName = null,
             LastRefreshedAtUtc = null,
             Recommendations = []
         };
@@ -92,6 +66,144 @@ internal static class ModelFitMapper
             IsInstalled = record.IsInstalled,
             PullModelName = record.PullModelName,
             ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson)
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Hardware profile → response (sanitized: aggregates only, no identifiers)
+    // -----------------------------------------------------------------------
+
+    public static HardwareProfileResponse ToResponse(this HardwareProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        return new HardwareProfileResponse
+        {
+            TotalRamBytes = profile.TotalRamBytes,
+            AvailableRamBytes = profile.AvailableRamBytes,
+            VramBytes = profile.VramBytes,
+            VramKnown = profile.VramKnown,
+            GpuVendor = profile.GpuVendor.ToWireString(),
+            GpuAccelAvailable = profile.GpuAccelAvailable,
+            CpuCores = profile.CpuCores,
+            FreeDiskBytes = profile.FreeDiskBytes
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // GGUF repo summary → response
+    // -----------------------------------------------------------------------
+
+    public static GgufRepositoryResponse ToResponse(this GgufRepoSummary summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+
+        return new GgufRepositoryResponse
+        {
+            RepoId = summary.RepoId,
+            IsGated = summary.IsGated,
+            Downloads = summary.Downloads,
+            Likes = summary.Likes,
+            LastModifiedAtUtc = summary.LastModified.ToUnixTimeMilliseconds(),
+            License = summary.License,
+            HasUsableGguf = summary.HasUsableGguf
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Running process health → response
+    // -----------------------------------------------------------------------
+
+    public static RunningModelResponse ToResponse(this LlamaServerProcessHealth health)
+    {
+        ArgumentNullException.ThrowIfNull(health);
+
+        return new RunningModelResponse
+        {
+            ModelName = health.ModelName,
+            Role = health.Role.ToWireString(),
+            IsResponsive = health.IsResponsive,
+            Detail = health.Detail
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // llama.cpp binary → response
+    // -----------------------------------------------------------------------
+
+    public static LlamaCppVersionResponse ToResponse(this LlamaBinary binary)
+    {
+        ArgumentNullException.ThrowIfNull(binary);
+
+        return new LlamaCppVersionResponse
+        {
+            Version = binary.Version,
+            Variant = binary.Variant.ToWireString(),
+            IsPinnedFallback = binary.IsPinnedFallback,
+            PinnedTag = LlamaCppReleasePins.PinnedTag
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Wire-string → enum parsing (case-insensitive; null/unknown handled by the caller)
+    // -----------------------------------------------------------------------
+
+    /// <summary>Parses a wire role string (<c>chat|embedding</c>) into <see cref="ModelRole" />; null/empty defaults to chat. Unknown → null.</summary>
+    public static ModelRole? TryParseRole(string? role)
+    {
+        // Upper-invariant (CA1308: upper-casing round-trips safely) for case-insensitive matching of the wire tokens.
+        return role?.Trim().ToUpperInvariant() switch
+        {
+            null or "" or "CHAT" => ModelRole.Chat,
+            "EMBEDDING" => ModelRole.Embedding,
+            _ => null
+        };
+    }
+
+    /// <summary>Parses a wire variant string (<c>cpu|cuda|vulkan</c>) into <see cref="GpuVariant" />; unknown/empty → null.</summary>
+    public static GpuVariant? TryParseVariant(string? variant)
+    {
+        return variant?.Trim().ToUpperInvariant() switch
+        {
+            "CPU" => GpuVariant.Cpu,
+            "CUDA" => GpuVariant.Cuda,
+            "VULKAN" => GpuVariant.Vulkan,
+            _ => null
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Lowercase wire-enum projections (kept in one place; matches the lowercase wire-enum convention)
+    // -----------------------------------------------------------------------
+
+    private static string ToWireString(this GpuVendor vendor)
+    {
+        return vendor switch
+        {
+            GpuVendor.Nvidia => "nvidia",
+            GpuVendor.Amd => "amd",
+            GpuVendor.Intel => "intel",
+            GpuVendor.None => "none",
+            _ => "unknown"
+        };
+    }
+
+    public static string ToWireString(this ModelRole role)
+    {
+        return role switch
+        {
+            ModelRole.Embedding => "embedding",
+            _ => "chat"
+        };
+    }
+
+    private static string ToWireString(this GpuVariant variant)
+    {
+        return variant switch
+        {
+            GpuVariant.Cuda => "cuda",
+            GpuVariant.Vulkan => "vulkan",
+            _ => "cpu"
         };
     }
 
@@ -120,22 +232,5 @@ internal static class ModelFitMapper
         {
             return null;
         }
-    }
-
-    private static IReadOnlyList<string> MapPurpose(UtilityImagePurpose purpose)
-    {
-        var purposes = new List<string>(2);
-
-        if (purpose.HasFlag(UtilityImagePurpose.ModelRecommendation))
-        {
-            purposes.Add(nameof(UtilityImagePurpose.ModelRecommendation));
-        }
-
-        if (purpose.HasFlag(UtilityImagePurpose.ModelBenchmark))
-        {
-            purposes.Add(nameof(UtilityImagePurpose.ModelBenchmark));
-        }
-
-        return purposes;
     }
 }

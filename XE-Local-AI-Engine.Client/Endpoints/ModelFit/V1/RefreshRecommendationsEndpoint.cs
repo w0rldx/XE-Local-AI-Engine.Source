@@ -11,12 +11,17 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 ///     FastEndpoints handler for the manual recommendation refresh (POST model-fit/recommendations/refresh). This is a
 ///     facade over the scheduler trigger service: it accepts ONLY an existing scheduled-job id (never an image reference,
 ///     command line or template id) and the trigger self-guards that the job is a <c>model-recommendation-check</c> job.
-///     The run is created asynchronously by the scheduler dispatcher; this endpoint never executes llmfit and never
-///     owns run/cancellation/history state.
+///     The optional <c>useCase</c>/<c>limit</c>/<c>quantOverride</c>/<c>ctxTarget</c> are validated here BEFORE anything
+///     fires and ride the per-fire override map (the approved-image + provider-name params are gone — non-additive,
+///     plan §8). The run is created asynchronously by the scheduler dispatcher; this endpoint never executes the advisor
+///     and never owns run/cancellation/history state.
 /// </summary>
 public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger modelFitRefreshTrigger)
     : Endpoint<RefreshRecommendationsRequest, RefreshRecommendationsResponse>
 {
+    /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema floor).</summary>
+    private const int MinCtxTarget = 256;
+
     private readonly IModelFitRefreshTrigger _modelFitRefreshTrigger = modelFitRefreshTrigger ?? throw new ArgumentNullException(nameof(modelFitRefreshTrigger));
 
     public override void Configure()
@@ -38,8 +43,8 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
             return;
         }
 
-        // Reject an out-of-range breadth override with a 400 BEFORE anything fires. Like the use-case, the limit is the
-        // only other widened parameter and is bounded to the same 1..50 the run validator enforces. Null = baked limit.
+        // Reject an out-of-range breadth override with a 400 BEFORE anything fires. Like the use-case, the limit is
+        // bounded to the same 1..50 the run validator (and the handler's JSON schema) enforces. Null = baked limit.
         if (req.Limit is { } limit && limit is < ModelFitRequestValidator.MinLimit or > ModelFitRequestValidator.MaxLimit)
         {
             AddError("Limit is out of range.");
@@ -47,9 +52,21 @@ public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger model
             return;
         }
 
+        // Reject an out-of-range context-window target with a 400 BEFORE anything fires (mirrors the handler schema's
+        // ≥256 floor). The quant override carries no range to bound — it is a label the advisor matches against the
+        // repo's files (falling back to file selection when none matches), never free text into a command.
+        if (req.CtxTarget is { } ctxTarget && ctxTarget < MinCtxTarget)
+        {
+            AddError("Context target is out of range.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         try
         {
-            await _modelFitRefreshTrigger.TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, ct).ConfigureAwait(false);
+            await _modelFitRefreshTrigger
+                  .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct)
+                  .ConfigureAwait(false);
             await Send.OkAsync(new RefreshRecommendationsResponse
                 {
                     ScheduledJobId = req.ScheduledJobId

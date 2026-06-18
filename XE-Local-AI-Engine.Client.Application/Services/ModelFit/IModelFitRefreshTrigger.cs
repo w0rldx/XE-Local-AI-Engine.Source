@@ -36,8 +36,16 @@ public interface IModelFitRefreshTrigger
     ///         definition's baked limit. Like the use-case, only this single whitelisted parameter is widened.
     ///     </para>
     /// </summary>
+    /// <remarks>
+    ///     <paramref name="quantOverride" /> optionally replaces the advisor's default <c>Q4_K_M</c> quant for this run;
+    ///     <paramref name="ctxTarget" /> optionally overrides the context window the KV-cache fit is sized against
+    ///     (validated to ≥256 before it is stamped). Both ride the same per-fire JobDataMap as the use-case/limit
+    ///     overrides; a <c>null</c>/empty value fires the definition's baked value unchanged.
+    /// </remarks>
     Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,
         int? limitOverride = null,
+        string? quantOverride = null,
+        int? ctxTarget = null,
         CancellationToken cancellationToken = default);
 }

@@ -4,34 +4,27 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
-///     Default <see cref="IModelFitQueryService" />: a thin cache reader over the M1 stores. It composes the
-///     approved-image registry store, the sanitized snapshot-summary store and the normalized recommendation store. It
-///     takes NO dependency on the utility runner or the refresh service, so a read can never start an llmfit run.
+///     Default <see cref="IModelFitQueryService" />: a thin cache reader over the model-fit stores. It composes the
+///     sanitized snapshot-summary store and the normalized recommendation store. It takes NO dependency on the refresh
+///     service, so a read can never start an advisor run. The approved-image store dependency is gone (the approved-image
+///     concept was removed in Lane C, plan §8).
 ///     <para>
 ///         On the read path it also reconciles each row's install state against the node's actually-installed Ollama
-///         models (<see cref="IOllamaModelService.ListLocalModelsAsync" />). The recommend run is offline
-///         (<c>--network none</c>), so llmfit's own <c>installed</c> flag is always false; listing the node's installed
-///         models is a node-local read — NOT an llmfit run — so the no-runner invariant still holds. The enrichment is
-///         best-effort: if the install list can't be read, each row keeps its stored flag.
+///         models (<see cref="IOllamaModelService.ListLocalModelsAsync" />). Listing the node's installed models is a
+///         node-local read — NOT an advisor run — so the no-runner invariant still holds. The enrichment is best-effort:
+///         if the install list can't be read, each row keeps its stored flag.
 ///     </para>
 /// </summary>
 public sealed class ModelFitQueryService(
-    IApprovedUtilityImageStore approvedImageStore,
     IModelFitSnapshotStore snapshotStore,
     IModelFitRecommendationStore recommendationStore,
     IOllamaModelService ollamaModelService,
     ILogger<ModelFitQueryService> logger) : IModelFitQueryService
 {
-    private readonly IApprovedUtilityImageStore _approvedImageStore = approvedImageStore ?? throw new ArgumentNullException(nameof(approvedImageStore));
     private readonly ILogger<ModelFitQueryService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IOllamaModelService _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
     private readonly IModelFitRecommendationStore _recommendationStore = recommendationStore ?? throw new ArgumentNullException(nameof(recommendationStore));
     private readonly IModelFitSnapshotStore _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
-
-    public Task<IReadOnlyList<ApprovedUtilityImageRecord>> ListApprovedImagesAsync(CancellationToken cancellationToken = default)
-    {
-        return _approvedImageStore.ListAsync(cancellationToken);
-    }
 
     public async Task<ModelFitLatestRecommendationsView?> GetLatestRecommendationsAsync(string? useCase,
         string providerName,

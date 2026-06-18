@@ -469,13 +469,78 @@ export type XeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionRespons
 	status?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = {
+	repoId?: string;
+	isGated?: boolean;
+	downloads?: number;
+	likes?: number;
+	lastModifiedAtUtc?: number;
+	license?: string | null;
+	hasUsableGguf?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = {
+	modelName?: string;
+	cancelled?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = {
+	modelName?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = {
+	modelName?: string;
+	role?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = {
+	modelName?: string;
+	role?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = {
+	version?: string;
+	variant?: string;
+	isPinnedFallback?: boolean;
+	pinnedTag?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = {
+	variant?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
+	totalRamBytes?: number;
+	availableRamBytes?: number;
+	vramBytes?: number | null;
+	vramKnown?: boolean;
+	gpuVendor?: string;
+	gpuAccelAvailable?: boolean;
+	cpuCores?: number;
+	freeDiskBytes?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse = {
+	hasToken?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = {
 	hasCache?: boolean;
 	snapshotId?: string | null;
 	status?: string | null;
-	sourceImageId?: string | null;
 	useCase?: string | null;
-	providerName?: string | null;
 	lastRefreshedAtUtc?: number | null;
 	recommendations?: Array<XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse>;
 };
@@ -501,24 +566,15 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequ
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1ApprovedImageResponse>;
+export type XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsModelFitV1ApprovedImageResponse = {
-	approvedImageId?: string;
-	displayName?: string;
-	description?: string | null;
-	purpose?: Array<string>;
-	imageReference?: string;
-	sourceUrl?: string | null;
-	upstreamVersion?: string | null;
-	enabled?: boolean;
-	deprecatedAtUtc?: number | null;
-	replacementApprovedImageId?: string | null;
-	lastUsedAtUtc?: number | null;
-	lastSuccessfulRunAtUtc?: number | null;
-	diagnostics?: string | null;
+export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
+	modelName?: string;
+	role?: string;
+	isResponsive?: boolean;
+	detail?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = {
@@ -529,6 +585,24 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsReques
 	scheduledJobId?: string;
 	useCase?: string | null;
 	limit?: number | null;
+	quantOverride?: string | null;
+	ctxTarget?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = {
+	token?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = {
+	modelName?: string;
+	alreadyInFlight?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = {
+	repoId?: string;
+	fileName?: string | null;
+	quant?: string | null;
+	revision?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
@@ -2283,12 +2357,233 @@ export type StartNodeBindingResponses = {
 
 export type StartNodeBindingResponse = StartNodeBindingResponses[keyof StartNodeBindingResponses];
 
-export type GetLatestRecommendationsData = {
+export type BrowseGgufRepositoriesData = {
+	body?: never;
+	path?: never;
+	query?: {
+		query?: string | null;
+		limit?: number | null;
+		sort?: string | null;
+	};
+	url: "/api/local/v1/model-fit/gguf/browse";
+};
+
+export type BrowseGgufRepositoriesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type BrowseGgufRepositoriesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
+};
+
+export type BrowseGgufRepositoriesResponse = BrowseGgufRepositoriesResponses[keyof BrowseGgufRepositoriesResponses];
+
+export type CancelGgufDownloadData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/download/cancel";
+};
+
+export type CancelGgufDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelGgufDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
+};
+
+export type CancelGgufDownloadResponse = CancelGgufDownloadResponses[keyof CancelGgufDownloadResponses];
+
+export type EjectRunningModelData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/running/eject";
+};
+
+export type EjectRunningModelErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EjectRunningModelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
+};
+
+export type EjectRunningModelResponse = EjectRunningModelResponses[keyof EjectRunningModelResponses];
+
+export type GetLlamaCppVersionData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/version";
+};
+
+export type GetLlamaCppVersionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLlamaCppVersionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+};
+
+export type GetLlamaCppVersionResponse = GetLlamaCppVersionResponses[keyof GetLlamaCppVersionResponses];
+
+export type EnsureLlamaCppBinaryData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/version";
+};
+
+export type EnsureLlamaCppBinaryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EnsureLlamaCppBinaryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+};
+
+export type EnsureLlamaCppBinaryResponse = EnsureLlamaCppBinaryResponses[keyof EnsureLlamaCppBinaryResponses];
+
+export type GetHardwareProfileData = {
 	body?: never;
 	path?: never;
 	query: {
+		refresh: boolean;
+	};
+	url: "/api/local/v1/model-fit/hardware-profile";
+};
+
+export type GetHardwareProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetHardwareProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse;
+};
+
+export type GetHardwareProfileResponse = GetHardwareProfileResponses[keyof GetHardwareProfileResponses];
+
+export type GetHfTokenStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/hf-token";
+};
+
+export type GetHfTokenStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetHfTokenStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+};
+
+export type GetHfTokenStatusResponse = GetHfTokenStatusResponses[keyof GetHfTokenStatusResponses];
+
+export type SetHfTokenData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/hf-token";
+};
+
+export type SetHfTokenErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetHfTokenResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+};
+
+export type SetHfTokenResponse = SetHfTokenResponses[keyof SetHfTokenResponses];
+
+export type GetLatestRecommendationsData = {
+	body?: never;
+	path?: never;
+	query?: {
 		useCase?: string | null;
-		providerName: string;
 	};
 	url: "/api/local/v1/model-fit/recommendations/latest";
 };
@@ -2313,14 +2608,14 @@ export type GetLatestRecommendationsResponses = {
 
 export type GetLatestRecommendationsResponse = GetLatestRecommendationsResponses[keyof GetLatestRecommendationsResponses];
 
-export type ListApprovedImagesData = {
+export type ListRunningModelsData = {
 	body?: never;
 	path?: never;
 	query?: never;
-	url: "/api/local/v1/model-fit/approved-images";
+	url: "/api/local/v1/model-fit/running";
 };
 
-export type ListApprovedImagesErrors = {
+export type ListRunningModelsErrors = {
 	/**
 	 * Unauthorized
 	 */
@@ -2331,14 +2626,14 @@ export type ListApprovedImagesErrors = {
 	403: unknown;
 };
 
-export type ListApprovedImagesResponses = {
+export type ListRunningModelsResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesResponse;
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
 };
 
-export type ListApprovedImagesResponse = ListApprovedImagesResponses[keyof ListApprovedImagesResponses];
+export type ListRunningModelsResponse = ListRunningModelsResponses[keyof ListRunningModelsResponses];
 
 export type RefreshRecommendationsData = {
 	body: XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
@@ -2366,6 +2661,33 @@ export type RefreshRecommendationsResponses = {
 };
 
 export type RefreshRecommendationsResponse = RefreshRecommendationsResponses[keyof RefreshRecommendationsResponses];
+
+export type StartGgufDownloadData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/download";
+};
+
+export type StartGgufDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartGgufDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
+};
+
+export type StartGgufDownloadResponse = StartGgufDownloadResponses[keyof StartGgufDownloadResponses];
 
 export type ListMcpServersData = {
 	body?: never;

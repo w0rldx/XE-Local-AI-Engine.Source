@@ -144,7 +144,16 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 }));
 
                 services.RemoveAll<IHttpClientFactory>();
-                services.AddSingleton<IHttpClientFactory>(_ => Substitute.For<IHttpClientFactory>());
+                services.AddSingleton<IHttpClientFactory>(_ =>
+                {
+                    // Return a real (but un-routed) HttpClient for ANY named client so DI factories that construct an
+                    // HttpClient at resolve time (e.g. the Lane B HF discovery/download clients reached by the model-fit
+                    // advisor endpoints) can be built. No real request is made in unit tests — the consuming endpoints
+                    // catch transport failures and degrade — so this never performs network I/O.
+                    var factory = Substitute.For<IHttpClientFactory>();
+                    factory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
+                    return factory;
+                });
             }
 
             ConfigureAdditionalTestServices?.Invoke(services);

@@ -9,6 +9,8 @@ import {
 	approveGoldenConversation,
 	archiveNodeChatConversation,
 	branchNodeChatConversation,
+	browseGgufRepositories,
+	cancelGgufDownload,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
 	cancelPreviewRun,
@@ -41,8 +43,10 @@ import {
 	disableAutoConnect,
 	disableScheduledJob,
 	disconnectConnection,
+	ejectRunningModel,
 	enableAutoConnect,
 	enableScheduledJob,
+	ensureLlamaCppBinary,
 	executeRuntimeContainerAction,
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
@@ -51,8 +55,11 @@ import {
 	getAgentPlaybookMonitor,
 	getCloudSettings,
 	getConnectionStatus,
+	getHardwareProfile,
+	getHfTokenStatus,
 	getInvocationMonitor,
 	getLatestRecommendations,
+	getLlamaCppVersion,
 	getLocalModelDetails,
 	getMcpServer,
 	getMcpServerTools,
@@ -72,13 +79,13 @@ import {
 	listAgentDefinitions,
 	listAgentPlaybookActions,
 	listAgentTemplates,
-	listApprovedImages,
 	listGoldenConversations,
 	listLocalModels,
 	listMcpServers,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
 	listPreviewWorkflows,
+	listRunningModels,
 	listScheduledJobRuns,
 	listScheduledJobs,
 	listScheduledJobTemplates,
@@ -103,9 +110,11 @@ import {
 	saveCloudSettings,
 	saveNodeSettings,
 	selectLocalModel,
+	setHfToken,
 	setMcpServerEnabled,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
+	startGgufDownload,
 	startNodeBinding,
 	triggerScheduledJob,
 	unloadLocalModel,
@@ -127,6 +136,10 @@ import type {
 	ArchiveNodeChatConversationResponse,
 	BranchNodeChatConversationData,
 	BranchNodeChatConversationResponse,
+	BrowseGgufRepositoriesData,
+	BrowseGgufRepositoriesResponse,
+	CancelGgufDownloadData,
+	CancelGgufDownloadResponse,
 	CancelNodeBindingData,
 	CancelNodeBindingResponse,
 	CancelNodeChatMessageData,
@@ -195,10 +208,14 @@ import type {
 	DisableScheduledJobResponse,
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
+	EjectRunningModelData,
+	EjectRunningModelResponse,
 	EnableAutoConnectData,
 	EnableAutoConnectResponse,
 	EnableScheduledJobData,
 	EnableScheduledJobResponse,
+	EnsureLlamaCppBinaryData,
+	EnsureLlamaCppBinaryResponse,
 	ExecuteRuntimeContainerActionData,
 	ExecuteRuntimeContainerActionResponse,
 	ExecuteSavedPreviewWorkflowData,
@@ -215,10 +232,16 @@ import type {
 	GetCloudSettingsResponse,
 	GetConnectionStatusData,
 	GetConnectionStatusResponse,
+	GetHardwareProfileData,
+	GetHardwareProfileResponse,
+	GetHfTokenStatusData,
+	GetHfTokenStatusResponse,
 	GetInvocationMonitorData,
 	GetInvocationMonitorResponse,
 	GetLatestRecommendationsData,
 	GetLatestRecommendationsResponse,
+	GetLlamaCppVersionData,
+	GetLlamaCppVersionResponse,
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsError,
 	GetLocalModelDetailsResponse,
@@ -259,8 +282,6 @@ import type {
 	ListAgentPlaybookActionsResponse,
 	ListAgentTemplatesData,
 	ListAgentTemplatesResponse,
-	ListApprovedImagesData,
-	ListApprovedImagesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListLocalModelsData,
@@ -274,6 +295,8 @@ import type {
 	ListNodeChatMessageRevisionsResponse,
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsResponse,
+	ListRunningModelsData,
+	ListRunningModelsResponse,
 	ListScheduledJobRunsData,
 	ListScheduledJobRunsResponse,
 	ListScheduledJobsData,
@@ -327,6 +350,8 @@ import type {
 	SelectLocalModelData,
 	SelectLocalModelError,
 	SelectLocalModelResponse,
+	SetHfTokenData,
+	SetHfTokenResponse,
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledResponse,
 	SetNodeChatMessageFeedbackData,
@@ -334,6 +359,8 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
+	StartGgufDownloadData,
+	StartGgufDownloadResponse,
 	StartNodeBindingData,
 	StartNodeBindingResponse,
 	TriggerScheduledJobData,
@@ -1055,10 +1082,173 @@ export const startNodeBindingMutation = (
 	return mutationOptions;
 };
 
-export const getLatestRecommendationsQueryKey = (options: Options<GetLatestRecommendationsData>) =>
+export const browseGgufRepositoriesQueryKey = (options?: Options<BrowseGgufRepositoriesData>) =>
+	createQueryKey("browseGgufRepositories", options);
+
+export const browseGgufRepositoriesOptions = (options?: Options<BrowseGgufRepositoriesData>) =>
+	queryOptions<
+		BrowseGgufRepositoriesResponse,
+		AxiosError<DefaultError>,
+		BrowseGgufRepositoriesResponse,
+		ReturnType<typeof browseGgufRepositoriesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await browseGgufRepositories({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: browseGgufRepositoriesQueryKey(options),
+	});
+
+export const cancelGgufDownloadMutation = (
+	options?: Partial<Options<CancelGgufDownloadData>>,
+): UseMutationOptions<CancelGgufDownloadResponse, AxiosError<DefaultError>, Options<CancelGgufDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelGgufDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<CancelGgufDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelGgufDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const ejectRunningModelMutation = (
+	options?: Partial<Options<EjectRunningModelData>>,
+): UseMutationOptions<EjectRunningModelResponse, AxiosError<DefaultError>, Options<EjectRunningModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		EjectRunningModelResponse,
+		AxiosError<DefaultError>,
+		Options<EjectRunningModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ejectRunningModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLlamaCppVersionQueryKey = (options?: Options<GetLlamaCppVersionData>) =>
+	createQueryKey("getLlamaCppVersion", options);
+
+export const getLlamaCppVersionOptions = (options?: Options<GetLlamaCppVersionData>) =>
+	queryOptions<
+		GetLlamaCppVersionResponse,
+		AxiosError<DefaultError>,
+		GetLlamaCppVersionResponse,
+		ReturnType<typeof getLlamaCppVersionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLlamaCppVersion({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLlamaCppVersionQueryKey(options),
+	});
+
+export const ensureLlamaCppBinaryMutation = (
+	options?: Partial<Options<EnsureLlamaCppBinaryData>>,
+): UseMutationOptions<EnsureLlamaCppBinaryResponse, AxiosError<DefaultError>, Options<EnsureLlamaCppBinaryData>> => {
+	const mutationOptions: UseMutationOptions<
+		EnsureLlamaCppBinaryResponse,
+		AxiosError<DefaultError>,
+		Options<EnsureLlamaCppBinaryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ensureLlamaCppBinary({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
+	createQueryKey("getHardwareProfile", options);
+
+export const getHardwareProfileOptions = (options: Options<GetHardwareProfileData>) =>
+	queryOptions<
+		GetHardwareProfileResponse,
+		AxiosError<DefaultError>,
+		GetHardwareProfileResponse,
+		ReturnType<typeof getHardwareProfileQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getHardwareProfile({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getHardwareProfileQueryKey(options),
+	});
+
+export const getHfTokenStatusQueryKey = (options?: Options<GetHfTokenStatusData>) => createQueryKey("getHfTokenStatus", options);
+
+export const getHfTokenStatusOptions = (options?: Options<GetHfTokenStatusData>) =>
+	queryOptions<
+		GetHfTokenStatusResponse,
+		AxiosError<DefaultError>,
+		GetHfTokenStatusResponse,
+		ReturnType<typeof getHfTokenStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getHfTokenStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getHfTokenStatusQueryKey(options),
+	});
+
+export const setHfTokenMutation = (
+	options?: Partial<Options<SetHfTokenData>>,
+): UseMutationOptions<SetHfTokenResponse, AxiosError<DefaultError>, Options<SetHfTokenData>> => {
+	const mutationOptions: UseMutationOptions<SetHfTokenResponse, AxiosError<DefaultError>, Options<SetHfTokenData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setHfToken({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLatestRecommendationsQueryKey = (options?: Options<GetLatestRecommendationsData>) =>
 	createQueryKey("getLatestRecommendations", options);
 
-export const getLatestRecommendationsOptions = (options: Options<GetLatestRecommendationsData>) =>
+export const getLatestRecommendationsOptions = (options?: Options<GetLatestRecommendationsData>) =>
 	queryOptions<
 		GetLatestRecommendationsResponse,
 		AxiosError<DefaultError>,
@@ -1077,18 +1267,18 @@ export const getLatestRecommendationsOptions = (options: Options<GetLatestRecomm
 		queryKey: getLatestRecommendationsQueryKey(options),
 	});
 
-export const listApprovedImagesQueryKey = (options?: Options<ListApprovedImagesData>) =>
-	createQueryKey("listApprovedImages", options);
+export const listRunningModelsQueryKey = (options?: Options<ListRunningModelsData>) =>
+	createQueryKey("listRunningModels", options);
 
-export const listApprovedImagesOptions = (options?: Options<ListApprovedImagesData>) =>
+export const listRunningModelsOptions = (options?: Options<ListRunningModelsData>) =>
 	queryOptions<
-		ListApprovedImagesResponse,
+		ListRunningModelsResponse,
 		AxiosError<DefaultError>,
-		ListApprovedImagesResponse,
-		ReturnType<typeof listApprovedImagesQueryKey>
+		ListRunningModelsResponse,
+		ReturnType<typeof listRunningModelsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listApprovedImages({
+			const { data } = await listRunningModels({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1096,7 +1286,7 @@ export const listApprovedImagesOptions = (options?: Options<ListApprovedImagesDa
 			});
 			return data;
 		},
-		queryKey: listApprovedImagesQueryKey(options),
+		queryKey: listRunningModelsQueryKey(options),
 	});
 
 export const refreshRecommendationsMutation = (
@@ -1109,6 +1299,26 @@ export const refreshRecommendationsMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await refreshRecommendations({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startGgufDownloadMutation = (
+	options?: Partial<Options<StartGgufDownloadData>>,
+): UseMutationOptions<StartGgufDownloadResponse, AxiosError<DefaultError>, Options<StartGgufDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartGgufDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<StartGgufDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startGgufDownload({
 				...options,
 				...fnOptions,
 				throwOnError: true,

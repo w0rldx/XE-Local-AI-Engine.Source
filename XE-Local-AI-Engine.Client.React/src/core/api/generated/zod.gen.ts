@@ -660,6 +660,101 @@ export const zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionRespo
 	status: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z.object({
+	repoId: z.string().optional(),
+	isGated: z.boolean().optional(),
+	downloads: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	likes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	lastModifiedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	license: z.string().nullish(),
+	hasUsableGguf: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse = z.object({
+	modelName: z.string().optional(),
+	cancelled: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = z.object({
+	modelName: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = z.object({
+	modelName: z.string().optional(),
+	role: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = z.object({
+	modelName: z.string().optional(),
+	role: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = z.object({
+	version: z.string().optional(),
+	variant: z.string().optional(),
+	isPinnedFallback: z.boolean().optional(),
+	pinnedTag: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = z.object({
+	variant: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
+	totalRamBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	availableRamBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	vramBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	vramKnown: z.boolean().optional(),
+	gpuVendor: z.string().optional(),
+	gpuAccelAvailable: z.boolean().optional(),
+	cpuCores: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	freeDiskBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse = z.object({
+	hasToken: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = z.object({
 	rank: z
 		.int()
@@ -689,9 +784,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRe
 	hasCache: z.boolean().optional(),
 	snapshotId: z.guid().nullish(),
 	status: z.string().nullish(),
-	sourceImageId: z.string().nullish(),
 	useCase: z.string().nullish(),
-	providerName: z.string().nullish(),
 	lastRefreshedAtUtc: z.coerce
 		.bigint()
 		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
@@ -702,36 +795,15 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRe
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsModelFitV1ApprovedImageResponse = z.object({
-	approvedImageId: z.string().optional(),
-	displayName: z.string().optional(),
-	description: z.string().nullish(),
-	purpose: z.array(z.string()).optional(),
-	imageReference: z.string().optional(),
-	sourceUrl: z.string().nullish(),
-	upstreamVersion: z.string().nullish(),
-	enabled: z.boolean().optional(),
-	deprecatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	replacementApprovedImageId: z.string().nullish(),
-	lastUsedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	lastSuccessfulRunAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	diagnostics: z.string().nullish(),
+export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.object({
+	modelName: z.string().optional(),
+	role: z.string().optional(),
+	isResponsive: z.boolean().optional(),
+	detail: z.string().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1ApprovedImageResponse).optional(),
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = z.object({
@@ -746,6 +818,28 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequ
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	quantOverride: z.string().nullish(),
+	ctxTarget: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = z.object({
+	token: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse = z.object({
+	modelName: z.string().optional(),
+	alreadyInFlight: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest = z.object({
+	repoId: z.string().optional(),
+	fileName: z.string().nullish(),
+	quant: z.string().nullish(),
+	revision: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
@@ -2070,9 +2164,70 @@ export const zPollNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindi
  */
 export const zStartNodeBindingResponse = zXeLocalAiEngineClientEndpointsNodeBindingV1NodeBindingSessionResponse;
 
+export const zBrowseGgufRepositoriesQuery = z.object({
+	query: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	sort: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zBrowseGgufRepositoriesResponse = zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse;
+
+export const zCancelGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest;
+
+/**
+ * Success
+ */
+export const zCancelGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
+
+export const zEjectRunningModelBody = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
+
+/**
+ * Success
+ */
+export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
+
+/**
+ * Success
+ */
+export const zGetLlamaCppVersionResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+
+export const zEnsureLlamaCppBinaryBody = zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
+
+/**
+ * Success
+ */
+export const zEnsureLlamaCppBinaryResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+
+export const zGetHardwareProfileQuery = z.object({
+	refresh: z.boolean(),
+});
+
+/**
+ * Success
+ */
+export const zGetHardwareProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse;
+
+/**
+ * Success
+ */
+export const zGetHfTokenStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+
+export const zSetHfTokenBody = zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest;
+
+/**
+ * Success
+ */
+export const zSetHfTokenResponse = zXeLocalAiEngineClientEndpointsModelFitV1HfTokenStatusResponse;
+
 export const zGetLatestRecommendationsQuery = z.object({
 	useCase: z.string().nullish(),
-	providerName: z.string(),
 });
 
 /**
@@ -2083,7 +2238,7 @@ export const zGetLatestRecommendationsResponse = zXeLocalAiEngineClientEndpoints
 /**
  * Success
  */
-export const zListApprovedImagesResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListApprovedImagesResponse;
+export const zListRunningModelsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
 
 export const zRefreshRecommendationsBody = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
 
@@ -2091,6 +2246,13 @@ export const zRefreshRecommendationsBody = zXeLocalAiEngineClientEndpointsModelF
  * Success
  */
 export const zRefreshRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse;
+
+export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
+
+/**
+ * Success
+ */
+export const zStartGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
 
 /**
  * Success

@@ -45,6 +45,10 @@ internal sealed class SchedulerDispatchExecutor(
 
     private const string OverridableLimitProperty = "limit";
 
+    private const string OverridableQuantProperty = "quantOverride";
+
+    private const string OverridableCtxTargetProperty = "ctxTarget";
+
     private readonly IScheduledJobDefinitionStore _definitionStore =
         definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
 
@@ -255,7 +259,21 @@ internal sealed class SchedulerDispatchExecutor(
             limitOverride = parsedLimit;
         }
 
-        if (useCaseOverride is null && limitOverride is null)
+        string? quantOverride = null;
+        if (parameterOverrides.TryGetValue(SchedulerJobKeys.ModelFitQuantOverrideKey, out var quantValue)
+            && !string.IsNullOrWhiteSpace(quantValue))
+        {
+            quantOverride = quantValue;
+        }
+
+        int? ctxTargetOverride = null;
+        if (parameterOverrides.TryGetValue(SchedulerJobKeys.ModelFitCtxTargetOverrideKey, out var ctxValue)
+            && int.TryParse(ctxValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedCtx))
+        {
+            ctxTargetOverride = parsedCtx;
+        }
+
+        if (useCaseOverride is null && limitOverride is null && quantOverride is null && ctxTargetOverride is null)
         {
             return storedParametersJson;
         }
@@ -285,6 +303,17 @@ internal sealed class SchedulerDispatchExecutor(
         {
             // The stored `limit` is a JSON number; write the override as a number so the handler's int parse still works.
             SetWhitelistedProperty(parametersObject, OverridableLimitProperty, JsonValue.Create(limit));
+        }
+
+        if (quantOverride is not null)
+        {
+            SetWhitelistedProperty(parametersObject, OverridableQuantProperty, JsonValue.Create(quantOverride));
+        }
+
+        if (ctxTargetOverride is { } ctxTarget)
+        {
+            // The stored `ctxTarget` is a JSON number; write the override as a number so the handler's int parse works.
+            SetWhitelistedProperty(parametersObject, OverridableCtxTargetProperty, JsonValue.Create(ctxTarget));
         }
 
         return parametersObject.ToJsonString();

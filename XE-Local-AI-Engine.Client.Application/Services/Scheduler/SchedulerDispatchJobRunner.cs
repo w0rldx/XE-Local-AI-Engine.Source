@@ -43,9 +43,9 @@ internal static class SchedulerDispatchJobRunner
     }
 
     /// <summary>
-    ///     Reads the whitelisted per-fire override keys (the model-fit use-case and breadth limit) from the merged data
-    ///     map. Returns <c>null</c> when none are present so a normal (cron / no-override) fire dispatches the stored
-    ///     parameters unchanged. No other data-map key is ever surfaced as an override.
+    ///     Reads the whitelisted per-fire override keys (the model-fit use-case, breadth limit, quant and context target)
+    ///     from the merged data map. Returns <c>null</c> when none are present so a normal (cron / no-override) fire
+    ///     dispatches the stored parameters unchanged. No other data-map key is ever surfaced as an override.
     /// </summary>
     private static IReadOnlyDictionary<string, string>? ExtractParameterOverrides(IJobExecutionContext context)
     {
@@ -61,6 +61,18 @@ internal static class SchedulerDispatchJobRunner
         if (!string.IsNullOrWhiteSpace(limitOverride))
         {
             overrides[SchedulerJobKeys.ModelFitLimitOverrideKey] = limitOverride;
+        }
+
+        var quantOverride = SafeGetString(context, SchedulerJobKeys.ModelFitQuantOverrideKey);
+        if (!string.IsNullOrWhiteSpace(quantOverride))
+        {
+            overrides[SchedulerJobKeys.ModelFitQuantOverrideKey] = quantOverride;
+        }
+
+        var ctxTargetOverride = SafeGetString(context, SchedulerJobKeys.ModelFitCtxTargetOverrideKey);
+        if (!string.IsNullOrWhiteSpace(ctxTargetOverride))
+        {
+            overrides[SchedulerJobKeys.ModelFitCtxTargetOverrideKey] = ctxTargetOverride;
         }
 
         return overrides.Count == 0 ? null : overrides;

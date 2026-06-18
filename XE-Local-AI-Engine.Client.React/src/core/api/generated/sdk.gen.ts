@@ -17,6 +17,12 @@ import type {
 	BranchNodeChatConversationData,
 	BranchNodeChatConversationErrors,
 	BranchNodeChatConversationResponses,
+	BrowseGgufRepositoriesData,
+	BrowseGgufRepositoriesErrors,
+	BrowseGgufRepositoriesResponses,
+	CancelGgufDownloadData,
+	CancelGgufDownloadErrors,
+	CancelGgufDownloadResponses,
 	CancelNodeBindingData,
 	CancelNodeBindingErrors,
 	CancelNodeBindingResponses,
@@ -113,12 +119,18 @@ import type {
 	DisconnectConnectionData,
 	DisconnectConnectionErrors,
 	DisconnectConnectionResponses,
+	EjectRunningModelData,
+	EjectRunningModelErrors,
+	EjectRunningModelResponses,
 	EnableAutoConnectData,
 	EnableAutoConnectErrors,
 	EnableAutoConnectResponses,
 	EnableScheduledJobData,
 	EnableScheduledJobErrors,
 	EnableScheduledJobResponses,
+	EnsureLlamaCppBinaryData,
+	EnsureLlamaCppBinaryErrors,
+	EnsureLlamaCppBinaryResponses,
 	ExecuteRuntimeContainerActionData,
 	ExecuteRuntimeContainerActionErrors,
 	ExecuteRuntimeContainerActionResponses,
@@ -143,12 +155,21 @@ import type {
 	GetConnectionStatusData,
 	GetConnectionStatusErrors,
 	GetConnectionStatusResponses,
+	GetHardwareProfileData,
+	GetHardwareProfileErrors,
+	GetHardwareProfileResponses,
+	GetHfTokenStatusData,
+	GetHfTokenStatusErrors,
+	GetHfTokenStatusResponses,
 	GetInvocationMonitorData,
 	GetInvocationMonitorErrors,
 	GetInvocationMonitorResponses,
 	GetLatestRecommendationsData,
 	GetLatestRecommendationsErrors,
 	GetLatestRecommendationsResponses,
+	GetLlamaCppVersionData,
+	GetLlamaCppVersionErrors,
+	GetLlamaCppVersionResponses,
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsErrors,
 	GetLocalModelDetailsResponses,
@@ -206,9 +227,6 @@ import type {
 	ListAgentTemplatesData,
 	ListAgentTemplatesErrors,
 	ListAgentTemplatesResponses,
-	ListApprovedImagesData,
-	ListApprovedImagesErrors,
-	ListApprovedImagesResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -227,6 +245,9 @@ import type {
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsErrors,
 	ListPreviewWorkflowsResponses,
+	ListRunningModelsData,
+	ListRunningModelsErrors,
+	ListRunningModelsResponses,
 	ListScheduledJobRunsData,
 	ListScheduledJobRunsErrors,
 	ListScheduledJobRunsResponses,
@@ -294,6 +315,9 @@ import type {
 	SelectLocalModelData,
 	SelectLocalModelErrors,
 	SelectLocalModelResponses,
+	SetHfTokenData,
+	SetHfTokenErrors,
+	SetHfTokenResponses,
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledErrors,
 	SetMcpServerEnabledResponses,
@@ -303,6 +327,9 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathErrors,
 	SetNodeChatSelectedPathResponses,
+	StartGgufDownloadData,
+	StartGgufDownloadErrors,
+	StartGgufDownloadResponses,
 	StartNodeBindingData,
 	StartNodeBindingErrors,
 	StartNodeBindingResponses,
@@ -347,6 +374,10 @@ import {
 	zArchiveNodeChatConversationResponse,
 	zBranchNodeChatConversationPath,
 	zBranchNodeChatConversationResponse,
+	zBrowseGgufRepositoriesQuery,
+	zBrowseGgufRepositoriesResponse,
+	zCancelGgufDownloadBody,
+	zCancelGgufDownloadResponse,
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
 	zCancelNodeChatMessageResponse,
@@ -406,9 +437,13 @@ import {
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
 	zDisconnectConnectionResponse,
+	zEjectRunningModelBody,
+	zEjectRunningModelResponse,
 	zEnableAutoConnectResponse,
 	zEnableScheduledJobPath,
 	zEnableScheduledJobResponse,
+	zEnsureLlamaCppBinaryBody,
+	zEnsureLlamaCppBinaryResponse,
 	zExecuteRuntimeContainerActionBody,
 	zExecuteRuntimeContainerActionResponse,
 	zExecuteSavedPreviewWorkflowPath,
@@ -423,9 +458,13 @@ import {
 	zGetAgentPlaybookMonitorResponse,
 	zGetCloudSettingsResponse,
 	zGetConnectionStatusResponse,
+	zGetHardwareProfileQuery,
+	zGetHardwareProfileResponse,
+	zGetHfTokenStatusResponse,
 	zGetInvocationMonitorResponse,
 	zGetLatestRecommendationsQuery,
 	zGetLatestRecommendationsResponse,
+	zGetLlamaCppVersionResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
 	zGetMcpServerPath,
@@ -457,7 +496,6 @@ import {
 	zListAgentPlaybookActionsPath,
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
-	zListApprovedImagesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListLocalModelsResponse,
@@ -467,6 +505,7 @@ import {
 	zListNodeChatMessageRevisionsPath,
 	zListNodeChatMessageRevisionsResponse,
 	zListPreviewWorkflowsResponse,
+	zListRunningModelsResponse,
 	zListScheduledJobRunsQuery,
 	zListScheduledJobRunsResponse,
 	zListScheduledJobsQuery,
@@ -510,6 +549,8 @@ import {
 	zSaveNodeSettingsResponse,
 	zSelectLocalModelBody,
 	zSelectLocalModelResponse,
+	zSetHfTokenBody,
+	zSetHfTokenResponse,
 	zSetMcpServerEnabledBody,
 	zSetMcpServerEnabledPath,
 	zSetMcpServerEnabledResponse,
@@ -519,6 +560,8 @@ import {
 	zSetNodeChatSelectedPathBody,
 	zSetNodeChatSelectedPathPath,
 	zSetNodeChatSelectedPathResponse,
+	zStartGgufDownloadBody,
+	zStartGgufDownloadResponse,
 	zStartNodeBindingResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
@@ -1301,16 +1344,202 @@ export const startNodeBinding = <ThrowOnError extends boolean = false>(options?:
 		...options,
 	});
 
-export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
-	options: Options<GetLatestRecommendationsData, ThrowOnError>,
+export const browseGgufRepositories = <ThrowOnError extends boolean = false>(
+	options?: Options<BrowseGgufRepositoriesData, ThrowOnError>,
 ) =>
-	(options.client ?? client).get<GetLatestRecommendationsResponses, GetLatestRecommendationsErrors, ThrowOnError>({
+	(options?.client ?? client).get<BrowseGgufRepositoriesResponses, BrowseGgufRepositoriesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
 				.object({
 					body: z.never().optional(),
 					path: z.never().optional(),
-					query: zGetLatestRecommendationsQuery,
+					query: zBrowseGgufRepositoriesQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zBrowseGgufRepositoriesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/browse",
+		...options,
+	});
+
+export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
+	options: Options<CancelGgufDownloadData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelGgufDownloadResponses, CancelGgufDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelGgufDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelGgufDownloadResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/download/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const ejectRunningModel = <ThrowOnError extends boolean = false>(options: Options<EjectRunningModelData, ThrowOnError>) =>
+	(options.client ?? client).post<EjectRunningModelResponses, EjectRunningModelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zEjectRunningModelBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEjectRunningModelResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/running/eject",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getLlamaCppVersion = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLlamaCppVersionData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetLlamaCppVersionResponses, GetLlamaCppVersionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLlamaCppVersionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/version",
+		...options,
+	});
+
+export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
+	options: Options<EnsureLlamaCppBinaryData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<EnsureLlamaCppBinaryResponses, EnsureLlamaCppBinaryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zEnsureLlamaCppBinaryBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEnsureLlamaCppBinaryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/version",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getHardwareProfile = <ThrowOnError extends boolean = false>(
+	options: Options<GetHardwareProfileData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetHardwareProfileResponses, GetHardwareProfileErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetHardwareProfileQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetHardwareProfileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/hardware-profile",
+		...options,
+	});
+
+export const getHfTokenStatus = <ThrowOnError extends boolean = false>(options?: Options<GetHfTokenStatusData, ThrowOnError>) =>
+	(options?.client ?? client).get<GetHfTokenStatusResponses, GetHfTokenStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetHfTokenStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/hf-token",
+		...options,
+	});
+
+export const setHfToken = <ThrowOnError extends boolean = false>(options: Options<SetHfTokenData, ThrowOnError>) =>
+	(options.client ?? client).post<SetHfTokenResponses, SetHfTokenErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSetHfTokenBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSetHfTokenResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/hf-token",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLatestRecommendationsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetLatestRecommendationsResponses, GetLatestRecommendationsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetLatestRecommendationsQuery.optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",
@@ -1323,10 +1552,8 @@ export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const listApprovedImages = <ThrowOnError extends boolean = false>(
-	options?: Options<ListApprovedImagesData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<ListApprovedImagesResponses, ListApprovedImagesErrors, ThrowOnError>({
+export const listRunningModels = <ThrowOnError extends boolean = false>(options?: Options<ListRunningModelsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListRunningModelsResponses, ListRunningModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
 				.object({
@@ -1336,12 +1563,12 @@ export const listApprovedImages = <ThrowOnError extends boolean = false>(
 				})
 				.parseAsync(data),
 		responseType: "json",
-		responseValidator: async (data) => await zListApprovedImagesResponse.parseAsync(data),
+		responseValidator: async (data) => await zListRunningModelsResponse.parseAsync(data),
 		security: [
 			{ scheme: "bearer", type: "http" },
 			{ scheme: "bearer", type: "http" },
 		],
-		url: "/api/local/v1/model-fit/approved-images",
+		url: "/api/local/v1/model-fit/running",
 		...options,
 	});
 
@@ -1364,6 +1591,30 @@ export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/recommendations/refresh",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startGgufDownload = <ThrowOnError extends boolean = false>(options: Options<StartGgufDownloadData, ThrowOnError>) =>
+	(options.client ?? client).post<StartGgufDownloadResponses, StartGgufDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartGgufDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartGgufDownloadResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/download",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

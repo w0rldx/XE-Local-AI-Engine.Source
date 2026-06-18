@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="ModelFitQueryService" /> tests: the cache reader returns the assembled view when a latest
-///     successful recommendation snapshot exists, returns null on a cache-miss, maps the approved-image registry rows,
-///     and — by construction — has NO dependency on the utility runner (it cannot run llmfit). The constructor's
-///     three-store signature is the structural proof of the no-runner invariant.
+///     successful recommendation snapshot exists, returns null on a cache-miss, and — by construction — has NO dependency
+///     on the refresh service / advisor (it cannot run a recommendation). The approved-image listing was removed in
+///     Lane C (plan §8); the constructor's two-store signature is the structural proof of the no-runner invariant.
 /// </summary>
 public sealed class ModelFitQueryServiceTests
 {
@@ -130,34 +130,19 @@ public sealed class ModelFitQueryServiceTests
         AssertEx.True(view!.Recommendations[0].IsInstalled, "the stored flag is preserved when the node list cannot be read.");
     }
 
-    [Test]
-    public async Task ListApprovedImagesAsync_MapsStoreRecords()
-    {
-        var harness = Harness.Create();
-
-        var images = await harness.Service.ListApprovedImagesAsync(CancellationToken.None);
-
-        AssertEx.Equal(1, images.Count);
-        AssertEx.Equal(ApprovedImageId, images[0].ApprovedImageId);
-        AssertEx.Equal(UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark, images[0].Purpose);
-    }
-
     private sealed class Harness
     {
         public required ModelFitQueryService Service { get; init; }
         public required InMemoryModelFitSnapshotStore SnapshotStore { get; init; }
         public required SeedableRecommendationStore RecommendationStore { get; init; }
-        public required InMemoryApprovedUtilityImageStore ApprovedImageStore { get; init; }
 
         public static Harness Create(IEnumerable<string>? installedModelNames = null, bool throwOnList = false)
         {
             var snapshotStore = new InMemoryModelFitSnapshotStore();
             var recommendationStore = new SeedableRecommendationStore();
-            var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor());
             var ollamaModelService = new FakeOllamaModelService(installedModelNames, throwOnList);
 
-            var service = new ModelFitQueryService(approvedImageStore,
-                snapshotStore,
+            var service = new ModelFitQueryService(snapshotStore,
                 recommendationStore,
                 ollamaModelService,
                 NullLogger<ModelFitQueryService>.Instance);
@@ -166,8 +151,7 @@ public sealed class ModelFitQueryServiceTests
             {
                 Service = service,
                 SnapshotStore = snapshotStore,
-                RecommendationStore = recommendationStore,
-                ApprovedImageStore = approvedImageStore
+                RecommendationStore = recommendationStore
             };
         }
 
@@ -179,25 +163,6 @@ public sealed class ModelFitQueryServiceTests
             SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: "{}", stderrExcerpt: null, diagnosticsJson: "{}", completedAtUtc: 2L)
                          .GetAwaiter().GetResult();
             return summary.Id;
-        }
-
-        private static ApprovedUtilityImageRecord Descriptor()
-        {
-            return new ApprovedUtilityImageRecord(ApprovedImageId: ApprovedImageId,
-                DisplayName: "llmfit",
-                Description: null,
-                Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
-                ImageReference: "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c",
-                SourceUrl: null,
-                UpstreamVersion: "0.9.30",
-                Enabled: true,
-                DeprecatedAtUtc: null,
-                ReplacementApprovedImageId: null,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                LastUsedAtUtc: null,
-                LastSuccessfulRunAtUtc: null,
-                DiagnosticsJson: null);
         }
     }
 
