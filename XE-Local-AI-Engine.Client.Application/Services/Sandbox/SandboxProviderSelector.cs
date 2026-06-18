@@ -5,14 +5,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 /// <summary>
-///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" />. Registered once as a singleton so a provider change requires a restart. The current
-///     default is the deterministic fake; local-container sandbox fills the <c>"local-container"</c> slot with the
-///     HostAgent-backed <see cref="LocalContainerSandboxProvider" />.
+///     Configuration-bound resolver for the AgentHome <see cref="ISandboxRuntimeProvider" />. Registered once as a
+///     singleton so a provider change requires a restart. The default is the deterministic fake; the <c>"process"</c>
+///     slot is the supervised-child <see cref="ProcessSandboxRuntimeProvider" /> (the successor to the removed
+///     HostAgent-backed container provider).
 /// </summary>
 internal static class SandboxProviderSelector
 {
-    public const string LocalContainerProvider = LocalContainerSandboxProvider.Name;
-
     public static ISandboxRuntimeProvider Resolve(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -21,7 +20,7 @@ internal static class SandboxProviderSelector
         return providerName switch
         {
             FakeSandboxRuntimeProvider.Name => ActivatorUtilities.CreateInstance<FakeSandboxRuntimeProvider>(services),
-            LocalContainerProvider => ActivatorUtilities.CreateInstance<LocalContainerSandboxProvider>(services),
+            ProcessSandboxRuntimeProvider.Name => ActivatorUtilities.CreateInstance<ProcessSandboxRuntimeProvider>(services),
             _ => throw new InvalidOperationException($"Unknown sandbox provider '{providerName}'.")
         };
     }

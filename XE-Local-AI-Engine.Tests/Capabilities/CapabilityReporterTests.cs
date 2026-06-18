@@ -57,7 +57,7 @@ public sealed class CapabilityReporterTests
 
         AssertEx.Contains(result.SupportedCapabilities, "text");
         AssertEx.Contains(result.SupportedCapabilities, "agent-home");
-        AssertEx.Contains(result.SupportedCapabilities, "sandbox-local-container");
+        AssertEx.Contains(result.SupportedCapabilities, "sandbox-process");
         AssertEx.Contains(result.SupportedCapabilities, "runtime-dotnet-agent-home");
         AssertEx.Contains(result.SupportedCapabilities, "workspace-copy");
         AssertEx.Contains(result.SupportedCapabilities, "patch-export");
@@ -75,7 +75,7 @@ public sealed class CapabilityReporterTests
         AssertEx.Contains(result.SupportedCapabilities, "text");
         AssertEx.False(result.SupportedCapabilities.Contains("agent-home"),
             "AgentHome capabilities must not be advertised when AgentHome:Enabled is false.");
-        AssertEx.False(result.SupportedCapabilities.Contains("sandbox-local-container"));
+        AssertEx.False(result.SupportedCapabilities.Contains("sandbox-process"));
         AssertEx.False(result.SupportedCapabilities.Contains("memory-proposals"));
     }
 

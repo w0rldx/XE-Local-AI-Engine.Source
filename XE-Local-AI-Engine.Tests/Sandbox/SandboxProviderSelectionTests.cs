@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
@@ -32,14 +31,14 @@ public sealed class SandboxProviderSelectionTests
     }
 
     [Test]
-    public void Resolve_WhenProviderIsLocalContainer_ReturnsLocalContainerProvider()
+    public void Resolve_WhenProviderIsProcess_ReturnsProcessProvider()
     {
-        using var services = BuildServices("local-container");
+        using var services = BuildServices("process");
 
         var provider = SandboxProviderSelector.Resolve(services);
 
-        AssertEx.Equal(LocalContainerSandboxProvider.Name, provider.ProviderName);
-        AssertEx.True(provider is LocalContainerSandboxProvider);
+        AssertEx.Equal(ProcessSandboxRuntimeProvider.Name, provider.ProviderName);
+        AssertEx.True(provider is ProcessSandboxRuntimeProvider);
     }
 
     [Test]
@@ -72,13 +71,8 @@ public sealed class SandboxProviderSelectionTests
         services.AddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddOptions<SandboxOptions>().Bind(configuration.GetSection(SandboxOptions.SectionName));
-        // The local-container provider is a thin gRPC client; constructing it (no connection happens at construction)
-        // needs HostAgentClientOptions plus the bound LocalContainerOptions.
-        services.AddSingleton(new HostAgentClientOptions
-        {
-            SocketPath = "/run/host-agent/host-agent.sock",
-            Secret = "selection-test-secret"
-        });
+        // The process provider reuses the bound LocalContainerOptions for its per-file copy ceiling; constructing it
+        // creates no process and opens no connection, so the bound options plus TimeProvider are all it needs.
         services.AddOptions<LocalContainerOptions>().Bind(configuration.GetSection(LocalContainerOptions.SectionName));
         return services.BuildServiceProvider();
     }
