@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Default <see cref="ILlamaServerProcessSupervisor" /> (plan §7.2 — the highest-risk Lane A component). Owns every

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using Microsoft.Extensions.AI;
 using NSubstitute;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -48,7 +49,7 @@ public sealed class LlamaServerProviderContractTests
     [Test]
     public async Task ListModelsAsync_DelegatesToGgufStore()
     {
-        var store = new FixedPathGgufModelStore("/fake/models/m.gguf", [Model, "other"]);
+        var store = new FakeModelStore("/fake/models/m.gguf", [Model, "other"]);
         var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
 
         var models = await provider.ListModelsAsync(CancellationToken.None);
@@ -58,21 +59,30 @@ public sealed class LlamaServerProviderContractTests
     }
 
     [Test]
-    public async Task PullModelAsync_NotYetAvailable_Throws()
+    public async Task PullModelAsync_DelegatesToStore_ParsingModelNameIntoRequest()
     {
-        var provider = CreateProvider(Substitute.For<ILlamaServerProcessSupervisor>());
+        var store = Substitute.For<IGgufModelStore>();
+        store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new GgufModelHandle(Model, "/fake/m.gguf", "Q4_K_M", 1, null, "rev", GgufRole.Unknown)));
+        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
 
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => provider.PullModelAsync(Model, progress: null, CancellationToken.None));
+        await provider.PullModelAsync($"{Model}:Q4_K_M", progress: null, CancellationToken.None);
+
+        await store.Received(1).EnsureModelAsync(
+            Arg.Is<GgufModelRequest>(r => r.RepoId == Model && r.Quant == "Q4_K_M"),
+            Arg.Any<IProgress<PullProgress>>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task DeleteModelAsync_NotYetAvailable_Throws()
+    public async Task DeleteModelAsync_DelegatesToStore()
     {
-        var provider = CreateProvider(Substitute.For<ILlamaServerProcessSupervisor>());
+        var store = Substitute.For<IGgufModelStore>();
+        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
 
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => provider.DeleteModelAsync(Model, CancellationToken.None));
+        await provider.DeleteModelAsync(Model, CancellationToken.None);
+
+        await store.Received(1).DeleteModelAsync(Model, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -184,5 +194,5 @@ public sealed class LlamaServerProviderContractTests
     }
 
     private static LlamaServerLocalModelProvider CreateProvider(ILlamaServerProcessSupervisor supervisor) =>
-        new(supervisor, new FixedPathGgufModelStore("/fake/models/m.gguf", [Model]));
+        new(supervisor, new FakeModelStore("/fake/models/m.gguf", [Model]));
 }

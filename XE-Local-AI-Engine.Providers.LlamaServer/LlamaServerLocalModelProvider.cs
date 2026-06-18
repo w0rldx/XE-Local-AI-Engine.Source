@@ -20,9 +20,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     </para>
 ///     <para>
 ///         <strong>GGUF acquisition (pull/delete) is Lane B's <see cref="IGgufModelStore" />.</strong> The store
-///         contract Lane A consumes exposes only file resolution + installed-model enumeration, so
-///         <see cref="PullModelAsync" /> / <see cref="DeleteModelAsync" /> surface a clear, sanitized
-///         <see cref="LlamaRuntimeException" /> until Lane B lands the download/delete surface.
+///         contract Lane A consumes exposes file resolution + installed-model enumeration (to launch and list), and
+///         <see cref="PullModelAsync" /> / <see cref="DeleteModelAsync" /> route into the store's download/delete surface.
 ///     </para>
 /// </remarks>
 public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
@@ -86,23 +85,23 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 
     /// <inheritdoc />
     /// <remarks>
-    ///     GGUF download is Lane B's responsibility (<see cref="IGgufModelStore" /> exposes no pull surface to Lane A).
-    ///     Surfaces a sanitized not-yet-available error rather than silently no-op'ing.
+    ///     Delegates to Lane B's <see cref="IGgufModelStore.EnsureModelAsync" />. The bare model name is parsed into a
+    ///     <see cref="GgufModelRequest" /> via the shared <see cref="GgufModelName" /> convention (<c>{repo}[:{quant}]</c>);
+    ///     the store reports byte/status <see cref="PullProgress" /> 1:1.
     /// </remarks>
     public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        throw new LlamaRuntimeException(
-            "Downloading GGUF models is handled by the model store and is not yet available in this build.");
+        var request = GgufModelName.Parse(modelName);
+        return _modelStore.EnsureModelAsync(request, progress, ct);
     }
 
     /// <inheritdoc />
-    /// <remarks>GGUF deletion is Lane B's responsibility; surfaces a sanitized not-yet-available error.</remarks>
+    /// <remarks>Delegates to Lane B's <see cref="IGgufModelStore.DeleteModelAsync" /> (file + registry entry).</remarks>
     public Task DeleteModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        throw new LlamaRuntimeException(
-            "Deleting GGUF models is handled by the model store and is not yet available in this build.");
+        return _modelStore.DeleteModelAsync(modelName, ct);
     }
 
     /// <inheritdoc />

@@ -21,8 +21,8 @@ public static class LlamaServerServiceCollectionExtensions
     ///         <strong>Caller contract:</strong> the consuming application must register a named/typed
     ///         <see cref="System.Net.Http.HttpClient" /> for binary downloads via <c>AddHttpClient</c> (the
     ///         <c>Microsoft.Extensions.Http</c> package is referenced by the Application host, not this provider
-    ///         project) and supply an <see cref="IGgufModelStore" /> — Lane B's real store, or
-    ///         <see cref="FixedPathGgufModelStore" /> until Lane B lands.
+    ///         project) and supply an <see cref="IGgufModelStore" /> — Lane B's real Hugging Face GGUF store
+    ///         (<c>AddHuggingFaceGgufStore</c>).
     ///     </para>
     /// </remarks>
     public static IServiceCollection AddLlamaServerLocalModelProvider(this IServiceCollection services)
@@ -58,7 +58,7 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
         // SEAM: the llamacpp ILocalModelProvider (T3). Registered over the supervisor + the caller-supplied
-        // IGgufModelStore (Lane B's real store, or FixedPathGgufModelStore until Lane B lands). Added to the
+        // IGgufModelStore (Lane B's real Hugging Face GGUF store). Added to the
         // ILocalModelProvider set alongside Ollama (decision #14); T4 introduces the per-model→provider resolver that
         // dispatches across both registrations. Singleton — it holds no per-request state; the deferred chat/embedding
         // clients it hands out own the cold-start.
