@@ -229,22 +229,45 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Local API contract type for model-fit (llmfit approved-image recommendations). Cache-first: the latest
-    ///     endpoints read the cached snapshot and never run llmfit; the refresh endpoint delegates to the scheduler
-    ///     trigger and never executes llmfit directly. Benchmark routes are intentionally not exposed yet.
+    ///     Local API contract type for model-fit, the box-aware local model advisor (Lane C). Cache-first: the latest
+    ///     endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates
+    ///     to the scheduler trigger and never executes the advisor directly. The advisor management routes are thin
+    ///     transport over the Lane A (binary/supervisor) and Lane B (HF discovery/store/token) seams. The approved-image
+    ///     concept and the provider-name param are gone (non-additive, plan §8/§13). Benchmark stays gated.
     /// </summary>
     public static class ModelFit
     {
-        // Read-only approved utility image registry projection.
-        public const string ApprovedImages = "model-fit/approved-images";
-
-        // Latest cached recommendation snapshot (query-filtered by useCase/providerName). The literal "latest" segment
-        // follows "recommendations", so it never collides with the "refresh" action below.
+        // Latest cached recommendation snapshot (query-filtered by useCase). The literal "latest" segment follows
+        // "recommendations", so it never collides with the "refresh" action below.
         public const string RecommendationsLatest = "model-fit/recommendations/latest";
 
         // Manual refresh trigger — a template-guarded facade over the scheduler trigger service. The literal "refresh"
         // segment follows "recommendations", so it never collides with "latest".
         public const string RecommendationsRefresh = "model-fit/recommendations/refresh";
+
+        // Sanitized hardware profile (RAM/VRAM/GPU vendor/CPU/disk aggregates only — no machine identifiers, plan §10).
+        // Lane C1 IHardwareProfiler passthrough.
+        public const string HardwareProfile = "model-fit/hardware-profile";
+
+        // GGUF repo discovery (Lane B IHuggingFaceGgufDiscovery search). The literal "browse" segment keeps it distinct.
+        public const string GgufBrowse = "model-fit/gguf/browse";
+
+        // Download a chosen GGUF file (Lane B IGgufModelStore) — starts a background, cancellable download keyed by
+        // model name; the cancel action signals the in-flight download's token.
+        public const string Download = "model-fit/download";
+        public const string DownloadCancel = "model-fit/download/cancel";
+
+        // Running llama-server processes derived from the Lane A supervisor health snapshot; eject tree-kills one.
+        public const string Running = "model-fit/running";
+        public const string RunningEject = "model-fit/running/eject";
+
+        // Resolved/pinned llama.cpp binary version (Lane A ILlamaCppBinaryManager). GET reads the pinned-tag + resolved
+        // variant; POST ensures the binary for a chosen variant is present (download + hash-verify).
+        public const string LlamaCppVersion = "model-fit/llamacpp/version";
+
+        // HF access-token set/clear (Lane B IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
+        // only (plan §10 / security gate).
+        public const string HfToken = "model-fit/hf-token";
     }
 
     /// <summary>

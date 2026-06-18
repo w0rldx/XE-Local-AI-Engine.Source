@@ -36,4 +36,20 @@ public static class SchedulerJobKeys
     ///     unchanged. The value is validated to the supported <c>1..50</c> range before it is stamped.
     /// </summary>
     public const string ModelFitLimitOverrideKey = "modelFitLimitOverride";
+
+    /// <summary>
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a quant override (e.g. <c>Q5_K_M</c>) for a model-fit
+    ///     recommendation refresh. Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c>
+    ///     fire (never on the recurring cron fire) and the dispatcher merges ONLY this whitelisted key over the stored
+    ///     parameters — replacing the default <c>Q4_K_M</c> the advisor would otherwise estimate against.
+    /// </summary>
+    public const string ModelFitQuantOverrideKey = "modelFitQuantOverride";
+
+    /// <summary>
+    ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a context-window target the advisor's KV-cache fit is
+    ///     sized against. Like the other model-fit override keys it is set only on a manual <c>TriggerNowAsync</c> fire
+    ///     (never on the recurring cron fire), validated to ≥256 before it is stamped, and written back as a JSON number so
+    ///     the handler's numeric <c>ctxTarget</c> parse is unchanged.
+    /// </summary>
+    public const string ModelFitCtxTargetOverrideKey = "modelFitCtxTargetOverride";
 }

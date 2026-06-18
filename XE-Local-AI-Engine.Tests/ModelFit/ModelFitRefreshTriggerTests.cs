@@ -110,7 +110,7 @@ public sealed class ModelFitRefreshTriggerTests
 
     [Test]
     [Arguments(0)]
-    [Arguments(501)]
+    [Arguments(51)]
     [Arguments(-1)]
     public async Task Refresh_WhenLimitOutOfRange_RejectsWithoutTrigger(int limit)
     {

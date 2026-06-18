@@ -14,9 +14,14 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
 {
     private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
 
+    /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema).</summary>
+    private const int MinCtxTarget = 256;
+
     public async Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,
         int? limitOverride = null,
+        string? quantOverride = null,
+        int? ctxTarget = null,
         CancellationToken cancellationToken = default)
     {
         var definition = await _scheduledJobManagementService.GetJobAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
@@ -53,6 +58,23 @@ public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService schedu
             }
 
             parameterOverrides[SchedulerJobKeys.ModelFitLimitOverrideKey] = limit.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (!string.IsNullOrWhiteSpace(quantOverride))
+        {
+            // The quant label rides the override unvalidated for content (the advisor falls back to its file selection
+            // when no file matches the label); it is trimmed and never free-text-injected into a command.
+            parameterOverrides[SchedulerJobKeys.ModelFitQuantOverrideKey] = quantOverride.Trim();
+        }
+
+        if (ctxTarget is { } ctx)
+        {
+            if (ctx < MinCtxTarget)
+            {
+                throw new ScheduledJobValidationException("Context target is out of range.");
+            }
+
+            parameterOverrides[SchedulerJobKeys.ModelFitCtxTargetOverrideKey] = ctx.ToString(CultureInfo.InvariantCulture);
         }
 
         // Delegate to the scheduler; it performs its own enabled/deleted/forbidden/unscheduled validation and fires the

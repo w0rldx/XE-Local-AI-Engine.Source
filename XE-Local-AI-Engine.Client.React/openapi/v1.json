@@ -1449,6 +1449,363 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/gguf/browse": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "browseGgufRepositories",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/download/cancel": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "cancelGgufDownload",
+        "requestBody": {
+          "x-name": "CancelGgufDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CancelGgufDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CancelGgufDownloadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/running/eject": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "ejectRunningModel",
+        "requestBody": {
+          "x-name": "EjectRunningModelRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1EjectRunningModelRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1EjectRunningModelResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/llamacpp/version": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "ensureLlamaCppBinary",
+        "requestBody": {
+          "x-name": "EnsureLlamaCppBinaryRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppVersionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getLlamaCppVersion",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppVersionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/hardware-profile": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getHardwareProfile",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1HardwareProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/hf-token": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getHfTokenStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1HfTokenStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "setHfToken",
+        "requestBody": {
+          "x-name": "SetHfTokenRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1SetHfTokenRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1HfTokenStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/recommendations/latest": {
       "get": {
         "tags": [
@@ -1462,14 +1819,6 @@
             "schema": {
               "type": "string",
               "nullable": true
-            }
-          },
-          {
-            "name": "providerName",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
             }
           }
         ],
@@ -1501,19 +1850,19 @@
         ]
       }
     },
-    "/api/local/v1/model-fit/approved-images": {
+    "/api/local/v1/model-fit/running": {
       "get": {
         "tags": [
           "Model-Fit"
         ],
-        "operationId": "listApprovedImages",
+        "operationId": "listRunningModels",
         "responses": {
           "200": {
             "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ListApprovedImagesResponse"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ListRunningModelsResponse"
                 }
               }
             }
@@ -1561,6 +1910,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RefreshRecommendationsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/download": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "startGgufDownload",
+        "requestBody": {
+          "x-name": "StartGgufDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1StartGgufDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1StartGgufDownloadResponse"
                 }
               }
             }
@@ -6469,6 +6865,175 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1GgufRepositoryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GgufRepositoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "isGated": {
+            "type": "boolean"
+          },
+          "downloads": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "likes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastModifiedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasUsableGguf": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CancelGgufDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "cancelled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CancelGgufDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1EjectRunningModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1EjectRunningModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppVersionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "isPinnedFallback": {
+            "type": "boolean"
+          },
+          "pinnedTag": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "variant": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1HardwareProfileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "totalRamBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "availableRamBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vramBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "vramKnown": {
+            "type": "boolean"
+          },
+          "gpuVendor": {
+            "type": "string"
+          },
+          "gpuAccelAvailable": {
+            "type": "boolean"
+          },
+          "cpuCores": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "freeDiskBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GetHardwareProfileRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1HfTokenStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hasToken": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelFitV1GetLatestRecommendationsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -6485,15 +7050,7 @@
             "type": "string",
             "nullable": true
           },
-          "sourceImageId": {
-            "type": "string",
-            "nullable": true
-          },
           "useCase": {
-            "type": "string",
-            "nullable": true
-          },
-          "providerName": {
             "type": "string",
             "nullable": true
           },
@@ -6578,74 +7135,33 @@
         "type": "object",
         "additionalProperties": false
       },
-      "XE_Local_AI_EngineClientEndpointsModelFitV1ListApprovedImagesResponse": {
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ListRunningModelsResponse": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ApprovedImageResponse"
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1RunningModelResponse"
             }
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsModelFitV1ApprovedImageResponse": {
+      "XE_Local_AI_EngineClientEndpointsModelFitV1RunningModelResponse": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "approvedImageId": {
+          "modelName": {
             "type": "string"
           },
-          "displayName": {
+          "role": {
             "type": "string"
           },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "purpose": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "imageReference": {
-            "type": "string"
-          },
-          "sourceUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "upstreamVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "enabled": {
+          "isResponsive": {
             "type": "boolean"
           },
-          "deprecatedAtUtc": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "replacementApprovedImageId": {
-            "type": "string",
-            "nullable": true
-          },
-          "lastUsedAtUtc": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "lastSuccessfulRunAtUtc": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "diagnostics": {
-            "type": "string",
-            "nullable": true
+          "detail": {
+            "type": "string"
           }
         }
       },
@@ -6674,6 +7190,58 @@
           "limit": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "quantOverride": {
+            "type": "string",
+            "nullable": true
+          },
+          "ctxTarget": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1SetHfTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1StartGgufDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "alreadyInFlight": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1StartGgufDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "repoId": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true
+          },
+          "quant": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
             "nullable": true
           }
         }
