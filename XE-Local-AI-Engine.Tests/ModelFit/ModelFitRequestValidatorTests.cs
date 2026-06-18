@@ -50,7 +50,8 @@ public sealed class ModelFitRequestValidatorTests
     [Test]
     [Arguments(0)]
     [Arguments(-1)]
-    [Arguments(501)]
+    [Arguments(51)]
+    [Arguments(500)]
     [Arguments(1000)]
     public void Validate_RecommendWithOutOfRangeLimit_IsInvalid(int limit)
     {
@@ -58,12 +59,13 @@ public sealed class ModelFitRequestValidatorTests
     }
 
     [Test]
+    [Arguments(1)]
+    [Arguments(12)]
     [Arguments(50)]
-    [Arguments(200)]
-    [Arguments(500)]
     public void Validate_RecommendWithHighButInRangeLimit_IsValid(int limit)
     {
-        // The upper bound was raised to 500 so the UI can fetch the full use-case catalog (Lane H1 / show-all + paginate).
+        // The advisor only inspects a small fixed window of repos, so the limit ceiling is 50 (matching the handler's
+        // JSON-schema maximum). The full inclusive 1..50 range validates.
         AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", null));
     }
 
@@ -74,6 +76,13 @@ public sealed class ModelFitRequestValidatorTests
     public void Validate_WithUnsupportedProvider_IsInvalid(string provider)
     {
         AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, "coding", 5, provider, null));
+    }
+
+    [Test]
+    public void Validate_WithLlamaCppProvider_IsValid()
+    {
+        // The local advisor (Lane C) targets llama.cpp in-process; the validator now allowlists it alongside ollama.
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", 5, "llama.cpp", null));
     }
 
     [Test]

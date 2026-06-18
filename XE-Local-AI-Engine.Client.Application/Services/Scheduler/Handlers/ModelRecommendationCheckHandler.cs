@@ -9,13 +9,13 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 
 /// <summary>
 ///     Quartz template handler for the reserved <c>model-recommendation-check</c> template. On each fire
-///     it validates the decrypted parameters, then invokes <see cref="IModelFitRefreshService" /> to run the approved
-///     llmfit recommend image and replace the cached recommendation snapshot.
+///     it validates the decrypted parameters, then invokes <see cref="IModelFitRefreshService" /> to run the local model
+///     advisor (box-aware GGUF recommendation) and replace the cached recommendation snapshot.
 ///     <para>
 ///         <b>Singleton.</b> The registry captures every handler in a <c>FrozenDictionary</c> at construction, so this
 ///         handler is effectively a singleton and CANNOT inject scoped services. It injects
 ///         <see cref="IServiceScopeFactory" /> and creates a scope per <see cref="ExecuteAsync" />, resolving the scoped
-///         refresh service inside (mirrors <c>ApprovedUtilityImageSeeder</c>).
+///         refresh service inside.
 ///     </para>
 ///     <para>
 ///         <b>Owns no scheduler state.</b> It never creates/updates scheduler run rows and never publishes SignalR — the
@@ -31,23 +31,27 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
     /// <summary>The reserved scheduler template id this handler claims.</summary>
     public const string TemplateIdValue = "model-recommendation-check";
 
-    private const string DefaultApprovedImageId = "llmfit-recommender-0-9-30";
+    /// <summary>The advisor's fixed provider sentinel — passed to the validator (use-case/limit bounds only, no caller provider).</summary>
+    private const string AdvisorProviderName = "llama.cpp";
 
-    /// <summary>JSON-Schema (draft-07) for the decrypted <c>model-recommendation-check</c> parameters.</summary>
+    /// <summary>
+    ///     JSON-Schema (draft-07) for the decrypted <c>model-recommendation-check</c> parameters. The approved-image and
+    ///     provider-name params are gone (the advisor runs box-aware GGUF recommendation in-process); the optional
+    ///     <c>quantOverride</c> replaces the default <c>Q4_K_M</c> and <c>ctxTarget</c> overrides the fit context window.
+    /// </summary>
     private const string ParameterSchemaJson =
         """
         {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "type": "object",
           "additionalProperties": false,
-          "required": ["approvedImageId", "operation", "limit", "providerName"],
+          "required": ["operation", "limit"],
           "properties": {
-            "approvedImageId": { "type": "string", "minLength": 1 },
             "operation": { "type": "string", "enum": ["Recommend"] },
             "useCase": { "type": "string", "enum": ["general", "coding", "reasoning", "chat", "multimodal", "embedding"] },
             "limit": { "type": "integer", "minimum": 1, "maximum": 50 },
-            "providerName": { "type": "string", "minLength": 1 },
-            "modelName": { "type": ["string", "null"] }
+            "quantOverride": { "type": ["string", "null"] },
+            "ctxTarget": { "type": ["integer", "null"], "minimum": 256 }
           }
         }
         """;
@@ -76,7 +80,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
     public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: TemplateIdValue,
         DisplayName: "Model recommendation check",
-        Description: "Runs the approved llmfit recommend image and refreshes the cached model recommendation snapshot.",
+        Description: "Runs the local model advisor and refreshes the cached model recommendation snapshot.",
         ParameterSchema: ParameterSchemaJson,
         DefaultParameters: BuildDefaultParameters(),
         SupportedScheduleKinds: [ScheduleKind.Manual, ScheduleKind.OneShot, ScheduleKind.Cron, ScheduleKind.SimpleInterval],
@@ -144,59 +148,45 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             throw new ScheduledJobValidationException("Model recommendation check parameters are required.");
         }
 
-        if (string.IsNullOrWhiteSpace(parameters.ApprovedImageId))
-        {
-            throw new ScheduledJobValidationException("An approved image id is required.");
-        }
-
         if (parameters.Operation != ModelFitOperation.Recommend)
         {
             throw new ScheduledJobValidationException("Only the Recommend operation is supported by this template.");
         }
 
-        if (string.IsNullOrWhiteSpace(parameters.ProviderName))
-        {
-            throw new ScheduledJobValidationException("A provider name is required.");
-        }
-
+        // The advisor targets llama.cpp in-process; the request validator's provider arg is fixed to that sentinel so it
+        // still enforces the use-case allowlist + limit bounds without a caller-supplied provider name.
         using var scope = _scopeFactory.CreateScope();
         var validator = scope.ServiceProvider.GetRequiredService<ModelFitRequestValidator>();
         var validationError = validator.GetValidationError(parameters.Operation,
             parameters.UseCase,
             parameters.Limit,
-            parameters.ProviderName,
+            AdvisorProviderName,
             modelName: null);
         if (validationError is not null)
         {
             throw new ScheduledJobValidationException(validationError);
         }
 
-        return new ModelFitRefreshRequest(ApprovedImageId: parameters.ApprovedImageId,
-            Operation: parameters.Operation,
+        return new ModelFitRefreshRequest(Operation: parameters.Operation,
             UseCase: parameters.UseCase,
             Limit: parameters.Limit,
-            ProviderName: parameters.ProviderName,
-            ModelName: null);
+            QuantOverride: parameters.QuantOverride,
+            CtxTarget: parameters.CtxTarget);
     }
 
     private static string BuildDefaultParameters()
     {
         return JsonSerializer.Serialize(new ModelRecommendationCheckParameters
         {
-            ApprovedImageId = DefaultApprovedImageId,
             Operation = ModelFitOperation.Recommend,
             UseCase = "coding",
-            Limit = 5,
-            ProviderName = "ollama"
+            Limit = 5
         }, ParameterSerializerOptions);
     }
 
     /// <summary>Decrypted-parameter shape for the <c>model-recommendation-check</c> template.</summary>
     private sealed record ModelRecommendationCheckParameters
     {
-        [JsonPropertyName("approvedImageId")]
-        public string? ApprovedImageId { get; init; }
-
         [JsonPropertyName("operation")]
         public ModelFitOperation Operation { get; init; } = ModelFitOperation.Recommend;
 
@@ -206,10 +196,10 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
         [JsonPropertyName("limit")]
         public int Limit { get; init; }
 
-        [JsonPropertyName("providerName")]
-        public string? ProviderName { get; init; }
+        [JsonPropertyName("quantOverride")]
+        public string? QuantOverride { get; init; }
 
-        [JsonPropertyName("modelName")]
-        public string? ModelName { get; init; }
+        [JsonPropertyName("ctxTarget")]
+        public int? CtxTarget { get; init; }
     }
 }

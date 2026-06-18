@@ -2,316 +2,233 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Fake;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ModelFitRefreshService" /> tests: the single non-bypass refresh path maps every runner
-///     outcome to the right snapshot status (Succeeded / Failed / Cancelled / TimedOut), persists normalized rows on
-///     success with the verified field mapping, stamps usage, tolerates malformed JSON without crashing, and re-throws
-///     on a cancelled run after recording a Cancelled (not Failed) snapshot.
+///     <see cref="ModelFitRefreshService" /> (the local model advisor) tests (plan §12): the refresh path profiles
+///     hardware, discovers candidate GGUF files (faked Lane B), estimates each file's fit, drops the non-fitting /
+///     insufficient-metadata files, ranks the survivors, persists normalized rows and replaces the latest snapshot;
+///     the default quant is <c>Q4_K_M</c> with override honored; download/start delegate to Lane B then Lane A in order.
 /// </summary>
 public sealed class ModelFitRefreshServiceTests
 {
-    private const string ApprovedImageId = "llmfit-recommender-0-9-30";
-
-    private const string ValidReference =
-        "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";
-
-    // A representative two-model recommend payload with a system object (schema captured live).
-    private const string TwoModelJson =
-        """
-        {
-          "models": [
-            {
-              "name": "qwen2.5-coder:7b",
-              "ollama_name": "qwen2.5-coder:7b",
-              "score": 82.5,
-              "fit_level": "Good",
-              "run_mode": "GPU",
-              "best_quant": "Q5_K_M",
-              "estimated_tps": 48.2,
-              "memory_required_gb": 6.0,
-              "effective_context_length": 16384,
-              "context_length": 32768,
-              "installed": true,
-              "category": "Coding",
-              "is_moe": false,
-              "params_b": 7.6,
-              "score_components": { "quality": 80, "speed": 90, "fit": 75, "context": 85 }
-            },
-            {
-              "name": "deepseek-coder:1.3b",
-              "ollama_name": "deepseek-coder:1.3b",
-              "score": 61.0,
-              "fit_level": "Marginal",
-              "run_mode": "CPU",
-              "best_quant": "Q4_K_M",
-              "estimated_tps": 12.0,
-              "memory_required_gb": 1.5,
-              "context_length": 16384,
-              "installed": false
-            }
-          ],
-          "system": { "total_ram_gb": 32, "cpu_cores": 16, "has_gpu": true, "gpu_vram_gb": 8 }
-        }
-        """;
+    private const long Gb = 1024L * 1024 * 1024;
 
     [Test]
-    public async Task RefreshAsync_WhenRunSucceeds_PersistsRecommendationsAndStampsSuccessfulRun()
+    public async Task Advisor_Recommend_PicksFittingGgufFileAndQuant()
     {
-        var harness = Harness.Create();
-        harness.ScriptSucceeded(TwoModelJson);
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
 
-        var result = await harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None);
+        // Two repos: one tiny (fits) and one 70B (does not fit a 12 GB VRAM budget).
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>(
+                 [
+                     Summary("org/tiny-GGUF"),
+                     Summary("org/huge-GGUF")
+                 ]));
+        discovery.InspectRepoAsync("org/tiny-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/tiny-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+        discovery.InspectRepoAsync("org/huge-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/huge-GGUF", File("Q4_K_M", paramCount: 70_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(vramBytes: 12 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
-        AssertEx.Equal(2, result.RecommendationCount);
-        AssertEx.True(result.SnapshotId.HasValue, "a successful refresh has a snapshot id.");
-        AssertEx.Null(result.SanitizedError);
+        AssertEx.Equal(1, result.RecommendationCount);
 
-        // Snapshot terminal status + raw/diagnostics stored, is_latest_successful set.
-        var snapshot = harness.SnapshotStore.Snapshots[result.SnapshotId!.Value];
-        AssertEx.Equal(ModelFitRunStatus.Succeeded, snapshot.Status);
-        AssertEx.True(snapshot.IsLatestSuccessful, "a succeeded recommend snapshot must be marked latest-successful.");
-        AssertEx.NotNull(snapshot.RawJson);
-        AssertEx.NotNull(snapshot.DiagnosticsJson);
-        AssertEx.Contains(snapshot.DiagnosticsJson!, "gpu_vram_gb");
-
-        // Normalized rows: rank order + field mapping incl. GB→MB.
-        var rows = harness.RecommendationStore.RowsFor(result.SnapshotId!.Value);
-        AssertEx.Equal(2, rows.Count);
-        AssertEx.Equal(1, rows[0].Rank);
-        AssertEx.Equal("qwen2.5-coder:7b", rows[0].ModelName);
-        AssertEx.Equal("qwen2.5-coder:7b", rows[0].ProviderModelName!);
-        AssertEx.Equal(82.5, rows[0].Score);
-        AssertEx.Equal("Good", rows[0].FitLevel!);
-        AssertEx.Equal("GPU", rows[0].RunMode!);
-        AssertEx.Equal("Q5_K_M", rows[0].Quantization!);
-        AssertEx.Equal(48.2, rows[0].EstimatedTokensPerSecond ?? 0d);
-        AssertEx.Equal(6.0 * 1024d, rows[0].RequiredRamMb ?? 0d); // GB → MB.
-        AssertEx.Null(rows[0].RequiredVramMb);
-        AssertEx.Equal(32768, rows[0].ContextTokens ?? 0); // Lane E: the model's real context_length, not the effective/estimation cap.
-        AssertEx.True(rows[0].IsInstalled, "first model is installed.");
-        AssertEx.Equal(2, rows[1].Rank);
-        AssertEx.Equal(16384, rows[1].ContextTokens ?? 0); // context_length used directly (no effective on this model).
-        AssertEx.False(rows[1].IsInstalled, "second model is not installed.");
-
-        // Image usage stamped, with a successful-run stamp.
-        var descriptor = harness.ApprovedImageStore.Records[ApprovedImageId];
-        AssertEx.True(descriptor.LastUsedAtUtc.HasValue, "last-used must be stamped on a run.");
-        AssertEx.True(descriptor.LastSuccessfulRunAtUtc.HasValue, "last-successful-run must be stamped on a success.");
+        var snapshotId = snapshotStore.Snapshots.Values.Single().Id;
+        var rows = recommendationStore.RowsFor(snapshotId);
+        AssertEx.ContainsSingle(rows, row => row.ModelName == "org/tiny-GGUF:Q4_K_M");
+        // The 70B repo was dropped (it exceeds the 12 GB budget).
+        AssertEx.False(rows.Any(row => row.ModelName.StartsWith("org/huge", StringComparison.Ordinal)), "the non-fitting 70B model must be dropped.");
+        // VRAM required is filled from the GPU-mode estimate (was always null in the Docker path).
+        AssertEx.True(rows[0].RequiredVramMb is not null, "GPU-mode fit must fill RequiredVramMb.");
     }
 
     [Test]
-    public async Task RefreshAsync_WhenModelsArrayIsEmpty_SucceedsWithZeroRows()
+    public async Task Advisor_Recommend_DefaultsQ4KM_RespectsOverride()
     {
-        var harness = Harness.Create();
-        harness.ScriptSucceeded("""{ "models": [], "system": {} }""");
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/multi-GGUF")]));
+        discovery.InspectRepoAsync("org/multi-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/multi-GGUF",
+                     File("Q4_K_M", 1_000_000_000L),
+                     File("Q8_0", 1_000_000_000L))));
 
-        var result = await harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None);
+        // Default → Q4_K_M selected.
+        var snapshotStoreDefault = new InMemoryModelFitSnapshotStore();
+        var recommendationStoreDefault = new InMemoryModelFitRecommendationStore();
+        var advisorDefault = BuildAdvisor(snapshotStoreDefault, recommendationStoreDefault, discovery, GpuProfile(64 * Gb));
+        await advisorDefault.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+        var defaultRows = recommendationStoreDefault.RowsFor(snapshotStoreDefault.Snapshots.Values.Single().Id);
+        AssertEx.Equal("Q4_K_M", defaultRows.Single().Quantization);
+
+        // Override → Q8_0 selected.
+        var snapshotStoreOverride = new InMemoryModelFitSnapshotStore();
+        var recommendationStoreOverride = new InMemoryModelFitRecommendationStore();
+        var advisorOverride = BuildAdvisor(snapshotStoreOverride, recommendationStoreOverride, discovery, GpuProfile(64 * Gb));
+        await advisorOverride.RefreshAsync(Request(quantOverride: "Q8_0"), reportProgress: null, CancellationToken.None);
+        var overrideRows = recommendationStoreOverride.RowsFor(snapshotStoreOverride.Snapshots.Values.Single().Id);
+        AssertEx.Equal("Q8_0", overrideRows.Single().Quantization);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_DropsInsufficientMetadataFile()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/nometa-GGUF")]));
+        // No param count AND no file size → no weights term → insufficient metadata, dropped.
+        discovery.InspectRepoAsync("org/nometa-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/nometa-GGUF",
+                     new GgufRepoFile("model.gguf", "Q4_K_M", SizeBytes: 0, Sha256: null, Revision: "main",
+                         Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null,
+                         AttentionHeadCountKV: null, EmbeddingLength: null, ContextLength: null))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
         AssertEx.Equal(0, result.RecommendationCount);
-        AssertEx.True(harness.SnapshotStore.Snapshots[result.SnapshotId!.Value].IsLatestSuccessful, "empty-list success is still latest-successful.");
-        AssertEx.Empty(harness.RecommendationStore.RowsFor(result.SnapshotId!.Value));
     }
 
     [Test]
-    public async Task RefreshAsync_WhenJsonIsMalformed_RecordsFailedSnapshotWithoutRowsOrSuccessStamp()
+    public async Task Advisor_DownloadThenStart_CallsLaneBThenLaneA()
     {
-        var harness = Harness.Create();
-        harness.ScriptSucceeded("this is not json at all");
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        var store = Substitute.For<IGgufModelStore>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
 
-        var result = await harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None);
+        var handle = new GgufModelHandle("org/tiny-GGUF:Q4_K_M", "/models/tiny.gguf", "Q4_K_M", 1 * Gb, null, "main", GgufRole.Chat);
+        store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>?>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(handle));
+        supervisor.EnsureRunningAsync("org/tiny-GGUF:Q4_K_M", ModelRole.Chat, Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(new LlamaServerEndpoint("org/tiny-GGUF:Q4_K_M", ModelRole.Chat, new Uri("http://127.0.0.1:8081/v1"))));
 
-        AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
-        AssertEx.Equal(0, result.RecommendationCount);
-        AssertEx.True(result.SnapshotId.HasValue, "a parse-failed run still recorded a snapshot.");
-        var snapshot = harness.SnapshotStore.Snapshots[result.SnapshotId!.Value];
-        AssertEx.Equal(ModelFitRunStatus.Failed, snapshot.Status);
-        AssertEx.False(snapshot.IsLatestSuccessful, "a parse-failed run must not be latest-successful.");
-        AssertEx.Empty(harness.RecommendationStore.RowsFor(result.SnapshotId!.Value));
-        AssertEx.Null(harness.ApprovedImageStore.Records[ApprovedImageId].LastSuccessfulRunAtUtc);
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb), store, supervisor);
+
+        var request = new GgufModelRequest { RepoId = "org/tiny-GGUF", Quant = "Q4_K_M" };
+        var downloaded = await advisor.DownloadAsync(request, progress: null, CancellationToken.None);
+        var endpoint = await advisor.StartAsync(downloaded.ModelName, ModelRole.Chat, CancellationToken.None);
+
+        await store.Received(1).EnsureModelAsync(Arg.Is<GgufModelRequest>(r => r.RepoId == "org/tiny-GGUF" && r.Quant == "Q4_K_M"),
+            Arg.Any<IProgress<PullProgress>?>(), Arg.Any<CancellationToken>());
+        await supervisor.Received(1).EnsureRunningAsync("org/tiny-GGUF:Q4_K_M", ModelRole.Chat, Arg.Any<CancellationToken>());
+        AssertEx.NotNull(endpoint);
     }
 
     [Test]
-    public async Task RefreshAsync_WhenRunnerReturnsFailed_RecordsFailedSnapshotWithoutRowsOrSuccessStamp()
+    public async Task Advisor_Refresh_Benchmark_FailsBeforeSnapshot()
     {
-        var harness = Harness.Create();
-        harness.Runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Failed,
-            ExitCode: 1,
-            StandardOutput: string.Empty,
-            StandardError: "Error: provider unavailable",
-            Completed: true,
-            DurationMs: 10,
-            StartedAtUtc: null,
-            CompletedAtUtc: null,
-            SanitizedError: "model-fit utility run failed (exit code 1)"));
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var advisor = BuildAdvisor(snapshotStore, new InMemoryModelFitRecommendationStore(),
+            Substitute.For<IHuggingFaceGgufDiscovery>(), GpuProfile(64 * Gb));
 
-        var result = await harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None);
-
-        AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
-        AssertEx.Equal(0, result.RecommendationCount);
-        var snapshot = harness.SnapshotStore.Snapshots[result.SnapshotId!.Value];
-        AssertEx.Equal(ModelFitRunStatus.Failed, snapshot.Status);
-        AssertEx.False(snapshot.IsLatestSuccessful);
-        AssertEx.Empty(harness.RecommendationStore.RowsFor(result.SnapshotId!.Value));
-        AssertEx.Null(harness.ApprovedImageStore.Records[ApprovedImageId].LastSuccessfulRunAtUtc);
-    }
-
-    [Test]
-    public async Task RefreshAsync_WhenRunnerThrowsCancellation_RecordsCancelledSnapshotAndRethrows()
-    {
-        var harness = Harness.Create();
-        harness.Runner.ScriptThrowCancellation();
-
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None));
-
-        // Exactly one snapshot was opened and it is Cancelled — NOT Failed.
-        AssertEx.Equal(1, harness.SnapshotStore.Snapshots.Count);
-        var snapshot = harness.SnapshotStore.Snapshots.Values.Single();
-        AssertEx.Equal(ModelFitRunStatus.Cancelled, snapshot.Status);
-        AssertEx.False(snapshot.IsLatestSuccessful);
-        AssertEx.Null(harness.ApprovedImageStore.Records[ApprovedImageId].LastSuccessfulRunAtUtc);
-    }
-
-    [Test]
-    public async Task RefreshAsync_WhenBenchmarkOperation_FailsBeforeOpeningSnapshot()
-    {
-        var harness = Harness.Create();
-
-        var result = await harness.Service.RefreshAsync(new ModelFitRefreshRequest(ApprovedImageId, ModelFitOperation.Benchmark, UseCase: null, Limit: 5, ProviderName: "ollama", ModelName: "llama3"),
-            reportProgress: null,
-            CancellationToken.None);
+        var result = await advisor.RefreshAsync(new ModelFitRefreshRequest(ModelFitOperation.Benchmark, "coding", 5),
+            reportProgress: null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
         AssertEx.Null(result.SnapshotId);
-        AssertEx.Empty(harness.SnapshotStore.Snapshots.Values);
-        AssertEx.Equal(0, harness.Runner.RunCount);
+        AssertEx.Empty(snapshotStore.Snapshots.Values);
     }
 
-    [Test]
-    public async Task RefreshAsync_WhenImageRejected_FailsBeforeOpeningSnapshotOrRunning()
+    private static ModelFitRefreshRequest Request(string? quantOverride = null)
     {
-        var harness = Harness.Create(enabled: false); // disabled descriptor → resolver rejection.
-
-        var result = await harness.Service.RefreshAsync(RecommendRequest(), reportProgress: null, CancellationToken.None);
-
-        AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
-        AssertEx.Null(result.SnapshotId);
-        AssertEx.Empty(harness.SnapshotStore.Snapshots.Values);
-        AssertEx.Equal(0, harness.Runner.RunCount);
+        return new ModelFitRefreshRequest(ModelFitOperation.Recommend, "coding", Limit: 5, QuantOverride: quantOverride);
     }
 
-    private static ModelFitRefreshRequest RecommendRequest()
+    private static ModelFitRefreshService BuildAdvisor(InMemoryModelFitSnapshotStore snapshotStore,
+        InMemoryModelFitRecommendationStore recommendationStore,
+        IHuggingFaceGgufDiscovery discovery,
+        HardwareProfile profile,
+        IGgufModelStore? store = null,
+        ILlamaServerProcessSupervisor? supervisor = null)
     {
-        return new ModelFitRefreshRequest(ApprovedImageId, ModelFitOperation.Recommend, UseCase: "coding", Limit: 5, ProviderName: "ollama", ModelName: null);
+        var profiler = Substitute.For<IHardwareProfiler>();
+        profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+
+        var registry = Substitute.For<IGgufModelRegistry>();
+        registry.ListAsync(Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<GgufModelRegistryEntry>>([]));
+
+        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$" });
+
+        return new ModelFitRefreshService(profiler,
+            discovery,
+            new MemoryFitEstimator(),
+            store ?? Substitute.For<IGgufModelStore>(),
+            registry,
+            supervisor ?? Substitute.For<ILlamaServerProcessSupervisor>(),
+            new ModelFitRequestValidator(new ModelNameValidator(securityOptions)),
+            snapshotStore,
+            recommendationStore,
+            TimeProvider.System,
+            NullLogger<ModelFitRefreshService>.Instance);
     }
 
-    private sealed class Harness
+    private static GgufRepoSummary Summary(string repoId)
     {
-        public required ModelFitRefreshService Service { get; init; }
-        public required FakeModelFitUtilityRunner Runner { get; init; }
-        public required InMemoryModelFitSnapshotStore SnapshotStore { get; init; }
-        public required InMemoryModelFitRecommendationStore RecommendationStore { get; init; }
-        public required InMemoryApprovedUtilityImageStore ApprovedImageStore { get; init; }
-
-        public static Harness Create(bool enabled = true)
-        {
-            var runner = new FakeModelFitUtilityRunner();
-            var snapshotStore = new InMemoryModelFitSnapshotStore();
-            var recommendationStore = new InMemoryModelFitRecommendationStore();
-            var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor(enabled));
-            var resolver = new ApprovedImageResolver(approvedImageStore, new ApprovedImageReferenceValidator());
-            var securityOptions = Options.Create(new SecurityOptions
-            {
-                AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
-            });
-            var validator = new ModelFitRequestValidator(new ModelNameValidator(securityOptions));
-
-            var service = new ModelFitRefreshService(resolver,
-                validator,
-                new StubCapabilityReporter(),
-                runner,
-                snapshotStore,
-                recommendationStore,
-                approvedImageStore,
-                TimeProvider.System,
-                NullLogger<ModelFitRefreshService>.Instance);
-
-            return new Harness
-            {
-                Service = service,
-                Runner = runner,
-                SnapshotStore = snapshotStore,
-                RecommendationStore = recommendationStore,
-                ApprovedImageStore = approvedImageStore
-            };
-        }
-
-        public void ScriptSucceeded(string standardOutput)
-        {
-            Runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Succeeded,
-                ExitCode: 0,
-                StandardOutput: standardOutput,
-                StandardError: string.Empty,
-                Completed: true,
-                DurationMs: 1234,
-                StartedAtUtc: null,
-                CompletedAtUtc: null,
-                SanitizedError: null));
-        }
-
-        private static ApprovedUtilityImageRecord Descriptor(bool enabled)
-        {
-            return new ApprovedUtilityImageRecord(ApprovedImageId: ApprovedImageId,
-                DisplayName: "llmfit",
-                Description: null,
-                Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
-                ImageReference: ValidReference,
-                SourceUrl: null,
-                UpstreamVersion: "0.9.30",
-                Enabled: enabled,
-                DeprecatedAtUtc: null,
-                ReplacementApprovedImageId: null,
-                CreatedAtUtc: 0,
-                UpdatedAtUtc: 0,
-                LastUsedAtUtc: null,
-                LastSuccessfulRunAtUtc: null,
-                DiagnosticsJson: null);
-        }
+        return new GgufRepoSummary(repoId, IsGated: false, Downloads: 1000, Likes: 10, LastModified: DateTimeOffset.UnixEpoch, License: "mit", HasUsableGguf: true);
     }
 
-    private sealed class StubCapabilityReporter : ICapabilityReporter
+    private static GgufRepoDetail Detail(string repoId, params GgufRepoFile[] files)
     {
-        public Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new ClientCapabilities
-            {
-                RamMb = 32_768,
-                VramMb = 8_192,
-                CudaAvailable = true
-            });
-        }
+        return new GgufRepoDetail(repoId, IsGated: false, License: "mit", Files: files);
+    }
 
-        public Task ReportToApiAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
+    private static GgufRepoFile File(string quant, long paramCount)
+    {
+        // A small, fits-anywhere geometry (4 layers, 2 kv-heads, embedding 16 over 4 heads) so only param-count drives weights.
+        return new GgufRepoFile($"model.{quant}.gguf",
+            quant,
+            SizeBytes: 1 * Gb,
+            Sha256: null,
+            Revision: "main",
+            Architecture: "llama",
+            QuantType: quant,
+            ParamCount: paramCount,
+            BlockCount: 4,
+            AttentionHeadCount: 4,
+            AttentionHeadCountKV: 2,
+            EmbeddingLength: 16,
+            ContextLength: 8192);
+    }
 
-        public Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default)
+    private static HardwareProfile GpuProfile(long vramBytes)
+    {
+        return new HardwareProfile
         {
-            return Task.FromResult(true);
-        }
+            TotalRamBytes = 64 * Gb,
+            AvailableRamBytes = 48 * Gb,
+            VramBytes = vramBytes,
+            VramKnown = true,
+            GpuVendor = GpuVendor.Nvidia,
+            GpuAccelAvailable = true,
+            CpuCores = 16,
+            FreeDiskBytes = 500 * Gb
+        };
     }
 }

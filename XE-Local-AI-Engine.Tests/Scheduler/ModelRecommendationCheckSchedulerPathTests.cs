@@ -5,18 +5,19 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Fake;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -24,18 +25,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     No-bypass proof: a real <see cref="SchedulerDispatchExecutor" /> dispatching a definition that
 ///     references the <c>model-recommendation-check</c> template runs the REAL handler through the registry's
 ///     <c>TryGetHandler</c>, opening a <c>scheduled_job_runs</c> row that goes Running → Succeeded AND creating a
-///     <c>model_fit_snapshots</c> row. The refresh service is wired only behind the scheduler — there is no direct
-///     execution entry point in this graph.
+///     <c>model_fit_snapshots</c> row via the local model advisor. The advisor is wired only behind the scheduler —
+///     there is no direct execution entry point in this graph. The new parameter schema carries no approved-image /
+///     provider-name fields.
 /// </summary>
 public sealed class ModelRecommendationCheckSchedulerPathTests
 {
-    private const string ApprovedImageId = "llmfit-recommender-0-9-30";
-
-    private const string ValidReference =
-        "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";
+    private const long Gb = 1024L * 1024 * 1024;
 
     private const string ParametersJson =
-        """{ "approvedImageId": "llmfit-recommender-0-9-30", "operation": "Recommend", "useCase": "coding", "limit": 5, "providerName": "ollama" }""";
+        """{ "operation": "Recommend", "useCase": "coding", "limit": 5 }""";
 
     private static readonly Guid JobId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid RunId = Guid.Parse("55555555-5555-5555-5555-555555555555");
@@ -63,7 +62,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             Arg.Any<string?>(),
             Arg.Any<CancellationToken>());
 
-        // Snapshot row created by the refresh service and marked Succeeded with normalized rows.
+        // Snapshot row created by the advisor and marked Succeeded with normalized rows.
         AssertEx.Equal(1, snapshotStore.Snapshots.Count);
         var snapshot = snapshotStore.Snapshots.Values.Single();
         AssertEx.Equal(ModelFitRunStatus.Succeeded, snapshot.Status);
@@ -76,34 +75,10 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         out IScheduledJobRunStore runStore,
         out ModelRecommendationCheckHandler handler)
     {
-        var runner = new FakeModelFitUtilityRunner();
-        runner.ScriptResult(new ModelFitUtilityRunResult(Status: ModelFitRunStatus.Succeeded,
-            ExitCode: 0,
-            StandardOutput:
-            """{ "models": [ { "name": "qwen2.5-coder:7b", "score": 80, "fit_level": "Good", "run_mode": "GPU", "best_quant": "Q5_K_M", "estimated_tps": 40, "memory_required_gb": 6, "effective_context_length": 16384, "installed": true } ], "system": { "cpu_cores": 16 } }""",
-            StandardError: string.Empty,
-            Completed: true,
-            DurationMs: 100,
-            StartedAtUtc: null,
-            CompletedAtUtc: null,
-            SanitizedError: null));
+        var refreshService = BuildAdvisor(snapshotStore);
 
-        var approvedImageStore = new InMemoryApprovedUtilityImageStore(Descriptor());
-        var securityOptions = Options.Create(new SecurityOptions
-        {
-            AllowedModelNamePattern = "^[a-zA-Z0-9._:-]+$"
-        });
-        var refreshService = new ModelFitRefreshService(new ApprovedImageResolver(approvedImageStore, new ApprovedImageReferenceValidator()),
-            new ModelFitRequestValidator(new ModelNameValidator(securityOptions)),
-            new StubCapabilityReporter(),
-            runner,
-            snapshotStore,
-            new InMemoryModelFitRecommendationStore(),
-            approvedImageStore,
-            TimeProvider.System,
-            NullLogger<ModelFitRefreshService>.Instance);
-
-        // The handler resolves the scoped refresh service + validator through a real scope factory (singleton handler).
+        // The handler resolves the scoped advisor + validator through a real scope factory (singleton handler).
+        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$" });
         var services = new ServiceCollection();
         services.AddSingleton<IModelFitRefreshService>(refreshService);
         services.AddSingleton(securityOptions);
@@ -140,23 +115,52 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             NullLogger<SchedulerDispatchExecutor>.Instance);
     }
 
-    private static ApprovedUtilityImageRecord Descriptor()
+    private static ModelFitRefreshService BuildAdvisor(InMemoryModelFitSnapshotStore snapshotStore)
     {
-        return new ApprovedUtilityImageRecord(ApprovedImageId: ApprovedImageId,
-            DisplayName: "llmfit",
-            Description: null,
-            Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
-            ImageReference: ValidReference,
-            SourceUrl: null,
-            UpstreamVersion: "0.9.30",
-            Enabled: true,
-            DeprecatedAtUtc: null,
-            ReplacementApprovedImageId: null,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            LastUsedAtUtc: null,
-            LastSuccessfulRunAtUtc: null,
-            DiagnosticsJson: null);
+        var profile = new HardwareProfile
+        {
+            TotalRamBytes = 64 * Gb,
+            AvailableRamBytes = 48 * Gb,
+            VramBytes = 24 * Gb,
+            VramKnown = true,
+            GpuVendor = GpuVendor.Nvidia,
+            GpuAccelAvailable = true,
+            CpuCores = 16,
+            FreeDiskBytes = 500 * Gb
+        };
+        var profiler = Substitute.For<IHardwareProfiler>();
+        profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>(
+                 [
+                     new GgufRepoSummary("org/qwen-GGUF", false, 1000, 10, DateTimeOffset.UnixEpoch, "apache-2.0", true)
+                 ]));
+        discovery.InspectRepoAsync("org/qwen-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(new GgufRepoDetail("org/qwen-GGUF", false, "apache-2.0",
+                 [
+                     new GgufRepoFile("qwen.Q4_K_M.gguf", "Q4_K_M", 4 * Gb, null, "main",
+                         "qwen2", "Q4_K_M", 7_000_000_000L, 28, 28, 4, 3584, 32768)
+                 ])));
+
+        var registry = Substitute.For<IGgufModelRegistry>();
+        registry.ListAsync(Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<GgufModelRegistryEntry>>([]));
+
+        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$" });
+
+        return new ModelFitRefreshService(profiler,
+            discovery,
+            new MemoryFitEstimator(),
+            Substitute.For<IGgufModelStore>(),
+            registry,
+            Substitute.For<ILlamaServerProcessSupervisor>(),
+            new ModelFitRequestValidator(new ModelNameValidator(securityOptions)),
+            snapshotStore,
+            new InMemoryModelFitRecommendationStore(),
+            TimeProvider.System,
+            NullLogger<ModelFitRefreshService>.Instance);
     }
 
     private static ScheduledJobDefinitionRecord DefinitionRecord()
@@ -207,28 +211,5 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
     {
         return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, 1L);
-    }
-
-    private sealed class StubCapabilityReporter : ICapabilityReporter
-    {
-        public Task<ClientCapabilities> DetectCapabilitiesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new ClientCapabilities
-            {
-                RamMb = 32_768,
-                VramMb = 8_192,
-                CudaAvailable = true
-            });
-        }
-
-        public Task ReportToApiAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> VerifyOllamaAndModelAsync(string? modelName, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(true);
-        }
     }
 }
