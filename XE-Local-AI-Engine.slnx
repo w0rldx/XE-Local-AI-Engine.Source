@@ -26,6 +26,7 @@
     </Folder>
     <Folder Name="/Src/Providers/">
         <Project Path="XE-Local-AI-Engine.Providers.Abstractions/XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Providers.Capabilities/XE-Local-AI-Engine.Providers.Capabilities.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.CodexOAuth/XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.HuggingFace/XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.LlamaServer/XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
