@@ -133,12 +133,6 @@ public sealed class HostAgentWindowsScaffoldTests
         var driver = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "Wsl2Driver.cs"));
         var allowlist = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "WslCommandAllowlist.cs"));
         var runner = await File.ReadAllTextAsync(GetWindowsProjectPath("Wsl", "Implementation", "WindowsProcessRunner.cs"));
-        var linuxInstallScript = await File.ReadAllTextAsync(Path.Combine(ProjectRoot,
-            "Apps",
-            "XE-Local-AI-Engine",
-            "XE-Local-AI-Engine.HostAgent.Linux",
-            "Packaging",
-            "install-user-unit.sh"));
 
         AssertEx.Contains(driver, "VerifyScriptHash");
         AssertEx.Contains(driver, "RunPhaseBoundaryAsync");
@@ -149,7 +143,8 @@ public sealed class HostAgentWindowsScaffoldTests
         AssertEx.Contains(allowlist, "WslArgumentNotAllowedException");
         AssertEx.Contains(runner, "startInfo.ArgumentList.Add(argument)");
         AssertEx.Contains(runner, "UseShellExecute = false");
-        AssertEx.False(linuxInstallScript.Contains("wsl --terminate", StringComparison.Ordinal));
+        // Lane D deleted the HostAgent.Linux packaging (install-user-unit.sh); the host-owned-terminate-boundary
+        // assertion against that script is dropped with the daemon it covered.
     }
 
     private static string GetProperty(XDocument project, string name)
