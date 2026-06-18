@@ -25,18 +25,9 @@ public sealed class HostAgentWindowsGrpcClientSourceTests
         AssertEx.Contains(client, "StatusCode.Unavailable");
     }
 
-    [Test]
-    public async Task LinuxHostAgent_WhenD4Implemented_ExposesLoopbackTcpHttp2Endpoint()
-    {
-        var program = await File.ReadAllTextAsync(GetLinuxProjectPath("Program.cs"));
-        var options = await File.ReadAllTextAsync(GetLinuxProjectPath("Hosting", "HostAgentTcpOptions.cs"));
-
-        AssertEx.Contains(program, "HostAgentTcpOptions.FromConfiguration");
-        AssertEx.Contains(program, "IPAddress.Loopback");
-        AssertEx.Contains(program, "HttpProtocols.Http2");
-        AssertEx.Contains(options, "DefaultPort = 57974");
-        AssertEx.Contains(options, "XE_HOST_AGENT_TCP_DISABLED");
-    }
+    // Lane D deleted the HostAgent.Linux daemon project; the Linux-side loopback-TCP source assertion that read its
+    // Program.cs / HostAgentTcpOptions.cs is dropped with the daemon it covered. The Windows gRPC client wiring above
+    // (the kept connection layer) stays under test.
 
     private static string GetWindowsProjectPath(params string[] relativePath)
     {
@@ -45,17 +36,6 @@ public sealed class HostAgentWindowsGrpcClientSourceTests
             "Apps",
             "XE-Local-AI-Engine",
             "XE-Local-AI-Engine.HostAgent.Windows",
-            .. relativePath
-        ]);
-    }
-
-    private static string GetLinuxProjectPath(params string[] relativePath)
-    {
-        return Path.Combine([
-            ProjectRoot,
-            "Apps",
-            "XE-Local-AI-Engine",
-            "XE-Local-AI-Engine.HostAgent.Linux",
             .. relativePath
         ]);
     }

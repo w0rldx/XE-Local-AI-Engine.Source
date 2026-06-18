@@ -21,7 +21,6 @@
     <Folder Name="/Src/HostAgent/">
         <Project Path="XE-Local-AI-Engine.HostAgent.Abstractions/XE-Local-AI-Engine.HostAgent.Abstractions.csproj"/>
         <Project Path="XE-Local-AI-Engine.HostAgent.Grpc.Contracts/XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
-        <Project Path="XE-Local-AI-Engine.HostAgent.Linux/XE-Local-AI-Engine.HostAgent.Linux.csproj"/>
         <Project Path="XE-Local-AI-Engine.HostAgent.Windows/XE-Local-AI-Engine.HostAgent.Windows.csproj"/>
     </Folder>
     <Folder Name="/Src/Providers/">

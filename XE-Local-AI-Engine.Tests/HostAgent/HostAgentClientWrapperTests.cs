@@ -7,13 +7,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.HostAgent.Grpc.Contracts.Security;
-using XE_Local_AI_Engine.HostAgent.Linux.Security;
 using XE_Local_AI_Engine.Tests.Testing;
 using ContainerDesiredState = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.ContainerDesiredState;
 using ContainerHealth = XE_Local_AI_Engine.HostAgent.Grpc.Contracts.ContainerHealth;
@@ -75,7 +73,7 @@ public sealed class HostAgentClientWrapperTests
         {
             SocketPath = socketPath,
             Secret = Secret,
-            BucketSeconds = HostAgentHmacOptions.DefaultBucketSeconds
+            BucketSeconds = HostAgentClientOptions.DefaultBucketSeconds
         }, new FrozenTimeProvider(FrozenNow));
     }
 
@@ -100,25 +98,12 @@ public sealed class HostAgentClientWrapperTests
         AssertEx.Equal(1, capturedCalls.Calls.Count);
         var call = capturedCalls.Calls[0];
         AssertEx.Equal(expectedMethodName, call.MethodName);
+        // The client signs each request: assert the HMAC headers are present and non-empty. Server-side validation
+        // (HmacRequestValidator) lived in the deleted HostAgent.Linux daemon, so the round-trip Validate() check is
+        // dropped — the kept connection layer only produces these headers.
         AssertEx.NotNullOrEmpty(call.Headers.GetValue(HostAgentHmacMetadata.RequestIdHeader));
         AssertEx.NotNullOrEmpty(call.Headers.GetValue(HostAgentHmacMetadata.BodySha256Header));
         AssertEx.NotNullOrEmpty(call.Headers.GetValue(HostAgentHmacMetadata.AuthorizationHeader));
-
-        var validator = CreateValidator();
-        var result = validator.Validate(call.Request, call.Headers, call.MethodName);
-        AssertEx.True(result.Succeeded, result.Detail);
-    }
-
-    private static HmacRequestValidator CreateValidator()
-    {
-        var options = new TestOptionsMonitor<HostAgentHmacOptions>(new HostAgentHmacOptions
-        {
-            Secret = Secret,
-            BucketSeconds = HostAgentHmacOptions.DefaultBucketSeconds,
-            MaxRequestIdsPerBucket = HostAgentHmacOptions.DefaultMaxRequestIdsPerBucket
-        });
-
-        return new HmacRequestValidator(options, new ReplayWindowCache(), new FrozenTimeProvider(FrozenNow));
     }
 
     private static TempDirectory CreateTempDirectory()
@@ -213,26 +198,6 @@ public sealed class HostAgentClientWrapperTests
         public override DateTimeOffset GetUtcNow()
         {
             return _utcNow;
-        }
-    }
-
-    private sealed class TestOptionsMonitor<TOptions> : IOptionsMonitor<TOptions>
-    {
-        public TestOptionsMonitor(TOptions value)
-        {
-            CurrentValue = value;
-        }
-
-        public TOptions CurrentValue { get; }
-
-        public TOptions Get(string? name)
-        {
-            return CurrentValue;
-        }
-
-        public IDisposable? OnChange(Action<TOptions, string?> listener)
-        {
-            return null;
         }
     }
 

@@ -6,10 +6,11 @@ using XE_Local_AI_Engine.HostAgent.Grpc.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Build-barrier coverage for the HostAgent <c>SandboxControl</c> proto surface: the unary-only HMAC
-///     security guard, and lossless serialization of the new messages (bytes for copy/read,
-///     the network enum, maps, the nested attach key, and the handle timestamp) so the
-///     <c>LocalContainerSandboxProvider</c> can stay a 1:1 translator of the SPI DTOs.
+///     Build-barrier coverage for the HostAgent <c>SandboxControl</c> proto surface (kept in
+///     <c>HostAgent.Grpc.Contracts</c>): the unary-only RPC set and lossless serialization of the messages (bytes for
+///     copy/read, the network enum, maps, the nested attach key, and the handle timestamp). The former
+///     <c>LocalContainerSandboxProvider</c> that consumed this proto was removed in Lane D; the proto contract is
+///     retained and still build-barrier-tested here.
 /// </summary>
 public sealed class SandboxControlProtoTests
 {
