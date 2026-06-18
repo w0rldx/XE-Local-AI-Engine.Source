@@ -39,6 +39,7 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Capabilities\XE-Local-AI-Engine.Providers.Capabilities.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
