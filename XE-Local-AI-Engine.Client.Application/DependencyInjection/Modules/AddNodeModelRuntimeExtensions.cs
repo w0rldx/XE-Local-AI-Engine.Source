@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.HostAgent;
 using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
+using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -69,6 +70,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
@@ -142,11 +144,12 @@ internal static class AddNodeModelRuntimeExtensions
         // variant probe, the process supervisor, and the "llamacpp" ILocalModelProvider into the provider set.
         // Caller-contract dependencies (the provider project intentionally takes them from the host):
         //   • an HttpClient for binary downloads + health probes (AddHttpClient),
-        //   • an IGgufModelStore — Lane B's real HF GGUF store later; until then FixedPathGgufModelStore is the
-        //     LANE B SWAP POINT (replace this single registration when Lane B lands).
+        //   • an IGgufModelStore — Lane B's real HF GGUF store, registered just below by AddHuggingFaceGgufStore.
+        // Lane B SWAP DONE: AddHuggingFaceGgufStore provides the real IGgufModelStore (HF discovery + download + disk
+        // guard + registry); the optional HF token rides the encrypted HfTokenStore (third IDataProtector .enc store).
         builder.Services.AddHttpClient();
-        builder.Services.AddSingleton<IGgufModelStore>(_ =>
-            new FixedPathGgufModelStore(ResolveGgufModelStorePlaceholderPath(configuration)));
+        builder.Services.AddSingleton<IHfTokenStore, HfTokenStore>();
+        builder.Services.AddHuggingFaceGgufStore(configuration);
         builder.Services.AddLlamaServerLocalModelProvider();
 
         // Lane A (§7.5): the provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
@@ -199,17 +202,6 @@ internal static class AddNodeModelRuntimeExtensions
         return new ModelRoutingLocalChatClient(
             serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
             chatConnectionSettings.Model);
-    }
-
-    /// <summary>
-    ///     Resolves the placeholder GGUF path handed to the <see cref="FixedPathGgufModelStore" /> stub. This is the
-    ///     LANE B SWAP POINT: the real HF GGUF store replaces the store registration entirely, so this path is only
-    ///     consulted if a model is explicitly mapped to <c>llamacpp</c> before Lane B lands (no model is by default).
-    /// </summary>
-    private static string ResolveGgufModelStorePlaceholderPath(IConfiguration configuration)
-    {
-        return configuration.GetValue<string>("LlamaServer:GgufModelPath")
-               ?? Path.Combine(AppContext.BaseDirectory, "models", "placeholder.gguf");
     }
 
     private static void DispatchSafely(Task dispatchTask, ILogger logger, string operationName)

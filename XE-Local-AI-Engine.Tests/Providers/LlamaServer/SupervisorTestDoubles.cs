@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -119,14 +120,41 @@ internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) :
     public Task<GpuVariant> SelectVariantAsync(CancellationToken ct) => Task.FromResult(variant);
 }
 
-/// <summary>GGUF store resolving a model name to a fixed path; null means "not installed".</summary>
-internal sealed class FakeModelStore(string? fixedPath = "/fake/models/model.gguf") : IGgufModelStore
+/// <summary>
+///     GGUF store fake: resolves a model name to a fixed path (null means "not installed") and reports an optional
+///     fixed installed-model list. The download/delete surface is not exercised by the supervisor/provider tests, so
+///     <see cref="EnsureModelAsync" /> throws and delete/exists are trivial.
+/// </summary>
+internal sealed class FakeModelStore(
+    string? fixedPath = "/fake/models/model.gguf",
+    IReadOnlyList<string>? installedModelNames = null) : IGgufModelStore
 {
     public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct) =>
         Task.FromResult(fixedPath);
 
-    public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]);
+    public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
+    {
+        IReadOnlyList<LocalModelDescriptor> descriptors = (installedModelNames ?? [])
+            .Select(name => new LocalModelDescriptor
+            {
+                ModelName = name,
+                ProviderName = LlamaServerProviderConstants.ProviderName,
+                IsAvailable = true,
+                SizeBytes = null,
+                ModifiedAt = null,
+                MaxContextTokens = null
+            })
+            .ToList();
+
+        return Task.FromResult(descriptors);
+    }
+
+    public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct) =>
+        throw new NotSupportedException("FakeModelStore does not download.");
+
+    public Task DeleteModelAsync(string modelName, CancellationToken ct) => Task.CompletedTask;
+
+    public Task<bool> ExistsAsync(string modelName, CancellationToken ct) => Task.FromResult(fixedPath is not null);
 }
 
 /// <summary>
