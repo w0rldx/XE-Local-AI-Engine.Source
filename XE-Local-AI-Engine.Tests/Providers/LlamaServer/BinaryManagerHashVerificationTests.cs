@@ -56,6 +56,30 @@ public sealed class BinaryManagerHashVerificationTests
         AssertEx.True(binary.IsPinnedFallback);
     }
 
+    [Test]
+    public async Task EnsureBinary_CachedBinaryInUpstreamTopLevelLayout_ResolvedByTreeSearch_NoDownload()
+    {
+        // Regression: the pinned b9692 Linux archive extracts llama-server to a top-level llama-{tag}/ folder,
+        // NOT the pin's build/bin/ relative path. The manager must locate the executable by searching the extracted
+        // tree, or acquisition silently fails with "did not contain the expected server executable".
+        using var cache = new TempCacheDir();
+        var variantDir = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu");
+        var actualServerPath = Path.Combine(variantDir, $"llama-{LlamaCppReleasePins.PinnedTag}", "llama-server");
+        Directory.CreateDirectory(Path.GetDirectoryName(actualServerPath)!);
+        await File.WriteAllTextAsync(actualServerPath, "fake-llama-server");
+
+        using var handler = new CountingHandler(() =>
+            throw new InvalidOperationException("Offline reuse must not hit the network."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        AssertEx.Equal(0, handler.CallCount);
+        AssertEx.Equal(actualServerPath, binary.ServerExecutablePath);
+        AssertEx.True(binary.IsPinnedFallback);
+    }
+
     private sealed class CountingHandler(Func<HttpResponseMessage> responder) : HttpMessageHandler
     {
         public int CallCount { get; private set; }
