@@ -381,3 +381,12 @@ cloud-credentials.enc
 # Local runtime artifacts (machine-specific, not for version control)
 .claude/scheduled_tasks.lock
 .codegraph/daemon.pid
+
+# --- Self-contained desktop launcher sources (override the Click-Once `publish/` and `*.pubxml` ignores above) ---
+# These are tracked SOURCE artifacts, not build output: the per-RID single-file publish profiles and the
+# desktop launcher scripts shipped beside the binary. The real publish output goes to bin/<config>/<rid>/publish/
+# (set by each profile's PublishDir), so the repo-root publish/ dir only holds these intentional sources.
+# Our pubxml carry no connection strings/secrets — only RuntimeIdentifier + single-file flags — so the security
+# rationale behind the default `*.pubxml` ignore does not apply here.
+!/publish/
+!/XE-Local-AI-Engine.Client/Properties/PublishProfiles/*.pubxml
