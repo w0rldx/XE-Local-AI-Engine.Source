@@ -4,11 +4,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     The bundle identity/contract file (<c>payload/bundle-metadata.json</c>) produced by
-///     <c>build-rc-zip.ps1</c> (plan §5 / §7.5a / §6.3). Field names match the camelCase keys the
-///     packaging script emits. The <c>*ScriptSha256</c> values pin the in-distro scripts: the driver
-///     recomputes each script's SHA-256 and verifies it against these BEFORE feeding the script to
-///     <c>bash -s</c> (mirrors <c>Wsl2Driver.VerifyScriptHash</c>).
+///     The bundle identity/contract file (<c>payload/bundle-metadata.json</c>) describing the Windows
+///     install bundle. Field names match the camelCase keys the packaging step emits. The
+///     <c>*ScriptSha256</c> values pin the in-distro scripts: the driver recomputes each script's
+///     SHA-256 and verifies it against these BEFORE feeding the script to <c>bash -s</c> (mirrors
+///     <c>Wsl2Driver.VerifyScriptHash</c>).
 /// </summary>
 public sealed record BundleMetadata
 {
