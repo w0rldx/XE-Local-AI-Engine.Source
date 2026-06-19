@@ -58,12 +58,12 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
-    <ProjectReference Include="..\..\..\C0re.AI.Shared.Contracts\C0re.AI.Shared.Contracts.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
-    <Using Include="C0re.AI.Shared.Contracts.Events"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
   </ItemGroup>
 
   <!--

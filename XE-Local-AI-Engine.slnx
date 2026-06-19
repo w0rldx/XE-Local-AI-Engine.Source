@@ -7,6 +7,7 @@
         <File Path="README.md"/>
     </Folder>
     <Folder Name="/Src/">
+        <Project Path="XE-Local-AI-Engine.AI.Contracts/XE-Local-AI-Engine.AI.Contracts.csproj"/>
         <Project Path="XE-Local-AI-Engine.AI.Agent/XE-Local-AI-Engine.AI.Agent.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Testing/XE-Local-AI-Engine.Client.Testing.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>

@@ -3,13 +3,13 @@
 # Production image for the XE node web server (xe-node-web-server).
 #
 # BUILD CONTEXT IS THE PARENT C0re REPO ROOT, NOT the app repo.
-# The app at Apps/XE-Local-AI-Engine references C0re.AI.Shared.Contracts,
-# which lives OUTSIDE the app repo (../../../C0re.AI.Shared.Contracts). MSBuild
+# The app at Apps/XE-Local-AI-Engine references XE-Local-AI-Engine.AI.Contracts,
+# which now lives INSIDE the app tree
+# (Apps/XE-Local-AI-Engine/XE-Local-AI-Engine.AI.Contracts). MSBuild
 # also walks up from each project to the nearest Directory.Build.props /
 # Directory.Packages.props (central package management is enabled), so the build
-# must reproduce that directory layout. The only correct context root that
-# contains BOTH the app tree and the shared contracts + the parent props files
-# is the C0re repo root.
+# must reproduce that directory layout. We keep the C0re repo root as the context
+# root so the parent props files remain available to the MSBuild Directory.* walk.
 #
 # Build invocation (records a registry-independent config Id — plan §14):
 #   docker build --provenance=false --sbom=false --platform linux/amd64 \
@@ -62,14 +62,13 @@ ARG REACT_DIR
 WORKDIR /src
 
 # Parent-repo central build configuration (CPM). These must sit at /src so the
-# MSBuild Directory.* walk for C0re.AI.Shared.Contracts resolves to them.
+# MSBuild Directory.* walk resolves to them for any project that is not covered
+# by the app tree's own Directory.* files.
 COPY Directory.Build.props Directory.Packages.props ./
 
-# The single out-of-app project reference.
-COPY C0re.AI.Shared.Contracts/ ./C0re.AI.Shared.Contracts/
-
 # The app tree (its own Directory.Build.props/Directory.Packages.props win for
-# projects under it via the nearest-ancestor rule).
+# projects under it via the nearest-ancestor rule). This now also carries
+# XE-Local-AI-Engine.AI.Contracts, which lives inside the app tree.
 COPY ${APP_DIR}/ ./${APP_DIR}/
 
 # Drop the freshly built SPA where CopyNodeReactBuildToWwwroot expects it.

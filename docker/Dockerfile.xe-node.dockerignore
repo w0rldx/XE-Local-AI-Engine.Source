@@ -18,7 +18,6 @@
 # --- re-include exactly what the Dockerfile needs ---
 !Directory.Build.props
 !Directory.Packages.props
-!C0re.AI.Shared.Contracts
 !Apps/XE-Local-AI-Engine
 
 # --- prune build output / tooling junk inside the re-included paths ---
