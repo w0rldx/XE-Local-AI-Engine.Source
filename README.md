@@ -87,6 +87,45 @@ Use Aspire for local development and integration checks.
 dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https
 ```
 
+## Self-contained desktop run
+
+The host can be published as a **single self-contained executable** (the .NET runtime is bundled — no prerequisite
+install) that runs as a "double-click" desktop app: a console window opens showing live logs, the default browser opens
+on the running site, and **closing the console window shuts the whole app down** — including the spawned `llama-server`
+child, so there is no orphan process. Closing the browser does *not* stop the app.
+
+Desktop mode is **opt-in** via the launcher (env `XE_LAUNCH_MODE=desktop` or the `--desktop` flag); headless, Aspire,
+and CI runs are unaffected. In desktop mode the host binds **HTTP on a free loopback port** (`127.0.0.1`) and skips the
+HTTPS-redirect/HSTS pipeline (traffic never leaves the loopback adapter).
+
+### Publish
+
+```bash
+# Linux
+dotnet publish XE-Local-AI-Engine.Client -c Release -r linux-x64 -p:PublishProfile=linux-x64
+# Windows
+dotnet publish XE-Local-AI-Engine.Client -c Release -r win-x64 -p:PublishProfile=win-x64
+```
+
+The profiles set `SelfContained`, `PublishSingleFile`, and `IncludeNativeLibrariesForSelfExtract=true` (so `e_sqlite3`
+and libsodium extract and load from the bundle); trimming stays **off** (EF Core / Serilog / FastEndpoints / MEAI are
+reflection-heavy). Output lands in `XE-Local-AI-Engine.Client/bin/Release/net10.0/<rid>/publish/`.
+
+### Run
+
+Copy the matching launcher from [`publish/`](publish/) next to the published binary and start it:
+
+- **Linux:** `publish/linux/run-xe-local-ai-engine.sh` — `exec`s the binary in the foreground so the terminal owns it
+  (terminal close → `SIGHUP` → graceful shutdown).
+- **Windows:** `publish/windows/run-xe-local-ai-engine.cmd` — runs the exe in the current console window so closing that
+  window fires `CTRL_CLOSE_EVENT` → graceful shutdown (the Job Object is the hard-kill safety net).
+
+See [`publish/README.md`](publish/README.md) for the expected layout. **Run one instance at a time** against the same
+user-data directory — a second instance races on the SQLite database.
+
+> The no-orphan guarantee (terminal/console close reaps `llama-server`) and the Windows Job Object path are verified on
+> real desktops with a model loaded; they cannot be exercised in WSL2/CI.
+
 ## RC readiness status
 
 Do not mark release or documentation work complete until matching validation evidence is available.
