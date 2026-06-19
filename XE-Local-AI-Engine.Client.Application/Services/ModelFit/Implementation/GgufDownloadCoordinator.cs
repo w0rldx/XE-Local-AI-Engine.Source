@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>

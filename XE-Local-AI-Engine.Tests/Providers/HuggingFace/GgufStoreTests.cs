@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;

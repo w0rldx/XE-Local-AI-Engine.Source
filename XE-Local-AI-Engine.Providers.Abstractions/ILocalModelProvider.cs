@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Provider-neutral contract for local model runtimes exposed to the node host.

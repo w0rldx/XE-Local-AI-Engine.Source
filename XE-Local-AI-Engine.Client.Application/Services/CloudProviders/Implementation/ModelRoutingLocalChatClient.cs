@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     THE reconnect (Lane A plan §7.4): the single local-branch <see cref="IChatClient" /> that replaces the

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 using System.Text.Json.Serialization;
 

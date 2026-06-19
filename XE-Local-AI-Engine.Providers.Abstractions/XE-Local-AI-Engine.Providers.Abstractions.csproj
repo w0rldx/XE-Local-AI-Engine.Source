@@ -8,8 +8,4 @@
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions"/>
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Abstractions\XE-Local-AI-Engine.HostAgent.Abstractions.csproj"/>
-  </ItemGroup>
-
 </Project>
