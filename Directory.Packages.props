@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Required so the SQLitePCLRaw.lib.e_sqlite3 security override below can pin a transitively-resolved package without adding a direct PackageReference. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.4.5-preview.1.26316.12" />
@@ -69,6 +71,15 @@
     <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.27.0.140913" />
+    <!-- TEMPORARY security override for CVE-2025-6965 (GHSA-2m69-gcr7-jv3q, High).
+         Microsoft.Data.Sqlite / Microsoft.EntityFrameworkCore.Sqlite 10.0.9 transitively pull
+         SQLitePCLRaw.bundle_e_sqlite3 2.1.11 -> SQLitePCLRaw.lib.e_sqlite3 2.1.11 (SQLite < 3.50.2).
+         There is no 2.1.x patch; lib.e_sqlite3 3.50.3 is a native-only package (no managed deps) that
+         satisfies the bundle's [2.1.11, ) range, so this swaps in the SQLite 3.50.3 binary while keeping
+         the SQLitePCLRaw 2.x managed core. Remove once Microsoft.Data.Sqlite ships the upstream fix
+         (dotnet/efcore PR 38402, milestone 11.0-preview6). Tracked by:
+         https://github.com/microsoft/EventLogExpert/issues/604 -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.9" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageVersion Include="TUnit" Version="1.56.0" />
