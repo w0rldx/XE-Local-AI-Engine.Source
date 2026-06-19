@@ -30,7 +30,10 @@ internal sealed class ProcessProbe : IProcessProbe
                 startInfo.ArgumentList.Add(argument);
             }
 
-            using var process = new Process { StartInfo = startInfo };
+            using var process = new Process
+            {
+                StartInfo = startInfo
+            };
             if (!process.Start())
             {
                 return null;

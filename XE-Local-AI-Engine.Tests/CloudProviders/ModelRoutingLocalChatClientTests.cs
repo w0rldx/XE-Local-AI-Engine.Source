@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -19,6 +20,11 @@ public sealed class ModelRoutingLocalChatClientTests
 {
     private const string DefaultModel = "default-chat";
 
+    private const string LlamaProvider = "llamacpp";
+    private const string OllamaProvider = "ollama";
+
+    private static ChatMessage[] Message => [new(ChatRole.User, "hi")];
+
     [Test]
     public async Task GetResponse_RoutesByModelId_ToMappedProviderAndDistinctPerModelClient()
     {
@@ -26,12 +32,21 @@ public sealed class ModelRoutingLocalChatClientTests
         var ollama = new RecordingLocalModelProvider(OllamaProvider);
         // "gguf-model" is mapped to llamacpp; "ollama-model" has no row → routes to the default provider (ollama).
         var resolver = BuildResolver([llamacpp, ollama],
-            defaultProviderName: OllamaProvider,
-            mappings: new Dictionary<string, string> { ["gguf-model"] = LlamaProvider });
+            OllamaProvider,
+            new Dictionary<string, string>
+            {
+                ["gguf-model"] = LlamaProvider
+            });
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
-        await router.GetResponseAsync(Message, new ChatOptions { ModelId = "gguf-model" });
-        await router.GetResponseAsync(Message, new ChatOptions { ModelId = "ollama-model" });
+        await router.GetResponseAsync(Message, new ChatOptions
+        {
+            ModelId = "gguf-model"
+        });
+        await router.GetResponseAsync(Message, new ChatOptions
+        {
+            ModelId = "ollama-model"
+        });
 
         // Each model id reached the provider the map (or default) names, with the model carried through the selection.
         AssertEx.Equal(1, llamacpp.CreatedClients.Count);
@@ -49,11 +64,17 @@ public sealed class ModelRoutingLocalChatClientTests
     public async Task GetResponse_WhenSameModelSentTwice_ReusesOneCachedClientPerProviderAndModel()
     {
         var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        var resolver = BuildResolver([ollama], OllamaProvider, mappings: new Dictionary<string, string>());
+        var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
-        await router.GetResponseAsync(Message, new ChatOptions { ModelId = "chat-a" });
-        await router.GetResponseAsync(Message, new ChatOptions { ModelId = "chat-a" });
+        await router.GetResponseAsync(Message, new ChatOptions
+        {
+            ModelId = "chat-a"
+        });
+        await router.GetResponseAsync(Message, new ChatOptions
+        {
+            ModelId = "chat-a"
+        });
 
         // One CreateChatClient for two sends of the same model — the (provider, model) cache held.
         AssertEx.Equal(1, ollama.CreatedClients.Count);
@@ -65,10 +86,10 @@ public sealed class ModelRoutingLocalChatClientTests
     public async Task GetResponse_WhenModelIdOmitted_FallsBackToDefaultModel()
     {
         var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        var resolver = BuildResolver([ollama], OllamaProvider, mappings: new Dictionary<string, string>());
+        var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
-        await router.GetResponseAsync(Message, options: null);
+        await router.GetResponseAsync(Message, null);
 
         AssertEx.Equal(1, ollama.CreatedClients.Count);
         AssertEx.Equal(DefaultModel, ollama.CreatedClients[0].ModelName);
@@ -78,10 +99,13 @@ public sealed class ModelRoutingLocalChatClientTests
     public async Task Dispose_DisposesCachedClients_ButNeverDuringASend()
     {
         var ollama = new RecordingLocalModelProvider(OllamaProvider);
-        var resolver = BuildResolver([ollama], OllamaProvider, mappings: new Dictionary<string, string>());
+        var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
         var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
-        await router.GetResponseAsync(Message, new ChatOptions { ModelId = "chat-a" });
+        await router.GetResponseAsync(Message, new ChatOptions
+        {
+            ModelId = "chat-a"
+        });
         var resolvedDuringSend = ollama.CreatedClients[0];
         AssertEx.False(resolvedDuringSend.IsDisposed, "The resolved adapter must survive the send (router never disposes per-call).");
 
@@ -90,13 +114,7 @@ public sealed class ModelRoutingLocalChatClientTests
         AssertEx.True(resolvedDuringSend.IsDisposed, "Disposing the router disposes the clients it cached.");
     }
 
-    private const string LlamaProvider = "llamacpp";
-    private const string OllamaProvider = "ollama";
-
-    private static ChatMessage[] Message => [new(ChatRole.User, "hi")];
-
-    private static ILocalModelProviderResolver BuildResolver(
-        IEnumerable<ILocalModelProvider> providers,
+    private static ILocalModelProviderResolver BuildResolver(IEnumerable<ILocalModelProvider> providers,
         string defaultProviderName,
         IReadOnlyDictionary<string, string> mappings)
     {
@@ -104,7 +122,7 @@ public sealed class ModelRoutingLocalChatClientTests
         services.AddScoped<IModelProviderMapStore>(_ => new FakeModelProviderMapStore(mappings));
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new LocalModelProviderResolver(providers, scopeFactory, defaultProviderName, maxLoadedProcesses: 3);
+        return new LocalModelProviderResolver(providers, scopeFactory, defaultProviderName, 3);
     }
 
     /// <summary>An in-memory map store seeded with a fixed model→provider dictionary (case-insensitive lookup).</summary>
@@ -112,12 +130,15 @@ public sealed class ModelRoutingLocalChatClientTests
     {
         private readonly Dictionary<string, string> _mappings = new(mappings, StringComparer.OrdinalIgnoreCase);
 
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        }
 
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(
-                _mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
@@ -144,20 +165,40 @@ public sealed class ModelRoutingLocalChatClientTests
             return client;
         }
 
-        public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) =>
+        public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
+        {
             throw new NotSupportedException();
+        }
 
-        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task WarmModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     /// <summary>A stub chat client that remembers the model it was created for so the routing assertions can read it.</summary>
@@ -175,16 +216,22 @@ public sealed class ModelRoutingLocalChatClientTests
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
         }
 
-        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             CallCount++;
             yield return new ChatResponseUpdate(ChatRole.Assistant, "ok");
             await Task.CompletedTask;
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) =>
-            serviceType.IsInstanceOfType(this) && serviceKey is null ? this : null;
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType.IsInstanceOfType(this) && serviceKey is null ? this : null;
+        }
 
-        public void Dispose() => IsDisposed = true;
+        public void Dispose()
+        {
+            IsDisposed = true;
+        }
     }
 }

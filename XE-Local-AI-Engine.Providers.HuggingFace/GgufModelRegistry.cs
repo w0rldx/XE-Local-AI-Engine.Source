@@ -21,10 +21,11 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private readonly string _modelsDirectory;
-    private readonly string _manifestPath;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ILogger<GgufModelRegistry> _logger;
+    private readonly string _manifestPath;
+
+    private readonly string _modelsDirectory;
 
     public GgufModelRegistry(HuggingFaceOptions options, ILogger<GgufModelRegistry> logger)
     {
@@ -34,6 +35,11 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         _modelsDirectory = options.ModelsDirectory;
         _manifestPath = Path.Combine(_modelsDirectory, ManifestFileName);
         _logger = logger;
+    }
+
+    public void Dispose()
+    {
+        _lock.Dispose();
     }
 
     /// <inheritdoc />
@@ -107,11 +113,6 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        _lock.Dispose();
-    }
-
     // Reads the manifest, self-healing to a directory rescan when it is missing or corrupt. Caller holds the lock.
     private async Task<IReadOnlyList<GgufModelRegistryEntry>> LoadEntriesAsync(CancellationToken ct)
     {
@@ -124,8 +125,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         {
             await using var stream = new FileStream(_manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             var manifest = await JsonSerializer
-                .DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct)
-                .ConfigureAwait(false);
+                                 .DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct)
+                                 .ConfigureAwait(false);
 
             if (manifest?.Models is null)
             {
@@ -134,8 +135,8 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
             // Drop entries whose backing file disappeared since the manifest was written (manual deletion).
             return manifest.Models
-                .Where(entry => File.Exists(entry.LocalPath))
-                .ToList();
+                           .Where(entry => File.Exists(entry.LocalPath))
+                           .ToList();
         }
         catch (JsonException exception)
         {
@@ -202,7 +203,10 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
     private async Task WriteManifestAsync(IReadOnlyList<GgufModelRegistryEntry> entries, CancellationToken ct)
     {
         Directory.CreateDirectory(_modelsDirectory);
-        var document = new ManifestDocument { Models = entries.ToList() };
+        var document = new ManifestDocument
+        {
+            Models = entries.ToList()
+        };
 
         var tempPath = _manifestPath + ".tmp";
         await using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -211,7 +215,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
 
         // Atomic replace so a crash mid-write never leaves a half-written manifest.
-        File.Move(tempPath, _manifestPath, overwrite: true);
+        File.Move(tempPath, _manifestPath, true);
     }
 
     private sealed class ManifestDocument

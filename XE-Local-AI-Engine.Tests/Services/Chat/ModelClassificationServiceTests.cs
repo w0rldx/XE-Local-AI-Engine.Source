@@ -173,7 +173,7 @@ public sealed class ModelClassificationServiceTests
     private static void StubDetails(IOllamaModelService ollama, string modelName, params string[] capabilities)
     {
         // The service reads only OllamaModelDetails.Capabilities, so the ShowModelResponse payload can be empty.
-        var details = new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: null, capabilities);
+        var details = new OllamaModelDetails(new ShowModelResponse(), null, capabilities);
         ollama.ShowModelDetailsAsync(modelName, Arg.Any<CancellationToken>()).Returns(details);
     }
 
@@ -207,8 +207,8 @@ public sealed class ModelClassificationServiceTests
                 detectedKind,
                 capabilitiesJson,
                 existing?.OverrideKind,
-                DetectedAtUtc: 1,
-                UpdatedAtUtc: 1);
+                1,
+                1);
             _rows[modelName] = record;
             return Task.FromResult(record);
         }
@@ -217,7 +217,7 @@ public sealed class ModelClassificationServiceTests
         {
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
             var record = existing is null
-                ? new ModelClassificationRecord(modelName, Digest: null, ModelKind.Unknown, DetectedCapabilitiesJson: null, overrideKind, DetectedAtUtc: null, UpdatedAtUtc: 1)
+                ? new ModelClassificationRecord(modelName, null, ModelKind.Unknown, null, overrideKind, null, 1)
                 : existing with
                 {
                     OverrideKind = overrideKind,

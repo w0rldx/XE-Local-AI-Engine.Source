@@ -80,7 +80,7 @@ public sealed class HfTokenStoreTests : IDisposable
         protector.CreateProtector(Arg.Any<string>()).Returns(protector);
         // Surface the token in the thrown message to prove the store never re-emits a decryption error verbatim.
         protector.Unprotect(Arg.Any<byte[]>())
-            .Returns(_ => throw new CryptographicException($"boom containing {Token}"));
+                 .Returns(_ => throw new CryptographicException($"boom containing {Token}"));
         using var store = CreateStore(protector);
 
         var loaded = await store.GetTokenAsync(CancellationToken.None);
@@ -109,5 +109,8 @@ public sealed class HfTokenStoreTests : IDisposable
             NullLogger<HfTokenStore>.Instance);
     }
 
-    private string GetTokenPath() => Path.Combine(_contentRootPath, "hf-token.enc");
+    private string GetTokenPath()
+    {
+        return Path.Combine(_contentRootPath, "hf-token.enc");
+    }
 }

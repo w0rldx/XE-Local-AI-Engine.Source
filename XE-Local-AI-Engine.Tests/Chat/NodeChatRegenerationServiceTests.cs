@@ -780,10 +780,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
-            .ClassifyAsync(Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(
-                models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
-                Arg.Any<CancellationToken>())
-            .ConfigureAwait(false);
+                                   .ClassifyAsync(
+                                       Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(models => models.Any(m => string.Equals(m.ModelName, CodexModel, StringComparison.OrdinalIgnoreCase))),
+                                       Arg.Any<CancellationToken>())
+                                   .ConfigureAwait(false);
 
         // Tool calling is enabled for all Codex ids (V0=true), so the requested local tool offer is honored on regenerate.
         offerProvider.Received().GetOfferedTools(CodexModel);
@@ -840,7 +840,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                    {
                        if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
                        {
-                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, ["completion", "tools", "thinking"], IsOverridden: false);
+                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, ["completion", "tools", "thinking"], false);
                        }
                    }
 

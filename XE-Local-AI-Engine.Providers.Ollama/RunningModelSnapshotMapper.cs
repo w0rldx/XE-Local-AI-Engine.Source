@@ -17,8 +17,7 @@ public static class RunningModelSnapshotMapper
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return new RunningModelSnapshot(
-            model.Name,
+        return new RunningModelSnapshot(model.Name,
             model.ModelName,
             NormalizeExpiresAt(model.ExpiresAt),
             NormalizeNonNegative(model.Size),

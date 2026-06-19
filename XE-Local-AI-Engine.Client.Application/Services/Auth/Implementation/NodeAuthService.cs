@@ -117,7 +117,7 @@ public sealed class NodeAuthService : INodeAuthService
             return FailedTokenResult();
         }
 
-        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true).ConfigureAwait(false);
+        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, true).ConfigureAwait(false);
         if (!signInResult.Succeeded)
         {
             _logger.LogWarning("Node login failed for user {UserId}: {Reason}.", user.Id, GetSignInFailureReason(signInResult));

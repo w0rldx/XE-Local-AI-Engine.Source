@@ -45,7 +45,7 @@ internal static class HostPathSafety
                 return null;
             }
 
-            var target = info.ResolveLinkTarget(returnFinalTarget: true);
+            var target = info.ResolveLinkTarget(true);
             return Normalize((target ?? info).FullName);
         }
         catch (IOException)
@@ -69,7 +69,7 @@ internal static class HostPathSafety
         withinRoot = false;
         try
         {
-            var target = info.ResolveLinkTarget(returnFinalTarget: true);
+            var target = info.ResolveLinkTarget(true);
             if (target is null)
             {
                 return false;

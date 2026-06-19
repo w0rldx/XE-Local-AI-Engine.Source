@@ -13,7 +13,7 @@ public sealed class AgentDefinitionServiceTests
     [Test]
     public async Task CreateAsync_WithValidInput_PersistsThroughStore()
     {
-        var service = CreateService(out var store, knownTools: ["GetCurrentTime"]);
+        var service = CreateService(out var store, ["GetCurrentTime"]);
         var input = CreateInput(allowedTools: ["GetCurrentTime"]);
         var stored = CreateRecord(input);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(stored);
@@ -28,7 +28,7 @@ public sealed class AgentDefinitionServiceTests
     public async Task CreateAsync_WithEmptyName_ThrowsValidation()
     {
         var service = CreateService(out var store);
-        var input = CreateInput(name: "   ");
+        var input = CreateInput("   ");
 
         await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
         await store.DidNotReceive().AddAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -47,7 +47,7 @@ public sealed class AgentDefinitionServiceTests
     [Test]
     public async Task CreateAsync_WithApprovalKeyOutsideAllowedTools_ThrowsValidation()
     {
-        var service = CreateService(out _, knownTools: ["GetCurrentTime"]);
+        var service = CreateService(out _, ["GetCurrentTime"]);
         var input = CreateInput(allowedTools: ["GetCurrentTime"],
             toolApprovals: new Dictionary<string, bool>
             {
@@ -70,7 +70,7 @@ public sealed class AgentDefinitionServiceTests
     public async Task CreateAsync_WithUnknownToolName_DoesNotThrow_AndPersists()
     {
         // An unknown tool name is a warning, not a failure — a tool can be reinstalled later. Persistence proceeds.
-        var service = CreateService(out var store, knownTools: ["GetCurrentTime"]);
+        var service = CreateService(out var store, ["GetCurrentTime"]);
         var input = CreateInput(allowedTools: ["GetCurrentTime", "MaybeLaterTool"]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input));
 
@@ -83,7 +83,7 @@ public sealed class AgentDefinitionServiceTests
     [Test]
     public async Task UpdateAsync_WhenStoreReturnsNull_ReturnsNull()
     {
-        var service = CreateService(out var store, knownTools: ["GetCurrentTime"]);
+        var service = CreateService(out var store, ["GetCurrentTime"]);
         var id = Guid.NewGuid();
         var input = CreateInput(allowedTools: ["GetCurrentTime"]);
         store.UpdateAsync(id, input, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
@@ -97,7 +97,7 @@ public sealed class AgentDefinitionServiceTests
     public async Task UpdateAsync_WithInvalidInput_ThrowsBeforeStore()
     {
         var service = CreateService(out var store);
-        var input = CreateInput(name: "");
+        var input = CreateInput("");
 
         await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.UpdateAsync(Guid.NewGuid(), input)).ConfigureAwait(false);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -106,7 +106,7 @@ public sealed class AgentDefinitionServiceTests
     [Test]
     public async Task DeleteGetList_DelegateToStore()
     {
-        var service = CreateService(out var store, knownTools: ["GetCurrentTime"]);
+        var service = CreateService(out var store, ["GetCurrentTime"]);
         var id = Guid.NewGuid();
         var record = CreateRecord(CreateInput(allowedTools: ["GetCurrentTime"]));
         store.DeleteAsync(id, Arg.Any<CancellationToken>()).Returns(true);

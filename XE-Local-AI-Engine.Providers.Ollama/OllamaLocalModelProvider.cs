@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Providers.Ollama;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 using OllamaSharp.Models;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Ollama implementation of the provider-neutral local-model management and chat-client boundary.

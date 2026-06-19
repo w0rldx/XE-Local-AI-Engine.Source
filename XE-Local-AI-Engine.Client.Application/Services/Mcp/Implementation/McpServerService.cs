@@ -20,7 +20,7 @@ internal sealed class McpServerService(
         ArgumentNullException.ThrowIfNull(input);
 
         Validate(input);
-        await EnsureNameAvailableAsync(input.Name, excludeId: null, cancellationToken).ConfigureAwait(false);
+        await EnsureNameAvailableAsync(input.Name, null, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -46,7 +46,7 @@ internal sealed class McpServerService(
             return null;
         }
 
-        await EnsureNameAvailableAsync(input.Name, excludeId: id, cancellationToken).ConfigureAwait(false);
+        await EnsureNameAvailableAsync(input.Name, id, cancellationToken).ConfigureAwait(false);
 
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag through to the store regardless of what the request body claims.

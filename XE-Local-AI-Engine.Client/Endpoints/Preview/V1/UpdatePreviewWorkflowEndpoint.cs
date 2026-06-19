@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Preview.V1;
 
 using FastEndpoints;
-using Microsoft.AspNetCore.Http;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
@@ -25,8 +24,8 @@ public sealed class UpdatePreviewWorkflowEndpoint(IPreviewWorkflowService previe
     public override async Task HandleAsync(UpdatePreviewWorkflowRequest req, CancellationToken ct)
     {
         var result = await _previewWorkflowService
-                          .UpdateAsync(req.WorkflowId, req.Version, req.Name, req.Graph, ct)
-                          .ConfigureAwait(false);
+                           .UpdateAsync(req.WorkflowId, req.Version, req.Name, req.Graph, ct)
+                           .ConfigureAwait(false);
 
         switch (result.Outcome)
         {
@@ -39,7 +38,10 @@ public sealed class UpdatePreviewWorkflowEndpoint(IPreviewWorkflowService previe
                 return;
 
             case PreviewWorkflowMutationOutcome.Conflict:
-                await Send.ResultAsync(Results.Conflict(new { message = "The workflow was modified by another writer; reload and retry." }))
+                await Send.ResultAsync(Results.Conflict(new
+                          {
+                              message = "The workflow was modified by another writer; reload and retry."
+                          }))
                           .ConfigureAwait(false);
                 return;
 

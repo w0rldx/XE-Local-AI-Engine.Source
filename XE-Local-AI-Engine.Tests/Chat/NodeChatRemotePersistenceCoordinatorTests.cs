@@ -89,7 +89,7 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         var package = RuntimePackageBuilder.Valid().WithUserMessage("q").Build();
 
         var session = await coordinator.BeginAsync(package);
-        await session.TerminalizeInterruptedAsync(wasCancelled: false);
+        await session.TerminalizeInterruptedAsync(false);
 
         await pump.Received(1).TerminalizeInterruptedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<NodeChatPumpCursor>(), false);
     }

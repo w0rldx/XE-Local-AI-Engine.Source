@@ -14,14 +14,14 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
 {
     private readonly IReadOnlyDictionary<string, string> _agentExecutorIdToNodeId;
     private readonly IReadOnlyDictionary<string, string> _debugExecutorIdToNodeId;
-    private readonly IReadOnlyDictionary<string, string> _requestPortIdToNodeId;
     private readonly ILogger _logger;
-    private readonly StreamingRun _run;
+    private readonly object _pendingGate = new();
 
     // Pending pause requests surfaced via RequestInfoEvent, keyed by the request id we hand back to the caller. Held so
     // ResumeAsync can build the ExternalResponse the held run expects.
     private readonly Dictionary<string, ExternalRequest> _pendingRequests = new(StringComparer.Ordinal);
-    private readonly object _pendingGate = new();
+    private readonly IReadOnlyDictionary<string, string> _requestPortIdToNodeId;
+    private readonly StreamingRun _run;
 
     public PreviewWorkflowRunSession(StreamingRun run,
         IReadOnlyDictionary<string, string> agentExecutorIdToNodeId,
@@ -36,8 +36,7 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync(
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         await foreach (var evt in _run.WatchStreamAsync(cancellationToken).ConfigureAwait(false))
         {

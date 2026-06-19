@@ -27,7 +27,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     public async Task DispatchAsync_WhenHandlerSucceeds_RecordsSucceededRun()
     {
         var handler = new ConfigurableHandler((_, _) => Task.CompletedTask);
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         await executor.DispatchAsync(JobId, "fire-success", Now, Now, CancellationToken.None);
 
@@ -54,7 +54,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     {
         const string secret = "super-secret-password-1234";
         var handler = new ConfigurableHandler((_, _) => throw new InvalidOperationException(secret));
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         // Must NOT throw — the run row is the record of failure; a faulting handler may not fault the scheduler.
         await executor.DispatchAsync(JobId, "fire-fail", Now, Now, CancellationToken.None);
@@ -79,7 +79,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     {
         const string sanitized = "The approved image is disabled.";
         var handler = new ConfigurableHandler((_, _) => throw new ScheduledJobExecutionException(sanitized));
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         await executor.DispatchAsync(JobId, "fire-sanitized", Now, Now, CancellationToken.None);
 
@@ -102,7 +102,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     public async Task DispatchAsync_WhenHandlerThrowsGenericException_StillRecordsGenericMessage()
     {
         var handler = new ConfigurableHandler((_, _) => throw new InvalidOperationException("raw internal detail"));
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         await executor.DispatchAsync(JobId, "fire-generic", Now, Now, CancellationToken.None);
 
@@ -132,10 +132,10 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             ct.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         });
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
         // The dispatcher re-reads the run on cancel; report that cancellation was requested.
         runStore.GetByIdAsync(RunId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, cancellationRequestedAtUtc: 123L)));
+                .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, 123L)));
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", null, Now, cts.Token));
 
@@ -165,10 +165,10 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             ct.ThrowIfCancellationRequested();
             return Task.CompletedTask;
         });
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
         // No cancellation requested → the only token-cancel source is the auto-interrupt max-runtime plugin.
         runStore.GetByIdAsync(RunId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, cancellationRequestedAtUtc: null)));
+                .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, null)));
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-timeout", null, Now, cts.Token));
 
@@ -194,7 +194,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         {
             await ctx.ReportProgressAsync!("indexing models", 50, ct);
         });
-        var (executor, _, eventStore, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, _, eventStore, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         await executor.DispatchAsync(JobId, "fire-progress", null, Now, CancellationToken.None);
 
@@ -216,7 +216,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     public async Task DispatchAsync_WhenFireInstanceAlreadyTerminal_SkipsHandlerAndDoesNotUpdate()
     {
         var handler = new ConfigurableHandler((_, _) => Task.CompletedTask);
-        var (executor, runStore, _, _) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Succeeded);
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Succeeded);
 
         await executor.DispatchAsync(JobId, "fire-dup", Now, Now, CancellationToken.None);
 
@@ -240,7 +240,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     public async Task DispatchAsync_WhenHandlerSucceeds_PublishesRunStartedThenRunCompleted()
     {
         var handler = new ConfigurableHandler((_, _) => Task.CompletedTask);
-        var (executor, _, _, publisher) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, _, _, publisher) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         await executor.DispatchAsync(JobId, "fire-publish", Now, Now, CancellationToken.None);
 
@@ -254,7 +254,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     public async Task DispatchAsync_WhenHandlerReportsProgress_PublishesProgressEvent()
     {
         var handler = new ConfigurableHandler(async (ctx, ct) => await ctx.ReportProgressAsync!("step", 25, ct));
-        var (executor, _, _, publisher) = CreateExecutor(handler, upsertStatus: ScheduledRunStatus.Running);
+        var (executor, _, _, publisher) = CreateExecutor(handler, ScheduledRunStatus.Running);
 
         await executor.DispatchAsync(JobId, "fire-publish-progress", null, Now, CancellationToken.None);
 
@@ -305,47 +305,47 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
     private static ScheduledJobDefinitionRecord DefinitionRecord()
     {
-        return new ScheduledJobDefinitionRecord(Id: JobId,
-            TemplateId: ConfigurableHandler.Id,
-            DisplayName: "History Test Job",
-            Description: null,
-            Enabled: true,
-            ScheduleKind: ScheduleKind.OneShot,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            TimeZoneId: "UTC",
-            MisfirePolicy: SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            ParameterJson: null,
-            CreatedBy: ScheduledJobCreator.User,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: null);
+        return new ScheduledJobDefinitionRecord(JobId,
+            ConfigurableHandler.Id,
+            "History Test Job",
+            null,
+            true,
+            ScheduleKind.OneShot,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "UTC",
+            SchedulerMisfirePolicy.Smart,
+            false,
+            null,
+            null,
+            ScheduledJobCreator.User,
+            0L,
+            0L,
+            null,
+            null);
     }
 
     private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status, long? cancellationRequestedAtUtc = null)
     {
-        return new ScheduledJobRunRecord(Id: RunId,
-            ScheduledJobId: JobId,
-            TemplateId: ConfigurableHandler.Id,
-            QuartzFireInstanceId: "fire",
-            TriggeredBy: ScheduledRunTrigger.Schedule,
-            Status: status,
-            ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: Now.ToUnixTimeMilliseconds(),
-            CompletedAtUtc: null,
-            DurationMs: null,
-            Summary: null,
-            DetailsJson: null,
-            ErrorMessage: null,
-            ErrorDetails: null,
-            CancellationRequestedAtUtc: cancellationRequestedAtUtc,
-            CreatedAtUtc: 1L);
+        return new ScheduledJobRunRecord(RunId,
+            JobId,
+            ConfigurableHandler.Id,
+            "fire",
+            ScheduledRunTrigger.Schedule,
+            status,
+            null,
+            Now.ToUnixTimeMilliseconds(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            cancellationRequestedAtUtc,
+            1L);
     }
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
@@ -364,17 +364,17 @@ public sealed class SchedulerDispatchExecutorHistoryTests
 
         public string TemplateId => Id;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: Id,
-            DisplayName: "Configurable (test)",
-            Description: "Test handler that runs an injected body.",
-            ParameterSchema: null,
-            DefaultParameters: null,
-            SupportedScheduleKinds: [ScheduleKind.OneShot, ScheduleKind.Cron],
-            DefaultScheduleKind: ScheduleKind.OneShot,
-            DefaultMisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
-            DefaultMaxRuntimeSeconds: null,
-            AllowManualTrigger: true,
-            AllowAgentCreation: false);
+        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(Id,
+            "Configurable (test)",
+            "Test handler that runs an injected body.",
+            null,
+            null,
+            [ScheduleKind.OneShot, ScheduleKind.Cron],
+            ScheduleKind.OneShot,
+            SchedulerMisfirePolicy.SkipMissed,
+            null,
+            true,
+            false);
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

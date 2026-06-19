@@ -78,7 +78,7 @@ public sealed class NodeChatStreamService(
         // resolve has no dependency on the placeholder (it reads conversation, trimmedContent, selectedPath), so the
         // hoist is safe; the emitted SSE order below is unchanged: UserMessagePersisted -> AssistantPending ->
         // AssistantQueued.
-        var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveTurnAsync(request, conversation, null, trimmedContent, cancellationToken).ConfigureAwait(false);
 
         var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
                 assistantMessageId,
@@ -176,7 +176,7 @@ public sealed class NodeChatStreamService(
             resolved?.ModelProfile ?? activeModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
-            AllowedTools: allowedTools,
+            allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: resolved?.ReasoningEffort ?? request.ReasoningEffort,
             OrchestrationSpec: orchestration?.Spec,

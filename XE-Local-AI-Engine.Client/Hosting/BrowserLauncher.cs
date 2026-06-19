@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-using System;
 using System.Diagnostics;
-using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Opens the default browser at the desktop loopback URL. The per-OS command is built by a pure function so it can be
@@ -11,6 +9,17 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal static class BrowserLauncher
 {
+    /// <summary>
+    ///     The default launch action used in production: starts the process with the configured
+    ///     <see cref="ProcessStartInfo" />. Kept as a field so the <see cref="OpenBrowser" /> seam has a real default.
+    /// </summary>
+    internal static readonly Action<ProcessStartInfo> StartProcess = static startInfo =>
+    {
+        // Fire-and-forget: disposing the returned Process releases only the managed wrapper/handles — the launched
+        // browser keeps running detached. (Process.Start may return null when an existing process is reused.)
+        using var process = Process.Start(startInfo);
+    };
+
     /// <summary>
     ///     Builds the OS-specific browser-open command. Returns the program to run and its single URL argument; never
     ///     uses a shell, so the URL is not interpreted by any command interpreter (repo convention: no
@@ -60,15 +69,4 @@ internal static class BrowserLauncher
                 "Could not open the default browser automatically. Open {DesktopUrl} manually to use the app.", url);
         }
     }
-
-    /// <summary>
-    ///     The default launch action used in production: starts the process with the configured
-    ///     <see cref="ProcessStartInfo" />. Kept as a field so the <see cref="OpenBrowser" /> seam has a real default.
-    /// </summary>
-    internal static readonly Action<ProcessStartInfo> StartProcess = static startInfo =>
-    {
-        // Fire-and-forget: disposing the returned Process releases only the managed wrapper/handles — the launched
-        // browser keeps running detached. (Process.Start may return null when an existing process is reused.)
-        using var process = Process.Start(startInfo);
-    };
 }

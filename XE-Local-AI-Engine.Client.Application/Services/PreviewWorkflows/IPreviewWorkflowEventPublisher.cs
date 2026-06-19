@@ -6,7 +6,6 @@ namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 ///     connection may drive several runs). The default implementation is a no-op
 ///     (<see cref="Implementation.NullPreviewWorkflowEventPublisher" />); the Client host swaps in a hub-backed
 ///     publisher.
-///
 ///     Privacy note (documented exception): unlike the Scheduler ("sanitize everything"), these payloads carry
 ///     the operator's OWN transient run output (the Debug feature's whole point) over the localhost Operator hub.
 ///     Nothing here is persisted, logged, or indexed.

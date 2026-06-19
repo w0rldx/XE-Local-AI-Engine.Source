@@ -67,8 +67,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: null,
-            SupportsThinking: false);
+            null,
+            false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -95,8 +95,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: "on",
-            SupportsThinking: false);
+            "on",
+            false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -124,8 +124,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: effort,
-            SupportsThinking: false);
+            effort,
+            false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -151,8 +151,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: "none",
-            SupportsThinking: false);
+            "none",
+            false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -177,8 +177,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: "high",
-            SupportsThinking: true);
+            "high",
+            true);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -211,8 +211,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: effort,
-            SupportsThinking: true);
+            effort,
+            true);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -234,8 +234,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            ReasoningEffort: null,
-            SupportsThinking: true);
+            null,
+            true);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);

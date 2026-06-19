@@ -139,17 +139,17 @@ public sealed class ScheduledJobTemplateRegistryTests
     {
         public string TemplateId { get; } = templateId;
 
-        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: templateId,
-            DisplayName: displayName,
-            Description: "Stub handler for registry tests.",
-            ParameterSchema: null,
-            DefaultParameters: null,
-            SupportedScheduleKinds: [ScheduleKind.OneShot],
-            DefaultScheduleKind: ScheduleKind.OneShot,
-            DefaultMisfirePolicy: SchedulerMisfirePolicy.Smart,
-            DefaultMaxRuntimeSeconds: null,
-            AllowManualTrigger: false,
-            AllowAgentCreation: false);
+        public ScheduledJobTemplateDescriptor Descriptor { get; } = new(templateId,
+            displayName,
+            "Stub handler for registry tests.",
+            null,
+            null,
+            [ScheduleKind.OneShot],
+            ScheduleKind.OneShot,
+            SchedulerMisfirePolicy.Smart,
+            null,
+            false,
+            false);
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

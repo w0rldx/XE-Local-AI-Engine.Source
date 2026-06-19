@@ -57,7 +57,11 @@ public static class PreviewWorkflowGraphMapper
 
         var nodes = graph.Nodes.Select(MapNode).ToList();
         var edges = graph.Edges
-                         .Select(static e => new PreviewWorkflowEdge { SourceId = e.SourceId, TargetId = e.TargetId })
+                         .Select(static e => new PreviewWorkflowEdge
+                         {
+                             SourceId = e.SourceId,
+                             TargetId = e.TargetId
+                         })
                          .ToList();
 
         return new PreviewWorkflowDefinition
@@ -72,7 +76,11 @@ public static class PreviewWorkflowGraphMapper
     {
         if (node.Kind != PreviewWorkflowNodeKind.Agent)
         {
-            return new PreviewWorkflowNode { Id = node.Id, Kind = MapKind(node.Kind) };
+            return new PreviewWorkflowNode
+            {
+                Id = node.Id,
+                Kind = MapKind(node.Kind)
+            };
         }
 
         // Validation guarantees these are present for Agent nodes; coalesce defensively to satisfy the required init.

@@ -63,8 +63,8 @@ internal static class NodeChatMetadataSerializer
             return null;
         }
 
-        return Encode(JsonSerializer.Serialize(
-            new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName, reasoningEffort,
+        return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName,
+                reasoningEffort,
                 generationDurationMs),
             MetadataJsonOptions));
     }

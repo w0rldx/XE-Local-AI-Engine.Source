@@ -105,12 +105,12 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         // ChatClientAgent ctor order is (chatClient, instructions, name, description, tools, loggerFactory, sp) —
         // instructions precede name. Named arguments keep that unambiguous.
         return new ChatClientAgent(_chatClient,
-            instructions: participant.Instructions,
-            name: participant.Name,
-            description: participant.Description,
-            tools: tools,
-            loggerFactory: _loggerFactory,
-            services: _serviceProvider);
+            participant.Instructions,
+            participant.Name,
+            participant.Description,
+            tools,
+            _loggerFactory,
+            _serviceProvider);
     }
 
     private static Workflow BuildWorkflow(OrchestrationAgentDefinition definition,

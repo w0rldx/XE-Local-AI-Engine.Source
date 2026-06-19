@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
-using System.Net;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -20,30 +19,37 @@ internal static class GgufStoreTestInfrastructure
     public const string Revision = "main";
     public static string ModelName => GgufModelName.Format(RepoId, Quant);
 
-    public static HuggingFaceOptions Options(string modelsDir) => new()
+    public static HuggingFaceOptions Options(string modelsDir)
     {
-        ModelsDirectory = modelsDir,
-        DiskMarginBytes = 0,
-        DefaultQuant = Quant,
-        MaxDownloadRetries = 2
-    };
+        return new HuggingFaceOptions
+        {
+            ModelsDirectory = modelsDir,
+            DiskMarginBytes = 0,
+            DefaultQuant = Quant,
+            MaxDownloadRetries = 2
+        };
+    }
 
-    public static GgufModelRegistry Registry(HuggingFaceOptions options) =>
-        new(options, NullLogger<GgufModelRegistry>.Instance);
+    public static GgufModelRegistry Registry(HuggingFaceOptions options)
+    {
+        return new GgufModelRegistry(options, NullLogger<GgufModelRegistry>.Instance);
+    }
 
-    public static HfDownloadClient DownloadClient(
-        HttpClient http,
+    public static HfDownloadClient DownloadClient(HttpClient http,
         IHfTokenStore tokenStore,
         IFreeSpaceProbe probe,
-        HuggingFaceOptions options) =>
-        new(http, tokenStore, probe, options, NullLogger<HfDownloadClient>.Instance);
+        HuggingFaceOptions options)
+    {
+        return new HfDownloadClient(http, tokenStore, probe, options, NullLogger<HfDownloadClient>.Instance);
+    }
 
-    public static HuggingFaceGgufStore Store(
-        HfDownloadClient downloadClient,
+    public static HuggingFaceGgufStore Store(HfDownloadClient downloadClient,
         IHuggingFaceGgufDiscovery discovery,
         GgufModelRegistry registry,
-        HuggingFaceOptions options) =>
-        new(downloadClient, discovery, registry, options, NullLogger<HuggingFaceGgufStore>.Instance);
+        HuggingFaceOptions options)
+    {
+        return new HuggingFaceGgufStore(downloadClient, discovery, registry, options, NullLogger<HuggingFaceGgufStore>.Instance);
+    }
 
     public static IHfTokenStore NoTokenStore()
     {
@@ -79,31 +85,34 @@ internal static class GgufStoreTestInfrastructure
     {
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.InspectRepoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => Task.FromResult(new GgufRepoDetail(
-                callInfo.ArgAt<string>(0),
-                IsGated: false,
-                License: "apache-2.0",
-                Files: files)));
+                 .Returns(callInfo => Task.FromResult(new GgufRepoDetail(callInfo.ArgAt<string>(0),
+                     false,
+                     "apache-2.0",
+                     files)));
         return discovery;
     }
 
-    public static GgufRepoFile RepoFile(string fileName, string quant, long sizeBytes, string? sha256 = null) =>
-        new(
-            fileName,
+    public static GgufRepoFile RepoFile(string fileName, string quant, long sizeBytes, string? sha256 = null)
+    {
+        return new GgufRepoFile(fileName,
             quant,
             sizeBytes,
             sha256,
             Revision,
-            Architecture: "llama",
-            QuantType: quant,
-            ParamCount: null,
-            BlockCount: null,
-            AttentionHeadCount: null,
-            AttentionHeadCountKV: null,
-            EmbeddingLength: null,
-            ContextLength: null);
+            "llama",
+            quant,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
 
-    public static string Sha256Upper(byte[] data) => Convert.ToHexString(SHA256.HashData(data));
+    public static string Sha256Upper(byte[] data)
+    {
+        return Convert.ToHexString(SHA256.HashData(data));
+    }
 
     /// <summary>A scripted HTTP handler returning queued responses (one per call), recording the requests it saw.</summary>
     public sealed class ScriptedHandler(Func<HttpRequestMessage, int, HttpResponseMessage> responder) : HttpMessageHandler
@@ -118,8 +127,7 @@ internal static class GgufStoreTestInfrastructure
         {
             var index = CallCount;
             CallCount++;
-            _requests.Add(new RecordedRequest(
-                request.Headers.Range?.ToString(),
+            _requests.Add(new RecordedRequest(request.Headers.Range?.ToString(),
                 request.Headers.Authorization?.Scheme,
                 request.Headers.Authorization?.Parameter));
             return Task.FromResult(responder(request, index));
@@ -138,21 +146,24 @@ internal static class GgufStoreTestInfrastructure
 
         public string Path { get; }
 
-        public string FilePath(string fileName) => System.IO.Path.Combine(Path, fileName);
-
         public void Dispose()
         {
             try
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, recursive: true);
+                    Directory.Delete(Path, true);
                 }
             }
             catch (IOException)
             {
                 // Best-effort temp cleanup.
             }
+        }
+
+        public string FilePath(string fileName)
+        {
+            return System.IO.Path.Combine(Path, fileName);
         }
     }
 }

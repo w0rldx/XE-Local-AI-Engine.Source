@@ -18,21 +18,6 @@ internal sealed partial class LinuxProcessGroupHandle(Process process) : ILlamaS
     private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
     private int _disposed;
 
-    /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static LinuxProcessGroupHandle Wrap(Process process)
-    {
-        ArgumentNullException.ThrowIfNull(process);
-        try
-        {
-            return new LinuxProcessGroupHandle(process);
-        }
-        catch
-        {
-            process.Dispose();
-            throw;
-        }
-    }
-
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
@@ -68,6 +53,21 @@ internal sealed partial class LinuxProcessGroupHandle(Process process) : ILlamaS
         finally
         {
             _process.Dispose();
+        }
+    }
+
+    /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
+    public static LinuxProcessGroupHandle Wrap(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        try
+        {
+            return new LinuxProcessGroupHandle(process);
+        }
+        catch
+        {
+            process.Dispose();
+            throw;
         }
     }
 

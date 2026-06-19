@@ -6,8 +6,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class EmbeddingPlaybookRetrievalRankerTests
@@ -17,9 +17,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_RanksByCosineSimilarity()
     {
-        var weather = Action("weather forecast rain", priority: 10, createdAtUtc: 1);
-        var cooking = Action("cooking recipe oven", priority: 10, createdAtUtc: 2);
-        var partial = Action("forecast the weekend weather", priority: 10, createdAtUtc: 3);
+        var weather = Action("weather forecast rain", 10, 1);
+        var cooking = Action("cooking recipe oven", 10, 2);
+        var partial = Action("forecast the weekend weather", 10, 3);
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
@@ -44,9 +44,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_OnScoreTie_BreaksByPriorityThenCreatedAtUtc()
     {
         // Identical candidate text => identical embeddings => identical cosine, so the tiebreak alone decides order.
-        var lowPriority = Action("deploy", priority: 5, createdAtUtc: 99);
-        var highPriorityOlder = Action("deploy", priority: 50, createdAtUtc: 1);
-        var highPriorityNewer = Action("deploy", priority: 50, createdAtUtc: 2);
+        var lowPriority = Action("deploy", 5, 99);
+        var highPriorityOlder = Action("deploy", 50, 1);
+        var highPriorityNewer = Action("deploy", 50, 2);
         var ranker = BuildRanker(new FakeEmbeddingProvider(), EmbeddingModel);
 
         var result = await ranker.SelectTopKAsync("deploy", [highPriorityNewer, highPriorityOlder, lowPriority], 3, CancellationToken.None);
@@ -75,7 +75,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_ReEmbedsCandidate_WhenVersionBumps()
     {
-        var original = Action("deploy production build", priority: 10, createdAtUtc: 1);
+        var original = Action("deploy production build", 10, 1);
         var bumped = original with
         {
             Version = original.Version + 1
@@ -97,10 +97,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_EvictsOldestEntries_WhenCacheBoundExceeded()
     {
         // Bound of 1: each new candidate evicts the previous one, so a re-query of the first candidate re-embeds it.
-        var first = Action("alpha task", priority: 10, createdAtUtc: 1);
-        var second = Action("beta task", priority: 10, createdAtUtc: 2);
+        var first = Action("alpha task", 10, 1);
+        var second = Action("beta task", 10, 2);
         var provider = new FakeEmbeddingProvider();
-        var ranker = BuildRanker(provider, EmbeddingModel, cacheMaxEntries: 1);
+        var ranker = BuildRanker(provider, EmbeddingModel, 1);
 
         await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None); // caches first (count 1)
         await ranker.SelectTopKAsync("beta", [second], 1, CancellationToken.None); // caches second, evicts first
@@ -116,7 +116,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     {
         var candidates = SampleCandidates();
         var provider = new FakeEmbeddingProvider();
-        var ranker = BuildRanker(provider, embeddingModel: null);
+        var ranker = BuildRanker(provider, null);
 
         var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
 
@@ -247,9 +247,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     {
         return
         [
-            Action("deploy the production build to the cluster", priority: 10, createdAtUtc: 1),
-            Action("summarise the meeting notes", priority: 20, createdAtUtc: 2),
-            Action("production incident response runbook", priority: 30, createdAtUtc: 3)
+            Action("deploy the production build to the cluster", 10, 1),
+            Action("summarise the meeting notes", 20, 2),
+            Action("production incident response runbook", 30, 3)
         ];
     }
 
@@ -260,12 +260,12 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
             triggerCondition,
-            Behavior: "behaviour text",
-            Scope: null,
+            "behaviour text",
+            null,
             priority,
-            Version: 1,
+            1,
             createdAtUtc,
-            UpdatedAtUtc: createdAtUtc);
+            createdAtUtc);
     }
 
     // A fake node-local provider whose embedding generator derives deterministic vectors from token hashing, so texts

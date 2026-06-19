@@ -80,7 +80,10 @@ internal sealed class HardwareProbeEnvironment : IHardwareProbeEnvironment
     }
 
     /// <inheritdoc />
-    public long GetTotalPhysicalMemoryBytes() => GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+    public long GetTotalPhysicalMemoryBytes()
+    {
+        return GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+    }
 
     /// <inheritdoc />
     public long GetAvailableMemoryBytes()

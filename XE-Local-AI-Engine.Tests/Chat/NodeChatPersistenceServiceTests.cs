@@ -88,9 +88,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         // produces a second Thoughts block. The tool part carries args + result (the completed-phase data).
         var parts = new List<NodeChatMessagePart>
         {
-            new(NodeChatMessagePartKinds.Reasoning, 0, Text: "thinking before"),
+            new(NodeChatMessagePartKinds.Reasoning, 0, "thinking before"),
             new(NodeChatMessagePartKinds.Tool, 1, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{\"tz\":\"UTC\"}", Result: "2026-06-01T00:00:00Z"),
-            new(NodeChatMessagePartKinds.Reasoning, 2, Text: "thinking after")
+            new(NodeChatMessagePartKinds.Reasoning, 2, "thinking after")
         };
 
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
@@ -801,7 +801,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         // SQLite ON DELETE CASCADE is not enforced (no PRAGMA foreign_keys=ON), so the purge must delete the
         // feedback row explicitly or plaintext feedback orphans after the conversation is gone (privacy gap).
-        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, 1103, PurgeImmediately: true)).ConfigureAwait(false);
+        await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, 1103, true)).ConfigureAwait(false);
 
         AssertEx.Null(await service.GetMessageFeedbackAsync(conversation.ConversationId, messageId).ConfigureAwait(false));
     }

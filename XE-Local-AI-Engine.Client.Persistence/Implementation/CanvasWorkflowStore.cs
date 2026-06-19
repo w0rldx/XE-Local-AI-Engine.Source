@@ -101,8 +101,7 @@ public sealed class CanvasWorkflowStore(NodeChatDbContext dbContext, TimeProvide
         var summaries = await _dbContext.CanvasWorkflows
                                         .AsNoTracking()
                                         .OrderBy(workflow => workflow.CreatedAtUtc)
-                                        .Select(workflow => new CanvasWorkflowRecord(
-                                            workflow.Id,
+                                        .Select(workflow => new CanvasWorkflowRecord(workflow.Id,
                                             workflow.Name,
                                             null,
                                             workflow.Version,

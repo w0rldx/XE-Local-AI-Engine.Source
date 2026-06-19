@@ -22,7 +22,7 @@ public sealed class SensitiveFileExclusionServiceTests
     [Arguments("my-credentials.enc")]
     public void IsExcluded_WhenSecretFile_ReturnsTrue(string name)
     {
-        AssertEx.True(_service.IsExcluded(name, isDirectory: false), $"{name} must be excluded");
+        AssertEx.True(_service.IsExcluded(name, false), $"{name} must be excluded");
     }
 
     [Test]
@@ -35,7 +35,7 @@ public sealed class SensitiveFileExclusionServiceTests
     [Arguments("coverage")]
     public void IsExcluded_WhenGeneratedOrSecretDirectory_ReturnsTrue(string name)
     {
-        AssertEx.True(_service.IsExcluded(name, isDirectory: true), $"{name} directory must be excluded");
+        AssertEx.True(_service.IsExcluded(name, true), $"{name} directory must be excluded");
     }
 
     [Test]
@@ -52,7 +52,7 @@ public sealed class SensitiveFileExclusionServiceTests
     [Test]
     public void IsExcluded_IsCaseInsensitive()
     {
-        AssertEx.True(_service.IsExcluded(".ENV", isDirectory: false), ".ENV must be excluded");
-        AssertEx.True(_service.IsExcluded("Node_Modules", isDirectory: true), "Node_Modules must be excluded");
+        AssertEx.True(_service.IsExcluded(".ENV", false), ".ENV must be excluded");
+        AssertEx.True(_service.IsExcluded("Node_Modules", true), "Node_Modules must be excluded");
     }
 }

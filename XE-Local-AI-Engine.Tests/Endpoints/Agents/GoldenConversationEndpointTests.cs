@@ -244,14 +244,14 @@ public sealed class GoldenConversationEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            Description: null,
+            null,
             "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            [],
+            new Dictionary<string, bool>(),
+            null)).ConfigureAwait(false);
         return agent.Id;
     }
 }

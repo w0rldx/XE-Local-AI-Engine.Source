@@ -460,12 +460,12 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         return new AgentDefinitionInput("Builder",
             Description,
             Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null);
+            [],
+            new Dictionary<string, bool>(),
+            null);
     }
 
     private static async Task TamperInstructionsAsync(string databasePath)

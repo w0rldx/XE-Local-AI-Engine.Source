@@ -35,7 +35,7 @@ public sealed class InvocationResumeRegistryTests
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();
 
-        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, content: "hi", generationDurationMs: 1234));
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "hi", 1234));
 
         var live = AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
         AssertEx.Equal(1234L, live.GenerationDurationMs);
@@ -57,8 +57,8 @@ public sealed class InvocationResumeRegistryTests
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();
 
-        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, content: "hi"));
-        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Completed, content: "hi there"));
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "hi"));
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Completed, "hi there"));
 
         AssertEx.Null(registry.TryGetLiveInvocation(invocationId));
     }
@@ -72,7 +72,7 @@ public sealed class InvocationResumeRegistryTests
         var conversationId = Guid.NewGuid();
 
         // Invocation is already mid-stream when the client reconnects.
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, content: "Hello"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
 
         var events = new List<ChatStreamEvent>();
         var consumer = Task.Run(async () =>
@@ -86,8 +86,8 @@ public sealed class InvocationResumeRegistryTests
         // Wait for the snapshot replay before pushing more deltas so ordering is deterministic.
         await AssertEx.EventuallyAsync(() => events.Count >= 1, TimeSpan.FromSeconds(5));
 
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, content: "Hello world"));
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, content: "Hello world"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
 
         await consumer;
 
@@ -131,8 +131,8 @@ public sealed class InvocationResumeRegistryTests
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();
 
-        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, content: "done"));
-        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Completed, content: "done"));
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "done"));
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Completed, "done"));
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
         {

@@ -38,10 +38,6 @@ public static class LlamaCppReleasePins
     /// <summary>The recommended-pinned llama.cpp release tag.</summary>
     public const string PinnedTag = "b9692";
 
-    /// <summary>Builds the absolute download URL for a named asset in the given release tag.</summary>
-    public static Uri DownloadUri(string tag, string assetName) =>
-        new($"https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{assetName}");
-
     private const string WindowsServerPath = "build/bin/llama-server.exe";
     private const string UnixServerPath = "build/bin/llama-server";
 
@@ -79,6 +75,12 @@ public static class LlamaCppReleasePins
             [(OSPlatform.OSX, Architecture.X64, GpuVariant.Cpu)] =
                 new("llama-b9692-bin-macos-x64.tar.gz", "95ef72d64fa16b40e1aeef59cdb3424f768b31cc9a4b490934bd66e7a6fdd7c8", UnixServerPath)
         };
+
+    /// <summary>Builds the absolute download URL for a named asset in the given release tag.</summary>
+    public static Uri DownloadUri(string tag, string assetName)
+    {
+        return new Uri($"https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{assetName}");
+    }
 
     /// <summary>
     ///     Resolves the pinned asset for the given OS/arch/variant, falling back to the CPU floor when no GPU prebuilt

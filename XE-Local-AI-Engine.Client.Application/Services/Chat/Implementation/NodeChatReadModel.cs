@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatMetadataSerializer;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql;
+using static NodeChatMetadataSerializer;
+using static NodeChatPersistenceSql;
 
 /// <summary>
 ///     Read-only conversation queries behind <see cref="NodeChatPersistenceService" />: the conversation list and the

@@ -63,8 +63,8 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         yield return ToEvent(ChatStreamEventTypes.AssistantDelta,
             snapshot,
             sequence++,
-            delta: lastContent.Length == 0 ? null : lastContent,
-            reasoningDelta: lastReasoning.Length == 0 ? null : lastReasoning);
+            lastContent.Length == 0 ? null : lastContent,
+            lastReasoning.Length == 0 ? null : lastReasoning);
 
         try
         {

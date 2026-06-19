@@ -155,7 +155,7 @@ internal sealed class AgentHomeMemoryProposalService : IAgentHomeMemoryProposalS
         JsonNode? node;
         try
         {
-            node = JsonNode.Parse(line, nodeOptions: null, documentOptions: JsonDocOptions);
+            node = JsonNode.Parse(line, null, JsonDocOptions);
         }
         catch (JsonException)
         {

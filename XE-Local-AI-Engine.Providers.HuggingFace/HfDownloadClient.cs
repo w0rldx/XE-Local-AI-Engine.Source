@@ -4,8 +4,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     The ranged, resumable, retryable HTTP download against <c>/{repo}/resolve/{rev}/{file}</c>: enforces the hard
@@ -24,15 +24,14 @@ internal sealed class HfDownloadClient
     private const string LinkedEtagHeader = "X-Linked-Etag";
     private const string RepoCommitHeader = "X-Repo-Commit";
     private const int CopyBufferSize = 128 * 1024;
+    private readonly IFreeSpaceProbe _freeSpaceProbe;
 
     private readonly HttpClient _httpClient;
-    private readonly IHfTokenStore _tokenStore;
-    private readonly IFreeSpaceProbe _freeSpaceProbe;
-    private readonly HuggingFaceOptions _options;
     private readonly ILogger<HfDownloadClient> _logger;
+    private readonly HuggingFaceOptions _options;
+    private readonly IHfTokenStore _tokenStore;
 
-    public HfDownloadClient(
-        HttpClient httpClient,
+    public HfDownloadClient(HttpClient httpClient,
         IHfTokenStore tokenStore,
         IFreeSpaceProbe freeSpaceProbe,
         HuggingFaceOptions options,
@@ -57,8 +56,7 @@ internal sealed class HfDownloadClient
     ///     is exposed, and atomically renaming on success. Returns the resolved commit revision and verified sha256
     ///     (null when no OID was available).
     /// </summary>
-    public async Task<HfDownloadResult> DownloadAsync(
-        string repoId,
+    public async Task<HfDownloadResult> DownloadAsync(string repoId,
         string fileName,
         string revision,
         string modelName,
@@ -75,7 +73,7 @@ internal sealed class HfDownloadClient
 
         var partPath = destinationPath + ".part";
         var directory = Path.GetDirectoryName(destinationPath)
-            ?? throw new InvalidOperationException("The model destination path has no directory.");
+                        ?? throw new InvalidOperationException("The model destination path has no directory.");
         Directory.CreateDirectory(directory);
 
         // Hard disk guard FIRST — refuse before opening any stream so no .part is written when space is short.
@@ -91,15 +89,13 @@ internal sealed class HfDownloadClient
             ct.ThrowIfCancellationRequested();
             try
             {
-                return await DownloadOnceAsync(
-                    requestUri, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
+                return await DownloadOnceAsync(requestUri, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
                     .ConfigureAwait(false);
             }
             catch (HuggingFaceDownloadException exception) when (IsTransient(exception.Reason) && attempt < _options.MaxDownloadRetries)
             {
                 attempt++;
-                _logger.LogWarning(
-                    "Transient Hugging Face download failure ({Reason}); retry {Attempt}/{Max}.",
+                _logger.LogWarning("Transient Hugging Face download failure ({Reason}); retry {Attempt}/{Max}.",
                     exception.Reason,
                     attempt,
                     _options.MaxDownloadRetries);
@@ -108,8 +104,7 @@ internal sealed class HfDownloadClient
         }
     }
 
-    private async Task<HfDownloadResult> DownloadOnceAsync(
-        Uri requestUri,
+    private async Task<HfDownloadResult> DownloadOnceAsync(Uri requestUri,
         string modelName,
         string partPath,
         string destinationPath,
@@ -130,20 +125,18 @@ internal sealed class HfDownloadClient
         try
         {
             response = await _httpClient
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-                .ConfigureAwait(false);
+                             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                             .ConfigureAwait(false);
         }
         catch (HttpRequestException exception)
         {
-            throw new HuggingFaceDownloadException(
-                HuggingFaceDownloadFailure.Network,
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                 "The model download failed due to a network error. Please try again.",
                 exception);
         }
         catch (TaskCanceledException exception) when (!ct.IsCancellationRequested)
         {
-            throw new HuggingFaceDownloadException(
-                HuggingFaceDownloadFailure.Network,
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                 "The model download timed out. Please try again.",
                 exception);
         }
@@ -156,8 +149,7 @@ internal sealed class HfDownloadClient
             if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
             {
                 TryDeleteFile(partPath);
-                throw new HuggingFaceDownloadException(
-                    HuggingFaceDownloadFailure.Network,
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                     "The model download could not resume from the partial file. Retrying from the start.");
             }
 
@@ -174,7 +166,7 @@ internal sealed class HfDownloadClient
             var verifiedSha = await VerifyHashAsync(partPath, expectedSha, ct).ConfigureAwait(false);
 
             // Atomic-on-complete: only now is the file a real model file.
-            File.Move(partPath, destinationPath, overwrite: true);
+            File.Move(partPath, destinationPath, true);
 
             var finalSize = new FileInfo(destinationPath).Length;
             progress?.Report(new PullProgress
@@ -189,8 +181,7 @@ internal sealed class HfDownloadClient
         }
     }
 
-    private static async Task CopyToPartAsync(
-        HttpResponseMessage response,
+    private static async Task CopyToPartAsync(HttpResponseMessage response,
         string partPath,
         bool appending,
         string modelName,
@@ -204,7 +195,7 @@ internal sealed class HfDownloadClient
         FileStream partStream;
         try
         {
-            partStream = new FileStream(partPath, mode, FileAccess.Write, FileShare.None, CopyBufferSize, useAsync: true);
+            partStream = new FileStream(partPath, mode, FileAccess.Write, FileShare.None, CopyBufferSize, true);
         }
         catch (IOException exception) when (IsDiskFull(exception))
         {
@@ -213,32 +204,34 @@ internal sealed class HfDownloadClient
 
         var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         await using (partStream.ConfigureAwait(false))
-        await using (source.ConfigureAwait(false))
         {
-            var buffer = new byte[CopyBufferSize];
-            int read;
-            try
+            await using (source.ConfigureAwait(false))
             {
-                while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                var buffer = new byte[CopyBufferSize];
+                int read;
+                try
                 {
-                    await partStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
-                    completed += read;
-                    progress?.Report(new PullProgress
+                    while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                     {
-                        ModelName = modelName,
-                        Status = "downloading",
-                        TotalBytes = totalBytes,
-                        CompletedBytes = completed
-                    });
-                }
+                        await partStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                        completed += read;
+                        progress?.Report(new PullProgress
+                        {
+                            ModelName = modelName,
+                            Status = "downloading",
+                            TotalBytes = totalBytes,
+                            CompletedBytes = completed
+                        });
+                    }
 
-                // Flush so the .part length on disk is accurate for a later resume.
-                await partStream.FlushAsync(ct).ConfigureAwait(false);
-            }
-            catch (IOException exception) when (IsDiskFull(exception))
-            {
-                // Leave the .part intact for a future resume; never rename a short file to final.
-                throw DiskFull(exception);
+                    // Flush so the .part length on disk is accurate for a later resume.
+                    await partStream.FlushAsync(ct).ConfigureAwait(false);
+                }
+                catch (IOException exception) when (IsDiskFull(exception))
+                {
+                    // Leave the .part intact for a future resume; never rename a short file to final.
+                    throw DiskFull(exception);
+                }
             }
         }
     }
@@ -252,7 +245,7 @@ internal sealed class HfDownloadClient
         }
 
         string actualSha;
-        await using (var stream = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, useAsync: true))
+        await using (var stream = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, true))
         {
             var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
             actualSha = Convert.ToHexString(hash);
@@ -262,8 +255,7 @@ internal sealed class HfDownloadClient
         {
             // Corrupt/truncated download — drop the .part so a retry re-downloads cleanly.
             TryDeleteFile(partPath);
-            throw new HuggingFaceDownloadException(
-                HuggingFaceDownloadFailure.HashMismatch,
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.HashMismatch,
                 "The downloaded model file failed its integrity check and was discarded. Please try again.");
         }
 
@@ -303,7 +295,9 @@ internal sealed class HfDownloadClient
     }
 
     private static long GetExistingPartLength(string partPath)
-        => File.Exists(partPath) ? new FileInfo(partPath).Length : 0L;
+    {
+        return File.Exists(partPath) ? new FileInfo(partPath).Length : 0L;
+    }
 
     private static void ClassifyStatus(HttpStatusCode status)
     {
@@ -314,20 +308,16 @@ internal sealed class HfDownloadClient
                 return;
             case HttpStatusCode.Unauthorized:
                 // No token was accepted → the repo is gated and the caller must configure a token.
-                throw new HuggingFaceDownloadException(
-                    HuggingFaceDownloadFailure.Gated,
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Gated,
                     "This model is gated and requires a Hugging Face access token. Configure a token and try again.");
             case HttpStatusCode.Forbidden:
-                throw new HuggingFaceDownloadException(
-                    HuggingFaceDownloadFailure.Unauthorized,
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Unauthorized,
                     "The configured Hugging Face token does not have access to this gated model.");
             case HttpStatusCode.NotFound:
-                throw new HuggingFaceDownloadException(
-                    HuggingFaceDownloadFailure.NotFound,
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                     "The requested model file, repository, or revision was not found.");
             default:
-                throw new HuggingFaceDownloadException(
-                    HuggingFaceDownloadFailure.Network,
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                     $"The model download failed with HTTP status {(int)status}. Please try again.");
         }
     }
@@ -349,7 +339,9 @@ internal sealed class HfDownloadClient
     }
 
     private static string? ReadRepoCommit(HttpResponseMessage response)
-        => response.Headers.TryGetValues(RepoCommitHeader, out var values) ? values.FirstOrDefault() : null;
+    {
+        return response.Headers.TryGetValues(RepoCommitHeader, out var values) ? values.FirstOrDefault() : null;
+    }
 
     private static long? ResolveTotalBytes(HttpResponseMessage response, bool appending, long existingPartBytes, long expectedSizeBytes)
     {
@@ -370,10 +362,14 @@ internal sealed class HfDownloadClient
     }
 
     private static bool IsSha256Hex(string? value)
-        => value is { Length: 64 } && value.All(Uri.IsHexDigit);
+    {
+        return value is { Length: 64 } && value.All(Uri.IsHexDigit);
+    }
 
     private static bool IsTransient(HuggingFaceDownloadFailure reason)
-        => reason == HuggingFaceDownloadFailure.Network;
+    {
+        return reason == HuggingFaceDownloadFailure.Network;
+    }
 
     private static bool IsDiskFull(IOException exception)
     {
@@ -383,13 +379,16 @@ internal sealed class HfDownloadClient
     }
 
     private static HuggingFaceDownloadException DiskFull(IOException exception)
-        => new(
-            HuggingFaceDownloadFailure.DiskFull,
+    {
+        return new HuggingFaceDownloadException(HuggingFaceDownloadFailure.DiskFull,
             "The volume ran out of space during the download. The partial file was kept so the download can resume.",
             exception);
+    }
 
     private static TimeSpan BackoffDelay(int attempt)
-        => TimeSpan.FromMilliseconds(250 * Math.Min(attempt, 8) * attempt);
+    {
+        return TimeSpan.FromMilliseconds(250 * Math.Min(attempt, 8) * attempt);
+    }
 
     private static void TryDeleteFile(string path)
     {

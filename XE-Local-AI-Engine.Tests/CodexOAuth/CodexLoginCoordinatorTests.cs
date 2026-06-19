@@ -5,8 +5,8 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Verifies the login coordinator's status lifecycle: start exposes the authorize URL and a
-/// pending status, completion flips the status to succeeded, and a second start supersedes the first.
+///     Verifies the login coordinator's status lifecycle: start exposes the authorize URL and a
+///     pending status, completion flips the status to succeeded, and a second start supersedes the first.
 /// </summary>
 public sealed class CodexLoginCoordinatorTests
 {
@@ -14,8 +14,7 @@ public sealed class CodexLoginCoordinatorTests
     public void Start_ReturnsAuthorizeUrl_AndReportsPendingStatus()
     {
         var authService = new FakeAuthService();
-        using var coordinator = new CodexLoginCoordinator(
-            new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
+        using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
 
         var url = coordinator.Start();
         var status = coordinator.GetStatus();
@@ -29,14 +28,12 @@ public sealed class CodexLoginCoordinatorTests
     public async Task Start_WhenLoginCompletes_FlipsStatusToSucceeded()
     {
         var authService = new FakeAuthService();
-        using var coordinator = new CodexLoginCoordinator(
-            new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
+        using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
 
         coordinator.Start();
         authService.CompleteWithSuccess(new CodexTokens("a", "r", DateTimeOffset.UtcNow.AddHours(1), "acct"));
 
-        await AssertEx.EventuallyAsync(
-            () => coordinator.GetStatus().State == CodexLoginState.Succeeded,
+        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == CodexLoginState.Succeeded,
             TimeSpan.FromSeconds(2));
         AssertEx.Null(coordinator.GetStatus().AuthorizeUrl);
     }
@@ -49,10 +46,9 @@ public sealed class CodexLoginCoordinatorTests
         // IActiveCloudChatClientFactory.InvalidateSelectionCache().
         var authService = new FakeAuthService();
         var invalidations = 0;
-        using var coordinator = new CodexLoginCoordinator(
-            new Lazy<ICodexAuthService>(() => authService),
+        using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService),
             NullLogger<CodexLoginCoordinator>.Instance,
-            onLoginSucceeded: () => Interlocked.Increment(ref invalidations));
+            () => Interlocked.Increment(ref invalidations));
 
         coordinator.Start();
         authService.CompleteWithSuccess(new CodexTokens("a", "r", DateTimeOffset.UtcNow.AddHours(1), "acct"));
@@ -65,16 +61,14 @@ public sealed class CodexLoginCoordinatorTests
     {
         var authService = new FakeAuthService();
         var invalidations = 0;
-        using var coordinator = new CodexLoginCoordinator(
-            new Lazy<ICodexAuthService>(() => authService),
+        using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService),
             NullLogger<CodexLoginCoordinator>.Instance,
-            onLoginSucceeded: () => Interlocked.Increment(ref invalidations));
+            () => Interlocked.Increment(ref invalidations));
 
         coordinator.Start();
         authService.CompleteWithFailure(new CodexAuthException("token endpoint returned 400"));
 
-        await AssertEx.EventuallyAsync(
-            () => coordinator.GetStatus().State == CodexLoginState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == CodexLoginState.Failed,
             TimeSpan.FromSeconds(2));
         AssertEx.Equal(0, Volatile.Read(ref invalidations));
     }
@@ -83,14 +77,12 @@ public sealed class CodexLoginCoordinatorTests
     public async Task Start_WhenLoginFaults_FlipsStatusToFailed()
     {
         var authService = new FakeAuthService();
-        using var coordinator = new CodexLoginCoordinator(
-            new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
+        using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
 
         coordinator.Start();
         authService.CompleteWithFailure(new CodexAuthException("token endpoint returned 400"));
 
-        await AssertEx.EventuallyAsync(
-            () => coordinator.GetStatus().State == CodexLoginState.Failed,
+        await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == CodexLoginState.Failed,
             TimeSpan.FromSeconds(2));
     }
 
@@ -98,8 +90,7 @@ public sealed class CodexLoginCoordinatorTests
     public void Start_WhenCalledAgain_SupersedesAndReportsTheNewPendingUrl()
     {
         var authService = new FakeAuthService();
-        using var coordinator = new CodexLoginCoordinator(
-            new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
+        using var coordinator = new CodexLoginCoordinator(new Lazy<ICodexAuthService>(() => authService), NullLogger<CodexLoginCoordinator>.Instance);
 
         var firstUrl = coordinator.Start();
         var secondUrl = coordinator.Start();
@@ -111,8 +102,8 @@ public sealed class CodexLoginCoordinatorTests
     }
 
     /// <summary>
-    /// A controllable <see cref="ICodexAuthService"/>: each <see cref="BeginLogin"/> hands back a fresh handle
-    /// with a unique authorize URL and a completion the test resolves on demand.
+    ///     A controllable <see cref="ICodexAuthService" />: each <see cref="BeginLogin" /> hands back a fresh handle
+    ///     with a unique authorize URL and a completion the test resolves on demand.
     /// </summary>
     private sealed class FakeAuthService : ICodexAuthService
     {
@@ -131,14 +122,24 @@ public sealed class CodexLoginCoordinatorTests
         }
 
         public Task<CodexTokens> LoginAsync(CancellationToken cancellationToken = default)
-            => BeginLogin(cancellationToken).Completion;
+        {
+            return BeginLogin(cancellationToken).Completion;
+        }
 
         public Task<CodexTokens> RefreshAsync(CodexTokens current, CancellationToken cancellationToken = default)
-            => Task.FromResult(current);
+        {
+            return Task.FromResult(current);
+        }
 
-        public void CompleteWithSuccess(CodexTokens tokens) => LastHandle!.Completion.TrySetResult(tokens);
+        public void CompleteWithSuccess(CodexTokens tokens)
+        {
+            LastHandle!.Completion.TrySetResult(tokens);
+        }
 
-        public void CompleteWithFailure(Exception exception) => LastHandle!.Completion.TrySetException(exception);
+        public void CompleteWithFailure(Exception exception)
+        {
+            LastHandle!.Completion.TrySetException(exception);
+        }
     }
 
     private sealed record FakeHandle(CodexLoginHandle Handle, TaskCompletionSource<CodexTokens> Completion)

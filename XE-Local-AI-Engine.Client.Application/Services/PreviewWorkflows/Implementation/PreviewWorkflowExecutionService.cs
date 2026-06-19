@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Singleton in-memory run-state machine for Open Canvas (Preview) runs. Owns a
@@ -21,17 +20,17 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutionService, IAsyncDisposable
 {
-    private readonly ConcurrentDictionary<Guid, PreviewWorkflowRunHandle> _runs = new();
     private readonly ConcurrentDictionary<Guid, Task> _drainTasks = new();
+    private readonly IPreviewWorkflowEventPublisher _eventPublisher;
+    private readonly ILogger<PreviewWorkflowExecutionService> _logger;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly PreviewWorkflowExecutionOptions _options;
 
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IPreviewWorkflowRunner _runner;
-    private readonly IPreviewWorkflowEventPublisher _eventPublisher;
-    private readonly PreviewWorkflowExecutionOptions _options;
-    private readonly TimeProvider _timeProvider;
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly ILogger<PreviewWorkflowExecutionService> _logger;
+    private readonly ConcurrentDictionary<Guid, PreviewWorkflowRunHandle> _runs = new();
     private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly TimeProvider _timeProvider;
 
     public PreviewWorkflowExecutionService(ILocalModelProviderResolver providerResolver,
         IPreviewWorkflowRunner runner,
@@ -64,6 +63,12 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     }
 
     internal IReadOnlyCollection<Guid> ActiveRunIds => [.. _runs.Keys];
+
+    public async ValueTask DisposeAsync()
+    {
+        await ShutdownAsync().ConfigureAwait(false);
+        _shutdownCts.Dispose();
+    }
 
     public async Task<Guid> StartAsync(PreviewWorkflowGraph graph, string? connectionId, CancellationToken cancellationToken = default)
     {
@@ -128,8 +133,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             {
                 if (!providersByModel.TryGetValue(id, out var provider))
                 {
-                    throw new InvalidOperationException(
-                        $"No node-local provider was resolved for model '{id}'.");
+                    throw new InvalidOperationException($"No node-local provider was resolved for model '{id}'.");
                 }
 
                 return provider.CreateChatClient(new LocalModelSelection
@@ -152,8 +156,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         // preview.run.failed, and the continuation logs anything that still escapes.
         var drainTask = Task.Run(() => DrainAsync(handle), CancellationToken.None);
         _drainTasks[runId] = drainTask;
-        _ = drainTask.ContinueWith(
-            (t, state) =>
+        _ = drainTask.ContinueWith((t, state) =>
             {
                 var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))state!;
                 svc._drainTasks.TryRemove(id, out _);
@@ -200,8 +203,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             // Re-pump the resumed run on a fresh drain task; the prior drain ended when the run paused.
             var drainTask = Task.Run(() => DrainAsync(handle), CancellationToken.None);
             _drainTasks[runId] = drainTask;
-            _ = drainTask.ContinueWith(
-                (t, state) =>
+            _ = drainTask.ContinueWith((t, state) =>
                 {
                     var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))state!;
                     svc._drainTasks.TryRemove(id, out _);
@@ -253,8 +255,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             // run's drain may be blocked in a model call that observes the cancelled token only slowly (or never), so
             // relying on the drain to publish leaves the UI stuck "running". This is the single authoritative publish
             // for both the Running and Paused paths.
-            await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, nodeId: null, output: null,
-                error: null, requestId: null, CancellationToken.None).ConfigureAwait(false);
+            await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, null, null,
+                null, null, CancellationToken.None).ConfigureAwait(false);
 
             if (wasPaused)
             {
@@ -333,7 +335,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             // a terminal update). Treat a clean end as completion only if still Running.
             if (handle.GetState() == PreviewRunState.Running)
             {
-                await CompleteRunAsync(handle, output: null, cancellationToken).ConfigureAwait(false);
+                await CompleteRunAsync(handle, null, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (handle.GetState() == PreviewRunState.Cancelled)
@@ -344,7 +346,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Preview run {RunId} failed during drain.", runId);
-            await FailRunAsync(handle, "The preview run failed.", nodeId: null).ConfigureAwait(false);
+            await FailRunAsync(handle, "The preview run failed.", null).ConfigureAwait(false);
         }
     }
 
@@ -357,16 +359,16 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         switch (update.Kind)
         {
             case PreviewWorkflowUpdateKind.NodeStarted:
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeStarted, runId, update.NodeId!, output: null, error: null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeStarted, runId, update.NodeId!, null, null, cancellationToken).ConfigureAwait(false);
                 return DrainStep.Continue;
 
             case PreviewWorkflowUpdateKind.NodeOutput:
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeOutput, runId, update.NodeId!, update.Output, error: null, cancellationToken).ConfigureAwait(false);
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeCompleted, runId, update.NodeId!, output: null, error: null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeOutput, runId, update.NodeId!, update.Output, null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeCompleted, runId, update.NodeId!, null, null, cancellationToken).ConfigureAwait(false);
                 return DrainStep.Continue;
 
             case PreviewWorkflowUpdateKind.NodeDebug:
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeDebug, runId, update.NodeId!, update.Output, error: null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeDebug, runId, update.NodeId!, update.Output, null, cancellationToken).ConfigureAwait(false);
                 return DrainStep.Continue;
 
             case PreviewWorkflowUpdateKind.NodeFailed:
@@ -382,7 +384,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
                 return DrainStep.Terminal;
 
             case PreviewWorkflowUpdateKind.RunFailed:
-                await FailRunAsync(handle, update.Error ?? "The preview run failed.", nodeId: null).ConfigureAwait(false);
+                await FailRunAsync(handle, update.Error ?? "The preview run failed.", null).ConfigureAwait(false);
                 return DrainStep.Terminal;
 
             default:
@@ -412,8 +414,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         handle.SetState(PreviewRunState.Faulted);
         await CancelTokenSourceAsync(handle).ConfigureAwait(false);
 
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null,
-            error: "Output limit exceeded.", requestId: null, cancellationToken).ConfigureAwait(false);
+        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, null, null,
+            "Output limit exceeded.", null, cancellationToken).ConfigureAwait(false);
 
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
         return true;
@@ -427,14 +429,14 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         handle.SuspendIdleClock();
 
         await PublishRunAsync(PreviewWorkflowHubEvents.RunPaused, handle.RunId, update.NodeId, update.Output,
-            error: null, update.RequestId, cancellationToken).ConfigureAwait(false);
+            null, update.RequestId, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task CompleteRunAsync(PreviewWorkflowRunHandle handle, string? output, CancellationToken cancellationToken)
     {
         handle.SetState(PreviewRunState.Completed);
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunCompleted, handle.RunId, nodeId: null, output, error: null,
-            requestId: null, cancellationToken).ConfigureAwait(false);
+        await PublishRunAsync(PreviewWorkflowHubEvents.RunCompleted, handle.RunId, null, output, null,
+            null, cancellationToken).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
     }
 
@@ -442,13 +444,13 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     {
         if (nodeId is not null)
         {
-            await PublishNodeAsync(PreviewWorkflowHubEvents.NodeFailed, handle.RunId, nodeId, output: null, error,
+            await PublishNodeAsync(PreviewWorkflowHubEvents.NodeFailed, handle.RunId, nodeId, null, error,
                 CancellationToken.None).ConfigureAwait(false);
         }
 
         handle.SetState(PreviewRunState.Faulted);
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null, error,
-            requestId: null, CancellationToken.None).ConfigureAwait(false);
+        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, null, null, error,
+            null, CancellationToken.None).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
     }
 
@@ -467,8 +469,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     ///     but starts no process — that is deferred to first use. Validation guarantees at least one Agent node; an
     ///     Agent node without a model is rejected upstream.
     /// </summary>
-    private async Task<IReadOnlyDictionary<string, ILocalModelProvider>> ResolveProvidersPerDistinctModelAsync(
-        PreviewWorkflowGraph graph,
+    private async Task<IReadOnlyDictionary<string, ILocalModelProvider>> ResolveProvidersPerDistinctModelAsync(PreviewWorkflowGraph graph,
         CancellationToken cancellationToken)
     {
         var distinctModels = new List<string>();
@@ -482,8 +483,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             }
 
             var modelId = node.Model
-                          ?? throw new InvalidOperationException(
-                              $"Agent node '{node.Id}' has no node-local model to resolve a chat client from.");
+                          ?? throw new InvalidOperationException($"Agent node '{node.Id}' has no node-local model to resolve a chat client from.");
 
             if (seen.Add(modelId))
             {
@@ -516,22 +516,9 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         return providersByModel;
     }
 
-    /// <summary>
-    ///     A live read-only view over the run's lazily-populated <see cref="IChatClient" /> cache, so the run handle
-    ///     disposes exactly the clients created during the run (the cache grows as agents first touch their models).
-    /// </summary>
-    private sealed class LiveClientCollection(ConcurrentDictionary<string, IChatClient> clients) : IReadOnlyCollection<IChatClient>
-    {
-        public int Count => clients.Count;
-
-        public IEnumerator<IChatClient> GetEnumerator() => clients.Values.GetEnumerator();
-
-        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
-    }
-
     private Task PublishRunAsync(string eventType, Guid runId, CancellationToken cancellationToken)
     {
-        return PublishRunAsync(eventType, runId, nodeId: null, output: null, error: null, requestId: null, cancellationToken);
+        return PublishRunAsync(eventType, runId, null, null, null, null, cancellationToken);
     }
 
     private Task PublishRunAsync(string eventType,
@@ -609,10 +596,23 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         }
     }
 
-    public async ValueTask DisposeAsync()
+    /// <summary>
+    ///     A live read-only view over the run's lazily-populated <see cref="IChatClient" /> cache, so the run handle
+    ///     disposes exactly the clients created during the run (the cache grows as agents first touch their models).
+    /// </summary>
+    private sealed class LiveClientCollection(ConcurrentDictionary<string, IChatClient> clients) : IReadOnlyCollection<IChatClient>
     {
-        await ShutdownAsync().ConfigureAwait(false);
-        _shutdownCts.Dispose();
+        public int Count => clients.Count;
+
+        public IEnumerator<IChatClient> GetEnumerator()
+        {
+            return clients.Values.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
     }
 
     private enum DrainStep

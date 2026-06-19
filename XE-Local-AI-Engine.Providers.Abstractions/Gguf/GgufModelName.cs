@@ -23,7 +23,10 @@ public static class GgufModelName
             };
         }
 
-        return new GgufModelRequest { RepoId = modelName };
+        return new GgufModelRequest
+        {
+            RepoId = modelName
+        };
     }
 
     /// <summary>Formats the canonical registry key for a repo + quant pair.</summary>

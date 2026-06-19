@@ -47,8 +47,7 @@ public sealed class ModelRecommendationScheduleSeederTests
     {
         var management = Substitute.For<IScheduledJobManagementService>();
         management.ListJobsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IReadOnlyList<ScheduledJobDefinitionRecord>>(
-                  [
+                  .Returns(Task.FromResult<IReadOnlyList<ScheduledJobDefinitionRecord>>([
                       Definition(new ScheduledJobManagementInput(ModelRecommendationCheckHandler.TemplateIdValue,
                           "existing", null, ScheduleKind.Manual, null, null, null, null, null, "UTC",
                           SchedulerMisfirePolicy.SkipMissed, true, 600, """{"operation":"Recommend"}"""))
@@ -72,26 +71,26 @@ public sealed class ModelRecommendationScheduleSeederTests
 
     private static ScheduledJobDefinitionRecord Definition(ScheduledJobManagementInput input)
     {
-        return new ScheduledJobDefinitionRecord(Id: Guid.NewGuid(),
-            TemplateId: input.TemplateId,
-            DisplayName: input.DisplayName,
-            Description: input.Description,
-            Enabled: true,
-            ScheduleKind: input.ScheduleKind,
-            CronExpression: input.CronExpression,
-            IntervalSeconds: input.IntervalSeconds,
-            RepeatCount: input.RepeatCount,
-            StartAtUtc: input.StartAtUtc,
-            EndAtUtc: input.EndAtUtc,
-            TimeZoneId: input.TimeZoneId,
-            MisfirePolicy: input.MisfirePolicy,
-            PreventOverlap: input.PreventOverlap,
-            MaxRuntimeSeconds: input.MaxRuntimeSeconds,
-            ParameterJson: input.Parameters,
-            CreatedBy: ScheduledJobCreator.System,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: null);
+        return new ScheduledJobDefinitionRecord(Guid.NewGuid(),
+            input.TemplateId,
+            input.DisplayName,
+            input.Description,
+            true,
+            input.ScheduleKind,
+            input.CronExpression,
+            input.IntervalSeconds,
+            input.RepeatCount,
+            input.StartAtUtc,
+            input.EndAtUtc,
+            input.TimeZoneId,
+            input.MisfirePolicy,
+            input.PreventOverlap,
+            input.MaxRuntimeSeconds,
+            input.Parameters,
+            ScheduledJobCreator.System,
+            0L,
+            0L,
+            null,
+            null);
     }
 }

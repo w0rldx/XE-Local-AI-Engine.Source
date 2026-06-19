@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     <see cref="IGgufModelStore" /> over <see cref="HfDownloadClient" /> + <see cref="IHuggingFaceGgufDiscovery" /> +
@@ -16,21 +16,20 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // The Hugging Face provider must not depend on the LlamaServer project; the descriptor provider name is the agreed
     // constant for the host-process llama-server runtime (LlamaServerProviderConstants.ProviderName).
     private const string ProviderName = "llamacpp";
+    private readonly IHuggingFaceGgufDiscovery _discovery;
 
     private readonly HfDownloadClient _downloadClient;
-    private readonly IHuggingFaceGgufDiscovery _discovery;
-    private readonly GgufModelRegistry _registry;
-    private readonly HuggingFaceOptions _options;
-    private readonly ILogger<HuggingFaceGgufStore> _logger;
 
     // Per-ModelName gate so two concurrent EnsureModelAsync calls for the same file do not both download. The set is
     // bounded by the node's model catalog (one entry per distinct model ever ensured for the process lifetime), so
     // entries are intentionally never pruned or disposed — the SemaphoreSlims hold no unmanaged handles and the bound
     // is small. Mirrors OllamaLocalModelProvider's per-pull gate.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _ensureGates = new(StringComparer.Ordinal);
+    private readonly ILogger<HuggingFaceGgufStore> _logger;
+    private readonly HuggingFaceOptions _options;
+    private readonly GgufModelRegistry _registry;
 
-    public HuggingFaceGgufStore(
-        HfDownloadClient downloadClient,
+    public HuggingFaceGgufStore(HfDownloadClient downloadClient,
         IHuggingFaceGgufDiscovery discovery,
         GgufModelRegistry registry,
         HuggingFaceOptions options,
@@ -100,8 +99,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
             // Hard containment guard (defense in depth — discovery already filters): never write outside ModelsDirectory.
             var destinationPath = GgufFilePath.ResolveContainedPath(_options.ModelsDirectory, fileName);
-            var result = await _downloadClient.DownloadAsync(
-                request.RepoId,
+            var result = await _downloadClient.DownloadAsync(request.RepoId,
                 fileName,
                 revision,
                 modelName,
@@ -160,8 +158,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     // Resolves the concrete .gguf file for the request: an explicit FileName is used verbatim; otherwise the repo is
     // inspected and the file whose quant matches (request.Quant ?? DefaultQuant) is selected.
-    private async Task<(string FileName, string Quant, long SizeBytes, string? Sha256, string Revision)> ResolveTargetAsync(
-        GgufModelRequest request,
+    private async Task<(string FileName, string Quant, long SizeBytes, string? Sha256, string Revision)> ResolveTargetAsync(GgufModelRequest request,
         CancellationToken ct)
     {
         var detail = await _discovery.InspectRepoAsync(request.RepoId, ct).ConfigureAwait(false);
@@ -172,8 +169,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 string.Equals(file.FileName, request.FileName, StringComparison.OrdinalIgnoreCase));
             if (byName is null)
             {
-                throw new HuggingFaceDownloadException(
-                    HuggingFaceDownloadFailure.NotFound,
+                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                     "The requested model file was not found in the repository.");
             }
 
@@ -186,8 +182,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             string.Equals(file.Quant, targetQuant, StringComparison.OrdinalIgnoreCase));
         if (byQuant is null)
         {
-            throw new HuggingFaceDownloadException(
-                HuggingFaceDownloadFailure.NotFound,
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                 "No GGUF file with the requested quantization was found in the repository.");
         }
 
@@ -195,32 +190,36 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         return (byQuant.FileName, byQuant.Quant, byQuant.SizeBytes, byQuant.Sha256, request.Revision ?? byQuant.Revision);
     }
 
-    private static LocalModelDescriptor ToDescriptor(GgufModelRegistryEntry entry) => new()
+    private static LocalModelDescriptor ToDescriptor(GgufModelRegistryEntry entry)
     {
-        ModelName = entry.ModelName,
-        ProviderName = ProviderName,
-        IsAvailable = File.Exists(entry.LocalPath),
-        SizeBytes = entry.SizeBytes,
-        ModifiedAt = entry.DownloadedAtUtc,
-        MaxContextTokens = null
-    };
+        return new LocalModelDescriptor
+        {
+            ModelName = entry.ModelName,
+            ProviderName = ProviderName,
+            IsAvailable = File.Exists(entry.LocalPath),
+            SizeBytes = entry.SizeBytes,
+            ModifiedAt = entry.DownloadedAtUtc,
+            MaxContextTokens = null
+        };
+    }
 
-    private static GgufModelHandle ToHandle(GgufModelRegistryEntry entry) => new(
-        entry.ModelName,
-        entry.LocalPath,
-        entry.Quant,
-        entry.SizeBytes,
-        entry.Sha256,
-        entry.SourceRevision,
-        entry.Role);
+    private static GgufModelHandle ToHandle(GgufModelRegistryEntry entry)
+    {
+        return new GgufModelHandle(entry.ModelName,
+            entry.LocalPath,
+            entry.Quant,
+            entry.SizeBytes,
+            entry.Sha256,
+            entry.SourceRevision,
+            entry.Role);
+    }
 
     // Untrusted repo input: reject any file name that could escape the models directory before we ever open a handle.
     private static void EnsureSafeFileName(string fileName)
     {
         if (!GgufFilePath.IsSafeRelativePath(fileName))
         {
-            throw new HuggingFaceDownloadException(
-                HuggingFaceDownloadFailure.NotFound,
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                 "The repository returned an unsafe model file path.");
         }
     }

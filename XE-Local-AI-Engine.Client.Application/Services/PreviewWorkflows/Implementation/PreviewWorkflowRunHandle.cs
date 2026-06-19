@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 
 /// <summary>
@@ -10,21 +9,20 @@ using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 ///     the .AI.Agent <see cref="IPreviewWorkflowRunSession" />, the owning hub connection id, and the per-run gate that
 ///     serializes continue/cancel. <see cref="DisposeAsync" /> disposes the session then EVERY client, swallow-logging
 ///     (mirrors <c>OrchestrationRunSession</c>) — disposal must never throw on a race.
-///
 ///     Idle clock: <see cref="ResetIdleClock" /> renews the inter-event bound after each productive event;
 ///     <see cref="SuspendIdleClock" /> sets it to <see cref="System.Threading.Timeout.InfiniteTimeSpan" /> while Paused
 ///     so the sweeper does not kill a paused run.
 /// </summary>
 internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
 {
-    private readonly ILogger _logger;
     private readonly SemaphoreSlim _commandGate = new(1, 1);
+    private readonly ILogger _logger;
     private readonly object _stateGate = new();
 
     private long _accumulatedOutputBytes;
-    private long _lastActivityTicks;
-    private bool _idleSuspended;
     private bool _disposed;
+    private bool _idleSuspended;
+    private long _lastActivityTicks;
 
     public PreviewWorkflowRunHandle(Guid runId,
         IReadOnlyCollection<IChatClient> chatClients,
@@ -65,6 +63,49 @@ internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
     public string? PendingRequestId { get; set; }
 
     public PreviewRunState State { get; private set; }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        try
+        {
+            await Session.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Ignoring error while disposing preview run session for run {RunId}.", RunId);
+        }
+
+        // IChatClient is IDisposable — every per-run node-local client (one per distinct model) is owned by this handle.
+        foreach (var chatClient in ChatClients)
+        {
+            try
+            {
+                chatClient.Dispose();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogDebug(exception, "Ignoring error while disposing preview run chat client for run {RunId}.", RunId);
+            }
+        }
+
+        try
+        {
+            CancellationTokenSource.Dispose();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Ignoring error while disposing preview run cancellation source for run {RunId}.", RunId);
+        }
+
+        _commandGate.Dispose();
+    }
 
     /// <summary>Acquire the per-run gate so continue and cancel serialize and never race on the held session.</summary>
     public Task<bool> TryEnterCommandGateAsync(CancellationToken cancellationToken)
@@ -149,48 +190,5 @@ internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
     {
         var total = Interlocked.Add(ref _accumulatedOutputBytes, byteCount);
         return total >= maxOutputBytes;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-
-        try
-        {
-            await Session.DisposeAsync().ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogDebug(exception, "Ignoring error while disposing preview run session for run {RunId}.", RunId);
-        }
-
-        // IChatClient is IDisposable — every per-run node-local client (one per distinct model) is owned by this handle.
-        foreach (var chatClient in ChatClients)
-        {
-            try
-            {
-                chatClient.Dispose();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogDebug(exception, "Ignoring error while disposing preview run chat client for run {RunId}.", RunId);
-            }
-        }
-
-        try
-        {
-            CancellationTokenSource.Dispose();
-        }
-        catch (Exception exception)
-        {
-            _logger.LogDebug(exception, "Ignoring error while disposing preview run cancellation source for run {RunId}.", RunId);
-        }
-
-        _commandGate.Dispose();
     }
 }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace;
 
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -22,8 +23,8 @@ internal sealed class GgufHeaderReader
     private const uint GgufMagic = 0x4655_4747; // "GGUF" little-endian (0x47 0x47 0x55 0x46).
 
     private readonly HttpClient _httpClient;
-    private readonly HuggingFaceOptions _options;
     private readonly ILogger<GgufHeaderReader> _logger;
+    private readonly HuggingFaceOptions _options;
 
     public GgufHeaderReader(HttpClient httpClient, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger)
     {
@@ -64,7 +65,7 @@ internal sealed class GgufHeaderReader
                 }
 
                 var (metadata, truncated) = TryParse(bytes);
-                if (!truncated || requested >= hardCap || (long)bytes.Length < requested)
+                if (!truncated || requested >= hardCap || bytes.Length < requested)
                 {
                     // Parsed fully, hit the cap, or the server returned the whole (short) file — accept what we have.
                     return metadata;
@@ -91,8 +92,8 @@ internal sealed class GgufHeaderReader
         request.Headers.Range = new RangeHeaderValue(0, Math.Max(0, count - 1));
 
         using var response = await _httpClient
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
+                                   .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                                   .ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -117,8 +118,8 @@ internal sealed class GgufHeaderReader
             return (GgufHeaderMetadata.Empty, false);
         }
 
-        if (!reader.TryReadUInt32(out _) ||                 // version
-            !reader.TryReadUInt64(out _) ||                 // tensor_count
+        if (!reader.TryReadUInt32(out _) || // version
+            !reader.TryReadUInt64(out _) || // tensor_count
             !reader.TryReadUInt64(out var kvCount))
         {
             return (GgufHeaderMetadata.Empty, true);
@@ -157,12 +158,15 @@ internal sealed class GgufHeaderReader
 
         // The quant label rides general.file_type (a uint enum in the GGUF spec), stringified.
         var quantType = TryGetLong(values, "general.file_type") is { } ft
-            ? ft.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ? ft.ToString(CultureInfo.InvariantCulture)
             : null;
 
         var paramCount = TryGetLong(values, "general.parameter_count");
 
-        string? Arch(string suffix) => architecture is null ? null : $"{architecture}.{suffix}";
+        string? Arch(string suffix)
+        {
+            return architecture is null ? null : $"{architecture}.{suffix}";
+        }
 
         var blockCount = TryGetLong(values, Arch("block_count"));
         var headCount = TryGetLong(values, Arch("attention.head_count"));
@@ -170,8 +174,7 @@ internal sealed class GgufHeaderReader
         var embeddingLength = TryGetLong(values, Arch("embedding_length"));
         var contextLength = TryGetLong(values, Arch("context_length"));
 
-        return new GgufHeaderMetadata(
-            architecture,
+        return new GgufHeaderMetadata(architecture,
             quantType,
             paramCount,
             blockCount,
@@ -182,7 +185,9 @@ internal sealed class GgufHeaderReader
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
-        => values.TryGetValue(key, out var v) && v is string s ? s : null;
+    {
+        return values.TryGetValue(key, out var v) && v is string s ? s : null;
+    }
 
     private static long? TryGetLong(IReadOnlyDictionary<string, object> values, string? key)
     {
@@ -215,43 +220,93 @@ internal sealed class GgufHeaderReader
             case 0: // UINT8
             case 1: // INT8
             case 7: // BOOL
-                if (!reader.TryReadByte(out var b)) { ranOut = true; return false; }
+                if (!reader.TryReadByte(out var b))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = (long)b;
                 return true;
             case 2: // UINT16
-                if (!reader.TryReadUInt16(out var u16)) { ranOut = true; return false; }
+                if (!reader.TryReadUInt16(out var u16))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = (long)u16;
                 return true;
             case 3: // INT16
-                if (!reader.TryReadInt16(out var i16)) { ranOut = true; return false; }
+                if (!reader.TryReadInt16(out var i16))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = (long)i16;
                 return true;
             case 4: // UINT32
-                if (!reader.TryReadUInt32(out var u32)) { ranOut = true; return false; }
+                if (!reader.TryReadUInt32(out var u32))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = (long)u32;
                 return true;
             case 5: // INT32
-                if (!reader.TryReadInt32(out var i32)) { ranOut = true; return false; }
+                if (!reader.TryReadInt32(out var i32))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = (long)i32;
                 return true;
             case 6: // FLOAT32
-                if (!reader.TryReadFloat32(out var f32)) { ranOut = true; return false; }
+                if (!reader.TryReadFloat32(out var f32))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = (double)f32;
                 return true;
             case 8: // STRING
-                if (!reader.TryReadGgufString(out var s)) { ranOut = true; return false; }
+                if (!reader.TryReadGgufString(out var s))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = s;
                 return true;
             case 10: // UINT64
-                if (!reader.TryReadUInt64(out var u64)) { ranOut = true; return false; }
+                if (!reader.TryReadUInt64(out var u64))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = u64;
                 return true;
             case 11: // INT64
-                if (!reader.TryReadInt64(out var i64)) { ranOut = true; return false; }
+                if (!reader.TryReadInt64(out var i64))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = i64;
                 return true;
             case 12: // FLOAT64
-                if (!reader.TryReadFloat64(out var f64)) { ranOut = true; return false; }
+                if (!reader.TryReadFloat64(out var f64))
+                {
+                    ranOut = true;
+                    return false;
+                }
+
                 value = f64;
                 return true;
             case 9: // ARRAY — consume to stay aligned; we don't surface array-valued metadata here.
@@ -304,56 +359,110 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadByte(out byte value)
         {
-            if (TryTake(1, out var s)) { value = s[0]; return true; }
-            value = 0; return false;
+            if (TryTake(1, out var s))
+            {
+                value = s[0];
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadUInt16(out ushort value)
         {
-            if (TryTake(2, out var s)) { value = BinaryPrimitives.ReadUInt16LittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(2, out var s))
+            {
+                value = BinaryPrimitives.ReadUInt16LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadInt16(out short value)
         {
-            if (TryTake(2, out var s)) { value = BinaryPrimitives.ReadInt16LittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(2, out var s))
+            {
+                value = BinaryPrimitives.ReadInt16LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadUInt32(out uint value)
         {
-            if (TryTake(4, out var s)) { value = BinaryPrimitives.ReadUInt32LittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(4, out var s))
+            {
+                value = BinaryPrimitives.ReadUInt32LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadInt32(out int value)
         {
-            if (TryTake(4, out var s)) { value = BinaryPrimitives.ReadInt32LittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(4, out var s))
+            {
+                value = BinaryPrimitives.ReadInt32LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadUInt64(out ulong value)
         {
-            if (TryTake(8, out var s)) { value = BinaryPrimitives.ReadUInt64LittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(8, out var s))
+            {
+                value = BinaryPrimitives.ReadUInt64LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadInt64(out long value)
         {
-            if (TryTake(8, out var s)) { value = BinaryPrimitives.ReadInt64LittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(8, out var s))
+            {
+                value = BinaryPrimitives.ReadInt64LittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadFloat32(out float value)
         {
-            if (TryTake(4, out var s)) { value = BinaryPrimitives.ReadSingleLittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(4, out var s))
+            {
+                value = BinaryPrimitives.ReadSingleLittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadFloat64(out double value)
         {
-            if (TryTake(8, out var s)) { value = BinaryPrimitives.ReadDoubleLittleEndian(s); return true; }
-            value = 0; return false;
+            if (TryTake(8, out var s))
+            {
+                value = BinaryPrimitives.ReadDoubleLittleEndian(s);
+                return true;
+            }
+
+            value = 0;
+            return false;
         }
 
         public bool TryReadGgufString(out string value)

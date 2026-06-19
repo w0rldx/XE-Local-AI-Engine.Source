@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
+using System.Globalization;
+using System.Net;
 using System.Net.Sockets;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -21,28 +23,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor, IAsyncDisposable
 {
-    private readonly ILlamaCppBinaryManager _binaryManager;
-    private readonly IGpuVariantSelector _variantSelector;
-    private readonly IGgufModelStore _modelStore;
-    private readonly ILlamaServerProcessLauncher _launcher;
-    private readonly ILlamaServerHealthProbe _healthProbe;
-    private readonly LlamaServerSupervisorOptions _options;
-    private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
-    private readonly TimeProvider _timeProvider;
-
-    // One running process per (model, role) key.
-    private readonly ConcurrentDictionary<ProcessKey, RunningProcess> _processes = new();
-
-    // Single-flight ensure-running gate, one semaphore per (model, role) key.
-    private readonly ConcurrentDictionary<ProcessKey, SemaphoreSlim> _ensureGates = new();
-
-    // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
-    private readonly SemaphoreSlim _admissionGate = new(1, 1);
-    private readonly HashSet<int> _allocatedPorts = [];
-
-    private readonly CancellationTokenSource _shutdownCts = new();
-    private readonly Task _reaperLoop;
-    private int _disposed;
+    private const string NonRetryableMarker = "LlamaServer.NonRetryable";
 
     /// <summary>Cold-start readiness budget for a freshly spawned process before its first request.</summary>
     private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromMinutes(2);
@@ -50,12 +31,33 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <summary>Base delay between crash-restart attempts; grows linearly per attempt.</summary>
     private static readonly TimeSpan RestartBackoffStep = TimeSpan.FromMilliseconds(250);
 
+    // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
+    private readonly SemaphoreSlim _admissionGate = new(1, 1);
+    private readonly HashSet<int> _allocatedPorts = [];
+    private readonly ILlamaCppBinaryManager _binaryManager;
+
+    // Single-flight ensure-running gate, one semaphore per (model, role) key.
+    private readonly ConcurrentDictionary<ProcessKey, SemaphoreSlim> _ensureGates = new();
+    private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
+    private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILlamaServerProcessLauncher _launcher;
+    private readonly IGgufModelStore _modelStore;
+    private readonly LlamaServerSupervisorOptions _options;
+
+    // One running process per (model, role) key.
+    private readonly ConcurrentDictionary<ProcessKey, RunningProcess> _processes = new();
+    private readonly Task _reaperLoop;
+
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly TimeProvider _timeProvider;
+    private readonly IGpuVariantSelector _variantSelector;
+    private int _disposed;
+
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
     ///     (same-assembly factory) or in tests — the launcher/health-probe seams are internal, so the ctor is internal.
     /// </summary>
-    internal LlamaServerProcessSupervisor(
-        ILlamaCppBinaryManager binaryManager,
+    internal LlamaServerProcessSupervisor(ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         IGgufModelStore modelStore,
         ILlamaServerProcessLauncher launcher,
@@ -74,6 +76,38 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _timeProvider = timeProvider ?? TimeProvider.System;
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        await _shutdownCts.CancelAsync().ConfigureAwait(false);
+        try
+        {
+            await _reaperLoop.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on shutdown.
+        }
+
+        foreach (var (key, running) in _processes.ToArray())
+        {
+            TeardownProcess(key, running);
+        }
+
+        _admissionGate.Dispose();
+        foreach (var gate in _ensureGates.Values)
+        {
+            gate.Dispose();
+        }
+
+        _shutdownCts.Dispose();
     }
 
     /// <inheritdoc />
@@ -144,8 +178,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return CheckHealthCoreAsync(snapshot, ct);
     }
 
-    private async Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthCoreAsync(
-        KeyValuePair<ProcessKey, RunningProcess>[] snapshot,
+    private async Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthCoreAsync(KeyValuePair<ProcessKey, RunningProcess>[] snapshot,
         CancellationToken ct)
     {
         var healths = new List<LlamaServerProcessHealth>(snapshot.Length);
@@ -158,8 +191,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
 
             var responsive = await _healthProbe.CheckResponsiveAsync(running.Endpoint.BaseAddress, ct).ConfigureAwait(false);
-            healths.Add(new LlamaServerProcessHealth(
-                key.ModelName,
+            healths.Add(new LlamaServerProcessHealth(key.ModelName,
                 key.Role,
                 responsive,
                 responsive ? "Responsive." : "Not responding to health probe."));
@@ -202,8 +234,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
         }
 
-        throw new LlamaRuntimeException(
-            "The local model runtime failed to start after several attempts. Check available memory and try again.",
+        throw new LlamaRuntimeException("The local model runtime failed to start after several attempts. Check available memory and try again.",
             lastError ?? new InvalidOperationException("Spawn failed."));
     }
 
@@ -228,8 +259,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             handle = _launcher.Launch(spec);
 
             var ready = await _healthProbe
-                .WaitForReadyAsync(spec.BaseAddress, ReadinessTimeout, ct)
-                .ConfigureAwait(false);
+                              .WaitForReadyAsync(spec.BaseAddress, ReadinessTimeout, ct)
+                              .ConfigureAwait(false);
             if (!ready)
             {
                 throw new LlamaRuntimeException("The local model runtime did not become ready in time.");
@@ -288,9 +319,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     {
         var args = new List<string>
         {
-            "-m", modelFilePath,
-            "--host", "127.0.0.1", // localhost-only bind
-            "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            "-m",
+            modelFilePath,
+            "--host",
+            "127.0.0.1", // localhost-only bind
+            "--port",
+            port.ToString(CultureInfo.InvariantCulture)
         };
 
         if (key.Role == ModelRole.Chat)
@@ -432,7 +466,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         throw NonRetryable("No free local port is available for the model runtime.");
     }
 
-    private void ReleasePort(int port) => _allocatedPorts.Remove(port);
+    private void ReleasePort(int port)
+    {
+        _allocatedPorts.Remove(port);
+    }
 
     /// <summary>
     ///     Releases a reserved port for a spawn that never registered (launch/readiness failure), taking the admission
@@ -457,7 +494,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         try
         {
             using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, port));
+            socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
             return true;
         }
         catch (SocketException)
@@ -466,8 +503,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    private static LlamaRuntimeException CapReached() =>
-        NonRetryable("The maximum number of local models are already loaded. Unload a model or raise the limit, then try again.");
+    private static LlamaRuntimeException CapReached()
+    {
+        return NonRetryable("The maximum number of local models are already loaded. Unload a model or raise the limit, then try again.");
+    }
 
     /// <summary>Builds a sanitized failure flagged as a deterministic (non-retryable) policy/config outcome.</summary>
     private static LlamaRuntimeException NonRetryable(string sanitizedMessage)
@@ -477,48 +516,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return ex;
     }
 
-    private const string NonRetryableMarker = "LlamaServer.NonRetryable";
-
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            return;
-        }
-
-        await _shutdownCts.CancelAsync().ConfigureAwait(false);
-        try
-        {
-            await _reaperLoop.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected on shutdown.
-        }
-
-        foreach (var (key, running) in _processes.ToArray())
-        {
-            TeardownProcess(key, running);
-        }
-
-        _admissionGate.Dispose();
-        foreach (var gate in _ensureGates.Values)
-        {
-            gate.Dispose();
-        }
-
-        _shutdownCts.Dispose();
-    }
-
     /// <summary>Identifies a process by the model it serves and the role (chat vs embedding).</summary>
     internal readonly record struct ProcessKey(string ModelName, ModelRole Role)
     {
-        public bool Equals(ProcessKey other) =>
-            Role == other.Role && string.Equals(ModelName, other.ModelName, StringComparison.OrdinalIgnoreCase);
+        public bool Equals(ProcessKey other)
+        {
+            return Role == other.Role && string.Equals(ModelName, other.ModelName, StringComparison.OrdinalIgnoreCase);
+        }
 
-        public override int GetHashCode() =>
-            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), Role);
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(ModelName), Role);
+        }
     }
 
     /// <summary>A live, registered process and its last-used timestamp (drives idle-TTL + LRU eviction).</summary>
@@ -534,6 +543,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 
-        public void MarkUsed(DateTimeOffset now) => Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        public void MarkUsed(DateTimeOffset now)
+        {
+            Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        }
     }
 }

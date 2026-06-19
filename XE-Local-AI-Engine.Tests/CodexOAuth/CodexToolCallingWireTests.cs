@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -8,27 +9,31 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// On-WIRE tool-calling assertions for the Codex (ChatGPT-subscription) Responses transport. These drive the SAME
-/// production <see cref="CodexStoreDisabledChatClient"/> wrapper the live send path uses (NOT the inner client
-/// directly), over the <c>BodyCapturingHandler</c> + real Responses-backed <see cref="IChatClient"/> harness the
-/// sibling <see cref="CodexReasoningOnWireTests"/> / <see cref="CodexStoreFalseOnWireTests"/> use, and assert the
-/// two requests the stateless tool loop depends on serialize correctly:
-/// <list type="number">
-///   <item>#1 first turn: a function tool reaches <c>tools[]</c>, the wrapper adds
-///   <c>include:[reasoning.encrypted_content]</c> (required for the stateless tool loop), reasoning summary/effort
-///   ride, <c>store=false</c>, no server-side state ids — and tools are NOT stripped by the system-message handling.</item>
-///   <item>#2 follow-up turn: a prior reasoning item (carrying <c>encrypted_content</c>) + function call + tool output
-///   round-trip back as input — reasoning BEFORE the function_call — via MEAI's
-///   <c>RawRepresentation is ResponseItem</c> verbatim-replay path, still <c>store=false</c>.</item>
-/// </list>
-/// The canned HTTP response is a minimal stub the SDK may fail to fully parse; only the captured REQUEST body
-/// (recorded before any response parsing) is asserted, exactly like the sibling wire tests.
-/// <para>
-/// OPENAI001 is suppressed file-wide: the Responses options/items surface
-/// (<see cref="CreateResponseOptions"/>, <see cref="IncludedResponseProperty"/>, <see cref="ReasoningResponseItem"/>,
-/// <see cref="ResponseItem"/>) is experimental and the Tests project does not put it in <c>NoWarn</c> (unlike the
-/// provider project).
-/// </para>
+///     On-WIRE tool-calling assertions for the Codex (ChatGPT-subscription) Responses transport. These drive the SAME
+///     production <see cref="CodexStoreDisabledChatClient" /> wrapper the live send path uses (NOT the inner client
+///     directly), over the <c>BodyCapturingHandler</c> + real Responses-backed <see cref="IChatClient" /> harness the
+///     sibling <see cref="CodexReasoningOnWireTests" /> / <see cref="CodexStoreFalseOnWireTests" /> use, and assert the
+///     two requests the stateless tool loop depends on serialize correctly:
+///     <list type="number">
+///         <item>
+///             #1 first turn: a function tool reaches <c>tools[]</c>, the wrapper adds
+///             <c>include:[reasoning.encrypted_content]</c> (required for the stateless tool loop), reasoning summary/effort
+///             ride, <c>store=false</c>, no server-side state ids — and tools are NOT stripped by the system-message handling.
+///         </item>
+///         <item>
+///             #2 follow-up turn: a prior reasoning item (carrying <c>encrypted_content</c>) + function call + tool output
+///             round-trip back as input — reasoning BEFORE the function_call — via MEAI's
+///             <c>RawRepresentation is ResponseItem</c> verbatim-replay path, still <c>store=false</c>.
+///         </item>
+///     </list>
+///     The canned HTTP response is a minimal stub the SDK may fail to fully parse; only the captured REQUEST body
+///     (recorded before any response parsing) is asserted, exactly like the sibling wire tests.
+///     <para>
+///         OPENAI001 is suppressed file-wide: the Responses options/items surface
+///         (<see cref="CreateResponseOptions" />, <see cref="IncludedResponseProperty" />, <see cref="ReasoningResponseItem" />,
+///         <see cref="ResponseItem" />) is experimental and the Tests project does not put it in <c>NoWarn</c> (unlike the
+///         provider project).
+///     </para>
 /// </summary>
 #pragma warning disable OPENAI001 // Experimental OpenAI Responses surface — the entire Codex transport is built on it.
 public sealed class CodexToolCallingWireTests
@@ -39,15 +44,14 @@ public sealed class CodexToolCallingWireTests
     private const string ReasoningSummary = "I should look up the weather.";
 
     /// <summary>
-    /// #1 — Driving the production wrapper: a function tool reaches <c>tools[]</c>, the wrapper adds
-    /// <c>include:[reasoning.encrypted_content]</c>, reasoning summary/effort ride, store=false, no server-side state
-    /// ids — proving the include + tools serialize through the real Codex boundary, not just hand-built base options.
+    ///     #1 — Driving the production wrapper: a function tool reaches <c>tools[]</c>, the wrapper adds
+    ///     <c>include:[reasoning.encrypted_content]</c>, reasoning summary/effort ride, store=false, no server-side state
+    ///     ids — proving the include + tools serialize through the real Codex boundary, not just hand-built base options.
     /// </summary>
     [Test]
     public async Task FirstTurn_WithTool_WrapperAddsEncryptedReasoningInclude_AndKeepsTool()
     {
-        var weatherTool = AIFunctionFactory.Create(
-            (string city) => $"sunny in {city}",
+        var weatherTool = AIFunctionFactory.Create((string city) => $"sunny in {city}",
             ToolName,
             "Gets the current weather for a city.");
 
@@ -56,7 +60,10 @@ public sealed class CodexToolCallingWireTests
             Tools = [weatherTool],
             // The wrapper resolves reasoning effort from AdditionalProperties; supply a graded level so the wire shows
             // reasoning.effort. The include + store=false are applied by the wrapper itself (not by the test).
-            AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = "medium" },
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = "medium"
+            }
         };
 
         var body = await CaptureRequestBodyAsync([new ChatMessage(ChatRole.User, "weather in Berlin?")], options);
@@ -98,15 +105,14 @@ public sealed class CodexToolCallingWireTests
     }
 
     /// <summary>
-    /// #1b — The include + tools survive the system-message strip: when a system message is present (moved into
-    /// top-level <c>instructions</c> by the wrapper), the tools and the encrypted-reasoning include still reach the
-    /// wire. Guards against the system-strip disturbing tool/reasoning items.
+    ///     #1b — The include + tools survive the system-message strip: when a system message is present (moved into
+    ///     top-level <c>instructions</c> by the wrapper), the tools and the encrypted-reasoning include still reach the
+    ///     wire. Guards against the system-strip disturbing tool/reasoning items.
     /// </summary>
     [Test]
     public async Task FirstTurn_WithToolAndSystemMessage_KeepsToolsAndInclude_AndMovesSystemToInstructions()
     {
-        var weatherTool = AIFunctionFactory.Create(
-            (string city) => $"sunny in {city}",
+        var weatherTool = AIFunctionFactory.Create((string city) => $"sunny in {city}",
             ToolName,
             "Gets the current weather for a city.");
 
@@ -114,13 +120,15 @@ public sealed class CodexToolCallingWireTests
         var options = new ChatOptions
         {
             Tools = [weatherTool],
-            AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = true },
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = true
+            }
         };
 
-        var body = await CaptureRequestBodyAsync(
-        [
+        var body = await CaptureRequestBodyAsync([
             new ChatMessage(ChatRole.System, SystemPrompt),
-            new ChatMessage(ChatRole.User, "weather in Berlin?"),
+            new ChatMessage(ChatRole.User, "weather in Berlin?")
         ], options);
 
         using var json = JsonDocument.Parse(body);
@@ -140,23 +148,22 @@ public sealed class CodexToolCallingWireTests
 
         // The system prompt was moved to instructions; no system-role input item remains.
         AssertEx.True(root.TryGetProperty("instructions", out var instructions), "request body must contain 'instructions'");
-        AssertEx.True(
-            instructions.GetString()?.Contains(SystemPrompt, StringComparison.Ordinal) == true,
+        AssertEx.True(instructions.GetString()?.Contains(SystemPrompt, StringComparison.Ordinal) == true,
             "the system prompt must be carried in 'instructions'");
         AssertEx.True(root.TryGetProperty("input", out var input), "request body must contain an 'input' array");
         var hasSystemInput = input.ValueKind == JsonValueKind.Array
-                            && input.EnumerateArray().Any(static item =>
-                                item.TryGetProperty("role", out var role)
-                                && string.Equals(role.GetString(), "system", StringComparison.OrdinalIgnoreCase));
+                             && input.EnumerateArray().Any(static item =>
+                                 item.TryGetProperty("role", out var role)
+                                 && string.Equals(role.GetString(), "system", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(hasSystemInput, "no system-role item may remain in input");
     }
 
     /// <summary>
-    /// #2 — A prior reasoning item (carrying <c>encrypted_content</c>), the function call, and the tool output all
-    /// round-trip back as the request input array, with the reasoning item BEFORE the function_call and store=false.
-    /// This is the stateless-replay mechanism: MEAI re-emits any content whose <c>RawRepresentation is ResponseItem</c>
-    /// verbatim, so the encrypted reasoning + function-call items minted here reappear unchanged on the wire — driven
-    /// through the production wrapper.
+    ///     #2 — A prior reasoning item (carrying <c>encrypted_content</c>), the function call, and the tool output all
+    ///     round-trip back as the request input array, with the reasoning item BEFORE the function_call and store=false.
+    ///     This is the stateless-replay mechanism: MEAI re-emits any content whose <c>RawRepresentation is ResponseItem</c>
+    ///     verbatim, so the encrypted reasoning + function-call items minted here reappear unchanged on the wire — driven
+    ///     through the production wrapper.
     /// </summary>
     [Test]
     public async Task FollowUpTurn_RoundTripsEncryptedReasoningAndFunctionItems()
@@ -166,7 +173,7 @@ public sealed class CodexToolCallingWireTests
         // A reasoning item carrying encrypted_content + a summary part — minted via the public SDK ctor + setter.
         var reasoningItem = new ReasoningResponseItem(ReasoningSummary)
         {
-            EncryptedContent = EncryptedReasoning,
+            EncryptedContent = EncryptedReasoning
         };
 
         // The function-call item the model emitted, matching the call id of the tool result below.
@@ -176,28 +183,39 @@ public sealed class CodexToolCallingWireTests
         [
             // Order matters: reasoning BEFORE the function call (Codex requires the reasoning item to immediately
             // precede the function_call it produced). MEAI yields contents in order.
-            new TextReasoningContent(ReasoningSummary) { RawRepresentation = reasoningItem },
-            new FunctionCallContent(CallId, ToolName, new Dictionary<string, object?> { ["city"] = "Berlin" })
+            new TextReasoningContent(ReasoningSummary)
             {
-                RawRepresentation = functionCallItem,
+                RawRepresentation = reasoningItem
             },
+            new FunctionCallContent(CallId, ToolName, new Dictionary<string, object?>
+            {
+                ["city"] = "Berlin"
+            })
+            {
+                RawRepresentation = functionCallItem
+            }
         ]);
 
         var toolMessage = new ChatMessage(ChatRole.Tool,
         [
-            new FunctionResultContent(CallId, "sunny in Berlin"),
+            new FunctionResultContent(CallId, "sunny in Berlin")
         ]);
 
         var messages = new[]
         {
             new ChatMessage(ChatRole.User, "do X"),
             assistantMessage,
-            toolMessage,
+            toolMessage
         };
 
-        var body = await CaptureRequestBodyAsync(
-            messages,
-            new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = true } });
+        var body = await CaptureRequestBodyAsync(messages,
+            new ChatOptions
+            {
+                AdditionalProperties = new AdditionalPropertiesDictionary
+                {
+                    ["think"] = true
+                }
+            });
 
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
@@ -220,8 +238,7 @@ public sealed class CodexToolCallingWireTests
 
         // The reasoning item carries its encrypted_content verbatim.
         var reasoningJson = items[reasoningIndex];
-        AssertEx.True(
-            reasoningJson.TryGetProperty("encrypted_content", out var encrypted),
+        AssertEx.True(reasoningJson.TryGetProperty("encrypted_content", out var encrypted),
             "the round-tripped reasoning item must carry 'encrypted_content'");
         AssertEx.Equal(EncryptedReasoning, encrypted.GetString());
 
@@ -253,8 +270,7 @@ public sealed class CodexToolCallingWireTests
         // Build the SAME Responses-backed IChatClient the factory builds, wrapped in the PRODUCTION store-disabling
         // decorator (the live send path's Codex boundary), pointed at the capturing transport. This proves the wrapper
         // itself emits the include + store=false + reasoning while keeping the tool/function items intact.
-        var inner = CodexChatClientConstruction.Build(
-            new Uri("https://chatgpt.com/backend-api/codex"),
+        var inner = CodexChatClientConstruction.Build(new Uri("https://chatgpt.com/backend-api/codex"),
             httpClient,
             "gpt-5.4");
         using var client = new CodexStoreDisabledChatClient(inner, "gpt-5.4");
@@ -286,9 +302,9 @@ public sealed class CodexToolCallingWireTests
 
             const string CannedResponse =
                 """{"id":"resp_test","object":"response","status":"completed","model":"gpt-5.4","output":[]}""";
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json"),
+                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json")
             };
         }
     }

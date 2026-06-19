@@ -39,7 +39,12 @@ public sealed class SupervisorSpawnArgsTests
 
         var poolingIndex = IndexOf(spec.Arguments, "--pooling");
         var poolingValue = spec.Arguments[poolingIndex + 1];
-        AssertEx.Contains(new[] { "mean", "cls", "last" }, poolingValue);
+        AssertEx.Contains(new[]
+        {
+            "mean",
+            "cls",
+            "last"
+        }, poolingValue);
         AssertEx.False(spec.Arguments.Contains("--jinja"), "Embedding process must not enable jinja chat templating.");
         AssertEx.False(string.Equals(poolingValue, "none", StringComparison.OrdinalIgnoreCase), "Pooling must not be none.");
     }
@@ -65,6 +70,8 @@ public sealed class SupervisorSpawnArgsTests
         throw new AssertionException($"Expected flag '{flag}' in argument vector.");
     }
 
-    private static LlamaServerProcessSupervisor NewSupervisor(FakeProcessLauncher launcher) =>
-        SupervisorFactory.Create(launcher: launcher);
+    private static LlamaServerProcessSupervisor NewSupervisor(FakeProcessLauncher launcher)
+    {
+        return SupervisorFactory.Create(launcher);
+    }
 }

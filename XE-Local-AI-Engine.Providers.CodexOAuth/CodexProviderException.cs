@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth;
 
 /// <summary>
-/// Categories of Codex provider failures surfaced to callers. Distinct from auth-flow
-/// failures (<see cref="Auth.CodexAuthException"/>), which map to <see cref="AuthRequired"/> / <see cref="RefreshFailed"/>.
+///     Categories of Codex provider failures surfaced to callers. Distinct from auth-flow
+///     failures (<see cref="Auth.CodexAuthException" />), which map to <see cref="AuthRequired" /> / <see cref="RefreshFailed" />.
 /// </summary>
 public enum CodexProviderErrorKind
 {
@@ -19,19 +19,25 @@ public enum CodexProviderErrorKind
     Transport,
 
     /// <summary>The requested model id is unavailable for this account.</summary>
-    ModelUnavailable,
+    ModelUnavailable
 }
 
 /// <summary>
-/// A typed Codex provider error. Messages must never contain token values or authorization headers.
+///     A typed Codex provider error. Messages must never contain token values or authorization headers.
 /// </summary>
 public sealed class CodexProviderException : Exception
 {
     public CodexProviderException(CodexProviderErrorKind kind, string message)
-        : base(message) => Kind = kind;
+        : base(message)
+    {
+        Kind = kind;
+    }
 
     public CodexProviderException(CodexProviderErrorKind kind, string message, Exception innerException)
-        : base(message, innerException) => Kind = kind;
+        : base(message, innerException)
+    {
+        Kind = kind;
+    }
 
     /// <summary>The category of failure.</summary>
     public CodexProviderErrorKind Kind { get; }

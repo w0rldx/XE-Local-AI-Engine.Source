@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
-using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -27,7 +26,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             {
                 if (Directory.Exists(path))
                 {
-                    Directory.Delete(path, recursive: true);
+                    Directory.Delete(path, true);
                 }
                 else if (File.Exists(path))
                 {
@@ -56,7 +55,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         AssertEx.Equal(handle.SandboxId, again.SandboxId);
 
         // Owner change on the same node forbids reuse: the old sandbox is evicted (its handle goes invalid).
-        var underNewOwner = await provider.CreateOrAttachAsync(CreateRequest(Key(owner: "owner-b")));
+        var underNewOwner = await provider.CreateOrAttachAsync(CreateRequest(Key("owner-b")));
         AssertEx.NotEqual(handle.SandboxId, underNewOwner.SandboxId);
         await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ConnectAsync(Key()));
     }
@@ -134,7 +133,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
 
         AssertEx.True(result.Completed, "the command completes; only its captured output is capped");
         const int capBytes = 4 * 1024 * 1024;
-        var capturedBytes = System.Text.Encoding.UTF8.GetByteCount(result.StandardOutput);
+        var capturedBytes = Encoding.UTF8.GetByteCount(result.StandardOutput);
         AssertEx.True(capturedBytes <= capBytes,
             $"captured stdout must be capped at the {capBytes}-byte UTF-8 budget but was {capturedBytes} bytes");
     }
@@ -269,7 +268,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     public async Task ProcessSandboxProvider_CopyInto_AtExactlyTheCap_StillCopies()
     {
         // The per-file cap comes from LocalContainerOptions; drive a small explicit cap so the boundary is testable.
-        using var provider = CreateProvider(maxCopyFileBytes: 8);
+        using var provider = CreateProvider(8);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         var source = WriteHostTempFileBytes([1, 2, 3, 4, 5, 6, 7, 8]); // exactly 8 bytes = the cap
 
@@ -289,7 +288,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         // A source one byte over the cap is SKIPPED-AND-LOGGED (degrade gracefully, parity with the deleted container
         // provider), never silently truncated to the stale size and never thrown (a throw would abort the whole
         // workspace-copy loop in AgentHomeWorkspaceService). The destination must simply not exist.
-        using var provider = CreateProvider(maxCopyFileBytes: 8);
+        using var provider = CreateProvider(8);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
         var source = WriteHostTempFileBytes([1, 2, 3, 4, 5, 6, 7, 8, 9]); // 9 bytes = over the 8-byte cap
 
@@ -444,8 +443,16 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         // OS-appropriate shell wrapper so the short-lived test commands (sleep/yes/head) run on the primary Linux
         // runtime and on Windows (via cmd) where the assertion is OS-agnostic.
         return OperatingSystem.IsWindows()
-            ? ("cmd.exe", new[] { "/c", command })
-            : ("/bin/sh", new[] { "-c", command });
+            ? ("cmd.exe", new[]
+            {
+                "/c",
+                command
+            })
+            : ("/bin/sh", new[]
+            {
+                "-c",
+                command
+            });
     }
 
     private string WriteHostTempFile(string content)
@@ -523,7 +530,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, recursive: true);
+                    Directory.Delete(Path, true);
                 }
             }
             catch (IOException)

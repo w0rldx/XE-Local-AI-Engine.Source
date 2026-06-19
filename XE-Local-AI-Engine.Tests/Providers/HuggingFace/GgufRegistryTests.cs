@@ -13,7 +13,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_ListsPresentModels_AndResolvesPathByModelName()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -48,7 +48,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_SelfHeals_OnCorruptManifest_ByRescan()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
 
         // A .gguf file is on disk but the manifest is corrupt — a rescan must recover it without throwing.
@@ -65,7 +65,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_MissingManifest_RescansDirectory_NoThrow()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
 
         await File.WriteAllTextAsync(dir.FilePath("Other-Model-Q5_K_M.gguf"), "fake-gguf");
@@ -82,7 +82,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_Remove_DropsEntry_Idempotent()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -110,7 +110,7 @@ public sealed class GgufRegistryTests
     [Test]
     public async Task GgufRegistry_DropsEntry_WhenBackingFileDeleted()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 

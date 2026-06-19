@@ -13,7 +13,7 @@ public sealed class PlaybookRetrievalSelectorTests
         var enabled = Candidates(3);
         var ranker = new RecordingRanker();
 
-        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, "deploy", enabled, retrievalThreshold: 3, topK: 2, CancellationToken.None);
+        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, "deploy", enabled, 3, 2, CancellationToken.None);
 
         AssertEx.Equal(0, ranker.CallCount, "At or below the threshold the ranker must not be consulted (no embedding client built).");
         AssertEx.True(ReferenceEquals(enabled, result), "The full Enabled set is returned unchanged so the prompt stays byte-identical.");
@@ -25,7 +25,7 @@ public sealed class PlaybookRetrievalSelectorTests
         var enabled = Candidates(5);
         var ranker = new RecordingRanker();
 
-        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, "   ", enabled, retrievalThreshold: 2, topK: 2, CancellationToken.None);
+        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, "   ", enabled, 2, 2, CancellationToken.None);
 
         AssertEx.Equal(0, ranker.CallCount, "A blank query short-circuits before the ranker is consulted.");
         AssertEx.True(ReferenceEquals(enabled, result), "A blank query returns the full Enabled set unchanged.");
@@ -37,7 +37,7 @@ public sealed class PlaybookRetrievalSelectorTests
         var enabled = Candidates(5);
         var ranker = new RecordingRanker();
 
-        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, retrievalQuery: null, enabled, retrievalThreshold: 2, topK: 2, CancellationToken.None);
+        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, null, enabled, 2, 2, CancellationToken.None);
 
         AssertEx.Equal(0, ranker.CallCount, "A null query short-circuits before the ranker is consulted.");
         AssertEx.True(ReferenceEquals(enabled, result), "A null query returns the full Enabled set unchanged.");
@@ -48,12 +48,12 @@ public sealed class PlaybookRetrievalSelectorTests
     {
         // Three Enabled actions, threshold 2 => retrieval engages. The ranker returns a deliberately out-of-order
         // subset; the selector must re-impose Priority-then-CreatedAtUtc so the composer's store-order contract holds.
-        var high = Candidate(priority: 10, createdAtUtc: 5);
-        var mid = Candidate(priority: 20, createdAtUtc: 3);
-        var low = Candidate(priority: 20, createdAtUtc: 9);
+        var high = Candidate(10, 5);
+        var mid = Candidate(20, 3);
+        var low = Candidate(20, 9);
         var ranker = new RecordingRanker([low, high, mid]);
 
-        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, "deploy", [high, mid, low], retrievalThreshold: 2, topK: 3, CancellationToken.None);
+        var result = await PlaybookRetrievalSelector.SelectAsync(ranker, "deploy", [high, mid, low], 2, 3, CancellationToken.None);
 
         AssertEx.Equal(1, ranker.CallCount, "Above the threshold with a non-blank query the ranker is consulted exactly once.");
         AssertEx.Equal(high.Id, result[0].Id, "Lowest Priority first after re-order.");
@@ -66,7 +66,7 @@ public sealed class PlaybookRetrievalSelectorTests
         var actions = new List<PlaybookActionRecord>(count);
         for (var index = 0; index < count; index++)
         {
-            actions.Add(Candidate(priority: index, createdAtUtc: index));
+            actions.Add(Candidate(index, index));
         }
 
         return actions;
@@ -78,13 +78,13 @@ public sealed class PlaybookRetrievalSelectorTests
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            TriggerCondition: "deploy",
-            Behavior: "behaviour",
-            Scope: null,
+            "deploy",
+            "behaviour",
+            null,
             priority,
-            Version: 1,
+            1,
             createdAtUtc,
-            UpdatedAtUtc: createdAtUtc);
+            createdAtUtc);
     }
 
     // Records how many times it is consulted and returns a fixed (out-of-order) subset so the gate and re-order can

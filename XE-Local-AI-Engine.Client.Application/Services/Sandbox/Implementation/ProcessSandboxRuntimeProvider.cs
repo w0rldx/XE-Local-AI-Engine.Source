@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -45,10 +46,10 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     // redirected through a planted leaf symlink. 0o644 mode for the created file.
     private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
     private const int DefaultCreateFileMode = 0b110_100_100;
-
-    private readonly long _maxCopyFileBytes;
     private readonly string _jailRoot;
     private readonly ILogger<ProcessSandboxRuntimeProvider> _logger;
+
+    private readonly long _maxCopyFileBytes;
     private readonly ConcurrentDictionary<string, JailState> _sandboxes = new(StringComparer.Ordinal);
     private readonly object _sync = new();
     private readonly TimeProvider _timeProvider;
@@ -96,7 +97,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         {
             if (Directory.Exists(_jailRoot))
             {
-                Directory.Delete(_jailRoot, recursive: true);
+                Directory.Delete(_jailRoot, true);
             }
         }
         catch (IOException)
@@ -221,7 +222,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
         }
-        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
             process.Dispose();
             // The executable could not be launched (not found / not executable). Surface a non-completed result rather
@@ -253,8 +254,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         // A timeout (not a caller cancel) yields a non-throwing TimedOut result; a caller cancel propagates
         // OperationCanceledException; a best-effort command cancel yields a non-throwing Completed=false result.
         using var timeoutSource = new CancellationTokenSource();
-        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, timeoutSource.Token, commandCancelSource.Token);
+        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token, commandCancelSource.Token);
         if (request.Timeout is { } timeout && timeout > TimeSpan.Zero)
         {
             timeoutSource.CancelAfter(timeout);
@@ -568,10 +568,9 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             // Probe only existing components. A symlink (file or directory) returns a non-null link target under a
             // no-follow resolve; a real file/dir or a not-yet-created leaf returns null.
             if ((File.Exists(current) || Directory.Exists(current))
-                && File.ResolveLinkTarget(current, returnFinalTarget: false) is not null)
+                && File.ResolveLinkTarget(current, false) is not null)
             {
-                throw new UnauthorizedAccessException(
-                    $"Sandbox path '{sandboxPath}' traverses or targets a symlink inside the jail and is rejected.");
+                throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' traverses or targets a symlink inside the jail and is rejected.");
             }
 
             var parent = Path.GetDirectoryName(current);
@@ -610,7 +609,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         {
             if (Directory.Exists(state.JailRoot))
             {
-                Directory.Delete(state.JailRoot, recursive: true);
+                Directory.Delete(state.JailRoot, true);
             }
         }
         catch (IOException)
@@ -634,7 +633,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE would be strictly stronger for orphan reaping, but Process.Kill
                 // with entireProcessTree is sufficient and OS-correct here; the Job Object polish is deferred and is
                 // not load-bearing for the Linux-primary runtime.)
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
             }
         }
         catch (InvalidOperationException)
@@ -739,7 +738,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 $"a selected file could not be opened safely for copy (it may have been replaced by a link; errno {error})."));
         }
 
-        return new SafeFileHandle(fileDescriptor, ownsHandle: true);
+        return new SafeFileHandle(fileDescriptor, true);
     }
 
     // A single libc open(). The path is marshalled by the caller into a null-terminated UTF-8 byte array so any
@@ -808,7 +807,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 $"the copy-into destination could not be created safely (it may be a symlink; errno {error})."));
         }
 
-        using var handle = new SafeFileHandle(fileDescriptor, ownsHandle: true);
+        using var handle = new SafeFileHandle(fileDescriptor, true);
         await RandomAccess.WriteAsync(handle, content, 0, cancellationToken).ConfigureAwait(false);
     }
 

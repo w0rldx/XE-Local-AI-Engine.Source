@@ -186,7 +186,7 @@ public sealed class NodeChatRegenerationService(
             resolved?.ModelProfile ?? activeModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
-            AllowedTools: allowedTools,
+            allowedTools,
             RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
             ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
             OrchestrationSpec: orchestration?.Spec,

@@ -43,36 +43,30 @@ public static class HuggingFaceServiceCollectionExtensions
         services.AddHttpClient(HubHttpClientName);
         services.AddHttpClient(DownloadHttpClientName);
 
-        services.TryAddSingleton(static sp => new HfHubClient(
-            sp.GetRequiredService<IHttpClientFactory>().CreateClient(HubHttpClientName),
+        services.TryAddSingleton(static sp => new HfHubClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HubHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<HfHubClient>>()));
 
-        services.TryAddSingleton(static sp => new GgufHeaderReader(
-            sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
+        services.TryAddSingleton(static sp => new GgufHeaderReader(sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<GgufHeaderReader>>()));
 
-        services.TryAddSingleton<IHuggingFaceGgufDiscovery>(static sp => new HuggingFaceGgufDiscovery(
-            sp.GetRequiredService<HfHubClient>(),
+        services.TryAddSingleton<IHuggingFaceGgufDiscovery>(static sp => new HuggingFaceGgufDiscovery(sp.GetRequiredService<HfHubClient>(),
             sp.GetRequiredService<GgufHeaderReader>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<HuggingFaceGgufDiscovery>>()));
 
-        services.TryAddSingleton(static sp => new HfDownloadClient(
-            sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
+        services.TryAddSingleton(static sp => new HfDownloadClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
             sp.GetRequiredService<IHfTokenStore>(),
             sp.GetRequiredService<IFreeSpaceProbe>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<HfDownloadClient>>()));
 
-        services.TryAddSingleton(static sp => new GgufModelRegistry(
-            sp.GetRequiredService<HuggingFaceOptions>(),
+        services.TryAddSingleton(static sp => new GgufModelRegistry(sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<GgufModelRegistry>>()));
         services.TryAddSingleton<IGgufModelRegistry>(static sp => sp.GetRequiredService<GgufModelRegistry>());
 
-        services.TryAddSingleton<IGgufModelStore>(static sp => new HuggingFaceGgufStore(
-            sp.GetRequiredService<HfDownloadClient>(),
+        services.TryAddSingleton<IGgufModelStore>(static sp => new HuggingFaceGgufStore(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),
             sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<HuggingFaceOptions>(),

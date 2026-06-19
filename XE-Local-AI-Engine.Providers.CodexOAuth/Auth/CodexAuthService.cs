@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
-using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -10,45 +9,49 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-/// Contract for the Codex OAuth login / refresh lifecycle.
+///     Contract for the Codex OAuth login / refresh lifecycle.
 /// </summary>
 public interface ICodexAuthService
 {
     /// <summary>
-    /// Starts the interactive PKCE (S256) loopback login: binds the loopback callback listener, builds the
-    /// authorize URL, and begins waiting for the callback in the background. The returned
-    /// <see cref="CodexLoginHandle"/> exposes the authorize URL <em>immediately</em> so the React client can render
-    /// it as a user-clicked link, and a
-    /// <see cref="CodexLoginHandle.Completion"/> task that resolves once the code is exchanged and persisted.
+    ///     Starts the interactive PKCE (S256) loopback login: binds the loopback callback listener, builds the
+    ///     authorize URL, and begins waiting for the callback in the background. The returned
+    ///     <see cref="CodexLoginHandle" /> exposes the authorize URL <em>immediately</em> so the React client can render
+    ///     it as a user-clicked link, and a
+    ///     <see cref="CodexLoginHandle.Completion" /> task that resolves once the code is exchanged and persisted.
     /// </summary>
     CodexLoginHandle BeginLogin(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs the interactive PKCE (S256) login against a loopback callback listener,
-    /// exchanges the authorization code, persists the session, and returns it. Convenience wrapper over
-    /// <see cref="BeginLogin"/> that awaits completion.
+    ///     Runs the interactive PKCE (S256) login against a loopback callback listener,
+    ///     exchanges the authorization code, persists the session, and returns it. Convenience wrapper over
+    ///     <see cref="BeginLogin" /> that awaits completion.
     /// </summary>
     Task<CodexTokens> LoginAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Exchanges the current refresh token for a new session (<c>grant_type=refresh_token</c>) and persists it.
+    ///     Exchanges the current refresh token for a new session (<c>grant_type=refresh_token</c>) and persists it.
     /// </summary>
     Task<CodexTokens> RefreshAsync(CodexTokens current, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Implements the Codex OAuth 2.0 Authorization-Code + PKCE (S256) flow with a loopback callback.
-/// Decodes the <c>chatgpt_account_id</c> JWT claim. Never logs token values.
+///     Implements the Codex OAuth 2.0 Authorization-Code + PKCE (S256) flow with a loopback callback.
+///     Decodes the <c>chatgpt_account_id</c> JWT claim. Never logs token values.
 /// </summary>
 public sealed class CodexAuthService : ICodexAuthService
 {
     private const string AccountClaimNamespace = "https://api.openai.com/auth";
     private const string AccountClaimName = "chatgpt_account_id";
 
-    private readonly CodexOptions _options;
+    // Unix-second bounds DateTimeOffset.FromUnixTimeSeconds accepts; an out-of-range or malformed exp falls back.
+    private const long MinUnixSeconds = -62135596800L;
+    private const long MaxUnixSeconds = 253402300799L;
     private readonly HttpClient _httpClient;
-    private readonly ICodexTokenStore _tokenStore;
     private readonly ILogger<CodexAuthService> _logger;
+
+    private readonly CodexOptions _options;
+    private readonly ICodexTokenStore _tokenStore;
 
     public CodexAuthService(IOptions<CodexOptions> options,
         HttpClient httpClient,
@@ -84,8 +87,7 @@ public sealed class CodexAuthService : ICodexAuthService
             // The loopback callback port could not be bound — e.g. a prior login left it half-open, or another
             // process holds it. Free this listener and surface a clean typed error instead of leaking it.
             ((IDisposable)listener).Dispose();
-            throw new CodexAuthException(
-                $"Could not bind the Codex loopback callback port {_options.CallbackPort}. Close any prior sign-in and retry.",
+            throw new CodexAuthException($"Could not bind the Codex loopback callback port {_options.CallbackPort}. Close any prior sign-in and retry.",
                 exception);
         }
 
@@ -97,10 +99,35 @@ public sealed class CodexAuthService : ICodexAuthService
     }
 
     public async Task<CodexTokens> LoginAsync(CancellationToken cancellationToken = default)
-        => await BeginLogin(cancellationToken).Completion.ConfigureAwait(false);
+    {
+        return await BeginLogin(cancellationToken).Completion.ConfigureAwait(false);
+    }
 
-    private async Task<CodexTokens> CompleteLoginAsync(
-        HttpListener listener,
+    public async Task<CodexTokens> RefreshAsync(CodexTokens current, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenUrl)
+        {
+            Content = JsonContent.Create(new
+            {
+                grant_type = "refresh_token",
+                client_id = _options.ClientId,
+                refresh_token = current.RefreshToken,
+                scope = _options.Scope
+            })
+        };
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_options.TokenRequestTimeout);
+
+        var tokens = await SendTokenRequestAsync(request, current.RefreshToken, timeout.Token).ConfigureAwait(false);
+        await _tokenStore.SaveAsync(tokens, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Codex OAuth token refreshed for account {AccountId}.", tokens.AccountId);
+        return tokens;
+    }
+
+    private async Task<CodexTokens> CompleteLoginAsync(HttpListener listener,
         string verifier,
         string state,
         CancellationToken cancellationToken)
@@ -123,30 +150,6 @@ public sealed class CodexAuthService : ICodexAuthService
         }
     }
 
-    public async Task<CodexTokens> RefreshAsync(CodexTokens current, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(current);
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenUrl)
-        {
-            Content = JsonContent.Create(new
-            {
-                grant_type = "refresh_token",
-                client_id = _options.ClientId,
-                refresh_token = current.RefreshToken,
-                scope = _options.Scope,
-            }),
-        };
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_options.TokenRequestTimeout);
-
-        var tokens = await SendTokenRequestAsync(request, current.RefreshToken, timeout.Token).ConfigureAwait(false);
-        await _tokenStore.SaveAsync(tokens, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("Codex OAuth token refreshed for account {AccountId}.", tokens.AccountId);
-        return tokens;
-    }
-
     private async Task<CodexTokens> ExchangeCodeAsync(string code, string verifier, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenUrl)
@@ -157,18 +160,17 @@ public sealed class CodexAuthService : ICodexAuthService
                 client_id = _options.ClientId,
                 code,
                 redirect_uri = _options.RedirectUri.ToString(),
-                code_verifier = verifier,
-            }),
+                code_verifier = verifier
+            })
         };
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_options.TokenRequestTimeout);
 
-        return await SendTokenRequestAsync(request, refreshFallback: null, timeout.Token).ConfigureAwait(false);
+        return await SendTokenRequestAsync(request, null, timeout.Token).ConfigureAwait(false);
     }
 
-    private async Task<CodexTokens> SendTokenRequestAsync(
-        HttpRequestMessage request,
+    private async Task<CodexTokens> SendTokenRequestAsync(HttpRequestMessage request,
         string? refreshFallback,
         CancellationToken cancellationToken)
     {
@@ -176,8 +178,7 @@ public sealed class CodexAuthService : ICodexAuthService
         if (!response.IsSuccessStatusCode)
         {
             // Never include the response body — it may echo token material.
-            throw new CodexAuthException(
-                $"Codex token endpoint returned {(int)response.StatusCode} ({response.StatusCode}).");
+            throw new CodexAuthException($"Codex token endpoint returned {(int)response.StatusCode} ({response.StatusCode}).");
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -185,7 +186,7 @@ public sealed class CodexAuthService : ICodexAuthService
         var root = document.RootElement;
 
         var access = ReadString(root, "access_token")
-            ?? throw new CodexAuthException("Codex token response did not include an access token.");
+                     ?? throw new CodexAuthException("Codex token response did not include an access token.");
 
         // OAuth refresh responses may omit a rotated refresh token; fall back to the previous one.
         var refresh = ReadString(root, "refresh_token") ?? refreshFallback
@@ -224,8 +225,7 @@ public sealed class CodexAuthService : ICodexAuthService
             }
 
             // Validate state to defend against CSRF on the loopback callback.
-            if (!CryptographicOperations.FixedTimeEquals(
-                    Encoding.UTF8.GetBytes(returnedState ?? string.Empty),
+            if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(returnedState ?? string.Empty),
                     Encoding.UTF8.GetBytes(expectedState)))
             {
                 await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.").ConfigureAwait(false);
@@ -263,13 +263,13 @@ public sealed class CodexAuthService : ICodexAuthService
             // subscription path can resolve chatgpt-account-id), and opt into the simplified Codex CLI flow.
             ["originator"] = _options.Originator,
             ["id_token_add_organizations"] = "true",
-            ["codex_cli_simplified_flow"] = "true",
+            ["codex_cli_simplified_flow"] = "true"
         };
 
         var builder = new UriBuilder(_options.AuthorizeUrl)
         {
             Query = string.Join('&', query.Select(kvp =>
-                $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value ?? string.Empty)}")),
+                $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value ?? string.Empty)}"))
         };
         return builder.Uri;
     }
@@ -302,7 +302,10 @@ public sealed class CodexAuthService : ICodexAuthService
         return Base64UrlEncode(hash);
     }
 
-    private static string CreateState() => Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+    private static string CreateState()
+    {
+        return Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+    }
 
     private static string ExtractAccountId(string jwt)
     {
@@ -316,10 +319,6 @@ public sealed class CodexAuthService : ICodexAuthService
 
         throw new CodexAuthException("Codex access token did not contain a chatgpt_account_id claim.");
     }
-
-    // Unix-second bounds DateTimeOffset.FromUnixTimeSeconds accepts; an out-of-range or malformed exp falls back.
-    private const long MinUnixSeconds = -62135596800L;
-    private const long MaxUnixSeconds = 253402300799L;
 
     private static DateTimeOffset GetJwtExpiry(string jwt)
     {
@@ -376,14 +375,18 @@ public sealed class CodexAuthService : ICodexAuthService
     }
 
     private static string? ReadString(JsonElement element, string propertyName)
-        => element.ValueKind == JsonValueKind.Object
-            && element.TryGetProperty(propertyName, out var value)
-            && value.ValueKind == JsonValueKind.String
+    {
+        return element.ValueKind == JsonValueKind.Object
+               && element.TryGetProperty(propertyName, out var value)
+               && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+    }
 
     private static string Base64UrlEncode(byte[] bytes)
-        => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    {
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
 
     private static byte[] Base64UrlDecode(string value)
     {
@@ -392,11 +395,13 @@ public sealed class CodexAuthService : ICodexAuthService
         {
             2 => padded + "==",
             3 => padded + "=",
-            _ => padded,
+            _ => padded
         };
         return Convert.FromBase64String(padded);
     }
 
     private static string EnsureTrailingSlash(string path)
-        => path.EndsWith('/') ? path : path + "/";
+    {
+        return path.EndsWith('/') ? path : path + "/";
+    }
 }

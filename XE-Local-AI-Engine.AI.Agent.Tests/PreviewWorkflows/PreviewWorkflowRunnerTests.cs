@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.PreviewWorkflows;
 
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
@@ -17,13 +18,11 @@ public sealed class PreviewWorkflowRunnerTests
     [Test]
     public async Task PreviewRunner_StartAgentAgentDebugEnd_PipesPrevOutputToNext()
     {
-        using var client = new RecordingStreamingChatClient(
-            ("alpha", "ALPHA_OUTPUT"),
+        using var client = new RecordingStreamingChatClient(("alpha", "ALPHA_OUTPUT"),
             ("beta", "BETA_OUTPUT"));
         var runner = NewRunner();
 
-        var definition = BuildLinear(
-            Agent("alpha", "Agent Alpha"),
+        var definition = BuildLinear(Agent("alpha", "Agent Alpha"),
             Agent("beta", "Agent Beta"),
             Debug("debug1"));
 
@@ -43,13 +42,11 @@ public sealed class PreviewWorkflowRunnerTests
     [Test]
     public async Task PreviewRunner_NextAgent_SeesOnlyUpstreamOutput_NotFullHistory()
     {
-        using var client = new RecordingStreamingChatClient(
-            ("alpha", "ALPHA_OUTPUT"),
+        using var client = new RecordingStreamingChatClient(("alpha", "ALPHA_OUTPUT"),
             ("beta", "BETA_OUTPUT"));
         var runner = NewRunner();
 
-        var definition = BuildLinear(
-            Agent("alpha", "Agent Alpha"),
+        var definition = BuildLinear(Agent("alpha", "Agent Alpha"),
             Agent("beta", "Agent Beta"));
 
         await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
@@ -76,8 +73,7 @@ public sealed class PreviewWorkflowRunnerTests
         using var client = new RecordingStreamingChatClient(("alpha", "ALPHA_OUTPUT"));
         var runner = NewRunner();
 
-        var definition = BuildLinear(
-            Agent("alpha", "Agent Alpha"),
+        var definition = BuildLinear(Agent("alpha", "Agent Alpha"),
             Debug("debug1"));
 
         await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
@@ -100,8 +96,7 @@ public sealed class PreviewWorkflowRunnerTests
         using var client = new RecordingStreamingChatClient(("alpha", "ALPHA_OUTPUT"));
         var runner = NewRunner();
 
-        var definition = BuildLinear(
-            Agent("alpha", "Agent Alpha"),
+        var definition = BuildLinear(Agent("alpha", "Agent Alpha"),
             Pause("pause1"));
 
         await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
@@ -132,6 +127,7 @@ public sealed class PreviewWorkflowRunnerTests
         var runner = NewRunner();
 
         var resolvedModelIds = new List<string>();
+
         IChatClient Resolve(string modelId)
         {
             resolvedModelIds.Add(modelId);
@@ -143,9 +139,8 @@ public sealed class PreviewWorkflowRunnerTests
             };
         }
 
-        var definition = BuildLinear(
-            Agent("alpha", "Agent Alpha", model: "model-a"),
-            Agent("beta", "Agent Beta", model: "model-b"));
+        var definition = BuildLinear(Agent("alpha", "Agent Alpha", "model-a"),
+            Agent("beta", "Agent Beta", "model-b"));
 
         await using var session = await runner.StartAsync(definition, Resolve, CancellationToken.None);
         var updates = await Drain(session);
@@ -165,8 +160,10 @@ public sealed class PreviewWorkflowRunnerTests
         AssertEx.Equal("BETA_OUTPUT", completed.Output);
     }
 
-    private static PreviewWorkflowRunner NewRunner() =>
-        new(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
+    private static PreviewWorkflowRunner NewRunner()
+    {
+        return new PreviewWorkflowRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
+    }
 
     private static async Task<List<PreviewWorkflowUpdate>> Drain(IPreviewWorkflowRunSession session)
     {
@@ -179,14 +176,35 @@ public sealed class PreviewWorkflowRunnerTests
         return updates;
     }
 
-    private static PreviewAgentNode Agent(string id, string label, string model = "test-model") =>
-        new() { Id = id, Kind = PreviewNodeKind.Agent, Label = label, Instructions = $"INSTR_{id}", ModelId = model };
+    private static PreviewAgentNode Agent(string id, string label, string model = "test-model")
+    {
+        return new PreviewAgentNode
+        {
+            Id = id,
+            Kind = PreviewNodeKind.Agent,
+            Label = label,
+            Instructions = $"INSTR_{id}",
+            ModelId = model
+        };
+    }
 
-    private static PreviewWorkflowNode Debug(string id) =>
-        new() { Id = id, Kind = PreviewNodeKind.Debug };
+    private static PreviewWorkflowNode Debug(string id)
+    {
+        return new PreviewWorkflowNode
+        {
+            Id = id,
+            Kind = PreviewNodeKind.Debug
+        };
+    }
 
-    private static PreviewWorkflowNode Pause(string id) =>
-        new() { Id = id, Kind = PreviewNodeKind.Pause };
+    private static PreviewWorkflowNode Pause(string id)
+    {
+        return new PreviewWorkflowNode
+        {
+            Id = id,
+            Kind = PreviewNodeKind.Pause
+        };
+    }
 
     /// <summary>
     ///     Builds a linear Start → [middle nodes…] → End graph from the supplied middle nodes, wiring one edge between
@@ -194,17 +212,32 @@ public sealed class PreviewWorkflowRunnerTests
     /// </summary>
     private static PreviewWorkflowDefinition BuildLinear(params PreviewWorkflowNode[] middle)
     {
-        var start = new PreviewWorkflowNode { Id = "start", Kind = PreviewNodeKind.Start };
-        var end = new PreviewWorkflowNode { Id = "end", Kind = PreviewNodeKind.End };
+        var start = new PreviewWorkflowNode
+        {
+            Id = "start",
+            Kind = PreviewNodeKind.Start
+        };
+        var end = new PreviewWorkflowNode
+        {
+            Id = "end",
+            Kind = PreviewNodeKind.End
+        };
 
-        var nodes = new List<PreviewWorkflowNode> { start };
+        var nodes = new List<PreviewWorkflowNode>
+        {
+            start
+        };
         nodes.AddRange(middle);
         nodes.Add(end);
 
         var edges = new List<PreviewWorkflowEdge>();
         for (var i = 0; i < nodes.Count - 1; i++)
         {
-            edges.Add(new PreviewWorkflowEdge { SourceId = nodes[i].Id, TargetId = nodes[i + 1].Id });
+            edges.Add(new PreviewWorkflowEdge
+            {
+                SourceId = nodes[i].Id,
+                TargetId = nodes[i + 1].Id
+            });
         }
 
         return new PreviewWorkflowDefinition
@@ -219,7 +252,10 @@ public sealed class PreviewWorkflowRunnerTests
     {
         public static EmptyServiceProvider Instance { get; } = new();
 
-        public object? GetService(Type serviceType) => null;
+        public object? GetService(Type serviceType)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -230,21 +266,12 @@ public sealed class PreviewWorkflowRunnerTests
     /// </summary>
     private sealed class RecordingStreamingChatClient : IChatClient
     {
-        private readonly IReadOnlyDictionary<string, string> _replyByAgentId;
         private readonly ConcurrentDictionary<string, List<IReadOnlyList<ChatMessage>>> _invocationsByAgentId = new(StringComparer.Ordinal);
+        private readonly IReadOnlyDictionary<string, string> _replyByAgentId;
 
         public RecordingStreamingChatClient(params (string AgentId, string Reply)[] scripts)
         {
             _replyByAgentId = scripts.ToDictionary(script => script.AgentId, script => script.Reply, StringComparer.Ordinal);
-        }
-
-        public IReadOnlyList<ChatMessage> FirstInvocationMessagesFor(string agentId) =>
-            _invocationsByAgentId[agentId][0];
-
-        public string FirstUserTurnFor(string agentId)
-        {
-            var first = FirstInvocationMessagesFor(agentId);
-            return first.First(message => message.Role == ChatRole.User).Text ?? string.Empty;
         }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -257,7 +284,8 @@ public sealed class PreviewWorkflowRunnerTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             var messageList = messages.ToList();
             var agentId = ResolveAgentId(options, messageList);
@@ -270,10 +298,26 @@ public sealed class PreviewWorkflowRunnerTests
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) =>
-            serviceType == typeof(IChatClient) ? this : null;
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
 
-        public void Dispose() => GC.SuppressFinalize(this);
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
+        public IReadOnlyList<ChatMessage> FirstInvocationMessagesFor(string agentId)
+        {
+            return _invocationsByAgentId[agentId][0];
+        }
+
+        public string FirstUserTurnFor(string agentId)
+        {
+            var first = FirstInvocationMessagesFor(agentId);
+            return first.First(message => message.Role == ChatRole.User).Text ?? string.Empty;
+        }
 
         // The agent's instructions ride ChatOptions.Instructions (set from PreviewAgentNode.Instructions =
         // "INSTR_<id>"); fall back to scanning any system message for the marker for robustness.

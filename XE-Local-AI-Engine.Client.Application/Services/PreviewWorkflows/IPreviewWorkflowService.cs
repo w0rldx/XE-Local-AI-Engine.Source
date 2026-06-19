@@ -57,18 +57,28 @@ public sealed record PreviewWorkflowMutationResult(
     PreviewWorkflowDetail? Detail,
     PreviewWorkflowValidationResult? Validation)
 {
-    public static PreviewWorkflowMutationResult Created(PreviewWorkflowDetail detail) =>
-        new(PreviewWorkflowMutationOutcome.Created, detail, Validation: null);
+    public static PreviewWorkflowMutationResult Created(PreviewWorkflowDetail detail)
+    {
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Created, detail, null);
+    }
 
-    public static PreviewWorkflowMutationResult Updated(PreviewWorkflowDetail detail) =>
-        new(PreviewWorkflowMutationOutcome.Updated, detail, Validation: null);
+    public static PreviewWorkflowMutationResult Updated(PreviewWorkflowDetail detail)
+    {
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Updated, detail, null);
+    }
 
-    public static PreviewWorkflowMutationResult NotFound() =>
-        new(PreviewWorkflowMutationOutcome.NotFound, Detail: null, Validation: null);
+    public static PreviewWorkflowMutationResult NotFound()
+    {
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.NotFound, null, null);
+    }
 
-    public static PreviewWorkflowMutationResult Conflict() =>
-        new(PreviewWorkflowMutationOutcome.Conflict, Detail: null, Validation: null);
+    public static PreviewWorkflowMutationResult Conflict()
+    {
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Conflict, null, null);
+    }
 
-    public static PreviewWorkflowMutationResult Invalid(PreviewWorkflowValidationResult validation) =>
-        new(PreviewWorkflowMutationOutcome.Invalid, Detail: null, validation);
+    public static PreviewWorkflowMutationResult Invalid(PreviewWorkflowValidationResult validation)
+    {
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Invalid, null, validation);
+    }
 }

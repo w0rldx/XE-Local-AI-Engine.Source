@@ -33,7 +33,7 @@ public sealed class SchedulerDispatchExecutorTests
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, "fire-1", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-1", Now, Now, CancellationToken.None);
 
         AssertEx.Equal(0, handler.InvocationCount, "Handler must not be invoked when definition is missing.");
     }
@@ -47,12 +47,12 @@ public sealed class SchedulerDispatchExecutorTests
     {
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
-        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>()).Returns(BuildRecord(enabled: false, deleted: false));
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>()).Returns(BuildRecord(false, false));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, "fire-2", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-2", Now, Now, CancellationToken.None);
 
         AssertEx.Equal(0, handler.InvocationCount, "Handler must not be invoked for a disabled definition.");
     }
@@ -70,12 +70,12 @@ public sealed class SchedulerDispatchExecutorTests
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         // enabled=true but deleted — the check is `!Enabled || DeletedAtUtc != null`
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: true));
+             .Returns(BuildRecord(true, true));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, "fire-3", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-3", Now, Now, CancellationToken.None);
 
         AssertEx.Equal(0, handler.InvocationCount, "Handler must not be invoked for a soft-deleted definition.");
     }
@@ -90,13 +90,13 @@ public sealed class SchedulerDispatchExecutorTests
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         // Record references a template that has no handler in the registry.
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, templateId: "unknown.template"));
+             .Returns(BuildRecord(true, false, "unknown.template"));
 
         // Registry contains only test.echo — "unknown.template" will miss.
         var registry = new ScheduledJobTemplateRegistry([new TestEchoScheduledJobHandler()]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, "fire-4", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-4", Now, Now, CancellationToken.None);
 
         // No exception thrown and the store was called once — the executor skipped after the registry miss.
         await store.Received(1).GetByIdAsync(JobId, Arg.Any<CancellationToken>());
@@ -116,12 +116,12 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: paramJson));
+             .Returns(BuildRecord(true, false, parameterJson: paramJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, fireInstanceId, scheduledFireTimeUtc: scheduled, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, fireInstanceId, scheduled, Now, CancellationToken.None);
 
         AssertEx.Equal(1, handler.InvocationCount, "Handler must be invoked exactly once.");
 
@@ -141,12 +141,12 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: null));
+             .Returns(BuildRecord(true, false, parameterJson: null));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, "fire-null-params", scheduledFireTimeUtc: null, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-null-params", null, Now, CancellationToken.None);
 
         AssertEx.Equal(1, handler.InvocationCount, "Handler must be invoked exactly once.");
         AssertEx.Null(handler.LastContext?.Parameters, "Null parameters must propagate.");
@@ -166,7 +166,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+             .Returns(BuildRecord(true, false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -178,8 +178,8 @@ public sealed class SchedulerDispatchExecutorTests
 
         await executor.DispatchAsync(JobId,
             "fire-override",
-            scheduledFireTimeUtc: Now,
-            actualFireTimeUtc: Now,
+            Now,
+            Now,
             CancellationToken.None,
             overrides);
 
@@ -203,7 +203,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+             .Returns(BuildRecord(true, false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -213,7 +213,7 @@ public sealed class SchedulerDispatchExecutorTests
             [SchedulerJobKeys.ModelFitLimitOverrideKey] = "20"
         };
 
-        await executor.DispatchAsync(JobId, "fire-limit", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None, overrides);
+        await executor.DispatchAsync(JobId, "fire-limit", Now, Now, CancellationToken.None, overrides);
 
         var parameters = AssertEx.NotNull(handler.LastContext?.Parameters);
         using var document = JsonDocument.Parse(parameters);
@@ -234,7 +234,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+             .Returns(BuildRecord(true, false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -245,7 +245,7 @@ public sealed class SchedulerDispatchExecutorTests
             [SchedulerJobKeys.ModelFitLimitOverrideKey] = "15"
         };
 
-        await executor.DispatchAsync(JobId, "fire-both", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None, overrides);
+        await executor.DispatchAsync(JobId, "fire-both", Now, Now, CancellationToken.None, overrides);
 
         var parameters = AssertEx.NotNull(handler.LastContext?.Parameters);
         using var document = JsonDocument.Parse(parameters);
@@ -266,7 +266,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+             .Returns(BuildRecord(true, false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -279,7 +279,7 @@ public sealed class SchedulerDispatchExecutorTests
             ["operation"] = "Benchmark"
         };
 
-        await executor.DispatchAsync(JobId, "fire-nonwhitelisted", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None, overrides);
+        await executor.DispatchAsync(JobId, "fire-nonwhitelisted", Now, Now, CancellationToken.None, overrides);
 
         AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "A non-whitelisted override key must leave the stored parameters unchanged.");
     }
@@ -294,13 +294,13 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
+             .Returns(BuildRecord(true, false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
         // No parameterOverrides argument → the recurring/cron dispatch behavior.
-        await executor.DispatchAsync(JobId, "fire-no-override", scheduledFireTimeUtc: Now, actualFireTimeUtc: Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-no-override", Now, Now, CancellationToken.None);
 
         AssertEx.Equal(storedJson, handler.LastContext?.Parameters, "Stored parameters must pass through unchanged with no override.");
     }
@@ -318,13 +318,13 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(enabled: true, deleted: false));
+             .Returns(BuildRecord(true, false));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
         // The handler calls ThrowIfCancellationRequested — the exception must propagate.
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, actualFireTimeUtc: Now, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", null, Now, cts.Token));
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -360,22 +360,22 @@ public sealed class SchedulerDispatchExecutorTests
 
     private static ScheduledJobRunRecord ToRunningRecord(ScheduledJobRunInput input)
     {
-        return new ScheduledJobRunRecord(Id: Guid.NewGuid(),
-            ScheduledJobId: input.ScheduledJobId,
-            TemplateId: input.TemplateId,
-            QuartzFireInstanceId: input.QuartzFireInstanceId,
-            TriggeredBy: input.TriggeredBy,
-            Status: ScheduledRunStatus.Running,
-            ScheduledFireTimeUtc: input.ScheduledFireTimeUtc,
-            ActualFireTimeUtc: input.ActualFireTimeUtc,
-            CompletedAtUtc: null,
-            DurationMs: null,
-            Summary: input.Summary,
-            DetailsJson: input.DetailsJson,
-            ErrorMessage: input.ErrorMessage,
-            ErrorDetails: input.ErrorDetails,
-            CancellationRequestedAtUtc: null,
-            CreatedAtUtc: 1L);
+        return new ScheduledJobRunRecord(Guid.NewGuid(),
+            input.ScheduledJobId,
+            input.TemplateId,
+            input.QuartzFireInstanceId,
+            input.TriggeredBy,
+            ScheduledRunStatus.Running,
+            input.ScheduledFireTimeUtc,
+            input.ActualFireTimeUtc,
+            null,
+            null,
+            input.Summary,
+            input.DetailsJson,
+            input.ErrorMessage,
+            input.ErrorDetails,
+            null,
+            1L);
     }
 
     private static ScheduledJobDefinitionRecord BuildRecord(bool enabled,
@@ -383,26 +383,26 @@ public sealed class SchedulerDispatchExecutorTests
         string templateId = TestEchoScheduledJobHandler.Id,
         string? parameterJson = null)
     {
-        return new ScheduledJobDefinitionRecord(Id: JobId,
-            TemplateId: templateId,
-            DisplayName: "Test Job",
-            Description: null,
-            Enabled: enabled,
-            ScheduleKind: ScheduleKind.OneShot,
-            CronExpression: null,
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            TimeZoneId: "UTC",
-            MisfirePolicy: SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            ParameterJson: parameterJson,
-            CreatedBy: ScheduledJobCreator.User,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: deleted ? 1L : null);
+        return new ScheduledJobDefinitionRecord(JobId,
+            templateId,
+            "Test Job",
+            null,
+            enabled,
+            ScheduleKind.OneShot,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "UTC",
+            SchedulerMisfirePolicy.Smart,
+            false,
+            null,
+            parameterJson,
+            ScheduledJobCreator.User,
+            0L,
+            0L,
+            null,
+            deleted ? 1L : null);
     }
 }

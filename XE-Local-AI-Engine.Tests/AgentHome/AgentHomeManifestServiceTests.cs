@@ -35,7 +35,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
             {
                 if (Directory.Exists(root))
                 {
-                    Directory.Delete(root, recursive: true);
+                    Directory.Delete(root, true);
                 }
             }
             catch (IOException)
@@ -129,7 +129,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         await File.WriteAllTextAsync(preservedPath, "SENTINEL");
         File.Delete(Path.Combine(first.RootPath, "tools", "registry.json"));
         File.Delete(Path.Combine(first.RootPath, "README.agent-home.md"));
-        Directory.Delete(Path.Combine(first.RootPath, "skills"), recursive: true);
+        Directory.Delete(Path.Combine(first.RootPath, "skills"), true);
 
         var healed = await service.InitializeAsync(Key());
 

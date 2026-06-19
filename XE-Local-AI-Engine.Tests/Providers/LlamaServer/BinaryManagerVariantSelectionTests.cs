@@ -14,7 +14,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_WindowsNvidia_PicksCuda()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), isWindows: true);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), true);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -24,7 +24,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_LinuxNvidia_FallsBackToVulkan_NoPrebuiltCuda()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), isWindows: false);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Nvidia), false);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -34,7 +34,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_AmdGpu_PicksVulkan()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Amd), isWindows: true);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Amd), true);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -44,7 +44,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_IntelGpu_PicksVulkan()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Intel), isWindows: false);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.Intel), false);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -54,7 +54,7 @@ public sealed class BinaryManagerVariantSelectionTests
     [Test]
     public async Task SelectVariant_NoGpu_PicksCpu()
     {
-        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.None), isWindows: false);
+        var selector = new GpuVariantSelector(new FakeVendorProbe(DetectedGpuVendor.None), false);
 
         var variant = await selector.SelectVariantAsync(CancellationToken.None);
 
@@ -91,7 +91,7 @@ public sealed class BinaryManagerVariantSelectionTests
         SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
 
         using var handler = new ThrowingHandler();
-        using var http = new HttpClient(handler, disposeHandler: false);
+        using var http = new HttpClient(handler, false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
@@ -111,7 +111,7 @@ public sealed class BinaryManagerVariantSelectionTests
         SeedCachedServer(cache.Path, "b9999", "cpu", pin.ServerRelativePath);
 
         using var handler = new ThrowingHandler();
-        using var http = new HttpClient(handler, disposeHandler: false);
+        using var http = new HttpClient(handler, false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, "b9999", OSPlatform.Linux, Architecture.X64);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
@@ -132,13 +132,18 @@ public sealed class BinaryManagerVariantSelectionTests
 
     private sealed class FakeVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe
     {
-        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) => Task.FromResult(vendor);
+        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
+        {
+            return Task.FromResult(vendor);
+        }
     }
 
     private sealed class ThrowingHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            => throw new InvalidOperationException("No network call expected: a cached binary should have been reused.");
+        {
+            throw new InvalidOperationException("No network call expected: a cached binary should have been reused.");
+        }
     }
 
     private sealed class TempCacheDir : IDisposable
@@ -157,7 +162,7 @@ public sealed class BinaryManagerVariantSelectionTests
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, recursive: true);
+                    Directory.Delete(Path, true);
                 }
             }
             catch (IOException)

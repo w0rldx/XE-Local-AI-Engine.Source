@@ -10,6 +10,8 @@ internal sealed class RecordingPreviewEventPublisher : IPreviewWorkflowEventPubl
 
     public ConcurrentQueue<PreviewWorkflowRunHubEvent> RunEvents { get; } = new();
 
+    public IReadOnlyList<string> RunEventTypes => [.. RunEvents.Select(e => e.EventType)];
+
     public Task PublishNodeAsync(PreviewWorkflowNodeHubEvent nodeEvent, CancellationToken cancellationToken = default)
     {
         NodeEvents.Enqueue(nodeEvent);
@@ -22,7 +24,8 @@ internal sealed class RecordingPreviewEventPublisher : IPreviewWorkflowEventPubl
         return Task.CompletedTask;
     }
 
-    public IReadOnlyList<string> RunEventTypes => [.. RunEvents.Select(e => e.EventType)];
-
-    public bool HasRunEvent(string eventType) => RunEvents.Any(e => string.Equals(e.EventType, eventType, StringComparison.Ordinal));
+    public bool HasRunEvent(string eventType)
+    {
+        return RunEvents.Any(e => string.Equals(e.EventType, eventType, StringComparison.Ordinal));
+    }
 }

@@ -10,7 +10,7 @@ public sealed class FeedbackInsightsServiceTests
     [Test]
     public async Task GetAgentFeedbackInsightsAsync_WhenStoreReturnsNull_ReturnsNull()
     {
-        var service = CreateService(out var store, nowUtcMs: 1_000);
+        var service = CreateService(out var store, 1_000);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(null));
@@ -23,7 +23,7 @@ public sealed class FeedbackInsightsServiceTests
     [Test]
     public async Task GetAgentFeedbackInsightsAsync_RequestsCappedExemplarsAndStampsGeneratedAt()
     {
-        var service = CreateService(out var store, nowUtcMs: 4_242);
+        var service = CreateService(out var store, 4_242);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId, "Agent", 0, 0, [], [])));
@@ -41,7 +41,7 @@ public sealed class FeedbackInsightsServiceTests
     [Test]
     public async Task GetAgentFeedbackInsightsAsync_WhenEmpty_ReturnsZeroStateBelowThreshold()
     {
-        var service = CreateService(out var store, nowUtcMs: 1);
+        var service = CreateService(out var store, 1);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId, "Agent", 0, 0, [], [])));
@@ -58,7 +58,7 @@ public sealed class FeedbackInsightsServiceTests
     [Test]
     public async Task GetAgentFeedbackInsightsAsync_OverallMeetsThresholdOnlyAtMinOccurrences()
     {
-        var service = CreateService(out var store, nowUtcMs: 1);
+        var service = CreateService(out var store, 1);
         var below = Guid.NewGuid();
         var meets = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(below, Arg.Any<int>(), Arg.Any<CancellationToken>())
@@ -79,7 +79,7 @@ public sealed class FeedbackInsightsServiceTests
     [Test]
     public async Task GetAgentFeedbackInsightsAsync_ShapesPerToolBreakdownWithThresholdAndDownRate()
     {
-        var service = CreateService(out var store, nowUtcMs: 1);
+        var service = CreateService(out var store, 1);
         var agentId = Guid.NewGuid();
         store.GetAgentFeedbackAggregateAsync(agentId, Arg.Any<int>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<AgentFeedbackAggregate?>(new AgentFeedbackAggregate(agentId,
@@ -105,7 +105,7 @@ public sealed class FeedbackInsightsServiceTests
     [Test]
     public async Task GetAgentFeedbackInsightsAsync_TruncatesLongExemplarComments()
     {
-        var service = CreateService(out var store, nowUtcMs: 1);
+        var service = CreateService(out var store, 1);
         var agentId = Guid.NewGuid();
         var longComment = new string('x', FeedbackInsightsService.MaxExemplarCommentLength + 20);
         const string ShortComment = "concise feedback";

@@ -14,7 +14,7 @@ public sealed class RunInAgentHomeToolHandlerTests
     public async Task ExecuteAsync_WhenAgentHomeDisabled_ReturnsDisabledMessage()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: false, gateway);
+        var handler = CreateHandler(false, gateway);
 
         var result = await handler.ExecuteAsync(ValidArguments);
 
@@ -26,7 +26,7 @@ public sealed class RunInAgentHomeToolHandlerTests
     public async Task ExecuteAsync_WhenEnabledAndValid_DelegatesToGateway()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = CreateHandler(true, gateway);
 
         var result = await handler.ExecuteAsync(ValidArguments);
 
@@ -38,7 +38,7 @@ public sealed class RunInAgentHomeToolHandlerTests
     public async Task ExecuteAsync_WhenEnabledAndInvalid_ReturnsValidationErrors()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = CreateHandler(true, gateway);
 
         var result = await handler.ExecuteAsync("""{"selectedFolderIds":[],"allowedActions":[]}""");
 
@@ -51,7 +51,7 @@ public sealed class RunInAgentHomeToolHandlerTests
     public async Task ExecuteAsync_WhenSelectedFolderIdIsRawHostPath_ReturnsValidationErrors()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = CreateHandler(true, gateway);
 
         var result = await handler.ExecuteAsync("""{"goal":"g","selectedFolderIds":["/etc/passwd"],"allowedActions":["read_workspace"]}""");
 
@@ -63,7 +63,7 @@ public sealed class RunInAgentHomeToolHandlerTests
     public async Task ExecuteAsync_WhenCancelled_Throws()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = CreateHandler(true, gateway);
         using var cancellationTokenSource = new CancellationTokenSource();
         await cancellationTokenSource.CancelAsync();
 

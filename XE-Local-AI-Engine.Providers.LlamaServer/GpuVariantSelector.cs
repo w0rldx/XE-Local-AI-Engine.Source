@@ -10,8 +10,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 /// </remarks>
 public sealed class GpuVariantSelector : IGpuVariantSelector
 {
-    private readonly IGpuVendorProbe _vendorProbe;
     private readonly bool _isWindows;
+    private readonly IGpuVendorProbe _vendorProbe;
 
     /// <summary>Creates a selector over the supplied vendor probe, defaulting OS detection to the live host.</summary>
     public GpuVariantSelector(IGpuVendorProbe vendorProbe)

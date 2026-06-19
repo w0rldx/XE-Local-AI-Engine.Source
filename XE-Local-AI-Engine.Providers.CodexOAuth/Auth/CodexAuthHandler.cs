@@ -6,30 +6,36 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-/// <see cref="DelegatingHandler"/> that owns Codex auth on the SSE Responses path:
-/// <list type="number">
-///   <item>Strips any <c>Authorization</c> the OpenAI SDK added from its dummy "unused" key, so it never
-///   reaches the wire.</item>
-///   <item>Injects the Codex header contract for the SSE path: real bearer <c>Authorization</c>,
-///   <c>chatgpt-account-id</c>, <c>originator</c>, <c>User-Agent</c> — and NOT the WebSocket-only
-///   <c>OpenAI-Beta</c>.</item>
-///   <item>On <c>401</c>, performs a single-flight refresh (one gate; concurrent 401s await the same refresh
-///   with double-checked expiry) and retries the request exactly once.</item>
-/// </list>
-/// Never logs token values, authorization headers, or the dummy key.
+///     <see cref="DelegatingHandler" /> that owns Codex auth on the SSE Responses path:
+///     <list type="number">
+///         <item>
+///             Strips any <c>Authorization</c> the OpenAI SDK added from its dummy "unused" key, so it never
+///             reaches the wire.
+///         </item>
+///         <item>
+///             Injects the Codex header contract for the SSE path: real bearer <c>Authorization</c>,
+///             <c>chatgpt-account-id</c>, <c>originator</c>, <c>User-Agent</c> — and NOT the WebSocket-only
+///             <c>OpenAI-Beta</c>.
+///         </item>
+///         <item>
+///             On <c>401</c>, performs a single-flight refresh (one gate; concurrent 401s await the same refresh
+///             with double-checked expiry) and retries the request exactly once.
+///         </item>
+///     </list>
+///     Never logs token values, authorization headers, or the dummy key.
 /// </summary>
 public sealed class CodexAuthHandler : DelegatingHandler
 {
     private const string BearerScheme = "Bearer";
-
-    private readonly CodexOptions _options;
-    private readonly ICodexTokenStore _tokenStore;
     private readonly ICodexAuthService _authService;
     private readonly ILogger<CodexAuthHandler> _logger;
-    private readonly TimeProvider _timeProvider;
+
+    private readonly CodexOptions _options;
 
     // Single-flight refresh gate: concurrent 401s await one in-flight refresh, then re-check expiry.
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly TimeProvider _timeProvider;
+    private readonly ICodexTokenStore _tokenStore;
     private CodexTokens? _cachedTokens;
 
     public CodexAuthHandler(IOptions<CodexOptions> options,
@@ -50,13 +56,12 @@ public sealed class CodexAuthHandler : DelegatingHandler
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    protected override async Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request,
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var tokens = await GetValidTokensAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
+        var tokens = await GetValidTokensAsync(false, cancellationToken).ConfigureAwait(false);
         ApplyHeaders(request, tokens);
 
         var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -70,7 +75,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
         // HttpRequestMessage cannot be resent (its content stream is consumed / it is marked used), so the retry
         // MUST go on a fresh CLONE of the request, not the original.
         response.Dispose();
-        var refreshed = await GetValidTokensAsync(forceRefresh: true, cancellationToken).ConfigureAwait(false);
+        var refreshed = await GetValidTokensAsync(true, cancellationToken).ConfigureAwait(false);
 
         using var retryRequest = await CloneRequestAsync(request, cancellationToken).ConfigureAwait(false);
         ApplyHeaders(retryRequest, refreshed);
@@ -80,17 +85,16 @@ public sealed class CodexAuthHandler : DelegatingHandler
     }
 
     /// <summary>
-    /// DIAGNOSTIC: on a non-success response from the Codex backend, log the error body so the node host log shows
-    /// the exact reason the call was rejected (e.g. <c>{"error":{"message","type","param":"model"}}</c>). The body
-    /// is buffered with <see cref="HttpContent.LoadIntoBufferAsync()"/> first, so reading it here does NOT consume
-    /// the content for the OpenAI SDK — the SDK still surfaces the same error to the caller. This is gated to
-    /// failure statuses ONLY: a success response carries the live SSE stream and must NOT be read here.
-    ///
-    /// <para>
-    /// Token hygiene: the response body is the server's error JSON and never echoes request auth headers,
-    /// so logging it does not leak the bearer token / account id. Only the body and the status are logged — request
-    /// headers are never touched.
-    /// </para>
+    ///     DIAGNOSTIC: on a non-success response from the Codex backend, log the error body so the node host log shows
+    ///     the exact reason the call was rejected (e.g. <c>{"error":{"message","type","param":"model"}}</c>). The body
+    ///     is buffered with <see cref="HttpContent.LoadIntoBufferAsync()" /> first, so reading it here does NOT consume
+    ///     the content for the OpenAI SDK — the SDK still surfaces the same error to the caller. This is gated to
+    ///     failure statuses ONLY: a success response carries the live SSE stream and must NOT be read here.
+    ///     <para>
+    ///         Token hygiene: the response body is the server's error JSON and never echoes request auth headers,
+    ///         so logging it does not leak the bearer token / account id. Only the body and the status are logged — request
+    ///         headers are never touched.
+    ///     </para>
     /// </summary>
     private async Task LogFailureBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
@@ -113,27 +117,25 @@ public sealed class CodexAuthHandler : DelegatingHandler
             return;
         }
 
-        _logger.LogWarning(
-            "Codex request to {RequestUri} failed with {StatusCode}. Error body: {ErrorBody}",
+        _logger.LogWarning("Codex request to {RequestUri} failed with {StatusCode}. Error body: {ErrorBody}",
             response.RequestMessage?.RequestUri,
             (int)response.StatusCode,
             body);
     }
 
     /// <summary>
-    /// Builds a fresh, unsent copy of <paramref name="request"/> for the 401 retry: method, URI, version, options,
-    /// content (buffered so it can be re-read), and content headers. Request headers are re-applied by
-    /// <see cref="ApplyHeaders"/> after cloning. A sent <see cref="HttpRequestMessage"/> cannot be reused, so the
-    /// retry requires this clone.
+    ///     Builds a fresh, unsent copy of <paramref name="request" /> for the 401 retry: method, URI, version, options,
+    ///     content (buffered so it can be re-read), and content headers. Request headers are re-applied by
+    ///     <see cref="ApplyHeaders" /> after cloning. A sent <see cref="HttpRequestMessage" /> cannot be reused, so the
+    ///     retry requires this clone.
     /// </summary>
-    private static async Task<HttpRequestMessage> CloneRequestAsync(
-        HttpRequestMessage request,
+    private static async Task<HttpRequestMessage> CloneRequestAsync(HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         var clone = new HttpRequestMessage(request.Method, request.RequestUri)
         {
             Version = request.Version,
-            VersionPolicy = request.VersionPolicy,
+            VersionPolicy = request.VersionPolicy
         };
 
         if (request.Content is not null)

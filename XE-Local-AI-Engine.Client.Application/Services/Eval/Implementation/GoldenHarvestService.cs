@@ -95,11 +95,11 @@ internal sealed class GoldenHarvestService(
             }
         }
 
-        return new GoldenHarvestOutcome(AgentExists: true,
-            ThumbsUpScanned: sources.Count,
-            CreatedCount: created,
-            DuplicateCount: duplicate,
-            SkippedCount: skipped);
+        return new GoldenHarvestOutcome(true,
+            sources.Count,
+            created,
+            duplicate,
+            skipped);
     }
 
     private static GoldenConversationCreateInput BuildCandidate(Guid agentId, HarvestCandidateSource source, string firstUserTurnText)
@@ -107,9 +107,9 @@ internal sealed class GoldenHarvestService(
         return new GoldenConversationCreateInput(agentId,
             BuildTitle(source, firstUserTurnText),
             SerializeTurns(source.PriorTurns),
-            Assertion: null,
-            Rubric: Truncate(RubricSeed + source.ApprovedAnswerText, MaxRubricLength),
-            Enabled: false,
+            null,
+            Truncate(RubricSeed + source.ApprovedAnswerText, MaxRubricLength),
+            false,
             GoldenConversationSource.Harvested,
             source.MessageId,
             source.ConversationId);

@@ -47,8 +47,8 @@ public sealed partial class InvocationRunner
         private readonly RuntimePackage _package;
         private readonly InvocationRunner _runner;
         private readonly bool _sendEncrypted;
-        private readonly IHubMessageSender _sender;
         private readonly bool _sendPlain;
+        private readonly IHubMessageSender _sender;
 
         public StreamTransport(InvocationRunner runner,
             IHubMessageSender sender,

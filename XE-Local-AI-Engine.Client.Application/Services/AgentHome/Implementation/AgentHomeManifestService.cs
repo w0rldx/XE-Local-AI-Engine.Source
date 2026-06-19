@@ -247,7 +247,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var temporaryPath = path + ".tmp";
         var json = JsonSerializer.Serialize(manifest, SerializerOptions);
         await File.WriteAllTextAsync(temporaryPath, json, cancellationToken).ConfigureAwait(false);
-        File.Move(temporaryPath, path, overwrite: true);
+        File.Move(temporaryPath, path, true);
     }
 
     private static void EnsureDirectories(string agentHomeRoot)
@@ -354,7 +354,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             throw new InvalidOperationException($"Refusing to recursively delete '{agentHomeRoot}': no AgentHome manifest is present.");
         }
 
-        Directory.Delete(agentHomeRoot, recursive: true);
+        Directory.Delete(agentHomeRoot, true);
     }
 
     private void WriteLockFile(string agentHomeRoot)

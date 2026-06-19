@@ -38,7 +38,7 @@ public sealed class ModelFitStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
 
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        var seeded = await store.UpsertSeedAsync(CreateImageRecord(enabled: false));
+        var seeded = await store.UpsertSeedAsync(CreateImageRecord(false));
 
         AssertEx.Equal(ImageId, seeded.ApprovedImageId);
         AssertEx.Equal(ImageReference, seeded.ImageReference);
@@ -64,7 +64,7 @@ public sealed class ModelFitStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
 
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        _ = await store.UpsertSeedAsync(CreateImageRecord(enabled: false));
+        _ = await store.UpsertSeedAsync(CreateImageRecord(false));
 
         var byUpperId = await store.GetByIdAsync(ImageId.ToUpperInvariant());
 
@@ -82,9 +82,9 @@ public sealed class ModelFitStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
 
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        _ = await store.UpsertSeedAsync(CreateImageRecord(enabled: false));
+        _ = await store.UpsertSeedAsync(CreateImageRecord(false));
 
-        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(ImageId, enabled: true));
+        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(ImageId, true));
         AssertEx.True(enabled.Enabled, "SetEnabled(true) should enable the descriptor.");
 
         var reread = AssertEx.NotNull(await store.GetByIdAsync(ImageId));
@@ -103,7 +103,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
 
-        AssertEx.Null(await store.SetEnabledAsync("does-not-exist", enabled: true));
+        AssertEx.Null(await store.SetEnabledAsync("does-not-exist", true));
     }
 
     [Test]
@@ -119,11 +119,11 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
 
         // Seed disabled, then the operator enables it.
-        _ = await store.UpsertSeedAsync(CreateImageRecord(enabled: false));
-        _ = await store.SetEnabledAsync(ImageId, enabled: true);
+        _ = await store.UpsertSeedAsync(CreateImageRecord(false));
+        _ = await store.SetEnabledAsync(ImageId, true);
 
         // Re-seed (as on the next startup) with code-owned changes and Enabled=false in the descriptor.
-        var reseeded = await store.UpsertSeedAsync(CreateImageRecord(enabled: false) with
+        var reseeded = await store.UpsertSeedAsync(CreateImageRecord(false) with
         {
             DisplayName = "llmfit recommender (updated)"
         });
@@ -143,9 +143,9 @@ public sealed class ModelFitStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
 
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        _ = await store.UpsertSeedAsync(CreateImageRecord(enabled: true));
+        _ = await store.UpsertSeedAsync(CreateImageRecord(true));
 
-        var touched = AssertEx.NotNull(await store.TouchUsedAsync(ImageId, lastUsedAtUtc: 5_000, lastSuccessfulRunAtUtc: 5_500));
+        var touched = AssertEx.NotNull(await store.TouchUsedAsync(ImageId, 5_000, 5_500));
 
         AssertEx.Equal(5_000L, touched.LastUsedAtUtc);
         AssertEx.Equal(5_500L, touched.LastSuccessfulRunAtUtc);
@@ -171,13 +171,13 @@ public sealed class ModelFitStoreTests : IDisposable
         AssertEx.Equal(ModelFitRunStatus.Queued, created.Status);
         AssertEx.False(created.IsLatestSuccessful, "A queued run is not latest-successful.");
 
-        var succeeded = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 1_234,
-            rawJson: """{"models":[]}""", stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 9_000));
+        var succeeded = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, 0, 1_234,
+            """{"models":[]}""", null, null, 9_000));
 
         AssertEx.Equal(ModelFitRunStatus.Succeeded, succeeded.Status);
         AssertEx.True(succeeded.IsLatestSuccessful, "A succeeded run becomes latest-successful for its key.");
 
-        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", null));
         AssertEx.Equal(succeeded.Id, latest.Id);
     }
 
@@ -203,7 +203,7 @@ public sealed class ModelFitStoreTests : IDisposable
         var firstReread = await store.GetRawByIdAsync(first.Id);
         AssertEx.NotNull(firstReread);
 
-        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", null));
         AssertEx.Equal(second.Id, latest.Id);
 
         // Exactly one row is latest for the key.
@@ -272,8 +272,8 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ModelFitSnapshotStore(context, TimeProvider.System);
         var created = await store.CreateRunningAsync(CreateRecommendInput("coding"));
 
-        var failed = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Failed, exitCode: 1, durationMs: 10,
-            rawJson: null, stderrExcerpt: "Error: boom", diagnosticsJson: null, completedAtUtc: 1_000));
+        var failed = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Failed, 1, 10,
+            null, "Error: boom", null, 1_000));
 
         AssertEx.Equal(ModelFitRunStatus.Failed, failed.Status);
         AssertEx.False(failed.IsLatestSuccessful, "A failed run is never latest-successful.");
@@ -313,7 +313,7 @@ public sealed class ModelFitStoreTests : IDisposable
         clock.Advance(1_000);
         var second = await store.CreateRunningAsync(CreateRecommendInput("coding"));
 
-        var recent = await store.ListRecentSummariesAsync(operation: ModelFitOperation.Recommend, providerName: "ollama");
+        var recent = await store.ListRecentSummariesAsync(ModelFitOperation.Recommend, "ollama");
 
         AssertEx.Equal(2, recent.Count);
         AssertEx.Equal(second.Id, recent[0].Id);
@@ -401,8 +401,8 @@ public sealed class ModelFitStoreTests : IDisposable
 
         var inserted = await recommendationStore.ReplaceForSnapshotAsync(snapshot.Id,
         [
-            CreateRecommendation(rank: 2, "model-b", 80.0),
-            CreateRecommendation(rank: 1, "model-a", 95.0)
+            CreateRecommendation(2, "model-b", 80.0),
+            CreateRecommendation(1, "model-a", 95.0)
         ]);
 
         AssertEx.Equal(2, inserted);
@@ -470,8 +470,8 @@ public sealed class ModelFitStoreTests : IDisposable
 
             var inserted = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput("qwen", "ollama", TokensPerSecond: 42.0, TtftMs: 12.0, TotalLatencyMs: 200.0,
-                    Runs: 3, RawJson: rawJson, DiagnosticsJson: """{"note":"ok"}""")
+                new ModelFitBenchmarkInput("qwen", "ollama", 42.0, 12.0, 200.0,
+                    3, rawJson, """{"note":"ok"}""")
             ]);
 
             AssertEx.Equal(1, inserted);
@@ -524,61 +524,61 @@ public sealed class ModelFitStoreTests : IDisposable
 
     private static ApprovedUtilityImageRecord CreateImageRecord(bool enabled)
     {
-        return new ApprovedUtilityImageRecord(ApprovedImageId: ImageId,
-            DisplayName: "llmfit recommender 0.9.30",
-            Description: null,
-            Purpose: UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
-            ImageReference: ImageReference,
-            SourceUrl: null,
-            UpstreamVersion: "0.9.30",
-            Enabled: enabled,
-            DeprecatedAtUtc: null,
-            ReplacementApprovedImageId: null,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            LastUsedAtUtc: null,
-            LastSuccessfulRunAtUtc: null,
-            DiagnosticsJson: """{"license":"MIT"}""");
+        return new ApprovedUtilityImageRecord(ImageId,
+            "llmfit recommender 0.9.30",
+            null,
+            UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
+            ImageReference,
+            null,
+            "0.9.30",
+            enabled,
+            null,
+            null,
+            0,
+            0,
+            null,
+            null,
+            """{"license":"MIT"}""");
     }
 
     private static ModelFitSnapshotInput CreateRecommendInput(string useCase)
     {
-        return new ModelFitSnapshotInput(ApprovedImageId: ImageId,
-            Operation: ModelFitOperation.Recommend,
-            UseCase: useCase,
-            ProviderName: "ollama",
-            ModelName: null,
-            Status: ModelFitRunStatus.Queued,
-            StartedAtUtc: null);
+        return new ModelFitSnapshotInput(ImageId,
+            ModelFitOperation.Recommend,
+            useCase,
+            "ollama",
+            null,
+            ModelFitRunStatus.Queued,
+            null);
     }
 
     private static ModelFitSnapshotInput CreateBenchmarkInput(string modelName)
     {
-        return new ModelFitSnapshotInput(ApprovedImageId: ImageId,
-            Operation: ModelFitOperation.Benchmark,
-            UseCase: null,
-            ProviderName: "ollama",
-            ModelName: modelName,
-            Status: ModelFitRunStatus.Queued,
-            StartedAtUtc: null);
+        return new ModelFitSnapshotInput(ImageId,
+            ModelFitOperation.Benchmark,
+            null,
+            "ollama",
+            modelName,
+            ModelFitRunStatus.Queued,
+            null);
     }
 
     private static ModelFitRecommendationInput CreateRecommendation(int rank, string modelName, double score)
     {
-        return new ModelFitRecommendationInput(Rank: rank,
-            ModelName: modelName,
-            ProviderModelName: modelName,
-            Score: score,
-            FitLevel: "Good",
-            RunMode: "CPU",
-            Quantization: "Q5_K_M",
-            EstimatedTokensPerSecond: 20.0,
-            RequiredRamMb: 4_096.0,
-            RequiredVramMb: null,
-            ContextTokens: 8_192,
-            IsInstalled: false,
-            PullModelName: modelName,
-            DiagnosticsJson: null);
+        return new ModelFitRecommendationInput(rank,
+            modelName,
+            modelName,
+            score,
+            "Good",
+            "CPU",
+            "Q5_K_M",
+            20.0,
+            4_096.0,
+            null,
+            8_192,
+            false,
+            modelName,
+            null);
     }
 
     private static async Task<int> CountLatestSuccessfulAsync(string databasePath,

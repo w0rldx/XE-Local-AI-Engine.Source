@@ -23,7 +23,7 @@ public sealed class SandboxProviderSelectionTests
     [Test]
     public void Resolve_WhenProviderUnset_DefaultsToFakeProvider()
     {
-        using var services = BuildServices(provider: null);
+        using var services = BuildServices(null);
 
         var provider = SandboxProviderSelector.Resolve(services);
 

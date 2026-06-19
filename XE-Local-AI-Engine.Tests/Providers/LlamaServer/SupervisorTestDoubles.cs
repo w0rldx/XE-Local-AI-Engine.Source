@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -16,7 +16,10 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
     private readonly Func<LlamaServerLaunchSpec, FakeProcessHandle>? _onLaunch;
     private int _nextPid = 1000;
 
-    public FakeProcessLauncher(Func<LlamaServerLaunchSpec, FakeProcessHandle>? onLaunch = null) => _onLaunch = onLaunch;
+    public FakeProcessLauncher(Func<LlamaServerLaunchSpec, FakeProcessHandle>? onLaunch = null)
+    {
+        _onLaunch = onLaunch;
+    }
 
     public ConcurrentQueue<LlamaServerLaunchSpec> Launches { get; } = new();
 
@@ -41,16 +44,13 @@ internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
     private int _exited;
     private int _killed;
 
-    public int ProcessId { get; } = pid;
-
-    public bool HasExited => Volatile.Read(ref _exited) != 0;
-
     public bool WasTreeKilled => Volatile.Read(ref _killed) != 0;
 
     public bool WasDisposed { get; private set; }
 
-    /// <summary>Simulates a process crash/exit so the next ensure-running sees a dead process.</summary>
-    public void SimulateExit() => Interlocked.Exchange(ref _exited, 1);
+    public int ProcessId { get; } = pid;
+
+    public bool HasExited => Volatile.Read(ref _exited) != 0;
 
     public void TreeKill()
     {
@@ -58,7 +58,16 @@ internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
         Interlocked.Exchange(ref _exited, 1);
     }
 
-    public void Dispose() => WasDisposed = true;
+    public void Dispose()
+    {
+        WasDisposed = true;
+    }
+
+    /// <summary>Simulates a process crash/exit so the next ensure-running sees a dead process.</summary>
+    public void SimulateExit()
+    {
+        Interlocked.Exchange(ref _exited, 1);
+    }
 }
 
 /// <summary>Health probe with controllable readiness; defaults to immediately-ready + responsive.</summary>
@@ -68,11 +77,15 @@ internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true)
 
     public bool Responsive { get; set; } = responsive;
 
-    public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct) =>
-        Task.FromResult(Ready);
+    public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+    {
+        return Task.FromResult(Ready);
+    }
 
-    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) =>
-        Task.FromResult(Responsive);
+    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+    {
+        return Task.FromResult(Responsive);
+    }
 }
 
 /// <summary>
@@ -86,9 +99,6 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
 
     /// <summary>Number of spawns currently parked in the readiness wait.</summary>
     public int Waiting => Volatile.Read(ref _waiting);
-
-    /// <summary>Releases every parked (and future) readiness wait.</summary>
-    public void Release() => _release.TrySetResult();
 
     public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
@@ -104,20 +114,34 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
         }
     }
 
-    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct) => Task.FromResult(true);
+    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+    {
+        return Task.FromResult(true);
+    }
+
+    /// <summary>Releases every parked (and future) readiness wait.</summary>
+    public void Release()
+    {
+        _release.TrySetResult();
+    }
 }
 
 /// <summary>Binary manager returning a fixed fake server path for whatever variant is requested; never downloads.</summary>
 internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
 {
-    public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) =>
-        Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", variant, IsPinnedFallback: true));
+    public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", variant, true));
+    }
 }
 
 /// <summary>Variant selector returning a fixed variant; never probes hardware.</summary>
 internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) : IGpuVariantSelector
 {
-    public Task<GpuVariant> SelectVariantAsync(CancellationToken ct) => Task.FromResult(variant);
+    public Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
+    {
+        return Task.FromResult(variant);
+    }
 }
 
 /// <summary>
@@ -129,32 +153,42 @@ internal sealed class FakeModelStore(
     string? fixedPath = "/fake/models/model.gguf",
     IReadOnlyList<string>? installedModelNames = null) : IGgufModelStore
 {
-    public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct) =>
-        Task.FromResult(fixedPath);
+    public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
+    {
+        return Task.FromResult(fixedPath);
+    }
 
     public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
     {
         IReadOnlyList<LocalModelDescriptor> descriptors = (installedModelNames ?? [])
-            .Select(name => new LocalModelDescriptor
-            {
-                ModelName = name,
-                ProviderName = LlamaServerProviderConstants.ProviderName,
-                IsAvailable = true,
-                SizeBytes = null,
-                ModifiedAt = null,
-                MaxContextTokens = null
-            })
-            .ToList();
+                                                          .Select(name => new LocalModelDescriptor
+                                                          {
+                                                              ModelName = name,
+                                                              ProviderName = LlamaServerProviderConstants.ProviderName,
+                                                              IsAvailable = true,
+                                                              SizeBytes = null,
+                                                              ModifiedAt = null,
+                                                              MaxContextTokens = null
+                                                          })
+                                                          .ToList();
 
         return Task.FromResult(descriptors);
     }
 
-    public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct) =>
+    public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
+    {
         throw new NotSupportedException("FakeModelStore does not download.");
+    }
 
-    public Task DeleteModelAsync(string modelName, CancellationToken ct) => Task.CompletedTask;
+    public Task DeleteModelAsync(string modelName, CancellationToken ct)
+    {
+        return Task.CompletedTask;
+    }
 
-    public Task<bool> ExistsAsync(string modelName, CancellationToken ct) => Task.FromResult(fixedPath is not null);
+    public Task<bool> ExistsAsync(string modelName, CancellationToken ct)
+    {
+        return Task.FromResult(fixedPath is not null);
+    }
 }
 
 /// <summary>
@@ -165,10 +199,18 @@ internal sealed class AdvanceableTimeProvider : TimeProvider
 {
     private long _utcTicks = DateTimeOffset.UtcNow.UtcTicks;
 
-    public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _utcTicks), TimeSpan.Zero);
+    public override DateTimeOffset GetUtcNow()
+    {
+        return new DateTimeOffset(Interlocked.Read(ref _utcTicks), TimeSpan.Zero);
+    }
 
-    public void Advance(TimeSpan delta) => Interlocked.Add(ref _utcTicks, delta.Ticks);
+    public void Advance(TimeSpan delta)
+    {
+        Interlocked.Add(ref _utcTicks, delta.Ticks);
+    }
 
-    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
-        System.CreateTimer(callback, state, dueTime, period);
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+    {
+        return System.CreateTimer(callback, state, dueTime, period);
+    }
 }

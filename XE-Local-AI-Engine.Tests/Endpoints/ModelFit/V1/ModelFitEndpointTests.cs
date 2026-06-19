@@ -18,19 +18,40 @@ public sealed class ModelFitEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1";
 
-    private static string RecommendationsLatestRoute() => $"{ApiPrefix}/model-fit/recommendations/latest";
+    private static string RecommendationsLatestRoute()
+    {
+        return $"{ApiPrefix}/model-fit/recommendations/latest";
+    }
 
-    private static string RecommendationsRefreshRoute() => $"{ApiPrefix}/model-fit/recommendations/refresh";
+    private static string RecommendationsRefreshRoute()
+    {
+        return $"{ApiPrefix}/model-fit/recommendations/refresh";
+    }
 
-    private static string HardwareProfileRoute() => $"{ApiPrefix}/model-fit/hardware-profile";
+    private static string HardwareProfileRoute()
+    {
+        return $"{ApiPrefix}/model-fit/hardware-profile";
+    }
 
-    private static string GgufBrowseRoute() => $"{ApiPrefix}/model-fit/gguf/browse";
+    private static string GgufBrowseRoute()
+    {
+        return $"{ApiPrefix}/model-fit/gguf/browse";
+    }
 
-    private static string RunningRoute() => $"{ApiPrefix}/model-fit/running";
+    private static string RunningRoute()
+    {
+        return $"{ApiPrefix}/model-fit/running";
+    }
 
-    private static string LlamaCppVersionRoute() => $"{ApiPrefix}/model-fit/llamacpp/version";
+    private static string LlamaCppVersionRoute()
+    {
+        return $"{ApiPrefix}/model-fit/llamacpp/version";
+    }
 
-    private static string HfTokenRoute() => $"{ApiPrefix}/model-fit/hf-token";
+    private static string HfTokenRoute()
+    {
+        return $"{ApiPrefix}/model-fit/hf-token";
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // 401 — every route requires a bearer token (Operator policy).

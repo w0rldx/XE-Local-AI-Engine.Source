@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32.SafeHandles;
@@ -22,44 +23,18 @@ using Microsoft.Win32.SafeHandles;
 [SupportedOSPlatform("windows")]
 internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProcessHandle
 {
-    private readonly Process _process;
+    // ── Win32 interop ────────────────────────────────────────────────────────────────────────────────────────────
+
+    private const int JobObjectExtendedLimitInformation = 9;
+    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
     private readonly SafeJobHandle _job;
+    private readonly Process _process;
     private int _disposed;
 
     private WindowsJobObjectProcessHandle(Process process, SafeJobHandle job)
     {
         _process = process;
         _job = job;
-    }
-
-    /// <summary>
-    ///     Creates a job, marks it kill-on-close, assigns the already-started <paramref name="process" /> to it, and
-    ///     returns the handle. On any failure the job and process are torn down and a sanitized error is surfaced.
-    /// </summary>
-    public static WindowsJobObjectProcessHandle Wrap(Process process)
-    {
-        ArgumentNullException.ThrowIfNull(process);
-
-        SafeJobHandle? job = null;
-        try
-        {
-            job = CreateJobObjectW(IntPtr.Zero, null);
-            if (job.IsInvalid)
-            {
-                throw new Win32Exception(Marshal.GetLastPInvokeError());
-            }
-
-            ConfigureKillOnClose(job);
-            AssignProcess(job, process);
-            return new WindowsJobObjectProcessHandle(process, job);
-        }
-        catch (Exception ex)
-        {
-            job?.Dispose();
-            TryKill(process);
-            process.Dispose();
-            throw new LlamaRuntimeException("The local model runtime could not be contained for safe shutdown.", ex);
-        }
     }
 
     public int ProcessId => _process.Id;
@@ -92,6 +67,36 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         }
     }
 
+    /// <summary>
+    ///     Creates a job, marks it kill-on-close, assigns the already-started <paramref name="process" /> to it, and
+    ///     returns the handle. On any failure the job and process are torn down and a sanitized error is surfaced.
+    /// </summary>
+    public static WindowsJobObjectProcessHandle Wrap(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+
+        SafeJobHandle? job = null;
+        try
+        {
+            job = CreateJobObjectW(IntPtr.Zero, null);
+            if (job.IsInvalid)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+
+            ConfigureKillOnClose(job);
+            AssignProcess(job, process);
+            return new WindowsJobObjectProcessHandle(process, job);
+        }
+        catch (Exception ex)
+        {
+            job?.Dispose();
+            TryKill(process);
+            process.Dispose();
+            throw new LlamaRuntimeException("The local model runtime could not be contained for safe shutdown.", ex);
+        }
+    }
+
     private static void ConfigureKillOnClose(SafeJobHandle job)
     {
         var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION
@@ -106,7 +111,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         var buffer = Marshal.AllocHGlobal(length);
         try
         {
-            Marshal.StructureToPtr(info, buffer, fDeleteOld: false);
+            Marshal.StructureToPtr(info, buffer, false);
             if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)length))
             {
                 throw new Win32Exception(Marshal.GetLastPInvokeError());
@@ -132,7 +137,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         {
             if (!SafeHasExited(process))
             {
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
             }
         }
         catch (Exception)
@@ -153,17 +158,6 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         }
     }
 
-    // ── Win32 interop ────────────────────────────────────────────────────────────────────────────────────────────
-
-    private const int JobObjectExtendedLimitInformation = 9;
-    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
-
-    /// <summary>Owns the Win32 job-object handle; closing it terminates the kill-on-close job's process tree.</summary>
-    private sealed class SafeJobHandle() : SafeHandleZeroOrMinusOneIsInvalid(ownsHandle: true)
-    {
-        protected override bool ReleaseHandle() => CloseHandle(handle);
-    }
-
     [LibraryImport("kernel32.dll", EntryPoint = "CreateJobObjectW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static partial SafeJobHandle CreateJobObjectW(IntPtr lpJobAttributes, string? lpName);
@@ -171,8 +165,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetInformationJobObject(
-        SafeJobHandle hJob,
+    private static partial bool SetInformationJobObject(SafeJobHandle hJob,
         int jobObjectInformationClass,
         IntPtr lpJobObjectInformation,
         uint cbJobObjectInformationLength);
@@ -187,8 +180,17 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CloseHandle(IntPtr hObject);
 
+    /// <summary>Owns the Win32 job-object handle; closing it terminates the kill-on-close job's process tree.</summary>
+    private sealed class SafeJobHandle() : SafeHandleZeroOrMinusOneIsInvalid(true)
+    {
+        protected override bool ReleaseHandle()
+        {
+            return CloseHandle(handle);
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
+    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
     private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
     {
         public long PerProcessUserTimeLimit;
@@ -203,7 +205,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
+    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
     private struct IO_COUNTERS
     {
         public ulong ReadOperationCount;
@@ -215,7 +217,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
+    [SuppressMessage("Major Code Smell", "S101:Types should be named in PascalCase", Justification = "Win32 interop struct — name mirrors the native layout exactly.")]
     private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
     {
         public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;

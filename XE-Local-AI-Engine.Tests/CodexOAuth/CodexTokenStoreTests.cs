@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
-/// Verifies the ported <see cref="CodexTokenStore"/> persists the OAuth session encrypted at rest, applies
-/// user-only file permissions, clears on logout, and fails closed when the stored payload is tampered.
+///     Verifies the ported <see cref="CodexTokenStore" /> persists the OAuth session encrypted at rest, applies
+///     user-only file permissions, clears on logout, and fails closed when the stored payload is tampered.
 /// </summary>
 public sealed class CodexTokenStoreTests : IDisposable
 {
@@ -110,8 +110,13 @@ public sealed class CodexTokenStoreTests : IDisposable
             NullLogger<CodexTokenStore>.Instance);
     }
 
-    private string GetTokensPath() => Path.Combine(_contentRootPath, TokensFileName);
+    private string GetTokensPath()
+    {
+        return Path.Combine(_contentRootPath, TokensFileName);
+    }
 
     private static CodexTokens CreateTokens()
-        => new("access-token-value", "refresh-token-value", DateTimeOffset.UtcNow.AddHours(1), "acct_123");
+    {
+        return new CodexTokens("access-token-value", "refresh-token-value", DateTimeOffset.UtcNow.AddHours(1), "acct_123");
+    }
 }

@@ -21,7 +21,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, recursive: true);
+                    Directory.Delete(dir, true);
                 }
             }
             catch (IOException)

@@ -243,7 +243,7 @@ internal sealed class AgentHomeService : IAgentHomeService
 
             // Only commandCts fired (CancelAfter) → a TIMEOUT → surface a non-throwing result so the conversation can
             // continue. The patch/memory exports are skipped; the run logger records the timeout.
-            await AppendCommandSafelyAsync(runLogger, runId, descriptor, completed: false, exitCode: -1, commandStartedAt,
+            await AppendCommandSafelyAsync(runLogger, runId, descriptor, false, -1, commandStartedAt,
                 nameof(OperationCanceledException), CancellationToken.None).ConfigureAwait(false);
             await AppendEventSafelyAsync(runLogger, "timed_out",
                 string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={_options.CommandTimeoutSeconds}"),
@@ -266,7 +266,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         }
 
         await AppendCommandSafelyAsync(runLogger, runId, descriptor, result.Completed, result.ExitCode, commandStartedAt,
-            errorClass: null, cancellationToken).ConfigureAwait(false);
+            null, cancellationToken).ConfigureAwait(false);
 
         // Patch export runs after the command so the agent's file edits are diffed against the workspace-copy git
         // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).

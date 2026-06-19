@@ -25,7 +25,7 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None).ConfigureAwait(false);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 5_000_000_000, SizeVramBytes: 4_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), 5_000_000_000, 4_000_000_000)
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         var capabilityClient = new OllamaModelCapabilityClient(ollamaClient);
@@ -47,7 +47,7 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None).ConfigureAwait(false);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 7_000_000_000, SizeVramBytes: 6_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), 7_000_000_000, 6_000_000_000)
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
@@ -88,9 +88,8 @@ public sealed class RunningModelSnapshotMappingTests
     {
         // A snapshot with no expiry/footprint maps to a row with null memory + null countdown rather than zeroed values, so
         // the UI can omit those columns.
-        var response = LocalModelsMapper.ToRunningResponse(
-        [
-            new RunningModelSnapshot("llama3:8b", ModelName: null, ExpiresAt: null)
+        var response = LocalModelsMapper.ToRunningResponse([
+            new RunningModelSnapshot("llama3:8b", null, null)
         ]);
 
         AssertEx.True(response.IsAvailable);
@@ -105,10 +104,9 @@ public sealed class RunningModelSnapshotMappingTests
     public void Mapper_ToRunningResponse_PrefersModelNameAndDropsNamelessEntries()
     {
         // The runtime may report the canonical id under "model"; nameless rows (neither field set) are dropped.
-        var response = LocalModelsMapper.ToRunningResponse(
-        [
-            new RunningModelSnapshot(Name: "raw", ModelName: "llama3:8b", ExpiresAt: null),
-            new RunningModelSnapshot(Name: null, ModelName: null, ExpiresAt: null)
+        var response = LocalModelsMapper.ToRunningResponse([
+            new RunningModelSnapshot("raw", "llama3:8b", null),
+            new RunningModelSnapshot(null, null, null)
         ]);
 
         var model = AssertEx.NotNull(response.Items.SingleOrDefault());

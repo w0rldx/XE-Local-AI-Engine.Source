@@ -417,7 +417,7 @@ public sealed class McpServerStoreTests : IDisposable
         var descriptionBefore = await ReadRawBlobAsync(databasePath, "description");
 
         clock.Advance(10);
-        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true),
+        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true),
             "SetEnabled should find the server.");
 
         AssertEx.True(enabled.Enabled, "Enabling should persist the enabled flag.");
@@ -438,13 +438,13 @@ public sealed class McpServerStoreTests : IDisposable
         // A second SetEnabled to the same value is a no-op for Version (no over-invalidation), and the secrets still
         // decrypt correctly across the whole sequence — proving the untouched ciphertext is still valid.
         clock.Advance(10);
-        var unchanged = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true),
+        var unchanged = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true),
             "SetEnabled should find the server.");
         AssertEx.Equal(2, unchanged.Version);
 
         // Disabling again is a real change and bumps Version once more (so an enable/disable cycle is +2 total, not +4).
         clock.Advance(10);
-        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: false),
+        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, false),
             "SetEnabled should find the server.");
         AssertEx.False(disabled.Enabled, "Disabling should clear the enabled flag.");
         AssertEx.Equal(3, disabled.Version);
@@ -468,7 +468,7 @@ public sealed class McpServerStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new McpServerStore(context, TimeProvider.System);
 
-        var result = await store.SetEnabledAsync(Guid.NewGuid(), enabled: true);
+        var result = await store.SetEnabledAsync(Guid.NewGuid(), true);
         AssertEx.Null(result, "Toggling an unknown id should return null.");
     }
 
@@ -502,32 +502,32 @@ public sealed class McpServerStoreTests : IDisposable
         return new McpServerInput("filesystem",
             Description,
             McpTransportKind.Stdio,
-            Command: "npx",
-            Arguments: new[]
+            "npx",
+            new[]
             {
                 "--root",
                 "repo"
             },
-            WorkingDirectory: "work-dir",
-            Environment: new Dictionary<string, string>
+            "work-dir",
+            new Dictionary<string, string>
             {
                 ["API_TOKEN"] = "s3cr3t"
             },
-            Url: null,
-            Enabled: false);
+            null,
+            false);
     }
 
     private static McpServerInput CreateHttpInput()
     {
         return new McpServerInput("playwright",
-            Description: null,
+            null,
             McpTransportKind.Http,
-            Command: null,
-            Arguments: [],
-            WorkingDirectory: null,
-            Environment: new Dictionary<string, string>(),
-            Url: LoopbackSseUrl,
-            Enabled: false);
+            null,
+            [],
+            null,
+            new Dictionary<string, string>(),
+            LoopbackSseUrl,
+            false);
     }
 
     private static async Task TamperArgumentsAsync(string databasePath)

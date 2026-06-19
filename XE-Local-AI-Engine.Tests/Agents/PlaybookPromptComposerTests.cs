@@ -23,8 +23,8 @@ public sealed class PlaybookPromptComposerTests
     {
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Action("Run the tests first.", priority: 1),
-            Action("Prefer small commits.", priority: 5)
+            Action("Run the tests first.", 1),
+            Action("Prefer small commits.", 5)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -40,8 +40,8 @@ public sealed class PlaybookPromptComposerTests
         // the Priority values look out of order, so it never second-guesses the store's ordering.
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Action("First emitted.", priority: 9),
-            Action("Second emitted.", priority: 2)
+            Action("First emitted.", 9),
+            Action("Second emitted.", 2)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -56,12 +56,12 @@ public sealed class PlaybookPromptComposerTests
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            TriggerCondition: null,
+            null,
             behavior,
-            Scope: null,
+            null,
             priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            1,
+            10,
+            10);
     }
 }

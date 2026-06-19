@@ -18,9 +18,9 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
 {
     private const string StartExecutorId = "preview-start";
     private const string EndExecutorId = "preview-end";
+    private readonly ILogger<PreviewWorkflowRunner> _logger;
 
     private readonly ILoggerFactory _loggerFactory;
-    private readonly ILogger<PreviewWorkflowRunner> _logger;
     private readonly IServiceProvider _serviceProvider;
 
     public PreviewWorkflowRunner(ILoggerFactory loggerFactory, IServiceProvider serviceProvider)
@@ -53,61 +53,60 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
             switch (node.Kind)
             {
                 case PreviewNodeKind.Start:
-                    plans.Add(new NodePlan(node.Kind, node.Id, ExecutorId: StartExecutorId, Binding: null));
+                    plans.Add(new NodePlan(node.Kind, node.Id, StartExecutorId, null));
                     break;
 
                 case PreviewNodeKind.Agent:
-                {
-                    var agentNode = (PreviewAgentNode)node;
-
-                    // Resolve THIS agent's node-local client by its own model id. The caller returns one
-                    // shared client per distinct model, so two agents on the same model share a client while an agent on
-                    // a different model gets its own — each agent runs on the model the operator selected for it.
-                    var agentClient = resolveChatClient(agentNode.ModelId)
-                        ?? throw new InvalidOperationException(
-                            $"No node-local chat client was resolved for model '{agentNode.ModelId}' (node '{agentNode.Id}').");
-                    var agent = BuildAgent(agentNode, agentClient);
-
-                    // The executor id MAF registers for an AIAgent binding is "{name}_{agentId}" — NOT bare agent.Id —
-                    // so resolve it from the materialized ExecutorBinding (its .Id), which is what events surface and
-                    // what a targeted SendMessageAsync must address. (Note: agent.Id is NOT the executor id.)
-                    // ForwardIncomingMessages=false: an agent must NOT re-forward the messages it received (that
-                    // broadcasts the upstream/seed turns to every downstream agent and double-pumps the chain — without
-                    // this the Start seed reaches every downstream agent). The agent still emits its own response,
-                    // which the transform/End consumes. EmitAgentUpdateEvents=true surfaces streamed assistant text.
-                    var hostOptions = new AIAgentHostOptions
                     {
-                        ForwardIncomingMessages = false,
-                        EmitAgentUpdateEvents = true
-                    };
-                    var agentBinding = agent.BindAsExecutor(hostOptions);
-                    agentExecutorIdToNodeId[agentBinding.Id] = agentNode.Id;
-                    plans.Add(new NodePlan(node.Kind, node.Id, agentBinding.Id, agentBinding));
-                    break;
-                }
+                        var agentNode = (PreviewAgentNode)node;
+
+                        // Resolve THIS agent's node-local client by its own model id. The caller returns one
+                        // shared client per distinct model, so two agents on the same model share a client while an agent on
+                        // a different model gets its own — each agent runs on the model the operator selected for it.
+                        var agentClient = resolveChatClient(agentNode.ModelId)
+                                          ?? throw new InvalidOperationException($"No node-local chat client was resolved for model '{agentNode.ModelId}' (node '{agentNode.Id}').");
+                        var agent = BuildAgent(agentNode, agentClient);
+
+                        // The executor id MAF registers for an AIAgent binding is "{name}_{agentId}" — NOT bare agent.Id —
+                        // so resolve it from the materialized ExecutorBinding (its .Id), which is what events surface and
+                        // what a targeted SendMessageAsync must address. (Note: agent.Id is NOT the executor id.)
+                        // ForwardIncomingMessages=false: an agent must NOT re-forward the messages it received (that
+                        // broadcasts the upstream/seed turns to every downstream agent and double-pumps the chain — without
+                        // this the Start seed reaches every downstream agent). The agent still emits its own response,
+                        // which the transform/End consumes. EmitAgentUpdateEvents=true surfaces streamed assistant text.
+                        var hostOptions = new AIAgentHostOptions
+                        {
+                            ForwardIncomingMessages = false,
+                            EmitAgentUpdateEvents = true
+                        };
+                        var agentBinding = agent.BindAsExecutor(hostOptions);
+                        agentExecutorIdToNodeId[agentBinding.Id] = agentNode.Id;
+                        plans.Add(new NodePlan(node.Kind, node.Id, agentBinding.Id, agentBinding));
+                        break;
+                    }
 
                 case PreviewNodeKind.Debug:
-                {
-                    var debug = PreviewExecutors.BuildDebugTap(node.Id);
-                    debugExecutorIdToNodeId[node.Id] = node.Id;
-                    plans.Add(new NodePlan(node.Kind, node.Id, node.Id, debug));
-                    break;
-                }
+                    {
+                        var debug = PreviewExecutors.BuildDebugTap(node.Id);
+                        debugExecutorIdToNodeId[node.Id] = node.Id;
+                        plans.Add(new NodePlan(node.Kind, node.Id, node.Id, debug));
+                        break;
+                    }
 
                 case PreviewNodeKind.Pause:
-                {
-                    var port = RequestPort.Create<string, string>(node.Id);
-                    requestPortIdToNodeId[node.Id] = node.Id;
-                    plans.Add(new NodePlan(node.Kind, node.Id, node.Id, port));
-                    break;
-                }
+                    {
+                        var port = RequestPort.Create<string, string>(node.Id);
+                        requestPortIdToNodeId[node.Id] = node.Id;
+                        plans.Add(new NodePlan(node.Kind, node.Id, node.Id, port));
+                        break;
+                    }
 
                 case PreviewNodeKind.End:
-                {
-                    var end = PreviewExecutors.BuildEnd(EndExecutorId);
-                    plans.Add(new NodePlan(node.Kind, node.Id, EndExecutorId, end));
-                    break;
-                }
+                    {
+                        var end = PreviewExecutors.BuildEnd(EndExecutorId);
+                        plans.Add(new NodePlan(node.Kind, node.Id, EndExecutorId, end));
+                        break;
+                    }
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(definition),
@@ -132,7 +131,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
         {
             var current = plans[i];
             var currentBinding = current.Binding
-                ?? throw new InvalidOperationException($"Node '{current.NodeId}' has no executor binding.");
+                                 ?? throw new InvalidOperationException($"Node '{current.NodeId}' has no executor binding.");
 
             if (current.Kind == PreviewNodeKind.Pause)
             {
@@ -167,7 +166,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
         }
 
         var endBinding = plans[^1].Binding
-            ?? throw new InvalidOperationException("The End node has no executor binding.");
+                         ?? throw new InvalidOperationException("The End node has no executor binding.");
         _ = builder.WithOutputFrom(endBinding);
         var workflow = builder.Build();
 
@@ -182,9 +181,6 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
             requestPortIdToNodeId,
             _logger);
     }
-
-    /// <summary>Per-node build record: the MAF executor id surfaced in events + its binding (null only for Start, built in pass 2).</summary>
-    private sealed record NodePlan(PreviewNodeKind Kind, string NodeId, string ExecutorId, ExecutorBinding? Binding);
 
     private AIAgent BuildAgent(PreviewAgentNode node, IChatClient chatClient)
     {
@@ -244,4 +240,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
 
         return ordered;
     }
+
+    /// <summary>Per-node build record: the MAF executor id surfaced in events + its binding (null only for Start, built in pass 2).</summary>
+    private sealed record NodePlan(PreviewNodeKind Kind, string NodeId, string ExecutorId, ExecutorBinding? Binding);
 }

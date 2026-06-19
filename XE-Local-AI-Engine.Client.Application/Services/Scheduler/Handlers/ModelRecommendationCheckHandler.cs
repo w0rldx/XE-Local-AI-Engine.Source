@@ -78,20 +78,20 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
 
     public string TemplateId => TemplateIdValue;
 
-    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateId: TemplateIdValue,
-        DisplayName: "Model recommendation check",
-        Description: "Runs the local model advisor and refreshes the cached model recommendation snapshot.",
-        ParameterSchema: ParameterSchemaJson,
-        DefaultParameters: BuildDefaultParameters(),
-        SupportedScheduleKinds: [ScheduleKind.Manual, ScheduleKind.OneShot, ScheduleKind.Cron, ScheduleKind.SimpleInterval],
+    public ScheduledJobTemplateDescriptor Descriptor { get; } = new(TemplateIdValue,
+        "Model recommendation check",
+        "Runs the local model advisor and refreshes the cached model recommendation snapshot.",
+        ParameterSchemaJson,
+        BuildDefaultParameters(),
+        [ScheduleKind.Manual, ScheduleKind.OneShot, ScheduleKind.Cron, ScheduleKind.SimpleInterval],
         // Manual is the recommended kind for this on-demand template (the React "Refresh now" button fires it via
         // TriggerNowAsync). Cron/OneShot/SimpleInterval stay supported for operators who want a recurring refresh.
-        DefaultScheduleKind: ScheduleKind.Manual,
-        DefaultMisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
-        DefaultMaxRuntimeSeconds: 600,
-        AllowManualTrigger: true,
-        AllowAgentCreation: false,
-        HistoryDetailLevel: HistoryDetailLevel.Detailed);
+        ScheduleKind.Manual,
+        SchedulerMisfirePolicy.SkipMissed,
+        600,
+        true,
+        false,
+        HistoryDetailLevel.Detailed);
 
     public async Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {
@@ -161,17 +161,17 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             parameters.UseCase,
             parameters.Limit,
             AdvisorProviderName,
-            modelName: null);
+            null);
         if (validationError is not null)
         {
             throw new ScheduledJobValidationException(validationError);
         }
 
-        return new ModelFitRefreshRequest(Operation: parameters.Operation,
-            UseCase: parameters.UseCase,
-            Limit: parameters.Limit,
-            QuantOverride: parameters.QuantOverride,
-            CtxTarget: parameters.CtxTarget);
+        return new ModelFitRefreshRequest(parameters.Operation,
+            parameters.UseCase,
+            parameters.Limit,
+            parameters.QuantOverride,
+            parameters.CtxTarget);
     }
 
     private static string BuildDefaultParameters()

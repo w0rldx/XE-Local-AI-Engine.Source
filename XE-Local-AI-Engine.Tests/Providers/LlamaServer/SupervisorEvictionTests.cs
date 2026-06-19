@@ -14,9 +14,8 @@ public sealed class SupervisorEvictionTests
     {
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
-        await using var supervisor = SupervisorFactory.Create(
-            launcher: launcher,
-            options: CapOf(2, ttl: TimeSpan.FromHours(1)),
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(2, TimeSpan.FromHours(1)),
             timeProvider: time);
 
         // Fill the cap with two fresh (non-idle) chat processes.
@@ -24,8 +23,7 @@ public sealed class SupervisorEvictionTests
         await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
 
         // A third distinct model has no idle victim to evict → reject at start.
-        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => supervisor.EnsureRunningAsync("model-c", ModelRole.Chat, CancellationToken.None));
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-c", ModelRole.Chat, CancellationToken.None));
 
         AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
         AssertEx.Equal(2, launcher.LaunchCount); // model-c never launched.
@@ -41,29 +39,27 @@ public sealed class SupervisorEvictionTests
         const int distinctModels = 8;
         var launcher = new FakeProcessLauncher();
         var probe = new GatedHealthProbe();
-        await using var supervisor = SupervisorFactory.Create(
-            launcher: launcher,
-            healthProbe: probe,
-            options: CapOf(cap, ttl: TimeSpan.FromHours(1)));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            probe,
+            options: CapOf(cap, TimeSpan.FromHours(1)));
 
         var calls = Enumerable.Range(0, distinctModels)
-            .Select(i => Task.Run(async () =>
-            {
-                try
-                {
-                    await supervisor.EnsureRunningAsync($"model-{i}", ModelRole.Chat, CancellationToken.None);
-                    return true; // admitted
-                }
-                catch (LlamaRuntimeException)
-                {
-                    return false; // cap-rejected at admit
-                }
-            }))
-            .ToArray();
+                              .Select(i => Task.Run(async () =>
+                              {
+                                  try
+                                  {
+                                      await supervisor.EnsureRunningAsync($"model-{i}", ModelRole.Chat, CancellationToken.None);
+                                      return true; // admitted
+                                  }
+                                  catch (LlamaRuntimeException)
+                                  {
+                                      return false; // cap-rejected at admit
+                                  }
+                              }))
+                              .ToArray();
 
         // Settle: exactly `cap` spawns park in readiness and the remaining (distinctModels - cap) are cap-rejected.
-        await AssertEx.EventuallyAsync(
-            () => probe.Waiting == cap && RejectedCount(calls) == distinctModels - cap,
+        await AssertEx.EventuallyAsync(() => probe.Waiting == cap && RejectedCount(calls) == distinctModels - cap,
             TimeSpan.FromSeconds(5),
             "Admissions did not settle at the cap.");
 
@@ -78,8 +74,10 @@ public sealed class SupervisorEvictionTests
         AssertEx.Equal(cap, launcher.LaunchCount); // the cap was never exceeded by the race.
     }
 
-    private static int RejectedCount(IEnumerable<Task<bool>> calls) =>
-        calls.Count(t => t.IsCompletedSuccessfully && !t.Result);
+    private static int RejectedCount(IEnumerable<Task<bool>> calls)
+    {
+        return calls.Count(t => t.IsCompletedSuccessfully && !t.Result);
+    }
 
     [Test]
     public async Task EnsureRunning_CapFull_ButLruIsIdlePastTtl_EvictsLru_AndAdmitsNewModel()
@@ -87,8 +85,7 @@ public sealed class SupervisorEvictionTests
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
         var ttl = TimeSpan.FromMinutes(15);
-        await using var supervisor = SupervisorFactory.Create(
-            launcher: launcher,
+        await using var supervisor = SupervisorFactory.Create(launcher,
             options: CapOf(2, ttl),
             timeProvider: time);
 
@@ -112,7 +109,7 @@ public sealed class SupervisorEvictionTests
     public async Task EnsureRunning_ReusesRunningProcess_NoSecondSpawn()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(launcher: launcher);
+        await using var supervisor = SupervisorFactory.Create(launcher);
 
         var first = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         var second = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
@@ -121,10 +118,13 @@ public sealed class SupervisorEvictionTests
         AssertEx.Equal(first.BaseAddress.AbsoluteUri, second.BaseAddress.AbsoluteUri);
     }
 
-    private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl) => new()
+    private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
     {
-        MaxLoadedProcesses = cap,
-        IdleTimeToLive = ttl,
-        MaxRestartAttempts = 3
-    };
+        return new LlamaServerSupervisorOptions
+        {
+            MaxLoadedProcesses = cap,
+            IdleTimeToLive = ttl,
+            MaxRestartAttempts = 3
+        };
+    }
 }

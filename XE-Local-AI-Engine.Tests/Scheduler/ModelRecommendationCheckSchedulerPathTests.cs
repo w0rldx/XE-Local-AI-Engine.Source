@@ -78,7 +78,10 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         var refreshService = BuildAdvisor(snapshotStore);
 
         // The handler resolves the scoped advisor + validator through a real scope factory (singleton handler).
-        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$" });
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$"
+        });
         var services = new ServiceCollection();
         services.AddSingleton<IModelFitRefreshService>(refreshService);
         services.AddSingleton(securityOptions);
@@ -133,8 +136,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
 
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>(
-                 [
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
                      new GgufRepoSummary("org/qwen-GGUF", false, 1000, 10, DateTimeOffset.UnixEpoch, "apache-2.0", true)
                  ]));
         discovery.InspectRepoAsync("org/qwen-GGUF", Arg.Any<CancellationToken>())
@@ -148,7 +150,10 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         registry.ListAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<IReadOnlyList<GgufModelRegistryEntry>>([]));
 
-        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$" });
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$"
+        });
 
         return new ModelFitRefreshService(profiler,
             discovery,
@@ -165,47 +170,47 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
 
     private static ScheduledJobDefinitionRecord DefinitionRecord()
     {
-        return new ScheduledJobDefinitionRecord(Id: JobId,
-            TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
-            DisplayName: "Model recommendation check",
-            Description: null,
-            Enabled: true,
-            ScheduleKind: ScheduleKind.Cron,
-            CronExpression: "0 0 * * * ?",
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            TimeZoneId: "UTC",
-            MisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: 600,
-            ParameterJson: ParametersJson,
-            CreatedBy: ScheduledJobCreator.User,
-            CreatedAtUtc: 0L,
-            UpdatedAtUtc: 0L,
-            DisabledAtUtc: null,
-            DeletedAtUtc: null);
+        return new ScheduledJobDefinitionRecord(JobId,
+            ModelRecommendationCheckHandler.TemplateIdValue,
+            "Model recommendation check",
+            null,
+            true,
+            ScheduleKind.Cron,
+            "0 0 * * * ?",
+            null,
+            null,
+            null,
+            null,
+            "UTC",
+            SchedulerMisfirePolicy.SkipMissed,
+            false,
+            600,
+            ParametersJson,
+            ScheduledJobCreator.User,
+            0L,
+            0L,
+            null,
+            null);
     }
 
     private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status)
     {
-        return new ScheduledJobRunRecord(Id: RunId,
-            ScheduledJobId: JobId,
-            TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
-            QuartzFireInstanceId: "fire-modelfit",
-            TriggeredBy: ScheduledRunTrigger.Schedule,
-            Status: status,
-            ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: Now.ToUnixTimeMilliseconds(),
-            CompletedAtUtc: null,
-            DurationMs: null,
-            Summary: null,
-            DetailsJson: null,
-            ErrorMessage: null,
-            ErrorDetails: null,
-            CancellationRequestedAtUtc: null,
-            CreatedAtUtc: 1L);
+        return new ScheduledJobRunRecord(RunId,
+            JobId,
+            ModelRecommendationCheckHandler.TemplateIdValue,
+            "fire-modelfit",
+            ScheduledRunTrigger.Schedule,
+            status,
+            null,
+            Now.ToUnixTimeMilliseconds(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            1L);
     }
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)

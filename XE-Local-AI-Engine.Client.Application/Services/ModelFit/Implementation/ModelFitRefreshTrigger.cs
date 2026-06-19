@@ -12,10 +12,10 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 /// </summary>
 public sealed class ModelFitRefreshTrigger(IScheduledJobManagementService scheduledJobManagementService) : IModelFitRefreshTrigger
 {
-    private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
-
     /// <summary>The minimum context-window target the advisor's KV-cache fit can be sized against (mirrors the handler schema).</summary>
     private const int MinCtxTarget = 256;
+
+    private readonly IScheduledJobManagementService _scheduledJobManagementService = scheduledJobManagementService ?? throw new ArgumentNullException(nameof(scheduledJobManagementService));
 
     public async Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,

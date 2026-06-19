@@ -59,7 +59,7 @@ internal sealed class GoldenConversationService(
             input.InputTurns,
             input.Assertion,
             input.Rubric,
-            Enabled: false,
+            false,
             GoldenConversationSource.Harvested,
             input.SourceMessageId,
             input.SourceConversationId);

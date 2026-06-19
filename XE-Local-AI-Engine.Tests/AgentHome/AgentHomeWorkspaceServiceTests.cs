@@ -31,7 +31,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, recursive: true);
+                    Directory.Delete(dir, true);
                 }
             }
             catch (IOException)
@@ -137,7 +137,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        var service = CreateService(provider, maxBytes: 100);
+        var service = CreateService(provider, 100);
 
         var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
 

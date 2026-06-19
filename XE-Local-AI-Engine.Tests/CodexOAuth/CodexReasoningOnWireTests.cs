@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -7,18 +8,18 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// On-WIRE reasoning-summary + reasoning-effort assertions for the Codex reasoning display. Proves the Codex
-/// Responses request the SDK actually POSTs opts into reasoning summaries (<c>reasoning.summary == "auto"</c>)
-/// and carries the per-send effort (<c>reasoning.effort</c>) mapped from the chat reasoning
-/// effort, WHILE preserving the store=false invariant and omitting server-side state ids. HTTP is mocked, so this
-/// body-shape assertion is the correctness proof; the MEAI summary→TextReasoningContent mapping is verified
-/// separately against a live model.
-/// <para>
-/// The effort reaches the Codex boundary via <see cref="ChatOptions.AdditionalProperties"/>: the agent factory sets
-/// the Codex-only <c>codex_reasoning_effort</c> raw-string side channel for a thinking-capable model (full fidelity,
-/// incl. minimal/xhigh) and the Ollama-shaped <c>think</c> value (false / "low"/"medium"/"high" / true). These tests
-/// drive both channels through the real SDK serialization over a capturing transport.
-/// </para>
+///     On-WIRE reasoning-summary + reasoning-effort assertions for the Codex reasoning display. Proves the Codex
+///     Responses request the SDK actually POSTs opts into reasoning summaries (<c>reasoning.summary == "auto"</c>)
+///     and carries the per-send effort (<c>reasoning.effort</c>) mapped from the chat reasoning
+///     effort, WHILE preserving the store=false invariant and omitting server-side state ids. HTTP is mocked, so this
+///     body-shape assertion is the correctness proof; the MEAI summary→TextReasoningContent mapping is verified
+///     separately against a live model.
+///     <para>
+///         The effort reaches the Codex boundary via <see cref="ChatOptions.AdditionalProperties" />: the agent factory sets
+///         the Codex-only <c>codex_reasoning_effort</c> raw-string side channel for a thinking-capable model (full fidelity,
+///         incl. minimal/xhigh) and the Ollama-shaped <c>think</c> value (false / "low"/"medium"/"high" / true). These tests
+///         drive both channels through the real SDK serialization over a capturing transport.
+///     </para>
 /// </summary>
 public sealed class CodexReasoningOnWireTests
 {
@@ -29,8 +30,13 @@ public sealed class CodexReasoningOnWireTests
     {
         // No effort supplied (think:true ≡ reason at default effort): summaries are still requested (summary=auto) and
         // the effort field is omitted so the model's default effort applies. store=false / no server state preserved.
-        var body = await CaptureRequestBodyAsync(
-            new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = true } });
+        var body = await CaptureRequestBodyAsync(new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = true
+            }
+        });
 
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
@@ -59,10 +65,13 @@ public sealed class CodexReasoningOnWireTests
         {
             // `think` rides alongside (factory sets both); the side channel must win.
             ["think"] = true,
-            [CodexReasoningEffortKey] = effort,
+            [CodexReasoningEffortKey] = effort
         };
 
-        var body = await CaptureRequestBodyAsync(new ChatOptions { AdditionalProperties = properties });
+        var body = await CaptureRequestBodyAsync(new ChatOptions
+        {
+            AdditionalProperties = properties
+        });
 
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
@@ -84,8 +93,13 @@ public sealed class CodexReasoningOnWireTests
     {
         // Without the side channel, the graded Ollama `think` level still maps to reasoning.effort (back-compat with the
         // think-only carry; covers low/medium/high which `think` CAN carry).
-        var body = await CaptureRequestBodyAsync(
-            new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = level } });
+        var body = await CaptureRequestBodyAsync(new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = level
+            }
+        });
 
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
@@ -102,8 +116,13 @@ public sealed class CodexReasoningOnWireTests
     {
         // Reasoning OFF: think:false ≡ effort none. We still request summaries (harmless; the model emits none at none),
         // and the store=false invariant holds.
-        var body = await CaptureRequestBodyAsync(
-            new ChatOptions { AdditionalProperties = new AdditionalPropertiesDictionary { ["think"] = false } });
+        var body = await CaptureRequestBodyAsync(new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = false
+            }
+        });
 
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
@@ -135,8 +154,7 @@ public sealed class CodexReasoningOnWireTests
         using var capture = new BodyCapturingHandler();
         using var httpClient = new HttpClient(capture);
 
-        var inner = CodexChatClientConstruction.Build(
-            new Uri("https://chatgpt.com/backend-api/codex"),
+        var inner = CodexChatClientConstruction.Build(new Uri("https://chatgpt.com/backend-api/codex"),
             httpClient,
             "gpt-5.4");
         using var client = new CodexStoreDisabledChatClient(inner, "gpt-5.4");
@@ -168,9 +186,9 @@ public sealed class CodexReasoningOnWireTests
 
             const string CannedResponse =
                 """{"id":"resp_test","object":"response","status":"completed","model":"gpt-5.4","output":[]}""";
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json"),
+                Content = new StringContent(CannedResponse, Encoding.UTF8, "application/json")
             };
         }
     }

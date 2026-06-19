@@ -84,7 +84,7 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         // An Origin=Remote conversation whose assistant placeholder is stuck in `queued` (the state held before
         // the collision lease is acquired) plus a Remote streaming row — both must be terminalized. A Remote
         // completed row must be left alone. Recovery filters by role+status only, so Origin never excludes a row.
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Remote", "node", 40, Origin: NodeChatOriginValues.Remote)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Remote", "node", 40, NodeChatOriginValues.Remote)).ConfigureAwait(false);
         var queuedCorrelation = await CreateRemoteAssistantPlaceholderAsync(persistence, conversation.ConversationId, 41).ConfigureAwait(false);
         var streamingCorrelation = await CreateRemoteAssistantPlaceholderAsync(persistence, conversation.ConversationId, 42).ConfigureAwait(false);
         var completedCorrelation = await CreateRemoteAssistantPlaceholderAsync(persistence, conversation.ConversationId, 43).ConfigureAwait(false);

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql;
+using static NodeChatPersistenceSql;
 
 /// <summary>
 ///     Node-local message-feedback storage behind <see cref="NodeChatPersistenceService" />: the thumbs + optional

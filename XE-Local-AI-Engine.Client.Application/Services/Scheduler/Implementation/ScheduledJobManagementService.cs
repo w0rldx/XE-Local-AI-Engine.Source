@@ -66,7 +66,7 @@ public sealed class ScheduledJobManagementService(
         var descriptor = Validate(input);
 
         // Operator-created jobs are persisted enabled and scheduled immediately; disabling is the dedicated action.
-        var storeInput = ToStoreInput(input, enabled: true, ScheduledJobCreator.User);
+        var storeInput = ToStoreInput(input, true, ScheduledJobCreator.User);
         var record = await _definitionStore.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
 
         await ReconcileScheduleAsync(record, descriptor, cancellationToken).ConfigureAwait(false);
@@ -98,7 +98,7 @@ public sealed class ScheduledJobManagementService(
 
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
         // enabled flag and original creator through to the store regardless of what the request body claims.
-        var storeInput = ToStoreInput(input, enabled: existing.Enabled, existing.CreatedBy);
+        var storeInput = ToStoreInput(input, existing.Enabled, existing.CreatedBy);
         var updated = await _definitionStore.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
         if (updated is null)
         {
@@ -450,7 +450,7 @@ public sealed class ScheduledJobManagementService(
             // A Manual job is a durable on-demand job with NO trigger — it never auto-fires, only TriggerNowAsync fires
             // it. AddJob requires the detail to be durable (BuildJobDetail already calls StoreDurably), so it registers
             // a trigger-less job. Do not build a trigger for Manual.
-            await scheduler.AddJob(jobDetail, replace: true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(jobDetail, true, cancellationToken).ConfigureAwait(false);
             return;
         }
 

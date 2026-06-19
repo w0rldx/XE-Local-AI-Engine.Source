@@ -18,11 +18,11 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public sealed class HfTokenStore : IHfTokenStore, IDisposable
 {
     private const string TokenFileName = "hf-token.enc";
-
-    private readonly string _tokenPath;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ILogger<HfTokenStore> _logger;
     private readonly IDataProtector _protector;
+
+    private readonly string _tokenPath;
 
     public HfTokenStore(IDataProtectionProvider dataProtectionProvider,
         IHostEnvironment hostEnvironment,
@@ -35,6 +35,11 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
         _protector = dataProtectionProvider.CreateProtector("WorkerNode.HfTokenStore.v1");
         _tokenPath = Path.Combine(hostEnvironment.ContentRootPath, TokenFileName);
         _logger = logger;
+    }
+
+    public void Dispose()
+    {
+        _lock.Dispose();
     }
 
     /// <inheritdoc />
@@ -115,11 +120,6 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     {
         var token = await GetTokenAsync(ct).ConfigureAwait(false);
         return token is not null;
-    }
-
-    public void Dispose()
-    {
-        _lock.Dispose();
     }
 
     private void ApplyPlatformFileSecurity()

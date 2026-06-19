@@ -224,7 +224,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var probedLocalRuntime = context.Server!.RecordedRequests
-            .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.5");
+                                        .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.5");
         AssertEx.False(probedLocalRuntime, "a Codex cloud id must not probe the local Ollama /api/show endpoint");
     }
 
@@ -361,7 +361,7 @@ public sealed class LocalModelEndpointTests
     {
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns(new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: 4096, Capabilities: []));
+                    .Returns(new OllamaModelDetails(new ShowModelResponse(), 4096, []));
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
@@ -385,8 +385,8 @@ public sealed class LocalModelEndpointTests
                              .Returns(new ModelClassificationResult("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
                                  ModelKind.Chat,
                                  ModelKind.Unknown,
-                                 Capabilities: [],
-                                 IsOverridden: true));
+                                 [],
+                                 true));
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 
@@ -412,8 +412,8 @@ public sealed class LocalModelEndpointTests
                              .Returns(new ModelClassificationResult("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
                                  ModelKind.Unknown,
                                  ModelKind.Unknown,
-                                 Capabilities: [],
-                                 IsOverridden: false));
+                                 [],
+                                 false));
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 

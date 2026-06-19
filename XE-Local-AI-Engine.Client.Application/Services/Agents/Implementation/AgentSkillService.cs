@@ -30,7 +30,7 @@ internal sealed partial class AgentSkillService : IAgentSkillService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, existingId: null, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, null, cancellationToken).ConfigureAwait(false);
 
         return await _store.CreateAsync(input, cancellationToken).ConfigureAwait(false);
     }
@@ -39,7 +39,7 @@ internal sealed partial class AgentSkillService : IAgentSkillService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, existingId: id, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, id, cancellationToken).ConfigureAwait(false);
 
         return await _store.UpdateAsync(id, input, cancellationToken).ConfigureAwait(false);
     }
@@ -76,8 +76,7 @@ internal sealed partial class AgentSkillService : IAgentSkillService
 
         if (!SkillNameRegex().IsMatch(name))
         {
-            throw new AgentSkillValidationException(
-                "Name must be lowercase letters, digits, and dashes, and may not start or end with a dash.");
+            throw new AgentSkillValidationException("Name must be lowercase letters, digits, and dashes, and may not start or end with a dash.");
         }
 
         if (string.IsNullOrWhiteSpace(input.Description))

@@ -257,17 +257,17 @@ public sealed class McpServerConnectionManagerTests
     {
         return new McpServerRecord(Guid.NewGuid(),
             name,
-            Description: null,
+            null,
             McpTransportKind.Stdio,
-            Command: "noop",
-            Arguments: [],
-            WorkingDirectory: null,
-            Environment: new Dictionary<string, string>(),
-            Url: null,
-            Enabled: true,
-            Version: 1,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0);
+            "noop",
+            [],
+            null,
+            new Dictionary<string, string>(),
+            null,
+            true,
+            1,
+            0,
+            0);
     }
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, params McpServerRecord[] enabled)

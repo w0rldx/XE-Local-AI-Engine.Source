@@ -13,12 +13,12 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 ///     independent normalize/validate ladders (package builder, config hash, runtime-package validator),
 ///     which made the factory send <c>think:false</c> and suppress reasoning.
 ///     <para>
-///     <b>Codex-only levels.</b> <c>minimal</c> and <c>xhigh</c> are members of the OpenAI Responses
-///     reasoning-effort set and are only offered for Codex (cloud) models in the composer. They must NEVER
-///     reach the Ollama <c>think</c> wire as a literal level (Ollama 400s on an unknown think level): the agent
-///     factory maps both to <c>think:true</c> (reason) on the Ollama path and only the Codex boundary maps them
-///     to <c>ResponseReasoningEffortLevel</c> (with <c>xhigh</c> falling back to <c>High</c> on the pinned
-///     OpenAI 2.10.0 SDK, which exposes None/Minimal/Low/Medium/High but no XHigh member yet).
+///         <b>Codex-only levels.</b> <c>minimal</c> and <c>xhigh</c> are members of the OpenAI Responses
+///         reasoning-effort set and are only offered for Codex (cloud) models in the composer. They must NEVER
+///         reach the Ollama <c>think</c> wire as a literal level (Ollama 400s on an unknown think level): the agent
+///         factory maps both to <c>think:true</c> (reason) on the Ollama path and only the Codex boundary maps them
+///         to <c>ResponseReasoningEffortLevel</c> (with <c>xhigh</c> falling back to <c>High</c> on the pinned
+///         OpenAI 2.10.0 SDK, which exposes None/Minimal/Low/Medium/High but no XHigh member yet).
 ///     </para>
 /// </summary>
 public static class ReasoningEffortNormalizer

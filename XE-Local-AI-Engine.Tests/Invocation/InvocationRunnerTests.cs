@@ -923,7 +923,7 @@ public sealed class InvocationRunnerTests
         // requiresApproval: false guarantees the Requested lifecycle fires before the result-wait timeout, so the
         // timeout path must emit a matching Completed (IsError=true) to clear the UI card.
         await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() =>
-            runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
+            runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", false));
 
         await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
             payload.InvocationId == invocationId
@@ -945,7 +945,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
+        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", false);
         await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(0, sender.SentApprovals.Count);
@@ -977,7 +977,7 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender);
         var invocationId = Guid.NewGuid();
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: true);
+        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", true);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         AssertEx.Equal(0, sender.SentToolCalls.Count);

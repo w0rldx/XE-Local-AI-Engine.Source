@@ -22,7 +22,10 @@ public static class CapabilitiesServiceCollectionExtensions
 
         var options = string.IsNullOrWhiteSpace(modelsVolumePath)
             ? new HardwareProfilerOptions()
-            : new HardwareProfilerOptions { ModelsVolumePath = modelsVolumePath };
+            : new HardwareProfilerOptions
+            {
+                ModelsVolumePath = modelsVolumePath
+            };
 
         services.AddSingleton(options);
         services.AddSingleton<IProcessProbe, ProcessProbe>();

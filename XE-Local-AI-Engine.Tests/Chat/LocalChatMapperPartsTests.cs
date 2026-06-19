@@ -14,9 +14,9 @@ public sealed class LocalChatMapperPartsTests
     {
         var parts = new List<NodeChatMessagePart>
         {
-            new(NodeChatMessagePartKinds.Reasoning, 0, Text: "before"),
+            new(NodeChatMessagePartKinds.Reasoning, 0, "before"),
             new(NodeChatMessagePartKinds.Tool, 1, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{}", Result: "now"),
-            new(NodeChatMessagePartKinds.Reasoning, 2, Text: "after")
+            new(NodeChatMessagePartKinds.Reasoning, 2, "after")
         };
         var message = BuildMessage(parts);
 
@@ -34,7 +34,7 @@ public sealed class LocalChatMapperPartsTests
     [Test]
     public void ToResponse_WhenMessageHasNoParts_ReturnsNullParts()
     {
-        var message = BuildMessage(parts: null);
+        var message = BuildMessage(null);
 
         var response = message.ToResponse();
 
@@ -67,7 +67,7 @@ public sealed class LocalChatMapperPartsTests
     [Test]
     public void ToResponse_SurfacesGenerationDurationMs()
     {
-        var message = BuildMessage(parts: null) with
+        var message = BuildMessage(null) with
         {
             GenerationDurationMs = 2000
         };
@@ -84,7 +84,7 @@ public sealed class LocalChatMapperPartsTests
     [Test]
     public void ToResponse_WhenNoGenerationDuration_ReturnsNull()
     {
-        var response = BuildMessage(parts: null).ToResponse();
+        var response = BuildMessage(null).ToResponse();
 
         AssertEx.Null(response.GenerationDurationMs);
     }

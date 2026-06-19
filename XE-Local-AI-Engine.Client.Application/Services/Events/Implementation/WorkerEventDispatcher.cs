@@ -650,7 +650,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             {
                 // The run ended without a terminal state reaching us (process/stream loss). Terminalize the
                 // node-local mirror as interrupted so it does not hang in a non-terminal state.
-                await session.TerminalizeInterruptedAsync(wasCancelled: false).ConfigureAwait(false);
+                await session.TerminalizeInterruptedAsync(false).ConfigureAwait(false);
             }
         }
         catch (Exception exception)

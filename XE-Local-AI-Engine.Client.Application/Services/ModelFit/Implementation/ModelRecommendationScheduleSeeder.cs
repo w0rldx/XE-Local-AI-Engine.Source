@@ -59,27 +59,27 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var managementService = scope.ServiceProvider.GetRequiredService<IScheduledJobManagementService>();
 
-            var jobs = await managementService.ListJobsAsync(includeDeleted: false, cancellationToken).ConfigureAwait(false);
+            var jobs = await managementService.ListJobsAsync(false, cancellationToken).ConfigureAwait(false);
             if (jobs.Any(job => job.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue))
             {
                 // A definition for this template already exists — nothing to seed (idempotent).
                 return;
             }
 
-            var input = new ScheduledJobManagementInput(TemplateId: ModelRecommendationCheckHandler.TemplateIdValue,
-                DisplayName: SeedDisplayName,
-                Description: SeedDescription,
-                ScheduleKind: ScheduleKind.Manual,
-                CronExpression: null,
-                IntervalSeconds: null,
-                RepeatCount: null,
-                StartAtUtc: null,
-                EndAtUtc: null,
-                TimeZoneId: SeedTimeZoneId,
-                MisfirePolicy: SchedulerMisfirePolicy.SkipMissed,
-                PreventOverlap: true,
-                MaxRuntimeSeconds: SeedMaxRuntimeSeconds,
-                Parameters: SeedParametersJson);
+            var input = new ScheduledJobManagementInput(ModelRecommendationCheckHandler.TemplateIdValue,
+                SeedDisplayName,
+                SeedDescription,
+                ScheduleKind.Manual,
+                null,
+                null,
+                null,
+                null,
+                null,
+                SeedTimeZoneId,
+                SchedulerMisfirePolicy.SkipMissed,
+                true,
+                SeedMaxRuntimeSeconds,
+                SeedParametersJson);
 
             // CreateJobAsync persists the definition enabled, then registers the durable Manual Quartz job (no trigger).
             var created = await managementService.CreateJobAsync(input, cancellationToken).ConfigureAwait(false);

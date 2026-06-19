@@ -1,12 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-using System;
 using System.Runtime.InteropServices;
-using System.Threading;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Desktop-mode host lifecycle: routes a closed console window into a graceful application stop (so the singleton
@@ -15,38 +11,47 @@ using Microsoft.Extensions.Logging;
 ///     <para>
 ///         Two OS gaps are filled (the rest — SIGINT/SIGTERM/SIGQUIT — are already handled by ConsoleLifetime):
 ///         <list type="bullet">
-///             <item>Linux <c>SIGHUP</c> (terminal close): a <see cref="PosixSignalRegistration" /> calls
-///             <see cref="IHostApplicationLifetime.StopApplication" />.</item>
-///             <item>Windows <c>CTRL_CLOSE_EVENT</c> (console-window close): a <c>SetConsoleCtrlHandler</c> handler runs
-///             on a separate OS thread, calls <c>StopApplication</c>, then BLOCKS until the host has stopped (or a
-///             sub-5s budget elapses) — returning early would let Windows force-kill the process before the drain runs.
-///             The Job Object remains the hard-kill safety net regardless.</item>
+///             <item>
+///                 Linux <c>SIGHUP</c> (terminal close): a <see cref="PosixSignalRegistration" /> calls
+///                 <see cref="IHostApplicationLifetime.StopApplication" />.
+///             </item>
+///             <item>
+///                 Windows <c>CTRL_CLOSE_EVENT</c> (console-window close): a <c>SetConsoleCtrlHandler</c> handler runs
+///                 on a separate OS thread, calls <c>StopApplication</c>, then BLOCKS until the host has stopped (or a
+///                 sub-5s budget elapses) — returning early would let Windows force-kill the process before the drain runs.
+///                 The Job Object remains the hard-kill safety net regardless.
+///             </item>
 ///         </list>
 ///     </para>
 ///     Only activated in desktop mode (invariant: with the desktop flag off, nothing here is installed).
 /// </summary>
 internal sealed class DesktopLifecycle : IDisposable
 {
+    // Win32 console control event codes (see learn.microsoft.com/windows/console/handlerroutine).
+    private const uint CtrlCloseEvent = 2;
+    private const uint CtrlLogoffEvent = 5;
+    private const uint CtrlShutdownEvent = 6;
+
     /// <summary>
     ///     Windows force-kills the process when a CTRL_CLOSE handler returns or after ~5s. Stay safely under that so the
     ///     drain has a chance to run before the OS pulls the plug.
     /// </summary>
     private static readonly TimeSpan ConsoleCloseDrainBudget = TimeSpan.FromMilliseconds(4000);
 
-    private readonly IHostApplicationLifetime _lifetime;
-    private readonly IServer _server;
-    private readonly ILogger<DesktopLifecycle> _logger;
     private readonly Func<string?> _browserOpener;
+
+    private readonly IHostApplicationLifetime _lifetime;
+    private readonly ILogger<DesktopLifecycle> _logger;
+    private readonly IServer _server;
 
     // Rooted on the instance (which is itself rooted via the lifetime registration in Program.cs) so the GC cannot
     // collect the native callback delegate while Windows holds the function pointer.
     private NativeConsoleCtrlHandler? _consoleCtrlHandlerDelegate;
+    private bool _disposed;
     private PosixSignalRegistration? _sigHupRegistration;
     private CancellationTokenRegistration _startedRegistration;
-    private bool _disposed;
 
-    internal DesktopLifecycle(
-        IHostApplicationLifetime lifetime,
+    internal DesktopLifecycle(IHostApplicationLifetime lifetime,
         IServer server,
         ILogger<DesktopLifecycle> logger,
         Func<string?>? browserOpener = null)
@@ -57,6 +62,25 @@ internal sealed class DesktopLifecycle : IDisposable
 
         // Returns the resolved URL it attempted to open, or null when no usable address was found. Overridable for tests.
         _browserOpener = browserOpener ?? OpenDefaultBrowser;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _sigHupRegistration?.Dispose();
+        _startedRegistration.Dispose();
+
+        if (OperatingSystem.IsWindows() && _consoleCtrlHandlerDelegate is not null)
+        {
+            // Best-effort unregister; ignore the result during teardown.
+            _ = SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, false);
+            _consoleCtrlHandlerDelegate = null;
+        }
     }
 
     /// <summary>
@@ -111,7 +135,7 @@ internal sealed class DesktopLifecycle : IDisposable
         // Keep the delegate rooted on this instance; SetConsoleCtrlHandler stores the raw function pointer and the GC
         // must not reclaim the managed callback for the life of the process.
         _consoleCtrlHandlerDelegate = HandleConsoleCtrl;
-        if (!SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, add: true))
+        if (!SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, true))
         {
             _logger.LogWarning("SetConsoleCtrlHandler registration failed; console-window close may hard-kill the host.");
         }
@@ -133,7 +157,7 @@ internal sealed class DesktopLifecycle : IDisposable
         {
             TriggerGracefulStop();
 
-            using var stopped = new ManualResetEventSlim(initialState: false, spinCount: 0);
+            using var stopped = new ManualResetEventSlim(false, 0);
             using var registration = _lifetime.ApplicationStopped.Register(stopped.Set);
             stopped.Wait(ConsoleCloseDrainBudget);
         }
@@ -182,34 +206,10 @@ internal sealed class DesktopLifecycle : IDisposable
         return url;
     }
 
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _sigHupRegistration?.Dispose();
-        _startedRegistration.Dispose();
-
-        if (OperatingSystem.IsWindows() && _consoleCtrlHandlerDelegate is not null)
-        {
-            // Best-effort unregister; ignore the result during teardown.
-            _ = SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, add: false);
-            _consoleCtrlHandlerDelegate = null;
-        }
-    }
-
-    // Win32 console control event codes (see learn.microsoft.com/windows/console/handlerroutine).
-    private const uint CtrlCloseEvent = 2;
-    private const uint CtrlLogoffEvent = 5;
-    private const uint CtrlShutdownEvent = 6;
-
-    private delegate bool NativeConsoleCtrlHandler(uint ctrlType);
-
     [DllImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetConsoleCtrlHandler(NativeConsoleCtrlHandler? handlerRoutine, [MarshalAs(UnmanagedType.Bool)] bool add);
+
+    private delegate bool NativeConsoleCtrlHandler(uint ctrlType);
 }

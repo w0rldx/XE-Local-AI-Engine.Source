@@ -20,11 +20,10 @@ public sealed class BinaryManagerHashVerificationTests
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
-        using var http = new HttpClient(handler, disposeHandler: false);
+        using var http = new HttpClient(handler, false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
         // Re-download exactly once: two total attempts.
         AssertEx.Equal(2, handler.CallCount);
@@ -45,7 +44,7 @@ public sealed class BinaryManagerHashVerificationTests
 
         using var handler = new CountingHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
-        using var http = new HttpClient(handler, disposeHandler: false);
+        using var http = new HttpClient(handler, false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
@@ -69,7 +68,7 @@ public sealed class BinaryManagerHashVerificationTests
 
         using var handler = new CountingHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
-        using var http = new HttpClient(handler, disposeHandler: false);
+        using var http = new HttpClient(handler, false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
@@ -106,7 +105,7 @@ public sealed class BinaryManagerHashVerificationTests
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, recursive: true);
+                    Directory.Delete(Path, true);
                 }
             }
             catch (IOException)

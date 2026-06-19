@@ -220,14 +220,14 @@ public sealed class SuggestedPlaybookActionEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            Description: null,
+            null,
             "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            [],
+            new Dictionary<string, bool>(),
+            null)).ConfigureAwait(false);
         return agent.Id;
     }
 
@@ -238,11 +238,11 @@ public sealed class SuggestedPlaybookActionEndpointTests
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
         var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
-            TriggerCondition: null,
-            Scope: "search",
-            Priority: 100,
-            SourceFeedbackIds: [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            null,
+            "search",
+            100,
+            [Guid.NewGuid()],
+            0.8d)).ConfigureAwait(false);
         return created.Id;
     }
 }

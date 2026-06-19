@@ -33,7 +33,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             {
                 if (Directory.Exists(root))
                 {
-                    Directory.Delete(root, recursive: true);
+                    Directory.Delete(root, true);
                 }
             }
             catch (IOException)

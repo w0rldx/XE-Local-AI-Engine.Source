@@ -18,10 +18,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 {
-    // Mirrors the private projection in NodeChatTitleEncryptionBackfillService so the second query can be
-    // materialized through the public Database.SqlQueryRaw surface.
-    private sealed record MessageIdAndContent(Guid MessageId, byte[] Content);
-
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -47,14 +43,14 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 
             // Reproduce the EncryptConversationTitle migration's effect: NULL the title so the backfill query has a row.
             await dbContext.Database
-                .ExecuteSqlRawAsync("UPDATE conversations SET title = NULL WHERE conversation_id = {0}", conversation.ConversationId)
-                .ConfigureAwait(false);
+                           .ExecuteSqlRawAsync("UPDATE conversations SET title = NULL WHERE conversation_id = {0}", conversation.ConversationId)
+                           .ConfigureAwait(false);
 
             // The exact query from NodeChatTitleEncryptionBackfillService — a trailing ';' breaks EF subquery wrapping.
             var conversationIds = await dbContext.Database
-                .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
-                .ToListAsync()
-                .ConfigureAwait(false);
+                                                 .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
+                                                 .ToListAsync()
+                                                 .ConfigureAwait(false);
 
             AssertEx.Contains(conversationIds, conversation.ConversationId);
         }
@@ -76,11 +72,11 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
 
             // The exact query from NodeChatTitleEncryptionBackfillService.
             var row = await dbContext.Database
-                .SqlQueryRaw<MessageIdAndContent>(
-                    "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
-                    conversation.ConversationId)
-                .FirstOrDefaultAsync()
-                .ConfigureAwait(false);
+                                     .SqlQueryRaw<MessageIdAndContent>(
+                                         "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
+                                         conversation.ConversationId)
+                                     .FirstOrDefaultAsync()
+                                     .ConfigureAwait(false);
 
             var materialized = AssertEx.NotNull(row);
             AssertEx.Equal(messageId, materialized.MessageId);
@@ -119,4 +115,8 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
     }
+
+    // Mirrors the private projection in NodeChatTitleEncryptionBackfillService so the second query can be
+    // materialized through the public Database.SqlQueryRaw surface.
+    private sealed record MessageIdAndContent(Guid MessageId, byte[] Content);
 }

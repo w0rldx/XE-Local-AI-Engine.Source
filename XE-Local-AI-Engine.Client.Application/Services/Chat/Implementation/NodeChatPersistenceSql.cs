@@ -5,7 +5,7 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatMetadataSerializer;
+using static NodeChatMetadataSerializer;
 
 /// <summary>
 ///     Shared raw-ADO helpers for the node chat persistence path: low-level <see cref="DbCommand" /> wiring plus the
@@ -178,7 +178,8 @@ internal static class NodeChatPersistenceSql
         return messages;
     }
 
-    internal static async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ReadConversationSummariesAsync(DbCommand command, NodeChatDbContext dbContext, int? limit, CancellationToken cancellationToken)
+    internal static async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ReadConversationSummariesAsync(DbCommand command, NodeChatDbContext dbContext, int? limit,
+        CancellationToken cancellationToken)
     {
         AddParameter(command, "$limit", limit is > 0 ? limit.Value : int.MaxValue);
 
@@ -237,14 +238,18 @@ internal static class NodeChatPersistenceSql
     ///     is null so the database column writes NULL.
     /// </summary>
     internal static byte[]? EncryptTitle(string? title, NodeChatDbContext dbContext, Guid conversationId)
-        => dbContext.EncryptConversationTitle(title, conversationId);
+    {
+        return dbContext.EncryptConversationTitle(title, conversationId);
+    }
 
     /// <summary>
     ///     Decrypts a raw title blob read from the database back to a string via the db context. Returns null when the
     ///     blob is null.
     /// </summary>
     internal static string? DecryptTitle(byte[]? encrypted, NodeChatDbContext dbContext, Guid conversationId)
-        => dbContext.DecryptConversationTitle(encrypted, conversationId);
+    {
+        return dbContext.DecryptConversationTitle(encrypted, conversationId);
+    }
 
     private static object DbValue(object? value)
     {

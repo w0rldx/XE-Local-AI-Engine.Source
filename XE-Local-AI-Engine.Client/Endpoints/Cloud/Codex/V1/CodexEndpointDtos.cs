@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
 
 /// <summary>
-/// Response to <c>POST cloud/codex/login</c>: the PKCE authorize URL the operator opens in a browser. The
-/// loopback callback completes the sign-in in the background; the UI polls <see cref="CodexStatusResponse"/>.
-/// Carries no token material.
+///     Response to <c>POST cloud/codex/login</c>: the PKCE authorize URL the operator opens in a browser. The
+///     loopback callback completes the sign-in in the background; the UI polls <see cref="CodexStatusResponse" />.
+///     Carries no token material.
 /// </summary>
 public sealed record CodexLoginResponse
 {
@@ -12,9 +12,9 @@ public sealed record CodexLoginResponse
 }
 
 /// <summary>
-/// Response to <c>GET cloud/codex/status</c>: the current Codex session / login state. Carries no token
-/// material — only whether a session exists, the (non-secret) account id, the access-token expiry, and whether
-/// a browser login is currently pending.
+///     Response to <c>GET cloud/codex/status</c>: the current Codex session / login state. Carries no token
+///     material — only whether a session exists, the (non-secret) account id, the access-token expiry, and whether
+///     a browser login is currently pending.
 /// </summary>
 public sealed record CodexStatusResponse
 {

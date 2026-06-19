@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -38,19 +38,18 @@ public sealed class ModelFitRefreshServiceTests
 
         // Two repos: one tiny (fits) and one 70B (does not fit a 12 GB VRAM budget).
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>(
-                 [
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
                      Summary("org/tiny-GGUF"),
                      Summary("org/huge-GGUF")
                  ]));
         discovery.InspectRepoAsync("org/tiny-GGUF", Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(Detail("org/tiny-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+                 .Returns(Task.FromResult(Detail("org/tiny-GGUF", File("Q4_K_M", 1_000_000_000L))));
         discovery.InspectRepoAsync("org/huge-GGUF", Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(Detail("org/huge-GGUF", File("Q4_K_M", paramCount: 70_000_000_000L))));
+                 .Returns(Task.FromResult(Detail("org/huge-GGUF", File("Q4_K_M", 70_000_000_000L))));
 
-        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(vramBytes: 12 * Gb));
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(12 * Gb));
 
-        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+        var result = await advisor.RefreshAsync(Request(), null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
         AssertEx.Equal(1, result.RecommendationCount);
@@ -79,7 +78,7 @@ public sealed class ModelFitRefreshServiceTests
         var snapshotStoreDefault = new InMemoryModelFitSnapshotStore();
         var recommendationStoreDefault = new InMemoryModelFitRecommendationStore();
         var advisorDefault = BuildAdvisor(snapshotStoreDefault, recommendationStoreDefault, discovery, GpuProfile(64 * Gb));
-        await advisorDefault.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+        await advisorDefault.RefreshAsync(Request(), null, CancellationToken.None);
         var defaultRows = recommendationStoreDefault.RowsFor(snapshotStoreDefault.Snapshots.Values.Single().Id);
         AssertEx.Equal("Q4_K_M", defaultRows.Single().Quantization);
 
@@ -87,7 +86,7 @@ public sealed class ModelFitRefreshServiceTests
         var snapshotStoreOverride = new InMemoryModelFitSnapshotStore();
         var recommendationStoreOverride = new InMemoryModelFitRecommendationStore();
         var advisorOverride = BuildAdvisor(snapshotStoreOverride, recommendationStoreOverride, discovery, GpuProfile(64 * Gb));
-        await advisorOverride.RefreshAsync(Request(quantOverride: "Q8_0"), reportProgress: null, CancellationToken.None);
+        await advisorOverride.RefreshAsync(Request("Q8_0"), null, CancellationToken.None);
         var overrideRows = recommendationStoreOverride.RowsFor(snapshotStoreOverride.Snapshots.Values.Single().Id);
         AssertEx.Equal("Q8_0", overrideRows.Single().Quantization);
     }
@@ -103,13 +102,13 @@ public sealed class ModelFitRefreshServiceTests
         // No param count AND no file size → no weights term → insufficient metadata, dropped.
         discovery.InspectRepoAsync("org/nometa-GGUF", Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(Detail("org/nometa-GGUF",
-                     new GgufRepoFile("model.gguf", "Q4_K_M", SizeBytes: 0, Sha256: null, Revision: "main",
-                         Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null,
-                         AttentionHeadCountKV: null, EmbeddingLength: null, ContextLength: null))));
+                     new GgufRepoFile("model.gguf", "Q4_K_M", 0, null, "main",
+                         null, null, null, null, null,
+                         null, null, null))));
 
         var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
 
-        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+        var result = await advisor.RefreshAsync(Request(), null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
         AssertEx.Equal(0, result.RecommendationCount);
@@ -132,8 +131,12 @@ public sealed class ModelFitRefreshServiceTests
 
         var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb), store, supervisor);
 
-        var request = new GgufModelRequest { RepoId = "org/tiny-GGUF", Quant = "Q4_K_M" };
-        var downloaded = await advisor.DownloadAsync(request, progress: null, CancellationToken.None);
+        var request = new GgufModelRequest
+        {
+            RepoId = "org/tiny-GGUF",
+            Quant = "Q4_K_M"
+        };
+        var downloaded = await advisor.DownloadAsync(request, null, CancellationToken.None);
         var endpoint = await advisor.StartAsync(downloaded.ModelName, ModelRole.Chat, CancellationToken.None);
 
         await store.Received(1).EnsureModelAsync(Arg.Is<GgufModelRequest>(r => r.RepoId == "org/tiny-GGUF" && r.Quant == "Q4_K_M"),
@@ -150,7 +153,7 @@ public sealed class ModelFitRefreshServiceTests
             Substitute.For<IHuggingFaceGgufDiscovery>(), GpuProfile(64 * Gb));
 
         var result = await advisor.RefreshAsync(new ModelFitRefreshRequest(ModelFitOperation.Benchmark, "coding", 5),
-            reportProgress: null, CancellationToken.None);
+            null, CancellationToken.None);
 
         AssertEx.Equal(ModelFitRunStatus.Failed, result.Status);
         AssertEx.Null(result.SnapshotId);
@@ -159,7 +162,7 @@ public sealed class ModelFitRefreshServiceTests
 
     private static ModelFitRefreshRequest Request(string? quantOverride = null)
     {
-        return new ModelFitRefreshRequest(ModelFitOperation.Recommend, "coding", Limit: 5, QuantOverride: quantOverride);
+        return new ModelFitRefreshRequest(ModelFitOperation.Recommend, "coding", 5, quantOverride);
     }
 
     private static ModelFitRefreshService BuildAdvisor(InMemoryModelFitSnapshotStore snapshotStore,
@@ -176,7 +179,10 @@ public sealed class ModelFitRefreshServiceTests
         registry.ListAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<IReadOnlyList<GgufModelRegistryEntry>>([]));
 
-        var securityOptions = Options.Create(new SecurityOptions { AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$" });
+        var securityOptions = Options.Create(new SecurityOptions
+        {
+            AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$"
+        });
 
         return new ModelFitRefreshService(profiler,
             discovery,
@@ -193,12 +199,12 @@ public sealed class ModelFitRefreshServiceTests
 
     private static GgufRepoSummary Summary(string repoId)
     {
-        return new GgufRepoSummary(repoId, IsGated: false, Downloads: 1000, Likes: 10, LastModified: DateTimeOffset.UnixEpoch, License: "mit", HasUsableGguf: true);
+        return new GgufRepoSummary(repoId, false, 1000, 10, DateTimeOffset.UnixEpoch, "mit", true);
     }
 
     private static GgufRepoDetail Detail(string repoId, params GgufRepoFile[] files)
     {
-        return new GgufRepoDetail(repoId, IsGated: false, License: "mit", Files: files);
+        return new GgufRepoDetail(repoId, false, "mit", files);
     }
 
     private static GgufRepoFile File(string quant, long paramCount)
@@ -206,17 +212,17 @@ public sealed class ModelFitRefreshServiceTests
         // A small, fits-anywhere geometry (4 layers, 2 kv-heads, embedding 16 over 4 heads) so only param-count drives weights.
         return new GgufRepoFile($"model.{quant}.gguf",
             quant,
-            SizeBytes: 1 * Gb,
-            Sha256: null,
-            Revision: "main",
-            Architecture: "llama",
-            QuantType: quant,
-            ParamCount: paramCount,
-            BlockCount: 4,
-            AttentionHeadCount: 4,
-            AttentionHeadCountKV: 2,
-            EmbeddingLength: 16,
-            ContextLength: 8192);
+            1 * Gb,
+            null,
+            "main",
+            "llama",
+            quant,
+            paramCount,
+            4,
+            4,
+            2,
+            16,
+            8192);
     }
 
     private static HardwareProfile GpuProfile(long vramBytes)

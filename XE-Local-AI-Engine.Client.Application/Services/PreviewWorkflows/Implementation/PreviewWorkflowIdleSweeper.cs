@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 /// <summary>
@@ -13,9 +11,9 @@ using Microsoft.Extensions.Options;
 public sealed class PreviewWorkflowIdleSweeper : BackgroundService
 {
     private readonly PreviewWorkflowExecutionService _executionService;
+    private readonly ILogger<PreviewWorkflowIdleSweeper> _logger;
     private readonly PreviewWorkflowExecutionOptions _options;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<PreviewWorkflowIdleSweeper> _logger;
 
     // The execution service is registered against its interface and (separately) as the concrete type for this sweeper
     // and the hub-disconnect path; both resolve the SAME singleton instance.

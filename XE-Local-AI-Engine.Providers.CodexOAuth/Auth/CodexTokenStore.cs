@@ -10,11 +10,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-/// Contract for persisting the encrypted Codex OAuth session.
+///     Contract for persisting the encrypted Codex OAuth session.
 /// </summary>
 public interface ICodexTokenStore
 {
-    /// <summary>Loads the stored session, or <see langword="null"/> if none / undecryptable.</summary>
+    /// <summary>Loads the stored session, or <see langword="null" /> if none / undecryptable.</summary>
     Task<CodexTokens?> LoadAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Encrypts and persists the session with user-only file permissions.</summary>
@@ -25,21 +25,21 @@ public interface ICodexTokenStore
 }
 
 /// <summary>
-/// Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,
-/// Windows user-only <see cref="FileSecurity"/>, *nix <c>0600</c>. Uses a dedicated protector purpose and a
-/// separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
-/// Never logs token values.
+///     Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,
+///     Windows user-only <see cref="FileSecurity" />, *nix <c>0600</c>. Uses a dedicated protector purpose and a
+///     separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
+///     Never logs token values.
 /// </summary>
 public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
 {
     private const string TokensFileName = "codex-oauth-tokens.enc";
     private const string ProtectorPurpose = "WorkerNode.CodexOAuth.Tokens.v1";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
-    private readonly string _tokensPath;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ILogger<CodexTokenStore> _logger;
     private readonly IDataProtector _protector;
+
+    private readonly string _tokensPath;
 
     public CodexTokenStore(IDataProtectionProvider dataProtectionProvider,
         IHostEnvironment hostEnvironment,
@@ -130,7 +130,10 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
         }
     }
 
-    public void Dispose() => _lock.Dispose();
+    public void Dispose()
+    {
+        _lock.Dispose();
+    }
 
     private static CodexTokens DeserializeTokens(byte[] payload)
     {

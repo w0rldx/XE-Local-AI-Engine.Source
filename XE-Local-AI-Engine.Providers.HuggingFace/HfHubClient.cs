@@ -23,8 +23,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 internal sealed class HfHubClient
 {
     private readonly HttpClient _httpClient;
-    private readonly HuggingFaceOptions _options;
     private readonly ILogger<HfHubClient> _logger;
+    private readonly HuggingFaceOptions _options;
 
     public HfHubClient(HttpClient httpClient, HuggingFaceOptions options, ILogger<HfHubClient> logger)
     {
@@ -73,8 +73,7 @@ internal sealed class HfHubClient
                 continue;
             }
 
-            summaries.Add(new HubModelSummary(
-                repoId!,
+            summaries.Add(new HubModelSummary(repoId!,
                 ParseGated(element),
                 GetInt64(element, "downloads") ?? 0L,
                 (int)(GetInt64(element, "likes") ?? 0L),
@@ -138,8 +137,7 @@ internal sealed class HfHubClient
             }
         }
 
-        return new HubModelDetail(
-            GetString(root, "id") ?? repoId,
+        return new HubModelDetail(GetString(root, "id") ?? repoId,
             ParseGated(root),
             ExtractLicense(root),
             GetString(root, "sha") ?? string.Empty,
@@ -256,25 +254,34 @@ internal sealed class HfHubClient
     }
 
     private static string? GetString(JsonElement element, string property)
-        => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+    {
+        return element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+    }
 
     private static long? GetInt64(JsonElement element, string property)
-        => element.TryGetProperty(property, out var value) &&
-           value.ValueKind == JsonValueKind.Number &&
-           value.TryGetInt64(out var number)
+    {
+        return element.TryGetProperty(property, out var value) &&
+               value.ValueKind == JsonValueKind.Number &&
+               value.TryGetInt64(out var number)
             ? number
             : null;
+    }
 
     private static DateTimeOffset? GetDate(JsonElement element, string property)
-        => element.TryGetProperty(property, out var value) &&
-           value.ValueKind == JsonValueKind.String &&
-           value.TryGetDateTimeOffset(out var date)
+    {
+        return element.TryGetProperty(property, out var value) &&
+               value.ValueKind == JsonValueKind.String &&
+               value.TryGetDateTimeOffset(out var date)
             ? date
             : null;
+    }
 
-    private static string TrimBase(string baseUrl) => baseUrl.TrimEnd('/');
+    private static string TrimBase(string baseUrl)
+    {
+        return baseUrl.TrimEnd('/');
+    }
 
     /// <summary>A repo as it appears in the Hub GGUF listing (filenames only, no per-file size).</summary>
     internal sealed record HubModelSummary(

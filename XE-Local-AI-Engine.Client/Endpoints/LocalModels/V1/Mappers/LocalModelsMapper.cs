@@ -38,28 +38,28 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
-    ///     Maps the offered Codex cloud models (<see cref="CodexModelCatalog.ModelIds"/>) to model-list entries tagged
-    ///     <see cref="LocalModelProviders.CodexOAuth"/>. The endpoint passes these only when a Codex session is
+    ///     Maps the offered Codex cloud models (<see cref="CodexModelCatalog.ModelIds" />) to model-list entries tagged
+    ///     <see cref="LocalModelProviders.CodexOAuth" />. The endpoint passes these only when a Codex session is
     ///     present. Each entry advertises the Codex provider's declared capability matrix
-    ///     (<see cref="CodexProviderCapabilities.V0"/>) rather than an Ollama classification (the local runtime has
+    ///     (<see cref="CodexProviderCapabilities.V0" />) rather than an Ollama classification (the local runtime has
     ///     never seen these ids). Size/quantization fields stay null — they are local-runtime concepts.
     /// </summary>
     public static IReadOnlyList<LocalModelResponse> ToCodexCloudModelResponses(string? selectedModelName)
     {
         return CodexModelCatalog.ModelIds
-               .Select(modelId => new LocalModelResponse
-               {
-                   ModelName = modelId,
-                   Provider = LocalModelProviders.CodexOAuth,
-                   IsSelected = string.Equals(modelId, selectedModelName, StringComparison.OrdinalIgnoreCase),
-                   Kind = ModelKind.Chat.ToString(),
-                   DetectedKind = ModelKind.Chat.ToString(),
-                   Capabilities = [],
-                   IsReasoningCapable = true,
-                   IsToolCapable = CodexProviderCapabilities.V0.SupportsToolCalling,
-                   IsOverridden = false,
-               })
-               .ToArray();
+                                .Select(modelId => new LocalModelResponse
+                                {
+                                    ModelName = modelId,
+                                    Provider = LocalModelProviders.CodexOAuth,
+                                    IsSelected = string.Equals(modelId, selectedModelName, StringComparison.OrdinalIgnoreCase),
+                                    Kind = ModelKind.Chat.ToString(),
+                                    DetectedKind = ModelKind.Chat.ToString(),
+                                    Capabilities = [],
+                                    IsReasoningCapable = true,
+                                    IsToolCapable = CodexProviderCapabilities.V0.SupportsToolCalling,
+                                    IsOverridden = false
+                                })
+                                .ToArray();
     }
 
     public static ListLocalModelsResponse ToUnavailableListResponse(string? selectedModelName,
@@ -172,7 +172,7 @@ internal static class LocalModelsMapper
 
     private static ModelClassificationResult UnknownClassification(string modelName)
     {
-        return new ModelClassificationResult(modelName, ModelKind.Unknown, ModelKind.Unknown, [], IsOverridden: false);
+        return new ModelClassificationResult(modelName, ModelKind.Unknown, ModelKind.Unknown, [], false);
     }
 
     public static LocalModelDetailsResponse ToResponse(this OllamaModelDetails modelDetails, string modelName)

@@ -37,7 +37,7 @@ public sealed class ModelFitQueryService(
         var summary = await _snapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend,
                                               useCase,
                                               providerName,
-                                              modelName: null,
+                                              null,
                                               cancellationToken)
                                           .ConfigureAwait(false);
 

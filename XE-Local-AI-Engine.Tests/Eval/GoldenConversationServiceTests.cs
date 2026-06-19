@@ -20,10 +20,10 @@ public sealed class GoldenConversationServiceTests
     {
         var service = CreateService(out _);
         var input = new GoldenConversationCreateInput(AgentId,
-            Title: new string('t', 201),
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            Rubric: "The answer must be helpful.");
+            new string('t', 201),
+            """[{"role":"user","text":"hi"}]""",
+            null,
+            "The answer must be helpful.");
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
     }
@@ -33,10 +33,10 @@ public sealed class GoldenConversationServiceTests
     {
         var service = CreateService(out _);
         var input = new GoldenConversationCreateInput(AgentId,
-            Title: "Long turns",
-            InputTurns: new string('x', 50_001),
-            Assertion: null,
-            Rubric: "The answer must be helpful.");
+            "Long turns",
+            new string('x', 50_001),
+            null,
+            "The answer must be helpful.");
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
     }
@@ -46,10 +46,10 @@ public sealed class GoldenConversationServiceTests
     {
         var service = CreateService(out var store);
         var input = new GoldenConversationCreateInput(AgentId,
-            Title: "Valid case",
-            InputTurns: """[{"role":"user","text":"hi"}]""",
-            Assertion: null,
-            Rubric: "The answer must be helpful.");
+            "Valid case",
+            """[{"role":"user","text":"hi"}]""",
+            null,
+            "The answer must be helpful.");
 
         _ = await service.CreateAsync(input).ConfigureAwait(false);
 
@@ -78,24 +78,24 @@ public sealed class GoldenConversationServiceTests
             input.Assertion,
             input.Rubric,
             input.Enabled,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            10,
+            10);
     }
 
     private static AgentDefinitionRecord CreateAgent()
     {
         return new AgentDefinitionRecord(AgentId,
             "Builder",
-            Description: null,
+            null,
             "Base instructions.",
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            [],
+            new Dictionary<string, bool>(),
+            null,
+            1,
+            10,
+            10);
     }
 }

@@ -112,7 +112,7 @@ public sealed class ModelClassificationStoreTests : IDisposable
         _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, """["completion"]""");
         _ = await store.SetOverrideAsync("mistral", ModelKind.Embedding);
 
-        var cleared = await store.SetOverrideAsync("mistral", overrideKind: null);
+        var cleared = await store.SetOverrideAsync("mistral", null);
 
         AssertEx.Null(cleared.OverrideKind, "A null override should clear the operator override.");
         AssertEx.Equal(ModelKind.Chat, cleared.DetectedKind, "Clearing the override must leave the detected fields intact.");
@@ -153,8 +153,8 @@ public sealed class ModelClassificationStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new ModelClassificationStore(context, TimeProvider.System);
 
-        _ = await store.UpsertDetectedAsync("zephyr", "sha256:z", ModelKind.Chat, capabilitiesJson: null);
-        _ = await store.UpsertDetectedAsync("alpaca", "sha256:a", ModelKind.Chat, capabilitiesJson: null);
+        _ = await store.UpsertDetectedAsync("zephyr", "sha256:z", ModelKind.Chat, null);
+        _ = await store.UpsertDetectedAsync("alpaca", "sha256:a", ModelKind.Chat, null);
         _ = await store.UpsertDetectedAsync("mxbai-embed-large", "sha256:m", ModelKind.Embedding, """["embedding"]""");
 
         var all = await store.ListAsync();

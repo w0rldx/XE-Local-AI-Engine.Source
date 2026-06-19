@@ -20,7 +20,10 @@ public sealed class PreviewWorkflowHub(IPreviewWorkflowExecutionService executio
         executionService ?? throw new ArgumentNullException(nameof(executionService));
 
     /// <summary>Returns the SignalR group name for a run's scoped delivery.</summary>
-    public static string RunGroup(Guid runId) => $"preview-run-{runId:N}";
+    public static string RunGroup(Guid runId)
+    {
+        return $"preview-run-{runId:N}";
+    }
 
     /// <summary>Opts this connection into the per-run group so it receives only that run's scoped events.</summary>
     public Task Subscribe(Guid runId)

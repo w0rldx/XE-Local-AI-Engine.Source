@@ -4,9 +4,8 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
-using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     A scripted <see cref="IPreviewWorkflowRunSession" /> that yields a queued sequence of
@@ -15,10 +14,14 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 internal sealed class ScriptedPreviewRunSession : IPreviewWorkflowRunSession
 {
-    private readonly Channel<PreviewWorkflowUpdate> _updates =
-        Channel.CreateUnbounded<PreviewWorkflowUpdate>(new UnboundedChannelOptions { SingleReader = false, SingleWriter = false });
-
     private readonly Func<string, ScriptedPreviewRunSession, Task>? _onResume;
+
+    private readonly Channel<PreviewWorkflowUpdate> _updates =
+        Channel.CreateUnbounded<PreviewWorkflowUpdate>(new UnboundedChannelOptions
+        {
+            SingleReader = false,
+            SingleWriter = false
+        });
 
     public ScriptedPreviewRunSession(IEnumerable<PreviewWorkflowUpdate> initialUpdates,
         Func<string, ScriptedPreviewRunSession, Task>? onResume = null)
@@ -35,20 +38,7 @@ internal sealed class ScriptedPreviewRunSession : IPreviewWorkflowRunSession
 
     public int ResumeCount { get; private set; }
 
-    /// <summary>Enqueues another update for the next (or in-flight) WatchAsync enumeration.</summary>
-    public void Enqueue(PreviewWorkflowUpdate update)
-    {
-        _ = _updates.Writer.TryWrite(update);
-    }
-
-    /// <summary>Signals the current WatchAsync enumeration to end (without a terminal update) — e.g. to pause.</summary>
-    public void CompleteStream()
-    {
-        _ = _updates.Writer.TryComplete();
-    }
-
-    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync(
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         while (await _updates.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -82,6 +72,18 @@ internal sealed class ScriptedPreviewRunSession : IPreviewWorkflowRunSession
         Disposed = true;
         _ = _updates.Writer.TryComplete();
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Enqueues another update for the next (or in-flight) WatchAsync enumeration.</summary>
+    public void Enqueue(PreviewWorkflowUpdate update)
+    {
+        _ = _updates.Writer.TryWrite(update);
+    }
+
+    /// <summary>Signals the current WatchAsync enumeration to end (without a terminal update) — e.g. to pause.</summary>
+    public void CompleteStream()
+    {
+        _ = _updates.Writer.TryComplete();
     }
 }
 
@@ -138,9 +140,15 @@ internal sealed class FakeNodeLocalChatClient : IChatClient
         return EmptyStream();
     }
 
-    public object? GetService(Type serviceType, object? serviceKey = null) => null;
+    public object? GetService(Type serviceType, object? serviceKey = null)
+    {
+        return null;
+    }
 
-    public void Dispose() => Disposed = true;
+    public void Dispose()
+    {
+        Disposed = true;
+    }
 
     private static async IAsyncEnumerable<ChatResponseUpdate> EmptyStream()
     {
@@ -168,18 +176,38 @@ internal sealed class FakeLocalModelProvider : ILocalModelProvider
         return client;
     }
 
-    public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
-
-    public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) => throw new NotSupportedException();
-
-    public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
-
-    public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
-
-    public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
-
-    public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
-
-    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) =>
+    public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct)
+    {
         throw new NotSupportedException();
+    }
+
+    public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task DeleteModelAsync(string modelName, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task WarmModelAsync(string modelName, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public Task UnloadModelAsync(string modelName, CancellationToken ct)
+    {
+        throw new NotSupportedException();
+    }
+
+    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
+    {
+        throw new NotSupportedException();
+    }
 }
