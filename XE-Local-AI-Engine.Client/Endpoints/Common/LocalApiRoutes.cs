@@ -125,16 +125,6 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
-    ///     Runtime manager routes and hub path.
-    /// </summary>
-    public static class RuntimeManager
-    {
-        public const string Hub = "/api/local/v1/runtime/hub";
-        public const string Status = "runtime/status";
-        public const string ContainerAction = "runtime/containers/action";
-    }
-
-    /// <summary>
     ///     Invocation monitor routes.
     /// </summary>
     public static class Invocations
@@ -224,7 +214,7 @@ public static class LocalApiRoutes
         public const string RunCancel = "scheduler/runs/{runId}/cancel";
 
         // SignalR push hub for scheduler lifecycle events. Full path (mapped via MapHub, not the FastEndpoints prefix),
-        // mirroring LocalChat.Hub / RuntimeManager.Hub.
+        // mirroring LocalChat.Hub.
         public const string Hub = "/api/local/v1/scheduler/hub";
     }
 

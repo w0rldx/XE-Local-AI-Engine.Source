@@ -54,13 +54,11 @@
 		"modelsInstalled": "Installed",
 		"recommendations": "Recommendations",
 		"loadedModels": "Loaded",
-		"overview": "Overview",
 		"tools": "Tools",
 		"agents": "Agents",
 		"mcp": "MCP",
 		"scheduler": "Scheduler",
 		"modelRecommendations": "Model Recommendations",
-		"manager": "Manager",
 		"invocations": "Invocations",
 		"schedule": "Schedule",
 		"user": "User",
@@ -940,12 +938,6 @@
 					"errorTitle": "Pull failed",
 					"error": "Could not pull {{model}}."
 				}
-			}
-		},
-		"manager": {
-			"placeholder": {
-				"title": "Runtime manager",
-				"description": "HostAgent runtime status and container actions will be added here."
 			}
 		},
 		"invocations": {

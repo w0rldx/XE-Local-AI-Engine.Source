@@ -54,13 +54,11 @@
 		"modelsInstalled": "Installiert",
 		"recommendations": "Empfehlungen",
 		"loadedModels": "Geladen",
-		"overview": "Übersicht",
 		"tools": "Tools",
 		"agents": "Agenten",
 		"mcp": "MCP",
 		"scheduler": "Planer",
 		"modelRecommendations": "Modellempfehlungen",
-		"manager": "Manager",
 		"invocations": "Aufrufe",
 		"schedule": "Terminplaner",
 		"user": "Benutzer",
@@ -940,12 +938,6 @@
 					"errorTitle": "Download fehlgeschlagen",
 					"error": "{{model}} konnte nicht heruntergeladen werden."
 				}
-			}
-		},
-		"manager": {
-			"placeholder": {
-				"title": "Runtime-Manager",
-				"description": "HostAgent-Laufzeitstatus und Container-Aktionen werden hier ergänzt."
 			}
 		},
 		"invocations": {

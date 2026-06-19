@@ -22,7 +22,6 @@ import { Route as LayoutNodeBindingRouteImport } from './routes/_layout/node-bin
 import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
 import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
 import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
-import { Route as LayoutManagerRouteImport } from './routes/_layout/manager'
 import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
@@ -95,11 +94,6 @@ const LayoutMcpRoute = LayoutMcpRouteImport.update({
   path: '/mcp',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutManagerRoute = LayoutManagerRouteImport.update({
-  id: '/manager',
-  path: '/manager',
-  getParentRoute: () => LayoutRoute,
-} as any)
 const LayoutLoadedModelsRoute = LayoutLoadedModelsRouteImport.update({
   id: '/loaded-models',
   path: '/loaded-models',
@@ -141,7 +135,6 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof LayoutDashboardRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
-  '/manager': typeof LayoutManagerRoute
   '/mcp': typeof LayoutMcpRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
@@ -161,7 +154,6 @@ export interface FileRoutesByTo {
   '/dashboard': typeof LayoutDashboardRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
-  '/manager': typeof LayoutManagerRoute
   '/mcp': typeof LayoutMcpRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/models': typeof LayoutModelsRoute
@@ -184,7 +176,6 @@ export interface FileRoutesById {
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/loaded-models': typeof LayoutLoadedModelsRoute
-  '/_layout/manager': typeof LayoutManagerRoute
   '/_layout/mcp': typeof LayoutMcpRoute
   '/_layout/model-recommendations': typeof LayoutModelRecommendationsRoute
   '/_layout/models': typeof LayoutModelsRoute
@@ -208,7 +199,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invocations'
     | '/loaded-models'
-    | '/manager'
     | '/mcp'
     | '/model-recommendations'
     | '/models'
@@ -228,7 +218,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/invocations'
     | '/loaded-models'
-    | '/manager'
     | '/mcp'
     | '/model-recommendations'
     | '/models'
@@ -250,7 +239,6 @@ export interface FileRouteTypes {
     | '/_layout/dashboard'
     | '/_layout/invocations'
     | '/_layout/loaded-models'
-    | '/_layout/manager'
     | '/_layout/mcp'
     | '/_layout/model-recommendations'
     | '/_layout/models'
@@ -362,13 +350,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutMcpRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/manager': {
-      id: '/_layout/manager'
-      path: '/manager'
-      fullPath: '/manager'
-      preLoaderRoute: typeof LayoutManagerRouteImport
-      parentRoute: typeof LayoutRoute
-    }
     '/_layout/loaded-models': {
       id: '/_layout/loaded-models'
       path: '/loaded-models'
@@ -421,7 +402,6 @@ interface LayoutRouteChildren {
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutLoadedModelsRoute: typeof LayoutLoadedModelsRoute
-  LayoutManagerRoute: typeof LayoutManagerRoute
   LayoutMcpRoute: typeof LayoutMcpRoute
   LayoutModelRecommendationsRoute: typeof LayoutModelRecommendationsRoute
   LayoutModelsRoute: typeof LayoutModelsRoute
@@ -441,7 +421,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutLoadedModelsRoute: LayoutLoadedModelsRoute,
-  LayoutManagerRoute: LayoutManagerRoute,
   LayoutMcpRoute: LayoutMcpRoute,
   LayoutModelRecommendationsRoute: LayoutModelRecommendationsRoute,
   LayoutModelsRoute: LayoutModelsRoute,

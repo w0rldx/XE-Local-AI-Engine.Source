@@ -22,7 +22,7 @@ describe("navigationLinks", () => {
 		vi.doUnmock("@/capabilities/NodeCapabilities");
 	});
 
-	it("groups the related node pages under Models / Settings / Automation / Manager with flat entries around them", () => {
+	it("groups the related node pages under Models / Settings / Automation with flat entries around them", () => {
 		expect(navigationLinks.map((link) => link.id)).toEqual([
 			"home",
 			"dashboard",
@@ -32,7 +32,6 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"preview",
-			"manager",
 			"invocations",
 		]);
 	});
@@ -41,12 +40,10 @@ describe("navigationLinks", () => {
 		const models = navigationLinks.find((link) => link.id === "models");
 		const settings = navigationLinks.find((link) => link.id === "settings");
 		const automation = navigationLinks.find((link) => link.id === "automation");
-		const manager = navigationLinks.find((link) => link.id === "manager");
 
 		expect(models?.to).toBeUndefined();
 		expect(settings?.to).toBeUndefined();
 		expect(automation?.to).toBeUndefined();
-		expect(manager?.to).toBeUndefined();
 
 		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.models,
@@ -63,17 +60,13 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,
 		]);
-		// Manager group: runtime overview only (the approved-images page was removed with the approved-image concept).
-		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.manager]);
 	});
 
-	it("keeps only Installed under Models and only Overview under Manager when modelFit and loadedModels are off", async () => {
+	it("keeps only Installed under Models when modelFit and loadedModels are off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ modelFit: false, loadedModels: false });
 		const models = gatedLinks.find((link) => link.id === "models");
-		const manager = gatedLinks.find((link) => link.id === "manager");
 
 		expect(models?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.models]);
-		expect(manager?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.manager]);
 	});
 
 	it("drops the loaded-models child from Models when loadedModels is off", async () => {

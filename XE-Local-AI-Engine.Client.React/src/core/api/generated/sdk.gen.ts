@@ -131,9 +131,6 @@ import type {
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryErrors,
 	EnsureLlamaCppBinaryResponses,
-	ExecuteRuntimeContainerActionData,
-	ExecuteRuntimeContainerActionErrors,
-	ExecuteRuntimeContainerActionResponses,
 	ExecuteSavedPreviewWorkflowData,
 	ExecuteSavedPreviewWorkflowErrors,
 	ExecuteSavedPreviewWorkflowResponses,
@@ -194,9 +191,6 @@ import type {
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsErrors,
 	GetRunningLocalModelsResponses,
-	GetRuntimeManagerStatusData,
-	GetRuntimeManagerStatusErrors,
-	GetRuntimeManagerStatusResponses,
 	GetScheduledJobData,
 	GetScheduledJobErrors,
 	GetScheduledJobResponses,
@@ -444,8 +438,6 @@ import {
 	zEnableScheduledJobResponse,
 	zEnsureLlamaCppBinaryBody,
 	zEnsureLlamaCppBinaryResponse,
-	zExecuteRuntimeContainerActionBody,
-	zExecuteRuntimeContainerActionResponse,
 	zExecuteSavedPreviewWorkflowPath,
 	zExecuteSavedPreviewWorkflowResponse,
 	zExecuteUnsavedPreviewWorkflowBody,
@@ -479,7 +471,6 @@ import {
 	zGetPreviewWorkflowPath,
 	zGetPreviewWorkflowResponse,
 	zGetRunningLocalModelsResponse,
-	zGetRuntimeManagerStatusResponse,
 	zGetScheduledJobPath,
 	zGetScheduledJobResponse,
 	zGetScheduledJobRunPath,
@@ -980,54 +971,6 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger",
-		...options,
-	});
-
-export const executeRuntimeContainerAction = <ThrowOnError extends boolean = false>(
-	options: Options<ExecuteRuntimeContainerActionData, ThrowOnError>,
-) =>
-	(options.client ?? client).post<ExecuteRuntimeContainerActionResponses, ExecuteRuntimeContainerActionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zExecuteRuntimeContainerActionBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zExecuteRuntimeContainerActionResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/runtime/containers/action",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const getRuntimeManagerStatus = <ThrowOnError extends boolean = false>(
-	options?: Options<GetRuntimeManagerStatusData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetRuntimeManagerStatusResponses, GetRuntimeManagerStatusErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetRuntimeManagerStatusResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/runtime/status",
 		...options,
 	});
 
