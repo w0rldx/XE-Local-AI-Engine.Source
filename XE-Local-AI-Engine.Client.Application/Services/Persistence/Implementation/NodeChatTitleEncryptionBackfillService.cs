@@ -27,7 +27,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
             // EncryptConversationTitle migration (which NULLs plaintext titles) or conversations created before
             // the first user message arrived.
             var conversationIds = await dbContext.Database
-                .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL;")
+                .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
                 .ToListAsync(stoppingToken)
                 .ConfigureAwait(false);
 
@@ -49,7 +49,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 // correct AAD (content AAD = conversationId + messageId + "content").
                 var row = await dbContext.Database
                     .SqlQueryRaw<MessageIdAndContent>(
-                        "SELECT message_id, content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1;",
+                        "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
                         conversationId)
                     .FirstOrDefaultAsync(stoppingToken)
                     .ConfigureAwait(false);
@@ -79,7 +79,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
 
                 await dbContext.Database
                     .ExecuteSqlRawAsync(
-                        "UPDATE conversations SET title = {0} WHERE conversation_id = {1};",
+                        "UPDATE conversations SET title = {0} WHERE conversation_id = {1}",
                         [(encryptedTitle is null ? (object)DBNull.Value : encryptedTitle), conversationId],
                         stoppingToken)
                     .ConfigureAwait(false);
