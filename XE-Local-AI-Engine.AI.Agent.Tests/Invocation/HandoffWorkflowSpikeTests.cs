@@ -28,8 +28,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Backend test suites must not be invoked in parallel on one machine; run them sequentially
 ///     (e.g. <c>dotnet test</c> one project at a time).
 /// </remarks>
-[NotInParallel(nameof(P5HandoffSpikeTests))]
-public sealed class P5HandoffSpikeTests
+[NotInParallel(nameof(HandoffWorkflowSpikeTests))]
+public sealed class HandoffWorkflowSpikeTests
 {
     private const string TriageInstructions =
         "You are the TRIAGE agent. Hand off the conversation to the specialist.";

@@ -35,7 +35,7 @@ type SkillFieldErrors = Partial<Record<keyof SkillFormValues, string>>;
 
 // Create/edit form for a node skill (SKILL.md): name + description inputs plus a markdown body editor. Controlled
 // Mantine inputs validated with the shared Zod schema on submit. Description + body are sent to the agent's model
-// on demand at run time, so a privacy note is shown (plan §10). The enabled toggle is only meaningful on edit.
+// on demand at run time, so a privacy note is shown. The enabled toggle is only meaningful on edit.
 export function SkillForm({
 	initialValues,
 	isSubmitting,

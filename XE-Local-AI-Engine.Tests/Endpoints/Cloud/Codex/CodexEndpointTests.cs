@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Covers the Operator Codex endpoints (plan §8/§12): login returns the authorize URL, status reflects the
+/// Covers the Operator Codex endpoints: login returns the authorize URL, status reflects the
 /// session + pending state without token material, logout clears the session, and all routes reject callers
 /// without an operator token.
 /// </summary>
@@ -65,7 +65,7 @@ public sealed class CodexEndpointTests
     [Test]
     public async Task Status_WhenSessionExpired_ReportsNotSignedIn_ButKeepsAccountAndExpiry()
     {
-        // A stale session must NOT report SignedIn=true with a past ExpiresAtUtc (T8 HIGH / §7.2). Account id +
+        // A stale session must NOT report SignedIn=true with a past ExpiresAtUtc. Account id +
         // expiry stay populated so the UI can show a "session expired — re-authenticate" state.
         var pastExpiry = DateTimeOffset.UtcNow.AddHours(-1);
         var tokenStore = Substitute.For<ICodexTokenStore>();

@@ -3,9 +3,9 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-/// Wraps the inner Responses <see cref="IChatClient"/> to enforce <c>store=false</c> on every call (plan D10/M1),
+/// Wraps the inner Responses <see cref="IChatClient"/> to enforce <c>store=false</c> on every call,
 /// pin the request to a VALID Codex model id, and protect the factory's shared <see cref="HttpClient"/> from
-/// disposal (M3).
+/// disposal.
 ///
 /// <para>
 /// store=false is mandatory for the transport-only boundary, so it is applied unconditionally: each call's
@@ -27,7 +27,7 @@ using Microsoft.Extensions.AI;
 /// <para>
 /// Disposal is left to the base <see cref="DelegatingChatClient"/>: the factory's shared <see cref="HttpClient"/>
 /// and <c>CodexAuthHandler</c> are owned by the factory and are not torn down by disposing this wrapper, because
-/// <c>HttpClientPipelineTransport</c> does not take ownership of the supplied client (M3).
+/// <c>HttpClientPipelineTransport</c> does not take ownership of the supplied client.
 /// </para>
 /// </summary>
 internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
@@ -121,5 +121,5 @@ internal sealed class CodexStoreDisabledChatClient : DelegatingChatClient
 
     // Dispose is left to the base DelegatingChatClient: the inner MEAI/Responses client does NOT own the
     // factory's shared HttpClient (HttpClientPipelineTransport does not take ownership), so the shared
-    // client/handler the factory owns is never torn down by disposing this wrapper (M3).
+    // client/handler the factory owns is never torn down by disposing this wrapper.
 }

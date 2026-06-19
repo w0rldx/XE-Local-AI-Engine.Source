@@ -4,10 +4,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>Supervisor_SpawnArgs_ChatHasJinja_EmbeddingHasPooling</c>: the supervisor's launch argument
-///     vector always carries the mandatory role flags — chat → <c>--jinja</c>; embedding → <c>--embeddings</c> +
-///     a non-<c>none</c> <c>--pooling</c> value — and always binds localhost only. Verified against the pinned
-///     llama.cpp release <c>b9692</c> flag names (<c>--jinja</c>, <c>--embeddings</c>, <c>--pooling mean|cls|last</c>).
+///     Verifies the supervisor's launch argument vector always carries the mandatory role flags — chat →
+///     <c>--jinja</c>; embedding → <c>--embeddings</c> + a non-<c>none</c> <c>--pooling</c> value — and always binds
+///     localhost only. Verified against the pinned llama.cpp release <c>b9692</c> flag names (<c>--jinja</c>,
+///     <c>--embeddings</c>, <c>--pooling mean|cls|last</c>).
 /// </summary>
 public sealed class SupervisorSpawnArgsTests
 {

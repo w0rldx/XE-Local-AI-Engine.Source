@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 ///     (<see cref="Implementation.NullPreviewWorkflowEventPublisher" />); the Client host swaps in a hub-backed
 ///     publisher.
 ///
-///     Privacy note (plan §10, documented exception): unlike the Scheduler ("sanitize everything"), these payloads carry
+///     Privacy note (documented exception): unlike the Scheduler ("sanitize everything"), these payloads carry
 ///     the operator's OWN transient run output (the Debug feature's whole point) over the localhost Operator hub.
 ///     Nothing here is persisted, logged, or indexed.
 /// </summary>
@@ -41,7 +41,7 @@ public static class PreviewWorkflowHubEvents
 
 /// <summary>
 ///     Node-scoped run event. <see cref="RunId" /> is mandatory (scopes delivery / prevents cross-run contamination).
-///     <see cref="Output" /> carries the operator's transient node/debug output (documented §10 exception);
+///     <see cref="Output" /> carries the operator's transient node/debug output (documented privacy exception);
 ///     <see cref="Error" /> a sanitized failure message.
 /// </summary>
 public sealed record PreviewWorkflowNodeHubEvent(

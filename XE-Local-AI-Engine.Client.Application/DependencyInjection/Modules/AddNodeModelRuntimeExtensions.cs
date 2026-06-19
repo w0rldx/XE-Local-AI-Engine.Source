@@ -123,7 +123,7 @@ internal static class AddNodeModelRuntimeExtensions
                 sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable));
         });
 
-        // Embeddings are provider-routed (Lane A §7.7): EmbeddingPlaybookRetrievalRanker resolves the embedding provider
+        // Embeddings are provider-routed: EmbeddingPlaybookRetrievalRanker resolves the embedding provider
         // by PlaybookRetrievalOptions.EmbeddingProviderName via ILocalModelProviderResolver and builds/owns its own
         // generator per send (node-local; ollama or llamacpp). There is intentionally no standalone DI-registered
         // IEmbeddingGenerator — the previous Ollama hardwire and its only consumer (the unused LocalEmbeddingService
@@ -135,25 +135,24 @@ internal static class AddNodeModelRuntimeExtensions
             return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
         });
 
-        // Lane A (decision #14): register the llama-server provider stack ALONGSIDE Ollama so the resolver can
+        // Register the llama-server provider stack ALONGSIDE Ollama so the resolver can
         // dispatch a model to either runtime. AddLlamaServerLocalModelProvider adds the binary manager, the GPU
         // variant probe, the process supervisor, and the "llamacpp" ILocalModelProvider into the provider set.
         // Caller-contract dependencies (the provider project intentionally takes them from the host):
         //   • an HttpClient for binary downloads + health probes (AddHttpClient),
-        //   • an IGgufModelStore — Lane B's real HF GGUF store, registered just below by AddHuggingFaceGgufStore.
-        // Lane B SWAP DONE: AddHuggingFaceGgufStore provides the real IGgufModelStore (HF discovery + download + disk
+        //   • an IGgufModelStore — the Hugging Face GGUF store, registered just below by AddHuggingFaceGgufStore.
+        // AddHuggingFaceGgufStore provides the real IGgufModelStore (HF discovery + download + disk
         // guard + registry); the optional HF token rides the encrypted HfTokenStore (third IDataProtector .enc store).
         builder.Services.AddHttpClient();
         builder.Services.AddSingleton<IHfTokenStore, HfTokenStore>();
         builder.Services.AddHuggingFaceGgufStore(configuration);
         builder.Services.AddLlamaServerLocalModelProvider();
 
-        // Lane A (§7.5): the provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
+        // The provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
         // unmapped → default) then ProviderName→ILocalModelProvider (over the registered set). Singleton; reads the
-        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "ollama" — the §6.1
-        // backfill keeps every existing model on its current runtime until it is explicitly re-pointed to llamacpp
-        // (no GGUF binary path exists yet; Lane B/C land that). The supervisor's loaded-cap is surfaced for the
-        // preview reject-at-start check (T5/§7.6).
+        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "ollama" — the
+        // backfill keeps every existing model on its current runtime until it is explicitly re-pointed to llamacpp.
+        // The supervisor's loaded-cap is surfaced for the preview reject-at-start check.
         builder.Services.AddSingleton<ILocalModelProviderResolver>(sp =>
         {
             var supervisorOptions = sp.GetRequiredService<LlamaServerSupervisorOptions>();
@@ -164,10 +163,10 @@ internal static class AddNodeModelRuntimeExtensions
                 maxLoadedProcesses: supervisorOptions.MaxLoadedProcesses);
         });
 
-        // C2 fix (plan §0/§7.2): register a runtime-re-selecting IChatClient rather than capturing the
+        // Register a runtime-re-selecting IChatClient rather than capturing the
         // cloud-vs-local choice once at startup. The wrapper re-evaluates the active provider per send via
         // IActiveCloudChatClientFactory, so signing in/out at runtime takes effect without a node restart.
-        // Lane A (§7.4): the local branch is now the ModelRoutingLocalChatClient — it routes per-send by
+        // The local branch is the ModelRoutingLocalChatClient — it routes per-send by
         // ChatOptions.ModelId across providers/processes rather than a single fixed-model client.
         builder.Services.AddSingleton<IChatClient>(sp =>
         {
@@ -186,7 +185,7 @@ internal static class AddNodeModelRuntimeExtensions
     {
         var chatConnectionSettings = ResolveChatConnectionSettings(configuration);
 
-        // Lane A (§7.4/§7.5): the local branch is the ModelRoutingLocalChatClient. It routes per-send by
+        // The local branch is the ModelRoutingLocalChatClient. It routes per-send by
         // ChatOptions.ModelId through the provider resolver, so it supersedes BOTH the old fixed-model
         // ILocalModelProvider.CreateChatClient path and the raw-IOllamaApiClient-as-IChatClient fallback (the latter
         // could not route by ModelId for llama-server). XE_USE_LOCAL_MODEL_PROVIDER is still honored: when it is unset

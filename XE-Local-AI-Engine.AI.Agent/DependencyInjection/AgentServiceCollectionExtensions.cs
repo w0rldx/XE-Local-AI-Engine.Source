@@ -77,7 +77,7 @@ public static class AgentServiceCollectionExtensions
         // caller-supplied node-local IChatClient with an empty tool set and runs it threadless.
         _ = services.AddSingleton<IPlaybookEvalAgentRunner, MafPlaybookEvalAgentRunner>();
         // Open Canvas (Preview) workflow runner. Builds a raw MAF WorkflowBuilder over the caller-supplied node-local
-        // IChatClient (Lane C resolves and hands it in); confines all Microsoft.Agents.AI.Workflows types to the runner.
+        // IChatClient (the caller resolves it per model and hands it in); confines all Microsoft.Agents.AI.Workflows types to the runner.
         _ = services.AddSingleton<IPreviewWorkflowRunner, PreviewWorkflowRunner>();
         return services;
     }

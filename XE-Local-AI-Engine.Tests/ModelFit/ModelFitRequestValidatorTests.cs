@@ -81,7 +81,7 @@ public sealed class ModelFitRequestValidatorTests
     [Test]
     public void Validate_WithLlamaCppProvider_IsValid()
     {
-        // The local advisor (Lane C) targets llama.cpp in-process; the validator now allowlists it alongside ollama.
+        // The local model-fit advisor targets llama.cpp in-process; the validator now allowlists it alongside ollama.
         AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", 5, "llama.cpp", null));
     }
 

@@ -5,11 +5,11 @@ using System.Net.Sockets;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Default <see cref="ILlamaServerProcessSupervisor" /> (plan §7.2 — the highest-risk Lane A component). Owns every
+///     Default <see cref="ILlamaServerProcessSupervisor" />. Owns every
 ///     <c>llama-server</c> child process: reuse-or-spawn per <c>(model, role)</c> with a single-flight gate, health
 ///     probe on start, restart-on-crash with a backoff cap, localhost port allocation with collision-retry, shared
-///     idle-TTL + loaded-cap eviction + a background reaper (decision #15), per-OS tree-kill teardown, and the hybrid
-///     attach-to-external-endpoint path (decision #5). Singleton; disposes every owned process on shutdown.
+///     idle-TTL + loaded-cap eviction + a background reaper, per-OS tree-kill teardown, and the hybrid
+///     attach-to-external-endpoint path. Singleton; disposes every owned process on shutdown.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -82,7 +82,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        // Hybrid attach (decision #5): a configured external endpoint short-circuits spawn/supervision entirely.
+        // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
         var external = _externalEndpoints.Resolve(modelName, role);
         if (external is not null)
         {
@@ -289,7 +289,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var args = new List<string>
         {
             "-m", modelFilePath,
-            "--host", "127.0.0.1", // localhost-only bind (decision #17)
+            "--host", "127.0.0.1", // localhost-only bind
             "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
 

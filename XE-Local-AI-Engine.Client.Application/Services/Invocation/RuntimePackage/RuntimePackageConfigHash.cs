@@ -93,8 +93,8 @@ public static class RuntimePackageConfigHash
             },
             // The orchestration spec is folded deterministically (sorted participants/tools/edges) ONLY when present.
             // It is emitted with WhenWritingNull so a single-agent loopback or the encrypted/server path (which never
-            // sets it) serializes BYTE-IDENTICALLY to the pre-P5 payload — the cross-repo round-trip digest depends on
-            // this. The per-property condition overrides the type-wide DefaultIgnoreCondition=Never.
+            // sets it) serializes BYTE-IDENTICALLY to the single-agent payload — the cross-repo round-trip digest
+            // depends on this. The per-property condition overrides the type-wide DefaultIgnoreCondition=Never.
             Orchestration = BuildOrchestrationHashPayload(orchestrationSpec),
             // The resolved skill set is folded deterministically (sorted by Id, body HASHED not embedded) ONLY when
             // non-empty. Like Orchestration it is emitted WhenWritingNull, so the no-skills loopback and the
@@ -228,7 +228,7 @@ public static class RuntimePackageConfigHash
         [JsonPropertyOrder(6)]
         public required TimeoutSettingsHashPayload Timeouts { get; init; }
 
-        // Omitted entirely when null so the pre-P5 payload is byte-identical (the cross-repo round-trip
+        // Omitted entirely when null so the single-agent payload is byte-identical (the cross-repo round-trip
         // digest depends on this). Only the loopback orchestration path sets it.
         [JsonPropertyOrder(7)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -6,7 +6,7 @@ using OpenAI;
 
 /// <summary>
 ///     Builds the MEAI OpenAI <see cref="IChatClient" /> / <see cref="IEmbeddingGenerator{TInput,TEmbedding}" />
-///     adapters over a llama-server endpoint's OpenAI-compatible base URL (decision #5/#6, plan §7.0/§7.3).
+///     adapters over a llama-server endpoint's OpenAI-compatible base URL.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -19,7 +19,7 @@ using OpenAI;
 ///     </para>
 ///     <para>
 ///         The API key is irrelevant — a local llama-server ignores it, so a fixed sentinel satisfies the SDK ctor and
-///         never reaches a real provider (the endpoint is localhost-bound, decision #17). The
+///         never reaches a real provider (the endpoint is localhost-bound). The
 ///         <see cref="OpenAIClientOptions.Endpoint" /> is the <c>…/v1</c> base address; the SDK appends the operation
 ///         path (e.g. <c>/chat/completions</c>) to it.
 ///     </para>

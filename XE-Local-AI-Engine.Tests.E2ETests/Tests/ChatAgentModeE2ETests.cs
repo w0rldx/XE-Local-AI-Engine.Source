@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for chat agent-mode selection + per-response attribution (gap analysis P1-1).
+///     Browser-driven E2E for chat agent-mode selection + per-response attribution.
 ///     The existing chat suite covers send/stream/cancel but never the agent picker, so a regression in
 ///     agent stamping (the attribution that names which persona answered) is invisible until manual testing.
 ///     <para>

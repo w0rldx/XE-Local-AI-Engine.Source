@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 using Microsoft.Extensions.Logging;
 
-/// <summary>The state of the most recent / current Codex login attempt (plan §8 <c>codex/status</c>).</summary>
+/// <summary>The state of the most recent / current Codex login attempt, surfaced by the <c>codex/status</c> endpoint.</summary>
 public enum CodexLoginState
 {
     /// <summary>No login has been started this process lifetime.</summary>
@@ -31,9 +31,9 @@ public sealed record CodexLoginStatus(CodexLoginState State, Uri? AuthorizeUrl)
 
 /// <summary>
 /// Owns the pending-login lifecycle so the Operator endpoints can start a loopback PKCE login, return the
-/// authorize URL immediately, and poll status until it completes (plan §8). A second <see cref="Start"/>
+/// authorize URL immediately, and poll status until it completes. A second <see cref="Start"/>
 /// <em>supersedes</em> any in-flight login: the prior attempt is cancelled and its loopback listener freed,
-/// so the new login can re-bind the callback port. Never logs token material (plan §9).
+/// so the new login can re-bind the callback port. Never logs token material.
 /// </summary>
 public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
 {
@@ -146,7 +146,7 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         }
         catch (Exception exception)
         {
-            // Never log token material; CodexAuthException messages are already redacted (plan §9).
+            // Never log token material; CodexAuthException messages are already redacted.
             _logger.LogWarning(exception, "Codex login did not complete successfully.");
             UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Failed, AuthorizeUrl: null));
         }

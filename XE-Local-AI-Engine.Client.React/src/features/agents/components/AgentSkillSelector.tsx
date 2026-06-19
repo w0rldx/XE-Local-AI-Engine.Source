@@ -22,7 +22,7 @@ function orphanSkillEntry(id: string): SkillSummary {
 // Skill multi-select for the agent form. The node skill library is fetched live (useSkills) — the SAME source the
 // Skills page renders. Each row is a checkbox toggling membership in allowedSkillIds; disabled skills are shown but
 // flagged (they are never loaded at resolve time even if assigned). Selected-but-absent skills are appended so they
-// remain deselectable. Skills are sent to the agent's model on demand, so a privacy note is shown (plan §10).
+// remain deselectable. Skills are sent to the agent's model on demand, so a privacy note is shown.
 export function AgentSkillSelector({ selectedSkillIds, onToggleSkill }: AgentSkillSelectorProps) {
 	const { t } = useTranslation();
 	const skillsQuery = useSkills();

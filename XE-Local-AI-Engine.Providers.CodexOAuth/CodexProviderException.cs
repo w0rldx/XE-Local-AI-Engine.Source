@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.CodexOAuth;
 
 /// <summary>
-/// Categories of Codex provider failures surfaced to callers (plan §8 Phase 3.4). Distinct from auth-flow
+/// Categories of Codex provider failures surfaced to callers. Distinct from auth-flow
 /// failures (<see cref="Auth.CodexAuthException"/>), which map to <see cref="AuthRequired"/> / <see cref="RefreshFailed"/>.
 /// </summary>
 public enum CodexProviderErrorKind
@@ -23,7 +23,7 @@ public enum CodexProviderErrorKind
 }
 
 /// <summary>
-/// A typed Codex provider error. Messages must never contain token values or authorization headers (plan §9).
+/// A typed Codex provider error. Messages must never contain token values or authorization headers.
 /// </summary>
 public sealed class CodexProviderException : Exception
 {

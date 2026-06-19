@@ -7,7 +7,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 /// <summary>
 ///     Query-string request for <c>GET model-fit/recommendations/latest</c>. <see cref="UseCase" /> is optional and is
 ///     the only cache-lookup key — the approved-image and provider-name params are gone (the advisor is the single
-///     box-aware recommendation backend, plan §8). It carries no raw image reference or command.
+///     box-aware recommendation backend). It carries no raw image reference or command.
 /// </summary>
 public sealed class GetLatestRecommendationsRequest
 {
@@ -121,13 +121,13 @@ public sealed class RefreshRecommendationsResponse
 }
 
 // ---------------------------------------------------------------------------
-// Hardware-profile response DTO (Lane C1 passthrough)
+// Hardware-profile response DTO (hardware profiler passthrough)
 // ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Sanitized projection of the node hardware profile (<c>GET model-fit/hardware-profile</c>). Carries only the
 ///     inference-relevant aggregates — RAM/VRAM/GPU vendor/CPU/free-disk — and never any machine identifier (hostname,
-///     serial) (plan §10). The GPU vendor is a lowercase string (<c>nvidia|amd|intel|none|unknown</c>).
+///     serial). The GPU vendor is a lowercase string (<c>nvidia|amd|intel|none|unknown</c>).
 /// </summary>
 public sealed class HardwareProfileResponse
 {
@@ -153,7 +153,7 @@ public sealed class HardwareProfileResponse
 }
 
 // ---------------------------------------------------------------------------
-// GGUF browse request/response DTOs (Lane B discovery passthrough)
+// GGUF browse request/response DTOs (Hugging Face discovery passthrough)
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -197,7 +197,7 @@ public sealed class BrowseGgufRepositoriesResponse
 }
 
 // ---------------------------------------------------------------------------
-// Download request/response DTOs (Lane B store + cancel registry)
+// Download request/response DTOs (GGUF store + cancel registry)
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -246,7 +246,7 @@ public sealed class CancelGgufDownloadResponse
 }
 
 // ---------------------------------------------------------------------------
-// Running-models / eject DTOs (Lane A supervisor passthrough)
+// Running-models / eject DTOs (llama-server supervisor passthrough)
 // ---------------------------------------------------------------------------
 
 /// <summary>One running llama-server process derived from the supervisor health snapshot. Diagnostics are sanitized.</summary>
@@ -290,14 +290,14 @@ public sealed class EjectRunningModelResponse
 }
 
 // ---------------------------------------------------------------------------
-// llama.cpp binary version DTOs (Lane A binary manager — read-only resolve + ensure)
+// llama.cpp binary version DTOs (binary manager — read-only resolve + ensure)
 // ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Response for <c>GET/POST model-fit/llamacpp/version</c>. Surfaces the resolved, hash-verified llama.cpp prebuilt
 ///     binary: its release tag (<see cref="Version" />), the acceleration <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>),
 ///     whether it is the recommended pinned fallback, and the recommended pinned tag. There is no source-build / arbitrary
-///     pin capability — the manager only resolves/ensures the pinned-or-selected prebuilt asset (plan §8 / Lane A).
+///     pin capability — the manager only resolves/ensures the pinned-or-selected prebuilt asset.
 /// </summary>
 public sealed class LlamaCppVersionResponse
 {
@@ -317,7 +317,7 @@ public sealed class LlamaCppVersionResponse
 /// <summary>
 ///     Body for <c>POST model-fit/llamacpp/version</c>. Ensures the prebuilt binary for the requested acceleration
 ///     <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>, case-insensitive) is present and hash-verified, downloading it if
-///     missing. There is no arbitrary version/tag input — the release tag is pinned in code (Lane A). An unknown variant
+///     missing. There is no arbitrary version/tag input — the release tag is pinned in code. An unknown variant
 ///     is rejected with a 400.
 /// </summary>
 public sealed class EnsureLlamaCppBinaryRequest
@@ -327,13 +327,13 @@ public sealed class EnsureLlamaCppBinaryRequest
 }
 
 // ---------------------------------------------------------------------------
-// HF token DTOs (Lane B token store — write-only value; never returned)
+// HF token DTOs (Hugging Face token store — write-only value; never returned)
 // ---------------------------------------------------------------------------
 
 /// <summary>
 ///     Body for <c>POST model-fit/hf-token</c>. When <see cref="Token" /> is non-empty the token is stored encrypted at
 ///     rest; when it is null/empty the stored token is cleared (returns to anonymous access). The token is a secret: it is
-///     NEVER returned by any endpoint, NEVER logged, and NEVER echoed in a response (plan §10).
+///     NEVER returned by any endpoint, NEVER logged, and NEVER echoed in a response.
 /// </summary>
 public sealed class SetHfTokenRequest
 {
@@ -343,7 +343,7 @@ public sealed class SetHfTokenRequest
 
 /// <summary>
 ///     Response for the HF-token endpoints. Reports ONLY whether a token is currently configured — never the token value
-///     itself (plan §10 / security gate).
+///     itself.
 /// </summary>
 public sealed class HfTokenStatusResponse
 {

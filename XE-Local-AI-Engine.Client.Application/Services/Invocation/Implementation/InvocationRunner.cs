@@ -342,9 +342,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         return ExecuteApiToolCallAsync(invocationId, toolName, parameters, true, cancellationToken);
     }
 
-    // The unchanged single-agent path, extracted verbatim from the former RunAsync body. Drives one ChatClientAgent
-    // over an approval-gated do/while loop, accumulating into `stream` through the shared transport so the streaming
-    // behavior is identical to before P5.
+    // The single-agent path. Drives one ChatClientAgent over an approval-gated do/while loop, accumulating into
+    // `stream` through the shared transport so the streaming behavior matches the orchestration path byte-for-byte.
     private async Task RunSingleAgentAsync(RuntimePackage package,
         string resolvedModel,
         StreamTransport transport,
@@ -362,7 +361,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // ApprovalRequiredAIFunction makes FunctionInvokingChatClient surface a ToolApprovalRequestContent and
         // end the segment WITHOUT executing the tool. We carry the decision over the existing approval transport
         // and resume threadlessly (session: null) by replaying the folded segment messages plus the approval
-        // response (the proven P0 gate shape). A segment that surfaces no approval request completes the run.
+        // response. A segment that surfaces no approval request completes the run.
         var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
         ToolApprovalRequestContent? pendingApproval;
 
@@ -468,7 +467,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         } while (pendingApproval is not null);
     }
 
-    // The loop-P5 orchestration path. Compiles the package's OrchestrationSpec into the MAF-agnostic
+    // The orchestration path. Compiles the package's OrchestrationSpec into the MAF-agnostic
     // OrchestrationAgentDefinition (bridging each participant's offer list with the SAME InvocationToolBridge switch the
     // single-agent path uses), drives the handoff workflow via IOrchestrationAgentFactory, and maps the normalized
     // OrchestrationUpdate stream onto the SAME transport/cap/sequence/approval plumbing as the single-agent loop. The

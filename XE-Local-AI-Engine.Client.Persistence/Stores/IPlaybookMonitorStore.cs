@@ -20,7 +20,7 @@ public interface IPlaybookMonitorStore
     ///     Returns the before/after feedback counts for <paramref name="agentDefinitionId" /> split at
     ///     <paramref name="enabledAtUtc" /> (feedback with <c>created_at_utc &lt; enabledAtUtc</c> is "before", the rest
     ///     is "after"). When <paramref name="toolScope" /> is non-null the counts are restricted to conversations that
-    ///     recorded a <c>tool_events</c> row for that tool, using <c>COUNT(DISTINCT message_id)</c> (the documented P2
+    ///     recorded a <c>tool_events</c> row for that tool, using <c>COUNT(DISTINCT message_id)</c> (the
     ///     conversation-level attribution limit). Only non-purged conversations are counted; archived are included. All
     ///     columns read are plaintext, so no decryption is involved.
     /// </summary>

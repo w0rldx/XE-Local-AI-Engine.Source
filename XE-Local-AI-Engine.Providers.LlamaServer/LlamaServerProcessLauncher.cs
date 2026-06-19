@@ -27,9 +27,9 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
             return LaunchLinux(BuildStartInfo(spec));
         }
 
-        // macOS / other Unix: no Job Object and no setsid wrapper. Lane A targets Windows + Linux for supervised GPU
-        // inference; on the CPU floor elsewhere a plain process whose own tree-kill tears down the server keeps the
-        // launcher functional. (Plan §7.2 specifies only the Windows + Linux containment primitives.)
+        // macOS / other Unix: no Job Object and no setsid wrapper. Supervised GPU inference targets Windows + Linux,
+        // which are the only platforms with a dedicated containment primitive; on the CPU floor elsewhere a plain
+        // process whose own tree-kill tears down the server keeps the launcher functional.
         return LaunchPlain(BuildStartInfo(spec));
     }
 

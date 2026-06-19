@@ -18,8 +18,8 @@ export interface NodeChatStreamRequestDto {
 	// Agent to resolve for this turn. Absent/null → Default Assistant (today's built-in chat path). This is a
 	// HAND-TYPED SSE DTO field (not generated), so it is safe to add here without touching NodeChatMapper.ts.
 	agentDefinitionId?: string;
-	// Developer-mode per-send sampling overrides (§5 of plan). Omitted entirely when developer mode is off or
-	// all fields are null — keeps the wire payload byte-identical to today in the default (non-dev) path.
+	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields
+	// are null — keeps the wire payload byte-identical to the default (non-dev) path.
 	samplingOptions?: {
 		temperature?: number;
 		topP?: number;
@@ -54,7 +54,7 @@ export interface NodeChatStreamEventDto {
 	outputTokens?: number | null;
 	totalTokens?: number | null;
 	reasoningTokens?: number | null;
-	// Tool lifecycle fields (Phase D6): present on `tool-call-requested` / `tool-call-completed` events only.
+	// Tool lifecycle fields: present on `tool-call-requested` / `tool-call-completed` events only.
 	toolCallId?: string | null;
 	toolName?: string | null;
 	arguments?: string | null;

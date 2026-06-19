@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using System.Text.Json.Serialization;
 
 /// <summary>
-///     The ONE Client-side Open Canvas (Preview) workflow graph contract (invariant #6). This is the wire shape the
-///     FastEndpoints Command/Query records carry, the shape the React zod schema (Lane D) mirrors, and the shape
-///     serialized into the encrypted <c>CanvasWorkflowRecord.GraphJson</c> blob (Lane A). It is mapped onto the
-///     <c>PreviewWorkflowDefinition</c> (.AI.Agent, Lane B) just before a run — three explicit serializations of one
+///     The ONE Client-side Open Canvas (Preview) workflow graph contract. This is the wire shape the
+///     FastEndpoints Command/Query records carry, the shape the React zod schema mirrors, and the shape
+///     serialized into the encrypted <c>CanvasWorkflowRecord.GraphJson</c> blob. It is mapped onto the
+///     <c>PreviewWorkflowDefinition</c> (.AI.Agent) just before a run — three explicit serializations of one
 ///     contract: stored blob ↔ this model ↔ runner DTO.
 ///
 ///     Field names are deliberately clean and stable; do not rename without updating the React zod schema and the
@@ -52,7 +52,7 @@ public sealed record PreviewWorkflowGraphNode
     /// <summary>Operator-facing label (Agent nodes; display only).</summary>
     public string? Label { get; init; }
 
-    /// <summary>System instructions (Agent nodes). Privacy-sensitive; encrypted at rest by Lane A.</summary>
+    /// <summary>System instructions (Agent nodes). Privacy-sensitive; encrypted at rest by the persistence layer.</summary>
     public string? Instructions { get; init; }
 
     /// <summary>Node-local model id this agent runs on (Agent nodes).</summary>

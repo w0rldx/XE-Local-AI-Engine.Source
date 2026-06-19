@@ -40,8 +40,8 @@ function toState(value: string | undefined): PlaybookActionState {
 	return value !== undefined && KNOWN_STATES.includes(value as PlaybookActionState) ? (value as PlaybookActionState) : "Disabled";
 }
 
-// Map a wire source to a known source, defaulting to Manual (the P1 provenance) for an absent/unknown value so the
-// panel always renders a provenance label.
+// Map a wire source to a known source, defaulting to Manual (the hand-authored provenance) for an absent/unknown
+// value so the panel always renders a provenance label.
 function toSource(value: string | undefined): PlaybookActionSource {
 	return value !== undefined && KNOWN_SOURCES.includes(value as PlaybookActionSource)
 		? (value as PlaybookActionSource)

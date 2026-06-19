@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// An <see cref="ILogger{TCategoryName}"/> that records every formatted message + scope so tests can assert
-/// that token material never appears in any log line (plan §9/§12).
+/// that token material never appears in any log line.
 /// </summary>
 internal sealed class CapturingLogger<T> : ILogger<T>
 {

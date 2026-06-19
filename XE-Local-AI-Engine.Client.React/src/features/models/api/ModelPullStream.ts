@@ -1,16 +1,15 @@
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
-// HAND-WIRED STREAM (off the generated hey-api SDK, per plan §7.2 / §8): the generated client is REST
-// request/response only, so the streaming pull is consumed directly here — mirroring the chat-stream / runtime
-// log-stream survivors. The endpoint is Operator-gated and validates the model name server-side; the events it
-// emits are sanitized to ONLY `{status, completedBytes, totalBytes}` (plan invariant §3.2) — never paths, tokens,
-// or raw Ollama payloads.
+// HAND-WIRED STREAM (off the generated hey-api SDK): the generated client is REST request/response only, so the
+// streaming pull is consumed directly here — mirroring the chat-stream / runtime log-stream survivors. The endpoint
+// is Operator-gated and validates the model name server-side; the events it emits are sanitized to ONLY
+// `{status, completedBytes, totalBytes}` — never paths, tokens, or raw Ollama payloads.
 //
 // Transport: POST `models/pull/stream` (= /api/local/v1/models/pull/stream, LocalApiRoutes.LocalModels.PullStream)
 // returning `application/x-ndjson` — one sanitized JSON object per newline-delimited line, scoped to the requesting
-// client (no broadcast). This matches the Lane B contract verified 2026-06-03 against PullStreamLocalModelEndpoint;
-// the route + body shape are centralized in this one function so the hook (useModelPull) stays transport-agnostic.
+// client (no broadcast). This matches the server-side PullStreamLocalModelEndpoint contract; the route + body shape
+// are centralized in this one function so the hook (useModelPull) stays transport-agnostic.
 
 const pullStreamPath = "models/pull/stream";
 

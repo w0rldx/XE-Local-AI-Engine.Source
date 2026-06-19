@@ -34,7 +34,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
-            // P5 cohort-monitoring clock: a create-as-Enabled action gets its clock stamped now; otherwise it carries
+            // Cohort-monitoring clock: a create-as-Enabled action gets its clock stamped now; otherwise it carries
             // whatever the caller supplied (null for a fresh Suggested/Disabled action). Centralizing the stamp here and
             // in UpdateAsync makes the store the single source of truth — every Enabled action gets an EnabledAtUtc.
             EnabledAtUtc = input.State == PlaybookActionState.Enabled ? now : input.EnabledAtUtc
@@ -62,13 +62,13 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         }
 
         // Only Behavior (injected text), Priority (injection order) and State (injection membership) change what the
-        // resolver folds into the prompt; Scope/TriggerCondition/Source are not injected in P1, so editing them alone
+        // resolver folds into the prompt; Scope/TriggerCondition/Source are not injected, so editing them alone
         // must not bump Version.
         var configChanged = !string.Equals(Decode(entity.Behavior), input.Behavior, StringComparison.Ordinal)
                             || entity.Priority != input.Priority
                             || entity.State != (int)input.State;
 
-        // P5 cohort-monitoring clock: detect a transition INTO Enabled (read the pre-mutation state, before the
+        // Cohort-monitoring clock: detect a transition INTO Enabled (read the pre-mutation state, before the
         // assignment below). The eval-gated promote (Suggested->Enabled) and a manual Disabled->Enabled toggle both
         // stamp the clock; an edit/eval-record/reject that stays out of Enabled carries the caller's value through.
         // Never cleared on disable — the last-enabled instant is preserved.
@@ -84,7 +84,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         entity.Behavior = Encoding.UTF8.GetBytes(input.Behavior);
         entity.Scope = input.Scope;
         // Provenance/confidence are not injected into the prompt, so updating them never bumps Version (mirrors
-        // Scope/TriggerCondition). The P3 review paths (promote/reject/edit) carry the existing values through.
+        // Scope/TriggerCondition). The review paths (promote/reject/edit) carry the existing values through.
         entity.SourceFeedbackIds = EncodeFeedbackIds(input.SourceFeedbackIds);
         entity.Confidence = input.Confidence;
         // EvalResult is deliberately excluded from configChanged: it is not injected into the prompt, so recording an

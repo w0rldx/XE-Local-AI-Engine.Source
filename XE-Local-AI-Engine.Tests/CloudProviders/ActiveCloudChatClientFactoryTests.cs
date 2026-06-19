@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Verifies the C2 active-cloud selector (plan §0/C2, §7.2 + T8 review fixes): Codex selection keys off live-session
+/// Verifies the active-cloud selector: Codex selection keys off live-session
 /// presence, Azure off the persisted credential, the typed re-auth error surfaces (not a 500) when Codex is selected
 /// but unusable, the fingerprint client-cache rebuilds only on selection change, swapped-out clients are NOT
 /// disposed (concurrency-safety), and the selection snapshot keeps the token-store read off the per-send hot path.
@@ -168,7 +168,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         AssertEx.True(ReferenceEquals(firstClient, before));
         AssertEx.True(ReferenceEquals(secondClient, after));
         harness.CodexFactory.Received(2).Create(Arg.Any<string?>());
-        // CRITICAL (T8): the swapped-out client is NOT disposed — a concurrent request may still be streaming on it.
+        // CRITICAL: the swapped-out client is NOT disposed — a concurrent request may still be streaming on it.
         AssertEx.False(firstClient.IsDisposed, "swapped-out cloud client must NOT be disposed (use-after-dispose race)");
         AssertEx.False(secondClient.IsDisposed, "the now-active client must not be disposed");
     }
@@ -214,7 +214,7 @@ public sealed class ActiveCloudChatClientFactoryTests
     [Test]
     public async Task StreamHeldInFlight_WhileSelectionSwaps_IsNotDisposedAndCompletes()
     {
-        // T8 CRITICAL, deterministic proof: hold a streaming enumeration OPEN on the resolved cloud client, then
+        // CRITICAL, deterministic proof: hold a streaming enumeration OPEN on the resolved cloud client, then
         // flip the selection (refresh) so the factory swaps the cached client WHILE the stream is live. Under the
         // pre-fix dispose-on-swap behaviour this would ObjectDispose the in-flight client; the fix (no dispose on
         // swap) must let the stream complete with no exception.

@@ -4,16 +4,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     Pure, I/O-free estimator of whether a GGUF model fits the node's memory budget. Implements the oobabooga
-///     "GGUF VRAM formula" (plan §4/§7.2,
-///     <see href="https://oobabooga.github.io/blog/posts/gguf-vram-formula/" />):
+///     "GGUF VRAM formula" (<see href="https://oobabooga.github.io/blog/posts/gguf-vram-formula/" />):
 ///     <code>
 ///     total ≈ weights(quant) + KV_cache + ~0.75 GB CUDA/runtime overhead + safety margin
 ///     KV_cache = 2 · n_layers · n_kv_heads · head_dim · ctx · bytesPerKvElement(kvQuant)
 ///     </code>
 ///     The budget is the GPU VRAM when GPU acceleration is available and VRAM was measured
 ///     (<see cref="HardwareProfile.GpuAccelAvailable" /> &amp;&amp; <see cref="HardwareProfile.VramKnown" />); otherwise
-///     the node's available RAM (CPU mode, plan §7.1 degrade rule). It performs no GGUF parsing — every header input is
-///     supplied by Lane B's per-file DTO. A model fits iff <c>total ≤ budget</c>.
+///     the node's available RAM (the CPU-mode degrade rule). It performs no GGUF parsing — every header input is supplied
+///     by the Hugging Face GGUF discovery per-file DTO. A model fits iff <c>total ≤ budget</c>.
 /// </summary>
 /// <remarks>
 ///     Singleton-safe (stateless). The <c>weights</c> term prefers the header param count × bytes-per-weight of the
@@ -25,7 +24,7 @@ public sealed class MemoryFitEstimator
     /// <summary>Fixed CUDA/runtime overhead added to every estimate (~0.75 GB, oobabooga formula).</summary>
     public const long RuntimeOverheadBytes = 768L * 1024 * 1024;
 
-    /// <summary>The default quant the advisor selects when the operator supplies no override (HF policy, decision #13).</summary>
+    /// <summary>The default quant the advisor selects when the operator supplies no override (HF default policy).</summary>
     public const string DefaultQuant = "Q4_K_M";
 
     /// <summary>
@@ -157,7 +156,7 @@ public sealed class MemoryFitEstimator
     }
 }
 
-/// <summary>Which memory budget an estimate was scored against (plan §7.2).</summary>
+/// <summary>Which memory budget an estimate was scored against.</summary>
 public enum FitMode
 {
     /// <summary>Scored against GPU VRAM (acceleration available and VRAM measured).</summary>

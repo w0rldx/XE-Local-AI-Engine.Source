@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
 /// <c>POST cloud/codex/login</c> (Operator): starts the loopback PKCE login and returns the authorize URL so the
-/// UI can render a copyable/clickable link (plan §8). Best-effort auto-opens the system browser; idempotent in
+/// UI can render a copyable/clickable link. Best-effort auto-opens the system browser; idempotent in
 /// that a second call supersedes any stale pending login. The token exchange completes in the background — the UI
 /// polls <c>cloud/codex/status</c> for completion. Never returns token material.
 /// </summary>

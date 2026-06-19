@@ -4,8 +4,9 @@ using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 ///     Execution shape of an agent definition. <see cref="Single" /> runs the single-agent loop;
-///     <see cref="Orchestrator" /> is persisted but executes as a single agent in P3 (orchestration is a later
-///     loop marker — the topology column round-trips without changing runtime behavior).
+///     <see cref="Orchestrator" /> is persisted but currently executes as a single agent (multi-agent
+///     orchestration is not wired into the runtime yet — the topology column round-trips without changing
+///     runtime behavior).
 /// </summary>
 [SuppressMessage("Naming", "CA1720:Identifier contains type name",
     Justification = "Single is the domain term for a non-orchestrated agent; the overlap with System.Single is incidental.")]

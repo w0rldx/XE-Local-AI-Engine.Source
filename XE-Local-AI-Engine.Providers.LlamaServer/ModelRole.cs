@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///     Role a llama-server process serves. A distinct <c>(model, role)</c> pair is always a distinct process
 ///     because chat and embeddings require mutually exclusive launch flags (chat needs <c>--jinja</c>; embeddings
 ///     need a non-<c>none</c> pooling type to expose <c>/v1/embeddings</c>). Each role-process counts against the
-///     shared loaded-cap (epic decision #15/#16).
+///     shared loaded-cap.
 /// </summary>
 public enum ModelRole
 {

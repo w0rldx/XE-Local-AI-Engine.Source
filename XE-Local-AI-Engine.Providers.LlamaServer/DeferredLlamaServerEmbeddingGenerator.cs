@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     An <see cref="IEmbeddingGenerator{TInput,TEmbedding}" /> that defers the embedding process start to first use
-///     (plan §7.3/§7.7): the supervisor ensure-runs a non-<c>none</c>-pooling embedding process on the first
+///     An <see cref="IEmbeddingGenerator{TInput,TEmbedding}" /> that defers the embedding process start to first use:
+///     the supervisor ensure-runs a non-<c>none</c>-pooling embedding process on the first
 ///     <see cref="GenerateAsync" /> call, then delegates to the MEAI OpenAI embedding adapter over its endpoint.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <strong>Lexical-fallback contract (plan §7.7, risk §15):</strong>
+///         <strong>Lexical-fallback contract:</strong>
 ///         <see cref="EmbeddingPlaybookRetrievalRanker" /> degrades to its lexical ranker only when this generator
 ///         throws <see cref="HttpRequestException" /> / <see cref="IOException" />. Process-unavailable failures
 ///         surface as <see cref="LlamaRuntimeException" />, so they are wrapped to <see cref="IOException" /> here to
@@ -88,7 +88,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             catch (LlamaRuntimeException exception)
             {
                 // Re-shape to the ranker's caught transport set so an unavailable embedding process degrades to the
-                // lexical fallback instead of hard-failing retrieval (plan §7.7). Message is already sanitized.
+                // lexical fallback instead of hard-failing retrieval. Message is already sanitized.
                 throw new IOException(exception.Message, exception);
             }
 

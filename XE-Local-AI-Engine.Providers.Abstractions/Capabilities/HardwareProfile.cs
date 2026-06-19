@@ -7,8 +7,8 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 /// </summary>
 /// <remarks>
 ///     Carries aggregates only — no machine identifiers (hostnames/serials) — so it is safe to surface to the operator
-///     UI (plan §10). <see cref="VramKnown" /> gates GPU-mode: when VRAM could not be measured the advisor must degrade
-///     to a CPU/RAM-only recommendation (plan §7.1 degrade rule).
+///     UI. <see cref="VramKnown" /> gates GPU-mode: when VRAM could not be measured the advisor must degrade
+///     to a CPU/RAM-only recommendation.
 /// </remarks>
 public sealed record HardwareProfile
 {

@@ -8,7 +8,7 @@ public sealed class CloudProviderOptions
 
     /// <summary>
     /// The Codex (OpenAI ChatGPT subscription) OAuth provider. Unlike Azure, it carries no endpoint / API key /
-    /// deployment in this options object — the OAuth session lives in the encrypted Codex token store (plan §2).
+    /// deployment in this options object — the OAuth session lives in the encrypted Codex token store.
     /// </summary>
     public const string ProviderCodexOAuth = "CodexOAuth";
 

@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 ///     Default <see cref="IModelFitQueryService" />: a thin cache reader over the model-fit stores. It composes the
 ///     sanitized snapshot-summary store and the normalized recommendation store. It takes NO dependency on the refresh
 ///     service, so a read can never start an advisor run. The approved-image store dependency is gone (the approved-image
-///     concept was removed in Lane C, plan §8).
+///     concept was removed when the advisor replaced the Docker/llmfit recommendation backend).
 ///     <para>
 ///         On the read path it also reconciles each row's install state against the node's actually-installed Ollama
 ///         models (<see cref="IOllamaModelService.ListLocalModelsAsync" />). Listing the node's installed models is a

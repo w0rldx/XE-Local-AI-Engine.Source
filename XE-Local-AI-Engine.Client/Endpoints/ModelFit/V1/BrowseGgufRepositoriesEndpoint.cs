@@ -7,18 +7,18 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     FastEndpoints handler for GGUF repo discovery (GET model-fit/gguf/browse). Thin transport over the Lane B
-///     <see cref="IHuggingFaceGgufDiscovery.SearchAsync" />: a free-text query + breadth + sort maps to candidate GGUF
-///     repos (non-GGUF repos are filtered out by Lane B). Returns the sanitized repo summaries only — no token, no
-///     internal URL. A discovery/network failure surfaces a 200 OK-empty list (never a 500) so the browse panel degrades
-///     gracefully.
+///     FastEndpoints handler for GGUF repo discovery (GET model-fit/gguf/browse). Thin transport over the Hugging Face
+///     GGUF discovery seam <see cref="IHuggingFaceGgufDiscovery.SearchAsync" />: a free-text query + breadth + sort maps
+///     to candidate GGUF repos (non-GGUF repos are filtered out by the discovery seam). Returns the sanitized repo
+///     summaries only — no token, no internal URL. A discovery/network failure surfaces a 200 OK-empty list (never a
+///     500) so the browse panel degrades gracefully.
 /// </summary>
 public sealed class BrowseGgufRepositoriesEndpoint(
     IHuggingFaceGgufDiscovery discovery,
     ILogger<BrowseGgufRepositoriesEndpoint> logger)
     : Endpoint<BrowseGgufRepositoriesRequest, BrowseGgufRepositoriesResponse>
 {
-    /// <summary>The maximum repos a single browse may return (bounds the Lane B search breadth).</summary>
+    /// <summary>The maximum repos a single browse may return (bounds the discovery search breadth).</summary>
     private const int MaxLimit = 50;
 
     /// <summary>The default repos returned when no limit is supplied.</summary>

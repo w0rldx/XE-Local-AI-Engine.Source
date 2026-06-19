@@ -8,6 +8,6 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 /// <param name="Role">Role the process serves (chat vs embedding).</param>
 /// <param name="BaseAddress">
 ///     The localhost OpenAI-compatible base URL (for example <c>http://127.0.0.1:18100/v1</c>) the MEAI OpenAI
-///     adapter points at. Bound to <c>127.0.0.1</c> only (decision #17).
+///     adapter points at. Bound to <c>127.0.0.1</c> only.
 /// </param>
 public sealed record LlamaServerEndpoint(string ModelName, ModelRole Role, Uri BaseAddress);

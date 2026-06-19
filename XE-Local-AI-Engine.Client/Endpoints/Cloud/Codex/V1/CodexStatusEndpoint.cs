@@ -8,14 +8,14 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
-/// <c>GET cloud/codex/status</c> (Operator): reports the current Codex session and login state (plan §8). The UI
+/// <c>GET cloud/codex/status</c> (Operator): reports the current Codex session and login state. The UI
 /// polls this after starting a login until <see cref="CodexStatusResponse.SignedIn"/> flips true (or the pending
 /// login resolves). Returns no token material — only presence, the non-secret account id, the access-token
 /// expiry, and whether a browser login is in flight.
 ///
 /// <para>
 /// <see cref="CodexStatusResponse.SignedIn"/> is gated on a <b>non-expired</b> (skew-adjusted) access token, so a
-/// stale session does not report signed-in with a past <see cref="CodexStatusResponse.ExpiresAtUtc"/> (§7.2). The
+/// stale session does not report signed-in with a past <see cref="CodexStatusResponse.ExpiresAtUtc"/>. The
 /// account id + expiry stay populated when a session exists so the UI can show a "session expired — re-authenticate"
 /// state.
 /// </para>

@@ -5,10 +5,10 @@ using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 rows <c>HardwareProfiler_Windows_ReportsVramAndVendor</c>,
-///     <c>HardwareProfiler_WhenVramUnprobed_DegradesToCpu</c>, <c>HardwareProfiler_Linux_ParsesMemInfoAndNvidiaSmi</c>
-///     and the no-HostAgent-dependency extraction gate. The process + environment probe seams are faked so RAM/VRAM/
-///     vendor detection is exercised with canned output and NO real GPU, process spawn or platform pin.
+///     <see cref="HardwareProfiler" /> tests: Windows and Linux RAM/VRAM/vendor detection, the degrade-to-CPU path when
+///     VRAM cannot be probed, and the gate proving the profiler project carries no HostAgent dependency. The process +
+///     environment probe seams are faked so detection is exercised with canned output and NO real GPU, process spawn or
+///     platform pin.
 /// </summary>
 public sealed class HardwareProfilerTests
 {
@@ -102,8 +102,8 @@ public sealed class HardwareProfilerTests
     [Test]
     public async Task HardwareProfiler_Windows_NonNvidia_DegradesToCpu_UntilDxgiSeamFilled()
     {
-        // No NVIDIA; the DXGI/WMI Windows seam is operator-deferred (returns Unknown vendor + null VRAM on this box)
-        // ⇒ the vendor-name fallback path yields VramKnown=false and CPU mode (plan §7.0/§13).
+        // No NVIDIA; the DXGI/WMI Windows seam is not yet implemented (returns Unknown vendor + null VRAM on this box)
+        // ⇒ the vendor-name fallback path yields VramKnown=false and CPU mode.
         var probe = new FakeProcessProbe(); // nvidia-smi absent.
         var environment = new FakeEnvironment
         {
@@ -159,7 +159,8 @@ public sealed class HardwareProfilerTests
     [Test]
     public void HardwareProfiler_NoHostAgentDependency_ExtractionGate()
     {
-        // Plan §13 extraction-before-delete gate: the profiler project must not reference HostAgent.* (Lane D deletes it).
+        // The profiler was extracted out of the now-removed in-Aspire HostAgent; this gate guards that it stays free of
+        // any HostAgent.* dependency so the HostAgent can be deleted.
         var referencedAssemblies = typeof(HardwareProfiler).Assembly
             .GetReferencedAssemblies()
             .Select(name => name.Name ?? string.Empty)

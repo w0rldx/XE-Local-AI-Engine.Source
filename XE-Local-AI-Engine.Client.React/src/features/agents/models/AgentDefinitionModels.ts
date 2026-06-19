@@ -8,7 +8,8 @@ import {
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 
 // Mirrors the backend AgentDefinitionKind enum (Single=0, Orchestrator=1). The wire contract carries the
-// string form. Orchestrator is persisted-but-ignored in P3 (runs as a single agent) — see agent-management plan §0.4.
+// string form. Orchestrator is persisted but currently ignored by the runtime (such a definition runs as a
+// single agent — multi-agent orchestration execution is not wired yet).
 export type AgentDefinitionKind = "Single" | "Orchestrator";
 
 export const agentDefinitionKinds: readonly AgentDefinitionKind[] = ["Single", "Orchestrator"];

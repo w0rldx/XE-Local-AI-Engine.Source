@@ -25,10 +25,10 @@ public interface ICodexTokenStore
 }
 
 /// <summary>
-/// Encrypted token store mirroring <c>CloudCredentialStore</c> (plan §3.1/D4): DataProtection at rest,
+/// Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,
 /// Windows user-only <see cref="FileSecurity"/>, *nix <c>0600</c>. Uses a dedicated protector purpose and a
 /// separate <c>.enc</c> file so it cannot collide with the API-key-shaped cloud credential store.
-/// Never logs token values (plan §9).
+/// Never logs token values.
 /// </summary>
 public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
 {

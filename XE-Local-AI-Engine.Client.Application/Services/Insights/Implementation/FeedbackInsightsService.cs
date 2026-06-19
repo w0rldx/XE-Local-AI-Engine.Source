@@ -4,13 +4,13 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 internal sealed class FeedbackInsightsService(IFeedbackInsightsStore store, TimeProvider timeProvider) : IFeedbackInsightsService
 {
-    /// <summary>Minimum occurrences before a signal is "a pattern, not n=1" (Playbook doc §6 non-negotiable #1).</summary>
+    /// <summary>Minimum occurrences before a signal is treated as a pattern rather than a one-off (n=1).</summary>
     internal const int MinOccurrenceThreshold = 3;
 
-    /// <summary>Maximum comment exemplars surfaced per agent (privacy cap, §7).</summary>
+    /// <summary>Maximum comment exemplars surfaced per agent (privacy cap).</summary>
     internal const int MaxExemplars = 5;
 
-    /// <summary>Maximum exemplar comment length before truncation (privacy cap, §7).</summary>
+    /// <summary>Maximum exemplar comment length before truncation (privacy cap).</summary>
     internal const int MaxExemplarCommentLength = 280;
 
     private readonly IFeedbackInsightsStore _store = store ?? throw new ArgumentNullException(nameof(store));

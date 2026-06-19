@@ -58,7 +58,7 @@ public sealed class PlaybookAnalysisServiceTests
         AssertEx.True(outcome.AgentExists);
         AssertEx.False(outcome.MeetsThreshold, "Sub-threshold feedback must report MeetsThreshold == false.");
         AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(0, agent.InvocationCount, "Sub-threshold runs never invoke the model (§6 #1).");
+        AssertEx.Equal(0, agent.InvocationCount, "Sub-threshold runs never invoke the model.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -123,7 +123,7 @@ public sealed class PlaybookAnalysisServiceTests
 
         AssertEx.Equal(1, outcome.ProposedCount);
         AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(1, outcome.RejectedCount, "A proposal with no evidence must be rejected (§6 #2).");
+        AssertEx.Equal(1, outcome.RejectedCount, "A proposal with no evidence must be rejected.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);

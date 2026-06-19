@@ -85,7 +85,7 @@ try
     // exceptions into RFC7807 ProblemDetails. Registered before UseFastEndpoints so it wraps endpoints.
     app.UseExceptionHandler();
 
-    // Desktop mode serves plain HTTP on loopback only (locked decision #1), so the HTTPS-redirect/HSTS pipeline is
+    // Desktop mode serves plain HTTP on loopback only, so the HTTPS-redirect/HSTS pipeline is
     // bypassed entirely. Off-flag both branches are exactly as before. UseAntiforgery is scheme-agnostic and stays.
     if (!isDesktop)
     {
@@ -190,7 +190,7 @@ try
     app.MapFallbackToFile("index.html");
 
     // Desktop mode only: install console-close → graceful-stop triggers and the on-started browser launch. Off-flag this
-    // is never reached, so no signal handler / P/Invoke is installed (invariant #1). The lifecycle is rooted for the
+    // is never reached, so no signal handler / P/Invoke is installed. The lifecycle is rooted for the
     // app's lifetime via the lifetime token registration; it disposes when the host stops.
     if (isDesktop)
     {

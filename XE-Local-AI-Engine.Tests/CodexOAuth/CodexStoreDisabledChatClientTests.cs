@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.CloudProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Proves <c>store=false</c> reaches the request options on every Codex call (plan §10/§12/R6) — asserting the
+/// Proves <c>store=false</c> reaches the request options on every Codex call — asserting the
 /// flag on the options the OpenAI Responses mapper consumes, not trusting the wrapper's name. The store-disabling
 /// wrapper sets <see cref="ChatOptions.RawRepresentationFactory"/> to produce a
 /// <see cref="CreateResponseOptions"/> with <see cref="CreateResponseOptions.StoredOutputEnabled"/> false.

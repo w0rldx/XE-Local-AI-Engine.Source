@@ -8,7 +8,7 @@ import {
 } from "@/features/preview/models/PreviewWorkflowModels";
 
 // Transient run-output store for the Open Canvas (Preview) surface. State is keyed by `(runId, nodeId)` so two
-// runs in flight on the same hub connection never cross-contaminate (decision #3 + MEDIUM-2): each Preview tab
+// runs in flight on the same hub connection never cross-contaminate: each Preview tab
 // registers ONLY the runIds it started (registerRun) and the store IGNORES every hub event whose runId is not
 // registered. On unmount the page calls `reset()` — so on mount/reload the store is EMPTY (no run output ever
 // survives a navigation; nothing is persisted). The live output here is the operator's OWN transient run output

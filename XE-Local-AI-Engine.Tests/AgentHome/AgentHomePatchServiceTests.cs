@@ -62,11 +62,11 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("--binary")
                                                  && HasHardenedFlags(command.Arguments)
                                                  && command.WorkingDirectory == "/agent-home/workspace/selected"),
-            "the patch diff runs with --binary, the §9.1 -c flags, and the workspace working directory");
+            "the patch diff runs with --binary, the hardened -c flags, and the workspace working directory");
         AssertEx.True(gitCommands.Any(command => command.Arguments.Contains("--name-status")
                                                  && HasHardenedFlags(command.Arguments)
                                                  && command.WorkingDirectory == "/agent-home/workspace/selected"),
-            "the name-status diff runs with the §9.1 -c flags and the workspace working directory");
+            "the name-status diff runs with the hardened -c flags and the workspace working directory");
     }
 
     [Test]

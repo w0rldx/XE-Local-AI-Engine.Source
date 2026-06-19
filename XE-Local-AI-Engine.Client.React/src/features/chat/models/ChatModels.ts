@@ -94,7 +94,7 @@ export interface ChatMessageModel {
 	// no feedback has been recorded; presence drives the feedback control's active state.
 	feedbackRating?: ChatFeedbackRating;
 	feedbackComment?: string;
-	// Agent attribution fields stamped at send time (ride metadata_json blob, no migration — §6 of the plan).
+	// Agent attribution fields stamped at send time (ride metadata_json blob, no migration).
 	// Absent for legacy turns and user messages. ChatMessage shows agentName ?? t("defaultAgentName") for
 	// assistant turns so every response carries a visible attribution even without a persisted name.
 	agentName?: string;

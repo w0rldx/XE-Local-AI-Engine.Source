@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     FastEndpoints handler reporting whether a Hugging Face access token is configured (GET model-fit/hf-token). Thin
-///     transport over the Lane B <see cref="IHfTokenStore.HasTokenAsync" />.
+///     transport over the Hugging Face token store (<see cref="IHfTokenStore.HasTokenAsync" />).
 ///     <para>
-///         <b>Secret hygiene (plan §10):</b> this endpoint returns ONLY a boolean presence flag — it NEVER returns or logs
+///         <b>Secret hygiene:</b> this endpoint returns ONLY a boolean presence flag — it NEVER returns or logs
 ///         the token value. The token never leaves the encrypted store.
 ///     </para>
 /// </summary>

@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     FastEndpoints handler for the node hardware profile (GET model-fit/hardware-profile). Thin transport over the
-///     Lane C1 <see cref="IHardwareProfiler" />: it returns the sanitized RAM/VRAM/GPU-vendor/CPU/free-disk aggregates the
-///     advisor sizes its memory-fit budget against. Carries NO machine identifier (hostname/serial) — aggregates only
-///     (plan §10). A <c>?refresh=true</c> query bypasses the in-memory cache and re-probes.
+///     <see cref="IHardwareProfiler" />: it returns the sanitized RAM/VRAM/GPU-vendor/CPU/free-disk aggregates the
+///     advisor sizes its memory-fit budget against. Carries NO machine identifier (hostname/serial) — aggregates only.
+///     A <c>?refresh=true</c> query bypasses the in-memory cache and re-probes.
 /// </summary>
 public sealed class GetHardwareProfileEndpoint(IHardwareProfiler hardwareProfiler)
     : Endpoint<GetHardwareProfileRequest, HardwareProfileResponse>

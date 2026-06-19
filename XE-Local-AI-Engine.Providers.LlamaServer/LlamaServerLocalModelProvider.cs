@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     llama-server implementation of the provider-neutral <see cref="ILocalModelProvider" /> boundary (plan §7.3).
+///     llama-server implementation of the provider-neutral <see cref="ILocalModelProvider" /> boundary.
 ///     Maps the 8-member contract onto the process supervisor (chat/embedding runtime, warm/unload, health) and the
 ///     GGUF model store (installed-model inventory + file resolution). <see cref="ProviderName" /> is
 ///     <c>"llamacpp"</c>.
@@ -15,12 +15,12 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///         <see cref="CreateChatClient" /> / <see cref="CreateEmbeddingGenerator" /> return <em>deferred</em> clients
 ///         (<see cref="DeferredLlamaServerChatClient" /> / <see cref="DeferredLlamaServerEmbeddingGenerator" />) that
 ///         ensure-run the right <c>(model, role)</c> process on first use, so cold-start is a normal first-token delay
-///         rather than a blocking sync factory call (plan §7.4). The selection's <see cref="LocalModelSelection.ProviderName" />
+///         rather than a blocking sync factory call. The selection's <see cref="LocalModelSelection.ProviderName" />
 ///         must equal <see cref="ProviderName" /> (mirror of <c>OllamaLocalModelProvider</c>).
 ///     </para>
 ///     <para>
-///         <strong>GGUF acquisition (pull/delete) is Lane B's <see cref="IGgufModelStore" />.</strong> The store
-///         contract Lane A consumes exposes file resolution + installed-model enumeration (to launch and list), and
+///         <strong>GGUF acquisition (pull/delete) is owned by the GGUF model store (<see cref="IGgufModelStore" />).</strong> The store
+///         contract this provider consumes exposes file resolution + installed-model enumeration (to launch and list), and
 ///         <see cref="PullModelAsync" /> / <see cref="DeleteModelAsync" /> route into the store's download/delete surface.
 ///     </para>
 /// </remarks>
@@ -85,7 +85,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 
     /// <inheritdoc />
     /// <remarks>
-    ///     Delegates to Lane B's <see cref="IGgufModelStore.EnsureModelAsync" />. The bare model name is parsed into a
+    ///     Delegates to the GGUF model store's <see cref="IGgufModelStore.EnsureModelAsync" />. The bare model name is parsed into a
     ///     <see cref="GgufModelRequest" /> via the shared <see cref="GgufModelName" /> convention (<c>{repo}[:{quant}]</c>);
     ///     the store reports byte/status <see cref="PullProgress" /> 1:1.
     /// </remarks>
@@ -97,7 +97,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     }
 
     /// <inheritdoc />
-    /// <remarks>Delegates to Lane B's <see cref="IGgufModelStore.DeleteModelAsync" /> (file + registry entry).</remarks>
+    /// <remarks>Delegates to the GGUF model store's <see cref="IGgufModelStore.DeleteModelAsync" /> (file + registry entry).</remarks>
     public Task DeleteModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);

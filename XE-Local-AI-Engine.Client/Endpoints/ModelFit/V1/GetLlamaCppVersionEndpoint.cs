@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     FastEndpoints handler for the resolved llama.cpp binary version (GET model-fit/llamacpp/version). Lane A's
+///     FastEndpoints handler for the resolved llama.cpp binary version (GET model-fit/llamacpp/version). The
 ///     <see cref="ILlamaCppBinaryManager" /> exposes ONLY <c>EnsureBinaryAsync(variant)</c> — there is no source-build and
 ///     no arbitrary version/tag input (the recommended release tag is pinned in code, <see cref="LlamaCppReleasePins" />).
 ///     So this read selects the recommended host variant via <see cref="IGpuVariantSelector" /> and resolves/ensures that
@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     <para>
 ///         <b>Honest limit:</b> resolving the binary is idempotent (a cached, hash-valid binary is reused without
 ///         re-download), but on a fresh node this GET may trigger the first prebuilt download. There is no read-only
-///         "current resolved binary without ensuring" seam in Lane A.
+///         "current resolved binary without ensuring" seam on the binary manager.
 ///     </para>
 /// </summary>
 public sealed class GetLlamaCppVersionEndpoint(

@@ -62,7 +62,7 @@ const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "s
 
 const MODEL_FIT_TEMPLATE_ID = "model-recommendation-check";
 
-// The §7.6 bridge: the hub invalidates the generated latest-recommendations key, a single-element array
+// The hub invalidates the generated latest-recommendations key, a single-element array
 // `[{ _id: "getLatestRecommendations", ... }]`. Invalidation is by the `_id` partial object (TanStack
 // partial-object matching), so it matches every cached (useCase, providerName) variant. Built via the same
 // production helper the hook uses.
@@ -170,7 +170,7 @@ describe("useModelFitSchedulerEvents", () => {
 		expect(invalidatedKeys).not.toContainEqual(LATEST_KEY);
 	});
 
-	it("marks a seeded latest query stale via the partial `_id` match (the §7.6 bridge end-to-end)", () => {
+	it("marks a seeded latest query stale via the partial `_id` match (the hub-to-cache bridge end-to-end)", () => {
 		// A real query keyed off the FULL generated key shape `[{ _id, baseURL, query }]` (createQueryKey bakes in
 		// the pinned baseURL: "" too) — the partial `_id` invalidation must still reach it.
 		const fullLatestKey = [

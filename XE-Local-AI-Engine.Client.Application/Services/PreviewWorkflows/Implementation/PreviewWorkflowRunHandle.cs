@@ -7,13 +7,13 @@ using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 /// <summary>
 ///     Explicit owner of ONE in-flight preview run: its state, cancellation, the per-run node-local
 ///     <see cref="IChatClient" />s (one per distinct model used by the graph's agents),
-///     the Lane B <see cref="IPreviewWorkflowRunSession" />, the owning hub connection id, and the per-run gate that
+///     the .AI.Agent <see cref="IPreviewWorkflowRunSession" />, the owning hub connection id, and the per-run gate that
 ///     serializes continue/cancel. <see cref="DisposeAsync" /> disposes the session then EVERY client, swallow-logging
 ///     (mirrors <c>OrchestrationRunSession</c>) — disposal must never throw on a race.
 ///
 ///     Idle clock: <see cref="ResetIdleClock" /> renews the inter-event bound after each productive event;
 ///     <see cref="SuspendIdleClock" /> sets it to <see cref="System.Threading.Timeout.InfiniteTimeSpan" /> while Paused
-///     so the sweeper does not kill a paused run (findings item 6).
+///     so the sweeper does not kill a paused run.
 /// </summary>
 internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
 {

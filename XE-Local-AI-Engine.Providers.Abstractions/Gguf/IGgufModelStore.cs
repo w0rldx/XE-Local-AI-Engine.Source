@@ -3,16 +3,16 @@ namespace XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     App-controlled lifecycle of GGUF model files on local disk and the cross-lane storage seam. Lane A consumes the
-///     resolve + list pair (to launch <c>llama-server -m &lt;path&gt;</c> and to enumerate installed models for
-///     <see cref="ILocalModelProvider.ListModelsAsync" />); Lane A's <c>PullModelAsync</c>/<c>DeleteModelAsync</c> and
-///     Lane C's advisor consume the acquire/delete pair. Lane B owns the only implementation.
+///     App-controlled lifecycle of GGUF model files on local disk and the shared storage seam. The llama-server
+///     provider consumes the resolve + list pair (to launch <c>llama-server -m &lt;path&gt;</c> and to enumerate
+///     installed models for <see cref="ILocalModelProvider.ListModelsAsync" />); its pull/delete operations and the
+///     model-fit advisor consume the acquire/delete pair.
 /// </summary>
 /// <remarks>
 ///     Downloads are atomic-on-complete: a file is reported present only after the full byte stream is received and its
 ///     hash verifies (when an LFS OID is available). Partial downloads live under a <c>.part</c> name and are never
 ///     returned as complete. Progress is reported as the same <see cref="PullProgress" /> DTO the Ollama provider uses,
-///     so Lane A maps it 1:1.
+///     so the provider layer maps it 1:1.
 /// </remarks>
 public interface IGgufModelStore
 {

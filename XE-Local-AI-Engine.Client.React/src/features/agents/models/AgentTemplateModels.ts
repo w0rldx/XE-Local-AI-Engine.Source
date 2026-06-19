@@ -1,7 +1,7 @@
 // UI-only helpers for the starter-agent gallery. The wire DTO is the generated hey-api summary type
 // (re-exported below) — this module never hand-writes the wire shape; it only adds the token-budget
 // presentation logic the gallery's warning badge keys off of (a chars/4 heuristic estimate, not a true
-// tokenizer — see the seed plan §9).
+// tokenizer).
 
 export type { XeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary as AgentTemplateSummary } from "@/core/api/generated/types.gen";
 

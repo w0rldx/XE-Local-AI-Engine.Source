@@ -65,7 +65,7 @@ export interface SendMessageRequest {
 	selectedPath?: Record<string, string>;
 	// Agent to resolve for this turn. Absent → Default Assistant (today's built-in chat path). Only included when
 	// agent mode is enabled, a valid agent is selected, and the agent still exists in the live list (stale/deleted
-	// ids are dropped by Chat.tsx before the send — see §7.11 of the plan).
+	// ids are dropped by Chat.tsx before the send).
 	agentDefinitionId?: string;
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields null.
 	samplingOptions?: ChatSamplingOptions;

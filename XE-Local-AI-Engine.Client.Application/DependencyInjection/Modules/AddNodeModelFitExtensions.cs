@@ -80,26 +80,28 @@ internal static class AddNodeModelFitExtensions
         // Model-fit persistence stores. Snapshots carry sanitized-by-default summaries; the encrypted raw output, stderr
         // and diagnostics are exposed only on the explicit operator-diagnostics read. Recommendation and benchmark rows
         // are normalized snapshot projections. Scoped to match the scoped, DbContext-backed stores.
-        // Lane C3: the approved-image registry store is no longer registered — the approved-image concept (its query-
-        // service read + the list endpoint) was removed (plan §8). The orphaned table/entity is left in place (no
+        // The approved-image registry store is no longer registered — the approved-image concept (its query-
+        // service read + the list endpoint) was removed. The orphaned table/entity is left in place (no
         // destructive migration); nothing writes or reads it.
         builder.Services.AddScoped<IModelFitSnapshotStore, ModelFitSnapshotStore>();
         builder.Services.AddScoped<IModelFitRecommendationStore, ModelFitRecommendationStore>();
         builder.Services.AddScoped<IModelFitBenchmarkStore, ModelFitBenchmarkStore>();
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();
-        // Lane C2: the memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
+        // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
         // profile → singleton. Consumed by the advisor to score each candidate GGUF file's fit.
         builder.Services.AddSingleton<MemoryFitEstimator>();
-        // Model-fit refresh service = the local model advisor: the single non-bypass path that profiles hardware (C1),
-        // discovers candidate GGUF files (Lane B), estimates memory fit, ranks the survivors and replaces the cached
-        // recommendation snapshot. Invoked only by the scheduler's ModelRecommendationCheckHandler. Scoped because it
-        // composes the Scoped DbContext-backed snapshot/recommendation stores (its Lane A/B seams are singletons).
+        // Model-fit refresh service = the local model advisor: the single non-bypass path that profiles hardware,
+        // discovers candidate GGUF files (the Hugging Face GGUF store), estimates memory fit, ranks the survivors and
+        // replaces the cached recommendation snapshot. Invoked only by the scheduler's ModelRecommendationCheckHandler.
+        // Scoped because it composes the Scoped DbContext-backed snapshot/recommendation stores (the hardware-profiler
+        // and GGUF-store seams it depends on are singletons).
         builder.Services.AddScoped<IModelFitRefreshService, ModelFitRefreshService>();
-        // Lane C3: the operator-driven GGUF download coordinator owns a per-model cancellation registry so a download
+        // The operator-driven GGUF download coordinator owns a per-model cancellation registry so a download
         // started by one HTTP request can be cancelled by a separate request, and tracks the latest sanitized progress.
         // Singleton because the download runs detached after the request scope that started it has returned (it composes
-        // the singleton Lane B IGgufModelStore). The advisor management endpoints (download/cancel) consume it.
+        // the singleton Hugging Face GGUF store IGgufModelStore). The advisor management endpoints (download/cancel)
+        // consume it.
         builder.Services.AddSingleton<IGgufDownloadCoordinator, GgufDownloadCoordinator>();
         // Model-fit local-API services. The query service is a pure cache reader over the persistence stores (sanitized
         // snapshot summary + normalized recommendation rows) and takes NO dependency on the runner or refresh service, so
@@ -109,11 +111,11 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddScoped<IModelFitQueryService, ModelFitQueryService>();
         builder.Services.AddScoped<IModelFitRefreshTrigger, ModelFitRefreshTrigger>();
 
-        // Lane C1 (plan §7.1/§13): the cross-platform hardware profiler (RAM/VRAM/GPU-vendor/CPU/free-disk), extracted
-        // out of the doomed HostAgent.Linux CapabilityDetector into the surviving Providers.Capabilities project so it
-        // compiles with ZERO HostAgent.* references (the Lane C↔D sequencing gate). Singleton — the profile is cached
-        // in-memory and re-probed only on forceRefresh:true. The free-disk figure is reported for the models volume,
-        // resolved here from the host content root (no Linux-specific default leaks in, unlike the old detector).
+        // The cross-platform hardware profiler (RAM/VRAM/GPU-vendor/CPU/free-disk), extracted out of the removed
+        // HostAgent.Linux CapabilityDetector into the surviving Providers.Capabilities project so it compiles with ZERO
+        // HostAgent.* references. Singleton — the profile is cached in-memory and re-probed only on forceRefresh:true.
+        // The free-disk figure is reported for the models volume, resolved here from the host content root (no
+        // Linux-specific default leaks in, unlike the old detector).
         builder.Services.AddHardwareProfiler(builder.Environment.ContentRootPath);
 
         return builder;

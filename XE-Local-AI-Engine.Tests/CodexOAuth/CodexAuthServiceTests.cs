@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Covers the Codex OAuth login / refresh mechanics (plan §12): PKCE challenge/verifier binding, callback
+/// Covers the Codex OAuth login / refresh mechanics: PKCE challenge/verifier binding, callback
 /// state validation, code→token exchange, refresh, the <see cref="ICodexAuthService.BeginLogin"/> URL exposure,
 /// loopback timeout, and the never-logs-token-material guarantee. The token endpoint is mocked; the loopback
 /// listener is real and driven by an in-test HTTP client posing as the OAuth redirect.

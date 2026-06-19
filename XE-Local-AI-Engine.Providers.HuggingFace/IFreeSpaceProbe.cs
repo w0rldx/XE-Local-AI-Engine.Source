@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace;
 
 /// <summary>
 ///     Tiny seam over free-disk-space measurement so the store's hard disk guard is unit-testable without touching a
-///     real volume (plan §13). Returns the bytes currently free on the volume hosting <paramref name="path" />.
+///     real volume. Returns the bytes currently free on the volume hosting <paramref name="path" />.
 /// </summary>
 public interface IFreeSpaceProbe
 {

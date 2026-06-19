@@ -62,9 +62,9 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
         var columns = await GetPlaybookActionColumnInfoAsync(connection).ConfigureAwait(false);
 
         AssertEx.False(columns.ContainsKey("enabled_at_utc"), "Rollback should drop the enabled_at_utc column.");
-        // The pre-P5 playbook_actions schema must survive the rollback intact.
+        // The earlier playbook_actions schema (before enabled_at_utc was added) must survive the rollback intact.
         AssertEx.True(columns.ContainsKey("behavior"), "Rollback should retain the original playbook_actions schema.");
-        AssertEx.True(columns.ContainsKey("eval_result"), "Rollback should retain the P4 eval_result column.");
+        AssertEx.True(columns.ContainsKey("eval_result"), "Rollback should retain the eval_result column.");
     }
 
     private NodeChatDbContext CreateContext(string databasePath)

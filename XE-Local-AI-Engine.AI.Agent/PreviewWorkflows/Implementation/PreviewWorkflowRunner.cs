@@ -8,10 +8,11 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 ///     MAF-native implementation of <see cref="IPreviewWorkflowRunner" />. Builds a raw <see cref="WorkflowBuilder" />
 ///     from a <see cref="PreviewWorkflowDefinition" /> (Start → Agent → transform → Agent → Debug/Pause → End), resolving
-///     each agent node's caller-supplied node-local <see cref="IChatClient" /> by its model id (invariant #1) and runs it
-///     via <see cref="InProcessExecution.RunStreamingAsync" />. All MAF types are confined to this class + the session
-///     (invariant #3). Linearity (in/out-degree ≤ 1) is enforced by Lane C's validator before this runs; the runner
-///     trusts a linear definition and walks it as an ordered chain.
+///     each agent node's caller-supplied node-local <see cref="IChatClient" /> by its model id (invariant: each agent
+///     runs on its own node-local client) and runs it via <see cref="InProcessExecution.RunStreamingAsync" />. All MAF
+///     types are confined to this class + the session (invariant: no Microsoft.Agents.AI types leak out). Linearity
+///     (in/out-degree ≤ 1) is enforced by the definition validator before this runs; the runner trusts a linear
+///     definition and walks it as an ordered chain.
 /// </summary>
 internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
 {
@@ -59,7 +60,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
                 {
                     var agentNode = (PreviewAgentNode)node;
 
-                    // Resolve THIS agent's node-local client by its own model id (invariant #1). The caller returns one
+                    // Resolve THIS agent's node-local client by its own model id. The caller returns one
                     // shared client per distinct model, so two agents on the same model share a client while an agent on
                     // a different model gets its own — each agent runs on the model the operator selected for it.
                     var agentClient = resolveChatClient(agentNode.ModelId)
@@ -69,11 +70,10 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
 
                     // The executor id MAF registers for an AIAgent binding is "{name}_{agentId}" — NOT bare agent.Id —
                     // so resolve it from the materialized ExecutorBinding (its .Id), which is what events surface and
-                    // what a targeted SendMessageAsync must address. (Phase-0 note differed here: agent.Id is not the
-                    // executor id.)
+                    // what a targeted SendMessageAsync must address. (Note: agent.Id is NOT the executor id.)
                     // ForwardIncomingMessages=false: an agent must NOT re-forward the messages it received (that
-                    // broadcasts the upstream/seed turns to every downstream agent and double-pumps the chain — the
-                    // phase-0 trace showed the Start seed reaching AgentB). The agent still emits its own response,
+                    // broadcasts the upstream/seed turns to every downstream agent and double-pumps the chain — without
+                    // this the Start seed reaches every downstream agent). The agent still emits its own response,
                     // which the transform/End consumes. EmitAgentUpdateEvents=true surfaces streamed assistant text.
                     var hostOptions = new AIAgentHostOptions
                     {
@@ -117,7 +117,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
 
         // Pass 2 — build the Start executor now that the first downstream executor id is known, then wire the chain.
         // Every message a Start/transform sends is TARGETED at the next executor id (untargeted SendMessageAsync
-        // broadcasts a TurnToken to ALL agents, which double-pumps the chain — observed in the phase-0 trace).
+        // broadcasts a TurnToken to ALL agents, which double-pumps the chain).
         var startPlan = plans[0];
         if (startPlan.Kind != PreviewNodeKind.Start)
         {
@@ -201,9 +201,9 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
     }
 
     /// <summary>
-    ///     Walks the linear graph from the Start node along its single out-edge to produce an ordered node list. Lane C
-    ///     validation guarantees exactly one Start, one reachable End, and in/out-degree ≤ 1, so a single forward walk
-    ///     is total and deterministic.
+    ///     Walks the linear graph from the Start node along its single out-edge to produce an ordered node list. The
+    ///     definition validator guarantees exactly one Start, one reachable End, and in/out-degree ≤ 1, so a single
+    ///     forward walk is total and deterministic.
     /// </summary>
     private static IReadOnlyList<PreviewWorkflowNode> OrderLinearChain(PreviewWorkflowDefinition definition)
     {

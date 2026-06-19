@@ -7,10 +7,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     FastEndpoints handler to set or clear the Hugging Face access token (POST model-fit/hf-token). Thin transport over
-///     the Lane B <see cref="IHfTokenStore" />: a non-empty token is stored encrypted at rest; a null/empty token clears
-///     the stored token (anonymous access).
+///     the Hugging Face token store (<see cref="IHfTokenStore" />): a non-empty token is stored encrypted at rest; a
+///     null/empty token clears the stored token (anonymous access).
 ///     <para>
-///         <b>Secret hygiene (plan §10):</b> the token is NEVER returned by this endpoint, NEVER logged, and NEVER echoed
+///         <b>Secret hygiene:</b> the token is NEVER returned by this endpoint, NEVER logged, and NEVER echoed
 ///         in the response. The response reports ONLY whether a token is now configured — the value itself never leaves the
 ///         store.
 ///     </para>

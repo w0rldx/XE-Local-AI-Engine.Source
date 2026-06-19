@@ -6,9 +6,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>BinaryManager_VerifiesHash_RejectsCorruptDownload</c>: a SHA256 mismatch is re-downloaded
-///     exactly once and then surfaced as a sanitized failure; a cached binary is reused offline with no download.
-///     All HTTP is faked — no network.
+///     Binary hash verification: a SHA256 mismatch is re-downloaded exactly once and then surfaced as a sanitized
+///     failure; a cached binary is reused offline with no download. All HTTP is faked — no network.
 /// </summary>
 public sealed class BinaryManagerHashVerificationTests
 {

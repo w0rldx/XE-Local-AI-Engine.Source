@@ -24,9 +24,9 @@ public sealed record GgufModelRequest
 }
 
 /// <summary>
-///     A present (downloaded-and-verified) GGUF file: the local path plus the metadata Lane A needs to register and
-///     route the model. <see cref="Sha256" /> is <see langword="null" /> when the source LFS OID was not exposed
-///     (revision-pin only — see the discovery contract).
+///     A present (downloaded-and-verified) GGUF file: the local path plus the metadata the GGUF model store needs to
+///     register and route the model. <see cref="Sha256" /> is <see langword="null" /> when the source LFS OID was not
+///     exposed (revision-pin only).
 /// </summary>
 public sealed record GgufModelHandle(
     string ModelName,
@@ -111,7 +111,7 @@ public sealed record GgufRepoSummary(
 
 /// <summary>
 ///     One <c>.gguf</c> file inside a repo, with quant/size/integrity plus the GGUF header metadata read via an HTTP
-///     range request during repo inspection (no full download). <strong>Frozen cross-lane contract:</strong> Lane C's
+///     range request during repo inspection (no full download). <strong>Frozen contract:</strong> the
 ///     <c>MemoryFitEstimator</c> consumes these header fields as a pure function and performs no GGUF parsing itself.
 ///     Header fields absent from a file are <see langword="null" />. <see cref="Sha256" /> is <see langword="null" />
 ///     when the LFS OID was not exposed (treat as "unavailable, revision-pin only").

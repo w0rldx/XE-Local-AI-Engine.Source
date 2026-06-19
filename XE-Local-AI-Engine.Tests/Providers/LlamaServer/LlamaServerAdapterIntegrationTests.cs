@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>LlamaServerAdapter_ChatAndEmbedding_AgainstLocalLlamaServer</c> (integration): points the MEAI
+///     Integration: points the MEAI
 ///     OpenAI adapter at a locally-running <c>llama-server</c> base URL and confirms the <see cref="IChatClient" /> and
 ///     <see cref="IEmbeddingGenerator{TInput,TEmbedding}" /> round-trip over its <c>/v1/chat/completions</c> +
 ///     <c>/v1/embeddings</c> surface — with no additional dependency beyond the pinned MEAI OpenAI family.

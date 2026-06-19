@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     recommendation snapshot from the sanitized persistence-store projections. It NEVER runs the advisor — fresh runs
 ///     are produced only by the scheduler's <c>model-recommendation-check</c> handler. It deliberately takes no dependency
 ///     on <c>IModelFitRefreshService</c> so a query can never trigger an execution path. The approved-image listing is
-///     gone (the approved-image concept was removed in Lane C, plan §8).
+///     gone (the approved-image concept was removed when the advisor moved to in-process box-aware GGUF recommendation).
 /// </summary>
 public interface IModelFitQueryService
 {

@@ -1,7 +1,6 @@
-// Approval-gate probe. Inert unless built with -p:DefineConstants=P0_SPIKE so the branch always
-// builds. Run via /tmp/p0.sh. See memory 'agent-mode-foundation'.
+// Approval-gate probe. Inert unless built with -p:DefineConstants=P0_SPIKE so the branch always builds.
 //
-// WHAT THIS PROVES (the real §4 gate, corrected 2026-05-29):
+// WHAT THIS PROVES (the tool-approval gate):
 // The node's ClientLocal path executes tools through FunctionInvokingChatClient (FICC). When a tool is
 // wrapped in ApprovalRequiredAIFunction, FICC does NOT execute it — it replaces the FunctionCallContent
 // with a ToolApprovalRequestContent and returns it to the caller. The caller resumes by replaying the
@@ -38,7 +37,7 @@ using OllamaSharp;
 ///     tool. Execution is ground-truth via a sentinel file, not inferred from model text. Opt-in via env
 ///     <c>P0_RUN_LIVE=1</c> so default CI stays offline.
 /// </summary>
-public sealed class P0ApprovalSpikeTests
+public sealed class WorkflowToolApprovalSpikeTests
 {
     private const string MarkerFile = "/tmp/p0_tool_ran.txt";
     private const string ResultFile = "/tmp/p0b_result.txt";

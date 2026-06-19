@@ -137,7 +137,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         // Route the embedding model to the runtime named by EmbeddingProviderName (ollama or llamacpp). For "llamacpp"
         // the provider stands up a non-none-pooling embedding process on first use; an unavailable process throws a
         // caught transport type (the deferred generator wraps LlamaRuntimeException -> IOException) so retrieval still
-        // degrades to lexical (plan §7.7). A misconfigured/unregistered provider name throws InvalidOperationException,
+        // degrades to lexical. A misconfigured/unregistered provider name throws InvalidOperationException,
         // also caught below as a degrade rather than a hard send failure.
         var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection

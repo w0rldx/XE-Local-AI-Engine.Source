@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Per-page interaction E2E tests for the invocation-monitor page (plan M2, wave-2).
+///     Per-page interaction E2E tests for the invocation-monitor page.
 ///     The real backend returns an empty monitor in the test host, so assertions target
 ///     static layout and the empty-state text rather than live invocation data.
 /// </summary>

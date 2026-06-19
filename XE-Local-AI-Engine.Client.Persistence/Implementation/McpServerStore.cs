@@ -31,7 +31,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
             WorkingDirectory = input.WorkingDirectory,
             EnvJson = EncodeEnvironment(input.Environment),
             Url = input.Url,
-            // A registration is always persisted disabled — enabling is a deliberate second action (locked §0 decision 3).
+            // A registration is always persisted disabled — enabling is a deliberate second action.
             Enabled = false,
             Version = 1,
             CreatedAtUtc = now,

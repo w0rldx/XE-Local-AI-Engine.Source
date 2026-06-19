@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     FastEndpoints handler for the running llama-server processes (GET model-fit/running). There is no dedicated
-///     list-running seam — the running models are derived from the Lane A
+///     list-running seam — the running models are derived from the llama-server process supervisor's
 ///     <see cref="ILlamaServerProcessSupervisor.CheckHealthAsync" /> snapshot (one row per running <c>(model, role)</c>
 ///     process). On a supervisor failure it returns an OK-empty list (never a 500) so the running panel can poll and
 ///     degrade. Each row's diagnostics are already sanitized (no internal paths/secrets).

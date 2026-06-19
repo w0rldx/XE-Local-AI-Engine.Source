@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Per-page interaction E2E tests for the node-binding page (plan M2, wave-2).
+///     Per-page interaction E2E tests for the node-binding page.
 ///     Asserts static layout and the "Start binding" button interaction without
 ///     depending on Central Platform availability — the POST will fail against
 ///     test.example.com, so the test accepts either the polling-started UI or an
@@ -68,7 +68,7 @@ public sealed class NodeBindingPageE2ETests : XEE2ETestBase
     ///     fires is the deterministic interaction signal — it is independent of response/render timing
     ///     (the in-process POST settles at variable speed, so the transient disabled state and the
     ///     resulting Alert are too brief/timing-dependent to catch reliably). Post-mutation UI readback
-    ///     (disabled state, Alert, polling) is deferred to wave-2.1.
+    ///     (disabled state, Alert, polling) is intentionally not asserted here.
     /// </summary>
     [Test]
     public async Task NodeBinding_StartBinding_Click_Produces_Deterministic_State_Change()

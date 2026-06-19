@@ -6,17 +6,17 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-/// <see cref="DelegatingHandler"/> that owns Codex auth on the SSE Responses path (plan §8 Phase 1.5):
+/// <see cref="DelegatingHandler"/> that owns Codex auth on the SSE Responses path:
 /// <list type="number">
 ///   <item>Strips any <c>Authorization</c> the OpenAI SDK added from its dummy "unused" key, so it never
-///   reaches the wire (MF5).</item>
-///   <item>Injects the §3.4 header contract for the SSE path: real bearer <c>Authorization</c>,
+///   reaches the wire.</item>
+///   <item>Injects the Codex header contract for the SSE path: real bearer <c>Authorization</c>,
 ///   <c>chatgpt-account-id</c>, <c>originator</c>, <c>User-Agent</c> — and NOT the WebSocket-only
 ///   <c>OpenAI-Beta</c>.</item>
 ///   <item>On <c>401</c>, performs a single-flight refresh (one gate; concurrent 401s await the same refresh
-///   with double-checked expiry) and retries the request exactly once (M2).</item>
+///   with double-checked expiry) and retries the request exactly once.</item>
 /// </list>
-/// Never logs token values, authorization headers, or the dummy key (plan §9).
+/// Never logs token values, authorization headers, or the dummy key.
 /// </summary>
 public sealed class CodexAuthHandler : DelegatingHandler
 {
@@ -28,7 +28,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
     private readonly ILogger<CodexAuthHandler> _logger;
     private readonly TimeProvider _timeProvider;
 
-    // Single-flight refresh gate (M2): concurrent 401s await one in-flight refresh, then re-check expiry.
+    // Single-flight refresh gate: concurrent 401s await one in-flight refresh, then re-check expiry.
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private CodexTokens? _cachedTokens;
 
@@ -66,7 +66,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
             return response;
         }
 
-        // Single retry after a single-flight refresh (M2). The original request was already sent — an
+        // Single retry after a single-flight refresh. The original request was already sent — an
         // HttpRequestMessage cannot be resent (its content stream is consumed / it is marked used), so the retry
         // MUST go on a fresh CLONE of the request, not the original.
         response.Dispose();
@@ -87,7 +87,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
     /// failure statuses ONLY: a success response carries the live SSE stream and must NOT be read here.
     ///
     /// <para>
-    /// Token hygiene (plan §9): the response body is the server's error JSON and never echoes request auth headers,
+    /// Token hygiene: the response body is the server's error JSON and never echoes request auth headers,
     /// so logging it does not leak the bearer token / account id. Only the body and the status are logged — request
     /// headers are never touched.
     /// </para>
@@ -208,7 +208,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
 
     private void ApplyHeaders(HttpRequestMessage request, CodexTokens tokens)
     {
-        // MF5: remove any Authorization the SDK injected from the dummy "unused" key before setting the real one.
+        // Remove any Authorization the SDK injected from the dummy "unused" key before setting the real one.
         request.Headers.Authorization = new AuthenticationHeaderValue(BearerScheme, tokens.AccessToken);
 
         SetHeader(request, CodexHeaders.AccountId, tokens.AccountId);
@@ -221,7 +221,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
         request.Headers.UserAgent.Clear();
         request.Headers.TryAddWithoutValidation(CodexHeaders.UserAgent, _options.UserAgent);
 
-        // Intentionally NOT setting OpenAI-Beta: responses_websockets — that header is WebSocket-only (plan §3.4).
+        // Intentionally NOT setting OpenAI-Beta: responses_websockets — that header is WebSocket-only.
     }
 
     private static void SetHeader(HttpRequestMessage request, string name, string value)

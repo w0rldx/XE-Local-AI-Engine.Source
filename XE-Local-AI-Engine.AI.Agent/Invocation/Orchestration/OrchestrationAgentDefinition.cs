@@ -28,7 +28,7 @@ public sealed record OrchestrationAgentDefinition
     public bool EmitStreamingUpdates { get; init; } = true;
 
     /// <summary>
-    ///     Autonomous-mode per-agent turn cap (§1.3 <c>WithAutonomousMode</c>). When &gt; 0 an agent whose response
+    ///     Autonomous-mode per-agent turn cap (maps to MAF's <c>WithAutonomousMode</c>). When &gt; 0 an agent whose response
     ///     contains no handoff is re-invoked up to this many times; the loop ends on a handoff, the termination
     ///     condition, or the cap. 0 disables autonomous mode (every user turn re-enters via triage).
     /// </summary>
@@ -36,7 +36,7 @@ public sealed record OrchestrationAgentDefinition
 
     /// <summary>
     ///     When true, subsequent user turns route back to the specialist that handled the previous turn rather than
-    ///     always re-entering through triage (§1.3 <c>EnableReturnToPrevious</c>).
+    ///     always re-entering through triage (maps to MAF's <c>EnableReturnToPrevious</c>).
     /// </summary>
     public bool ReturnToPrevious { get; init; }
 }

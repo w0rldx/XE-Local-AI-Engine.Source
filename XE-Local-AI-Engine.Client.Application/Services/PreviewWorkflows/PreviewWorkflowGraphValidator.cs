@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 
 /// <summary>
-///     Validates a <see cref="PreviewWorkflowGraph" /> against the basic-variant rules (plan §7.3). A workflow is a
+///     Validates a <see cref="PreviewWorkflowGraph" /> against the basic-variant rules. A workflow is a
 ///     STRICTLY LINEAR chain: exactly one Start, exactly one reachable End, in-degree ≤ 1 and out-degree ≤ 1 per node
-///     (acyclic alone is insufficient — that still permits fan-out → parallel supersteps, invariant #5), every Agent
+///     (acyclic alone is insufficient — that still permits fan-out → parallel supersteps), every Agent
 ///     node has a model + instructions, and at least one Agent node lies between Start and End (a Start→End chain with
 ///     no agent is a 400, never a no-op). Pure/stateless so it is trivially unit-testable.
 /// </summary>

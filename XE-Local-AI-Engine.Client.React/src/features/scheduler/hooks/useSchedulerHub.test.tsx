@@ -47,7 +47,7 @@ const RUN_EVENTS = [
 	"scheduler.runProgress",
 ];
 
-// The §7.6 bridge: the hub must invalidate the generated query keys, which are single-element arrays
+// The query-invalidation bridge: the hub must invalidate the generated query keys, which are single-element arrays
 // `[{ _id: "<operationId>", ... }]`. A job-definition push invalidates listScheduledJobs; a run push invalidates
 // both listScheduledJobRuns and getScheduledJobRun. Invalidation is by the `_id` partial object (TanStack
 // partial-object matching), so it matches every cached variant regardless of the query/path the call carried.
@@ -148,7 +148,7 @@ describe("useSchedulerHub", () => {
 		}
 	});
 
-	it("marks a seeded jobs query stale via the partial `_id` match (the §7.6 bridge end-to-end)", () => {
+	it("marks a seeded jobs query stale via the partial `_id` match (the invalidation bridge end-to-end)", () => {
 		// A real query keyed off the FULL generated options shape `[{ _id, ..., query }]` — the partial `_id`
 		// invalidation must still reach it.
 		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
@@ -160,7 +160,7 @@ describe("useSchedulerHub", () => {
 		expect(queryClient.getQueryState(fullJobsKey)?.isInvalidated).toBe(true);
 	});
 
-	it("marks a seeded run query stale via the partial `_id` match (the §7.6 bridge end-to-end)", () => {
+	it("marks a seeded run query stale via the partial `_id` match (the invalidation bridge end-to-end)", () => {
 		// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 		const fullRunsKey = [{ _id: "listScheduledJobRuns", query: { status: "Running" } }];
 		const queryClient = renderHubWithSeededQuery(fullRunsKey);

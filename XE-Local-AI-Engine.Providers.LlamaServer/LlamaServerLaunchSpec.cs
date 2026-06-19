@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 /// <remarks>
 ///     <para>
 ///         <see cref="Arguments" /> is the exact, ordered argument vector handed to the process — it always binds
-///         <c>--host 127.0.0.1</c> (decision #17), a chat process always carries <c>--jinja</c> (tool calling), and an
+///         <c>--host 127.0.0.1</c>, a chat process always carries <c>--jinja</c> (tool calling), and an
 ///         embedding process always carries <c>--embeddings</c> plus a non-<c>none</c> <c>--pooling</c> value
 ///         (verified against llama.cpp release <c>b9692</c>). The spawn-args unit test asserts these directly.
 ///     </para>

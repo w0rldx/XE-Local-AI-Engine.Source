@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="MemoryFitEstimator" /> tests (plan §12): the pure estimator computes
+///     <see cref="MemoryFitEstimator" /> tests: the pure estimator computes
 ///     <c>weights + 2·layers·kv_heads·head_dim·ctx·bytes + margin + ~0.75GB overhead</c>, rejects a model that exceeds
 ///     the budget, lowers the KV term under KV-cache quant, and degrades to a RAM/CPU budget when VRAM is unknown. No
 ///     I/O — every input is supplied directly.
@@ -84,7 +84,7 @@ public sealed class MemoryFitEstimatorTests
     [Test]
     public void MemoryFit_VramUnknown_UsesRamBudget_CpuMode()
     {
-        // VRAM unknown ⇒ budget = available RAM, mode = Cpu (plan §7.1 degrade rule).
+        // VRAM unknown ⇒ budget = available RAM, mode = Cpu (the degrade rule when no GPU memory is known).
         var cpuProfile = new HardwareProfile
         {
             TotalRamBytes = 32 * Gb,

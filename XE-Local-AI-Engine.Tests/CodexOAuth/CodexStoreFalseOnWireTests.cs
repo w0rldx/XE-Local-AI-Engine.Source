@@ -7,11 +7,11 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// On-WIRE store=false assertion (security M2). The <see cref="CodexStoreDisabledChatClientTests"/> proves the
+/// On-WIRE store=false assertion. The <see cref="CodexStoreDisabledChatClientTests"/> proves the
 /// flag on the request options; this proves it on the actual SERIALIZED request body the OpenAI Responses client
 /// POSTs — driving the real Responses-backed <see cref="IChatClient"/> over a capturing transport and asserting
 /// the JSON contains <c>"store": false</c> AND omits <c>previous_response_id</c> / <c>conversation</c> (no
-/// service-side state retention, plan §10).
+/// service-side state retention).
 /// </summary>
 public sealed class CodexStoreFalseOnWireTests
 {
@@ -53,7 +53,7 @@ public sealed class CodexStoreFalseOnWireTests
     }
 
     /// <summary>
-    /// 400-regression (T1/T2): the agent send path sets <see cref="ChatOptions.ModelId"/> to the node's LOCAL model
+    /// 400-regression: the agent send path sets <see cref="ChatOptions.ModelId"/> to the node's LOCAL model
     /// (e.g. <c>qwen3:8b</c>). The Codex wrapper must OVERWRITE that with the resolved Codex model id so only a
     /// valid Codex model reaches the wire — proving the leaked local name can never be the request model (which was
     /// the cause of the live HTTP 400 from chatgpt.com/backend-api/codex/responses).

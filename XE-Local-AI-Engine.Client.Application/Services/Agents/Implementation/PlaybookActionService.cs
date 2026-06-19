@@ -95,7 +95,7 @@ internal sealed class PlaybookActionService(
             throw new PlaybookActionValidationException("Behavior is required.");
         }
 
-        // §6 #2 — an analysis proposal with no cited evidence is rejected, never stored.
+        // An analysis proposal with no cited evidence is rejected, never stored.
         if (input.SourceFeedbackIds is null || input.SourceFeedbackIds.Count == 0)
         {
             throw new PlaybookActionValidationException("An analysis suggestion must cite at least one source feedback id.");
@@ -170,7 +170,7 @@ internal sealed class PlaybookActionService(
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, null);
         }
 
-        // Hard cap (relevance retrieval and cohort monitoring, the enabled-action cap): the eval may pass, but if the agent is already at MaxEnabledActions the
+        // Hard cap on enabled actions: the eval may pass, but if the agent is already at MaxEnabledActions the
         // promote is blocked with no store write — the operator archives/disables an Enabled action first. The pending
         // suggestion is not yet Enabled, so the count needs no exclusion here.
         var enabledCount = await CountEnabledAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);

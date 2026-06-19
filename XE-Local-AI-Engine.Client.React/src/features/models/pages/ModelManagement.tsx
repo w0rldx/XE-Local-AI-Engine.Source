@@ -38,7 +38,7 @@ export function ModelManagement() {
 	const [pullModelName, setPullModelName] = useState("");
 	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
 	const [pullModalOpened, { open: openPullModal, close: closePullModal }] = useDisclosure(false);
-	// Shared single pull engine (invariant §3.3): the dialog's submit + live progress run through this hook, the same
+	// Shared single pull engine (invariant): the dialog's submit + live progress run through this hook, the same
 	// one the recommendation Pull button uses. It owns the progress toast and installed-list invalidation.
 	const modelPull = useModelPull();
 

@@ -6,10 +6,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 /// <summary>
 ///     Cross-platform <see cref="IHardwareProfiler" />. Extracted from (and supersedes) the Linux-shell-only
 ///     <c>HostAgent.Linux.CapabilityDetector</c> — which measured no RAM/VRAM bytes — and adds RAM + VRAM-bytes +
-///     GPU-vendor detection on both Linux and Windows. Has ZERO <c>HostAgent.*</c> dependency (Lane C↔D gate, plan §7.1/§13).
+///     GPU-vendor detection on both Linux and Windows. Has ZERO <c>HostAgent.*</c> dependency, so the capabilities
+///     provider stays decoupled from the host-agent runtime.
 /// </summary>
 /// <remarks>
-///     Probe order (plan §7.1):
+///     Probe order:
 ///     <list type="bullet">
 ///         <item>RAM — Linux <c>/proc/meminfo</c> (MemTotal/MemAvailable); Windows OS query.</item>
 ///         <item>
@@ -66,7 +67,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         var vramBytes = await DetectVramAsync(vendor, ct).ConfigureAwait(false);
 
         var vramKnown = vramBytes is not null;
-        // Degrade rule (plan §7.1): VRAM unknown ⇒ no GPU budget, regardless of a detected vendor.
+        // Degrade rule: VRAM unknown ⇒ no GPU budget, regardless of a detected vendor.
         var gpuAccelAvailable = vramKnown && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel;
 
         return new HardwareProfile
@@ -203,9 +204,9 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     }
 
     /// <summary>
-    ///     Windows non-NVIDIA VRAM-bytes seam. NOT implemented on this Linux box (plan §7.0/§13): DXGI
+    ///     Windows non-NVIDIA VRAM-bytes seam. Not yet implemented: the eventual implementation would read DXGI
     ///     <c>IDXGIAdapter::GetDesc().DedicatedVideoMemory</c> (vendor-neutral, accurate &gt;4GB) then WMI
-    ///     <c>Win32_VideoController</c> vendor-name only. The operator fills this on a real Win11 box; until then it
+    ///     <c>Win32_VideoController</c> vendor-name only. This needs validating on a real Win11 box; until then it
     ///     degrades to <see langword="null" /> (VRAM unknown ⇒ CPU mode). NVIDIA on Windows is already covered by the
     ///     shared <c>nvidia-smi</c> branch above, so this gap only affects AMD/Intel on Windows.
     /// </summary>
@@ -214,22 +215,22 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         _ = vendor;
         _ = ct;
 
-        // OPERATOR FOLLOW-UP (plan §7.0/§13 — Win11): implement DXGI DedicatedVideoMemory P/Invoke (vendor-neutral, no
-        // NuGet) → WMI Win32_VideoController vendor-name fallback. System.Management is intentionally NOT referenced
-        // (avoids a Windows-only NuGet on this cross-platform project); prefer DXGI P/Invoke validated on a real Win11
-        // box. Until then this degrades to null (VRAM unknown ⇒ CPU mode) — the always-correct floor.
+        // Win11 follow-up: implement DXGI DedicatedVideoMemory P/Invoke (vendor-neutral, no NuGet) → WMI
+        // Win32_VideoController vendor-name fallback. System.Management is intentionally NOT referenced (avoids a
+        // Windows-only NuGet on this cross-platform project); prefer DXGI P/Invoke validated on a real Win11 box.
+        // Until then this degrades to null (VRAM unknown ⇒ CPU mode) — the always-correct floor.
         return Task.FromResult<long?>(null);
     }
 
     /// <summary>
-    ///     Windows GPU-vendor-name seam from the adapter description (DXGI/WMI). NOT implemented on this Linux box
-    ///     (plan §7.0/§13): returns <see cref="GpuVendor.Unknown" /> so the NVIDIA-via-nvidia-smi path still works and
-    ///     non-NVIDIA Windows boxes degrade to CPU mode until the operator fills this on Win11.
+    ///     Windows GPU-vendor-name seam from the adapter description (DXGI/WMI). Not yet implemented: returns
+    ///     <see cref="GpuVendor.Unknown" /> so the NVIDIA-via-nvidia-smi path still works and non-NVIDIA Windows boxes
+    ///     degrade to CPU mode until this is implemented and validated on Win11.
     /// </summary>
     private static GpuVendor ProbeWindowsAdapterVendor()
     {
-        // OPERATOR FOLLOW-UP (plan §7.0/§13 — Win11): enumerate DXGI adapter descriptions / WMI Win32_VideoController.Name
-        // and map "AMD"/"Radeon"/"Advanced Micro Devices"→Amd, "Intel"→Intel. NVIDIA is already covered by nvidia-smi,
+        // Win11 follow-up: enumerate DXGI adapter descriptions / WMI Win32_VideoController.Name and map
+        // "AMD"/"Radeon"/"Advanced Micro Devices"→Amd, "Intel"→Intel. NVIDIA is already covered by nvidia-smi,
         // so the gap here is AMD/Intel-on-Windows only; until filled they degrade to Unknown (CPU mode).
         return GpuVendor.Unknown;
     }

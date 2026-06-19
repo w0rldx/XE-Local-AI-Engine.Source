@@ -37,8 +37,8 @@ public interface ICodexAuthService
 }
 
 /// <summary>
-/// Implements the Codex OAuth 2.0 Authorization-Code + PKCE (S256) flow with a loopback callback
-/// (plan §3.2/§8 Phase 1.4). Decodes the <c>chatgpt_account_id</c> JWT claim. Never logs token values (plan §9).
+/// Implements the Codex OAuth 2.0 Authorization-Code + PKCE (S256) flow with a loopback callback.
+/// Decodes the <c>chatgpt_account_id</c> JWT claim. Never logs token values.
 /// </summary>
 public sealed class CodexAuthService : ICodexAuthService
 {
@@ -73,7 +73,7 @@ public sealed class CodexAuthService : ICodexAuthService
         var state = CreateState();
 
         var listener = new HttpListener();
-        // Loopback-only binding (plan §9). Started synchronously so the port is bound before we return the URL.
+        // Loopback-only binding. Started synchronously so the port is bound before we return the URL.
         listener.Prefixes.Add($"http://localhost:{_options.CallbackPort}{EnsureTrailingSlash(_options.CallbackPath)}");
         try
         {
@@ -82,7 +82,7 @@ public sealed class CodexAuthService : ICodexAuthService
         catch (HttpListenerException exception)
         {
             // The loopback callback port could not be bound — e.g. a prior login left it half-open, or another
-            // process holds it. Free this listener and surface a clean typed error instead of leaking it (security L1).
+            // process holds it. Free this listener and surface a clean typed error instead of leaking it.
             ((IDisposable)listener).Dispose();
             throw new CodexAuthException(
                 $"Could not bind the Codex loopback callback port {_options.CallbackPort}. Close any prior sign-in and retry.",
@@ -223,7 +223,7 @@ public sealed class CodexAuthService : ICodexAuthService
                 throw new CodexAuthException($"Codex authorization returned an error: {error}.");
             }
 
-            // Validate state to defend against CSRF on the loopback callback (plan §9).
+            // Validate state to defend against CSRF on the loopback callback.
             if (!CryptographicOperations.FixedTimeEquals(
                     Encoding.UTF8.GetBytes(returnedState ?? string.Empty),
                     Encoding.UTF8.GetBytes(expectedState)))
@@ -280,7 +280,7 @@ public sealed class CodexAuthService : ICodexAuthService
         response.ContentType = "text/html";
 
         // The callback URL carried the OAuth authorization code; prevent the browser from caching this response or
-        // leaking a referrer so the code cannot linger in cache/history (plan §9 / security M1).
+        // leaking a referrer so the code cannot linger in cache/history.
         response.Headers["Cache-Control"] = "no-store";
         response.Headers["Pragma"] = "no-cache";
         response.Headers["Referrer-Policy"] = "no-referrer";
@@ -326,7 +326,7 @@ public sealed class CodexAuthService : ICodexAuthService
         var payload = DecodeJwtPayload(jwt);
 
         // Guard against a malformed (non-integral / oversized) exp claim: TryGetInt64 + range-check so a hostile
-        // or corrupt token can't throw or produce a nonsense expiry (security L3).
+        // or corrupt token can't throw or produce a nonsense expiry.
         if (payload.TryGetProperty("exp", out var exp)
             && exp.ValueKind == JsonValueKind.Number
             && exp.TryGetInt64(out var expSeconds)
@@ -339,7 +339,7 @@ public sealed class CodexAuthService : ICodexAuthService
         return DateTimeOffset.UtcNow.AddMinutes(50);
     }
 
-    // SECURITY (L4): the JWT payload is base64url-decoded WITHOUT verifying the token signature. This is
+    // SECURITY: the JWT payload is base64url-decoded WITHOUT verifying the token signature. This is
     // intentional and safe here: the access token is received over TLS directly from the OpenAI token endpoint,
     // and the decoded claims (chatgpt_account_id, exp) are used ONLY as advisory metadata — the account id becomes
     // a request header and the expiry drives proactive refresh. NEITHER is ever used as an authorization input or
@@ -361,7 +361,7 @@ public sealed class CodexAuthService : ICodexAuthService
     private static bool TryGetExpiresIn(JsonElement root, out int expiresIn)
     {
         // Guard against a malformed / oversized expires_in: TryGetInt32 + non-negative bound so a corrupt value
-        // can't throw or yield a negative lifetime (security L3). Out-of-range falls back to the JWT exp claim.
+        // can't throw or yield a negative lifetime. Out-of-range falls back to the JWT exp claim.
         if (root.TryGetProperty("expires_in", out var element)
             && element.ValueKind == JsonValueKind.Number
             && element.TryGetInt32(out var parsed)

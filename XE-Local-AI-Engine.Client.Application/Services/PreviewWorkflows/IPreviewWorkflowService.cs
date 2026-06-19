@@ -2,7 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 
 /// <summary>
 ///     CRUD + validation over the persisted preview-workflow library. Serializes the <see cref="PreviewWorkflowGraph" />
-///     to the encrypted <c>GraphJson</c> blob on write and deserializes it on read (Lane A owns encryption-at-rest).
+///     to the encrypted <c>GraphJson</c> blob on write and deserializes it on read (the persistence layer owns
+///     encryption-at-rest).
 ///     Validation (<see cref="PreviewWorkflowGraphValidator" />) runs before every create/update so an invalid graph
 ///     never reaches storage; the execution service re-validates before a run.
 /// </summary>

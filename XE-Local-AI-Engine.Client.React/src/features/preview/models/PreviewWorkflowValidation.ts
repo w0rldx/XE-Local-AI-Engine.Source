@@ -1,6 +1,6 @@
 import type { PreviewWorkflowGraph } from "@/features/preview/models/PreviewWorkflowModels";
 
-// Client-side mirror of PreviewWorkflowGraphValidator.cs (plan §7.3). A workflow is a STRICTLY LINEAR chain:
+// Client-side mirror of PreviewWorkflowGraphValidator.cs. A workflow is a STRICTLY LINEAR chain:
 // exactly one Start, exactly one reachable End, in-degree ≤ 1 and out-degree ≤ 1 per node, every Agent node
 // carries a model + instructions, and at least one Agent node lies between Start and End. The backend remains
 // the authority (it re-validates and returns 400); this is purely the Execute-disabled-when-invalid UX gate so

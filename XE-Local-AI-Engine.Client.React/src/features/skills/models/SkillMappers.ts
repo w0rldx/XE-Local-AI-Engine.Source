@@ -40,7 +40,7 @@ export function toSkillSummary(dto: XeLocalAiEngineClientEndpointsSkillsV1SkillS
 
 // Projects form values to the generated create request body. Trimmed so a stored skill never carries leading/
 // trailing whitespace. Create has no `enabled` field on the wire (a new skill always persists enabled by the
-// store default, plan §6.1); the form's enabled flag only matters on update.
+// store default); the form's enabled flag only matters on update.
 export function toCreateSkillRequest(form: SkillFormValues): XeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest {
 	return {
 		name: form.name.trim(),

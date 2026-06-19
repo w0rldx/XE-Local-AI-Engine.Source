@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Covers the <see cref="CodexAuthHandler"/> 401-retry path (plan §8 M2 + T8 HIGH): a 401 triggers a single-flight
+/// Covers the <see cref="CodexAuthHandler"/> 401-retry path: a 401 triggers a single-flight
 /// refresh and exactly one retry, and — because a sent <see cref="HttpRequestMessage"/> cannot be resent — the
 /// retry goes on a fresh CLONE of the request carrying the original (buffered) content and the refreshed bearer.
 /// </summary>
@@ -88,7 +88,7 @@ public sealed class CodexAuthHandlerTests
     [Test]
     public async Task SendAsync_ByDefault_SendsHonestProductOriginatorAndUserAgent_NotCodexCli()
     {
-        // M3: the operator chose honest product identifiers over impersonating the official Codex CLI (ToS).
+        // The handler sends honest product identifiers rather than impersonating the official Codex CLI (ToS).
         var inner = await SendOnceWithOptions(new CodexOptions());
 
         var originator = inner.Requests[0].Headers.GetValues("originator").Single();
@@ -113,7 +113,7 @@ public sealed class CodexAuthHandlerTests
     [Test]
     public async Task SendAsync_WhenOriginatorAndUserAgentOverridden_SendsTheConfiguredValues()
     {
-        // M3 escape hatch: if the subscription endpoint requires a Codex-compatible identifier, the operator can
+        // Override escape hatch: if the subscription endpoint requires a Codex-compatible identifier, the operator can
         // override both via the CodexOAuth config section without a recompile.
         var inner = await SendOnceWithOptions(new CodexOptions { Originator = "codex_cli_rs", UserAgent = "codex_cli_rs" });
 

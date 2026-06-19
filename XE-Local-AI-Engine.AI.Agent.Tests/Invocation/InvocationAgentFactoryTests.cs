@@ -601,7 +601,7 @@ public sealed class InvocationAgentFactoryTests
     }
 
     // MAAI001: AgentSkillsProvider/AgentInlineSkill are [Experimental] in Microsoft.Agents.AI 1.8.0; the factory adopts
-    // them deliberately for progressive disclosure (agent-skills plan §7.7), so this test references them under the same
+    // them deliberately for progressive disclosure of agent skills, so this test references them under the same
     // scoped suppression the production code uses.
 #pragma warning disable MAAI001
     [Test]

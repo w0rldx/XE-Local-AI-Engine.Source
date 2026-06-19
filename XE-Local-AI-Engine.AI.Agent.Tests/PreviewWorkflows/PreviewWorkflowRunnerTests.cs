@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Deterministic CI guard for the Preview workflow runner (no Ollama, no network). A recording streaming
-///     <see cref="IChatClient" /> stands in for the node-local model. Agent executors run the STREAMING path
-///     (phase-0 surprise 2), so the fake MUST implement <see cref="IChatClient.GetStreamingResponseAsync" />.
+///     <see cref="IChatClient" /> stands in for the node-local model. Agent executors run the STREAMING path,
+///     so the fake MUST implement <see cref="IChatClient.GetStreamingResponseAsync" />.
 /// </summary>
 public sealed class PreviewWorkflowRunnerTests
 {
@@ -55,8 +55,8 @@ public sealed class PreviewWorkflowRunnerTests
         await using var session = await runner.StartAsync(definition, _ => client, CancellationToken.None);
         _ = await Drain(session);
 
-        // NEGATIVE ASSERTION (decision #4 guard): Beta's FIRST inbound is EXACTLY one user message carrying only the
-        // transform output — no Start seed text, no instructions message, no prior assistant turn.
+        // NEGATIVE ASSERTION (downstream-isolation guard): Beta's FIRST inbound is EXACTLY one user message carrying
+        // only the transform output — no Start seed text, no instructions message, no prior assistant turn.
         var betaFirstInvocation = client.FirstInvocationMessagesFor("beta");
         AssertEx.Equal(1, betaFirstInvocation.Count);
         AssertEx.Equal(ChatRole.User, betaFirstInvocation[0].Role);
@@ -225,7 +225,8 @@ public sealed class PreviewWorkflowRunnerTests
     /// <summary>
     ///     Recording streaming <see cref="IChatClient" />. Returns scripted assistant text per agent (matched by the
     ///     agent's instructions marker carried in <see cref="ChatOptions.Instructions" />), and records the routed
-    ///     ChatMessages of each invocation so tests can assert decision-#4 isolation. Drives ONLY the streaming path.
+    ///     ChatMessages of each invocation so tests can assert downstream-node isolation (each node sees only its
+    ///     upstream output, not the full history). Drives ONLY the streaming path.
     /// </summary>
     private sealed class RecordingStreamingChatClient : IChatClient
     {

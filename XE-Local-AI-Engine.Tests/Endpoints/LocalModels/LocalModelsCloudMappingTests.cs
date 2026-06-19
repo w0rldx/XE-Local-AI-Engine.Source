@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// T2: the chat model list exposes Codex cloud models (tagged <see cref="LocalModelProviders.CodexOAuth"/>) as a
+/// The chat model list exposes Codex cloud models (tagged <see cref="LocalModelProviders.CodexOAuth"/>) as a
 /// distinct group alongside the node-local Ollama models, and the cloud entries advertise the Codex provider's
 /// declared capability matrix rather than an Ollama classification.
 /// </summary>
@@ -25,8 +25,7 @@ public sealed class LocalModelsCloudMappingTests
         AssertEx.True(cloud.All(static m => m.Provider == LocalModelProviders.CodexOAuth),
             "every cloud entry must be tagged provider=CodexOAuth");
         AssertEx.True(cloud.All(static m => m.IsReasoningCapable), "Codex models reason by default");
-        // Tool calling is now enabled for ALL Codex ids (de-risk plan D1); the mapped tag tracks the V0 flag, which
-        // is now true.
+        // Tool calling is now enabled for ALL Codex ids; the mapped tag tracks the V0 flag, which is now true.
         AssertEx.True(CodexProviderCapabilities.V0.SupportsToolCalling, "the Codex matrix must advertise tool calling");
         AssertEx.True(cloud.All(static m => m.IsToolCapable == CodexProviderCapabilities.V0.SupportsToolCalling));
         AssertEx.True(cloud.Any(static m => m.ModelName == "gpt-5.5"), "the catalog must include gpt-5.5");

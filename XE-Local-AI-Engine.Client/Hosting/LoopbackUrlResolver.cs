@@ -53,7 +53,7 @@ internal static class LoopbackUrlResolver
         }
 
         // Desktop mode binds 127.0.0.1 exclusively, so the browser must only ever receive a loopback host — never a
-        // wildcard (0.0.0.0/::) NOR a routable interface — regardless of what the listener reports (invariant #3).
+        // wildcard (0.0.0.0/::) NOR a routable interface — regardless of what the listener reports.
         var host = uri.Host;
         var isLoopback = host is "127.0.0.1" or "localhost" or "::1" or "[::1]";
         var resolvedHost = isLoopback ? host : "127.0.0.1";

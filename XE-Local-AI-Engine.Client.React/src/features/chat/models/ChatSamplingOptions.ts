@@ -1,5 +1,5 @@
 // Developer-mode per-send sampling overrides. All fields are optional; absent = use model default.
-// The wire shape (camelCase JSON field `samplingOptions`) matches the backend SamplingOptions record (§5 of plan).
+// The wire shape (camelCase JSON field `samplingOptions`) matches the backend SamplingOptions record.
 
 export interface ChatSamplingOptions {
 	temperature?: number;
@@ -186,7 +186,8 @@ function toFiniteNumber(raw: unknown): number | undefined {
 // Wire-safe serialization: coerces every numeric field to a real JS number and drops any that are
 // not finite (covers string-typed store entries from partial Mantine NumberInput input). Drops null/
 // undefined values and empty arrays. Returns undefined when nothing is set, signaling the caller to
-// omit the samplingOptions field entirely (§3 byte-identical invariant when all null).
+// omit the samplingOptions field entirely (the byte-identical invariant: when all fields are null the
+// wire payload must match the default non-developer path exactly).
 export function toWireSamplingOptions(opts: ChatSamplingOptions): ChatSamplingOptions | undefined {
 	const result: ChatSamplingOptions = {};
 	let hasAny = false;

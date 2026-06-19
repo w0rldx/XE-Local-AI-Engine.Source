@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 /// <summary>
 ///     Provider-agnostic description of an Open Canvas (Preview) workflow graph. This is the ONE graph contract the
 ///     runner consumes; Application/Client mirror it (zod schema + Client.Models) and map their stored/inline graph
-///     onto it. NO Microsoft.Agents.AI types appear here (invariant #3 — MAF stays inside the runner/session).
+///     onto it. NO Microsoft.Agents.AI types appear here (invariant: MAF stays inside the runner/session).
 ///
-///     === GRAPH SCHEMA (mirror this in Lane C zod + Lane D Client.Models) ===
-///     A workflow is a STRICTLY LINEAR chain (in-degree/out-degree ≤ 1 per node — enforced by Lane C validation):
+///     === GRAPH SCHEMA (mirror this in the Application zod schema + the Client.Models DTOs) ===
+///     A workflow is a STRICTLY LINEAR chain (in-degree/out-degree ≤ 1 per node — enforced by definition validation):
 ///         Start → Agent → [Agent…] → (Debug | Pause)* → End
 ///     Nodes:
 ///       - <see cref="PreviewNodeKind.Start" />  : carries the seed user text (<see cref="PreviewWorkflowDefinition.StartText" />).
@@ -56,7 +56,8 @@ public record PreviewWorkflowNode
 
 /// <summary>
 ///     An Agent (model-call) node. Instructions + model selection are the privacy-sensitive payload (encrypted at rest
-///     by Lane A). The runner builds a <c>ChatClientAgent</c> over the caller-supplied node-local client using these.
+///     by the persistence layer). The runner builds a <c>ChatClientAgent</c> over the caller-supplied node-local
+///     client using these.
 /// </summary>
 public sealed record PreviewAgentNode : PreviewWorkflowNode
 {

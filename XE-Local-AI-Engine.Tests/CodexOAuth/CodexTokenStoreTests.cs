@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 /// Verifies the ported <see cref="CodexTokenStore"/> persists the OAuth session encrypted at rest, applies
-/// user-only file permissions, clears on logout, and fails closed when the stored payload is tampered (plan §12).
+/// user-only file permissions, clears on logout, and fails closed when the stored payload is tampered.
 /// </summary>
 public sealed class CodexTokenStoreTests : IDisposable
 {

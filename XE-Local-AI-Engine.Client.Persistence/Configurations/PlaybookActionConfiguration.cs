@@ -32,14 +32,14 @@ internal sealed class PlaybookActionConfiguration : IEntityTypeConfiguration<Pla
         builder.Property(entity => entity.Scope)
                .HasColumnName("scope");
 
-        // P3 analysis provenance/confidence — additive nullable columns. Plaintext (ids only / a scalar), not encrypted.
+        // Analysis provenance/confidence — additive nullable columns. Plaintext (ids only / a scalar), not encrypted.
         builder.Property(entity => entity.SourceFeedbackIds)
                .HasColumnName("source_feedback_ids");
 
         builder.Property(entity => entity.Confidence)
                .HasColumnName("confidence");
 
-        // P4 eval-gate outcome — additive nullable column. Plaintext (ids + flags + counts only), not encrypted.
+        // Eval-gate outcome — additive nullable column. Plaintext (ids + flags + counts only), not encrypted.
         builder.Property(entity => entity.EvalResult)
                .HasColumnName("eval_result");
 
@@ -55,7 +55,7 @@ internal sealed class PlaybookActionConfiguration : IEntityTypeConfiguration<Pla
         builder.Property(entity => entity.UpdatedAtUtc)
                .HasColumnName("updated_at_utc");
 
-        // P5 cohort-monitoring clock — additive nullable column. Plaintext (a timestamp), not encrypted.
+        // Cohort-monitoring clock — additive nullable column. Plaintext (a timestamp), not encrypted.
         builder.Property(entity => entity.EnabledAtUtc)
                .HasColumnName("enabled_at_utc");
 

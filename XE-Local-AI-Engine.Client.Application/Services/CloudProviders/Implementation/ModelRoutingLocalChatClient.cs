@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
-///     THE reconnect (Lane A plan §7.4): the single local-branch <see cref="IChatClient" /> that replaces the
+///     The single local-branch <see cref="IChatClient" /> that replaces the
 ///     fixed-model local client. Per request it reads <see cref="ChatOptions.ModelId" />, resolves that model to its
 ///     provider through <see cref="ILocalModelProviderResolver" /> (persisted map + default), asks the provider for a
 ///     model-specific chat client, and delegates. For llama-server the provider hands back a <em>deferred</em> client

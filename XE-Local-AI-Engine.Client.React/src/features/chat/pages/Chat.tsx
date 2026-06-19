@@ -158,7 +158,7 @@ export function Chat() {
 		setAgentModeEnabled,
 		setSelectedAgentId,
 	} = useNodeChatPreferencesStore((state) => state.actions);
-	// Developer mode + per-send sampling overrides (§7.9 of plan). Read directly from global stores.
+	// Developer mode + per-send sampling overrides. Read directly from global stores.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
@@ -187,7 +187,7 @@ export function Chat() {
 		...withResponseValidation(listLocalModelsOptions()),
 		// Keep the prior model list while a refetch is in flight so a transient response that momentarily omits
 		// the selected model can't trip the reconcile effect and reset selectedModel to the default (which would
-		// undercut the persisted selection from #4).
+		// undercut the persisted model selection restored from localStorage).
 		placeholderData: keepPreviousData,
 	});
 
@@ -207,7 +207,7 @@ export function Chat() {
 			cloudModelOptions.find((option) => option.value === selectedModel),
 		[cloudModelOptions, modelOptions, selectedModel],
 	);
-	// Per-model capability gating (plan §6.6): only offer the reasoning-effort menu when the active model
+	// Per-model capability gating: only offer the reasoning-effort menu when the active model
 	// advertises the Ollama `thinking` capability — otherwise collapse to ["none"] so the composer disables the
 	// menu (it disables at length <= 1) and a non-reasoning model can never send a stale effort. Tool controls
 	// gate on the model's `tools` capability (combined with the node-wide gate inside ChatInputArea).
@@ -526,7 +526,7 @@ export function Chat() {
 						agentDefinitionId: effectiveAgentId,
 						// Include sampling overrides only when developer mode is on and at least one field is set.
 						// toWireSamplingOptions returns undefined when all fields are null → omitted from wire payload
-						// (§3 byte-identical invariant: OFF path is byte-identical to today).
+						// (byte-identical invariant: the OFF path is byte-identical to the default non-dev path).
 						samplingOptions: developerMode ? toWireSamplingOptions(samplingOptions) : undefined,
 					},
 					abortController.signal,
@@ -927,7 +927,7 @@ export function Chat() {
 	);
 
 	// Only an actual error / remote-view-only condition surfaces a notice; the always-on informational banner
-	// was dropped (RC #3). When undefined, ChatDisplayShell renders no alert.
+	// was dropped. When undefined, ChatDisplayShell renders no alert.
 	const notice = useMemo(
 		() =>
 			streamError ? (
@@ -951,7 +951,7 @@ export function Chat() {
 		[conversationsQuery.error, conversationsQuery.isError, isRemoteConversation, streamError, t],
 	);
 
-	// A9 module-readiness gate (platform parity): block the chat behind a connecting/error state until the
+	// Module-readiness gate (platform parity): block the chat behind a connecting/error state until the
 	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.
 	if (connectionReadiness !== "ready") {
 		return (

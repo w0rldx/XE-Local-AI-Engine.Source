@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Models;
 ///     conversation is bound to a <c>Kind=Orchestrator</c> definition whose effective model is tool-capable (orchestration).
 ///     It is OPTIONAL: <c>null</c> on the single-agent loopback path and on the encrypted/server path, where the
 ///     config hash stays byte-identical to today. The orchestration resolver produces it from a topology + the
-///     per-participant P3 tool projection; the invocation factory compiles it 1:1 into the workflow participants, and
+///     per-participant tool projection (the same projection the single-agent path uses); the invocation factory compiles it 1:1 into the workflow participants, and
 ///     <c>RuntimePackageConfigHash</c> folds it deterministically so a topology/participant edit invalidates resume.
 /// </summary>
 public sealed record OrchestrationSpec
@@ -28,7 +28,7 @@ public sealed record OrchestrationSpec
 
 /// <summary>
 ///     One participant of a compiled orchestration. Maps 1:1 onto a workflow agent: its prompt, model, reasoning, and
-///     the per-participant capability-gated, approval-flagged tool projection (same P3 contract as the single-agent
+///     the per-participant capability-gated, approval-flagged tool projection (the same contract as the single-agent
 ///     path). <see cref="Key" /> is the stable correlation id (the participant's agent-definition id as a string).
 /// </summary>
 public sealed record OrchestrationSpecParticipant

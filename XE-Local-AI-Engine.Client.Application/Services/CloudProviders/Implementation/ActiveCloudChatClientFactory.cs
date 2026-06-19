@@ -9,17 +9,17 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
-/// Resolves the active cloud chat client on demand (plan §0/C2, §7.2). Per the review resolution (§0/C2),
+/// Resolves the active cloud chat client on demand.
 /// <b>Codex selection keys off Codex-session presence</b> — a live OAuth session in the separate encrypted
 /// <see cref="ICodexTokenStore"/> — rather than the Azure-shaped <see cref="StoredCloudCredentials"/>. Azure
 /// selection continues to key off the persisted credential's <see cref="StoredCloudCredentials.ProviderName"/>.
 ///
 /// <para>
 /// Codex takes precedence when both are present: signing in to Codex is the operator's explicit selection, and
-/// signing out (clearing the session) reverts to Azure-or-local on the next send (the C2 runtime-switch property).
+/// signing out (clearing the session) reverts to Azure-or-local on the next send (the runtime-switch property).
 /// A Codex session is <em>usable</em> when it is non-expired (skew-adjusted) or carries a refresh token the auth
 /// handler can rotate; an expired session with no refresh token still selects Codex (never silent-local) but the
-/// cloud factory surfaces a typed re-auth error rather than building a doomed client (§7.2).
+/// cloud factory surfaces a typed re-auth error rather than building a doomed client.
 /// </para>
 ///
 /// <para>
@@ -31,7 +31,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 /// </para>
 ///
 /// <para>
-/// <b>Swapped-out clients are NOT disposed</b> (concurrency-safety, plan T8/CRITICAL): the singleton chat client
+/// <b>Swapped-out clients are NOT disposed</b> (concurrency-safety): the singleton chat client
 /// is called by parallel requests, and a request may be mid-stream on the previously cached wrapper when the
 /// selection flips. The cloud wrappers own nothing real — the HttpClient/handler chain is owned and
 /// disposal-protected by the singleton <see cref="ICodexOAuthChatClientFactory"/> / Azure factory — so a
@@ -70,7 +70,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
     private string? _cachedFingerprint;
     private IChatClient? _cachedClient;
 
-    // Selection snapshot cache (MED: keeps the per-send token-store read + DataProtection off the hot path).
+    // Selection snapshot cache: keeps the per-send token-store read + DataProtection off the hot path.
     private CloudSelection? _cachedSelection;
     private DateTimeOffset _selectionCachedAtUtc = DateTimeOffset.MinValue;
     private bool _selectionCacheValid;

@@ -4,9 +4,9 @@ using Microsoft.Extensions.AI;
 
 /// <summary>
 ///     Builds and runs an Open Canvas (Preview) workflow as a MAF graph in-process over caller-supplied
-///     <strong>node-local</strong> <see cref="IChatClient" />s (invariant #1 — the runner NEVER resolves DI; Lane C
+///     <strong>node-local</strong> <see cref="IChatClient" />s (invariant: the runner NEVER resolves DI; the caller
 ///     resolves <c>ILocalModelProvider.CreateChatClient</c> per distinct model and hands a resolver in). All
-///     <c>Microsoft.Agents.AI.Workflows</c> usage is confined behind this seam (invariant #3).
+///     <c>Microsoft.Agents.AI.Workflows</c> usage is confined behind this seam (invariant: no MAF type leaks past it).
 /// </summary>
 public interface IPreviewWorkflowRunner
 {
@@ -24,8 +24,8 @@ public interface IPreviewWorkflowRunner
 }
 
 /// <summary>
-///     A single in-flight Preview workflow run. Holds the underlying MAF <c>StreamingRun</c> in RAM (decision #3 —
-///     session-only resume, no disk checkpoint). Disposal swallows-logs (mirrors <c>OrchestrationRunSession</c>).
+///     A single in-flight Preview workflow run. Holds the underlying MAF <c>StreamingRun</c> in RAM
+///     (session-only resume, no disk checkpoint). Disposal swallows-logs (mirrors <c>OrchestrationRunSession</c>).
 /// </summary>
 public interface IPreviewWorkflowRunSession : IAsyncDisposable
 {
