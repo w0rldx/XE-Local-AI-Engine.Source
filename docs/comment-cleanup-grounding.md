@@ -123,8 +123,8 @@ Sources:
 ## Launch and build toolchain comments
 
 - `global.json` comments and docs should treat the SDK version and `rollForward` policy as a .NET CLI selection contract, not as the runtime target framework.
-- Aspire AppHost comments should describe local orchestration/resources and launch profiles; installer clean-install evidence remains a separate release gate.
-- Aspire comments should distinguish local developer orchestration from production installer/runtime lifecycle, because AppHost launch profiles do not validate clean-install package behavior.
+- Aspire AppHost comments should describe local orchestration/resources and launch profiles; packaging/release-gate evidence remains a separate concern.
+- Aspire comments should distinguish local developer orchestration from production packaging/runtime lifecycle, because AppHost launch profiles do not validate packaged release behavior.
 - ASP.NET Core environment-variable comments should distinguish host configuration, app configuration, and double-underscore hierarchical keys. Do not imply that AppHost, installers, user shells, and package scripts own the same variable lifetime.
 - Release comments should treat `dotnet publish` as the deployment-preparation command and should keep runtime identifiers plus self-contained settings explicit when documenting MSI/deb/rpm artifact inputs.
 - React client launch docs should preserve the repository's explicit Node engine and pnpm package-manager pins before citing generic frontend tooling examples.
