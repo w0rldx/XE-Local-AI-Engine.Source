@@ -33,5 +33,3 @@ Use the repository validation wrapper rather than ad-hoc commands:
 ```bash
 bash .opencode/scripts/project-validate.sh --scope changed --serial
 ```
-
-For release work, also run the XE subtree validation described in `docs/host-agent/release-and-operations.md`.

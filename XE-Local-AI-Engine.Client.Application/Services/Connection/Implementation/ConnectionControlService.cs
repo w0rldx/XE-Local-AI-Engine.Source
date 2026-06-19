@@ -74,7 +74,6 @@ public sealed class ConnectionControlService(
             WorkerConnectionState.Reconnecting => "reconnecting",
             WorkerConnectionState.Pairing => "pairing",
             WorkerConnectionState.Error => "error",
-            WorkerConnectionState.PreparingModel => "preparing-model",
             _ => "unknown"
         };
     }
