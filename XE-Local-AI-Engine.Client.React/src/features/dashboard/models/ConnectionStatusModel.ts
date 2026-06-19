@@ -1,4 +1,4 @@
-export type ConnectionStateValue = "disconnected" | "connecting" | "connected" | "reconnecting" | "pairing" | "error" | "preparing-model" | "unknown";
+export type ConnectionStateValue = "disconnected" | "connecting" | "connected" | "reconnecting" | "pairing" | "error" | "unknown";
 
 // Stricter domain view-model the dashboard renders. The generated connection-status response has all-optional
 // fields (`x?: T`); this shape coalesces every field to a required value so the page never null-checks the wire
@@ -24,7 +24,6 @@ export function connectionStatusColor(state: string): "blue" | "green" | "orange
 			return "green";
 		case "connecting":
 		case "reconnecting":
-		case "preparing-model":
 		case "pairing":
 			return "blue";
 		case "error":
@@ -38,8 +37,6 @@ export function connectionStatusColor(state: string): "blue" | "green" | "orange
 
 export function connectionStatusLabel(state: string): string {
 	switch (state) {
-		case "preparing-model":
-			return "Preparing model";
 		case "reconnecting":
 			return "Reconnecting";
 		case "connecting":

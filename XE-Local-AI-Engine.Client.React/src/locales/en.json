@@ -829,7 +829,6 @@
 				"privacyNote": "Connection controls never return access or refresh tokens to the browser."
 			},
 			"connectionStatus": {
-				"preparingModel": "Preparing model",
 				"reconnecting": "Reconnecting",
 				"connecting": "Connecting",
 				"connected": "Connected",

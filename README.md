@@ -1,7 +1,7 @@
 # XE Local AI Engine
 
 XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform
-`WorkerHub` connection, and coordinates local model/runtime workflows through HostAgent and Tray components.
+`WorkerHub` connection, and runs the local model runtime in-process via the llama.cpp supervisor.
 
 The repository is being prepared for an RC release. Release documentation and validation evidence live in this repo and must stay current with runtime behavior.
 
@@ -11,9 +11,7 @@ The repository is being prepared for an RC release. Release documentation and va
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
   connection.
-- **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, models, and HostAgent actions.
-- **HostAgent.Windows / HostAgent.Linux** — local substrate components for Windows-managed WSL2 and Linux-native runtime management.
-- **Tray Launcher** (`XE-Local-AI-Engine.Tray`) — desktop entry point, status surface, and local start/stop/restart control.
+- **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, and models.
 - **Providers and agents** — local provider abstractions, Ollama provider integration, and shared agent execution loop.
 - **Scheduler** — Quartz.NET-backed job scheduler with job definitions, run history, cancellation, and live run updates over a local SignalR hub (`Services/Scheduler`, `src/features/scheduler`).
 - **Model-fit** — on-demand model recommendation and benchmark runs against a digest-pinned, approved utility image, exposed as cache-only reads plus a scheduler-driven refresh (`Services/ModelFit`,
@@ -26,8 +24,7 @@ The repository is being prepared for an RC release. Release documentation and va
 ## Architecture rules
 
 - Only the Node Web Server talks to the C0re platform over `WorkerHub`.
-- HostAgent and Tray are local substrate components only; they do not connect to the platform.
-- Worker credentials, admin tokens, HMAC secrets, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to the browser or written to logs/transcripts.
+- Worker credentials, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to the browser or written to logs/transcripts.
 - Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
 - Windows and Linux installers must not create background autostart behavior unless a new approved plan changes that contract.
 
