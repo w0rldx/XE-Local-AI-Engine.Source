@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Ollama;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 using OllamaSharp.Models;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>

@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>

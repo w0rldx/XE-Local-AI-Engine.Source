@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     App-controlled lifecycle of GGUF model files on local disk and the cross-lane storage seam. Lane A consumes the

@@ -5,7 +5,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
