@@ -37,8 +37,6 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
-using XE_Local_AI_Engine.Client.Services.HostAgent;
-using XE_Local_AI_Engine.Client.Services.HostAgent.Implementation;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Client.Services.Insights.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -47,8 +45,6 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage.Implementation;
-using XE_Local_AI_Engine.Client.Services.Manager;
-using XE_Local_AI_Engine.Client.Services.Manager.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -68,7 +64,6 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
-using XE_Local_AI_Engine.HostAgent.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
@@ -80,21 +75,10 @@ internal static class AddNodeHostAgentAndInvocationExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        builder.Services.AddSingleton(HostAgentClientOptions.FromConfiguration(configuration));
-        builder.Services.AddSingleton<IHostAgentClient, GrpcHostAgentClient>();
-        builder.Services.AddSingleton(HostAgentStartupGateOptions.FromConfiguration(configuration));
-        builder.Services.AddSingleton<IHostAgentReadinessClient>(sp =>
-        {
-            var options = sp.GetRequiredService<HostAgentStartupGateOptions>();
-            return options.Enabled
-                ? ActivatorUtilities.CreateInstance<GrpcHostAgentReadinessClient>(sp)
-                : new DisabledHostAgentReadinessClient();
-        });
         builder.Services.AddSingleton(sp => new Lazy<IHubMessageSender>(() => sp.GetRequiredService<IHubMessageSender>()));
         builder.Services.AddSingleton(sp => new Lazy<IWorkerEventDispatcher>(() => sp.GetRequiredService<IWorkerEventDispatcher>()));
         builder.Services.AddSingleton<ModelNameValidator>();
         builder.Services.AddSingleton<IRuntimePackageValidator, RuntimePackageValidator>();
-        builder.Services.AddSingleton<IHostAgentManagerService, HostAgentManagerService>();
         builder.Services.AddSingleton<INodeAeadCipher, AesGcmNodeAeadCipher>();
         builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
         builder.Services.AddSingleton<IRuntimePackageEnvelopeAssembler, RuntimePackageEnvelopeAssembler>();
