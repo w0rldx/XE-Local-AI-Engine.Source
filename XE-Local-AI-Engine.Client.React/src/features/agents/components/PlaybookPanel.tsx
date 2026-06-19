@@ -82,7 +82,7 @@ function errorMessage(error: unknown, fallback: string): string {
 type EditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
 
 // Per-agent playbook governance panel. Lists the agent's playbook actions in injection order
-// (ascending Priority), shows each action's provenance (P1 renders source "Manual"), and offers a per-action
+// (ascending Priority), shows each action's provenance (e.g. "Manual" for hand-authored actions), and offers a per-action
 // enable/disable toggle plus add/edit/delete and reorder-by-priority. Capability-gated under agentManagement —
 // when `enabled` is false it renders nothing.
 export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: PlaybookPanelProps) {

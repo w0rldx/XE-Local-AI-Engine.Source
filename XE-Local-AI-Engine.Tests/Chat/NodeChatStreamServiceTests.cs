@@ -871,8 +871,8 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessage_PendingMessageCarriesAgentName()
     {
-        // Locks the §7.4 hoist: the resolve happens BEFORE the placeholder is minted, so the placeholder request (the
-        // AssistantPending source) already carries the agent name — not just the terminal.
+        // Locks the resolve-before-placeholder ordering: the resolve happens BEFORE the placeholder is minted, so the
+        // placeholder request (the AssistantPending source) already carries the agent name — not just the terminal.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -1029,7 +1029,7 @@ public sealed class NodeChatStreamServiceTests
     {
         // Negative guard: editing the Default Assistant bumps its Version (AgentDefinitionStore.cs:131), so the resolved
         // package's config hash differs from the unedited (version 1) legacy package — mode-off is NOT frozen to the
-        // embedded prompt once the operator edits the default (documented as intended, §15).
+        // embedded prompt once the operator edits the default (this is intended behavior).
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -1149,7 +1149,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenRequestModelNull_ResolvesOfferWithOperatorNodeDefaultModel()
     {
-        // MED-4 regression: a "Local default" send carries a null request model. The offer-time active model must
+        // Regression guard: a "Local default" send carries a null request model. The offer-time active model must
         // resolve to the operator's node-default selection (StoredNodeSettings.DefaultModelName), NOT the static
         // config fallback — otherwise a tool-capable node default would never reach the capability gate and
         // run_in_agent_home would be withheld even though the operator selected a tool-capable model.
@@ -1200,7 +1200,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenRequestModelNullAndNoNodeDefault_ResolvesOfferWithStaticConfigDefault()
     {
-        // MED-4 lower bound: with no operator node default the offer-time active model falls through to the static
+        // Lower-bound guard: with no operator node default the offer-time active model falls through to the static
         // config fallback, so the pre-fix behaviour is preserved for a node that never set a default model.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -1248,7 +1248,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenActiveModelIsCodexCloudModel_SkipsOllamaClassificationForCapabilities()
     {
-        // T2 capability gating: a Codex cloud model is not an Ollama model. The capability gate must use the Codex
+        // Capability gating: a Codex cloud model is not an Ollama model. The capability gate must use the Codex
         // provider's declared matrix (CodexProviderCapabilities.V0), NOT the Ollama /api/show classification — so the
         // classification service is never consulted for a Codex model id (which the local runtime has never seen).
         var conversationId = Guid.NewGuid();
@@ -1300,9 +1300,8 @@ public sealed class NodeChatStreamServiceTests
                 models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
                 Arg.Any<CancellationToken>());
 
-        // Tool calling is now enabled for ALL Codex ids (de-risk plan D1), so the requested local tool offer
-        // (UseLocalTools: true) is honored for the Codex model — capabilities still come from the Codex matrix, not
-        // the Ollama classifier.
+        // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
+        // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier.
         offerProvider.Received().GetOfferedTools("gpt-5.5");
     }
 

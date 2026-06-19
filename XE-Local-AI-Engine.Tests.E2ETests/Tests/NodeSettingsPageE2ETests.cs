@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Per-page interaction E2E tests for the node-settings page (plan M2, wave-2).
+///     Per-page interaction E2E tests for the node-settings page.
 ///     The real backend answers GET /api/local/v1/node-settings 200 in-process, so the
 ///     form populates from actual data stored in the per-session temp SQLite.
 ///     Save writes back to the same SQLite — harmless and verifiable via the success alert.

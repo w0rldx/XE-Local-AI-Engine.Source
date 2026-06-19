@@ -7,12 +7,12 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// On-WIRE reasoning-summary + reasoning-effort assertions (2026-06-08 Codex reasoning display). Proves the Codex
-/// Responses request the SDK actually POSTs opts into reasoning summaries (<c>reasoning.summary == "auto"</c>,
-/// decision D2 fixed) and carries the per-send effort (<c>reasoning.effort</c>) mapped from the chat reasoning
+/// On-WIRE reasoning-summary + reasoning-effort assertions for the Codex reasoning display. Proves the Codex
+/// Responses request the SDK actually POSTs opts into reasoning summaries (<c>reasoning.summary == "auto"</c>)
+/// and carries the per-send effort (<c>reasoning.effort</c>) mapped from the chat reasoning
 /// effort, WHILE preserving the store=false invariant and omitting server-side state ids. HTTP is mocked, so this
-/// body-shape assertion is the correctness proof; the MEAI summary→TextReasoningContent mapping is a separate
-/// live-verify gate (findings §Risks).
+/// body-shape assertion is the correctness proof; the MEAI summary→TextReasoningContent mapping is verified
+/// separately against a live model.
 /// <para>
 /// The effort reaches the Codex boundary via <see cref="ChatOptions.AdditionalProperties"/>: the agent factory sets
 /// the Codex-only <c>codex_reasoning_effort</c> raw-string side channel for a thinking-capable model (full fidelity,

@@ -35,8 +35,8 @@ public sealed class ModelFitRequestValidator
         };
 
     /// <summary>
-    ///     The allowlisted providers. <c>llama.cpp</c> is the local advisor's in-process target (Lane C runtime
-    ///     re-architecture); <c>ollama</c> is retained for back-compat with any legacy recommendation snapshot key.
+    ///     The allowlisted providers. <c>llama.cpp</c> is the local advisor's in-process target; <c>ollama</c> is
+    ///     retained for back-compat with any legacy recommendation snapshot key.
     ///     Matched ordinally and case-sensitively.
     /// </summary>
     public static readonly IReadOnlySet<string> AllowedProviders =

@@ -18,10 +18,12 @@ using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ModelFitRefreshService" /> (the local model advisor) tests (plan §12): the refresh path profiles
-///     hardware, discovers candidate GGUF files (faked Lane B), estimates each file's fit, drops the non-fitting /
-///     insufficient-metadata files, ranks the survivors, persists normalized rows and replaces the latest snapshot;
-///     the default quant is <c>Q4_K_M</c> with override honored; download/start delegate to Lane B then Lane A in order.
+///     <see cref="ModelFitRefreshService" /> (the local model advisor) tests: the refresh path profiles
+///     hardware, discovers candidate GGUF files (via a faked <see cref="IHuggingFaceGgufDiscovery" />), estimates each
+///     file's fit, drops the non-fitting / insufficient-metadata files, ranks the survivors, persists normalized rows
+///     and replaces the latest snapshot; the default quant is <c>Q4_K_M</c> with override honored; download/start
+///     delegate to the GGUF model store (<see cref="IGgufModelStore" />) then the llama-server supervisor
+///     (<see cref="ILlamaServerProcessSupervisor" />) in order.
 /// </summary>
 public sealed class ModelFitRefreshServiceTests
 {
@@ -114,7 +116,7 @@ public sealed class ModelFitRefreshServiceTests
     }
 
     [Test]
-    public async Task Advisor_DownloadThenStart_CallsLaneBThenLaneA()
+    public async Task Advisor_DownloadThenStart_CallsStoreThenSupervisor()
     {
         var snapshotStore = new InMemoryModelFitSnapshotStore();
         var recommendationStore = new InMemoryModelFitRecommendationStore();

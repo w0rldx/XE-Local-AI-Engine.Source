@@ -36,7 +36,7 @@ interface UseModelPullResult {
 	pullingModelName: string | undefined;
 }
 
-// Shared single pull engine (invariant §3.3): BOTH the recommendation Pull button and the ModelManagement pull
+// Shared single pull engine (invariant: a single code path drives every pull): BOTH the recommendation Pull button and the ModelManagement pull
 // dialog drive pulls through this one hook. It consumes the hand-wired NDJSON pull stream, surfaces ONE in-place
 // progress toast keyed `model-pull-${modelName}` (sticky+loading while downloading, finalized success/error), and
 // invalidates the installed-models TanStack query on completion so the authoritative list refetches. The toast and

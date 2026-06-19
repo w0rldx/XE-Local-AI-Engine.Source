@@ -24,9 +24,9 @@ if (builder.Environment.IsDevelopment())
     nodeSqlite = nodeSqlite.WithSqliteWeb();
 }
 
-// Lane D removed the in-Aspire HostAgent.Linux (Docker) sandbox/runtime project and the connection-layer
-// teardown removed the HostAgent gRPC client entirely: inference and the AgentHome sandbox now run as host
-// processes (process sandbox provider), so no HostAgent resource or socket/HMAC/startup-gate wiring exists.
+// The in-Aspire HostAgent.Linux (Docker) sandbox/runtime project and the HostAgent gRPC client were removed:
+// inference and the AgentHome sandbox now run as host processes (process sandbox provider), so no HostAgent
+// resource or socket/HMAC/startup-gate wiring exists.
 
 var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithExternalHttpEndpoints()

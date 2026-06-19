@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Insights;
 ///     ) and how confident it is. The agent only PROPOSES — it
 ///     persists nothing and decides nothing; the service validates the evidence and writes <c>Suggested</c> actions for
 ///     human review. Implementations run a node-local model (never the cloud-capable shared chat client) so feedback
-///     comments never leave the node (Playbook doc §7 privacy). The seam keeps the model off the hot send path and lets
+///     comments never leave the node (privacy invariant). The seam keeps the model off the hot send path and lets
 ///     tests substitute a deterministic fake (no Ollama in CI).
 /// </summary>
 public interface IPlaybookAnalysisAgent

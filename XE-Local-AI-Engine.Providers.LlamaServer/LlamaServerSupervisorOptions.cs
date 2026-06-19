@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Shared eviction + port-allocation policy for the supervisor (decision #15). One idle-TTL + loaded-cap + reaper
-///     policy governs all <c>(model, role)</c> processes; chat and embedding processes both count against the cap
-///     (decision #16). Bound from node config at DI time (T4).
+///     Shared eviction + port-allocation policy for the supervisor. One idle-TTL + loaded-cap + reaper
+///     policy governs all <c>(model, role)</c> processes; chat and embedding processes both count against the cap.
+///     Bound from node config at DI time.
 /// </summary>
 public sealed class LlamaServerSupervisorOptions
 {
-    /// <summary>Max number of concurrently-loaded <c>(model, role)</c> processes before spawn rejects (decision #18).</summary>
+    /// <summary>Max number of concurrently-loaded <c>(model, role)</c> processes before spawn rejects.</summary>
     public int MaxLoadedProcesses { get; init; } = 3;
 
     /// <summary>Idle duration after which an unused process is evicted by the reaper.</summary>

@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>BinaryManager_PicksVariant_ByDetectedGpu</c>: the OS-aware GPU-variant selection rule
+///     GPU-variant selection: the OS-aware selection rule
 ///     (NVIDIA→CUDA on Windows / →Vulkan on Linux, AMD/Intel→Vulkan, none→CPU) plus pinned-vs-upgrade asset
 ///     resolution. No network and no real GPU probe — the vendor probe is faked.
 /// </summary>

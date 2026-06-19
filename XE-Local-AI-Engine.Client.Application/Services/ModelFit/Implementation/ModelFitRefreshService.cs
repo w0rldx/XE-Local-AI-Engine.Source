@@ -11,16 +11,17 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     The local model advisor — the box-aware rewrite of the Docker/llmfit recommendation backend (plan §7.3). On each
-///     refresh it profiles the node hardware (Lane C1 <see cref="IHardwareProfiler" />), discovers candidate GGUF repos
-///     and inspects their files (Lane B <see cref="IHuggingFaceGgufDiscovery" />), estimates each file's memory fit with
+///     The local model advisor — the box-aware rewrite of the Docker/llmfit recommendation backend. On each
+///     refresh it profiles the node hardware (<see cref="IHardwareProfiler" />), discovers candidate GGUF repos
+///     and inspects their files (<see cref="IHuggingFaceGgufDiscovery" />), estimates each file's memory fit with
 ///     the pure <see cref="MemoryFitEstimator" />, drops the files that do not fit or lack the header metadata to compute
 ///     a fit, ranks the survivors by headroom, serializes them to the advisor recommendation JSON, parses them through
 ///     the reused <see cref="RecommendationJsonParser" /> scaffold and replaces the cached recommendation snapshot.
 ///     <para>
 ///         <b>Three seams stay separate.</b> The advisor never spawns processes or downloads files during a refresh —
 ///         that is the operator-driven download/start path (<see cref="DownloadAsync" /> / <see cref="StartAsync" />,
-///         consumed by Lane C3 endpoints), which delegates to Lane B's store and Lane A's supervisor respectively.
+///         consumed by the model-fit endpoints), which delegates to the GGUF model store and the llama-server
+///         process supervisor respectively.
 ///     </para>
 ///     <para>
 ///         It owns NO scheduler state and publishes no SignalR — the dispatcher owns the run row. Logs carry the
@@ -29,10 +30,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 public sealed class ModelFitRefreshService : IModelFitRefreshService
 {
-    /// <summary>Sentinel written into the plaintext <c>ApprovedImageId</c> column now that approved images are gone (plan §6.1).</summary>
+    /// <summary>Sentinel written into the plaintext <c>ApprovedImageId</c> column now that approved images are gone.</summary>
     private const string AdvisorSnapshotSource = "local-advisor";
 
-    /// <summary>Sentinel written into the plaintext <c>ProviderName</c> column — the advisor targets llama.cpp only (plan §6.1).</summary>
+    /// <summary>Sentinel written into the plaintext <c>ProviderName</c> column — the advisor targets llama.cpp only.</summary>
     private const string AdvisorProviderName = "llama.cpp";
 
     /// <summary>Default context window the KV-cache fit is sized against when the request supplies no <c>CtxTarget</c>.</summary>
@@ -84,7 +85,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Benchmark is deferred (recommend-only path, plan §2 decision #8). Reject before any snapshot row is created.
+        // Benchmark is deferred — this is the recommend-only path. Reject before any snapshot row is created.
         if (request.Operation != ModelFitOperation.Recommend)
         {
             return Failed(snapshotId: null, "Benchmark refresh is not yet enabled.");
@@ -212,7 +213,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Operator-driven download of a chosen GGUF file (Lane C3 endpoint calls this). Delegates to Lane B's
+    ///     Operator-driven download of a chosen GGUF file (a model-fit endpoint calls this). Delegates to
     ///     <see cref="IGgufModelStore.EnsureModelAsync" />; the advisor never downloads during a refresh.
     /// </summary>
     public Task<GgufModelHandle> DownloadAsync(GgufModelRequest request,
@@ -224,8 +225,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Operator-driven start of a downloaded model (Lane C3 endpoint calls this). Delegates to Lane A's supervisor
-    ///     ensure-running for the requested role and returns the local endpoint; the advisor never spawns during a refresh.
+    ///     Operator-driven start of a downloaded model (a model-fit endpoint calls this). Delegates to the
+    ///     llama-server process supervisor's ensure-running for the requested role and returns the local endpoint;
+    ///     the advisor never spawns during a refresh.
     /// </summary>
     public Task<LlamaServerEndpoint> StartAsync(string modelName, ModelRole role, CancellationToken cancellationToken)
     {
@@ -280,7 +282,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <summary>
     ///     Inspects one repo, selects its best quant file, estimates the fit, and returns a ranked candidate — or
     ///     <see langword="null" /> when the repo has no usable file, the file lacks the metadata to compute a weights term,
-    ///     or the estimate does not fit the budget (plan §7.3 tolerance).
+    ///     or the estimate does not fit the budget.
     /// </summary>
     private async Task<AdvisorRecommendation?> EvaluateRepoAsync(string repoId,
         string quant,

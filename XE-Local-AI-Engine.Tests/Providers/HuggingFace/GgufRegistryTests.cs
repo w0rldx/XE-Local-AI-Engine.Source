@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
-///     Plan §12 registry rows: list/resolve a present model by name, and self-heal a corrupt/missing manifest by
+///     GGUF registry: list/resolve a present model by name, and self-heal a corrupt/missing manifest by
 ///     rescanning the models directory. No network.
 /// </summary>
 public sealed class GgufRegistryTests
@@ -41,7 +41,7 @@ public sealed class GgufRegistryTests
         AssertEx.NotNull(found);
         AssertEx.Equal(filePath, found!.LocalPath);
 
-        // The A-side LocalModelDescriptor mapping holds: a present entry resolves to a real on-disk path.
+        // The LocalModelDescriptor mapping holds: a present entry resolves to a real on-disk path.
         AssertEx.True(File.Exists(found.LocalPath));
     }
 

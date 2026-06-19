@@ -27,8 +27,8 @@ internal sealed class PlaybookAnalysisService(
             return new PlaybookAnalysisOutcome(false, false, [], 0, 0, 0);
         }
 
-        // §6 #1 — never act on a single signal: if the aggregate is below the occurrence threshold, don't even invoke
-        // the model. A sub-threshold run writes nothing.
+        // Never act on a single signal: if the aggregate is below the occurrence threshold, don't even invoke the
+        // model. A sub-threshold run writes nothing.
         if (!insights.Overall.MeetsThreshold)
         {
             _logger.LogInformation("Skipping playbook analysis for agent {AgentId}: feedback below the occurrence threshold.", agentDefinitionId);
@@ -58,7 +58,7 @@ internal sealed class PlaybookAnalysisService(
             if (!IsValidProposal(proposal, evidenceIds))
             {
                 rejected++;
-                // §6 #2 — an action with no (or invented) evidence hallucinates a root cause; drop it, never store it.
+                // An action with no (or invented) evidence hallucinates a root cause; drop it, never store it.
                 _logger.LogWarning("Rejected an analysis proposal for agent {AgentId} (missing/invalid evidence or confidence).", agentDefinitionId);
                 continue;
             }

@@ -474,7 +474,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-host-evidence", root));
 
-        AssertEx.Empty(result.Proposals, "an absolute host path in evidence must reject the record (§11)");
+        AssertEx.Empty(result.Proposals, "an absolute host path in evidence must reject the record");
         AssertEx.Equal(1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "absolute host path");
     }
@@ -490,7 +490,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-win-evidence", root));
 
-        AssertEx.Empty(result.Proposals, "a Windows drive-rooted host path in evidence must reject the record (§11)");
+        AssertEx.Empty(result.Proposals, "a Windows drive-rooted host path in evidence must reject the record");
         AssertEx.Equal(1, result.Rejections.Count);
     }
 

@@ -263,7 +263,7 @@ public sealed class ModelFitEndpointTests
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    // HF token: the endpoints NEVER return the token value — only a presence flag (plan §10 / security gate).
+    // HF token: the endpoints NEVER return the token value — only a presence flag (security gate).
     // ──────────────────────────────────────────────────────────────────────
 
     [Test]

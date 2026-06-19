@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     Cross-platform probe for the host's inference-relevant hardware (RAM / VRAM / GPU vendor / CPU / free disk).
-///     Provider-neutral and free of any <c>HostAgent.*</c> dependency (Lane C↔D sequencing gate, plan §7.1/§13).
+///     Provider-neutral and free of any <c>HostAgent.*</c> dependency.
 /// </summary>
 /// <remarks>
 ///     Implementations cache the last <see cref="HardwareProfile" /> in memory; pass <paramref name="forceRefresh" />

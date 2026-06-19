@@ -54,7 +54,7 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
     {
         // Facet path: restrict to conversations that recorded a tool_events row for the scoped tool. tool_events has no
         // message link, so attribution is conversation-level — COUNT(DISTINCT message_id) keeps a tool used many times
-        // in a conversation from inflating each rated message beyond one (the documented P2 attribution limit).
+        // in a conversation from inflating each rated message beyond one (the conversation-level attribution limit).
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               SELECT

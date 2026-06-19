@@ -11,17 +11,17 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public static class LlamaServerServiceCollectionExtensions
 {
     /// <summary>
-    ///     Registers the Lane A model-runtime-core services that exist today: the GPU vendor probe, the OS-aware
-    ///     variant selector, and the llama.cpp binary manager. The supervisor (<see cref="ILlamaServerProcessSupervisor" />)
-    ///     and the provider (<c>ILocalModelProvider</c> for <c>llamacpp</c>) are registered by the later Lane A tasks
-    ///     (T2/T3) and wired into the multi-provider resolver by T4.
+    ///     Registers the model-runtime-core services: the GPU vendor probe, the OS-aware
+    ///     variant selector, and the llama.cpp binary manager, plus the supervisor
+    ///     (<see cref="ILlamaServerProcessSupervisor" />) and the provider (<c>ILocalModelProvider</c> for
+    ///     <c>llamacpp</c>) wired into the multi-provider resolver.
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         <strong>Caller contract:</strong> the consuming application must register a named/typed
     ///         <see cref="System.Net.Http.HttpClient" /> for binary downloads via <c>AddHttpClient</c> (the
     ///         <c>Microsoft.Extensions.Http</c> package is referenced by the Application host, not this provider
-    ///         project) and supply an <see cref="IGgufModelStore" /> — Lane B's real Hugging Face GGUF store
+    ///         project) and supply an <see cref="IGgufModelStore" /> — the Hugging Face GGUF store
     ///         (<c>AddHuggingFaceGgufStore</c>).
     ///     </para>
     /// </remarks>
@@ -34,11 +34,11 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppBinaryManager>(static sp =>
             new LlamaCppBinaryManager(sp.GetRequiredService<HttpClient>()));
 
-        // Options default here so the supervisor is resolvable today; T4 overrides them from node config.
+        // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
 
-        // Process-supervision seams (T2): the OS-aware launcher (tree-kill) + the /health readiness probe.
+        // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
         services.TryAddSingleton<ILlamaServerHealthProbe>(static sp =>
             new LlamaServerHealthProbe(sp.GetRequiredService<HttpClient>()));
@@ -57,10 +57,10 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
-        // SEAM: the llamacpp ILocalModelProvider (T3). Registered over the supervisor + the caller-supplied
-        // IGgufModelStore (Lane B's real Hugging Face GGUF store). Added to the
-        // ILocalModelProvider set alongside Ollama (decision #14); T4 introduces the per-model→provider resolver that
-        // dispatches across both registrations. Singleton — it holds no per-request state; the deferred chat/embedding
+        // SEAM: the llamacpp ILocalModelProvider. Registered over the supervisor + the caller-supplied
+        // IGgufModelStore (the Hugging Face GGUF store). Added to the
+        // ILocalModelProvider set alongside Ollama; the per-model→provider resolver dispatches across both
+        // registrations. Singleton — it holds no per-request state; the deferred chat/embedding
         // clients it hands out own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(

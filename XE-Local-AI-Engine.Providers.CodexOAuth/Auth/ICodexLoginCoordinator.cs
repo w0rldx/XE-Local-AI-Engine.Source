@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 /// <summary>
 /// Coordinates the Operator-facing Codex login lifecycle: start (or supersede) a loopback PKCE login that
 /// returns the authorize URL immediately, and expose a pollable status while the exchange completes in the
-/// background (plan §8). Distinct from <see cref="ICodexAuthService"/>, which owns the per-attempt OAuth
+/// background. Distinct from <see cref="ICodexAuthService"/>, which owns the per-attempt OAuth
 /// mechanics; this owns the singleton pending-login state shared across requests.
 /// </summary>
 public interface ICodexLoginCoordinator

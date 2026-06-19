@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     An <see cref="IChatClient" /> that defers process start to first use (plan §7.3/§7.4): the supervisor's
+///     An <see cref="IChatClient" /> that defers process start to first use: the supervisor's
 ///     <see cref="ILlamaServerProcessSupervisor.EnsureRunningAsync" /> is async while
 ///     <see cref="ILocalModelProvider.CreateChatClient" /> is sync, so the cold-start cost is paid on the first
 ///     <see cref="GetResponseAsync" /> / <see cref="GetStreamingResponseAsync" /> call (a normal first-token delay)

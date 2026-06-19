@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Provenance of a playbook action. P1 writes only <see cref="Manual" /> (human-authored);
-///     <see cref="Analysis" /> (proposed by the deferred analysis agent) is reserved for later phases.
+///     Provenance of a playbook action. The current write path writes only <see cref="Manual" /> (human-authored);
+///     <see cref="Analysis" /> (proposed by the analysis agent) is reserved for the self-improvement flow.
 /// </summary>
 public enum PlaybookActionSource
 {

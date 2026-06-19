@@ -4,9 +4,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>Supervisor_EvictsIdleModel_AfterTtl_AndCapReached_Rejects</c>: the shared idle-TTL evicts an
-///     unused process (decision #15) and a new distinct model is admitted by evicting the idle LRU; when the cap is
-///     full of <em>in-use</em> processes a new distinct model is rejected at start (decision #18).
+///     Verifies that the shared idle-TTL evicts an unused process and a new distinct model is admitted by evicting the
+///     idle LRU; when the cap is full of <em>in-use</em> processes a new distinct model is rejected at start.
 /// </summary>
 public sealed class SupervisorEvictionTests
 {

@@ -15,13 +15,13 @@ public sealed class CodexOptions
 
     /// <summary>
     /// Codex backend base URL (subscription auth, not api.openai.com). The Responses endpoint
-    /// is <c>{BaseUrl}/responses</c>. See plan §3.2.
+    /// is <c>{BaseUrl}/responses</c>.
     /// </summary>
     [Required]
     public Uri BaseUrl { get; set; } = new("https://chatgpt.com/backend-api/codex", UriKind.Absolute);
 
     /// <summary>
-    /// OAuth authorize endpoint (PKCE S256 browser flow). See plan §3.2.
+    /// OAuth authorize endpoint (PKCE S256 browser flow).
     /// <para>
     /// LIVE-CORRECTNESS: the authorize host is the OAuth ISSUER (<c>auth.openai.com</c>), NOT
     /// <c>chatgpt.com</c> — verified against the working opencode reference client (ISSUER =
@@ -32,17 +32,17 @@ public sealed class CodexOptions
     [Required]
     public Uri AuthorizeUrl { get; set; } = new("https://auth.openai.com/oauth/authorize", UriKind.Absolute);
 
-    /// <summary>OAuth token endpoint (code exchange and refresh). See plan §3.2.</summary>
+    /// <summary>OAuth token endpoint (code exchange and refresh).</summary>
     [Required]
     public Uri TokenUrl { get; set; } = new("https://auth.openai.com/oauth/token", UriKind.Absolute);
 
-    /// <summary>Public OAuth client id observed from the Codex CLI. Not a secret. See plan §3.2.</summary>
+    /// <summary>Public OAuth client id observed from the Codex CLI. Not a secret.</summary>
     [Required]
     public string ClientId { get; set; } = "app_EMoamEEZ73f0CkXaXp7hrann";
 
     /// <summary>
     /// Loopback port the local PKCE callback listener binds to. Codex uses 1455.
-    /// The listener is loopback-only (plan §9).
+    /// The listener is loopback-only.
     /// </summary>
     public int CallbackPort { get; set; } = 1455;
 
@@ -71,7 +71,7 @@ public sealed class CodexOptions
     private static readonly string ProductUserAgent = BuildProductUserAgent();
 
     /// <summary>
-    /// Codex <c>originator</c> header value identifying the client family to OpenAI. See plan §3.4.
+    /// Codex <c>originator</c> header value identifying the client family to OpenAI.
     /// <para>
     /// Identifies this client to OpenAI. The default is honest and product-specific (<c>xe-local-ai-engine</c>);
     /// the operator chose this over impersonating the official Codex CLI (ToS). It is bound from the
@@ -84,7 +84,7 @@ public sealed class CodexOptions
     public string Originator { get; set; } = ProductOriginator;
 
     /// <summary>
-    /// <c>User-Agent</c> header value sent on the SSE Responses path. See plan §3.4.
+    /// <c>User-Agent</c> header value sent on the SSE Responses path.
     /// <para>
     /// Identifies this client to OpenAI. The default is honest and product-specific
     /// (<c>XE-Local-AI-Engine/&lt;asm-version&gt;</c>); the operator chose this over impersonating the official
@@ -98,7 +98,7 @@ public sealed class CodexOptions
 
     /// <summary>
     /// Default / selected Codex model id (account-scoped <c>gpt-5.x</c> family). The non-secret selected model is
-    /// persisted by the node's selection store; this is the fallback default. See plan §3.2/D13.
+    /// persisted by the node's selection store; this is the fallback default.
     /// <para>
     /// LIVE-CORRECTNESS: must be a model the ChatGPT-subscription Responses backend accepts. The working opencode
     /// reference client's allow-list is <c>gpt-5.5 / gpt-5.4 / gpt-5.4-mini / gpt-5.3-codex-spark</c>; the earlier

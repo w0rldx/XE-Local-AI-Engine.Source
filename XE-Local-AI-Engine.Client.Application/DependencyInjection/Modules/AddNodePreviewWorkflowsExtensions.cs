@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 /// <summary>
 ///     Registers the Open Canvas (Preview) workflow application services: CRUD/validation service, the singleton
 ///     in-memory execution run registry, the idle-TTL sweeper hosted service, and the no-op event publisher default
-///     (the Client host swaps in a hub-backed publisher). The Lane B <c>IPreviewWorkflowRunner</c> is registered by the
-///     AI.Agent runtime composition root; the canvas store is registered by the workspace/agents module (Lane A).
+///     (the Client host swaps in a hub-backed publisher). The <c>IPreviewWorkflowRunner</c> is registered by the
+///     AI.Agent runtime composition root; the canvas store is registered by the workspace/agents module.
 /// </summary>
 internal static class AddNodePreviewWorkflowsExtensions
 {

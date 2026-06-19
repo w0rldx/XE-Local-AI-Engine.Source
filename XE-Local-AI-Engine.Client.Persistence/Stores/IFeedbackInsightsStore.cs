@@ -37,7 +37,7 @@ public sealed record ToolFeedbackCount(string ToolName, int UpCount, int DownCou
 
 /// <summary>
 ///     A single feedback comment exemplar with its evidence refs. <see cref="MessageId" /> / <see cref="ConversationId" />
-///     are the references the deferred analysis phase (P3) cites as source feedback; <see cref="Comment" /> is the raw
+///     are the references the analysis phase cites as source feedback; <see cref="Comment" /> is the raw
 ///     stored comment (truncation/capping is applied by the application service, not here).
 /// </summary>
 public sealed record FeedbackExemplar(string Rating, string Comment, Guid MessageId, Guid ConversationId, long CreatedAtUtc);

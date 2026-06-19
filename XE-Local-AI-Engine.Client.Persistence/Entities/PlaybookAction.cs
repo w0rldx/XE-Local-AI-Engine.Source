@@ -17,7 +17,7 @@ internal sealed record class PlaybookAction
     ///     Optional retrieval/trigger hint as UTF-8 bytes. Plaintext while tracked in memory; encrypted at rest by
     ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
     ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>trigger_condition</c>.
-    ///     Advisory/display in P1 (not injected); drives retrieval in later phases.
+    ///     Advisory/display only (not injected into the prompt); drives retrieval in later phases.
     /// </summary>
     public byte[]? TriggerCondition { get; set; }
 
@@ -38,7 +38,7 @@ internal sealed record class PlaybookAction
     /// </summary>
     public string? SourceFeedbackIds { get; set; }
 
-    /// <summary>Analysis-agent confidence in [0,1] for a P3-proposed action; null for manual actions. Plaintext (structural).</summary>
+    /// <summary>Analysis-agent confidence in [0,1] for an analysis-proposed action; null for manual actions. Plaintext (structural).</summary>
     public double? Confidence { get; set; }
 
     /// <summary>Regression-gate outcome JSON (ids + pass/fail + counts, no transcripts); null until eval runs; cleared on edit; structural — not sensitive.</summary>

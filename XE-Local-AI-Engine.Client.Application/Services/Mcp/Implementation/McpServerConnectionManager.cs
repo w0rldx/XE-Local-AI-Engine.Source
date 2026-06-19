@@ -237,8 +237,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             var qualifiedName = $"mcp__{slug}__{tool.Name}";
             var named = tool.WithName(qualifiedName);
 
-            // Every MCP tool defaults to requiring approval (locked P4 decision 3); the per-tool auto-execute opt-in
-            // lives in a bound P3 definition's ToolApprovals override, applied at projection — never in the catalog.
+            // Every MCP tool defaults to requiring approval; the per-tool auto-execute opt-in lives in a bound agent
+            // definition's ToolApprovals override, applied at projection — never in the catalog.
             const bool requiresApproval = true;
             var descriptor = new LocalChatToolDescriptor(qualifiedName,
                 named.Description,

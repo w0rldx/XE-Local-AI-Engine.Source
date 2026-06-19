@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Verifies the login coordinator's status lifecycle (plan §8/§12): start exposes the authorize URL and a
+/// Verifies the login coordinator's status lifecycle: start exposes the authorize URL and a
 /// pending status, completion flips the status to succeeded, and a second start supersedes the first.
 /// </summary>
 public sealed class CodexLoginCoordinatorTests
@@ -44,7 +44,7 @@ public sealed class CodexLoginCoordinatorTests
     [Test]
     public async Task Start_WhenLoginCompletes_InvokesOnLoginSucceeded()
     {
-        // N2: a sign-in must invalidate the active-cloud selection snapshot so the next send routes to Codex
+        // A sign-in must invalidate the active-cloud selection snapshot so the next send routes to Codex
         // immediately. The coordinator fires onLoginSucceeded on the success transition; the host wires it to
         // IActiveCloudChatClientFactory.InvalidateSelectionCache().
         var authService = new FakeAuthService();

@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
-///     Node-scoped persistence for the per-model→provider map (Lane A plan §6.1). Keyed by model name
+///     Node-scoped persistence for the per-model→provider map. Keyed by model name
 ///     (case-insensitive). Not encrypted — model names and provider keys are not secrets. The store performs no
 ///     validation and applies no routing default; the caller (the application-layer provider resolver) owns the
 ///     "unmapped model → default provider" policy.

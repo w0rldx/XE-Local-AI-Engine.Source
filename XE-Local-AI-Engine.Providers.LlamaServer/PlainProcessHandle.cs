@@ -5,7 +5,7 @@ using System.Diagnostics;
 /// <summary>
 ///     Fallback process handle for platforms without a dedicated containment primitive (macOS / other Unix). Tree-kill
 ///     terminates the process and its descendants via <see cref="Process.Kill(bool)" /> with <c>entireProcessTree</c>.
-///     Lane A's supervised GPU paths are Windows + Linux; this keeps the launcher functional elsewhere on the CPU floor.
+///     The supervised GPU paths are Windows + Linux; this keeps the launcher functional elsewhere on the CPU floor.
 /// </summary>
 internal sealed class PlainProcessHandle(Process process) : ILlamaServerProcessHandle
 {

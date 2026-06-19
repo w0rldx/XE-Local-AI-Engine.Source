@@ -1,12 +1,12 @@
 namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 
 /// <summary>
-///     Provider-agnostic event the session emits as it drains the MAF stream. Lane C adds the <c>runId</c> when it
-///     republishes these over the hub; the runner itself is run-agnostic (it maps ONE run's events). NO
-///     Microsoft.Agents.AI types leak through this DTO (invariant #3).
+///     Provider-agnostic event the session emits as it drains the MAF stream. The execution service adds the
+///     <c>runId</c> when it republishes these over the hub; the runner itself is run-agnostic (it maps ONE run's
+///     events). NO Microsoft.Agents.AI types leak through this DTO (invariant: MAF stays inside the runner/session).
 ///
-///     === EVENT SCHEMA (mirror in Lane C/D) ===
-///     <see cref="PreviewWorkflowUpdateKind" /> values map to the plan's hub events:
+///     === EVENT SCHEMA (mirror in the execution service + Client) ===
+///     <see cref="PreviewWorkflowUpdateKind" /> values map to the hub events:
 ///       NodeStarted   → preview.node.started   (NodeId set)
 ///       NodeOutput    → preview.node.output    (NodeId + Output set)
 ///       NodeDebug     → preview.node.debug     (NodeId + Output = the upstream payload the Debug node tapped)
@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 ///                                               RequestId = the pause token to pass back to resume)
 ///       RunCompleted  → preview.run.completed  (Output = the terminal workflow output)
 ///       RunFailed     → preview.run.failed     (Error set)
-///     run.started/cancelled are owned by Lane C's execution service (lifecycle), not surfaced by the runner drain.
+///     run.started/cancelled are owned by the execution service (lifecycle), not surfaced by the runner drain.
 /// </summary>
 public sealed record PreviewWorkflowUpdate
 {

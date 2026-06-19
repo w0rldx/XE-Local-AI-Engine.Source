@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Orchestration topology (orchestration). A Kind=Orchestrator agent definition carries its handoff topology as a raw
 // JSON string (orchestrationTopologyJson on the wire). This module owns the typed view-model + Zod schema that the
-// form section serializes to/from that string. The shape mirrors the backend contract (Lane B/C, plan §4.1, camelCase):
+// form section serializes to/from that string. The shape mirrors the backend contract (camelCase):
 //   { version, triageAgentDefinitionId, participantAgentDefinitionIds[], handoffs[{from,to,reason?}],
 //     maxTurnsPerAgent, returnToPrevious }
 // The triage is THIS definition's own id and is always included in participantAgentDefinitionIds.

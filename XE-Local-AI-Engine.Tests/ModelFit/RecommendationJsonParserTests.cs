@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Lane E tests for <see cref="RecommendationJsonParser" />: the Context column must reflect the model's advertised
+///     <see cref="RecommendationJsonParser" /> tests: the Context column must reflect the model's advertised
 ///     maximum window (<c>context_length</c>), not llmfit's <c>effective_context_length</c> memory-estimation cap (which
 ///     defaults to 8192 and previously masked every model's real context). The parser falls back to
 ///     <c>effective_context_length</c> only when <c>context_length</c> is absent.
@@ -91,7 +91,7 @@ public sealed class RecommendationJsonParserTests
     [Test]
     public void Parse_WhenReleaseDatePresent_CarriesItIntoDiagnostics()
     {
-        // Lane H3: release_date rides the existing diagnostics blob (no new column) so the read mapper can surface it.
+        // release_date rides the existing diagnostics blob (no new column) so the read mapper can surface it.
         const string json = """
                             { "models": [ { "name": "qwen3-coder", "release_date": "2026-01-15" } ] }
                             """;

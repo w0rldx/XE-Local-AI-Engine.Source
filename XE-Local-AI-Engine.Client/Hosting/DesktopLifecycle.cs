@@ -23,7 +23,7 @@ using Microsoft.Extensions.Logging;
 ///             The Job Object remains the hard-kill safety net regardless.</item>
 ///         </list>
 ///     </para>
-///     Only activated in desktop mode (invariant #1: off-flag installs nothing).
+///     Only activated in desktop mode (invariant: with the desktop flag off, nothing here is installed).
 /// </summary>
 internal sealed class DesktopLifecycle : IDisposable
 {

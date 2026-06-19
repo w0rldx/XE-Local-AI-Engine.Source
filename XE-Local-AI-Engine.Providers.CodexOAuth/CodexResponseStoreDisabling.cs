@@ -4,16 +4,14 @@ using Microsoft.Extensions.AI;
 using OpenAI.Responses;
 
 /// <summary>
-/// Forces <c>store=false</c> on the Codex Responses transport (plan D10 / M1 / pre-mortem §B-3).
+/// Forces <c>store=false</c> on the Codex Responses transport.
 ///
 /// <para>
-/// <b>Phase 1.7 store=false decision (compile-gated):</b> the plan prefers
-/// <c>ResponsesClient.AsIChatClientWithStoredOutputDisabled()</c> ONLY IF <c>Microsoft.Agents.AI.OpenAI</c>
-/// compiles cleanly with the repo's existing <c>Microsoft.Agents.AI*</c> 1.6.2 package set. That package is
-/// NOT present in the repo's package graph (the repo pins <c>Microsoft.Agents.AI.Hosting.OpenAI</c>, a
-/// different package) and is not resolvable, so per the plan default we use the local
-/// <see cref="ChatOptions.RawRepresentationFactory"/> mechanism instead. This carries no extra dependency and
-/// is verified to compile against the pinned OpenAI 2.10.0 / Microsoft.Extensions.AI.OpenAI 10.6.0.
+/// <b>store=false mechanism:</b> rather than a dedicated stored-output-disabling client (the
+/// <c>Microsoft.Agents.AI.OpenAI</c> package that offers one is not in the repo's package graph — the repo pins
+/// <c>Microsoft.Agents.AI.Hosting.OpenAI</c>, a different package), this uses the local
+/// <see cref="ChatOptions.RawRepresentationFactory"/> mechanism. This carries no extra dependency and is verified to
+/// compile against the pinned OpenAI 2.10.0 / Microsoft.Extensions.AI.OpenAI 10.6.0.
 /// </para>
 ///
 /// <para>
@@ -21,21 +19,21 @@ using OpenAI.Responses;
 /// the base <see cref="CreateResponseOptions"/>. Setting <see cref="CreateResponseOptions.StoredOutputEnabled"/>
 /// to <see langword="false"/> and leaving <see cref="CreateResponseOptions.PreviousResponseId"/> /
 /// <see cref="CreateResponseOptions.ConversationOptions"/> unset yields a request body that omits service-side
-/// state. A Phase-3 body-assertion test proves the emitted body matches.
+/// state.
 /// </para>
 ///
 /// <para>
-/// <b>Reasoning summaries (2026-06-08):</b> the same base options also opt the request into OpenAI Responses
+/// <b>Reasoning summaries:</b> the same base options also opt the request into OpenAI Responses
 /// reasoning summaries — <see cref="CreateResponseOptions.ReasoningOptions"/> with
-/// <see cref="ResponseReasoningSummaryVerbosity.Auto"/> (decision D2, fixed) and the per-send
+/// <see cref="ResponseReasoningSummaryVerbosity.Auto"/> (fixed) and the per-send
 /// <see cref="ResponseReasoningEffortLevel"/> mapped from the chat reasoning effort. Summaries ride the response
 /// output and do NOT require <c>store=true</c>, so the store=false invariant above is preserved. When no effort is
 /// resolvable the request still asks for summaries at the model's default effort (effort omitted).
 /// </para>
 ///
 /// <para>
-/// <b>Encrypted reasoning include (tool calling, de-risk plan <c>Plans/2026-06-08-codex-tool-calling-derisk.md</c>
-/// D3):</b> because reasoning is always requested on the Codex boundary, the same base options also add
+/// <b>Encrypted reasoning include (tool calling):</b> because reasoning is always requested on the Codex boundary,
+/// the same base options also add
 /// <see cref="IncludedResponseProperty.ReasoningEncryptedContent"/> to
 /// <see cref="CreateResponseOptions.IncludedProperties"/> (serializes to <c>include:[reasoning.encrypted_content]</c>).
 /// This is REQUIRED for the stateless tool loop: with <c>store=false</c> each follow-up turn must replay the prior
@@ -68,20 +66,19 @@ public static class CodexResponseStoreDisabling
                 StoredOutputEnabled = false,
                 ReasoningOptions = new ResponseReasoningOptions
                 {
-                    // D2: summary verbosity is FIXED to Auto (≈ detailed for gpt-5.x). Requesting summaries is what
+                    // Summary verbosity is FIXED to Auto (≈ detailed for gpt-5.x). Requesting summaries is what
                     // makes reasoning text flow back as TextReasoningContent for the React reasoning pipeline.
                     ReasoningSummaryVerbosity = ResponseReasoningSummaryVerbosity.Auto,
                 },
-                // D3: reasoning is always on here, so always ask the backend to emit the encrypted reasoning blob
+                // Reasoning is always on here, so always ask the backend to emit the encrypted reasoning blob
                 // (include:[reasoning.encrypted_content]). Required for the stateless (store=false) tool loop — each
                 // follow-up turn replays the prior reasoning item with its encrypted_content before its function_call.
                 // Harmless when no tool is offered.
                 IncludedProperties = { IncludedResponseProperty.ReasoningEncryptedContent },
 
-                // D2 (single-call first): disable parallel tool calls on the wire (serializes parallel_tool_calls:false).
-                // The Codex capability matrix declares SupportsParallelToolCalls=false; this is the request-level
-                // enforcement of that decision so the model emits at most one tool call per turn. Harmless when no tool
-                // is offered.
+                // Disable parallel tool calls on the wire (serializes parallel_tool_calls:false). The Codex capability
+                // matrix declares SupportsParallelToolCalls=false; this is the request-level enforcement so the model
+                // emits at most one tool call per turn. Harmless when no tool is offered.
                 ParallelToolCallsEnabled = false,
             };
 

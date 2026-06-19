@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///     is fully unit-testable by faking <see cref="IGpuVendorProbe" />.
 /// </summary>
 /// <remarks>
-///     Rule (epic decision #3/#8): NVIDIA → CUDA <em>only on Windows</em> (llama.cpp ships no prebuilt Linux CUDA
+///     Rule: NVIDIA → CUDA <em>only on Windows</em> (llama.cpp ships no prebuilt Linux CUDA
 ///     asset, so Linux NVIDIA degrades to Vulkan); AMD/Intel → Vulkan; none/unknown → CPU.
 /// </remarks>
 public sealed class GpuVariantSelector : IGpuVariantSelector

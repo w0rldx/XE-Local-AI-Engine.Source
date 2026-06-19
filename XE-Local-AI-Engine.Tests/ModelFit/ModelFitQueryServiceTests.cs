@@ -12,8 +12,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     <see cref="ModelFitQueryService" /> tests: the cache reader returns the assembled view when a latest
 ///     successful recommendation snapshot exists, returns null on a cache-miss, and — by construction — has NO dependency
-///     on the refresh service / advisor (it cannot run a recommendation). The approved-image listing was removed in
-///     Lane C (plan §8); the constructor's two-store signature is the structural proof of the no-runner invariant.
+///     on the refresh service / advisor (it cannot run a recommendation). The approved-image listing was removed when
+///     the local model-fit advisor replaced the containerized runner; the constructor's two-store signature is the
+///     structural proof of the no-runner invariant.
 /// </summary>
 public sealed class ModelFitQueryServiceTests
 {

@@ -13,7 +13,7 @@ import { usePreviewRunStore } from "@/features/preview/stores/PreviewRunStore";
 
 // Realtime push for the Open Canvas (Preview) run output. Connects to the preview SignalR hub for the lifetime of
 // the mounting component and forwards every node/run event into the PreviewRunStore, which applies it ONLY if the
-// event's runId is one this tab registered (registerRun) — the foreign-run guard (decision #3 + MEDIUM-2) lives
+// event's runId is one this tab registered (registerRun) — the foreign-run guard lives
 // in the store, so this hook stays a thin transport that validates the wire payload and dispatches by event name.
 //
 // The backend publishes every event to the run's SignalR group (PreviewWorkflowHub.RunGroup), so a connection

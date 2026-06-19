@@ -2,12 +2,13 @@ import { z } from "zod";
 
 // Manual playbook actions. Each action carries an injected behavior (the instruction text appended
 // to the owning agent's system prompt when its playbook is enabled), an enable/disable state, a provenance
-// source (P1 writes "Manual" only — the analysis-proposed "Analysis" source arrives in a later phase), an
-// optional trigger condition + scope tag (advisory/display in P1), and a Priority that orders injection.
+// source ("Manual" for hand-authored actions; "Analysis" for analysis-proposed ones), an
+// optional trigger condition + scope tag (advisory/display only), and a Priority that orders injection.
 //
 // Mirrors the backend PlaybookActionState (Suggested=0, Enabled=1, Disabled=2, Archived=3) and
-// PlaybookActionSource (Manual=0, Analysis=1) enums; the wire contract carries the string form. P1 only ever
-// shows/authors Enabled|Disabled state and Manual source — the other enum slots are reserved for later phases.
+// PlaybookActionSource (Manual=0, Analysis=1) enums; the wire contract carries the string form. The hand-authored
+// create/edit form only ever shows/authors Enabled|Disabled state and Manual source — the other enum slots
+// (Suggested/Archived state, Analysis source) are produced by the analysis flow, not this form.
 //
 // Boundary validation + wire→domain mapping live in PlaybookActionMappers.ts (the generated zod validator owns the
 // response shape). This module is the domain view-models + the create/edit FORM schemas only.
@@ -79,7 +80,7 @@ export interface PlaybookAction {
 }
 
 // Form values authored in the panel: identity/version/timestamps/source/agentDefinitionId are managed by the
-// backend and the panel, not edited as free text here. P1 authors only the injectable behavior, the enable
+// backend and the panel, not edited as free text here. The form authors only the injectable behavior, the enable
 // state, the optional advisory fields, and the injection priority.
 export interface PlaybookActionFormValues {
 	behavior: string;
@@ -92,7 +93,8 @@ export interface PlaybookActionFormValues {
 const editableStateSchema = z.enum(["Enabled", "Disabled"]);
 
 // Zod schema validating the form before submit. Behavior is required (non-empty after trim); state is
-// constrained to Enabled|Disabled (P1 scope); priority is any integer (ties broken server-side by CreatedAtUtc).
+// constrained to Enabled|Disabled (the only states this form authors); priority is any integer (ties broken
+// server-side by CreatedAtUtc).
 // triggerCondition/scope are free-text advisory fields, optional.
 export const playbookActionFormSchema = z.object({
 	behavior: z.string().trim().min(1).max(20000),
@@ -117,7 +119,7 @@ export function emptyPlaybookActionForm(nextPriority = 0): PlaybookActionFormVal
 }
 
 // Project a persisted action back into editable form values (round-trip on edit). A reserved state
-// (Suggested/Archived) that should never reach the P1 panel degrades to Disabled so the constrained editor can
+// (Suggested/Archived) that this constrained editor does not author degrades to Disabled so the editor can
 // still render and re-save it safely.
 export function toPlaybookActionFormValues(action: PlaybookAction): PlaybookActionFormValues {
 	return {
@@ -129,7 +131,7 @@ export function toPlaybookActionFormValues(action: PlaybookAction): PlaybookActi
 	};
 }
 
-// Request body for create/update. Source is omitted — the backend pins it to Manual in P1. Kept as the domain-side
+// Request body for create/update. Source is omitted — the backend pins it to Manual for form-authored actions. Kept as the domain-side
 // shape the form builders produce; the mapper widens it to the generated request type at the call boundary.
 export interface SavePlaybookActionRequestDto {
 	state: string;

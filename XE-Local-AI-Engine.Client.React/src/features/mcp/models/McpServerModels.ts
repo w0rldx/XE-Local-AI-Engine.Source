@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Mirrors the backend McpTransportKind enum (Stdio=0, Http=1). The wire contract carries the string form.
 // Stdio launches a local process by command/args/env/cwd; Http connects to an already-running loopback-only
-// server by URL (see dynamic tool-catalog plan §2.1 / §0.1).
+// server by URL.
 export type McpTransportKind = "Stdio" | "Http";
 
 export const mcpTransportKinds: readonly McpTransportKind[] = ["Stdio", "Http"];
@@ -17,7 +17,7 @@ export interface McpEnvEntry {
 
 // Domain view-model for a registered MCP server. Secret-bearing fields (description, args, env) are encrypted
 // at rest on the node; here they are plaintext for editing. Timestamps are epoch milliseconds (long on the
-// wire). A server is disabled on register (locked P4 decision 3) — enabled is toggled explicitly by the user.
+// wire). A server is disabled on register by design — enabled is toggled explicitly by the user.
 export interface McpServerRegistration {
 	readonly id: string;
 	readonly name: string;
@@ -55,7 +55,7 @@ const envEntrySchema = z.object({
 	value: z.string(),
 });
 
-// Loopback-only HTTP URL guard (locked P4 decision 1). A node may only reach a loopback MCP server by URL;
+// Loopback-only HTTP URL guard. A node may only reach a loopback MCP server by URL;
 // pointing it at a remote host is out of scope and rejected client-side (the backend re-validates).
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 

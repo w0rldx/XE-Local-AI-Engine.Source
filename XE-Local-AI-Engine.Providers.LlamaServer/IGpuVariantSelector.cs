@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Minimal GPU-variant selector probe. Lane A owns <em>only enough</em> hardware probing to pick the prebuilt
-///     llama.cpp asset (CUDA vs Vulkan vs CPU). The full <c>HardwareProfiler</c> (VRAM probe, memory-fit math) is
-///     Lane C and is explicitly NOT built here.
+///     Minimal GPU-variant selector probe. This provider does <em>only enough</em> hardware probing to pick the prebuilt
+///     llama.cpp asset (CUDA vs Vulkan vs CPU). The full <c>HardwareProfiler</c> (VRAM probe, memory-fit math) lives in
+///     the model-fit advisor and is explicitly NOT built here.
 /// </summary>
 /// <remarks>
 ///     Selection rule: NVIDIA GPU → <see cref="GpuVariant.Cuda" /> on Windows (no prebuilt Linux CUDA asset exists,

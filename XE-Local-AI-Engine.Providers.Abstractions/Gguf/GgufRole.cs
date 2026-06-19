@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Role a GGUF model file is intended to serve. Mirrors the chat/embedding process split (epic §7.8): the same
+///     Role a GGUF model file is intended to serve. Mirrors the chat/embedding process split: the same
 ///     repo can ship a chat model and an embedding model, and the runtime spawns a distinct <c>llama-server</c> per
 ///     role. <see cref="Unknown" /> is the default until a caller hint classifies the file.
 /// </summary>

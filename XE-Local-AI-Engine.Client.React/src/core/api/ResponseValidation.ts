@@ -83,7 +83,7 @@ export function withResponseValidation<TOptions extends object>(options: TOption
  * choke-point for the TanStack query/mutation layer; this is the equivalent for imperative call sites that invoke
  * the generated SDK fn themselves — e.g. the chat adapter, whose CRUD methods are plain async calls rather than
  * query hooks. HTTP errors already converge to `ApiError` via the shared axios ProblemDetails interceptor; this
- * only adds the post-2xx `ZodError` remap so no raw validation error escapes to the UI (§7.4).
+ * only adds the post-2xx `ZodError` remap so no raw validation error escapes to the UI.
  *
  *   const { data } = await callWithResponseValidation(listNodeChatConversations({ query, throwOnError: true }));
  */

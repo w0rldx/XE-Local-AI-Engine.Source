@@ -4,9 +4,9 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Viewport and full-width layout regression tests (plan M2, wave-2, WP-B4).
-///     Guards that worker-1's full-width changes (Container fluid=true on 5 pages, Box flex on Chat)
-///     are not silently reverted — a fixed max-width Container would re-introduce the centered-column
+///     Viewport and full-width layout regression tests.
+///     Guards that the full-width layout (Container fluid=true on 5 pages, Box flex on Chat)
+///     is not silently reverted — a fixed max-width Container would re-introduce the centered-column
 ///     gutter that these tests catch.
 ///     <para>
 ///         Wide-viewport assertions: at 1280×800 the page body must not overflow horizontally

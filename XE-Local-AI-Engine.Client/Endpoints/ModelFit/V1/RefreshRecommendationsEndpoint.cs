@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 ///     facade over the scheduler trigger service: it accepts ONLY an existing scheduled-job id (never an image reference,
 ///     command line or template id) and the trigger self-guards that the job is a <c>model-recommendation-check</c> job.
 ///     The optional <c>useCase</c>/<c>limit</c>/<c>quantOverride</c>/<c>ctxTarget</c> are validated here BEFORE anything
-///     fires and ride the per-fire override map (the approved-image + provider-name params are gone — non-additive,
-///     plan §8). The run is created asynchronously by the scheduler dispatcher; this endpoint never executes the advisor
+///     fires and ride the per-fire override map (the approved-image + provider-name params are gone — non-additive).
+///     The run is created asynchronously by the scheduler dispatcher; this endpoint never executes the advisor
 ///     and never owns run/cancellation/history state.
 /// </summary>
 public sealed class RefreshRecommendationsEndpoint(IModelFitRefreshTrigger modelFitRefreshTrigger)

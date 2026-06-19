@@ -1,17 +1,17 @@
 import { z } from "zod";
 
 // MAF-safe skill name: lowercase letters/digits with internal single-or-multi dashes; no leading/trailing dash.
-// Mirrors the backend AgentSkillService guard (plan §7.3). Doubled internal dashes ARE valid — only a leading or
+// Mirrors the backend AgentSkillService guard. Doubled internal dashes ARE valid — only a leading or
 // trailing dash is rejected. Anchored so the whole name must match.
 export const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 
-// Length caps mirror the backend (plan §7.3): Name ≤64, Description ≤1024, Body ≤20000 (matches the instructions cap).
+// Length caps mirror the backend: Name ≤64, Description ≤1024, Body ≤20000 (matches the instructions cap).
 export const SKILL_NAME_MAX = 64;
 export const SKILL_DESCRIPTION_MAX = 1024;
 export const SKILL_BODY_MAX = 20000;
 
 // Domain view-model for a single skill (full record, body included). Description + body are plaintext here for
-// editing; they are encrypted at rest on the node (plan §10). Timestamps are epoch milliseconds (long on the wire).
+// editing; they are encrypted at rest on the node. Timestamps are epoch milliseconds (long on the wire).
 export interface Skill {
 	readonly id: string;
 	readonly name: string;
@@ -23,7 +23,7 @@ export interface Skill {
 	readonly updatedAtUtc: number;
 }
 
-// List/summary view-model: the list endpoint omits `body` for payload economy (plan §8); the editor GETs the
+// List/summary view-model: the list endpoint omits `body` for payload economy; the editor GETs the
 // single skill to load its body. A summary is a Skill without the body field.
 export interface SkillSummary {
 	readonly id: string;

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     DI wiring for the Hugging Face GGUF discovery + store stack (Lane B). Registers <see cref="IGgufModelStore" />,
+///     DI wiring for the Hugging Face GGUF discovery + store stack. Registers <see cref="IGgufModelStore" />,
 ///     <see cref="IGgufModelRegistry" />, and <see cref="IHuggingFaceGgufDiscovery" /> plus the internal Hub/download
 ///     clients, header reader, free-space probe, named <see cref="HttpClient" />s, and bound options.
 /// </summary>

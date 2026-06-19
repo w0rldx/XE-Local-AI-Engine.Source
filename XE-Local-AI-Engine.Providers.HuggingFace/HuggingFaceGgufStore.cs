@@ -13,8 +13,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 internal sealed class HuggingFaceGgufStore : IGgufModelStore
 {
-    // Lane B must not depend on the LlamaServer project; the descriptor provider name is the agreed constant for the
-    // host-process llama-server runtime (LlamaServerProviderConstants.ProviderName).
+    // The Hugging Face provider must not depend on the LlamaServer project; the descriptor provider name is the agreed
+    // constant for the host-process llama-server runtime (LlamaServerProviderConstants.ProviderName).
     private const string ProviderName = "llamacpp";
 
     private readonly HfDownloadClient _downloadClient;

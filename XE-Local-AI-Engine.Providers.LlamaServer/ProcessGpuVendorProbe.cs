@@ -8,8 +8,8 @@ using System.Runtime.InteropServices;
 ///     signatures. Detection failure degrades to <see cref="DetectedGpuVendor.None" /> (CPU floor) — never throws.
 /// </summary>
 /// <remarks>
-///     This is the <em>minimal</em> probe Lane A owns. It deliberately does NOT measure VRAM or compute a memory-fit
-///     budget — that is Lane C's <c>HardwareProfiler</c>. Probe order: <c>nvidia-smi</c> (NVIDIA), then a platform
+///     This is the <em>minimal</em> probe the runtime core owns. It deliberately does NOT measure VRAM or compute a
+///     memory-fit budget — that is the <c>HardwareProfiler</c>'s job. Probe order: <c>nvidia-smi</c> (NVIDIA), then a platform
 ///     adapter list (<c>wmic</c>/<c>lspci</c>) for AMD/Intel.
 /// </remarks>
 public sealed class ProcessGpuVendorProbe : IGpuVendorProbe

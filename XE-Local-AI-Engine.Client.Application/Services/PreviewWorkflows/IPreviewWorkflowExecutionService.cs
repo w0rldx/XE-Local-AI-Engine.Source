@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 
 /// <summary>
 ///     The in-memory run-state machine for Open Canvas (Preview) runs. Singleton: owns a registry of in-flight
-///     <c>RunHandle</c>s keyed by runId. Each run resolves a NODE-LOCAL <c>IChatClient</c> (invariant #1 — never a
-///     shared/cloud client) and drains the Lane B runner in a background task, republishing every update over the hub
-///     stamped with the runId. Runs are one-shot, in-memory, never persisted (decision #3).
+///     <c>RunHandle</c>s keyed by runId. Each run resolves a NODE-LOCAL <c>IChatClient</c> (privacy invariant — never a
+///     shared/cloud client) and drains the .AI.Agent runner in a background task, republishing every update over the hub
+///     stamped with the runId. Runs are one-shot, in-memory, never persisted (a preview/debug run is transient by design).
 /// </summary>
 public interface IPreviewWorkflowExecutionService
 {
@@ -63,7 +63,7 @@ public sealed class PreviewWorkflowCapReachedException(int maxConcurrentRuns)
 
 /// <summary>
 ///     Thrown by <see cref="IPreviewWorkflowExecutionService.StartAsync" /> when a graph needs more distinct node-local
-///     model processes than the shared loaded-process cap allows (reject-at-start, decision #18 / Lane A plan §7.6 → 409).
+///     model processes than the shared loaded-process cap allows (reject-at-start → 409).
 /// </summary>
 public sealed class PreviewWorkflowModelCapExceededException(int distinctModelCount, int maxLoadedProcesses)
     : Exception(

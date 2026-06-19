@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     lets a separate request cancel the in-flight download by model name.
 ///     <para>
 ///         <b>Singleton.</b> The registry must outlive any one request scope (the download runs after the HTTP request
-///         that started it returns). It composes the singleton Lane B <see cref="IGgufModelStore" />.
+///         that started it returns). It composes the singleton Hugging Face GGUF store <see cref="IGgufModelStore" />.
 ///     </para>
 ///     <para>
 ///         <b>Honest limits.</b> Progress and cancellation are best-effort and process-local: the registry is RAM-only

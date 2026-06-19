@@ -8,15 +8,14 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// On-WIRE tool-calling assertions for the Codex (ChatGPT-subscription) Responses transport (de-risk plan
-/// <c>Plans/2026-06-08-codex-tool-calling-derisk.md</c>). Promoted from the de-risk spike: these drive the SAME
+/// On-WIRE tool-calling assertions for the Codex (ChatGPT-subscription) Responses transport. These drive the SAME
 /// production <see cref="CodexStoreDisabledChatClient"/> wrapper the live send path uses (NOT the inner client
 /// directly), over the <c>BodyCapturingHandler</c> + real Responses-backed <see cref="IChatClient"/> harness the
 /// sibling <see cref="CodexReasoningOnWireTests"/> / <see cref="CodexStoreFalseOnWireTests"/> use, and assert the
 /// two requests the stateless tool loop depends on serialize correctly:
 /// <list type="number">
 ///   <item>#1 first turn: a function tool reaches <c>tools[]</c>, the wrapper adds
-///   <c>include:[reasoning.encrypted_content]</c> (required for the stateless tool loop, D3), reasoning summary/effort
+///   <c>include:[reasoning.encrypted_content]</c> (required for the stateless tool loop), reasoning summary/effort
 ///   ride, <c>store=false</c>, no server-side state ids — and tools are NOT stripped by the system-message handling.</item>
 ///   <item>#2 follow-up turn: a prior reasoning item (carrying <c>encrypted_content</c>) + function call + tool output
 ///   round-trip back as input — reasoning BEFORE the function_call — via MEAI's
@@ -42,7 +41,7 @@ public sealed class CodexToolCallingWireTests
     /// <summary>
     /// #1 — Driving the production wrapper: a function tool reaches <c>tools[]</c>, the wrapper adds
     /// <c>include:[reasoning.encrypted_content]</c>, reasoning summary/effort ride, store=false, no server-side state
-    /// ids — proving the include + tools serialize through the real Codex boundary, not just a hand-built base options.
+    /// ids — proving the include + tools serialize through the real Codex boundary, not just hand-built base options.
     /// </summary>
     [Test]
     public async Task FirstTurn_WithTool_WrapperAddsEncryptedReasoningInclude_AndKeepsTool()
@@ -72,7 +71,7 @@ public sealed class CodexToolCallingWireTests
             tool.TryGetProperty("name", out var name) && string.Equals(name.GetString(), ToolName, StringComparison.Ordinal));
         AssertEx.True(hasFunctionTool, $"tools[] must contain the '{ToolName}' function");
 
-        // The wrapper added include:[reasoning.encrypted_content] (D3 — required for the stateless tool loop).
+        // The wrapper added include:[reasoning.encrypted_content] (required for the stateless tool loop).
         AssertEx.True(root.TryGetProperty("include", out var include), "request body must contain an 'include' array");
         AssertEx.Equal(JsonValueKind.Array, include.ValueKind);
         var hasEncryptedInclude = include.EnumerateArray().Any(static entry =>
@@ -87,7 +86,7 @@ public sealed class CodexToolCallingWireTests
         AssertEx.True(reasoning.TryGetProperty("effort", out var effort), "reasoning.effort must be set");
         AssertEx.Equal("medium", effort.GetString());
 
-        // D2 single-call-first: parallel tool calls disabled on the wire.
+        // Single-call-first: parallel tool calls disabled on the wire.
         AssertEx.True(root.TryGetProperty("parallel_tool_calls", out var parallelToolCalls), "request body must contain 'parallel_tool_calls'");
         AssertEx.Equal(JsonValueKind.False, parallelToolCalls.ValueKind);
 
@@ -101,7 +100,7 @@ public sealed class CodexToolCallingWireTests
     /// <summary>
     /// #1b — The include + tools survive the system-message strip: when a system message is present (moved into
     /// top-level <c>instructions</c> by the wrapper), the tools and the encrypted-reasoning include still reach the
-    /// wire. Guards the de-risk plan §Remaining-risks #3 (system-strip must not disturb tool/reasoning items).
+    /// wire. Guards against the system-strip disturbing tool/reasoning items.
     /// </summary>
     [Test]
     public async Task FirstTurn_WithToolAndSystemMessage_KeepsToolsAndInclude_AndMovesSystemToInstructions()

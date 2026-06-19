@@ -5,7 +5,7 @@ using Microsoft.Extensions.AI;
 
 /// <summary>
 /// The node's registered <see cref="IChatClient"/>: a stable wrapper that re-selects cloud-vs-local on
-/// <b>every</b> call (plan §0/C2, §7.2). Singleton consumers (the agent factories) capture this wrapper once,
+/// <b>every</b> call. Singleton consumers (the agent factories) capture this wrapper once,
 /// but each send re-evaluates the active provider via <see cref="IActiveCloudChatClientFactory"/>, so signing
 /// in or out at runtime takes effect on the next send without restarting the node.
 ///

@@ -18,7 +18,7 @@ import { toSkill, toSkillSummary } from "@/features/skills/models/SkillMappers";
 // withResponseValidation so a zod response-shape failure surfaces as an ApiError (never a raw ZodError). Mutations
 // invalidate the skill list; an edit also invalidates the single-skill cache for that id so a re-open shows fresh body.
 
-// Lists skill summaries (no body — the list endpoint omits it for payload economy, plan §8).
+// Lists skill summaries (no body — the list endpoint omits it for payload economy).
 export function useSkills() {
 	return useQuery({
 		...withResponseValidation(listSkillsOptions()),

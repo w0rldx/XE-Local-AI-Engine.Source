@@ -11,8 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="ModelRecommendationScheduleSeeder" /> tests (plan §12 row
-///     <c>ScheduleSeeder_SeedsManualJob_WithNewParams</c>): the startup seeder idempotently seeds ONE enabled Manual
+///     <see cref="ModelRecommendationScheduleSeeder" /> tests: the startup seeder idempotently seeds ONE enabled Manual
 ///     <c>model-recommendation-check</c> schedule whose parameters carry the new advisor schema (no approved-image /
 ///     provider fields), and re-runs never duplicate it when a definition already exists.
 /// </summary>

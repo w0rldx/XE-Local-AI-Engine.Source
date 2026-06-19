@@ -9,8 +9,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
 /// <summary>
-///     Plan §12 store rows: disk guard, quant resolution, resume, disk-full survival, hash verification, cancel,
-///     progress reporting, and gated/token behaviour. All HTTP is faked — no network, no Docker, no real DriveInfo.
+///     GGUF store: disk guard, quant resolution, resume, disk-full survival, hash verification, cancel,
+///     progress reporting, and gated/token behaviour. All HTTP is faked — no network, no real DriveInfo.
 /// </summary>
 public sealed class GgufStoreTests
 {

@@ -11,9 +11,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
-///     Plan §12 row <c>HfTokenStore_RoundTrips_Encrypted_AndNeverLeaksInErrors</c>: the optional HF token round-trips
-///     through the <see cref="IDataProtector" /> store, clears back to anonymous, is never written in plaintext, and a
-///     decryption failure self-heals to anonymous without surfacing the token.
+///     The optional HF token round-trips through the <see cref="IDataProtector" /> store, clears back to anonymous,
+///     is never written in plaintext, and a decryption failure self-heals to anonymous without surfacing the token.
 /// </summary>
 public sealed class HfTokenStoreTests : IDisposable
 {

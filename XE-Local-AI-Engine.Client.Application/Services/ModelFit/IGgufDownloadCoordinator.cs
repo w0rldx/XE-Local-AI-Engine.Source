@@ -3,13 +3,14 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Coordinates operator-driven GGUF downloads for the advisor surface (Lane C3). It owns a per-model
+///     Coordinates operator-driven GGUF downloads for the model-fit advisor surface. It owns a per-model
 ///     <see cref="System.Threading.CancellationTokenSource" /> registry so a download started by one request can be
 ///     cancelled by a separate request, and it tracks the latest sanitized <see cref="GgufDownloadStatus" /> for each
 ///     in-flight or recently-finished download so the operator UI can poll progress.
 ///     <para>
-///         <b>Honest cancellation:</b> cancel is cooperative — it signals the in-flight download's token, which the Lane B
-///         store (<see cref="IGgufModelStore.EnsureModelAsync" />) honors at the next byte/await boundary. A download that
+///         <b>Honest cancellation:</b> cancel is cooperative — it signals the in-flight download's token, which the
+///         Hugging Face GGUF store (<see cref="IGgufModelStore.EnsureModelAsync" />) honors at the next byte/await
+///         boundary. A download that
 ///         has already completed (or was never started) is a no-op cancel. No bytes are force-killed mid-write.
 ///     </para>
 /// </summary>
@@ -57,7 +58,7 @@ public enum GgufDownloadPhase
 
 /// <summary>
 ///     A sanitized snapshot of a coordinated download's progress. Carries only the model name, phase, byte counts and a
-///     sanitized error reason — never an absolute path, URL, token, or raw store payload (plan §10).
+///     sanitized error reason — never an absolute path, URL, token, or raw store payload.
 /// </summary>
 public sealed record GgufDownloadStatus(
     string ModelName,

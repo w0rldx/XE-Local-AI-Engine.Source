@@ -51,7 +51,7 @@ public sealed class EmbeddingSmokeTests
                         });
                     });
 
-                    // Embeddings are provider-routed now (Lane A §7.7) — there is no standalone DI IEmbeddingGenerator.
+                    // Embeddings are provider-routed now — there is no standalone DI IEmbeddingGenerator.
                     // Resolve the embedding generator through ILocalModelProviderResolver exactly as the production
                     // retrieval path does: pick the embedding model's provider (ollama here) and create its generator.
                     var resolver = factory.Services.GetRequiredService<ILocalModelProviderResolver>();

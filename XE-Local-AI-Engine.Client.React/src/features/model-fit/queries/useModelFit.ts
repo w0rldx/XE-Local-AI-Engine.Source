@@ -153,7 +153,7 @@ export interface StartGgufDownloadVariables {
 	revision?: string;
 }
 
-// Starts a resumable GGUF download via Lane B. On success the running-models list may change as the download begins,
+// Starts a resumable GGUF download via the Hugging Face GGUF model store. On success the running-models list may change as the download begins,
 // so invalidate it (the page surfaces the in-flight download from that list). Returns the wire response so the caller
 // can read `alreadyInFlight` / the resolved `modelName`.
 export function useStartGgufDownload() {
@@ -186,7 +186,7 @@ export interface EjectRunningModelVariables {
 	role?: string;
 }
 
-// Ejects a running model via Lane A. Invalidates the running-models list so the ejected entry disappears.
+// Ejects a running model from the llama.cpp runtime. Invalidates the running-models list so the ejected entry disappears.
 export function useEjectRunningModel() {
 	const queryClient = useQueryClient();
 
@@ -199,7 +199,7 @@ export function useEjectRunningModel() {
 	});
 }
 
-// Ensures (selects/downloads) a llama.cpp binary variant via Lane A. Invalidates the version query so the panel
+// Ensures (selects/downloads) a llama.cpp binary variant via the llama.cpp runtime. Invalidates the version query so the panel
 // reflects the newly active binary.
 export function useEnsureLlamaCppBinary() {
 	const queryClient = useQueryClient();

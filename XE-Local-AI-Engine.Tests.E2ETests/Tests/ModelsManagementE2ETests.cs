@@ -4,8 +4,8 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the Models page (<c>/models</c>) pull + kind-change + delete round-trip
-///     (gap analysis P1-2). The existing smoke test only proves a FakeOllama model renders; this suite
+///     Browser-driven E2E for the Models page (<c>/models</c>) pull + kind-change + delete round-trip.
+///     The existing smoke test only proves a FakeOllama model renders; this suite
 ///     drives the full management lifecycle against FakeOllama's pull/show/delete endpoints:
 ///     <list type="bullet">
 ///         <item>

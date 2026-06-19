@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Unit coverage for the self-contained desktop launcher host hooks (plan §7.1–§7.4 / §12). Pure tests only: the
+///     Unit coverage for the self-contained desktop launcher host hooks. Pure tests only: the
 ///     desktop-mode gate, browser-command builder, loopback URL resolver, the signal→StopApplication seam, and the
 ///     non-fatal browser-launch path. No real process, signal, or network is exercised.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed class DesktopLaunchTests
     [Test]
     public void DesktopModeGate_WhenFlagUnset_LeavesPipelineUnchanged()
     {
-        // No CLI arg, no env signal → desktop mode is off, so Program.cs keeps today's HTTPS/HSTS pipeline (invariant #1).
+        // No CLI arg, no env signal → desktop mode is off, so Program.cs keeps the standard HTTPS/HSTS pipeline.
         var isDesktop = DesktopLaunch.IsDesktopMode(args: [], environmentReader: static _ => null);
 
         AssertEx.False(isDesktop);

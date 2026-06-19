@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 ///     Drains a single Preview workflow <see cref="StreamingRun" /> into provider-agnostic
 ///     <see cref="PreviewWorkflowUpdate" />s. Mirrors <c>OrchestrationRunSession</c>'s <c>WatchStreamAsync</c> drain
-///     and <c>DisposeAsync</c> swallow-log. Holds the run in RAM across a Pause→resume round-trip (decision #3).
+///     and <c>DisposeAsync</c> swallow-log. Holds the run in RAM across a Pause→resume round-trip.
 ///     Confines all <c>Microsoft.Agents.AI.Workflows</c> types behind <see cref="IPreviewWorkflowRunSession" />.
 /// </summary>
 internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
@@ -50,7 +50,7 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
             yield return update;
 
             // A Pause halts the run: stop draining so the caller can resume via ResumeAsync. The held StreamingRun
-            // survives in RAM (phase-0 item 6); re-enumerate WatchAsync after resuming.
+            // survives in RAM; re-enumerate WatchAsync after resuming.
             if (update.Kind == PreviewWorkflowUpdateKind.RunPaused)
             {
                 yield break;
@@ -119,7 +119,7 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
                 _logger.LogWarning("Preview executor '{ExecutorId}' failed: {Message}", failed.ExecutorId, message);
                 if (_agentExecutorIdToNodeId.TryGetValue(failed.ExecutorId, out var failedNode))
                 {
-                    // Surface the node failure; the execution service (Lane C) folds it into a terminal run.failed.
+                    // Surface the node failure; the execution service folds it into a terminal run.failed.
                     return PreviewWorkflowUpdate.NodeFailed(failedNode, message);
                 }
 

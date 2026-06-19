@@ -12,11 +12,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Singleton in-memory run-state machine for Open Canvas (Preview) runs (plan §7.3). Owns a
+///     Singleton in-memory run-state machine for Open Canvas (Preview) runs. Owns a
 ///     <see cref="ConcurrentDictionary{TKey,TValue}" /> registry of <see cref="PreviewWorkflowRunHandle" />s keyed by
-///     runId; resolves a NODE-LOCAL <see cref="IChatClient" /> per run via <see cref="ILocalModelProvider" /> (invariant
-///     #1 — it injects ONLY the local provider; there is no path here to a shared/cloud <see cref="IChatClient" /> or an
-///     Azure Foundry factory); drains the Lane B runner in a background task and republishes every update over the hub
+///     runId; resolves a NODE-LOCAL <see cref="IChatClient" /> per run via <see cref="ILocalModelProvider" /> (privacy
+///     invariant — it injects ONLY the local provider; there is no path here to a shared/cloud <see cref="IChatClient" />
+///     or an Azure Foundry factory); drains the .AI.Agent runner in a background task and republishes every update over the hub
 ///     stamped with the runId (the runId on every event is the real cross-run isolation guard).
 /// </summary>
 internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutionService, IAsyncDisposable
@@ -82,13 +82,13 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
         var runId = Guid.NewGuid();
 
-        // Resolve the PROVIDER for each DISTINCT agent model up front (the §6.1 map read is async; client/process
-        // creation stays lazy). This also enforces the loaded-cap reject-at-start (decision #18, plan §7.6): if the
+        // Resolve the PROVIDER for each DISTINCT agent model up front (the model→provider map read is async; client/process
+        // creation stays lazy). This also enforces the loaded-cap reject-at-start: if the
         // graph's distinct-model count exceeds the supervisor cap, throw NOW — before spawning any process — rather
         // than evict-reload thrashing mid-run.
         var providersByModel = await ResolveProvidersPerDistinctModelAsync(graph, cancellationToken).ConfigureAwait(false);
 
-        // One lazily-created NODE-LOCAL chat client per distinct model (invariant #1 — only the local provider; no path
+        // One lazily-created NODE-LOCAL chat client per distinct model (privacy invariant — only the local provider; no path
         // here to a shared/cloud client or an Azure Foundry factory). The client (and, for llama-server, its backing
         // process) is created on FIRST use inside the drain loop, not up front: a deferred llama-server client spawns
         // its process on the first model call; an Ollama client is cheap. Agents sharing a model share one client.
@@ -297,7 +297,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             }
 
             // A Paused run's idle clock is suspended (IsIdleExpired returns false) and it is exempt from the wall-clock
-            // cap — so it is never swept while waiting on a human Continue (findings item 6).
+            // cap — so it is never swept while waiting on a human Continue.
             if (handle.IsIdleExpired(_options.IdleTimeout) || handle.IsOverWallClock(_options.MaxRunDuration))
             {
                 _logger.LogInformation("Sweeping idle/expired preview run {RunId}.", handle.RunId);
@@ -423,7 +423,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     {
         handle.PendingRequestId = update.RequestId;
         handle.SetState(PreviewRunState.Paused);
-        // Suspend the idle clock so the sweeper does not kill a run waiting on a human Continue (findings item 6).
+        // Suspend the idle clock so the sweeper does not kill a run waiting on a human Continue.
         handle.SuspendIdleClock();
 
         await PublishRunAsync(PreviewWorkflowHubEvents.RunPaused, handle.RunId, update.NodeId, update.Output,
@@ -462,8 +462,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
     /// <summary>
     ///     Resolves the node-local PROVIDER for each DISTINCT agent model in the graph (keyed by model id), and enforces
-    ///     the loaded-process cap reject-at-start (decision #18, plan §7.6): if the distinct-model count exceeds the
-    ///     supervisor cap, throws BEFORE any client/process is created. Provider resolution reads the §6.1 map (async)
+    ///     the loaded-process cap reject-at-start: if the distinct-model count exceeds the
+    ///     supervisor cap, throws BEFORE any client/process is created. Provider resolution reads the model→provider map (async)
     ///     but starts no process — that is deferred to first use. Validation guarantees at least one Agent node; an
     ///     Agent node without a model is rejected upstream.
     /// </summary>
@@ -496,7 +496,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             throw new InvalidOperationException("The workflow has no Agent node to resolve a node-local model from.");
         }
 
-        // Reject at start (decision #18): refuse a graph that would need more concurrent (model) processes than the
+        // Reject at start: refuse a graph that would need more concurrent (model) processes than the
         // shared loaded-cap allows, rather than evict-reload thrashing mid-run or doing partial work. Each distinct
         // model is at least one process; embeddings are not used here so distinct-model count is the relevant bound.
         var cap = _providerResolver.MaxLoadedProcesses;

@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 discovery rows: GGUF repo search filters out non-GGUF repos, per-repo inspection parses
+///     GGUF discovery: repo search filters out non-GGUF repos, per-repo inspection parses
 ///     quant/size/gated/license + GGUF header metadata via a range read, the LFS sha is optional, and the summary maps
-///     popularity fields. No network and no Docker — a stubbed <see cref="HttpMessageHandler" /> returns canned Hub JSON
+///     popularity fields. No network — a stubbed <see cref="HttpMessageHandler" /> returns canned Hub JSON
 ///     plus canned GGUF header bytes.
 /// </summary>
 public sealed class GgufDiscoveryTests

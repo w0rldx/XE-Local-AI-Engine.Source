@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities;
 
 /// <summary>
-///     Minimal process-shell seam owned by this project (deliberately NOT
-///     <c>HostAgent.Linux.Capabilities.IProcessRunner</c>, which Lane D deletes). Runs a command and returns its exit
-///     code plus stdout so <see cref="HardwareProfiler" /> is unit-testable with canned probe output and no real GPU.
+///     Minimal process-shell seam owned by this project (deliberately NOT the now-removed
+///     <c>HostAgent.Linux.Capabilities.IProcessRunner</c>). Runs a command and returns its exit code plus stdout so
+///     <see cref="HardwareProfiler" /> is unit-testable with canned probe output and no real GPU.
 /// </summary>
 internal interface IProcessProbe
 {

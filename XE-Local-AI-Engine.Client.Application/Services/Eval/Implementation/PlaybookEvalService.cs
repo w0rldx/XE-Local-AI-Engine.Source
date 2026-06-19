@@ -93,8 +93,9 @@ internal sealed class PlaybookEvalService(
             goldenCases = [.. goldenCases.Take(_options.MaxGoldenCases)];
         }
 
-        // Route the configured eval model to the runtime that serves it (persisted map, else §6.1 default = ollama —
-        // an un-repointed model behaves exactly as before). Node-local only — never the shared/cloud singleton.
+        // Route the configured eval model to the runtime that serves it (persisted map, else the configured default
+        // provider = ollama — an un-repointed model behaves exactly as before). Node-local only — never the
+        // shared/cloud singleton.
         var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
         var selection = new LocalModelSelection
         {
@@ -129,7 +130,7 @@ internal sealed class PlaybookEvalService(
         var baselineScore = await _evalJudge.ScoreAsync(goldenCase, baselineText, chatClient, cancellationToken).ConfigureAwait(false);
         var candidateScore = await _evalJudge.ScoreAsync(goldenCase, candidateText, chatClient, cancellationToken).ConfigureAwait(false);
 
-        // Regression criterion (§6 #3): a case the baseline passed and the candidate fails is a regression.
+        // Regression criterion: a case the baseline passed and the candidate fails is a regression.
         var regressed = baselineScore.Pass && !candidateScore.Pass;
 
         // Record the CANDIDATE's scoring path — the candidate is the thing under evaluation. (Baseline and candidate

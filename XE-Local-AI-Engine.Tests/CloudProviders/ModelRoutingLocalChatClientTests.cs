@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Proves Lane A's reconnect property (plan §7.4/§12): the model-routing client dispatches each send by
+///     Proves the model-routing client's reconnect property: it dispatches each send by
 ///     <see cref="ChatOptions.ModelId" /> to the provider the persisted map names (or the default for unmapped models),
 ///     reaches a NEW per-model client when the model switches mid-session (no node restart), caches one client per
 ///     (provider, model), and never disposes a resolved adapter at the boundary.

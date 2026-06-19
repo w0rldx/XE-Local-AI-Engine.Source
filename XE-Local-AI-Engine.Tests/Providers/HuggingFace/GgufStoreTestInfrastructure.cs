@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 
 /// <summary>
-///     Shared, network-free test scaffolding for the Lane B store/registry/download tests: a scripted
+///     Shared, network-free test scaffolding for the Hugging Face GGUF store/registry/download tests: a scripted
 ///     <see cref="HttpMessageHandler" />, a fake <see cref="IFreeSpaceProbe" />, a temp models directory, and helpers to
 ///     wire a <see cref="HuggingFaceGgufStore" /> over a substituted <see cref="IHuggingFaceGgufDiscovery" />.
 /// </summary>
@@ -73,8 +73,8 @@ internal static class GgufStoreTestInfrastructure
         return probe;
     }
 
-    // Substitutes the discovery half so the store can resolve a quant → the canned file (the real discovery is owned by
-    // another lane). Files default to one Q4_K_M file with the given size + sha; extra files can be appended.
+    // Substitutes the discovery half so the store can resolve a quant → the canned file (the real discovery is
+    // exercised by its own tests). Files default to one Q4_K_M file with the given size + sha; extra files can be appended.
     public static IHuggingFaceGgufDiscovery DiscoveryWith(params GgufRepoFile[] files)
     {
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();

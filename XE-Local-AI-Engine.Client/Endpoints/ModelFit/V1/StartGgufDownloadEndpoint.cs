@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     FastEndpoints handler to begin a GGUF file download (POST model-fit/download). Thin transport over the Lane C3
-///     <see cref="IGgufDownloadCoordinator" /> (which delegates to the Lane B <see cref="IGgufModelStore" />): it starts a
+///     FastEndpoints handler to begin a GGUF file download (POST model-fit/download). Thin transport over the
+///     <see cref="IGgufDownloadCoordinator" /> (which delegates to the Hugging Face GGUF store, <see cref="IGgufModelStore" />): it starts a
 ///     background, cancellable download keyed by the canonical model name and returns immediately with that identity. The
 ///     download runs detached; progress/cancel are tracked by the coordinator. No path/token is accepted or returned.
 /// </summary>

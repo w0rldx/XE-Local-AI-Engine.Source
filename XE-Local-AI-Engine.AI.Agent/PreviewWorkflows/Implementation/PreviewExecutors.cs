@@ -4,8 +4,8 @@ using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-///     Builds the non-agent MAF executors for a Preview workflow: Start (seed), transform (decision-#4 isolation),
-///     Debug-tap (side-event + forward-unchanged), and End (terminal output). Encapsulates the phase-0-pinned MAF
+///     Builds the non-agent MAF executors for a Preview workflow: Start (seed), transform (input isolation),
+///     Debug-tap (side-event + forward-unchanged), and End (terminal output). Encapsulates the MAF
 ///     discipline: agent executors run the ChatProtocol — they ACCUMULATE inbound ChatMessages and only run+forward
 ///     the WHOLE accumulated conversation on a TurnToken, so:
 ///       - Start/transform send a fresh single-message user list + a TurnToken (declare both sentMessageTypes).
@@ -34,10 +34,10 @@ internal static class PreviewExecutors
 
     /// <summary>
     ///     Transform node (between two agents): isolates the next agent's input to ONLY the upstream agent's latest
-    ///     assistant text (phase-0 item 3). Extracts the last <see cref="ChatRole.Assistant" /> message from the
+    ///     assistant text. Extracts the last <see cref="ChatRole.Assistant" /> message from the
     ///     forwarded accumulated conversation, emits a FRESH single user message list, and sends a TurnToken so the
     ///     downstream agent actually runs. Never concatenates the whole forwarded list (which would re-include the
-    ///     prior user turn and break decision #4).
+    ///     prior user turn and break per-agent input isolation).
     /// </summary>
     public static FunctionExecutor<List<ChatMessage>> BuildTransform(string id, string targetId)
     {
@@ -55,8 +55,8 @@ internal static class PreviewExecutors
 
     /// <summary>
     ///     Debug-print node: a tap. Emits the upstream payload as a <see cref="PreviewDebugEvent" /> side event
-    ///     (AddEventAsync — NOT routed) and returns the payload UNCHANGED (auto-forwarded) so the edge does not fork
-    ///     (phase-0 item 4). The payload is the upstream agent's accumulated conversation; we surface its latest
+    ///     (AddEventAsync — NOT routed) and returns the payload UNCHANGED (auto-forwarded) so the edge does not fork.
+    ///     The payload is the upstream agent's accumulated conversation; we surface its latest
     ///     assistant text for display but forward the full list unchanged to preserve downstream agent semantics.
     /// </summary>
     public static FunctionExecutor<List<ChatMessage>, List<ChatMessage>> BuildDebugTap(string nodeId)

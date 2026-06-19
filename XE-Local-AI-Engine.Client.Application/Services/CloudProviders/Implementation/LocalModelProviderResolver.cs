@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     Default <see cref="ILocalModelProviderResolver" />. Holds the registered provider set keyed by provider name
 ///     and reads the persisted per-model→provider map through a fresh DI scope per lookup (so a singleton router can
 ///     consume the scoped <see cref="IModelProviderMapStore" /> safely). Unmapped models route to the configured
-///     default provider (§6.1).
+///     default provider.
 /// </summary>
 public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 {
@@ -76,7 +76,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
         var mapStore = scope.ServiceProvider.GetRequiredService<IModelProviderMapStore>();
         var mapped = await mapStore.GetProviderForModelAsync(modelName, cancellationToken).ConfigureAwait(false);
 
-        // An unmapped model routes to the configured default provider (§6.1); a mapped row wins.
+        // An unmapped model routes to the configured default provider; a mapped row wins.
         return string.IsNullOrWhiteSpace(mapped) ? _defaultProviderName : mapped;
     }
 

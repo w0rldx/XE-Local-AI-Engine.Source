@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Owns the lifecycle of every <c>llama-server</c> child process: reuse-or-spawn per <c>(model, role)</c>, health
-///     aggregation, idle-TTL + loaded-cap eviction + reaper (shared policy, decision #15), restart-backoff, port
-///     allocation, and tree-kill teardown. All processes are same-user, unprivileged, localhost-bound (decision #17).
+///     aggregation, idle-TTL + loaded-cap eviction + reaper (shared eviction policy), restart-backoff, port
+///     allocation, and tree-kill teardown. All processes are same-user, unprivileged, localhost-bound.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <strong>Seam only (this is the Lane A contract; T2 implements the body).</strong> Implementations are
+///         <strong>This is the contract only; the implementation supplies the body.</strong> Implementations are
 ///         singleton — the supervisor owns all processes and disposes them on shutdown. Every async member flows a
 ///         <see cref="CancellationToken" />.
 ///     </para>
@@ -21,8 +21,7 @@ public interface ILlamaServerProcessSupervisor
 {
     /// <summary>
     ///     Reuses the running <c>(model, role)</c> process or spawns one (single-flight per key), then returns its
-    ///     localhost OpenAI-compatible endpoint. Spawning a new distinct model when the loaded-cap is full rejects
-    ///     (decision #18).
+    ///     localhost OpenAI-compatible endpoint. Spawning a new distinct model when the loaded-cap is full rejects.
     /// </summary>
     /// <exception cref="LlamaRuntimeException">
     ///     Spawn failed, the loaded-cap was reached, or the restart-backoff cap was exceeded — message is sanitized.

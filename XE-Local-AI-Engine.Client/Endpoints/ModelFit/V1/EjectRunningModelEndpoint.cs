@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     FastEndpoints handler to evict a running llama-server process (POST model-fit/running/eject). Thin transport over
-///     the Lane A <see cref="ILlamaServerProcessSupervisor.EvictAsync" />: it tree-kills the <c>(model, role)</c> process
+///     the <see cref="ILlamaServerProcessSupervisor.EvictAsync" />: it tree-kills the <c>(model, role)</c> process
 ///     and releases its port. Eviction is idempotent (a not-running process is a no-op). The role is <c>chat|embedding</c>
 ///     (defaulting to chat); an unknown role is rejected with a 400.
 /// </summary>

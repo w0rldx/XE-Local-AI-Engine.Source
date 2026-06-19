@@ -48,9 +48,9 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
             "Migration should create the playbook_actions table.");
 
         var actionColumns = await GetPlaybookActionColumnsAsync(connection).ConfigureAwait(false);
-        // A full MigrateAsync() also applies the later AddPlaybookActionAnalysisColumns migration (P3 analysis columns
-        // source_feedback_ids, confidence), AddPlaybookEvalAndGoldenConversations (P4 eval_result) and
-        // AddPlaybookActionEnabledAtUtc (P5 enabled_at_utc) — hence they are part of the expected set here.
+        // A full MigrateAsync() also applies the later AddPlaybookActionAnalysisColumns migration (analysis columns
+        // source_feedback_ids, confidence), AddPlaybookEvalAndGoldenConversations (eval_result) and
+        // AddPlaybookActionEnabledAtUtc (enabled_at_utc) — hence they are part of the expected set here.
         AssertEx.True(actionColumns.SetEquals(new[]
         {
             "id",

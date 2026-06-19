@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     FastEndpoints handler to ensure a llama.cpp prebuilt binary for a chosen acceleration variant is present
-///     (POST model-fit/llamacpp/version). Thin transport over Lane A's <see cref="ILlamaCppBinaryManager.EnsureBinaryAsync" />:
+///     (POST model-fit/llamacpp/version). Thin transport over <see cref="ILlamaCppBinaryManager.EnsureBinaryAsync" />:
 ///     it downloads + hash-verifies the pinned prebuilt for the requested variant (<c>cpu|cuda|vulkan</c>) when missing and
 ///     returns the resolved binary. There is NO arbitrary version/tag input — the release tag is pinned in code
 ///     (<see cref="LlamaCppReleasePins" />); this endpoint only selects which acceleration variant to acquire. An unknown

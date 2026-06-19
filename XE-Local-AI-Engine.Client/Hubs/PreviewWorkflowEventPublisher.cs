@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 ///     connection receives only the runs it subscribed to — the runId on every payload plus group scoping together
 ///     prevent cross-run contamination. Replaces the no-op default in the Client host.
 ///
-///     Privacy (plan §10, documented exception): these payloads carry the operator's own transient run output (the
+///     Privacy (documented exception): these payloads carry the operator's own transient run output (the
 ///     Debug feature) over the localhost Operator hub; nothing is persisted, logged, or indexed.
 /// </summary>
 internal sealed class PreviewWorkflowEventPublisher(IHubContext<PreviewWorkflowHub> hubContext) : IPreviewWorkflowEventPublisher

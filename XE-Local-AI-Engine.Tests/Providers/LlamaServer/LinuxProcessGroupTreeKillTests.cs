@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Runtime verification of the Linux process-group tree-kill path (plan §7.2 — the Linux branch this WSL2/Linux
-///     environment CAN exercise, unlike the Windows Job Object path). Spawns a real shell that forks a child, then
+///     Runtime verification of the Linux process-group tree-kill path — the Linux branch a WSL2/Linux
+///     environment CAN exercise, unlike the Windows Job Object path. Spawns a real shell that forks a child, then
 ///     tree-kills via the production launcher and asserts NO descendant survives (no orphan).
 /// </summary>
 /// <remarks>

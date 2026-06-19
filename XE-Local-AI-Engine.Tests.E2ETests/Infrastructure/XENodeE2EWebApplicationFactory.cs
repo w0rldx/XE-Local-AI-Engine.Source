@@ -262,7 +262,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.AddSingleton<IHttpClientFactory>(_ =>
             {
                 // Return a real (but un-routed) HttpClient for ANY named client so DI factories that construct an
-                // HttpClient at resolve time (e.g. the Lane B HF discovery/download clients reached by the model-fit
+                // HttpClient at resolve time (e.g. the Hugging Face discovery/download clients reached by the model-fit
                 // advisor endpoints, instantiated by FastEndpoints at MapFastEndpoints/startup) can be built. No real
                 // request is made in these E2E flows — the consuming endpoints catch transport failures and degrade —
                 // so this never performs network I/O. Mirrors TestingWebAppFactory's unit-side factory.

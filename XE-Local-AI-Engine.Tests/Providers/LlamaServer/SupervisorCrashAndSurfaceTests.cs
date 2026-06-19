@@ -4,10 +4,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>Supervisor_CrashRestart_BackoffCap_AndSpawnFail_Surfaces</c>: a repeatedly-failing spawn retries
-///     up to the restart cap with backoff and then surfaces a sanitized <see cref="LlamaRuntimeException" /> (no
-///     internal paths/secrets); a not-installed model surfaces the same way. Also covers the hybrid external-endpoint
-///     attach path (decision #5) and the per-process health aggregation surface.
+///     Verifies that a repeatedly-failing spawn retries up to the restart cap with backoff and then surfaces a
+///     sanitized <see cref="LlamaRuntimeException" /> (no internal paths/secrets); a not-installed model surfaces the
+///     same way. Also covers the hybrid external-endpoint attach path (attach to a configured endpoint instead of
+///     spawning a local process) and the per-process health aggregation surface.
 /// </summary>
 public sealed class SupervisorCrashAndSurfaceTests
 {

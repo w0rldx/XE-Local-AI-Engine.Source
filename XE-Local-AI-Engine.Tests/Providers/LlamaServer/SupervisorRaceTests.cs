@@ -4,9 +4,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Plan §12 row <c>Supervisor_EnsureRunning_RaceAndEvictDuringToolCall</c>: concurrent ensure-running for the same
-///     <c>(model, role)</c> spawns exactly once (single-flight gate), and a model the reaper evicted mid-tool-call is
-///     transparently re-spawned on the next ensure-running (restart, not failure).
+///     Verifies that concurrent ensure-running for the same <c>(model, role)</c> spawns exactly once (single-flight
+///     gate), and a model the reaper evicted mid-tool-call is transparently re-spawned on the next ensure-running
+///     (restart, not failure).
 /// </summary>
 public sealed class SupervisorRaceTests
 {

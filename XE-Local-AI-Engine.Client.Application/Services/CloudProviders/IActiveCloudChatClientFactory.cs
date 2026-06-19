@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-/// Resolves the <em>currently active</em> cloud chat client on demand (plan §0/C2, §7.2). The node's selected
+/// Resolves the <em>currently active</em> cloud chat client on demand. The node's selected
 /// cloud provider is the persisted <see cref="StoredCloudCredentials.ProviderName"/>; for Codex the live OAuth
 /// session lives in a separate encrypted store, so selection consults Codex-session presence rather than the
 /// Azure-shaped credential fields.

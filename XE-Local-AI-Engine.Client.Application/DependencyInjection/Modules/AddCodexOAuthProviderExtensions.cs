@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
-/// Registers the Codex OAuth cloud provider's auth lifecycle (plan §7.3): options binding, the encrypted
+/// Registers the Codex OAuth cloud provider's auth lifecycle: options binding, the encrypted
 /// token store, the auth service (with its own named token-endpoint <see cref="HttpClient"/>), the
 /// <see cref="CodexAuthHandler"/> that decorates the chat transport, the cloud chat-client factory + active-cloud
 /// selector, and the singleton login coordinator that owns the pending-login state behind the Operator endpoints.
@@ -77,7 +77,7 @@ internal static class AddCodexOAuthProviderExtensions
         builder.Services.AddSingleton(serviceProvider =>
             new Lazy<ICodexOAuthChatClientFactory>(serviceProvider.GetRequiredService<ICodexOAuthChatClientFactory>));
 
-        // The C2 selector: re-resolves the active cloud client (Codex/Azure) per send (plan §7.2).
+        // Re-resolves the active cloud client (Codex/Azure) per send so a sign-in/sign-out takes effect immediately.
         builder.Services.AddSingleton<IActiveCloudChatClientFactory, ActiveCloudChatClientFactory>();
 
         return builder;

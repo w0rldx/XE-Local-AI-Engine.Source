@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 
 /// <summary>
-///     The single mapper layer for the one graph contract (invariant #6): JSON blob ↔ <see cref="PreviewWorkflowGraph" />
+///     The single mapper layer for the one graph contract: JSON blob ↔ <see cref="PreviewWorkflowGraph" />
 ///     (Client model) ↔ <see cref="PreviewWorkflowDefinition" /> (.AI.Agent runner DTO). The persisted
 ///     <c>GraphJson</c> is a JSON serialization of the Client model; the execution path deserializes it (saved run) or
 ///     takes a Client model inline (unsaved run) and maps it onto the runner DTO.
