@@ -29,7 +29,6 @@
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
     <PackageReference Include="FastEndpoints"/>
     <PackageReference Include="FastEndpoints.Swagger"/>
-    <PackageReference Include="Grpc.Net.Client"/>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
@@ -56,7 +55,6 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>

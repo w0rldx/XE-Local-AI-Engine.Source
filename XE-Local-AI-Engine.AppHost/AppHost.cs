@@ -3,18 +3,6 @@ using Microsoft.Extensions.Hosting;
 using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
-var enableHostAgentDev = builder.Configuration.GetValue<bool>("XE_ENABLE_HOST_AGENT_DEV");
-var enableHostAgentRuntimeFidelity = builder.Configuration.GetValue<bool>("XE_ENABLE_HOST_AGENT_RUNTIME_FIDELITY");
-var hostAgentMode = "disabled";
-if (enableHostAgentDev)
-{
-    hostAgentMode = "fast-dev";
-}
-
-if (enableHostAgentRuntimeFidelity)
-{
-    hostAgentMode = "runtime-fidelity";
-}
 
 // Pin a concrete Ollama version (>= 0.30.3) instead of "latest": the floating tag drifted to a cached
 // 0.24.0 image that cannot load the gemma-4-12b ("gemma4") architecture, surfacing as an opaque 500.
@@ -36,10 +24,9 @@ if (builder.Environment.IsDevelopment())
     nodeSqlite = nodeSqlite.WithSqliteWeb();
 }
 
-// Lane D removed the in-Aspire HostAgent.Linux (Docker) sandbox/runtime project: inference and the AgentHome
-// sandbox now run as host processes (process sandbox provider), so the dev/runtime-fidelity HostAgent.Linux
-// resource and its socket/HMAC/startup-gate wiring are gone. The XE_ENABLE_HOST_AGENT_* flags still set the
-// reported mode the kept connection layer reads, but no HostAgent.Linux resource is provisioned here.
+// Lane D removed the in-Aspire HostAgent.Linux (Docker) sandbox/runtime project and the connection-layer
+// teardown removed the HostAgent gRPC client entirely: inference and the AgentHome sandbox now run as host
+// processes (process sandbox provider), so no HostAgent resource or socket/HMAC/startup-gate wiring exists.
 
 var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithExternalHttpEndpoints()
@@ -47,7 +34,6 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithUrlForEndpoint("http", url => url.DisplayText = "XE Local AI Engine (http)")
                  .WithEnvironment("ASPIRE_ENABLED", "true")
                  .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
-                 .WithEnvironment("XE_HOST_AGENT_ASPIRE_MODE", hostAgentMode)
                  .WithEnvironment("XE_NODE_SQLITE_KEY", nodeSqliteKey)
                  .WithEnvironment("NodeAuth__Jwt__Issuer", "xe-local-ai-engine")
                  .WithEnvironment("NodeAuth__Jwt__Audience", "xe-local-ai-engine")

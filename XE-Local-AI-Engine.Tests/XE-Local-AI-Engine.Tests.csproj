@@ -6,10 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- gRPC server hosting (AddGrpc / MapGrpcService) for the in-process gRPC server in HostAgentClientWrapperTests.
-         Previously pulled in transitively via the (now-removed) HostAgent.Linux project reference; made explicit so the
-         kept client-connection-layer round-trip test still compiles. -->
-    <PackageReference Include="Grpc.AspNetCore"/>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/>
     <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"/>
@@ -27,8 +23,6 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Abstractions\XE-Local-AI-Engine.HostAgent.Abstractions.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Capabilities\XE-Local-AI-Engine.Providers.Capabilities.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
@@ -43,8 +37,6 @@
 
   <ItemGroup>
     <Content Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest"/>
-    <Content Include="..\Plans\artifacts\sample-manifests\*.yaml" Link="Fixtures\HostAgent\SampleManifests\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"/>
-    <Content Include="..\XE-Local-AI-Engine.HostAgent.Abstractions\Schemas\host-agent-manifest.schema.json" Link="Fixtures\HostAgent\host-agent-manifest.schema.json" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
 </Project>
