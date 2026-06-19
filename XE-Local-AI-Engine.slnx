@@ -12,7 +12,6 @@
         <Project Path="XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
         <Project Path="XE-Local-AI-Engine.Client.Persistence/XE-Local-AI-Engine.Client.Persistence.csproj"/>
-        <Project Path="XE-Local-AI-Engine.Tray/XE-Local-AI-Engine.Tray.csproj"/>
     </Folder>
     <Folder Name="/Src/Aspire/">
         <Project Path="XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj"/>

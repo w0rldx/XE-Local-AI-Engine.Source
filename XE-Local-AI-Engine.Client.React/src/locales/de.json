@@ -829,7 +829,6 @@
 				"privacyNote": "Verbindungssteuerung gibt keine Zugriffs- oder Refresh-Tokens an den Browser zurück."
 			},
 			"connectionStatus": {
-				"preparingModel": "Modell wird vorbereitet",
 				"reconnecting": "Verbindet erneut",
 				"connecting": "Verbindet",
 				"connected": "Verbunden",

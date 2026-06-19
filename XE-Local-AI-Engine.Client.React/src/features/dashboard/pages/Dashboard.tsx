@@ -93,7 +93,7 @@ export function Dashboard() {
 		error instanceof Error ? error.message : t("pages.dashboard.unexpectedError");
 
 	const getConnectionStatusLabel = (state: string): string => {
-		const key = `pages.dashboard.connectionStatus.${state === "preparing-model" ? "preparingModel" : state}`;
+		const key = `pages.dashboard.connectionStatus.${state}`;
 		return t(key, { defaultValue: t("pages.dashboard.connectionStatus.unknown") });
 	};
 
