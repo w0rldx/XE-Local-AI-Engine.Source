@@ -31,8 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="C0re.AI.Shared.Contracts.Enums"/>
-    <Using Include="C0re.AI.Shared.Contracts.Events"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
+    <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
   </ItemGroup>
 
 </Project>
