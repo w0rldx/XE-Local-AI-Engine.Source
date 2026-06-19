@@ -8,7 +8,6 @@
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
-    <PackageReference Include="Grpc.Net.Client"/>
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
@@ -37,7 +36,6 @@
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
-    <ProjectReference Include="..\XE-Local-AI-Engine.HostAgent.Grpc.Contracts\XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Capabilities\XE-Local-AI-Engine.Providers.Capabilities.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.CodexOAuth\XE-Local-AI-Engine.Providers.CodexOAuth.csproj"/>

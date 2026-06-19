@@ -18,11 +18,6 @@
         <Project Path="XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj"/>
         <Project Path="XE-Local-AI-Engine.ServiceDefaults/XE-Local-AI-Engine.ServiceDefaults.csproj"/>
     </Folder>
-    <Folder Name="/Src/HostAgent/">
-        <Project Path="XE-Local-AI-Engine.HostAgent.Abstractions/XE-Local-AI-Engine.HostAgent.Abstractions.csproj"/>
-        <Project Path="XE-Local-AI-Engine.HostAgent.Grpc.Contracts/XE-Local-AI-Engine.HostAgent.Grpc.Contracts.csproj"/>
-        <Project Path="XE-Local-AI-Engine.HostAgent.Windows/XE-Local-AI-Engine.HostAgent.Windows.csproj"/>
-    </Folder>
     <Folder Name="/Src/Providers/">
         <Project Path="XE-Local-AI-Engine.Providers.Abstractions/XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
         <Project Path="XE-Local-AI-Engine.Providers.Capabilities/XE-Local-AI-Engine.Providers.Capabilities.csproj"/>
