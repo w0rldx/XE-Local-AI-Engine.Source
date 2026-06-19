@@ -26,7 +26,7 @@ The repository is being prepared for an RC release. Release documentation and va
 - Only the Node Web Server talks to the C0re platform over `WorkerHub`.
 - Worker credentials, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to the browser or written to logs/transcripts.
 - Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
-- Windows and Linux installers must not create background autostart behavior unless a new approved plan changes that contract.
+- Any future installer or packaging effort must not create background autostart behavior unless a new approved plan changes that contract.
 
 ## Documentation map
 
@@ -81,7 +81,7 @@ bash .opencode/scripts/project-validate.sh --scope e2e --confirm-e2e --serial
 
 ## Aspire modes
 
-Use Aspire for local development and integration checks, not as a replacement for installer clean-install tests.
+Use Aspire for local development and integration checks.
 
 ```bash
 dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https
@@ -96,8 +96,6 @@ Required evidence includes:
 - restore/build/test transcripts
 - generated schema/sample manifest validation
 - digest-pinned runtime images and package checksums
-- Windows clean-install transcript
-- Linux clean-install transcript
 - runtime smoke-test transcript
 
-Clean-install runner scripts are tracked under `ci/host-agent/`. Their transcripts remain pending until RC MSI/deb/rpm artifacts are produced and executed on clean runners.
+Standalone OS-package distribution (MSI/deb/rpm) is deferred: under the runtime re-architecture the app self-provisions its llama.cpp runtime and GGUF models at first run, so there is no installer bundle to validate. A future packaging effort would be its own plan.
