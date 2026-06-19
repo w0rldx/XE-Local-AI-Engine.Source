@@ -48,7 +48,6 @@ describe("nodeCapabilities", () => {
 			nodeSettings: "/node-settings",
 			cloudSettings: "/cloud-settings",
 			models: "/models",
-			manager: "/manager",
 			invocations: "/invocations",
 			tools: "/tools",
 			agents: "/agents",

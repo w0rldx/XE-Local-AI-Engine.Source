@@ -8,7 +8,6 @@ import {
 	IconMessageCircle,
 	IconPlugConnected,
 	IconRobot,
-	IconServerCog,
 	IconSettings,
 } from "@tabler/icons-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
@@ -105,14 +104,6 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.preview",
 		to: nodeRoutePaths.preview,
 		capability: "preview",
-	},
-	// Manager group: runtime overview (always). The former approved-images entry was removed with the approved-image
-	// concept (Lane C — the advisor replaces the Docker-llmfit recommendation backend).
-	{
-		id: "manager",
-		icon: IconServerCog,
-		translationKey: "navigation.manager",
-		links: [{ translationKey: "navigation.overview", to: nodeRoutePaths.manager }],
 	},
 	{
 		id: "invocations",

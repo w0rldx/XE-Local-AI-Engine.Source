@@ -24,7 +24,6 @@ export interface NodeCapabilityConfig {
 	// Set to false for local-only (LocalTester) builds where no CentralPlatform:BaseUrl is configured.
 	readonly cloudSettings: boolean;
 	readonly modelManagement: boolean;
-	readonly runtimeManager: boolean;
 	readonly invocationMonitor: boolean;
 	readonly agentManagement: boolean;
 	readonly mcpServers: boolean;
@@ -60,7 +59,6 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Set to true when the node is paired to a central platform instance.
 	cloudSettings: false,
 	modelManagement: true,
-	runtimeManager: true,
 	invocationMonitor: true,
 	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,
@@ -91,7 +89,6 @@ export const nodeRoutePaths = {
 	nodeSettings: "/node-settings",
 	cloudSettings: "/cloud-settings",
 	models: "/models",
-	manager: "/manager",
 	invocations: "/invocations",
 	// local tools catalog page — extension seam: MCP tools will populate the same list later
 	tools: "/tools",

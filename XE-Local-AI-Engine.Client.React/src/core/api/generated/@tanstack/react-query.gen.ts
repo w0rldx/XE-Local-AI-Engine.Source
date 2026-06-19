@@ -47,7 +47,6 @@ import {
 	enableAutoConnect,
 	enableScheduledJob,
 	ensureLlamaCppBinary,
-	executeRuntimeContainerAction,
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
 	getAgentDefinition,
@@ -68,7 +67,6 @@ import {
 	getNodeSettings,
 	getPreviewWorkflow,
 	getRunningLocalModels,
-	getRuntimeManagerStatus,
 	getScheduledJob,
 	getScheduledJobRun,
 	getSkill,
@@ -216,8 +214,6 @@ import type {
 	EnableScheduledJobResponse,
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryResponse,
-	ExecuteRuntimeContainerActionData,
-	ExecuteRuntimeContainerActionResponse,
 	ExecuteSavedPreviewWorkflowData,
 	ExecuteSavedPreviewWorkflowResponse,
 	ExecuteUnsavedPreviewWorkflowData,
@@ -260,8 +256,6 @@ import type {
 	GetPreviewWorkflowResponse,
 	GetRunningLocalModelsData,
 	GetRunningLocalModelsResponse,
-	GetRuntimeManagerStatusData,
-	GetRuntimeManagerStatusResponse,
 	GetScheduledJobData,
 	GetScheduledJobResponse,
 	GetScheduledJobRunData,
@@ -754,52 +748,6 @@ export const triggerScheduledJobMutation = (
 	};
 	return mutationOptions;
 };
-
-export const executeRuntimeContainerActionMutation = (
-	options?: Partial<Options<ExecuteRuntimeContainerActionData>>,
-): UseMutationOptions<
-	ExecuteRuntimeContainerActionResponse,
-	AxiosError<DefaultError>,
-	Options<ExecuteRuntimeContainerActionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ExecuteRuntimeContainerActionResponse,
-		AxiosError<DefaultError>,
-		Options<ExecuteRuntimeContainerActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await executeRuntimeContainerAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getRuntimeManagerStatusQueryKey = (options?: Options<GetRuntimeManagerStatusData>) =>
-	createQueryKey("getRuntimeManagerStatus", options);
-
-export const getRuntimeManagerStatusOptions = (options?: Options<GetRuntimeManagerStatusData>) =>
-	queryOptions<
-		GetRuntimeManagerStatusResponse,
-		AxiosError<DefaultError>,
-		GetRuntimeManagerStatusResponse,
-		ReturnType<typeof getRuntimeManagerStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getRuntimeManagerStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getRuntimeManagerStatusQueryKey(options),
-	});
 
 export const cancelPreviewRunMutation = (
 	options?: Partial<Options<CancelPreviewRunData>>,

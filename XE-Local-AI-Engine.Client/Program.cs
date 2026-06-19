@@ -138,8 +138,6 @@ try
     });
     app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
-    app.MapHub<RuntimeManagerHub>(LocalApiRoutes.RuntimeManager.Hub)
-       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<SchedulerHub>(LocalApiRoutes.Scheduler.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<PreviewWorkflowHub>(LocalApiRoutes.Preview.Hub)
