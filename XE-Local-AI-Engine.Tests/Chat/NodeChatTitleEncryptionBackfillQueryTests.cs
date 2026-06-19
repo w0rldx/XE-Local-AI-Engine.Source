@@ -82,7 +82,13 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
                 .FirstOrDefaultAsync()
                 .ConfigureAwait(false);
 
-            AssertEx.Equal(messageId, AssertEx.NotNull(row).MessageId);
+            var materialized = AssertEx.NotNull(row);
+            AssertEx.Equal(messageId, materialized.MessageId);
+
+            // Guard the content-column alias too (it was equally affected by the snake_case -> PascalCase
+            // mismatch): the encrypted blob must materialize as a non-empty byte[], not default/null.
+            AssertEx.NotNull(materialized.Content);
+            AssertEx.NotEqual(0, materialized.Content.Length);
         }
     }
 
