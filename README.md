@@ -31,22 +31,10 @@ The repository is being prepared for an RC release. Release documentation and va
 - Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
 - Windows and Linux installers must not create background autostart behavior unless a new approved plan changes that contract.
 
-See [HostAgent architecture](docs/host-agent/architecture.md) for the full component and security-boundary model.
-
 ## Documentation map
 
-Start with the HostAgent documentation index:
-
-- [HostAgent docs](docs/host-agent/README.md)
 - [AI runtime developer notes](docs/ai-runtime.md)
 - [Backend commentary map](docs/backend-commentary-map.md)
-- [Release and operations](docs/host-agent/release-and-operations.md)
-- [Aspire development modes](docs/host-agent/aspire-dev.md)
-- [Windows installation](docs/host-agent/install-windows.md)
-- [Linux installation](docs/host-agent/install-linux.md)
-- [Tray launcher](docs/host-agent/tray.md)
-- [Bring your own runtime](docs/host-agent/byo.md)
-- [Troubleshooting](docs/host-agent/troubleshooting.md)
 
 Component-specific notes:
 
@@ -100,11 +88,7 @@ Use Aspire for local development and integration checks, not as a replacement fo
 
 ```bash
 dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https
-dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https-fast-dev
-dotnet run --project XE-Local-AI-Engine.AppHost --launch-profile https-runtime-fidelity
 ```
-
-See [Aspire development modes](docs/host-agent/aspire-dev.md) for mode details and limitations.
 
 ## RC readiness status
 
@@ -120,5 +104,3 @@ Required evidence includes:
 - runtime smoke-test transcript
 
 Clean-install runner scripts are tracked under `ci/host-agent/`. Their transcripts remain pending until RC MSI/deb/rpm artifacts are produced and executed on clean runners.
-
-Use [Release and operations](docs/host-agent/release-and-operations.md) as the release checklist and evidence index.

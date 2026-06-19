@@ -12,11 +12,9 @@
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
     <PackageReference Include="Microsoft.Testing.Platform"/>
     <PackageReference Include="ModelContextProtocol"/>
-    <PackageReference Include="NJsonSchema"/>
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TUnit"/>
-    <PackageReference Include="YamlDotNet"/>
   </ItemGroup>
 
   <ItemGroup>

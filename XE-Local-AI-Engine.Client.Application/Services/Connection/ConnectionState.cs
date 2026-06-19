@@ -10,8 +10,7 @@ public enum WorkerConnectionState
     Connected = 2,
     Reconnecting = 3,
     Pairing = 4,
-    Error = 5,
-    PreparingModel = 6
+    Error = 5
 }
 
 /// <summary>
