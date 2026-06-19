@@ -9,13 +9,11 @@ using XE_Local_AI_Engine.Installer.Manifest;
 
 /// <summary>
 ///     RC1 <see cref="IInstallerEnvironmentDriver" /> (plan §7.2). Drives the host by shelling out to
-///     <c>wsl.exe</c> (mirroring the <c>WslCommandAllowlist</c> argument shapes and the hash-pinned
-///     <c>bash -s</c> transport — the script body rides stdin) and to the vendored <c>*.ps1</c> via
-///     <c>powershell.exe -NoProfile -ExecutionPolicy Bypass -File</c> after <c>Unblock-File</c> (HIGH-4).
-///     It deliberately does NOT reference the Windows-only <c>HostAgent.Windows</c> assembly so the
-///     installer project (and its tests) build on the Linux CI box; the driver is only instantiated at
-///     runtime under <see cref="OperatingSystem.IsWindows" />, and the one Windows-only API (DPAPI) is
-///     guarded so the file-layout logic stays testable cross-platform.
+///     <c>wsl.exe</c> (hash-pinned <c>bash -s</c> transport — the script body rides stdin) and to the
+///     vendored <c>*.ps1</c> via <c>powershell.exe -NoProfile -ExecutionPolicy Bypass -File</c> after
+///     <c>Unblock-File</c> (HIGH-4). The driver is only instantiated at runtime under
+///     <see cref="OperatingSystem.IsWindows" />, and the one Windows-only API (DPAPI) is guarded so the
+///     file-layout logic stays testable cross-platform.
 /// </summary>
 public sealed partial class WindowsInstallerDriver : IInstallerEnvironmentDriver
 {
