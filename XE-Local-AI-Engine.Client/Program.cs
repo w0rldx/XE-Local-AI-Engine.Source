@@ -2,12 +2,14 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.Agents.AI.DevUI;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Hosting.Server;
 using Scalar.AspNetCore;
 using Serilog;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -21,6 +23,16 @@ using XE_Local_AI_Engine.Client.Services.Shutdown;
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    // Desktop mode (self-contained double-click launch) is strictly opt-in via env XE_LAUNCH_MODE=desktop or --desktop.
+    // Resolved once, early, so it can gate the loopback bind below and the HTTPS pipeline further down. Off-flag, every
+    // call below is skipped and the pipeline is byte-identical to a headless/Aspire/CI run.
+    var isDesktop = DesktopLaunch.IsDesktopMode(args);
+    if (isDesktop)
+    {
+        // Bind HTTP on a free loopback port (port 0 = OS picks); the real port is read post-bind for the browser launch.
+        builder.WebHost.UseUrls(DesktopLaunch.LoopbackBindUrl);
+    }
 
     builder.Logging.ClearProviders();
 
@@ -73,12 +85,18 @@ try
     // exceptions into RFC7807 ProblemDetails. Registered before UseFastEndpoints so it wraps endpoints.
     app.UseExceptionHandler();
 
-    if (!app.Environment.IsDevelopment())
+    // Desktop mode serves plain HTTP on loopback only (locked decision #1), so the HTTPS-redirect/HSTS pipeline is
+    // bypassed entirely. Off-flag both branches are exactly as before. UseAntiforgery is scheme-agnostic and stays.
+    if (!isDesktop)
     {
-        app.UseHsts();
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+        }
+
+        app.UseHttpsRedirection();
     }
 
-    app.UseHttpsRedirection();
     app.UseAntiforgery();
 
     app.UseStaticFiles();
@@ -171,6 +189,14 @@ try
 
     app.MapFallbackToFile("index.html");
 
+    // Desktop mode only: install console-close → graceful-stop triggers and the on-started browser launch. Off-flag this
+    // is never reached, so no signal handler / P/Invoke is installed (invariant #1). The lifecycle is rooted for the
+    // app's lifetime via the lifetime token registration; it disposes when the host stops.
+    if (isDesktop)
+    {
+        ActivateDesktopLifecycle(app);
+    }
+
     await app.RunAsync();
 }
 catch (HostAbortedException)
@@ -236,6 +262,24 @@ static async Task ReconcileStaleScheduledRunsAsync(IServiceProvider services)
     {
         Log.Information("Reconciled {ReconciledCount} stale scheduled job run(s) at startup.", reconciledCount);
     }
+}
+
+static void ActivateDesktopLifecycle(WebApplication app)
+{
+    ArgumentNullException.ThrowIfNull(app);
+
+    var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+    var server = app.Services.GetRequiredService<IServer>();
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<DesktopLifecycle>();
+
+    // Ownership is transferred to the host lifetime: the instance lives for the app's lifetime (rooting the native
+    // console-ctrl delegate held inside it) and is disposed when the host stops. CA2000 can't see the deferred disposal
+    // through the lifetime registration, so it is suppressed with that justification.
+#pragma warning disable CA2000 // Disposal is deferred to and owned by ApplicationStopped below.
+    var desktopLifecycle = new DesktopLifecycle(lifetime, server, logger);
+#pragma warning restore CA2000
+    desktopLifecycle.Activate();
+    lifetime.ApplicationStopped.Register(desktopLifecycle.Dispose);
 }
 
 static void ActivateInvocationResumeRegistry(IServiceProvider services)
