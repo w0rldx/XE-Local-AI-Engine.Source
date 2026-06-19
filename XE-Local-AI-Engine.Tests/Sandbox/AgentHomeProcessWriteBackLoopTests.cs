@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -37,7 +38,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             {
                 if (Directory.Exists(root))
                 {
-                    Directory.Delete(root, recursive: true);
+                    Directory.Delete(root, true);
                 }
             }
             catch (IOException)
@@ -56,8 +57,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         }
 
         var clock = new FixedClock(FixedNow);
-        using var provider = new ProcessSandboxRuntimeProvider(
-            Options.Create(new LocalContainerOptions()), clock);
+        using var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), clock);
 
         var resolver = new FakeSelectedFolderResolver();
         var folderId = Guid.NewGuid();
@@ -136,7 +136,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             process.WaitForExit(5000);
             return process.HasExited && process.ExitCode == 0;
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (Win32Exception)
         {
             return false;
         }

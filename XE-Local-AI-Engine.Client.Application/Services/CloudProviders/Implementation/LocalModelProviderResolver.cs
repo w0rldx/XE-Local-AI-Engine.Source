@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -12,17 +11,16 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 {
+    private readonly string _defaultProviderName;
     private readonly IReadOnlyDictionary<string, ILocalModelProvider> _providersByName;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly string _defaultProviderName;
 
     /// <summary>
     ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server + the optional
     ///     Ollama provider), the scope factory used to read the per-model map, the configured default provider for
     ///     unmapped models, and the loaded-process cap surfaced to the preview cap check.
     /// </summary>
-    public LocalModelProviderResolver(
-        IEnumerable<ILocalModelProvider> providers,
+    public LocalModelProviderResolver(IEnumerable<ILocalModelProvider> providers,
         IServiceScopeFactory scopeFactory,
         string defaultProviderName,
         int maxLoadedProcesses)
@@ -51,8 +49,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
 
         if (!byName.TryGetValue(defaultProviderName, out var defaultProvider))
         {
-            throw new InvalidOperationException(
-                $"The configured default local model provider '{defaultProviderName}' is not registered.");
+            throw new InvalidOperationException($"The configured default local model provider '{defaultProviderName}' is not registered.");
         }
 
         _providersByName = byName;
@@ -90,8 +87,7 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
             return provider;
         }
 
-        throw new InvalidOperationException(
-            $"No registered local model provider matches '{providerName}'.");
+        throw new InvalidOperationException($"No registered local model provider matches '{providerName}'.");
     }
 
     /// <inheritdoc />

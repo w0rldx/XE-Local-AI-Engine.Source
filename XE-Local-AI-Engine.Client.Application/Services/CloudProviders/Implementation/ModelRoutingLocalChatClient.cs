@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
@@ -35,9 +36,10 @@ public sealed class ModelRoutingLocalChatClient : IChatClient
         "Resolved chat clients are cached and owned by this router (disposed in Dispose); the underlying model "
         + "processes are owned by the provider/supervisor. Disposing a resolved client per-call would be incorrect.";
 
-    private readonly ILocalModelProviderResolver _resolver;
-    private readonly string _defaultModelName;
     private readonly ConcurrentDictionary<(string Provider, string Model), IChatClient> _clientsByProviderAndModel = new();
+    private readonly string _defaultModelName;
+
+    private readonly ILocalModelProviderResolver _resolver;
 
     private int _disposed;
 
@@ -54,8 +56,7 @@ public sealed class ModelRoutingLocalChatClient : IChatClient
 
     /// <inheritdoc />
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ResolvedClientOwnershipNote)]
-    public async Task<ChatResponse> GetResponseAsync(
-        IEnumerable<ChatMessage> messages,
+    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
@@ -65,10 +66,10 @@ public sealed class ModelRoutingLocalChatClient : IChatClient
 
     /// <inheritdoc />
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ResolvedClientOwnershipNote)]
-    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> messages,
+    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         var client = await ResolveClientAsync(options, cancellationToken).ConfigureAwait(false);
         await foreach (var update in client.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))

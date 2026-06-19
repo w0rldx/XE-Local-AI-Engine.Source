@@ -4,17 +4,16 @@ namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 ///     Provider-agnostic description of an Open Canvas (Preview) workflow graph. This is the ONE graph contract the
 ///     runner consumes; Application/Client mirror it (zod schema + Client.Models) and map their stored/inline graph
 ///     onto it. NO Microsoft.Agents.AI types appear here (invariant: MAF stays inside the runner/session).
-///
 ///     === GRAPH SCHEMA (mirror this in the Application zod schema + the Client.Models DTOs) ===
 ///     A workflow is a STRICTLY LINEAR chain (in-degree/out-degree ≤ 1 per node — enforced by definition validation):
-///         Start → Agent → [Agent…] → (Debug | Pause)* → End
+///     Start → Agent → [Agent…] → (Debug | Pause)* → End
 ///     Nodes:
-///       - <see cref="PreviewNodeKind.Start" />  : carries the seed user text (<see cref="PreviewWorkflowDefinition.StartText" />).
-///       - <see cref="PreviewNodeKind.Agent" />  : a model call. Carries Id, Label, Instructions, ModelId,
-///                                                 optional ModelProfile + ReasoningEffort (see <see cref="PreviewAgentNode" />).
-///       - <see cref="PreviewNodeKind.Debug" />  : a tap — emits the upstream payload as a side event, forwards unchanged.
-///       - <see cref="PreviewNodeKind.Pause" />  : halts the run; surfaces the upstream output; resumes on a continue signal.
-///       - <see cref="PreviewNodeKind.End" />    : terminal output.
+///     - <see cref="PreviewNodeKind.Start" />  : carries the seed user text (<see cref="PreviewWorkflowDefinition.StartText" />).
+///     - <see cref="PreviewNodeKind.Agent" />  : a model call. Carries Id, Label, Instructions, ModelId,
+///     optional ModelProfile + ReasoningEffort (see <see cref="PreviewAgentNode" />).
+///     - <see cref="PreviewNodeKind.Debug" />  : a tap — emits the upstream payload as a side event, forwards unchanged.
+///     - <see cref="PreviewNodeKind.Pause" />  : halts the run; surfaces the upstream output; resumes on a continue signal.
+///     - <see cref="PreviewNodeKind.End" />    : terminal output.
 ///     Edges: directed <see cref="PreviewWorkflowEdge" /> { SourceId, TargetId }.
 ///     Run output is NEVER part of this contract — it streams as <see cref="PreviewWorkflowUpdate" /> events only.
 /// </summary>

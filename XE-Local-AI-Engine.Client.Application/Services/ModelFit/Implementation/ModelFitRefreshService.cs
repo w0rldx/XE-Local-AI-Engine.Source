@@ -5,9 +5,9 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -42,17 +42,18 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <summary>How many GGUF repos to inspect per refresh (each inspect is an HTTP range read, not a download).</summary>
     private const int DefaultRepoSearchLimit = 12;
 
-    private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IHuggingFaceGgufDiscovery _discovery;
     private readonly MemoryFitEstimator _estimator;
-    private readonly IGgufModelStore _modelStore;
+
+    private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly ILogger<ModelFitRefreshService> _logger;
     private readonly IGgufModelRegistry _modelRegistry;
-    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly IGgufModelStore _modelStore;
+    private readonly IModelFitRecommendationStore _recommendationStore;
     private readonly ModelFitRequestValidator _requestValidator;
     private readonly IModelFitSnapshotStore _snapshotStore;
-    private readonly IModelFitRecommendationStore _recommendationStore;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<ModelFitRefreshService> _logger;
 
     public ModelFitRefreshService(IHardwareProfiler hardwareProfiler,
         IHuggingFaceGgufDiscovery discovery,
@@ -88,7 +89,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         // Benchmark is deferred — this is the recommend-only path. Reject before any snapshot row is created.
         if (request.Operation != ModelFitOperation.Recommend)
         {
-            return Failed(snapshotId: null, "Benchmark refresh is not yet enabled.");
+            return Failed(null, "Benchmark refresh is not yet enabled.");
         }
 
         // Pre-run config validation: intent params. The advisor targets llama.cpp, so the provider is fixed to the
@@ -97,10 +98,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             request.UseCase,
             request.Limit,
             AdvisorProviderName,
-            modelName: null);
+            null);
         if (validationError is not null)
         {
-            return Failed(snapshotId: null, validationError);
+            return Failed(null, validationError);
         }
 
         var quant = string.IsNullOrWhiteSpace(request.QuantOverride) ? MemoryFitEstimator.DefaultQuant : request.QuantOverride.Trim();
@@ -108,13 +109,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         // Open the Running snapshot row (sentinel image/provider — the approved-image concept is gone).
         var startedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId: AdvisorSnapshotSource,
-                Operation: request.Operation,
-                UseCase: request.UseCase,
-                ProviderName: AdvisorProviderName,
-                ModelName: null,
-                Status: ModelFitRunStatus.Running,
-                StartedAtUtc: startedAtUtc),
+        var snapshot = await _snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(AdvisorSnapshotSource,
+                request.Operation,
+                request.UseCase,
+                AdvisorProviderName,
+                null,
+                ModelFitRunStatus.Running,
+                startedAtUtc),
             cancellationToken).ConfigureAwait(false);
 
         var snapshotId = snapshot.Id;
@@ -126,7 +127,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         try
         {
-            var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
+            var profile = await _hardwareProfiler.GetProfileAsync(false, cancellationToken).ConfigureAwait(false);
             var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -140,13 +141,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 // Should not happen (we emit the JSON ourselves) — record Failed and never throw out of the service.
                 await _snapshotStore.MarkTerminalAsync(snapshotId,
                     ModelFitRunStatus.Failed,
-                    exitCode: null,
-                    durationMs: completedAtUtc - startedAtUtc,
-                    rawJson: advisorJson,
-                    stderrExcerpt: null,
-                    diagnosticsJson: "advisor recommendation JSON parse failed",
-                    completedAtUtc: completedAtUtc,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    null,
+                    completedAtUtc - startedAtUtc,
+                    advisorJson,
+                    null,
+                    "advisor recommendation JSON parse failed",
+                    completedAtUtc,
+                    cancellationToken).ConfigureAwait(false);
 
                 _logger.LogWarning("Advisor emitted unparseable recommendation JSON for snapshot {SnapshotId}.", snapshotId);
                 return Failed(snapshotId, "Advisor recommendation could not be assembled.");
@@ -154,13 +155,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Succeeded,
-                exitCode: 0,
-                durationMs: completedAtUtc - startedAtUtc,
-                rawJson: advisorJson,
-                stderrExcerpt: null,
-                diagnosticsJson: parse.SystemDiagnosticsJson,
-                completedAtUtc: completedAtUtc,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                0,
+                completedAtUtc - startedAtUtc,
+                advisorJson,
+                null,
+                parse.SystemDiagnosticsJson,
+                completedAtUtc,
+                cancellationToken).ConfigureAwait(false);
 
             var inserted = await _recommendationStore.ReplaceForSnapshotAsync(snapshotId, parse.Recommendations, cancellationToken)
                                                      .ConfigureAwait(false);
@@ -171,7 +172,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 inserted,
                 profile is { GpuAccelAvailable: true, VramKnown: true } ? "GPU" : "CPU");
 
-            return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Succeeded, inserted, SanitizedError: null);
+            return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Succeeded, inserted, null);
         }
         catch (OperationCanceledException)
         {
@@ -181,13 +182,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             var cancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Cancelled,
-                exitCode: null,
-                durationMs: cancelledAtUtc - startedAtUtc,
-                rawJson: null,
-                stderrExcerpt: null,
-                diagnosticsJson: null,
-                completedAtUtc: cancelledAtUtc,
-                cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                null,
+                cancelledAtUtc - startedAtUtc,
+                null,
+                null,
+                null,
+                cancelledAtUtc,
+                CancellationToken.None).ConfigureAwait(false);
 
             _logger.LogInformation("Advisor refresh cancelled for snapshot {SnapshotId}.", snapshotId);
             throw;
@@ -199,13 +200,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             var failedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Failed,
-                exitCode: null,
-                durationMs: failedAtUtc - startedAtUtc,
-                rawJson: null,
-                stderrExcerpt: null,
-                diagnosticsJson: "GGUF discovery failed",
-                completedAtUtc: failedAtUtc,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                null,
+                failedAtUtc - startedAtUtc,
+                null,
+                null,
+                "GGUF discovery failed",
+                failedAtUtc,
+                cancellationToken).ConfigureAwait(false);
 
             _logger.LogWarning(exception, "Advisor refresh failed during GGUF discovery for snapshot {SnapshotId}.", snapshotId);
             return Failed(snapshotId, "GGUF discovery failed.");
@@ -308,7 +309,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             file.AttentionHeadCount ?? 0,
             ctxTarget,
             profile,
-            kvCacheQuantized: false);
+            false);
 
         // Drop insufficient-metadata files (no weights term computable) and non-fitting files.
         if (estimate.EstimatedBytes <= _estimator.OverheadBytes || !estimate.Fits)
@@ -409,7 +410,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     private static ModelFitRefreshResult Failed(Guid? snapshotId, string sanitizedError)
     {
-        return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, RecommendationCount: 0, sanitizedError);
+        return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, 0, sanitizedError);
     }
 
     /// <summary>One ranked advisor candidate: the repo/file/quant identity plus its computed memory-fit estimate.</summary>

@@ -29,10 +29,10 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     private const string PciVendorNvidia = "10DE";
     private const string PciVendorAmd = "1002";
     private const string PciVendorIntel = "8086";
-
-    private readonly IProcessProbe _processProbe;
     private readonly IHardwareProbeEnvironment _environment;
     private readonly HardwareProfilerOptions _options;
+
+    private readonly IProcessProbe _processProbe;
 
     private volatile HardwareProfile? _cachedProfile;
 
@@ -168,16 +168,16 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     private async Task<bool> NvidiaPresentAsync(CancellationToken ct)
     {
         var result = await _processProbe
-            .RunAsync("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], ct)
-            .ConfigureAwait(false);
+                           .RunAsync("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], ct)
+                           .ConfigureAwait(false);
         return result is { ExitCode: 0 } && !string.IsNullOrWhiteSpace(result.StandardOutput);
     }
 
     private async Task<long?> ProbeNvidiaVramBytesAsync(CancellationToken ct)
     {
         var result = await _processProbe
-            .RunAsync("nvidia-smi", ["--query-gpu=memory.total", "--format=csv,noheader,nounits"], ct)
-            .ConfigureAwait(false);
+                           .RunAsync("nvidia-smi", ["--query-gpu=memory.total", "--format=csv,noheader,nounits"], ct)
+                           .ConfigureAwait(false);
 
         if (result is not { ExitCode: 0 })
         {

@@ -25,7 +25,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, recursive: true);
+                    Directory.Delete(dir, true);
                 }
             }
             catch (IOException)
@@ -74,7 +74,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         var (logger, ctx) = CreateLogger();
         await logger.OpenAsync(ctx);
 
-        await logger.AppendEventAsync("run_completed", detail: "exit=0");
+        await logger.AppendEventAsync("run_completed", "exit=0");
 
         var lines = await File.ReadAllLinesAsync(Path.Combine(ctx.HostLogDirectory, "events.jsonl"));
         AssertEx.Equal(2, lines.Length - CountTrailingEmpty(lines)); // started + run_completed
@@ -335,7 +335,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
 
     private static void AssertCorrelation(JsonElement record, AgentHomeRunLogContext ctx)
     {
-        AssertCorrelationFields(record, ctx, fileName: null);
+        AssertCorrelationFields(record, ctx, null);
     }
 
     private static void AssertCorrelationFields(JsonElement record, AgentHomeRunLogContext ctx, string? fileName)

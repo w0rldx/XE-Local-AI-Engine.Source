@@ -23,11 +23,11 @@ using System.Security.Cryptography;
 /// </remarks>
 public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
 {
-    private readonly HttpClient _httpClient;
-    private readonly string _cacheRoot;
     private readonly string _activeTag;
-    private readonly OSPlatform _os;
     private readonly Architecture _arch;
+    private readonly string _cacheRoot;
+    private readonly HttpClient _httpClient;
+    private readonly OSPlatform _os;
 
     /// <summary>
     ///     Creates a binary manager that downloads through <paramref name="httpClient" /> and caches under
@@ -35,8 +35,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     default; pass a different tag to model a user-selected upgrade (the pinned tag's cache is never touched).
     /// </summary>
     public LlamaCppBinaryManager(HttpClient httpClient, string? cacheRoot = null, string? activeTag = null)
-        : this(
-            httpClient,
+        : this(httpClient,
             cacheRoot ?? DefaultCacheRoot(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
             CurrentOsPlatform(),
@@ -60,8 +59,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     public async Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
         var pin = LlamaCppReleasePins.Resolve(_os, _arch, variant)
-            ?? throw new LlamaRuntimeException(
-                "No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.");
+                  ?? throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.");
 
         var isPinnedFallback = string.Equals(_activeTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", _activeTag, VariantSlug(variant));
@@ -78,8 +76,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var serverPath = ResolveServerPath(variantDir, pin);
         if (serverPath is null)
         {
-            throw new LlamaRuntimeException(
-                "The downloaded llama.cpp runtime did not contain the expected server executable.");
+            throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
         }
 
         return new LlamaBinary(serverPath, _activeTag, variant, isPinnedFallback);
@@ -107,8 +104,8 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var serverFileName = Path.GetFileName(pin.ServerRelativePath);
         return Directory
-            .EnumerateFiles(variantDir, serverFileName, SearchOption.AllDirectories)
-            .FirstOrDefault();
+               .EnumerateFiles(variantDir, serverFileName, SearchOption.AllDirectories)
+               .FirstOrDefault();
     }
 
     private async Task DownloadVerifyExtractAsync(LlamaCppAssetPin pin, string variantDir, CancellationToken ct)
@@ -128,9 +125,8 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return;
         }
 
-        throw new LlamaRuntimeException(
-            "The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. "
-            + "Check the network connection and try again.",
+        throw new LlamaRuntimeException("The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. "
+                                        + "Check the network connection and try again.",
             secondError);
     }
 
@@ -170,8 +166,8 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private async Task DownloadToFileAsync(Uri url, string destination, CancellationToken ct)
     {
         using var response = await _httpClient
-            .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
+                                   .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
+                                   .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -210,7 +206,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
             Directory.CreateDirectory(Path.GetDirectoryName(variantDir.TrimEnd(Path.DirectorySeparatorChar))!);
             if (Directory.Exists(variantDir))
             {
-                Directory.Delete(variantDir, recursive: true);
+                Directory.Delete(variantDir, true);
             }
 
             Directory.Move(stagingDir, variantDir);
@@ -219,7 +215,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             if (Directory.Exists(stagingDir))
             {
-                Directory.Delete(stagingDir, recursive: true);
+                Directory.Delete(stagingDir, true);
             }
         }
     }
@@ -228,7 +224,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     {
         using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var gzip = new GZipStream(fileStream, CompressionMode.Decompress);
-        TarFile.ExtractToDirectory(gzip, destination, overwriteFiles: true);
+        TarFile.ExtractToDirectory(gzip, destination, true);
     }
 
     private static void TryDeleteFile(string path)
@@ -250,17 +246,21 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
     }
 
-    private static string VariantSlug(GpuVariant variant) => variant switch
+    private static string VariantSlug(GpuVariant variant)
     {
-        GpuVariant.Cuda => "cuda",
-        GpuVariant.Vulkan => "vulkan",
-        _ => "cpu"
-    };
+        return variant switch
+        {
+            GpuVariant.Cuda => "cuda",
+            GpuVariant.Vulkan => "vulkan",
+            _ => "cpu"
+        };
+    }
 
-    private static string DefaultCacheRoot() =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    private static string DefaultCacheRoot()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "XE-Local-AI-Engine");
+    }
 
     private static OSPlatform CurrentOsPlatform()
     {

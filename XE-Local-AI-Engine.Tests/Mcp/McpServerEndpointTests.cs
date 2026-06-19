@@ -30,7 +30,7 @@ public sealed class McpServerEndpointTests
     public async Task CreateServer_WhenAuthorized_ReturnsCreatedWithRecord()
     {
         var service = Substitute.For<IMcpServerService>();
-        var record = CreateRecord(name: "Filesystem", enabled: false);
+        var record = CreateRecord("Filesystem", false);
         service.CreateAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(record);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
@@ -83,7 +83,7 @@ public sealed class McpServerEndpointTests
     public async Task ListServers_WhenAuthorized_ReturnsItems()
     {
         var service = Substitute.For<IMcpServerService>();
-        service.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord("Filesystem", enabled: true), CreateRecord("Remote", enabled: false)]);
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord("Filesystem", true), CreateRecord("Remote", false)]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -130,7 +130,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        service.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
         {
             Id = id
         });
@@ -188,7 +188,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: false) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", false) with
         {
             Id = id
         });
@@ -209,7 +209,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
         {
             Id = id
         });
@@ -257,7 +257,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
         {
             Id = id
         });
@@ -291,7 +291,7 @@ public sealed class McpServerEndpointTests
         // still in flight). That is a healthy not-yet-connected state, not a hard failure, so it reports "connecting".
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
         {
             Id = id
         });
@@ -316,7 +316,7 @@ public sealed class McpServerEndpointTests
         // "error". "error" is reserved for an actually recorded failure (a non-empty LastError).
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
         {
             Id = id
         });

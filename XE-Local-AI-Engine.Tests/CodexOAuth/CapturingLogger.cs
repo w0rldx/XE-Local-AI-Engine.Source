@@ -4,8 +4,8 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-/// An <see cref="ILogger{TCategoryName}"/> that records every formatted message + scope so tests can assert
-/// that token material never appears in any log line.
+///     An <see cref="ILogger{TCategoryName}" /> that records every formatted message + scope so tests can assert
+///     that token material never appears in any log line.
 /// </summary>
 internal sealed class CapturingLogger<T> : ILogger<T>
 {
@@ -34,10 +34,12 @@ internal sealed class CapturingLogger<T> : ILogger<T>
         return CapturingLoggerScope.Instance;
     }
 
-    public bool IsEnabled(LogLevel logLevel) => true;
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return true;
+    }
 
-    public void Log<TState>(
-        LogLevel logLevel,
+    public void Log<TState>(LogLevel logLevel,
         EventId eventId,
         TState state,
         Exception? exception,
@@ -54,10 +56,9 @@ internal sealed class CapturingLogger<T> : ILogger<T>
             }
         }
     }
-
 }
 
-/// <summary>A no-op scope shared by every <see cref="CapturingLogger{T}"/> instance.</summary>
+/// <summary>A no-op scope shared by every <see cref="CapturingLogger{T}" /> instance.</summary>
 internal sealed class CapturingLoggerScope : IDisposable
 {
     public static CapturingLoggerScope Instance { get; } = new();

@@ -12,21 +12,6 @@ internal sealed class PlainProcessHandle(Process process) : ILlamaServerProcessH
     private readonly Process _process = process ?? throw new ArgumentNullException(nameof(process));
     private int _disposed;
 
-    /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
-    public static PlainProcessHandle Wrap(Process process)
-    {
-        ArgumentNullException.ThrowIfNull(process);
-        try
-        {
-            return new PlainProcessHandle(process);
-        }
-        catch
-        {
-            process.Dispose();
-            throw;
-        }
-    }
-
     public int ProcessId => _process.Id;
 
     public bool HasExited => SafeHasExited(_process);
@@ -40,7 +25,7 @@ internal sealed class PlainProcessHandle(Process process) : ILlamaServerProcessH
 
         try
         {
-            _process.Kill(entireProcessTree: true);
+            _process.Kill(true);
         }
         catch (InvalidOperationException)
         {
@@ -62,6 +47,21 @@ internal sealed class PlainProcessHandle(Process process) : ILlamaServerProcessH
         finally
         {
             _process.Dispose();
+        }
+    }
+
+    /// <summary>Takes ownership of an already-started process, disposing it if the wrap itself throws.</summary>
+    public static PlainProcessHandle Wrap(Process process)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        try
+        {
+            return new PlainProcessHandle(process);
+        }
+        catch
+        {
+            process.Dispose();
+            throw;
         }
     }
 

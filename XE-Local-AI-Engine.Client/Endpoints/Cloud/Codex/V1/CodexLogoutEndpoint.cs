@@ -7,20 +7,20 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
-/// <c>POST cloud/codex/logout</c> (Operator): clears the stored Codex OAuth session (deletes
-/// <c>codex-oauth-tokens.enc</c>), so the next chat send routes back to Azure-or-local. Returns the resulting
-/// signed-out status. Never returns token material.
+///     <c>POST cloud/codex/logout</c> (Operator): clears the stored Codex OAuth session (deletes
+///     <c>codex-oauth-tokens.enc</c>), so the next chat send routes back to Azure-or-local. Returns the resulting
+///     signed-out status. Never returns token material.
 /// </summary>
 public sealed class CodexLogoutEndpoint(
     ICodexTokenStore tokenStore,
     IActiveCloudChatClientFactory activeCloudFactory)
     : EndpointWithoutRequest<CodexStatusResponse>
 {
-    private readonly ICodexTokenStore _tokenStore =
-        tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
-
     private readonly IActiveCloudChatClientFactory _activeCloudFactory =
         activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
+
+    private readonly ICodexTokenStore _tokenStore =
+        tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
 
     public override void Configure()
     {
@@ -35,6 +35,10 @@ public sealed class CodexLogoutEndpoint(
         // Invalidate the selector's snapshot so the very next send reverts to Azure/local without waiting for the TTL.
         _activeCloudFactory.InvalidateSelectionCache();
 
-        await Send.OkAsync(new CodexStatusResponse { SignedIn = false, LoginPending = false }, ct).ConfigureAwait(false);
+        await Send.OkAsync(new CodexStatusResponse
+        {
+            SignedIn = false,
+            LoginPending = false
+        }, ct).ConfigureAwait(false);
     }
 }

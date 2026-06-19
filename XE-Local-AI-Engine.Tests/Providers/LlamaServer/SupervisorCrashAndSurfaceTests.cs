@@ -20,12 +20,14 @@ public sealed class SupervisorCrashAndSurfaceTests
             Interlocked.Increment(ref attempts);
             throw new InvalidOperationException("internal failure with /secret/path/model.gguf and TOKEN=abc123");
         });
-        await using var supervisor = SupervisorFactory.Create(
-            launcher: launcher,
-            options: new LlamaServerSupervisorOptions { MaxRestartAttempts = 3, IdleTimeToLive = TimeSpan.FromHours(1) });
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: new LlamaServerSupervisorOptions
+            {
+                MaxRestartAttempts = 3,
+                IdleTimeToLive = TimeSpan.FromHours(1)
+            });
 
-        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
 
         AssertEx.Equal(3, attempts); // retried up to the restart cap.
         // Sanitized surface: no internal path or secret leaks into the user-facing message.
@@ -38,13 +40,15 @@ public sealed class SupervisorCrashAndSurfaceTests
     public async Task EnsureRunning_ReadinessNeverReady_SurfacesSanitized()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(
-            launcher: launcher,
-            healthProbe: new FakeHealthProbe(ready: false),
-            options: new LlamaServerSupervisorOptions { MaxRestartAttempts = 2, IdleTimeToLive = TimeSpan.FromHours(1) });
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            new FakeHealthProbe(false),
+            options: new LlamaServerSupervisorOptions
+            {
+                MaxRestartAttempts = 2,
+                IdleTimeToLive = TimeSpan.FromHours(1)
+            });
 
-        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
 
         AssertEx.Contains(ex.Message, "failed to start", StringComparison.OrdinalIgnoreCase);
         // Every failed start's half-spawned process must be torn down — no leaked handles.
@@ -54,10 +58,9 @@ public sealed class SupervisorCrashAndSurfaceTests
     [Test]
     public async Task EnsureRunning_ModelNotInstalled_SurfacesSanitized()
     {
-        await using var supervisor = SupervisorFactory.Create(modelStore: new FakeModelStore(fixedPath: null));
+        await using var supervisor = SupervisorFactory.Create(modelStore: new FakeModelStore(null));
 
-        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => supervisor.EnsureRunningAsync("ghost", ModelRole.Chat, CancellationToken.None));
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("ghost", ModelRole.Chat, CancellationToken.None));
 
         AssertEx.Contains(ex.Message, "not installed", StringComparison.OrdinalIgnoreCase);
     }
@@ -73,7 +76,7 @@ public sealed class SupervisorCrashAndSurfaceTests
                 ["remote-model"] = new("http://127.0.0.1:9999/v1")
             }
         };
-        await using var supervisor = SupervisorFactory.Create(launcher: launcher, externalEndpoints: external);
+        await using var supervisor = SupervisorFactory.Create(launcher, externalEndpoints: external);
 
         var endpoint = await supervisor.EnsureRunningAsync("remote-model", ModelRole.Chat, CancellationToken.None);
 
@@ -85,9 +88,8 @@ public sealed class SupervisorCrashAndSurfaceTests
     public async Task CheckHealth_AggregatesPerProcessDiagnostics()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(
-            launcher: launcher,
-            healthProbe: new FakeHealthProbe(responsive: true));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            new FakeHealthProbe(responsive: true));
 
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Embedding, CancellationToken.None);

@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -13,10 +14,10 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Covers the Codex OAuth login / refresh mechanics: PKCE challenge/verifier binding, callback
-/// state validation, code→token exchange, refresh, the <see cref="ICodexAuthService.BeginLogin"/> URL exposure,
-/// loopback timeout, and the never-logs-token-material guarantee. The token endpoint is mocked; the loopback
-/// listener is real and driven by an in-test HTTP client posing as the OAuth redirect.
+///     Covers the Codex OAuth login / refresh mechanics: PKCE challenge/verifier binding, callback
+///     state validation, code→token exchange, refresh, the <see cref="ICodexAuthService.BeginLogin" /> URL exposure,
+///     loopback timeout, and the never-logs-token-material guarantee. The token endpoint is mocked; the loopback
+///     listener is real and driven by an in-test HTTP client posing as the OAuth redirect.
 /// </summary>
 public sealed class CodexAuthServiceTests : IDisposable
 {
@@ -56,8 +57,8 @@ public sealed class CodexAuthServiceTests : IDisposable
         AssertEx.Equal(newAccess, refreshed.AccessToken);
         AssertEx.Equal("rotated-refresh", refreshed.RefreshToken);
         AssertEx.Equal(CodexTestHelpers.AccountId, refreshed.AccountId);
-        AssertEx.Contains(handler.Requests[0].Body, "refresh_token", StringComparison.Ordinal);
-        AssertEx.Contains(handler.Requests[0].Body, "grant_type", StringComparison.Ordinal);
+        AssertEx.Contains(handler.Requests[0].Body, "refresh_token");
+        AssertEx.Contains(handler.Requests[0].Body, "grant_type");
         await tokenStore.Received(1).SaveAsync(Arg.Is<CodexTokens>(t => t.RefreshToken == "rotated-refresh"), Arg.Any<CancellationToken>());
     }
 
@@ -66,7 +67,7 @@ public sealed class CodexAuthServiceTests : IDisposable
     {
         using var handler = new CapturingHttpMessageHandler();
         // Short timeout so the background completion ends promptly and the loopback listener is released.
-        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out var options, loginTimeout: TimeSpan.FromMilliseconds(150));
+        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out var options, TimeSpan.FromMilliseconds(150));
 
         var handle = service.BeginLogin();
         var query = ParseQuery(handle.AuthorizeUrl.Query);
@@ -116,7 +117,7 @@ public sealed class CodexAuthServiceTests : IDisposable
 
         // The exchange request must carry the verifier whose SHA-256 base64url equals the authorize challenge (PKCE binding).
         var exchangeBody = handler.Requests[0].Body;
-        AssertEx.Contains(exchangeBody, "auth-code-xyz", StringComparison.Ordinal);
+        AssertEx.Contains(exchangeBody, "auth-code-xyz");
         var verifier = ExtractJsonString(exchangeBody, "code_verifier");
         var recomputed = CodexTestHelpers.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         AssertEx.Equal(challenge, recomputed);
@@ -139,7 +140,7 @@ public sealed class CodexAuthServiceTests : IDisposable
     public async Task BeginLogin_WhenNoCallbackArrivesBeforeTimeout_FailsWithCancellation()
     {
         using var handler = new CapturingHttpMessageHandler();
-        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out _, loginTimeout: TimeSpan.FromMilliseconds(150));
+        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out _, TimeSpan.FromMilliseconds(150));
 
         var handle = service.BeginLogin();
 
@@ -161,8 +162,7 @@ public sealed class CodexAuthServiceTests : IDisposable
         AssertEx.False(logger.AllText.Contains("secret-refresh-def", StringComparison.Ordinal), "refresh token must never be logged");
     }
 
-    private CodexAuthService CreateService(
-        CapturingHttpMessageHandler handler,
+    private CodexAuthService CreateService(CapturingHttpMessageHandler handler,
         ICodexTokenStore tokenStore,
         out CodexOptions options,
         TimeSpan? loginTimeout = null,
@@ -172,11 +172,11 @@ public sealed class CodexAuthServiceTests : IDisposable
         {
             CallbackPort = GetFreeLoopbackPort(),
             LoginTimeout = loginTimeout ?? TimeSpan.FromSeconds(10),
-            TokenRequestTimeout = TimeSpan.FromSeconds(10),
+            TokenRequestTimeout = TimeSpan.FromSeconds(10)
         };
 
         // The test owns the handler (via `using`); this client must not dispose it.
-        var httpClient = new HttpClient(handler, disposeHandler: false);
+        var httpClient = new HttpClient(handler, false);
         _disposables.Add(httpClient);
         return new CodexAuthService(Options.Create(options), httpClient, tokenStore, logger ?? NullLogger<CodexAuthService>.Instance);
     }
@@ -203,7 +203,10 @@ public sealed class CodexAuthServiceTests : IDisposable
 
     private static async Task DeliverCallbackAsync(CodexOptions options, string queryString)
     {
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        using var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(5)
+        };
         var callbackUri = new Uri($"http://localhost:{options.CallbackPort}{options.CallbackPath}?{queryString}");
 
         // Retry briefly: the loopback listener may still be coming up when the callback fires.
@@ -232,7 +235,7 @@ public sealed class CodexAuthServiceTests : IDisposable
 
     private static string ExtractJsonString(string json, string propertyName)
     {
-        using var document = System.Text.Json.JsonDocument.Parse(json);
+        using var document = JsonDocument.Parse(json);
         return document.RootElement.GetProperty(propertyName).GetString()!;
     }
 
@@ -241,8 +244,11 @@ public sealed class CodexAuthServiceTests : IDisposable
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            var candidate = Path.Combine(
-                new[] { directory.FullName, "XE-Local-AI-Engine.Providers.CodexOAuth" }.Concat(relativePath).ToArray());
+            var candidate = Path.Combine(new[]
+            {
+                directory.FullName,
+                "XE-Local-AI-Engine.Providers.CodexOAuth"
+            }.Concat(relativePath).ToArray());
             if (File.Exists(candidate))
             {
                 return candidate;

@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Projects;
 
@@ -82,7 +81,7 @@ builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithRunScript("dev")
        .WithBuildScript("build")
        .WithPnpm()
-       .WithBrowserLogs(browser: "/usr/bin/chromium-browser",
+       .WithBrowserLogs("/usr/bin/chromium-browser",
            userDataMode: BrowserUserDataMode.Isolated);
 
 await builder.Build().RunAsync();

@@ -8,27 +8,26 @@ using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 /// <summary>
-/// Registers the Codex OAuth cloud provider's auth lifecycle: options binding, the encrypted
-/// token store, the auth service (with its own named token-endpoint <see cref="HttpClient"/>), the
-/// <see cref="CodexAuthHandler"/> that decorates the chat transport, the cloud chat-client factory + active-cloud
-/// selector, and the singleton login coordinator that owns the pending-login state behind the Operator endpoints.
+///     Registers the Codex OAuth cloud provider's auth lifecycle: options binding, the encrypted
+///     token store, the auth service (with its own named token-endpoint <see cref="HttpClient" />), the
+///     <see cref="CodexAuthHandler" /> that decorates the chat transport, the cloud chat-client factory + active-cloud
+///     selector, and the singleton login coordinator that owns the pending-login state behind the Operator endpoints.
 /// </summary>
 internal static class AddCodexOAuthProviderExtensions
 {
-    /// <summary>Named <see cref="HttpClient"/> for the Codex OAuth token endpoint (code exchange / refresh).</summary>
+    /// <summary>Named <see cref="HttpClient" /> for the Codex OAuth token endpoint (code exchange / refresh).</summary>
     private const string CodexAuthHttpClientName = "CodexOAuthTokenEndpoint";
 
-    internal static IHostApplicationBuilder AddCodexOAuthProvider(
-        this IHostApplicationBuilder builder,
+    internal static IHostApplicationBuilder AddCodexOAuthProvider(this IHostApplicationBuilder builder,
         IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.Services.AddOptions<CodexOptions>()
-            .Bind(configuration.GetSection(CodexOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+               .Bind(configuration.GetSection(CodexOptions.SectionName))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
 
         // Encrypted at-rest session store (IDataProtector, separate codex-oauth-tokens.enc). NOT ICloudCredentialStore.
         builder.Services.AddSingleton<ICodexTokenStore, CodexTokenStore>();
@@ -41,8 +40,7 @@ internal static class AddCodexOAuthProviderExtensions
         builder.Services.AddSingleton<ICodexAuthService>(serviceProvider =>
         {
             var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(CodexAuthHttpClientName);
-            return new CodexAuthService(
-                serviceProvider.GetRequiredService<IOptions<CodexOptions>>(),
+            return new CodexAuthService(serviceProvider.GetRequiredService<IOptions<CodexOptions>>(),
                 httpClient,
                 serviceProvider.GetRequiredService<ICodexTokenStore>(),
                 serviceProvider.GetRequiredService<ILogger<CodexAuthService>>());
@@ -62,10 +60,9 @@ internal static class AddCodexOAuthProviderExtensions
         // sign-in takes effect on the very next send (not after the snapshot TTL). It resolves the selector at
         // invoke-time (login success, background) — never at coordinator construction — to keep host startup from
         // eagerly building the Codex chat-client transport chain.
-        builder.Services.AddSingleton<ICodexLoginCoordinator>(serviceProvider => new CodexLoginCoordinator(
-            serviceProvider.GetRequiredService<Lazy<ICodexAuthService>>(),
+        builder.Services.AddSingleton<ICodexLoginCoordinator>(serviceProvider => new CodexLoginCoordinator(serviceProvider.GetRequiredService<Lazy<ICodexAuthService>>(),
             serviceProvider.GetRequiredService<ILogger<CodexLoginCoordinator>>(),
-            onLoginSucceeded: () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
+            () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
 
         // Cloud chat-client factory, parallel to IAzureFoundryChatClientFactory. Singleton because it owns a
         // shared HttpClient + CodexAuthHandler transport (IDisposable); the per-call Create() is cheap.

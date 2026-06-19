@@ -52,12 +52,12 @@ internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, 
         return new AgentDefinitionInput(template.Name,
             template.Description,
             template.Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null,
-            PlaybookEnabled: false);
+            [],
+            new Dictionary<string, bool>(),
+            null,
+            false);
     }
 }

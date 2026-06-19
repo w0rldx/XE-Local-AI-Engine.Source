@@ -57,8 +57,7 @@ public sealed class PreviewWorkflowHubTests
         await connection.InvokeAsync("Subscribe", runId).ConfigureAwait(false);
 
         var publisher = factory.Services.GetRequiredService<IPreviewWorkflowEventPublisher>();
-        await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(
-            PreviewWorkflowHubEvents.RunStarted, runId, NodeId: null, Output: null, Error: null, RequestId: null, OccurredAtUtc: 123L))
+        await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunStarted, runId, null, null, null, null, 123L))
                        .ConfigureAwait(false);
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -95,9 +94,8 @@ public sealed class PreviewWorkflowHubTests
         await connection.DisposeAsync().ConfigureAwait(false);
 
         // The hub's OnDisconnectedAsync must ask the execution service to cancel runs owned by the connection.
-        await AssertEx.EventuallyAsync(
-            () => executionService.ReceivedCalls()
-                                  .Any(c => c.GetMethodInfo().Name == nameof(IPreviewWorkflowExecutionService.CancelRunsForConnectionAsync)),
+        await AssertEx.EventuallyAsync(() => executionService.ReceivedCalls()
+                                                             .Any(c => c.GetMethodInfo().Name == nameof(IPreviewWorkflowExecutionService.CancelRunsForConnectionAsync)),
             TimeSpan.FromSeconds(10)).ConfigureAwait(false);
     }
 }

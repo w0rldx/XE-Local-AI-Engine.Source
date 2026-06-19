@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     llama-server implementation of the provider-neutral <see cref="ILocalModelProvider" /> boundary.
@@ -26,8 +26,8 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 {
-    private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly IGgufModelStore _modelStore;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
 
     /// <summary>Creates the provider over the process supervisor and the GGUF model store.</summary>
     public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor, IGgufModelStore modelStore)
@@ -49,11 +49,14 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
             // The provider is healthy iff the supervisor is operational (it answered the aggregation). Per-process
             // detail is surfaced for diagnostics; an empty list means "operational, no processes loaded yet".
             var diagnostics = processHealths.Count == 0
-                ? new[] { "llama-server supervisor is operational with no loaded models." }
+                ? new[]
+                {
+                    "llama-server supervisor is operational with no loaded models."
+                }
                 : processHealths
-                    .Select(static health =>
-                        $"{health.ModelName} ({health.Role}): {(health.IsResponsive ? "responsive" : "unresponsive")} — {health.Detail}")
-                    .ToArray();
+                  .Select(static health =>
+                      $"{health.ModelName} ({health.Role}): {(health.IsResponsive ? "responsive" : "unresponsive")} — {health.Detail}")
+                  .ToArray();
 
             return new ModelProviderHealth
             {
@@ -80,8 +83,10 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) =>
-        _modelStore.ListInstalledModelsAsync(ct);
+    public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
+    {
+        return _modelStore.ListInstalledModelsAsync(ct);
+    }
 
     /// <inheritdoc />
     /// <remarks>
@@ -143,8 +148,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 
         if (!string.Equals(selection.ProviderName, ProviderName, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException(
-                $"Provider selection '{selection.ProviderName}' does not match '{ProviderName}'.", nameof(selection));
+            throw new ArgumentException($"Provider selection '{selection.ProviderName}' does not match '{ProviderName}'.", nameof(selection));
         }
     }
 }

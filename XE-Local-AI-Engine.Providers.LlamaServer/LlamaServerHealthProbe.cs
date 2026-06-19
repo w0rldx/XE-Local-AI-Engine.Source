@@ -65,5 +65,8 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
     }
 
     // The endpoint base ends with /v1; /health is a sibling at the server root.
-    private static Uri HealthUri(Uri baseAddress) => new(baseAddress, "/health");
+    private static Uri HealthUri(Uri baseAddress)
+    {
+        return new Uri(baseAddress, "/health");
+    }
 }

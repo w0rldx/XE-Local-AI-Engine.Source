@@ -18,7 +18,7 @@ public sealed class OllamaPlaybookEvalJudgeTests
     public async Task ScoreAsync_WhenRequiredPhrasePresentAndNoForbidden_PassesViaAssertion()
     {
         var judge = new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance);
-        var goldenCase = AssertionCase(required: ["cite"], forbidden: ["maybe"]);
+        var goldenCase = AssertionCase(["cite"], ["maybe"]);
 
         var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
 
@@ -30,7 +30,7 @@ public sealed class OllamaPlaybookEvalJudgeTests
     public async Task ScoreAsync_WhenRequiredPhraseMissing_FailsViaAssertion()
     {
         var judge = new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance);
-        var goldenCase = AssertionCase(required: ["cite"], forbidden: []);
+        var goldenCase = AssertionCase(["cite"], []);
 
         var score = await judge.ScoreAsync(goldenCase, "No citation here.", Substitute.For<IChatClient>()).ConfigureAwait(false);
 
@@ -42,7 +42,7 @@ public sealed class OllamaPlaybookEvalJudgeTests
     public async Task ScoreAsync_WhenForbiddenPhrasePresent_FailsViaAssertion()
     {
         var judge = new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance);
-        var goldenCase = AssertionCase(required: ["cite"], forbidden: ["maybe"]);
+        var goldenCase = AssertionCase(["cite"], ["maybe"]);
 
         // Ordinal (case-sensitive) match: the forbidden phrase "maybe" appears verbatim in the candidate output.
         var score = await judge.ScoreAsync(goldenCase, "I will maybe cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
@@ -56,7 +56,7 @@ public sealed class OllamaPlaybookEvalJudgeTests
     {
         var judge = new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance);
         // An empty forbidden entry is degenerate ("".Contains("") is true) — it must be ignored, not force-fail.
-        var goldenCase = AssertionCase(required: ["cite"], forbidden: [""]);
+        var goldenCase = AssertionCase(["cite"], [""]);
 
         var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
 
@@ -69,7 +69,7 @@ public sealed class OllamaPlaybookEvalJudgeTests
     {
         var judge = new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance);
         // An empty required entry would always "pass" — it must be ignored so only meaningful phrases gate the case.
-        var goldenCase = AssertionCase(required: [""], forbidden: ["maybe"]);
+        var goldenCase = AssertionCase([""], ["maybe"]);
 
         var score = await judge.ScoreAsync(goldenCase, "Always cite the source.", Substitute.For<IChatClient>()).ConfigureAwait(false);
 
@@ -83,12 +83,12 @@ public sealed class OllamaPlaybookEvalJudgeTests
         var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             "Invalid case",
-            InputTurns: "[]",
-            Assertion: null,
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            "[]",
+            null,
+            null,
+            true,
+            10,
+            10);
 
         var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
 
@@ -105,11 +105,11 @@ public sealed class OllamaPlaybookEvalJudgeTests
         return new GoldenConversationRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             "Assertion case",
-            InputTurns: """[{"role":"user","text":"hello"}]""",
-            Assertion: assertion,
-            Rubric: null,
-            Enabled: true,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            """[{"role":"user","text":"hello"}]""",
+            assertion,
+            null,
+            true,
+            10,
+            10);
     }
 }

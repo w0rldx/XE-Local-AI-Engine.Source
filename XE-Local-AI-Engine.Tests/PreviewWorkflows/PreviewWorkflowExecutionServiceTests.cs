@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.PreviewWorkflows;
 
+using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -16,14 +17,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class PreviewWorkflowExecutionServiceTests
 {
-    private static PreviewWorkflowExecutionOptions DefaultOptions() => new()
+    private static PreviewWorkflowExecutionOptions DefaultOptions()
     {
-        IdleTimeout = TimeSpan.FromMinutes(5),
-        MaxRunDuration = TimeSpan.FromMinutes(15),
-        SweepInterval = TimeSpan.FromSeconds(30),
-        MaxConcurrentRuns = 4,
-        MaxOutputBytes = 10 * 1024 * 1024
-    };
+        return new PreviewWorkflowExecutionOptions
+        {
+            IdleTimeout = TimeSpan.FromMinutes(5),
+            MaxRunDuration = TimeSpan.FromMinutes(15),
+            SweepInterval = TimeSpan.FromSeconds(30),
+            MaxConcurrentRuns = 4,
+            MaxOutputBytes = 10 * 1024 * 1024
+        };
+    }
 
     private static PreviewWorkflowExecutionService CreateService(FakePreviewWorkflowRunner runner,
         RecordingPreviewEventPublisher publisher,
@@ -40,7 +44,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             Options.Create(options ?? DefaultOptions()),
             TimeProvider.System,
             NullLoggerFactory.Instance,
-            applicationLifetime: null);
+            null);
     }
 
     private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout)
@@ -73,7 +77,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
 
         await using var service = CreateService(runner, publisher, provider);
 
-        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: "conn-1").ConfigureAwait(false);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), "conn-1").ConfigureAwait(false);
 
         // Wait until the run reaches Paused (run.paused published).
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
@@ -93,9 +97,8 @@ public sealed class PreviewWorkflowExecutionServiceTests
         var provider = new FakeLocalModelProvider();
         var publisher = new RecordingPreviewEventPublisher();
         var runner = new FakePreviewWorkflowRunner((_, _) =>
-            new ScriptedPreviewRunSession(
-                [PreviewWorkflowUpdate.RunPaused("pause", "upstream", "req-1")],
-                onResume: (_, s) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "upstream", "req-1")],
+                (_, s) =>
                 {
                     // On resume, drive to completion.
                     s.Enqueue(PreviewWorkflowUpdate.RunCompleted("done"));
@@ -103,7 +106,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
                 }));
 
         await using var service = CreateService(runner, publisher, provider);
-        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         // Fire continue and cancel concurrently — they must serialize via the per-run gate and never throw
@@ -116,8 +119,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         // be cancelled (Accepted) with the loser seeing WrongState/NotFound.
         var outcomes = await Task.WhenAll(continueTask, cancelTask).ConfigureAwait(false);
 
-        AssertEx.True(
-            outcomes.All(static o => o is PreviewRunCommandOutcome.Accepted
+        AssertEx.True(outcomes.All(static o => o is PreviewRunCommandOutcome.Accepted
                 or PreviewRunCommandOutcome.WrongState
                 or PreviewRunCommandOutcome.NotFound),
             "continue/cancel race must produce defined outcomes without throwing.");
@@ -137,7 +139,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         });
 
         var service = CreateService(runner, publisher, provider);
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         // DisposeAsync mirrors the ApplicationStopping path: cancel + dispose every in-flight run.
@@ -158,7 +160,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             new ScriptedPreviewRunSession([PreviewWorkflowUpdate.NodeOutput("agent", "this output is definitely longer than eight bytes")]));
 
         await using var service = CreateService(runner, publisher, provider, options);
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
 
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunFailed), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
@@ -175,12 +177,12 @@ public sealed class PreviewWorkflowExecutionServiceTests
         var publisher = new RecordingPreviewEventPublisher();
         var options = DefaultOptions();
         const string output = "12345678"; // 8 ASCII bytes
-        options.MaxOutputBytes = System.Text.Encoding.UTF8.GetByteCount(output);
+        options.MaxOutputBytes = Encoding.UTF8.GetByteCount(output);
         var runner = new FakePreviewWorkflowRunner((_, _) =>
             new ScriptedPreviewRunSession([PreviewWorkflowUpdate.NodeOutput("agent", output)]));
 
         await using var service = CreateService(runner, publisher, provider, options);
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
 
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunFailed), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
@@ -198,7 +200,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             new ScriptedPreviewRunSession([PreviewWorkflowUpdate.NodeFailed("agent", "model not installed")]));
 
         await using var service = CreateService(runner, publisher, provider);
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
 
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunFailed), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
@@ -224,7 +226,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         var cloudFactory = new ThrowingAzureFoundryChatClientFactory();
 
         await using var service = CreateService(runner, publisher, provider);
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         AssertEx.True(handedToRunner is FakeNodeLocalChatClient, "the runner must receive the node-local client.");
@@ -247,7 +249,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
 
         // This service only exposes a single StartAsync(graph) entry point and holds no store, so whatever graph it is
         // handed cannot be persisted (the saved-vs-unsaved split lives in the endpoints, not here).
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         // The run is removed from the registry after completion — no lingering run state, no read-back surface.
@@ -275,11 +277,10 @@ public sealed class PreviewWorkflowExecutionServiceTests
             new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "x", "req")]));
 
         await using var service = CreateService(runner, publisher, provider, options);
-        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<PreviewWorkflowCapReachedException>(
-            async () => await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false))
+        _ = await AssertEx.ThrowsAsync<PreviewWorkflowCapReachedException>(async () => await service.StartAsync(PreviewGraphBuilder.Linear(), null).ConfigureAwait(false))
                           .ConfigureAwait(false);
     }
 
@@ -293,7 +294,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "x", "req")]));
 
         await using var service = CreateService(runner, publisher, provider, maxLoadedProcesses: 8);
-        _ = await service.StartAsync(TwoAgentTwoModelGraph(), connectionId: null).ConfigureAwait(false);
+        _ = await service.StartAsync(TwoAgentTwoModelGraph(), null).ConfigureAwait(false);
         await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         var resolve = AssertEx.NotNull(runner.LastResolver, "The runner must have received the per-model resolver closure.");
@@ -320,22 +321,22 @@ public sealed class PreviewWorkflowExecutionServiceTests
         // Cap of 1 with a two-distinct-model graph => reject at start, before any client/process is created.
         await using var service = CreateService(runner, publisher, provider, maxLoadedProcesses: 1);
 
-        _ = await AssertEx.ThrowsAsync<PreviewWorkflowModelCapExceededException>(
-            async () => await service.StartAsync(TwoAgentTwoModelGraph(), connectionId: null).ConfigureAwait(false))
+        _ = await AssertEx.ThrowsAsync<PreviewWorkflowModelCapExceededException>(async () => await service.StartAsync(TwoAgentTwoModelGraph(), null).ConfigureAwait(false))
                           .ConfigureAwait(false);
 
         AssertEx.Equal(0, provider.CreatedClients.Count);
     }
 
-    private static PreviewWorkflowGraph TwoAgentTwoModelGraph() =>
-        new()
+    private static PreviewWorkflowGraph TwoAgentTwoModelGraph()
+    {
+        return new PreviewWorkflowGraph
         {
             StartText = "hello",
             Nodes =
             [
                 PreviewGraphBuilder.Start(),
-                PreviewGraphBuilder.Agent("agentA", model: "model-a"),
-                PreviewGraphBuilder.Agent("agentB", model: "model-b"),
+                PreviewGraphBuilder.Agent("agentA", "model-a"),
+                PreviewGraphBuilder.Agent("agentB", "model-b"),
                 PreviewGraphBuilder.End()
             ],
             Edges =
@@ -345,6 +346,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
                 PreviewGraphBuilder.Edge("agentB", "end")
             ]
         };
+    }
 
     [Test]
     public async Task PreviewExec_InvalidGraph_ThrowsValidation()
@@ -362,8 +364,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             Edges = [PreviewGraphBuilder.Edge("start", "end")]
         };
 
-        _ = await AssertEx.ThrowsAsync<PreviewWorkflowValidationException>(
-            async () => await service.StartAsync(noAgentGraph, connectionId: null).ConfigureAwait(false))
+        _ = await AssertEx.ThrowsAsync<PreviewWorkflowValidationException>(async () => await service.StartAsync(noAgentGraph, null).ConfigureAwait(false))
                           .ConfigureAwait(false);
     }
 

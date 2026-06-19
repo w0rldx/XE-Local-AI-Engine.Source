@@ -67,10 +67,10 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void ConfigHash_NoSkills_ByteIdenticalToPreSkillsDigest()
     {
-        var nullSkillsJson = SerializeSharedVector(skills: null);
-        var emptySkillsJson = SerializeSharedVector(skills: []);
-        var nullSkillsDigest = ComputeSharedVector(skills: null);
-        var emptySkillsDigest = ComputeSharedVector(skills: []);
+        var nullSkillsJson = SerializeSharedVector(null);
+        var emptySkillsJson = SerializeSharedVector([]);
+        var nullSkillsDigest = ComputeSharedVector(null);
+        var emptySkillsDigest = ComputeSharedVector([]);
 
         const string ExpectedJson =
             "{\"agentDefinitionVersion\":7,\"resolvedSystemPrompt\":\"You are a helpful local AI assistant.\",\"allowedTools\":[{\"name\":\"open_url\",\"description\":\"Open a URL in the worker browser\",\"schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"url\\\":{\\\"type\\\":\\\"string\\\"}},\\\"required\\\":[\\\"url\\\"]}\",\"location\":0,\"requiresApproval\":false}],\"modelProfile\":null,\"reasoningEffort\":null,\"timeouts\":{\"invocationTimeoutSeconds\":300,\"toolCallTimeoutSeconds\":60,\"streamIdleTimeoutSeconds\":30}}";
@@ -90,14 +90,13 @@ public sealed class RuntimePackageConfigHashTests
         var skillId = Guid.NewGuid();
         var secondSkillId = Guid.NewGuid();
 
-        var baseline = ComputeSharedVector(skills: null);
-        var withSkill = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1)]);
-        var bodyEdited = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v2", 1)]);
-        var renamed = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "k8s-debug", "Debug k8s", "## Body v1", 1)]);
-        var descriptionEdited = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug Kubernetes clusters", "## Body v1", 1)]);
-        var versionBumped = ComputeSharedVector(skills: [new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 2)]);
-        var picklistAdded = ComputeSharedVector(skills:
-        [
+        var baseline = ComputeSharedVector(null);
+        var withSkill = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1)]);
+        var bodyEdited = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v2", 1)]);
+        var renamed = ComputeSharedVector([new ResolvedSkill(skillId, "k8s-debug", "Debug k8s", "## Body v1", 1)]);
+        var descriptionEdited = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug Kubernetes clusters", "## Body v1", 1)]);
+        var versionBumped = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 2)]);
+        var picklistAdded = ComputeSharedVector([
             new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1),
             new ResolvedSkill(secondSkillId, "log-triage", "Triage logs", "## Logs", 1)
         ]);
@@ -129,9 +128,9 @@ public sealed class RuntimePackageConfigHashTests
                 ToolCallTimeoutSeconds = 60,
                 StreamIdleTimeoutSeconds = 30
             },
-            reasoningEffort: null,
-            orchestrationSpec: null,
-            skills: skills);
+            null,
+            null,
+            skills);
     }
 
     private static string ComputeSharedVector(IReadOnlyList<ResolvedSkill>? skills)
@@ -153,9 +152,9 @@ public sealed class RuntimePackageConfigHashTests
                 ToolCallTimeoutSeconds = 60,
                 StreamIdleTimeoutSeconds = 30
             },
-            reasoningEffort: null,
-            orchestrationSpec: null,
-            skills: skills);
+            null,
+            null,
+            skills);
     }
 
     // Cross-repo round-trip guard (worker half): a ClientLocal tool carrying RequiresApproval must canonicalize to
@@ -446,7 +445,7 @@ public sealed class RuntimePackageConfigHashTests
     public void Compute_WhenPlaybookActionAppended_ChangesDigest()
     {
         const string basePrompt = "You are the bound persona.";
-        var composed = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", priority: 1)]);
+        var composed = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", 1)]);
 
         var baseDigest = RuntimePackageConfigHash.Compute(7, basePrompt, [], null, new TimeoutSettings());
         var composedDigest = RuntimePackageConfigHash.Compute(7, composed, [], null, new TimeoutSettings());
@@ -458,8 +457,8 @@ public sealed class RuntimePackageConfigHashTests
     public void Compute_WhenPlaybookBehaviorEdited_ChangesDigest()
     {
         const string basePrompt = "You are the bound persona.";
-        var first = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", priority: 1)]);
-        var edited = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the FULL test suite first.", priority: 1)]);
+        var first = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", 1)]);
+        var edited = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the FULL test suite first.", 1)]);
 
         var firstDigest = RuntimePackageConfigHash.Compute(7, first, [], null, new TimeoutSettings());
         var editedDigest = RuntimePackageConfigHash.Compute(7, edited, [], null, new TimeoutSettings());
@@ -475,13 +474,13 @@ public sealed class RuntimePackageConfigHashTests
         const string basePrompt = "You are the bound persona.";
         var order1 = PlaybookPromptComposer.Compose(basePrompt,
         [
-            EnabledAction("Run the tests first.", priority: 1),
-            EnabledAction("Prefer small commits.", priority: 5)
+            EnabledAction("Run the tests first.", 1),
+            EnabledAction("Prefer small commits.", 5)
         ]);
         var order2 = PlaybookPromptComposer.Compose(basePrompt,
         [
-            EnabledAction("Prefer small commits.", priority: 1),
-            EnabledAction("Run the tests first.", priority: 5)
+            EnabledAction("Prefer small commits.", 1),
+            EnabledAction("Run the tests first.", 5)
         ]);
 
         var order1Digest = RuntimePackageConfigHash.Compute(7, order1, [], null, new TimeoutSettings());
@@ -496,12 +495,12 @@ public sealed class RuntimePackageConfigHashTests
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            TriggerCondition: null,
+            null,
             behavior,
-            Scope: null,
+            null,
             priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            1,
+            10,
+            10);
     }
 }

@@ -14,12 +14,12 @@ public sealed class SupervisorRaceTests
     public async Task EnsureRunning_ConcurrentSameKey_SpawnsExactlyOnce()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(launcher: launcher);
+        await using var supervisor = SupervisorFactory.Create(launcher);
 
         // Fire many concurrent ensure-running calls for the same (model, role).
         var calls = Enumerable.Range(0, 20)
-            .Select(_ => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None))
-            .ToArray();
+                              .Select(_ => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None))
+                              .ToArray();
         var endpoints = await Task.WhenAll(calls);
 
         AssertEx.Equal(1, launcher.LaunchCount); // single-flight: one spawn for the whole burst.
@@ -31,7 +31,7 @@ public sealed class SupervisorRaceTests
     public async Task EnsureRunning_AfterEvictionMidToolCall_RespawnsInsteadOfFailing()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(launcher: launcher);
+        await using var supervisor = SupervisorFactory.Create(launcher);
 
         var first = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
@@ -58,7 +58,7 @@ public sealed class SupervisorRaceTests
 #pragma warning restore CA2000
         var launcher = new FakeProcessLauncher(_ =>
             Interlocked.Increment(ref spawnCount) == 1 ? crashHandle : new FakeProcessHandle(4000));
-        await using var supervisor = SupervisorFactory.Create(launcher: launcher);
+        await using var supervisor = SupervisorFactory.Create(launcher);
 
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         crashHandle.SimulateExit(); // the process dies between requests.

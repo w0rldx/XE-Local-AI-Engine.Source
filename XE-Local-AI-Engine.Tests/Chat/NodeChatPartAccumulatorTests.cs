@@ -13,9 +13,9 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendReasoning("before", sequence: 0);
-        acc.AppendToolRequested("call-1", "GetCurrentTime", "{}", false, sequence: 1);
-        acc.AppendReasoning("after", sequence: 2);
+        acc.AppendReasoning("before", 0);
+        acc.AppendToolRequested("call-1", "GetCurrentTime", "{}", false, 1);
+        acc.AppendReasoning("after", 2);
 
         var parts = acc.Snapshot();
 
@@ -36,9 +36,9 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendReasoning("chunk1", sequence: 0);
-        acc.AppendReasoning("chunk2", sequence: 3); // higher sequence — same segment extended
-        acc.AppendReasoning("chunk3", sequence: 5);
+        acc.AppendReasoning("chunk1", 0);
+        acc.AppendReasoning("chunk2", 3); // higher sequence — same segment extended
+        acc.AppendReasoning("chunk3", 5);
 
         var parts = acc.Snapshot();
 
@@ -53,10 +53,10 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendReasoning("first segment", sequence: 0);
-        acc.AppendToolRequested("call-1", "DoThing", null, false, sequence: 1);
-        acc.AppendReasoning("second ", sequence: 2);
-        acc.AppendReasoning("segment", sequence: 4); // extends the second segment
+        acc.AppendReasoning("first segment", 0);
+        acc.AppendToolRequested("call-1", "DoThing", null, false, 1);
+        acc.AppendReasoning("second ", 2);
+        acc.AppendReasoning("segment", 4); // extends the second segment
 
         var parts = acc.Snapshot();
 
@@ -73,8 +73,8 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendToolRequested("call-1", "GetCurrentTime", "{}", false, sequence: 0);
-        acc.AppendToolRequested("call-1", "GetCurrentTime", "{}", false, sequence: 1); // duplicate
+        acc.AppendToolRequested("call-1", "GetCurrentTime", "{}", false, 0);
+        acc.AppendToolRequested("call-1", "GetCurrentTime", "{}", false, 1); // duplicate
 
         var parts = acc.Snapshot();
 
@@ -90,8 +90,8 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendToolRequested("call-1", "GetCurrentTime", "{\"tz\":\"UTC\"}", false, sequence: 0);
-        acc.CompleteToolCall("call-1", "GetCurrentTime", "2026-06-01T00:00:00Z", isError: false, sequence: 1);
+        acc.AppendToolRequested("call-1", "GetCurrentTime", "{\"tz\":\"UTC\"}", false, 0);
+        acc.CompleteToolCall("call-1", "GetCurrentTime", "2026-06-01T00:00:00Z", false, 1);
 
         var parts = acc.Snapshot();
 
@@ -110,8 +110,8 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendToolRequested("call-err", "RunScript", "{}", true, sequence: 0);
-        acc.CompleteToolCall("call-err", "RunScript", "permission denied", isError: true, sequence: 1);
+        acc.AppendToolRequested("call-err", "RunScript", "{}", true, 0);
+        acc.CompleteToolCall("call-err", "RunScript", "permission denied", true, 1);
 
         var parts = acc.Snapshot();
 
@@ -128,7 +128,7 @@ public sealed class NodeChatPartAccumulatorTests
         var acc = new NodeChatPartAccumulator();
 
         // Completed arrives with no prior Requested (defensive path at ~:92 in the accumulator)
-        acc.CompleteToolCall("call-orphan", "SomeTool", "result text", isError: false, sequence: 5);
+        acc.CompleteToolCall("call-orphan", "SomeTool", "result text", false, 5);
 
         var parts = acc.Snapshot();
 
@@ -147,9 +147,9 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.CompleteToolCall("call-orphan", "SomeTool", "first result", isError: false, sequence: 5);
+        acc.CompleteToolCall("call-orphan", "SomeTool", "first result", false, 5);
         // A second Completed for the same id (e.g. idempotent re-delivery) collapses into the existing entry.
-        acc.CompleteToolCall("call-orphan", "SomeTool", "second result", isError: false, sequence: 6);
+        acc.CompleteToolCall("call-orphan", "SomeTool", "second result", false, 6);
 
         var parts = acc.Snapshot();
 
@@ -167,8 +167,8 @@ public sealed class NodeChatPartAccumulatorTests
 
         // Simulate concurrent feed: tool part stamped at seq=1, then reasoning delta at seq=0
         // (lower sequence added after — positional insertion is out of order).
-        acc.AppendToolRequested("call-1", "GetCurrentTime", null, false, sequence: 1);
-        acc.AppendReasoning("pre-tool thinking", sequence: 0);
+        acc.AppendToolRequested("call-1", "GetCurrentTime", null, false, 1);
+        acc.AppendReasoning("pre-tool thinking", 0);
 
         var parts = acc.Snapshot();
 
@@ -184,9 +184,9 @@ public sealed class NodeChatPartAccumulatorTests
     public void Snapshot_MultipleCallsReturnConsistentView()
     {
         var acc = new NodeChatPartAccumulator();
-        acc.AppendReasoning("thinking", sequence: 0);
-        acc.AppendToolRequested("call-1", "GetCurrentTime", null, false, sequence: 1);
-        acc.CompleteToolCall("call-1", "GetCurrentTime", "now", isError: false, sequence: 2);
+        acc.AppendReasoning("thinking", 0);
+        acc.AppendToolRequested("call-1", "GetCurrentTime", null, false, 1);
+        acc.CompleteToolCall("call-1", "GetCurrentTime", "now", false, 2);
 
         var first = acc.Snapshot();
         var second = acc.Snapshot();
@@ -211,7 +211,7 @@ public sealed class NodeChatPartAccumulatorTests
     public void HasParts_AfterAnyAppend_ReturnsTrue()
     {
         var acc = new NodeChatPartAccumulator();
-        acc.AppendReasoning("thinking", sequence: 0);
+        acc.AppendReasoning("thinking", 0);
 
         AssertEx.True(acc.HasParts);
     }
@@ -221,8 +221,8 @@ public sealed class NodeChatPartAccumulatorTests
     {
         var acc = new NodeChatPartAccumulator();
 
-        acc.AppendReasoning(null, sequence: 0);
-        acc.AppendReasoning(string.Empty, sequence: 1);
+        acc.AppendReasoning(null, 0);
+        acc.AppendReasoning(string.Empty, 1);
 
         AssertEx.False(acc.HasParts);
         AssertEx.Equal(0, acc.Snapshot().Count);

@@ -27,17 +27,16 @@ public sealed class NodeChatTitleEncryptionBackfillService(
             // EncryptConversationTitle migration (which NULLs plaintext titles) or conversations created before
             // the first user message arrived.
             var conversationIds = await dbContext.Database
-                .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
-                .ToListAsync(stoppingToken)
-                .ConfigureAwait(false);
+                                                 .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE purged = 0 AND title IS NULL")
+                                                 .ToListAsync(stoppingToken)
+                                                 .ConfigureAwait(false);
 
             if (conversationIds.Count == 0)
             {
                 return;
             }
 
-            logger.LogInformation(
-                "NodeChatTitleEncryptionBackfillService: backfilling encrypted titles for {Count} conversation(s).",
+            logger.LogInformation("NodeChatTitleEncryptionBackfillService: backfilling encrypted titles for {Count} conversation(s).",
                 conversationIds.Count);
 
             var backfilled = 0;
@@ -48,11 +47,11 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 // Read the first user-role message id + encrypted content blob so we can decrypt using the
                 // correct AAD (content AAD = conversationId + messageId + "content").
                 var row = await dbContext.Database
-                    .SqlQueryRaw<MessageIdAndContent>(
-                        "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
-                        conversationId)
-                    .FirstOrDefaultAsync(stoppingToken)
-                    .ConfigureAwait(false);
+                                         .SqlQueryRaw<MessageIdAndContent>(
+                                             "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
+                                             conversationId)
+                                         .FirstOrDefaultAsync(stoppingToken)
+                                         .ConfigureAwait(false);
 
                 if (row is null)
                 {
@@ -67,8 +66,7 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(
-                        ex,
+                    logger.LogWarning(ex,
                         "NodeChatTitleEncryptionBackfillService: could not decrypt message content for conversation {ConversationId}; skipping.",
                         conversationId);
                     continue;
@@ -78,17 +76,15 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 var encryptedTitle = dbContext.EncryptConversationTitle(title, conversationId);
 
                 await dbContext.Database
-                    .ExecuteSqlRawAsync(
-                        "UPDATE conversations SET title = {0} WHERE conversation_id = {1}",
-                        [(encryptedTitle is null ? (object)DBNull.Value : encryptedTitle), conversationId],
-                        stoppingToken)
-                    .ConfigureAwait(false);
+                               .ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1}",
+                                   [encryptedTitle is null ? DBNull.Value : encryptedTitle, conversationId],
+                                   stoppingToken)
+                               .ConfigureAwait(false);
 
                 backfilled++;
             }
 
-            logger.LogInformation(
-                "NodeChatTitleEncryptionBackfillService: backfill complete — {Backfilled} title(s) encrypted, {Skipped} skipped (no user message yet).",
+            logger.LogInformation("NodeChatTitleEncryptionBackfillService: backfill complete — {Backfilled} title(s) encrypted, {Skipped} skipped (no user message yet).",
                 backfilled,
                 conversationIds.Count - backfilled);
         }

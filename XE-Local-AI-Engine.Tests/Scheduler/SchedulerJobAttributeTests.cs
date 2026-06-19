@@ -16,7 +16,7 @@ public sealed class SchedulerJobAttributeTests
     public void NonOverlappingSchedulerDispatchJob_HasDisallowConcurrentExecutionAttribute()
     {
         var hasAttribute = typeof(NonOverlappingSchedulerDispatchJob)
-            .IsDefined(typeof(DisallowConcurrentExecutionAttribute), inherit: false);
+            .IsDefined(typeof(DisallowConcurrentExecutionAttribute), false);
 
         AssertEx.True(hasAttribute,
             $"{nameof(NonOverlappingSchedulerDispatchJob)} must carry [DisallowConcurrentExecution] " +
@@ -27,7 +27,7 @@ public sealed class SchedulerJobAttributeTests
     public void SchedulerDispatchJob_DoesNotHaveDisallowConcurrentExecutionAttribute()
     {
         var hasAttribute = typeof(SchedulerDispatchJob)
-            .IsDefined(typeof(DisallowConcurrentExecutionAttribute), inherit: false);
+            .IsDefined(typeof(DisallowConcurrentExecutionAttribute), false);
 
         AssertEx.False(hasAttribute,
             $"{nameof(SchedulerDispatchJob)} must NOT carry [DisallowConcurrentExecution] " +

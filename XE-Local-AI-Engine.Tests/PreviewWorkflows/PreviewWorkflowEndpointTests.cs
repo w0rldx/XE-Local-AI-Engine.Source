@@ -6,7 +6,6 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
-using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -43,7 +42,9 @@ public sealed class PreviewWorkflowEndpointTests
             using var request = new HttpRequestMessage(method, route);
             if (method != HttpMethod.Get && method != HttpMethod.Delete)
             {
-                request.Content = JsonContent.Create(new { });
+                request.Content = JsonContent.Create(new
+                {
+                });
             }
 
             using var response = await client.SendAsync(request).ConfigureAwait(false);
@@ -70,7 +71,10 @@ public sealed class PreviewWorkflowEndpointTests
 
         using var executeRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/preview/runs/execute")
         {
-            Content = JsonContent.Create(new { graph })
+            Content = JsonContent.Create(new
+            {
+                graph
+            })
         };
         factory.AddNodeBearerToken(executeRequest);
 

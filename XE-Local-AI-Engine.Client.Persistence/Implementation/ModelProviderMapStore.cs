@@ -69,6 +69,8 @@ public sealed class ModelProviderMapStore(NodeChatDbContext dbContext, TimeProvi
         return ToRecord(entity);
     }
 
-    private static ModelProviderMapRecord ToRecord(ModelProviderMap entity) =>
-        new(entity.ModelName, entity.ProviderName, entity.UpdatedAtUtc);
+    private static ModelProviderMapRecord ToRecord(ModelProviderMap entity)
+    {
+        return new ModelProviderMapRecord(entity.ModelName, entity.ProviderName, entity.UpdatedAtUtc);
+    }
 }

@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
@@ -19,11 +20,11 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_DiskGuard_BlocksBeforeAnyBytes_WhenInsufficient()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         // Free space is well below the file size → the hard guard must throw before any stream opens.
         var probe = Infra.FixedSpace(ModelBytes.Length - 1);
-        using var handler = new Infra.ScriptedHandler((_, _) =>
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
             throw new InvalidOperationException("The disk guard must block before any HTTP call."));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -31,8 +32,10 @@ public sealed class GgufStoreTests
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        await AssertEx.ThrowsAsync<InsufficientDiskSpaceException>(
-            () => store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None));
+        await AssertEx.ThrowsAsync<InsufficientDiskSpaceException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None));
 
         // No .part written.
         AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
@@ -42,9 +45,9 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_RejectsPathTraversalFileName_WritesNothingOutsideModelsDir()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) =>
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
             throw new InvalidOperationException("A traversal file name must be rejected before any HTTP call."));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -53,8 +56,10 @@ public sealed class GgufStoreTests
         var malicious = Infra.RepoFile("../../../../tmp/evil-Q4_K_M.gguf", "Q4_K_M", ModelBytes.Length);
         var store = Infra.Store(download, Infra.DiscoveryWith(malicious), registry, options);
 
-        await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(
-            () => store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None));
+        await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None));
 
         // Rejected before any HTTP call; nothing written anywhere under the models directory.
         AssertEx.Equal(0, handler.CallCount);
@@ -64,19 +69,20 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_DefaultsToQ4_K_M_WhenNoQuant()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
-        var discovery = Infra.DiscoveryWith(
-            Infra.RepoFile("Demo-Model-Q8_0.gguf", "Q8_0", 10),
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q8_0.gguf", "Q8_0", 10),
             Infra.RepoFile(Infra.FileName, "Q4_K_M", ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var handle = await store.EnsureModelAsync(
-            new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None);
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
 
         AssertEx.Equal("Q4_K_M", handle.Quant);
         AssertEx.Equal(Infra.ModelName, handle.ModelName);
@@ -87,19 +93,21 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_EnsureModel_HonorsQuantOverride()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
-        var discovery = Infra.DiscoveryWith(
-            Infra.RepoFile(Infra.FileName, "Q4_K_M", 10),
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, "Q4_K_M", 10),
             Infra.RepoFile("Demo-Model-Q8_0.gguf", "Q8_0", ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var handle = await store.EnsureModelAsync(
-            new GgufModelRequest { RepoId = Infra.RepoId, Quant = "Q8_0" }, progress: null, CancellationToken.None);
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = "Q8_0"
+        }, null, CancellationToken.None);
 
         AssertEx.Equal("Q8_0", handle.Quant);
         AssertEx.Equal("Demo-Model-Q8_0.gguf", Path.GetFileName(handle.LocalPath));
@@ -108,26 +116,28 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_Resume_ContinuesFromPartialPart_AcrossRuns()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         const int prefix = 1024;
         // Pre-seed a .part with the first 1024 bytes, simulating an interrupted earlier run.
         var partPath = dir.FilePath(Infra.FileName) + ".part";
         await File.WriteAllBytesAsync(partPath, ModelBytes[..prefix]);
 
-        using var handler = new Infra.ScriptedHandler((_, _) => PartialDownload(ModelBytes, prefix));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => PartialDownload(ModelBytes, prefix));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var handle = await store.EnsureModelAsync(
-            new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None);
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
 
         // A Range request was issued from the partial offset and the final file is the full, intact byte stream.
         AssertEx.NotNull(handler.Requests[0].Range);
-        AssertEx.Contains(handler.Requests[0].Range!, prefix.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.Contains(handler.Requests[0].Range!, prefix.ToString(CultureInfo.InvariantCulture));
         var finalBytes = await File.ReadAllBytesAsync(handle.LocalPath);
         AssertEx.Equal(ModelBytes.Length, finalBytes.Length);
         AssertEx.True(finalBytes.SequenceEqual(ModelBytes));
@@ -137,14 +147,14 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_Resume_RecoversFrom416_ByRestartingFromStart()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         // A stale .part at/over the real length → the first (ranged) request 416s; the store must drop it and the
         // retry (no Range) must complete the full file from byte 0.
         var partPath = dir.FilePath(Infra.FileName) + ".part";
         await File.WriteAllBytesAsync(partPath, ModelBytes);
 
-        using var handler = new Infra.ScriptedHandler((_, callIndex) => callIndex == 0
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, callIndex) => callIndex == 0
             ? new HttpResponseMessage(HttpStatusCode.RequestedRangeNotSatisfiable)
             : FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
@@ -153,8 +163,10 @@ public sealed class GgufStoreTests
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var handle = await store.EnsureModelAsync(
-            new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None);
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
 
         // Recovered after exactly two requests: the 416 reset, then a clean full download.
         AssertEx.Equal(2, handler.CallCount);
@@ -168,12 +180,12 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_DiskFullMidDownload_SurfacesReason_LeavesPartIntact()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
         {
             // A stream that throws ENOSPC partway through the copy loop.
-            Content = new StreamContent(new DiskFullStream(ModelBytes, throwAfter: 512))
+            Content = new StreamContent(new DiskFullStream(ModelBytes, 512))
         });
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -181,8 +193,10 @@ public sealed class GgufStoreTests
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(
-            () => store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.DiskFull, exception.Reason);
         // .part retained for resume; final never created.
@@ -193,19 +207,21 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_VerifiesHash_RejectsCorruptDownload()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         // The handler advertises a sha that does NOT match the bytes it streams → integrity failure.
         var wrongSha = Infra.Sha256Upper(Encoding.UTF8.GetBytes("different-content"));
-        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(ModelBytes, lfsSha256: wrongSha));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes, wrongSha));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(
-            () => store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.HashMismatch, exception.Reason);
         AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
@@ -215,34 +231,36 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_AcceptsDownload_WhenLfsShaMatches()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         var correctSha = Infra.Sha256Upper(ModelBytes);
-        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(ModelBytes, lfsSha256: correctSha));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes, correctSha));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var handle = await store.EnsureModelAsync(
-            new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None);
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!, message: null);
+        AssertEx.Equal(correctSha, handle.Sha256!, null);
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
     [Test]
     public async Task GgufStore_CancelDuringDownload_StopsAndLeavesNoFinal()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var cts = new CancellationTokenSource();
-        using var handler = new Infra.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
         {
             // Cancel is tripped after some bytes flow, mid copy loop.
-            Content = new StreamContent(new CancelTriggeringStream(ModelBytes, cts, cancelAfter: 512))
+            Content = new StreamContent(new CancelTriggeringStream(ModelBytes, cts, 512))
         });
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -250,8 +268,10 @@ public sealed class GgufStoreTests
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, cts.Token));
 
         AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
         AssertEx.Empty(await registry.ListAsync(CancellationToken.None));
@@ -260,9 +280,9 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_ReportsProgress_AsPullProgressDto()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
@@ -272,7 +292,10 @@ public sealed class GgufStoreTests
         var reports = new List<PullProgress>();
         var progress = new SynchronousProgress(reports.Add);
 
-        await store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress, CancellationToken.None);
+        await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, progress, CancellationToken.None);
 
         AssertEx.NotEmpty(reports);
         AssertEx.Contains(reports, report => report.ModelName == Infra.ModelName);
@@ -283,36 +306,41 @@ public sealed class GgufStoreTests
     [Test]
     public async Task GgufStore_GatedRepo_UsesBearerToken_WhenPresent()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         const string token = "hf_secret_token_value";
-        using var handler = new Infra.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.TokenStore(token), Infra.AbundantSpace(), options);
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        await store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None);
+        await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
 
-        AssertEx.Equal("Bearer", handler.Requests[0].AuthScheme!, message: null);
-        AssertEx.Equal(token, handler.Requests[0].AuthParameter!, message: null);
+        AssertEx.Equal("Bearer", handler.Requests[0].AuthScheme!, null);
+        AssertEx.Equal(token, handler.Requests[0].AuthParameter!, null);
     }
 
     [Test]
     public async Task GgufStore_GatedRepo_NoToken_SurfacesUnauthorized()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
-        using var handler = new Infra.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized));
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(
-            () => store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, progress: null, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.Gated, exception.Reason);
         // No retry on a 401 — exactly one call.
@@ -355,7 +383,10 @@ public sealed class GgufStoreTests
     // Reports progress on the calling thread so assertions see every report deterministically.
     private sealed class SynchronousProgress(Action<PullProgress> onReport) : IProgress<PullProgress>
     {
-        public void Report(PullProgress value) => onReport(value);
+        public void Report(PullProgress value)
+        {
+            onReport(value);
+        }
     }
 
     // A read stream that yields some bytes then throws an ENOSPC IOException, simulating a disk-full write failure.
@@ -397,9 +428,21 @@ public sealed class GgufStoreTests
         }
 
         public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     // A read stream that trips the supplied CancellationTokenSource partway through, then honours the token.
@@ -413,8 +456,10 @@ public sealed class GgufStoreTests
         public override long Length => bytes.Length;
         public override long Position { get => _position; set => throw new NotSupportedException(); }
 
-        public override int Read(byte[] buffer, int offset, int count) =>
-            ReadAsync(buffer.AsMemory(offset, count), CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return ReadAsync(buffer.AsMemory(offset, count), CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        }
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
@@ -440,8 +485,20 @@ public sealed class GgufStoreTests
         }
 
         public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

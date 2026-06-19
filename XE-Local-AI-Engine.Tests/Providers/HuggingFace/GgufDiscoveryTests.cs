@@ -22,28 +22,28 @@ public sealed class GgufDiscoveryTests
     public async Task GgufDiscovery_IgnoresNonGgufRepos_AndKeepsGgufRepos()
     {
         // One repo with a usable .gguf, one with only non-GGUF files → only the first survives.
-        var listing = $$"""
-        [
-          {
-            "id": "owner/Has-Gguf",
-            "gated": false,
-            "downloads": 100,
-            "likes": 5,
-            "lastModified": "2026-01-01T00:00:00.000Z",
-            "siblings": [ { "rfilename": "model-Q4_K_M.gguf" }, { "rfilename": "README.md" } ]
-          },
-          {
-            "id": "owner/No-Gguf",
-            "gated": false,
-            "downloads": 999,
-            "likes": 9,
-            "lastModified": "2026-01-02T00:00:00.000Z",
-            "siblings": [ { "rfilename": "model.safetensors" }, { "rfilename": "config.json" } ]
-          }
-        ]
-        """;
+        var listing = """
+                      [
+                        {
+                          "id": "owner/Has-Gguf",
+                          "gated": false,
+                          "downloads": 100,
+                          "likes": 5,
+                          "lastModified": "2026-01-01T00:00:00.000Z",
+                          "siblings": [ { "rfilename": "model-Q4_K_M.gguf" }, { "rfilename": "README.md" } ]
+                        },
+                        {
+                          "id": "owner/No-Gguf",
+                          "gated": false,
+                          "downloads": 999,
+                          "likes": 9,
+                          "lastModified": "2026-01-02T00:00:00.000Z",
+                          "siblings": [ { "rfilename": "model.safetensors" }, { "rfilename": "config.json" } ]
+                        }
+                      ]
+                      """;
 
-        using var harness = BuildHarness(listing: listing);
+        using var harness = BuildHarness(listing);
 
         var results = await harness.Discovery.SearchAsync(new GgufSearchQuery(), CancellationToken.None);
 
@@ -56,23 +56,25 @@ public sealed class GgufDiscoveryTests
     public async Task GgufDiscovery_SortsByPopularity_ReadsDownloadsLikesLastModified()
     {
         var listing = """
-        [
-          {
-            "id": "owner/Popular",
-            "gated": "manual",
-            "downloads": 1234567,
-            "likes": 4321,
-            "lastModified": "2026-05-10T12:34:56.000Z",
-            "cardData": { "license": "apache-2.0" },
-            "siblings": [ { "rfilename": "weights-Q4_K_M.gguf" } ]
-          }
-        ]
-        """;
+                      [
+                        {
+                          "id": "owner/Popular",
+                          "gated": "manual",
+                          "downloads": 1234567,
+                          "likes": 4321,
+                          "lastModified": "2026-05-10T12:34:56.000Z",
+                          "cardData": { "license": "apache-2.0" },
+                          "siblings": [ { "rfilename": "weights-Q4_K_M.gguf" } ]
+                        }
+                      ]
+                      """;
 
-        using var harness = BuildHarness(listing: listing);
+        using var harness = BuildHarness(listing);
 
-        var results = await harness.Discovery.SearchAsync(
-            new GgufSearchQuery { Sort = GgufSearchSort.Downloads },
+        var results = await harness.Discovery.SearchAsync(new GgufSearchQuery
+            {
+                Sort = GgufSearchSort.Downloads
+            },
             CancellationToken.None);
 
         AssertEx.Equal(1, results.Count);
@@ -94,21 +96,21 @@ public sealed class GgufDiscoveryTests
         // Two valid .gguf (different quants), plus one .gguf with no recognizable quant token (skipped, not repo-dropping),
         // plus a non-GGUF sibling (ignored).
         var detail = $$"""
-        {
-          "id": "{{RepoId}}",
-          "sha": "{{Commit}}",
-          "gated": false,
-          "cardData": { "license": "llama3.2" },
-          "siblings": [
-            { "rfilename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "size": 2019377440,
-              "lfs": { "sha256": "aaaa", "size": 2019377440 } },
-            { "rfilename": "Llama-3.2-3B-Instruct-Q8_0.gguf", "size": 3421899296,
-              "lfs": { "sha256": "bbbb", "size": 3421899296 } },
-            { "rfilename": "mystery-no-quant.gguf", "size": 10, "lfs": { "sha256": "cccc", "size": 10 } },
-            { "rfilename": "README.md" }
-          ]
-        }
-        """;
+                       {
+                         "id": "{{RepoId}}",
+                         "sha": "{{Commit}}",
+                         "gated": false,
+                         "cardData": { "license": "llama3.2" },
+                         "siblings": [
+                           { "rfilename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "size": 2019377440,
+                             "lfs": { "sha256": "aaaa", "size": 2019377440 } },
+                           { "rfilename": "Llama-3.2-3B-Instruct-Q8_0.gguf", "size": 3421899296,
+                             "lfs": { "sha256": "bbbb", "size": 3421899296 } },
+                           { "rfilename": "mystery-no-quant.gguf", "size": 10, "lfs": { "sha256": "cccc", "size": 10 } },
+                           { "rfilename": "README.md" }
+                         ]
+                       }
+                       """;
 
         using var harness = BuildHarness(repoDetail: detail, headerBytes: MinimalHeaderBytes());
 
@@ -134,27 +136,27 @@ public sealed class GgufDiscoveryTests
     public async Task GgufDiscovery_InspectsRepo_ReturnsGgufHeaderMetadata_ViaRangeRead()
     {
         var detail = $$"""
-        {
-          "id": "{{RepoId}}",
-          "sha": "{{Commit}}",
-          "gated": false,
-          "siblings": [
-            { "rfilename": "model-Q4_K_M.gguf", "size": 100, "lfs": { "sha256": "aaaa", "size": 100 } }
-          ]
-        }
-        """;
+                       {
+                         "id": "{{RepoId}}",
+                         "sha": "{{Commit}}",
+                         "gated": false,
+                         "siblings": [
+                           { "rfilename": "model-Q4_K_M.gguf", "size": 100, "lfs": { "sha256": "aaaa", "size": 100 } }
+                         ]
+                       }
+                       """;
 
         // Full header: architecture=llama plus llama.* keys + general.* keys, incl. file_type (the quant enum).
         var header = new GgufHeaderBytesBuilder()
-            .WithString("general.architecture", "llama")
-            .WithUint32("general.file_type", 15) // LLAMA_FTYPE_MOSTLY_Q4_K_M.
-            .WithUint64("general.parameter_count", 3_212_749_888UL)
-            .WithUint32("llama.block_count", 28)
-            .WithUint32("llama.attention.head_count", 24)
-            .WithUint32("llama.attention.head_count_kv", 8)
-            .WithUint32("llama.embedding_length", 3072)
-            .WithUint32("llama.context_length", 131072)
-            .Build();
+                     .WithString("general.architecture", "llama")
+                     .WithUint32("general.file_type", 15) // LLAMA_FTYPE_MOSTLY_Q4_K_M.
+                     .WithUint64("general.parameter_count", 3_212_749_888UL)
+                     .WithUint32("llama.block_count", 28)
+                     .WithUint32("llama.attention.head_count", 24)
+                     .WithUint32("llama.attention.head_count_kv", 8)
+                     .WithUint32("llama.embedding_length", 3072)
+                     .WithUint32("llama.context_length", 131072)
+                     .Build();
 
         using var harness = BuildHarness(repoDetail: detail, headerBytes: header);
 
@@ -177,15 +179,15 @@ public sealed class GgufDiscoveryTests
     {
         // No lfs/sha256 on the sibling → Sha256 must be null; the revision (sha) is still present.
         var detail = $$"""
-        {
-          "id": "{{RepoId}}",
-          "sha": "{{Commit}}",
-          "gated": false,
-          "siblings": [
-            { "rfilename": "model-Q4_K_M.gguf", "size": 4242 }
-          ]
-        }
-        """;
+                       {
+                         "id": "{{RepoId}}",
+                         "sha": "{{Commit}}",
+                         "gated": false,
+                         "siblings": [
+                           { "rfilename": "model-Q4_K_M.gguf", "size": 4242 }
+                         ]
+                       }
+                       """;
 
         using var harness = BuildHarness(repoDetail: detail, headerBytes: MinimalHeaderBytes());
 
@@ -198,10 +200,14 @@ public sealed class GgufDiscoveryTests
     }
 
     private static byte[] MinimalHeaderBytes()
-        => new GgufHeaderBytesBuilder().WithString("general.architecture", "llama").Build();
+    {
+        return new GgufHeaderBytesBuilder().WithString("general.architecture", "llama").Build();
+    }
 
     private static DiscoveryHarness BuildHarness(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null)
-        => new(listing, repoDetail, headerBytes);
+    {
+        return new DiscoveryHarness(listing, repoDetail, headerBytes);
+    }
 
     /// <summary>
     ///     Owns the stubbed handler + HTTP clients + wired discovery so a <c>using var</c> in each test disposes them
@@ -209,15 +215,14 @@ public sealed class GgufDiscoveryTests
     /// </summary>
     private sealed class DiscoveryHarness : IDisposable
     {
-        private readonly StubHandler _handler;
-        private readonly HttpClient _hubHttp;
         private readonly HttpClient _downloadHttp;
+        private readonly HttpClient _hubHttp;
 
         public DiscoveryHarness(string? listing, string? repoDetail, byte[]? headerBytes)
         {
-            _handler = new StubHandler(listing, repoDetail, headerBytes);
-            _hubHttp = new HttpClient(_handler, disposeHandler: false);
-            _downloadHttp = new HttpClient(_handler, disposeHandler: false);
+            Handler = new StubHandler(listing, repoDetail, headerBytes);
+            _hubHttp = new HttpClient(Handler, false);
+            _downloadHttp = new HttpClient(Handler, false);
 
             var options = new HuggingFaceOptions();
             var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance);
@@ -227,13 +232,13 @@ public sealed class GgufDiscoveryTests
 
         public HuggingFaceGgufDiscovery Discovery { get; }
 
-        public StubHandler Handler => _handler;
+        public StubHandler Handler { get; }
 
         public void Dispose()
         {
             _hubHttp.Dispose();
             _downloadHttp.Dispose();
-            _handler.Dispose();
+            Handler.Dispose();
         }
     }
 
@@ -270,7 +275,12 @@ public sealed class GgufDiscoveryTests
         }
 
         private static HttpResponseMessage Json(string body)
-            => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+        }
 
         private static HttpResponseMessage BuildRangeResponse(HttpRequestMessage request, byte[] full)
         {
@@ -287,7 +297,10 @@ public sealed class GgufDiscoveryTests
 
             // 206 Partial Content for an honored range; the reader treats a short body as "whole (small) file".
             var status = length < full.Length ? HttpStatusCode.PartialContent : HttpStatusCode.OK;
-            return new HttpResponseMessage(status) { Content = new ByteArrayContent(slice) };
+            return new HttpResponseMessage(status)
+            {
+                Content = new ByteArrayContent(slice)
+            };
         }
     }
 }

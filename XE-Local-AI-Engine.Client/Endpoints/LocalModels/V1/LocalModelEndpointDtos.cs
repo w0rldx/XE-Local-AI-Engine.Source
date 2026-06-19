@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
-/// <summary>Provider tags for <see cref="LocalModelResponse.Provider"/> (chat picker grouping + egress hint).</summary>
+/// <summary>Provider tags for <see cref="LocalModelResponse.Provider" /> (chat picker grouping + egress hint).</summary>
 public static class LocalModelProviders
 {
     /// <summary>A node-local Ollama model (default; stays entirely on the node).</summary>

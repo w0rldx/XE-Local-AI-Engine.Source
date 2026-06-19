@@ -45,8 +45,7 @@ public static class LlamaServerServiceCollectionExtensions
 
         // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
-        services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(
-            sp.GetRequiredService<ILlamaCppBinaryManager>(),
+        services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(sp.GetRequiredService<ILlamaCppBinaryManager>(),
             sp.GetRequiredService<IGpuVariantSelector>(),
             sp.GetRequiredService<IGgufModelStore>(),
             sp.GetRequiredService<ILlamaServerProcessLauncher>(),
@@ -63,8 +62,7 @@ public static class LlamaServerServiceCollectionExtensions
         // registrations. Singleton — it holds no per-request state; the deferred chat/embedding
         // clients it hands out own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
-            new LlamaServerLocalModelProvider(
-                sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+            new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());

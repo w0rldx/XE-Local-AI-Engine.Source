@@ -67,7 +67,7 @@ public sealed class AgentDefinitionResolverTests
         // The runtime projection carries the resolved agent's id + display-name snapshot so the stream service can stamp
         // per-response attribution without a second fetch.
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
-        var definition = CreateDefinition(name: "Backend Buddy", allowedTools: ["GetCurrentTime"]);
+        var definition = CreateDefinition("Backend Buddy", allowedTools: ["GetCurrentTime"]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
@@ -83,7 +83,7 @@ public sealed class AgentDefinitionResolverTests
         // The seeded Default Assistant (mode-off persona) gets the FULL capability-gated offer, NOT the intersected
         // allowed set — even though its AllowedToolNames is empty, both offered tools survive (reproduces today's chat).
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
-        var defaultAssistant = CreateDefinition(name: AgentDefaults.DefaultAgentName, allowedTools: []) with
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: []) with
         {
             Source = AgentDefinitionSource.Seeded,
             SeedSlug = AgentDefaults.DefaultAgentSeedSlug
@@ -111,8 +111,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedSkillIds: [enabledId, disabledId, deletedId]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>(
-                      [SkillRecord(enabledId, "kubernetes-debug", "Debug k8s issues", "## Body", version: 3)]));
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([SkillRecord(enabledId, "kubernetes-debug", "Debug k8s issues", "## Body", 3)]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
 
@@ -150,7 +149,7 @@ public sealed class AgentDefinitionResolverTests
         // The full-offer branch is keyed strictly on the default-assistant slug: any other seeded row stays intersected,
         // so a starter-pack persona can never claim the full offer.
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
-        var seededPersona = CreateDefinition(name: "Seeded persona", allowedTools: ["GetCurrentTime"]) with
+        var seededPersona = CreateDefinition("Seeded persona", allowedTools: ["GetCurrentTime"]) with
         {
             Source = AgentDefinitionSource.Seeded,
             SeedSlug = "some-other-pack-agent"
@@ -186,8 +185,8 @@ public sealed class AgentDefinitionResolverTests
         // The offer ships both tools as non-approval. The definition overrides one to require approval and leaves the
         // other to its descriptor default.
         var resolver = CreateResolver(out var store,
-            OfferTool("GetCurrentTime", requiresApproval: false),
-            OfferTool("Calculate", requiresApproval: false));
+            OfferTool("GetCurrentTime", false),
+            OfferTool("Calculate", false));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime", "Calculate"],
             toolApprovals: new Dictionary<string, bool>
             {
@@ -212,7 +211,7 @@ public sealed class AgentDefinitionResolverTests
         // treated like any other offered tool.
         const string mcpTool = "mcp__weather__get_forecast";
         var resolver = CreateResolver(out var store,
-            OfferTool(mcpTool, requiresApproval: true),
+            OfferTool(mcpTool, true),
             OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: [mcpTool, "GetCurrentTime"],
             modelProfile: ToolCapableModel,
@@ -278,7 +277,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, null, false).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(0, resolved!.AllowedTools.Count);
@@ -292,7 +291,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, null, true).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "GetCurrentTime");
@@ -360,7 +359,7 @@ public sealed class AgentDefinitionResolverTests
 
         // Same config-affecting fields (instructions/tools/model/reasoning/version), different Name/Description. The
         // store owns the version; a name/description-only edit does not bump it, so the hash is unchanged.
-        var first = CreateDefinition(name: "Alpha", description: "first", allowedTools: ["GetCurrentTime"], version: 2);
+        var first = CreateDefinition("Alpha", "first", ["GetCurrentTime"], version: 2);
         var second = first with
         {
             Name = "Beta",
@@ -445,8 +444,8 @@ public sealed class AgentDefinitionResolverTests
         // composed prompt preserves this exact order.
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
-                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
+                         EnabledAction(definition.Id, "Run the tests first.", 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", 5)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
@@ -469,7 +468,7 @@ public sealed class AgentDefinitionResolverTests
         };
         playbookStore.ListEnabledByAgentAsync(enabled.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(enabled.Id, "Run the tests first.", priority: 1)
+                         EnabledAction(enabled.Id, "Run the tests first.", 1)
                      ]));
 
         var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled).ConfigureAwait(false);
@@ -484,13 +483,13 @@ public sealed class AgentDefinitionResolverTests
         // Two enabled actions, threshold 8: below the threshold the ranker is never consulted and the prompt is the full
         // static prepend — byte-identical to Compose(base, enabled).
         var ranker = new RecordingRanker();
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 8, topK: 8, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 8, 8, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
-                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
+                         EnabledAction(definition.Id, "Run the tests first.", 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", 5)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything").ConfigureAwait(false);
@@ -507,14 +506,14 @@ public sealed class AgentDefinitionResolverTests
         // Three enabled actions, threshold 2 (above it): but a blank query must NOT engage retrieval — the full static
         // prepend is kept and the ranker is never consulted.
         var ranker = new RecordingRanker();
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 2, 2, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
-                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5),
-                         EnabledAction(definition.Id, "Write a changelog.", priority: 9)
+                         EnabledAction(definition.Id, "Run the tests first.", 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", 5),
+                         EnabledAction(definition.Id, "Write a changelog.", 9)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "   ").ConfigureAwait(false);
@@ -530,12 +529,12 @@ public sealed class AgentDefinitionResolverTests
     {
         // Three enabled actions, threshold 2, top-k 2, non-blank query: the ranker is consulted once. The fake returns the
         // two it chooses out-of-priority-order; the resolver must re-impose Priority-then-CreatedAtUtc before composing.
-        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);
-        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", priority: 1);
-        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", priority: 9);
+        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", 5);
+        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", 1);
+        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", 9);
 
-        var ranker = new RecordingRanker(selection: [lowPriority, highPriority]);
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
+        var ranker = new RecordingRanker([lowPriority, highPriority]);
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 2, 2, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
@@ -555,7 +554,7 @@ public sealed class AgentDefinitionResolverTests
     {
         // The empty-set guard holds even when a query is present: no enabled actions => byte-identical base, ranker untouched.
         var ranker = new RecordingRanker();
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 0, topK: 8, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 0, 8, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
@@ -602,7 +601,7 @@ public sealed class AgentDefinitionResolverTests
 
     private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
     {
-        return BuildResolver(out store, out _, onGetOffered: null, offeredTools);
+        return BuildResolver(out store, out _, null, offeredTools);
     }
 
     // Exposes the playbook store so the playbook-injection tests can stub ListEnabledByAgentAsync / assert it is not
@@ -611,7 +610,7 @@ public sealed class AgentDefinitionResolverTests
         out IPlaybookActionStore playbookStore,
         params AllowedToolDto[] offeredTools)
     {
-        return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools);
+        return BuildResolver(out store, out playbookStore, null, offeredTools);
     }
 
     // Exposes both the definition store and a real (stubbable) skill store so the skill-resolution tests can configure
@@ -638,7 +637,7 @@ public sealed class AgentDefinitionResolverTests
 
     private static AgentSkillRecord SkillRecord(Guid id, string name, string description, string body, int version = 1)
     {
-        return new AgentSkillRecord(id, name, description, body, Enabled: true, version, CreatedAtUtc: 10, UpdatedAtUtc: 10);
+        return new AgentSkillRecord(id, name, description, body, true, version, 10, 10);
     }
 
     private static AgentDefinitionResolver BuildResolver(out IAgentDefinitionStore store,
@@ -746,13 +745,13 @@ public sealed class AgentDefinitionResolverTests
             agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            TriggerCondition: null,
+            null,
             behavior,
-            Scope: null,
+            null,
             priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            1,
+            10,
+            10);
     }
 
     private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)

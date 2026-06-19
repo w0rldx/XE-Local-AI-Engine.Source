@@ -79,26 +79,26 @@ public static class RecommendationJsonParser
         var memoryRequiredGb = GetDouble(model, "memory_required_gb");
         var vramRequiredGb = GetDouble(model, "vram_required_gb");
 
-        return new ModelFitRecommendationInput(Rank: rank,
-            ModelName: GetString(model, "name") ?? string.Empty,
-            ProviderModelName: providerModelName,
-            Score: GetDouble(model, "score") ?? 0d,
-            FitLevel: GetString(model, "fit_level"),
-            RunMode: GetString(model, "run_mode"),
-            Quantization: GetString(model, "best_quant"),
-            EstimatedTokensPerSecond: GetDouble(model, "estimated_tps"),
+        return new ModelFitRecommendationInput(rank,
+            GetString(model, "name") ?? string.Empty,
+            providerModelName,
+            GetDouble(model, "score") ?? 0d,
+            GetString(model, "fit_level"),
+            GetString(model, "run_mode"),
+            GetString(model, "best_quant"),
+            GetDouble(model, "estimated_tps"),
             // memory_required_gb is in GB; the column is MB.
-            RequiredRamMb: memoryRequiredGb is { } gb ? gb * 1024d : null,
+            memoryRequiredGb is { } gb ? gb * 1024d : null,
             // The advisor fills vram_required_gb from the memory-fit estimate (null for a CPU-mode fit / legacy payload).
-            RequiredVramMb: vramRequiredGb is { } vramGb ? vramGb * 1024d : null,
+            vramRequiredGb is { } vramGb ? vramGb * 1024d : null,
             // Context column = the model's advertised maximum window (context_length). effective_context_length is
             // llmfit's memory-estimation cap (defaults to 8192 when --max-context / OLLAMA_CONTEXT_LENGTH are unset), so
             // preferring it showed 8192 for every model; fall back to it only when context_length is absent.
-            ContextTokens: GetInt(model, "context_length") ?? GetInt(model, "effective_context_length"),
-            IsInstalled: GetBool(model, "installed") ?? false,
+            GetInt(model, "context_length") ?? GetInt(model, "effective_context_length"),
+            GetBool(model, "installed") ?? false,
             // The advisor's model name IS the GGUF registry pull key ({repo}:{quant}); fall back to the legacy ollama tag.
-            PullModelName: GetString(model, "name") ?? ollamaName,
-            DiagnosticsJson: BuildDiagnostics(model));
+            GetString(model, "name") ?? ollamaName,
+            BuildDiagnostics(model));
     }
 
     /// <summary>Builds a small sanitized JSON of extras kept for the UI/audit. Returns <c>null</c> when there is nothing to keep.</summary>

@@ -33,7 +33,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, recursive: true);
+                    Directory.Delete(dir, true);
                 }
             }
             catch (IOException)
@@ -121,7 +121,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, "M\trepo-01/src/App.cs\n");
         provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, new string('x', 4096));
-        var service = CreateService(provider, maxPatchBytes: 16);
+        var service = CreateService(provider, 16);
 
         var runDir = NewTempDir();
         var export = await service.ExportPatchAsync(handle, Request("run-2", runDir, Folder("repo-01")));

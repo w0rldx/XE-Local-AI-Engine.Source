@@ -6,8 +6,8 @@ using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Embedding-backed <see cref="IPlaybookRetrievalRanker" />: ranks candidates by cosine similarity between the
@@ -153,7 +153,7 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         // lexical instead so the send never breaks. No playbook/query text is logged.
         if (generated.Count != batchTexts.Count)
         {
-            return await FallBackToLexicalAsync(query, candidates, k, exception: null, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, k, null, cancellationToken).ConfigureAwait(false);
         }
 
         var queryVector = generated[queryBatchIndex].Vector;

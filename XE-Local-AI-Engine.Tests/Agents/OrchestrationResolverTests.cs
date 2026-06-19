@@ -106,8 +106,8 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_WhenValid_CompilesSpecWithTriageAndParticipants()
     {
-        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
-        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
@@ -127,8 +127,8 @@ public sealed class OrchestrationResolverTests
     public async Task ResolveAsync_ProjectsParticipantToolsLikeP3()
     {
         // Each participant's tools are projected with the same contract as single-agent resolution: offer ∩ AllowedToolNames, approval override.
-        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
-        var specialist = CreateDefinition(name: "Specialist",
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist",
             modelProfile: ToolCapableModel,
             allowedTools: ["GetCurrentTime", "NotOffered"],
             toolApprovals: new Dictionary<string, bool>
@@ -136,7 +136,7 @@ public sealed class OrchestrationResolverTests
                 ["GetCurrentTime"] = true
             });
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
-        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime", requiresApproval: false), OfferTool("Calculate"));
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime", false), OfferTool("Calculate"));
         SeedParticipants(store, triage, specialist);
 
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
@@ -152,14 +152,14 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_WhenParticipantPlaybookEnabled_FoldsActionsIntoItsInstructions()
     {
-        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
-        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
         var resolver = CreateResolver(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
         playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(specialist.Id, "Stay terse.", priority: 1)
+                         EnabledAction(specialist.Id, "Stay terse.", 1)
                      ]));
 
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
@@ -175,8 +175,8 @@ public sealed class OrchestrationResolverTests
     [Test]
     public async Task ResolveAsync_WhenParticipantPlaybookDisabled_KeepsInstructionsByteIdentical()
     {
-        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: false);
-        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: false);
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: false);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: false);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
         var resolver = CreateResolver(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
@@ -196,15 +196,15 @@ public sealed class OrchestrationResolverTests
         // Per-participant playbook retrieval: a participant whose enabled set exceeds the threshold and a non-blank
         // retrievalQuery must route through the SAME shared PlaybookRetrievalSelector the single-agent path uses, so only
         // the ranker's top-k (re-ordered by Priority then CreatedAtUtc) is folded into that participant's instructions.
-        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);
-        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", priority: 1);
-        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", priority: 9);
+        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", 5);
+        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", 1);
+        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", 9);
 
-        var ranker = new RecordingRanker(selection: [lowPriority, highPriority]);
-        var triage = CreateDefinition(name: "Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
-        var specialist = CreateDefinition(name: "Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        var ranker = new RecordingRanker([lowPriority, highPriority]);
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 2, 2, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
         playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([highPriority, lowPriority, ignored]));
@@ -403,13 +403,13 @@ public sealed class OrchestrationResolverTests
             agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            TriggerCondition: null,
+            null,
             behavior,
-            Scope: null,
+            null,
             priority,
-            Version: 1,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10);
+            1,
+            10,
+            10);
     }
 
     private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)

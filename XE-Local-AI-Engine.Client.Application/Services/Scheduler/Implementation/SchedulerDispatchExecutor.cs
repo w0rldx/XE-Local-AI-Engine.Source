@@ -166,9 +166,9 @@ internal sealed class SchedulerDispatchExecutor(
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 ScheduledRunStatus.Succeeded,
-                completedAtUtc: completedMs,
-                durationMs: completedMs - actualFireMs,
-                summary: "Completed.",
+                completedMs,
+                completedMs - actualFireMs,
+                "Completed.",
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
             await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunCompleted).ConfigureAwait(false);
@@ -185,8 +185,8 @@ internal sealed class SchedulerDispatchExecutor(
 
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 status,
-                completedAtUtc: completedMs,
-                durationMs: completedMs - actualFireMs,
+                completedMs,
+                completedMs - actualFireMs,
                 errorMessage: wasCancelRequested
                     ? "Run was cancelled."
                     : "Run exceeded its maximum runtime and was interrupted.",
@@ -218,8 +218,8 @@ internal sealed class SchedulerDispatchExecutor(
 
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 ScheduledRunStatus.Failed,
-                completedAtUtc: completedMs,
-                durationMs: completedMs - actualFireMs,
+                completedMs,
+                completedMs - actualFireMs,
                 errorMessage: errorMessage,
                 errorDetails: exception.GetType().FullName,
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);

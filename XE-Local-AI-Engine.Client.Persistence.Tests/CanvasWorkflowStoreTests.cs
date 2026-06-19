@@ -114,7 +114,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
 
         // A correct expected version updates the row and bumps the version to 2.
         clock.Advance(10);
-        var firstUpdate = await store.UpdateAsync(added.Id, expectedVersion: 1, CreateInput() with
+        var firstUpdate = await store.UpdateAsync(added.Id, 1, CreateInput() with
         {
             Name = "Renamed",
             GraphJson = "{\"nodes\":[],\"edges\":[]}"
@@ -127,7 +127,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
 
         // Re-applying the now-stale expected version (1) must be rejected as a conflict without mutating the row.
         clock.Advance(10);
-        var stale = await store.UpdateAsync(added.Id, expectedVersion: 1, CreateInput() with
+        var stale = await store.UpdateAsync(added.Id, 1, CreateInput() with
         {
             Name = "Should not apply"
         });
@@ -139,7 +139,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
         AssertEx.Equal("Renamed", current.Name);
 
         // Updating an unknown id returns NotFound (distinct from Conflict).
-        var missing = await store.UpdateAsync(Guid.NewGuid(), expectedVersion: 1, CreateInput());
+        var missing = await store.UpdateAsync(Guid.NewGuid(), 1, CreateInput());
         AssertEx.Equal(CanvasWorkflowUpdateOutcome.NotFound, missing.Outcome);
     }
 
@@ -180,7 +180,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
     {
         try
         {
-            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+            return new UTF8Encoding(false, true).GetString(bytes);
         }
         catch (DecoderFallbackException)
         {

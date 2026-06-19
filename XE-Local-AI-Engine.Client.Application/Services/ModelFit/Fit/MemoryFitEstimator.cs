@@ -33,7 +33,6 @@ public sealed class MemoryFitEstimator
     /// </summary>
     public const double DefaultSafetyMarginFraction = 0.12d;
 
-    private readonly long _overheadBytes;
     private readonly double _safetyMarginFraction;
 
     /// <summary>Creates an estimator with the default ~0.75 GB overhead and 12% safety margin.</summary>
@@ -47,12 +46,12 @@ public sealed class MemoryFitEstimator
     {
         ArgumentOutOfRangeException.ThrowIfNegative(overheadBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(safetyMarginFraction);
-        _overheadBytes = overheadBytes;
+        OverheadBytes = overheadBytes;
         _safetyMarginFraction = safetyMarginFraction;
     }
 
     /// <summary>The fixed runtime overhead this estimator adds to every estimate (the insufficient-metadata floor).</summary>
-    public long OverheadBytes => _overheadBytes;
+    public long OverheadBytes { get; }
 
     /// <summary>
     ///     Estimates the memory footprint of a model with the given GGUF header metadata at <paramref name="ctxTarget" />
@@ -88,7 +87,7 @@ public sealed class MemoryFitEstimator
 
         // Apply the safety margin to the model-driven terms (weights + KV) only, then add the fixed runtime overhead.
         var marginBytes = (long)((weightsBytes + kvBytes) * _safetyMarginFraction);
-        var estimatedBytes = weightsBytes + kvBytes + marginBytes + _overheadBytes;
+        var estimatedBytes = weightsBytes + kvBytes + marginBytes + OverheadBytes;
 
         var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
         var budgetBytes = useGpu ? profile.VramBytes!.Value : profile.AvailableRamBytes;

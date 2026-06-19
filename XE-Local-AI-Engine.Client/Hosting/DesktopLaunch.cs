@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-using System;
-using System.Linq;
-
 /// <summary>
 ///     Resolves whether the process was started in "desktop" mode — a self-contained, double-click launch that binds
 ///     loopback HTTP, opens the default browser, and routes a closed console window into a graceful shutdown.
@@ -53,6 +50,8 @@ internal static class DesktopLaunch
     ///     Convenience overload that reads from the real process environment. Used by <c>Program.cs</c>; tests call the
     ///     injectable overload above.
     /// </summary>
-    internal static bool IsDesktopMode(string[] args) =>
-        IsDesktopMode(args, Environment.GetEnvironmentVariable);
+    internal static bool IsDesktopMode(string[] args)
+    {
+        return IsDesktopMode(args, Environment.GetEnvironmentVariable);
+    }
 }

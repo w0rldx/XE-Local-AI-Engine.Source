@@ -14,11 +14,11 @@ public sealed class ExecuteSavedPreviewWorkflowEndpoint(
     IPreviewWorkflowExecutionService executionService)
     : Endpoint<PreviewWorkflowRouteRequest, PreviewRunStartedResponse>
 {
-    private readonly IPreviewWorkflowService _previewWorkflowService =
-        previewWorkflowService ?? throw new ArgumentNullException(nameof(previewWorkflowService));
-
     private readonly IPreviewWorkflowExecutionService _executionService =
         executionService ?? throw new ArgumentNullException(nameof(executionService));
+
+    private readonly IPreviewWorkflowService _previewWorkflowService =
+        previewWorkflowService ?? throw new ArgumentNullException(nameof(previewWorkflowService));
 
     public override void Configure()
     {

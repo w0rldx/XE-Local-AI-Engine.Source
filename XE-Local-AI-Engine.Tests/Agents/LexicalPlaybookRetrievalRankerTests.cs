@@ -12,9 +12,9 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_WithHigherOverlap_RanksMoreRelevantFirst()
     {
-        var weather = Action("weather forecast rain temperature", priority: 10, createdAtUtc: 1);
-        var cooking = Action("cooking recipe oven bake", priority: 10, createdAtUtc: 2);
-        var partial = Action("forecast the weekend", priority: 10, createdAtUtc: 3);
+        var weather = Action("weather forecast rain temperature", 10, 1);
+        var cooking = Action("cooking recipe oven bake", 10, 2);
+        var partial = Action("forecast the weekend", 10, 3);
 
         var result = await Ranker.SelectTopKAsync("what is the weather forecast", [cooking, partial, weather], 3, CancellationToken.None);
 
@@ -43,9 +43,9 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     public async Task SelectTopK_OnScoreTie_BreaksByPriorityThenCreatedAtUtc()
     {
         // All three share exactly one token ("deploy") with the query, so the tiebreak decides the order.
-        var lowPriority = Action("deploy", priority: 5, createdAtUtc: 99);
-        var highPriorityOlder = Action("deploy", priority: 50, createdAtUtc: 1);
-        var highPriorityNewer = Action("deploy", priority: 50, createdAtUtc: 2);
+        var lowPriority = Action("deploy", 5, 99);
+        var highPriorityOlder = Action("deploy", 50, 1);
+        var highPriorityNewer = Action("deploy", 50, 2);
 
         var result = await Ranker.SelectTopKAsync("deploy", [highPriorityNewer, highPriorityOlder, lowPriority], 3, CancellationToken.None);
 
@@ -67,9 +67,9 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_WhenQueryIsBlank_FallsBackToPriorityOrder()
     {
-        var third = Action("alpha", priority: 30, createdAtUtc: 1);
-        var first = Action("beta", priority: 10, createdAtUtc: 5);
-        var second = Action("gamma", priority: 20, createdAtUtc: 3);
+        var third = Action("alpha", 30, 1);
+        var first = Action("beta", 10, 5);
+        var second = Action("gamma", 20, 3);
 
         var result = await Ranker.SelectTopKAsync("   ", [third, first, second], 3, CancellationToken.None);
 
@@ -98,9 +98,9 @@ public sealed class LexicalPlaybookRetrievalRankerTests
     {
         return
         [
-            Action("deploy the production build to the cluster", priority: 10, createdAtUtc: 1),
-            Action("summarise the meeting notes", priority: 20, createdAtUtc: 2),
-            Action("production incident response runbook", priority: 30, createdAtUtc: 3)
+            Action("deploy the production build to the cluster", 10, 1),
+            Action("summarise the meeting notes", 20, 2),
+            Action("production incident response runbook", 30, 3)
         ];
     }
 
@@ -111,11 +111,11 @@ public sealed class LexicalPlaybookRetrievalRankerTests
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
             triggerCondition,
-            Behavior: "behaviour text",
-            Scope: null,
+            "behaviour text",
+            null,
             priority,
-            Version: 1,
+            1,
             createdAtUtc,
-            UpdatedAtUtc: createdAtUtc);
+            createdAtUtc);
     }
 }

@@ -24,9 +24,9 @@ using Microsoft.Extensions.AI;
 /// </remarks>
 internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
 {
-    private readonly ILlamaServerProcessSupervisor _supervisor;
-    private readonly string _modelName;
     private readonly SemaphoreSlim _initGate = new(1, 1);
+    private readonly string _modelName;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
 
     private IEmbeddingGenerator<string, Embedding<float>>? _inner;
 
@@ -37,8 +37,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         _modelName = modelName;
     }
 
-    public async Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(
-        IEnumerable<string> values,
+    public async Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
         EmbeddingGenerationOptions? options = null,
         CancellationToken cancellationToken = default)
     {

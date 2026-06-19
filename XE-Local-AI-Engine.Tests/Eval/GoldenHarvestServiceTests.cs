@@ -49,9 +49,9 @@ public sealed class GoldenHarvestServiceTests
         var sourceConversationId = Guid.NewGuid();
         var source = new HarvestCandidateSource(sourceMessageId,
             sourceConversationId,
-            ConversationTitle: "Original Conversation",
-            PriorTurns: [new HarvestTurn("user", "How do I reset?"), new HarvestTurn("assistant", "Use the reset button.")],
-            ApprovedAnswerText: "Hold the reset button for five seconds.");
+            "Original Conversation",
+            [new HarvestTurn("user", "How do I reset?"), new HarvestTurn("assistant", "Use the reset button.")],
+            "Hold the reset button for five seconds.");
         harness.WithSources(source);
 
         var captured = harness.CaptureCreateHarvested();
@@ -94,9 +94,9 @@ public sealed class GoldenHarvestServiceTests
         var sourceMessageId = Guid.NewGuid();
         var source = new HarvestCandidateSource(sourceMessageId,
             Guid.NewGuid(),
-            ConversationTitle: "Conv",
-            PriorTurns: [new HarvestTurn("user", "q")],
-            ApprovedAnswerText: "a");
+            "Conv",
+            [new HarvestTurn("user", "q")],
+            "a");
         harness.WithSources(source);
         // The dedup set already contains this source's message id.
         harness.GoldenStore.ListSourceMessageIdsByAgentAsync(AgentId, Arg.Any<CancellationToken>())
@@ -117,10 +117,10 @@ public sealed class GoldenHarvestServiceTests
         var harness = new Harness();
         var source = new HarvestCandidateSource(Guid.NewGuid(),
             Guid.NewGuid(),
-            ConversationTitle: "Conv",
+            "Conv",
             // Only an assistant prior turn (no lead-up user turn) → unusable as an input conversation.
-            PriorTurns: [new HarvestTurn("assistant", "answer with no question")],
-            ApprovedAnswerText: "a");
+            [new HarvestTurn("assistant", "answer with no question")],
+            "a");
         harness.WithSources(source);
 
         var outcome = await harness.Service.HarvestAsync(AgentId).ConfigureAwait(false);
@@ -135,7 +135,7 @@ public sealed class GoldenHarvestServiceTests
     [Test]
     public async Task HarvestAsync_WhenMoreSourcesThanMaxProposals_CapsCreatedCount()
     {
-        var harness = new Harness(maxProposals: 2);
+        var harness = new Harness(2);
         harness.WithSources(FreshSource("q1"),
             FreshSource("q2"),
             FreshSource("q3"));
@@ -176,9 +176,9 @@ public sealed class GoldenHarvestServiceTests
     {
         return new HarvestCandidateSource(Guid.NewGuid(),
             Guid.NewGuid(),
-            ConversationTitle: "Conv",
-            PriorTurns: [new HarvestTurn("user", question)],
-            ApprovedAnswerText: "answer for " + question);
+            "Conv",
+            [new HarvestTurn("user", question)],
+            "answer for " + question);
     }
 
     private static GoldenConversationRecord StoredRecord(GoldenConversationCreateInput input)
@@ -189,9 +189,9 @@ public sealed class GoldenHarvestServiceTests
             input.InputTurns,
             input.Assertion,
             input.Rubric,
-            Enabled: false,
-            CreatedAtUtc: 10,
-            UpdatedAtUtc: 10,
+            false,
+            10,
+            10,
             GoldenConversationSource.Harvested,
             input.SourceMessageId,
             input.SourceConversationId);
@@ -256,17 +256,17 @@ public sealed class GoldenHarvestServiceTests
         {
             return new AgentDefinitionRecord(AgentId,
                 "Builder",
-                Description: null,
+                null,
                 "Base instructions.",
-                ModelProfile: null,
-                ReasoningEffort: null,
+                null,
+                null,
                 AgentDefinitionKind.Single,
-                AllowedToolNames: [],
-                ToolApprovals: new Dictionary<string, bool>(),
-                OrchestrationTopologyJson: null,
-                Version: 1,
-                CreatedAtUtc: 10,
-                UpdatedAtUtc: 10);
+                [],
+                new Dictionary<string, bool>(),
+                null,
+                1,
+                10,
+                10);
         }
     }
 

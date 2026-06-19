@@ -236,14 +236,14 @@ public sealed class GoldenConversationStoreTests : IDisposable
             agentId = await SeedAgentAsync(writeContext);
             var store = new GoldenConversationStore(writeContext, TimeProvider.System);
             var added = await store.AddAsync(new GoldenConversationInput(agentId,
-                Title: "Harvested case",
+                "Harvested case",
                 InputTurns,
-                Assertion: null,
+                null,
                 rubric,
-                Enabled: false,
-                Source: GoldenConversationSource.Harvested,
-                SourceMessageId: sourceMessageId,
-                SourceConversationId: sourceConversationId));
+                false,
+                GoldenConversationSource.Harvested,
+                sourceMessageId,
+                sourceConversationId));
 
             AssertEx.Equal(GoldenConversationSource.Harvested, added.Source);
             AssertEx.Equal(sourceMessageId, added.SourceMessageId);
@@ -388,25 +388,25 @@ public sealed class GoldenConversationStoreTests : IDisposable
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-            Description: null,
+            null,
             Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+            [],
+            new Dictionary<string, bool>(),
+            null));
         return agent.Id;
     }
 
     private static GoldenConversationInput CreateInput(Guid agentDefinitionId)
     {
         return new GoldenConversationInput(agentDefinitionId,
-            Title: "Summary case",
+            "Summary case",
             InputTurns,
             Assertion,
             Rubric,
-            Enabled: true);
+            true);
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)

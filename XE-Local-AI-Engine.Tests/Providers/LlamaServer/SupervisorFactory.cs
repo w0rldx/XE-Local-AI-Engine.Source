@@ -5,16 +5,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// <summary>Builds a <see cref="LlamaServerProcessSupervisor" /> over fakes with sensible test defaults.</summary>
 internal static class SupervisorFactory
 {
-    public static LlamaServerProcessSupervisor Create(
-        FakeProcessLauncher? launcher = null,
+    public static LlamaServerProcessSupervisor Create(FakeProcessLauncher? launcher = null,
         ILlamaServerHealthProbe? healthProbe = null,
         FakeModelStore? modelStore = null,
         LlamaServerSupervisorOptions? options = null,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         AdvanceableTimeProvider? timeProvider = null)
     {
-        return new LlamaServerProcessSupervisor(
-            new FakeBinaryManager(),
+        return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             new FakeVariantSelector(),
             modelStore ?? new FakeModelStore(),
             launcher ?? new FakeProcessLauncher(),

@@ -49,7 +49,10 @@ internal static class LlamaServerOpenAIAdapterFactory
 
     private static OpenAIClient BuildOpenAIClient(Uri baseAddress)
     {
-        var options = new OpenAIClientOptions { Endpoint = baseAddress };
+        var options = new OpenAIClientOptions
+        {
+            Endpoint = baseAddress
+        };
         return new OpenAIClient(new ApiKeyCredential(IgnoredApiKey), options);
     }
 }

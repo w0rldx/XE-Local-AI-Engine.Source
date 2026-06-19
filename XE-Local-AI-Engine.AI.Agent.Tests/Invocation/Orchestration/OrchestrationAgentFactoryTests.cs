@@ -94,8 +94,8 @@ public sealed class OrchestrationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ApprovalAcrossHandoff_ExecutesOnlyWhenApproved()
     {
-        await RunApprovalAcrossHandoff(approve: true, decorateClient: false);
-        await RunApprovalAcrossHandoff(approve: false, decorateClient: false);
+        await RunApprovalAcrossHandoff(true, false);
+        await RunApprovalAcrossHandoff(false, false);
     }
 
     [Test]
@@ -108,8 +108,8 @@ public sealed class OrchestrationAgentFactoryTests
         // as AdditionalTools so the approval surfaces (RequestInfoEvent) and the tool executes once approved, while
         // handoff_to_* flows through. If this regressed, the fallback is to give the factory the base (pre-decoration)
         // client.
-        await RunApprovalAcrossHandoff(approve: true, decorateClient: true);
-        await RunApprovalAcrossHandoff(approve: false, decorateClient: true);
+        await RunApprovalAcrossHandoff(true, true);
+        await RunApprovalAcrossHandoff(false, true);
     }
 
     [Test]
@@ -167,7 +167,7 @@ public sealed class OrchestrationAgentFactoryTests
 
                 // Wait well past the 1s idle timeout before responding; the suspended clock must keep the run alive.
                 await Task.Delay(TimeSpan.FromMilliseconds(2500));
-                await session.RespondToApprovalAsync(update.RequestId!, approved: true, reason: null);
+                await session.RespondToApprovalAsync(update.RequestId!, true, null);
             }
         }
 

@@ -148,14 +148,14 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            Description: null,
+            null,
             "You are a careful engineering agent.",
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null)).ConfigureAwait(false);
+            [],
+            new Dictionary<string, bool>(),
+            null)).ConfigureAwait(false);
         return agent.Id;
     }
 
@@ -165,11 +165,11 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
         var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
-            TriggerCondition: null,
-            Scope: "search",
-            Priority: 100,
-            SourceFeedbackIds: [Guid.NewGuid()],
-            Confidence: 0.8d)).ConfigureAwait(false);
+            null,
+            "search",
+            100,
+            [Guid.NewGuid()],
+            0.8d)).ConfigureAwait(false);
         return created.Id;
     }
 
@@ -180,10 +180,10 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         _ = await service.CreateAsync(new PlaybookActionInput(agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            TriggerCondition: null,
+            null,
             "Always cite the tool you used.",
-            Scope: null,
-            Priority: 50)).ConfigureAwait(false);
+            null,
+            50)).ConfigureAwait(false);
     }
 
     private static async Task RecordPassingEvalAsync(TestingWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
@@ -193,17 +193,17 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         var current = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
 
         // A passing eval pinned to the action's current Version so the eval gate lets the promote through to the cap check.
-        var eval = new PlaybookEvalResult(Passed: true,
-            EvaluatedAtUtc: 1_000,
-            ActionVersionAtEval: current.Version,
-            ModelName: "test-model",
-            GoldenCaseCount: 1,
-            GoldenCaseTotal: 1,
-            BaselinePassCount: 1,
-            CandidatePassCount: 1,
-            RegressedCaseCount: 0,
-            ImprovedCaseCount: 0,
-            Cases: []);
+        var eval = new PlaybookEvalResult(true,
+            1_000,
+            current.Version,
+            "test-model",
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            []);
         var json = JsonSerializer.Serialize(eval, PlaybookEvalResult.SerializerOptions);
         _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json).ConfigureAwait(false));
     }

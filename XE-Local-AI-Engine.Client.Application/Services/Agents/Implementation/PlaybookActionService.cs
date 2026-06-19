@@ -24,7 +24,7 @@ internal sealed class PlaybookActionService(
         // cannot be bypassed via direct CRUD. A create-as-Disabled never touches the cap.
         if (input.State == PlaybookActionState.Enabled)
         {
-            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, excludedActionId: null, cancellationToken).ConfigureAwait(false);
+            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, null, cancellationToken).ConfigureAwait(false);
         }
 
         return await _store.AddAsync(input, cancellationToken).ConfigureAwait(false);
@@ -57,7 +57,7 @@ internal sealed class PlaybookActionService(
         // count). Editing an action that is already Enabled (stays Enabled) is not a transition and is never blocked.
         if (existing.State != PlaybookActionState.Enabled && input.State == PlaybookActionState.Enabled)
         {
-            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, excludedActionId: id, cancellationToken).ConfigureAwait(false);
+            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, id, cancellationToken).ConfigureAwait(false);
         }
 
         return await _store.UpdateAsync(id, input, cancellationToken).ConfigureAwait(false);
@@ -216,7 +216,7 @@ internal sealed class PlaybookActionService(
     {
         // Reject moves the action to Archived (provenance preserved rather than hard-deleted). A recorded eval result
         // is irrelevant once archived, so clear it rather than let a stale pass linger on the rejected record.
-        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, evalResult: null, cancellationToken);
+        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, null, cancellationToken);
     }
 
     public async Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default)
@@ -246,7 +246,7 @@ internal sealed class PlaybookActionService(
             input.Priority,
             pending.SourceFeedbackIds,
             pending.Confidence,
-            EvalResult: null);
+            null);
 
         return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken).ConfigureAwait(false);
     }

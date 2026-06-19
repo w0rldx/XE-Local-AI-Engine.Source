@@ -50,7 +50,7 @@ public sealed class FakeSandboxRuntimeProviderTests
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
         await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ConnectAsync(Key(owner: "other-owner")));
+        await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ConnectAsync(Key("other-owner")));
     }
 
     [Test]
@@ -250,14 +250,14 @@ public sealed class FakeSandboxRuntimeProviderTests
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
         provider.WriteHostFile("/host/secret", "owner-a secret");
-        var handleA = await provider.CreateOrAttachAsync(CreateRequest(Key(owner: "owner-a")));
+        var handleA = await provider.CreateOrAttachAsync(CreateRequest(Key("owner-a")));
         await provider.CopyIntoAsync(handleA, new SandboxCopyRequest
         {
             SourcePath = "/host/secret",
             DestinationPath = "/agent-home/secret"
         });
 
-        var handleB = await provider.CreateOrAttachAsync(CreateRequest(Key(owner: "owner-b")));
+        var handleB = await provider.CreateOrAttachAsync(CreateRequest(Key("owner-b")));
 
         AssertEx.NotEqual(handleA.SandboxId, handleB.SandboxId);
         await AssertEx.ThrowsAsync<SandboxHandleInvalidException>(() => provider.ReadFileAsync(handleA, "/agent-home/secret"));

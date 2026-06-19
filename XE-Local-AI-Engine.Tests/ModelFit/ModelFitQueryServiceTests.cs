@@ -35,7 +35,7 @@ public sealed class ModelFitQueryServiceTests
     public async Task GetLatestRecommendationsAsync_WhenLatestSnapshotExists_ReturnsViewWithRows()
     {
         var harness = Harness.Create();
-        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, "Good", "GPU", "Q5_K_M", 48.2, 6144d, null, 16384, true, "qwen2.5-coder:7b", null),
             new ModelFitRecommendationInput(2, "deepseek-coder:1.3b", "deepseek-coder:1.3b", 61.0, "Marginal", "CPU", "Q4_K_M", 12.0, 1536d, null, 16384, false, "deepseek-coder:1.3b", null));
@@ -58,7 +58,7 @@ public sealed class ModelFitQueryServiceTests
     public async Task GetLatestRecommendationsAsync_WhenUseCaseDiffers_ReturnsNull()
     {
         var harness = Harness.Create();
-        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", null, 82.5, null, null, null, null, null, null, null, false, null, null));
 
@@ -73,8 +73,8 @@ public sealed class ModelFitQueryServiceTests
     {
         // The node has the tag though the snapshot stored installed:false (offline recommend); a different row stored
         // installed:true is NOT on the node. Install state must follow the node, not llmfit's offline flag.
-        var harness = Harness.Create(installedModelNames: ["qwen2.5-coder:7b"]);
-        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        var harness = Harness.Create(["qwen2.5-coder:7b"]);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, null, null, null, null, null, null, 16384, false, "qwen2.5-coder:7b", null),
             new ModelFitRecommendationInput(2, "deepseek-coder:1.3b", null, 61.0, null, null, null, null, null, null, 16384, true, "deepseek-coder:1.3b", null));
@@ -90,8 +90,8 @@ public sealed class ModelFitQueryServiceTests
     public async Task GetLatestRecommendationsAsync_WhenPullModelNameNull_IsNotInstalled()
     {
         // An HF-only model with no Ollama tag cannot be matched to the install list → not installed (unknown).
-        var harness = Harness.Create(installedModelNames: ["qwen2.5-coder:7b"]);
-        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        var harness = Harness.Create(["qwen2.5-coder:7b"]);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput(1, "Some/HF-Only-Model", null, 50.0, null, null, null, null, null, null, null, true, null, null));
 
@@ -105,8 +105,8 @@ public sealed class ModelFitQueryServiceTests
     public async Task GetLatestRecommendationsAsync_WhenTagOmitsLatest_MatchesInstalledLatest()
     {
         // The recommendation carries the bare name; the node lists the `:latest` form — they must match.
-        var harness = Harness.Create(installedModelNames: ["Mistral:latest"]);
-        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "general");
+        var harness = Harness.Create(["Mistral:latest"]);
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("general");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput(1, "mistral", "mistral", 70.0, null, null, null, null, null, null, null, false, "mistral", null));
 
@@ -121,7 +121,7 @@ public sealed class ModelFitQueryServiceTests
     {
         // Ollama unreachable: the install-state enrichment must not fail the cached read — keep the stored flag.
         var harness = Harness.Create(throwOnList: true);
-        var snapshotId = harness.SeedLatestRecommendationSnapshot(useCase: "coding");
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, null, null, null, null, null, null, 16384, true, "qwen2.5-coder:7b", null));
 
@@ -159,9 +159,9 @@ public sealed class ModelFitQueryServiceTests
         public Guid SeedLatestRecommendationSnapshot(string? useCase)
         {
             // Open then mark Succeeded so the in-memory store sets is_latest_successful via its real transition path.
-            var summary = SnapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(
-                ApprovedImageId, ModelFitOperation.Recommend, useCase, ProviderName, ModelName: null, ModelFitRunStatus.Running, StartedAtUtc: 1L)).GetAwaiter().GetResult();
-            SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: "{}", stderrExcerpt: null, diagnosticsJson: "{}", completedAtUtc: 2L)
+            var summary = SnapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId, ModelFitOperation.Recommend, useCase, ProviderName, null, ModelFitRunStatus.Running, 1L))
+                                       .GetAwaiter().GetResult();
+            SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, 0, 100, "{}", null, "{}", 2L)
                          .GetAwaiter().GetResult();
             return summary.Id;
         }

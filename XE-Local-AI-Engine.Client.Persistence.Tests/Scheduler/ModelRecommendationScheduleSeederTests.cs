@@ -32,7 +32,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, recursive: true);
+            Directory.Delete(_rootPath, true);
         }
     }
 
@@ -139,7 +139,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         services.AddScoped<IScheduledJobRunStore, ScheduledJobRunStore>();
         services.AddSingleton(TimeProvider.System);
 
-        var config = BuildConfig(connectionString: $"Data Source={dbPath}");
+        var config = BuildConfig($"Data Source={dbPath}");
         services.AddSingleton<IConfiguration>(config);
 
         // AddNodeScheduler registers the real ModelRecommendationCheckHandler template, the scheduler factory, and the

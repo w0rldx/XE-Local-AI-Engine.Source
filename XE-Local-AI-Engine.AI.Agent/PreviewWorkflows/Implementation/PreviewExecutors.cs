@@ -8,8 +8,8 @@ using Microsoft.Extensions.AI;
 ///     Debug-tap (side-event + forward-unchanged), and End (terminal output). Encapsulates the MAF
 ///     discipline: agent executors run the ChatProtocol — they ACCUMULATE inbound ChatMessages and only run+forward
 ///     the WHOLE accumulated conversation on a TurnToken, so:
-///       - Start/transform send a fresh single-message user list + a TurnToken (declare both sentMessageTypes).
-///       - the transform extracts ONLY the upstream agent's latest assistant text (never concat the whole list).
+///     - Start/transform send a fresh single-message user list + a TurnToken (declare both sentMessageTypes).
+///     - the transform extracts ONLY the upstream agent's latest assistant text (never concat the whole list).
 /// </summary>
 internal static class PreviewExecutors
 {
@@ -21,13 +21,12 @@ internal static class PreviewExecutors
     /// </summary>
     public static FunctionExecutor<string> BuildStart(string id, string seedText, string targetId)
     {
-        return new FunctionExecutor<string>(
-            id,
+        return new FunctionExecutor<string>(id,
             async (_, context, cancellationToken) =>
             {
-                List<ChatMessage> seed = [new ChatMessage(ChatRole.User, seedText)];
+                List<ChatMessage> seed = [new(ChatRole.User, seedText)];
                 await context.SendMessageAsync(seed, targetId, cancellationToken).ConfigureAwait(false);
-                await context.SendMessageAsync(new TurnToken(emitEvents: true), targetId, cancellationToken).ConfigureAwait(false);
+                await context.SendMessageAsync(new TurnToken(true), targetId, cancellationToken).ConfigureAwait(false);
             },
             sentMessageTypes: AgentDriveMessageTypes);
     }
@@ -41,14 +40,13 @@ internal static class PreviewExecutors
     /// </summary>
     public static FunctionExecutor<List<ChatMessage>> BuildTransform(string id, string targetId)
     {
-        return new FunctionExecutor<List<ChatMessage>>(
-            id,
+        return new FunctionExecutor<List<ChatMessage>>(id,
             async (messages, context, cancellationToken) =>
             {
                 var text = ExtractLatestAssistantText(messages);
-                List<ChatMessage> next = [new ChatMessage(ChatRole.User, text)];
+                List<ChatMessage> next = [new(ChatRole.User, text)];
                 await context.SendMessageAsync(next, targetId, cancellationToken).ConfigureAwait(false);
-                await context.SendMessageAsync(new TurnToken(emitEvents: true), targetId, cancellationToken).ConfigureAwait(false);
+                await context.SendMessageAsync(new TurnToken(true), targetId, cancellationToken).ConfigureAwait(false);
             },
             sentMessageTypes: AgentDriveMessageTypes);
     }
@@ -61,8 +59,7 @@ internal static class PreviewExecutors
     /// </summary>
     public static FunctionExecutor<List<ChatMessage>, List<ChatMessage>> BuildDebugTap(string nodeId)
     {
-        return new FunctionExecutor<List<ChatMessage>, List<ChatMessage>>(
-            nodeId,
+        return new FunctionExecutor<List<ChatMessage>, List<ChatMessage>>(nodeId,
             async (messages, context, cancellationToken) =>
             {
                 var display = ExtractLatestAssistantText(messages);
@@ -78,8 +75,7 @@ internal static class PreviewExecutors
     /// </summary>
     public static FunctionExecutor<List<ChatMessage>, string> BuildPausePreAdapter(string id)
     {
-        return new FunctionExecutor<List<ChatMessage>, string>(
-            id,
+        return new FunctionExecutor<List<ChatMessage>, string>(id,
             (messages, _, _) => new ValueTask<string>(ExtractLatestAssistantText(messages)));
     }
 
@@ -91,13 +87,12 @@ internal static class PreviewExecutors
     /// </summary>
     public static FunctionExecutor<string> BuildPausePostAdapter(string id, string targetId)
     {
-        return new FunctionExecutor<string>(
-            id,
+        return new FunctionExecutor<string>(id,
             async (resumed, context, cancellationToken) =>
             {
-                List<ChatMessage> next = [new ChatMessage(ChatRole.User, resumed)];
+                List<ChatMessage> next = [new(ChatRole.User, resumed)];
                 await context.SendMessageAsync(next, targetId, cancellationToken).ConfigureAwait(false);
-                await context.SendMessageAsync(new TurnToken(emitEvents: true), targetId, cancellationToken).ConfigureAwait(false);
+                await context.SendMessageAsync(new TurnToken(true), targetId, cancellationToken).ConfigureAwait(false);
             },
             sentMessageTypes: AgentDriveMessageTypes);
     }
@@ -109,8 +104,7 @@ internal static class PreviewExecutors
     /// </summary>
     public static FunctionExecutor<List<ChatMessage>> BuildEnd(string id)
     {
-        return new FunctionExecutor<List<ChatMessage>>(
-            id,
+        return new FunctionExecutor<List<ChatMessage>>(id,
             async (messages, context, cancellationToken) =>
             {
                 var output = ExtractLatestAssistantText(messages);

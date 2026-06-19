@@ -4,18 +4,17 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 
 /// <summary>
-/// The node's registered <see cref="IChatClient"/>: a stable wrapper that re-selects cloud-vs-local on
-/// <b>every</b> call. Singleton consumers (the agent factories) capture this wrapper once,
-/// but each send re-evaluates the active provider via <see cref="IActiveCloudChatClientFactory"/>, so signing
-/// in or out at runtime takes effect on the next send without restarting the node.
-///
-/// <para>
-/// The local model client is stable, so it is resolved once and reused. The active cloud client is resolved per
-/// call but <see cref="IActiveCloudChatClientFactory"/> caches it on a selection fingerprint, so it is rebuilt
-/// only when the selection changes (sign-in / sign-out / refresh) — not on every send. When a cloud provider is
-/// selected but unusable (e.g. no Codex session), the cloud factory throws a typed re-auth error, which propagates
-/// to the caller as a re-authenticate prompt rather than silently routing local.
-/// </para>
+///     The node's registered <see cref="IChatClient" />: a stable wrapper that re-selects cloud-vs-local on
+///     <b>every</b> call. Singleton consumers (the agent factories) capture this wrapper once,
+///     but each send re-evaluates the active provider via <see cref="IActiveCloudChatClientFactory" />, so signing
+///     in or out at runtime takes effect on the next send without restarting the node.
+///     <para>
+///         The local model client is stable, so it is resolved once and reused. The active cloud client is resolved per
+///         call but <see cref="IActiveCloudChatClientFactory" /> caches it on a selection fingerprint, so it is rebuilt
+///         only when the selection changes (sign-in / sign-out / refresh) — not on every send. When a cloud provider is
+///         selected but unusable (e.g. no Codex session), the cloud factory throws a typed re-auth error, which propagates
+///         to the caller as a re-authenticate prompt rather than silently routing local.
+///     </para>
 /// </summary>
 public sealed class RuntimeChatClient : IChatClient
 {
@@ -42,18 +41,20 @@ public sealed class RuntimeChatClient : IChatClient
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
-    public Task<ChatResponse> GetResponseAsync(
-        IEnumerable<ChatMessage> messages,
+    public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => ResolveActiveClient().GetResponseAsync(messages, options, cancellationToken);
+    {
+        return ResolveActiveClient().GetResponseAsync(messages, options, cancellationToken);
+    }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
-    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> messages,
+    public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => ResolveActiveClient().GetStreamingResponseAsync(messages, options, cancellationToken);
+    {
+        return ResolveActiveClient().GetStreamingResponseAsync(messages, options, cancellationToken);
+    }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
     public object? GetService(Type serviceType, object? serviceKey = null)
@@ -80,7 +81,9 @@ public sealed class RuntimeChatClient : IChatClient
     }
 
     private IChatClient ResolveActiveClient()
-        => _activeCloudFactory.TryCreateActiveCloudChatClient(out var cloudClient) && cloudClient is not null
+    {
+        return _activeCloudFactory.TryCreateActiveCloudChatClient(out var cloudClient) && cloudClient is not null
             ? cloudClient
             : _localClient.Value;
+    }
 }

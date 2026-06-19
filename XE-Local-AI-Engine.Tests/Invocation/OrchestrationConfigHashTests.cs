@@ -200,8 +200,8 @@ public sealed class OrchestrationConfigHashTests
             [],
             "qwen3:8b",
             new TimeoutSettings(),
-            reasoningEffort: null,
-            orchestrationSpec: spec);
+            null,
+            spec);
     }
 
     private static OrchestrationSpec SampleSpec()

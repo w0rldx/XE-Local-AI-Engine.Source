@@ -6,7 +6,6 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Insights;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Default <see cref="IPlaybookAnalysisAgent" />: runs a <b>node-local</b> model (resolved per-model via
@@ -22,10 +21,10 @@ internal sealed class OllamaPlaybookAnalysisAgent(
     ILogger<OllamaPlaybookAnalysisAgent> logger) : IPlaybookAnalysisAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ILogger<OllamaPlaybookAnalysisAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+
+    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
 
     public async Task<IReadOnlyList<ProposedPlaybookAction>> ProposeAsync(FeedbackInsightsResult aggregate, CancellationToken cancellationToken = default)
     {

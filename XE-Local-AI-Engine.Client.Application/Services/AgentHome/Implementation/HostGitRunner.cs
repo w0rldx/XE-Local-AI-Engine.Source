@@ -94,7 +94,7 @@ internal sealed class HostGitRunner
     {
         try
         {
-            process.Kill(entireProcessTree: true);
+            process.Kill(true);
         }
         catch (InvalidOperationException)
         {

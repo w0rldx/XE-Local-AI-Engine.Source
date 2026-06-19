@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Preview.V1;
 
-using Microsoft.AspNetCore.Http;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 
 /// <summary>

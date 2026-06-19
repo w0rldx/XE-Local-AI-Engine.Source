@@ -752,14 +752,14 @@ public sealed class PlaybookActionStoreTests : IDisposable
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-            Description: null,
+            null,
             Instructions,
-            ModelProfile: null,
-            ReasoningEffort: null,
+            null,
+            null,
             AgentDefinitionKind.Single,
-            AllowedToolNames: [],
-            ToolApprovals: new Dictionary<string, bool>(),
-            OrchestrationTopologyJson: null));
+            [],
+            new Dictionary<string, bool>(),
+            null));
         return agent.Id;
     }
 
@@ -770,8 +770,8 @@ public sealed class PlaybookActionStoreTests : IDisposable
             PlaybookActionSource.Manual,
             TriggerCondition,
             Behavior,
-            Scope: "testing",
-            Priority: 10);
+            "testing",
+            10);
     }
 
     private static async Task TamperBehaviorAsync(string databasePath)

@@ -13,10 +13,10 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Verifies the active-cloud selector: Codex selection keys off live-session
-/// presence, Azure off the persisted credential, the typed re-auth error surfaces (not a 500) when Codex is selected
-/// but unusable, the fingerprint client-cache rebuilds only on selection change, swapped-out clients are NOT
-/// disposed (concurrency-safety), and the selection snapshot keeps the token-store read off the per-send hot path.
+///     Verifies the active-cloud selector: Codex selection keys off live-session
+///     presence, Azure off the persisted credential, the typed re-auth error surfaces (not a 500) when Codex is selected
+///     but unusable, the fingerprint client-cache rebuilds only on selection change, swapped-out clients are NOT
+///     disposed (concurrency-safety), and the selection snapshot keeps the token-store read off the per-send hot path.
 /// </summary>
 [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
     Justification = "The out client aliases a test-owned StubChatClient already disposed via 'using'.")]
@@ -30,7 +30,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         using var codexClient = new StubChatClient();
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(NonExpiredSession());
+               .Returns(NonExpiredSession());
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
         var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
@@ -46,7 +46,10 @@ public sealed class ActiveCloudChatClientFactoryTests
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
         harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(new StoredNodeSettings { DefaultModelName = "gpt-5.4" });
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "gpt-5.4"
+               });
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
         harness.Factory.TryCreateActiveCloudChatClient(out _);
@@ -63,7 +66,10 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
         // A local Ollama model name left in the node default must NOT reach Codex as the model — fall back to default.
         harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(new StoredNodeSettings { DefaultModelName = "qwen3:8b" });
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "qwen3:8b"
+               });
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
         harness.Factory.TryCreateActiveCloudChatClient(out _);
@@ -79,7 +85,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         harness.CredentialStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(CreateAzureCredentials());
+               .Returns(CreateAzureCredentials());
         harness.AzureFactory.Create(Arg.Any<StoredCloudCredentials>()).Returns(azureClient);
 
         var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
@@ -106,10 +112,10 @@ public sealed class ActiveCloudChatClientFactoryTests
     {
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(NonExpiredSession());
+               .Returns(NonExpiredSession());
         // The factory itself decides the session is unusable and throws the typed AuthRequired error.
         harness.CodexFactory.Create(Arg.Any<string?>())
-            .Returns(_ => throw new CodexProviderException(CodexProviderErrorKind.AuthRequired, "sign in required"));
+               .Returns(_ => throw new CodexProviderException(CodexProviderErrorKind.AuthRequired, "sign in required"));
 
         var error = Throws<CodexProviderException>(() => harness.Factory.TryCreateActiveCloudChatClient(out _));
 
@@ -121,7 +127,7 @@ public sealed class ActiveCloudChatClientFactoryTests
     {
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(NonExpiredSession());
+               .Returns(NonExpiredSession());
 
         AssertEx.True(harness.Factory.IsCloudProviderSelected());
     }
@@ -132,7 +138,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         using var codexClient = new StubChatClient();
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(SessionExpiringAt(2030));
+               .Returns(SessionExpiringAt(2030));
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
         using var factory = harness.Factory;
 
@@ -155,9 +161,8 @@ public sealed class ActiveCloudChatClientFactoryTests
         using var secondClient = new StubChatClient();
         var harness = new Harness();
         // First resolution: an early expiry. Second: a refreshed session (later expiry) → fingerprint changes.
-        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(
-            SessionExpiringAt(2030, hour: 0),
-            SessionExpiringAt(2030, hour: 1, accountId: "acct2"));
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030, 0),
+            SessionExpiringAt(2030, 1, "acct2"));
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(firstClient, secondClient);
         using var factory = harness.Factory;
 
@@ -178,15 +183,14 @@ public sealed class ActiveCloudChatClientFactoryTests
     {
         using var codexClient = new StubChatClient();
         var harness = new Harness();
-        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(
-            NonExpiredSession(),
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession(),
             (CodexTokens?)null);
         harness.CredentialStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((StoredCloudCredentials?)null);
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
         using var factory = harness.Factory;
 
         factory.TryCreateActiveCloudChatClient(out _); // signed in → cached
-        factory.InvalidateSelectionCache();             // logout pokes the selector
+        factory.InvalidateSelectionCache(); // logout pokes the selector
         var produced = factory.TryCreateActiveCloudChatClient(out var afterLogout); // signed out → local
 
         AssertEx.False(produced);
@@ -226,15 +230,14 @@ public sealed class ActiveCloudChatClientFactoryTests
         var createdCount = 0;
         var firstClient = new StubChatClient(midStreamGate: async () =>
         {
-            swapHappened.Release();                 // signal the test that we're parked mid-stream
-            await resumeStream.WaitAsync();         // wait until the test has flipped + resolved the new selection
+            swapHappened.Release(); // signal the test that we're parked mid-stream
+            await resumeStream.WaitAsync(); // wait until the test has flipped + resolved the new selection
         });
         var harness = new Harness();
-        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(
-            SessionExpiringAt(2030, hour: 0),
-            SessionExpiringAt(2030, hour: 1, accountId: "acct2"));
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030, 0),
+            SessionExpiringAt(2030, 1, "acct2"));
         harness.CodexFactory.Create(Arg.Any<string?>())
-            .Returns(_ => Interlocked.Increment(ref createdCount) == 1 ? firstClient : new StubChatClient());
+               .Returns(_ => Interlocked.Increment(ref createdCount) == 1 ? firstClient : new StubChatClient());
         using var factory = harness.Factory;
 
         factory.TryCreateActiveCloudChatClient(out var client);
@@ -257,10 +260,10 @@ public sealed class ActiveCloudChatClientFactoryTests
             }
         });
 
-        await swapHappened.WaitAsync();             // the stream is now provably parked mid-enumeration
-        harness.Time.Advance(PastTtl);             // lapse the snapshot so the refreshed session is re-read
+        await swapHappened.WaitAsync(); // the stream is now provably parked mid-enumeration
+        harness.Time.Advance(PastTtl); // lapse the snapshot so the refreshed session is re-read
         factory.TryCreateActiveCloudChatClient(out var afterSwap); // swaps the cache → would dispose firstClient pre-fix
-        resumeStream.Release();                     // let the held stream finish
+        resumeStream.Release(); // let the held stream finish
         await streamTask;
 
         AssertEx.Null(streamError, "the in-flight stream must not see ObjectDisposedException after a swap");
@@ -275,7 +278,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         var harness = new Harness();
         var flip = 0;
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => SessionExpiringAt(2030, hour: Interlocked.Increment(ref flip) % 4));
+               .Returns(_ => SessionExpiringAt(2030, Interlocked.Increment(ref flip) % 4));
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(_ => new StubChatClient());
         using var factory = harness.Factory;
 
@@ -308,19 +311,25 @@ public sealed class ActiveCloudChatClientFactoryTests
     }
 
     private static StoredCloudCredentials CreateAzureCredentials()
-        => new()
+    {
+        return new StoredCloudCredentials
         {
             ProviderName = CloudProviderOptions.ProviderAzureFoundry,
             Endpoint = "https://example.openai.azure.com/",
             ApiKey = "test-api-key",
-            DeploymentName = "gpt-4o",
+            DeploymentName = "gpt-4o"
         };
+    }
 
     private static CodexTokens NonExpiredSession()
-        => new("a", "r", DateTimeOffset.UtcNow.AddHours(1), "acct");
+    {
+        return new CodexTokens("a", "r", DateTimeOffset.UtcNow.AddHours(1), "acct");
+    }
 
     private static CodexTokens SessionExpiringAt(int year, int hour = 0, string accountId = "acct")
-        => new("a", "r", new DateTimeOffset(year, 1, 1, hour, 0, 0, TimeSpan.Zero), accountId);
+    {
+        return new CodexTokens("a", "r", new DateTimeOffset(year, 1, 1, hour, 0, 0, TimeSpan.Zero), accountId);
+    }
 
     private static TException Throws<TException>(Action action) where TException : Exception
     {
@@ -359,21 +368,21 @@ public sealed class ActiveCloudChatClientFactoryTests
 
         public AdvanceableTimeProvider Time { get; } = new();
 
-        public ActiveCloudChatClientFactory Factory => new(
-            CodexTokenStore,
-            CredentialStore,
-            AzureFactory,
-            new Lazy<ICodexOAuthChatClientFactory>(() => CodexFactory),
-            Options.Create(CodexOptions),
-            NodeSettingsStore,
-            Time);
+        public ActiveCloudChatClientFactory Factory =>
+            new(CodexTokenStore,
+                CredentialStore,
+                AzureFactory,
+                new Lazy<ICodexOAuthChatClientFactory>(() => CodexFactory),
+                Options.Create(CodexOptions),
+                NodeSettingsStore,
+                Time);
     }
 
-    /// <summary>A <see cref="TimeProvider"/> whose clock the test advances to lapse the selection-snapshot TTL.</summary>
+    /// <summary>A <see cref="TimeProvider" /> whose clock the test advances to lapse the selection-snapshot TTL.</summary>
     private sealed class AdvanceableTimeProvider : TimeProvider
     {
-        private DateTimeOffset _now = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
         private readonly Lock _gate = new();
+        private DateTimeOffset _now = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         public override DateTimeOffset GetUtcNow()
         {

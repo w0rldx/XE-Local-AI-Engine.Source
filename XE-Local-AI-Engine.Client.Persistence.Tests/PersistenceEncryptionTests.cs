@@ -192,16 +192,13 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await context.Database.EnsureCreatedAsync();
 
             // Insert the conversation row first (no title).
-            await context.Database.ExecuteSqlRawAsync(
-                "INSERT INTO conversations (conversation_id, user_id, created_at_utc, last_seen_utc, purged, origin) VALUES ({0}, {1}, {2}, {3}, 0, {4});",
-                [conversationId, "worker-node", 1L, 2L, "local"]);
+            await context.Database.ExecuteSqlRawAsync("INSERT INTO conversations (conversation_id, user_id, created_at_utc, last_seen_utc, purged, origin) VALUES ({0}, {1}, {2}, {3}, 0, {4});",
+                conversationId, "worker-node", 1L, 2L, "local");
 
             // Encrypt the title exactly as the raw-SQL write path does.
             var encryptedTitle = context.EncryptConversationTitle(titleText, conversationId);
 
-            await context.Database.ExecuteSqlRawAsync(
-                "UPDATE conversations SET title = {0} WHERE conversation_id = {1};",
-                [(encryptedTitle is null ? (object)DBNull.Value : encryptedTitle), conversationId]);
+            await context.Database.ExecuteSqlRawAsync("UPDATE conversations SET title = {0} WHERE conversation_id = {1};", encryptedTitle is null ? DBNull.Value : encryptedTitle, conversationId);
         }
 
         // Assert — raw file bytes must not contain the plaintext title sentinel.
@@ -225,6 +222,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
             await reader.ReadAsync();
             raw = await reader.IsDBNullAsync(0) ? null : (byte[])reader.GetValue(0);
         }
+
         var decrypted = readContext.DecryptConversationTitle(raw, conversationId);
         AssertEx.True(decrypted == titleText,
             "Title should decrypt correctly via DecryptConversationTitle (raw-SQL path).");

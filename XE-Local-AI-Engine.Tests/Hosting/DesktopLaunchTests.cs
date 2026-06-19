@@ -1,9 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http.Features;
@@ -23,7 +20,7 @@ public sealed class DesktopLaunchTests
     public void DesktopModeGate_WhenFlagUnset_LeavesPipelineUnchanged()
     {
         // No CLI arg, no env signal → desktop mode is off, so Program.cs keeps the standard HTTPS/HSTS pipeline.
-        var isDesktop = DesktopLaunch.IsDesktopMode(args: [], environmentReader: static _ => null);
+        var isDesktop = DesktopLaunch.IsDesktopMode([], static _ => null);
 
         AssertEx.False(isDesktop);
     }
@@ -31,15 +28,13 @@ public sealed class DesktopLaunchTests
     [Test]
     public void DesktopModeGate_WhenEnvOrArgSet_EnablesDesktopPath()
     {
-        var viaEnv = DesktopLaunch.IsDesktopMode(
-            args: [],
-            environmentReader: static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "desktop" : null);
+        var viaEnv = DesktopLaunch.IsDesktopMode([],
+            static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "desktop" : null);
 
-        var viaEnvCaseInsensitive = DesktopLaunch.IsDesktopMode(
-            args: [],
-            environmentReader: static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "DESKTOP" : null);
+        var viaEnvCaseInsensitive = DesktopLaunch.IsDesktopMode([],
+            static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "DESKTOP" : null);
 
-        var viaArg = DesktopLaunch.IsDesktopMode(args: ["--desktop"], environmentReader: static _ => null);
+        var viaArg = DesktopLaunch.IsDesktopMode(["--desktop"], static _ => null);
 
         AssertEx.True(viaEnv, "XE_LAUNCH_MODE=desktop must enable desktop mode.");
         AssertEx.True(viaEnvCaseInsensitive, "XE_LAUNCH_MODE is matched case-insensitively.");
@@ -51,8 +46,8 @@ public sealed class DesktopLaunchTests
     {
         const string url = "http://127.0.0.1:5001/";
 
-        var (windowsFile, windowsArgs) = BrowserLauncher.BuildOpenCommand(url, isWindows: true);
-        var (linuxFile, linuxArgs) = BrowserLauncher.BuildOpenCommand(url, isWindows: false);
+        var (windowsFile, windowsArgs) = BrowserLauncher.BuildOpenCommand(url, true);
+        var (linuxFile, linuxArgs) = BrowserLauncher.BuildOpenCommand(url, false);
 
         AssertEx.Equal("explorer", windowsFile);
         AssertEx.Equal(url, windowsArgs);
@@ -63,7 +58,7 @@ public sealed class DesktopLaunchTests
         // through the ProcessStartInfo the launcher constructs; do NOT assert on process exit code (explorer returns 1
         // on success).
         ProcessStartInfo? captured = null;
-        BrowserLauncher.OpenBrowser(url, isWindows: true, NullLogger.Instance, startInfo => captured = startInfo);
+        BrowserLauncher.OpenBrowser(url, true, NullLogger.Instance, startInfo => captured = startInfo);
 
         var startInfo = AssertEx.NotNull(captured);
         AssertEx.False(startInfo.UseShellExecute, "Browser launch must keep UseShellExecute=false.");
@@ -109,7 +104,7 @@ public sealed class DesktopLaunchTests
         const string url = "http://127.0.0.1:5005/";
 
         // The launch action throws (e.g. xdg-open absent); OpenBrowser must swallow it and not propagate.
-        BrowserLauncher.OpenBrowser(url, isWindows: false, NullLogger.Instance,
+        BrowserLauncher.OpenBrowser(url, false, NullLogger.Instance,
             static _ => throw new InvalidOperationException("xdg-open not found"));
 
         // Reaching here without an exception is the assertion: a failed launch does not abort startup.
@@ -139,22 +134,33 @@ public sealed class DesktopLaunchTests
             // No unmanaged state; the interface requires IDisposable.
         }
 
-        public System.Threading.Tasks.Task StartAsync<TContext>(
-            Microsoft.AspNetCore.Hosting.Server.IHttpApplication<TContext> application,
+        public Task StartAsync<TContext>(IHttpApplication<TContext> application,
             CancellationToken cancellationToken)
-            where TContext : notnull => System.Threading.Tasks.Task.CompletedTask;
+            where TContext : notnull
+        {
+            return Task.CompletedTask;
+        }
 
-        public System.Threading.Tasks.Task StopAsync(CancellationToken cancellationToken) =>
-            System.Threading.Tasks.Task.CompletedTask;
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime, IDisposable
     {
         private readonly CancellationTokenSource _started = new();
-        private readonly CancellationTokenSource _stopping = new();
         private readonly CancellationTokenSource _stopped = new();
+        private readonly CancellationTokenSource _stopping = new();
 
         public int StopApplicationCallCount { get; private set; }
+
+        public void Dispose()
+        {
+            _started.Dispose();
+            _stopping.Dispose();
+            _stopped.Dispose();
+        }
 
         public CancellationToken ApplicationStarted => _started.Token;
 
@@ -162,13 +168,9 @@ public sealed class DesktopLaunchTests
 
         public CancellationToken ApplicationStopped => _stopped.Token;
 
-        public void StopApplication() => StopApplicationCallCount++;
-
-        public void Dispose()
+        public void StopApplication()
         {
-            _started.Dispose();
-            _stopping.Dispose();
-            _stopped.Dispose();
+            StopApplicationCallCount++;
         }
     }
 }

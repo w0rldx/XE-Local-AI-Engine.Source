@@ -11,13 +11,12 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 {
     private const string GgufExtension = ".gguf";
+    private readonly GgufHeaderReader _headerReader;
 
     private readonly HfHubClient _hubClient;
-    private readonly GgufHeaderReader _headerReader;
     private readonly ILogger<HuggingFaceGgufDiscovery> _logger;
 
-    public HuggingFaceGgufDiscovery(
-        HfHubClient hubClient,
+    public HuggingFaceGgufDiscovery(HfHubClient hubClient,
         GgufHeaderReader headerReader,
         HuggingFaceOptions options,
         ILogger<HuggingFaceGgufDiscovery> logger)
@@ -49,14 +48,13 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
                 continue;
             }
 
-            summaries.Add(new GgufRepoSummary(
-                model.RepoId,
+            summaries.Add(new GgufRepoSummary(model.RepoId,
                 model.IsGated,
                 model.Downloads,
                 model.Likes,
                 model.LastModified,
                 model.License,
-                HasUsableGguf: true));
+                true));
         }
 
         return summaries;
@@ -70,7 +68,7 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
         var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
         if (detail is null)
         {
-            return new GgufRepoDetail(repoId, IsGated: false, License: null, Files: []);
+            return new GgufRepoDetail(repoId, false, null, []);
         }
 
         var files = new List<GgufRepoFile>();
@@ -97,11 +95,10 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
             }
 
             var header = await _headerReader
-                .ReadHeaderAsync(detail.RepoId, file.FileName, detail.Revision, ct)
-                .ConfigureAwait(false);
+                               .ReadHeaderAsync(detail.RepoId, file.FileName, detail.Revision, ct)
+                               .ConfigureAwait(false);
 
-            files.Add(new GgufRepoFile(
-                file.FileName,
+            files.Add(new GgufRepoFile(file.FileName,
                 quant,
                 file.SizeBytes,
                 file.Sha256,
@@ -120,10 +117,14 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
     }
 
     private static bool IsUsableGgufFile(string fileName)
-        => IsGgufFileName(fileName)
-           && GgufFilePath.IsSafeRelativePath(fileName)
-           && GgufQuantParser.TryParse(fileName) is not null;
+    {
+        return IsGgufFileName(fileName)
+               && GgufFilePath.IsSafeRelativePath(fileName)
+               && GgufQuantParser.TryParse(fileName) is not null;
+    }
 
     private static bool IsGgufFileName(string fileName)
-        => fileName.EndsWith(GgufExtension, StringComparison.OrdinalIgnoreCase);
+    {
+        return fileName.EndsWith(GgufExtension, StringComparison.OrdinalIgnoreCase);
+    }
 }

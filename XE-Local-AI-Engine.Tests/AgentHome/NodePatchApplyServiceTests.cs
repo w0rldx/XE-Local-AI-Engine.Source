@@ -36,7 +36,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, recursive: true);
+                    Directory.Delete(dir, true);
                 }
             }
             catch (IOException)
@@ -220,7 +220,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     [Test]
     public async Task ApplyApprovedAsync_WithBinaryBlock_RejectsByDefaultButAppliesWhenAllowed()
     {
-        var rejectingHarness = NewHarness(allowBinary: false);
+        var rejectingHarness = NewHarness(false);
         var rejectingRoot = rejectingHarness.AddFolder("repo-01");
         await SeedHostBinaryAsync(rejectingRoot, "blob.bin", [0x00, 0x01, 0x02, 0x03]);
 
@@ -240,7 +240,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         AssertEx.Contains(preview.Rejections, reason => reason.Contains("binary", StringComparison.Ordinal));
 
         // With the option on, the same patch is no longer rejected for the binary reason and applies.
-        var allowed = NewHarness(allowBinary: true);
+        var allowed = NewHarness(true);
         var allowedRoot = allowed.AddFolder("repo-01");
         await SeedHostBinaryAsync(allowedRoot, "blob.bin", [0x00, 0x01, 0x02, 0x03]);
         await WritePatchAsync(allowed, "run-binary", patch);

@@ -93,7 +93,7 @@ public sealed class AgentSkillStoreTests : IDisposable
         // Toggling Enabled alone gates resolution only; it must not bump Version (membership in the resolved set already
         // covers it in the config hash).
         clock.Advance(10);
-        var toggled = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, Body, Enabled: false)),
+        var toggled = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, Body, false)),
             "Update should find the skill.");
         AssertEx.False(toggled.Enabled, "The disable toggle should round-trip.");
         AssertEx.Equal(1, toggled.Version);
@@ -101,13 +101,13 @@ public sealed class AgentSkillStoreTests : IDisposable
 
         // Editing the body is content-affecting and must bump Version.
         clock.Advance(10);
-        var edited = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, "A different body.", Enabled: false)),
+        var edited = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, "A different body.", false)),
             "Update should find the skill.");
         AssertEx.Equal(2, edited.Version);
 
         // A rename is also content-affecting (the model sees the name) and must bump Version.
         clock.Advance(10);
-        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput("renamed-skill", Description, "A different body.", Enabled: false)),
+        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput("renamed-skill", Description, "A different body.", false)),
             "Update should find the skill.");
         AssertEx.Equal(3, renamed.Version);
     }
@@ -145,7 +145,7 @@ public sealed class AgentSkillStoreTests : IDisposable
         var store = new AgentSkillStore(context, TimeProvider.System);
 
         var enabled = await store.CreateAsync(new AgentSkillInput("alpha", Description, Body));
-        var disabled = await store.CreateAsync(new AgentSkillInput("bravo", Description, Body, Enabled: false));
+        var disabled = await store.CreateAsync(new AgentSkillInput("bravo", Description, Body, false));
         var unassigned = await store.CreateAsync(new AgentSkillInput("charlie", Description, Body));
 
         var resolved = await store.ListEnabledByIdsAsync(new[]

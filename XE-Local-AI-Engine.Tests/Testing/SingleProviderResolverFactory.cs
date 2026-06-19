@@ -27,13 +27,19 @@ internal static class SingleProviderResolverFactory
 
     private sealed class EmptyModelProviderMapStore : IModelProviderMapStore
     {
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult<string?>(null);
+        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
 
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>([]);
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>([]);
+        }
 
-        public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+        public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+        }
     }
 }

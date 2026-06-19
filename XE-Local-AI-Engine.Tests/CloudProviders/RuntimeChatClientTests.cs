@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Proves the runtime-switch property: the registered <see cref="RuntimeChatClient"/>
-/// is captured once by singleton consumers, yet each send re-selects cloud-vs-local — so signing in routes the
-/// NEXT send to the cloud without a restart, and signing out routes the next send back to local.
+///     Proves the runtime-switch property: the registered <see cref="RuntimeChatClient" />
+///     is captured once by singleton consumers, yet each send re-selects cloud-vs-local — so signing in routes the
+///     NEXT send to the cloud without a restart, and signing out routes the next send back to local.
 /// </summary>
 public sealed class RuntimeChatClientTests
 {
@@ -46,8 +46,7 @@ public sealed class RuntimeChatClientTests
         var selector = new ThrowingCloudFactory();
         using var runtime = new RuntimeChatClient(selector, () => localClient);
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(
-            () => runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
 
         // The local client must NOT have been used — a selected-but-unusable cloud provider does not silently fall back.
         AssertEx.Equal(0, localClient.CallCount);
@@ -58,7 +57,10 @@ public sealed class RuntimeChatClientTests
     {
         private readonly IChatClient _cloudClient;
 
-        public ToggleableCloudFactory(IChatClient cloudClient) => _cloudClient = cloudClient;
+        public ToggleableCloudFactory(IChatClient cloudClient)
+        {
+            _cloudClient = cloudClient;
+        }
 
         public bool CloudActive { get; set; }
 
@@ -68,7 +70,10 @@ public sealed class RuntimeChatClientTests
             return CloudActive;
         }
 
-        public bool IsCloudProviderSelected() => CloudActive;
+        public bool IsCloudProviderSelected()
+        {
+            return CloudActive;
+        }
 
         public void InvalidateSelectionCache()
         {
@@ -79,9 +84,14 @@ public sealed class RuntimeChatClientTests
     private sealed class ThrowingCloudFactory : IActiveCloudChatClientFactory
     {
         public bool TryCreateActiveCloudChatClient(out IChatClient? client)
-            => throw new InvalidOperationException("cloud not authenticated");
+        {
+            throw new InvalidOperationException("cloud not authenticated");
+        }
 
-        public bool IsCloudProviderSelected() => true;
+        public bool IsCloudProviderSelected()
+        {
+            return true;
+        }
 
         public void InvalidateSelectionCache()
         {

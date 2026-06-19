@@ -1,9 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 /// <summary>
 ///     Resolves the concrete bound loopback URL after Kestrel binds <c>http://127.0.0.1:0</c> and the OS assigns a free
 ///     port. The actual address is only known post-bind, so it is read from <c>IServerAddressesFeature.Addresses</c>.
@@ -22,9 +18,9 @@ internal static class LoopbackUrlResolver
         ArgumentNullException.ThrowIfNull(addresses);
 
         var httpAddresses = addresses
-            .Where(static address => !string.IsNullOrWhiteSpace(address))
-            .Where(static address => address.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+                            .Where(static address => !string.IsNullOrWhiteSpace(address))
+                            .Where(static address => address.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
 
         if (httpAddresses.Count == 0)
         {

@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Default <see cref="IPlaybookEvalService" />. Re-runs the real agent loop over the
@@ -36,12 +35,12 @@ internal sealed class PlaybookEvalService(
     private readonly IPlaybookEvalAgentRunner _evalAgentRunner = evalAgentRunner ?? throw new ArgumentNullException(nameof(evalAgentRunner));
     private readonly IPlaybookEvalJudge _evalJudge = evalJudge ?? throw new ArgumentNullException(nameof(evalJudge));
     private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly ILogger<PlaybookEvalService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly PlaybookEvalOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
     private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
+    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)
@@ -191,17 +190,17 @@ internal sealed class PlaybookEvalService(
 
     private PlaybookEvalResult BuildEmptyResult(int actionVersion)
     {
-        return new PlaybookEvalResult(Passed: false,
+        return new PlaybookEvalResult(false,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             actionVersion,
             _options.ModelName,
-            GoldenCaseCount: 0,
-            GoldenCaseTotal: 0,
-            BaselinePassCount: 0,
-            CandidatePassCount: 0,
-            RegressedCaseCount: 0,
-            ImprovedCaseCount: 0,
-            Cases: []);
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            []);
     }
 
     private async Task<PlaybookEvalOutcome> PersistAsync(Guid agentId, Guid actionId, PlaybookEvalResult result, CancellationToken cancellationToken)

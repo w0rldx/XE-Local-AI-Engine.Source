@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Covers the Operator Codex endpoints: login returns the authorize URL, status reflects the
-/// session + pending state without token material, logout clears the session, and all routes reject callers
-/// without an operator token.
+///     Covers the Operator Codex endpoints: login returns the authorize URL, status reflects the
+///     session + pending state without token material, logout clears the session, and all routes reject callers
+///     without an operator token.
 /// </summary>
 public sealed class CodexEndpointTests
 {
@@ -43,7 +43,7 @@ public sealed class CodexEndpointTests
         var expiry = DateTimeOffset.UtcNow.AddHours(1);
         var tokenStore = Substitute.For<ICodexTokenStore>();
         tokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(new CodexTokens("secret-access", "secret-refresh", expiry, "acct_42"));
+                  .Returns(new CodexTokens("secret-access", "secret-refresh", expiry, "acct_42"));
         var coordinator = Substitute.For<ICodexLoginCoordinator>();
         coordinator.GetStatus().Returns(CodexLoginStatus.None);
         await using var factory = CreateFactory(tokenStore, coordinator);
@@ -70,7 +70,7 @@ public sealed class CodexEndpointTests
         var pastExpiry = DateTimeOffset.UtcNow.AddHours(-1);
         var tokenStore = Substitute.For<ICodexTokenStore>();
         tokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(new CodexTokens("a", "r", pastExpiry, "acct_expired"));
+                  .Returns(new CodexTokens("a", "r", pastExpiry, "acct_expired"));
         var coordinator = Substitute.For<ICodexLoginCoordinator>();
         coordinator.GetStatus().Returns(CodexLoginStatus.None);
         await using var factory = CreateFactory(tokenStore, coordinator);
@@ -94,7 +94,7 @@ public sealed class CodexEndpointTests
         tokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         var coordinator = Substitute.For<ICodexLoginCoordinator>();
         coordinator.GetStatus()
-            .Returns(new CodexLoginStatus(CodexLoginState.Pending, new Uri("https://auth.openai.com/authorize")));
+                   .Returns(new CodexLoginStatus(CodexLoginState.Pending, new Uri("https://auth.openai.com/authorize")));
         await using var factory = CreateFactory(tokenStore, coordinator);
         using var client = factory.CreateClient();
 
@@ -132,9 +132,9 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         // No operator bearer token attached → all codex routes must reject.
-        using var loginResponse = await client.PostAsync("/api/local/v1/cloud/codex/login", content: null).ConfigureAwait(false);
+        using var loginResponse = await client.PostAsync("/api/local/v1/cloud/codex/login", null).ConfigureAwait(false);
         using var statusResponse = await client.GetAsync("/api/local/v1/cloud/codex/status").ConfigureAwait(false);
-        using var logoutResponse = await client.PostAsync("/api/local/v1/cloud/codex/logout", content: null).ConfigureAwait(false);
+        using var logoutResponse = await client.PostAsync("/api/local/v1/cloud/codex/logout", null).ConfigureAwait(false);
 
         AssertEx.True(IsRejected(loginResponse.StatusCode), $"login was {loginResponse.StatusCode}");
         AssertEx.True(IsRejected(statusResponse.StatusCode), $"status was {statusResponse.StatusCode}");
@@ -145,10 +145,11 @@ public sealed class CodexEndpointTests
     }
 
     private static bool IsRejected(HttpStatusCode statusCode)
-        => statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+    {
+        return statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+    }
 
-    private static TestingWebAppFactory CreateFactory(
-        ICodexTokenStore? tokenStore = null,
+    private static TestingWebAppFactory CreateFactory(ICodexTokenStore? tokenStore = null,
         ICodexLoginCoordinator? loginCoordinator = null)
     {
         return new TestingWebAppFactory
@@ -164,7 +165,7 @@ public sealed class CodexEndpointTests
                 // into endpoint instantiation at host startup.
                 services.RemoveAll<IActiveCloudChatClientFactory>();
                 services.AddSingleton(Substitute.For<IActiveCloudChatClientFactory>());
-            },
+            }
         };
     }
 
@@ -178,5 +179,7 @@ public sealed class CodexEndpointTests
 
     private static T Deserialize<T>(string body)
         where T : class
-        => AssertEx.NotNull(JsonSerializer.Deserialize<T>(body, JsonOptions));
+    {
+        return AssertEx.NotNull(JsonSerializer.Deserialize<T>(body, JsonOptions));
+    }
 }

@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Default <see cref="IGgufDownloadCoordinator" />. Starts each download on a detached task wired to a per-model
@@ -21,11 +21,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </summary>
 public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 {
-    private readonly IGgufModelStore _modelStore;
-    private readonly ILogger<GgufDownloadCoordinator> _logger;
-
     // Keyed by canonical model name. An in-flight download owns a live CTS; the status cell is updated as progress flows.
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ILogger<GgufDownloadCoordinator> _logger;
+    private readonly IGgufModelStore _modelStore;
     private readonly ConcurrentDictionary<string, GgufDownloadStatus> _status = new(StringComparer.OrdinalIgnoreCase);
 
     public GgufDownloadCoordinator(IGgufModelStore modelStore, ILogger<GgufDownloadCoordinator> logger)
@@ -50,16 +49,16 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         if (!_inFlight.TryAdd(modelName, cts))
         {
             cts.Dispose();
-            return new GgufDownloadTicket(modelName, AlreadyInFlight: true);
+            return new GgufDownloadTicket(modelName, true);
         }
 
-        _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
+        _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Running, null, null, null);
 
         // The detached task owns the rest of the CTS lifetime: it captures only the token (a struct), and disposes the
         // CTS by re-reading it from the registry in its finally — so no IDisposable instance is passed into an un-awaited
         // task (CA2025), while Cancel can still signal it via the registry until then.
         _ = RunDownloadAsync(modelName, request, cts.Token);
-        return new GgufDownloadTicket(modelName, AlreadyInFlight: false);
+        return new GgufDownloadTicket(modelName, false);
     }
 
     public bool Cancel(string modelName)
@@ -92,12 +91,11 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 
     private async Task RunDownloadAsync(string modelName, GgufModelRequest request, CancellationToken token)
     {
-        var progress = new Progress<PullProgress>(update => _status[modelName] = new GgufDownloadStatus(
-            modelName,
+        var progress = new Progress<PullProgress>(update => _status[modelName] = new GgufDownloadStatus(modelName,
             GgufDownloadPhase.Running,
             update.CompletedBytes,
             update.TotalBytes,
-            SanitizedError: null));
+            null));
 
         try
         {
@@ -108,28 +106,28 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 GgufDownloadPhase.Completed,
                 last?.CompletedBytes ?? last?.TotalBytes,
                 last?.TotalBytes,
-                SanitizedError: null);
+                null);
         }
         catch (OperationCanceledException)
         {
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Cancelled, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Cancelled, null, null, null);
             _logger.LogInformation("Operator cancelled the GGUF download for {ModelName}.", modelName);
         }
         catch (HuggingFaceDownloadException exception)
         {
             // Message is contractually sanitized (no token / Bearer / path) — safe to surface to the operator.
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message);
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, null, null, exception.Message);
             _logger.LogWarning("GGUF download failed for {ModelName} ({Reason}).", modelName, exception.Reason);
         }
         catch (InsufficientDiskSpaceException exception)
         {
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message);
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, null, null, exception.Message);
             _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
         {
             // Never surface the raw transport message (it can carry a URL/path): collapse to a generic sanitized reason.
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, "Download failed.");
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, null, null, "Download failed.");
             _logger.LogWarning(exception, "GGUF download failed for {ModelName}.", modelName);
         }
         finally

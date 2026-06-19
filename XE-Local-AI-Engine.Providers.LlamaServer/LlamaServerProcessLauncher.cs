@@ -83,7 +83,10 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 
     private static Process StartProcess(ProcessStartInfo startInfo)
     {
-        var process = new Process { StartInfo = startInfo };
+        var process = new Process
+        {
+            StartInfo = startInfo
+        };
         try
         {
             if (!process.Start())

@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-/// Covers the <see cref="CodexAuthHandler"/> 401-retry path: a 401 triggers a single-flight
-/// refresh and exactly one retry, and — because a sent <see cref="HttpRequestMessage"/> cannot be resent — the
-/// retry goes on a fresh CLONE of the request carrying the original (buffered) content and the refreshed bearer.
+///     Covers the <see cref="CodexAuthHandler" /> 401-retry path: a 401 triggers a single-flight
+///     refresh and exactly one retry, and — because a sent <see cref="HttpRequestMessage" /> cannot be resent — the
+///     retry goes on a fresh CLONE of the request carrying the original (buffered) content and the refreshed bearer.
 /// </summary>
 public sealed class CodexAuthHandlerTests
 {
@@ -28,19 +28,18 @@ public sealed class CodexAuthHandlerTests
         authService.RefreshAsync(Arg.Any<CodexTokens>(), Arg.Any<CancellationToken>()).Returns(refreshed);
 
         var inner = new SequencedInnerHandler(HttpStatusCode.Unauthorized, HttpStatusCode.OK);
-        using var handler = new CodexAuthHandler(
-            Options.Create(new CodexOptions()),
+        using var handler = new CodexAuthHandler(Options.Create(new CodexOptions()),
             tokenStore,
             authService,
             NullLogger<CodexAuthHandler>.Instance)
         {
-            InnerHandler = inner,
+            InnerHandler = inner
         };
         using var client = new HttpClient(handler);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://chatgpt.com/backend-api/codex/responses")
         {
-            Content = new StringContent("""{"model":"gpt-5-codex"}""", Encoding.UTF8, "application/json"),
+            Content = new StringContent("""{"model":"gpt-5-codex"}""", Encoding.UTF8, "application/json")
         };
         using var response = await client.SendAsync(request);
 
@@ -63,17 +62,16 @@ public sealed class CodexAuthHandlerTests
     {
         var tokenStore = Substitute.For<ICodexTokenStore>();
         tokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(new CodexTokens("access", "refresh", DateTimeOffset.UtcNow.AddMinutes(30), "acct"));
+                  .Returns(new CodexTokens("access", "refresh", DateTimeOffset.UtcNow.AddMinutes(30), "acct"));
         var authService = Substitute.For<ICodexAuthService>();
 
         var inner = new SequencedInnerHandler(HttpStatusCode.OK);
-        using var handler = new CodexAuthHandler(
-            Options.Create(new CodexOptions()),
+        using var handler = new CodexAuthHandler(Options.Create(new CodexOptions()),
             tokenStore,
             authService,
             NullLogger<CodexAuthHandler>.Instance)
         {
-            InnerHandler = inner,
+            InnerHandler = inner
         };
         using var client = new HttpClient(handler);
 
@@ -115,7 +113,11 @@ public sealed class CodexAuthHandlerTests
     {
         // Override escape hatch: if the subscription endpoint requires a Codex-compatible identifier, the operator can
         // override both via the CodexOAuth config section without a recompile.
-        var inner = await SendOnceWithOptions(new CodexOptions { Originator = "codex_cli_rs", UserAgent = "codex_cli_rs" });
+        var inner = await SendOnceWithOptions(new CodexOptions
+        {
+            Originator = "codex_cli_rs",
+            UserAgent = "codex_cli_rs"
+        });
 
         AssertEx.Equal("codex_cli_rs", inner.Requests[0].Headers.GetValues("originator").Single());
         AssertEx.Equal("codex_cli_rs", inner.Requests[0].Headers.GetValues("User-Agent").Single());
@@ -125,17 +127,16 @@ public sealed class CodexAuthHandlerTests
     {
         var tokenStore = Substitute.For<ICodexTokenStore>();
         tokenStore.LoadAsync(Arg.Any<CancellationToken>())
-            .Returns(new CodexTokens("access", "refresh", DateTimeOffset.UtcNow.AddMinutes(30), "acct"));
+                  .Returns(new CodexTokens("access", "refresh", DateTimeOffset.UtcNow.AddMinutes(30), "acct"));
         var authService = Substitute.For<ICodexAuthService>();
 
         var inner = new SequencedInnerHandler(HttpStatusCode.OK);
-        using var handler = new CodexAuthHandler(
-            Options.Create(options),
+        using var handler = new CodexAuthHandler(Options.Create(options),
             tokenStore,
             authService,
             NullLogger<CodexAuthHandler>.Instance)
         {
-            InnerHandler = inner,
+            InnerHandler = inner
         };
         using var client = new HttpClient(handler);
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://chatgpt.com/backend-api/codex/responses");
@@ -151,7 +152,9 @@ public sealed class CodexAuthHandlerTests
         private readonly Queue<HttpStatusCode> _statuses;
 
         public SequencedInnerHandler(params HttpStatusCode[] statuses)
-            => _statuses = new Queue<HttpStatusCode>(statuses);
+        {
+            _statuses = new Queue<HttpStatusCode>(statuses);
+        }
 
         public List<HttpRequestMessage> Requests { get; } = [];
 

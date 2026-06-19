@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -16,9 +17,9 @@ using Microsoft.Extensions.AI;
 /// </remarks>
 internal sealed class DeferredLlamaServerChatClient : IChatClient
 {
-    private readonly ILlamaServerProcessSupervisor _supervisor;
-    private readonly string _modelName;
     private readonly SemaphoreSlim _initGate = new(1, 1);
+    private readonly string _modelName;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
 
     private IChatClient? _inner;
 
@@ -29,8 +30,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         _modelName = modelName;
     }
 
-    public async Task<ChatResponse> GetResponseAsync(
-        IEnumerable<ChatMessage> messages,
+    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
@@ -38,10 +38,10 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
     }
 
-    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-        IEnumerable<ChatMessage> messages,
+    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
         await foreach (var update in inner.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))

@@ -953,9 +953,9 @@ public sealed class NodeChatStreamServiceTests
             1,
             10,
             10,
-            PlaybookEnabled: false,
-            Source: AgentDefinitionSource.Seeded,
-            SeedSlug: "default-assistant");
+            false,
+            AgentDefinitionSource.Seeded,
+            "default-assistant");
         store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
         var offerProvider = CreateOfferProvider(offeredTool);
         var resolver = new AgentDefinitionResolver(store,
@@ -1052,9 +1052,9 @@ public sealed class NodeChatStreamServiceTests
             2,
             10,
             20,
-            PlaybookEnabled: false,
-            Source: AgentDefinitionSource.Seeded,
-            SeedSlug: "default-assistant");
+            false,
+            AgentDefinitionSource.Seeded,
+            "default-assistant");
         store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(editedDefault);
         var offerProvider = CreateOfferProvider(offeredTool);
         var resolver = new AgentDefinitionResolver(store,
@@ -1296,9 +1296,9 @@ public sealed class NodeChatStreamServiceTests
 
         // The Ollama classifier is never consulted for a Codex model id — capabilities come from the Codex matrix.
         await classificationService.DidNotReceive()
-            .ClassifyAsync(Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(
-                models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
-                Arg.Any<CancellationToken>());
+                                   .ClassifyAsync(
+                                       Arg.Is<IEnumerable<(string ModelName, string? Digest)>>(models => models.Any(m => string.Equals(m.ModelName, "gpt-5.5", StringComparison.OrdinalIgnoreCase))),
+                                       Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
         // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier.
@@ -1340,7 +1340,7 @@ public sealed class NodeChatStreamServiceTests
                    {
                        if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
                        {
-                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, resolved, IsOverridden: false);
+                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, resolved, false);
                        }
                    }
 
@@ -1467,8 +1467,8 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            persistedSelection: selectedPath,
-            requestSelection: null).ConfigureAwait(false);
+            selectedPath,
+            null).ConfigureAwait(false);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -1490,8 +1490,8 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            persistedSelection: null,
-            requestSelection: null).ConfigureAwait(false);
+            null,
+            null).ConfigureAwait(false);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -1519,8 +1519,8 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            persistedSelection: null,
-            requestSelection: requestSelection).ConfigureAwait(false);
+            null,
+            requestSelection).ConfigureAwait(false);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)

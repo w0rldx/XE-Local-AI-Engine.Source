@@ -131,7 +131,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var succeeded = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded));
         _ = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Failed));
 
-        var result = await store.ListAsync(status: ScheduledRunStatus.Succeeded);
+        var result = await store.ListAsync(ScheduledRunStatus.Succeeded);
 
         AssertEx.Equal(1, result.Count);
         AssertEx.Equal(succeeded.Id, result[0].Id);
@@ -273,11 +273,11 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var updated = AssertEx.NotNull(await store.UpdateLifecycleAsync(added.Id,
                 ScheduledRunStatus.Running,
-                completedAtUtc: null,
-                durationMs: null,
-                summary: null, // not supplied → should remain "initial-summary"
-                detailsJson: null,
-                errorMessage: null),
+                null,
+                null,
+                null, // not supplied → should remain "initial-summary"
+                null,
+                null),
             "UpdateLifecycle should return the updated record.");
 
         AssertEx.Equal(ScheduledRunStatus.Running, updated.Status);
@@ -302,12 +302,12 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var updated = AssertEx.NotNull(await store.UpdateLifecycleAsync(added.Id,
                 ScheduledRunStatus.Succeeded,
-                completedAtUtc: 9_999,
-                durationMs: 1_234,
-                summary: "all done",
-                detailsJson: """{"output":"ok"}""",
-                errorMessage: null,
-                errorDetails: null),
+                9_999,
+                1_234,
+                "all done",
+                """{"output":"ok"}""",
+                null,
+                null),
             "UpdateLifecycle should return the updated record.");
 
         AssertEx.Equal(ScheduledRunStatus.Succeeded, updated.Status);
@@ -353,7 +353,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var store = new ScheduledJobRunStore(context, clock);
         var added = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
 
-        var updated = AssertEx.NotNull(await store.RequestCancellationAsync(added.Id, requestedAtUtc: 7_500),
+        var updated = AssertEx.NotNull(await store.RequestCancellationAsync(added.Id, 7_500),
             "RequestCancellation should return the updated record.");
 
         AssertEx.Equal(7_500L, updated.CancellationRequestedAtUtc);
@@ -376,7 +376,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var store = new ScheduledJobRunStore(context, TimeProvider.System);
 
-        var result = await store.RequestCancellationAsync(Guid.NewGuid(), requestedAtUtc: 1_000);
+        var result = await store.RequestCancellationAsync(Guid.NewGuid(), 1_000);
 
         AssertEx.Null(result, "RequestCancellation on unknown id should return null.");
     }
@@ -680,7 +680,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var eventStore = new ScheduledJobRunEventStore(context, TimeProvider.System);
 
         var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Info, "msg", DataJson: null));
+        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Info, "msg", null));
 
         AssertEx.Null(added.DataJson, "Null DataJson should round-trip as null.");
     }
@@ -728,13 +728,13 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
     private static ScheduledJobRunInput CreateRunInput(Guid scheduledJobId, ScheduledRunStatus status)
     {
-        return new ScheduledJobRunInput(ScheduledJobId: scheduledJobId,
-            TemplateId: "tpl-test",
-            QuartzFireInstanceId: null,
-            TriggeredBy: ScheduledRunTrigger.Schedule,
-            Status: status,
-            ScheduledFireTimeUtc: null,
-            ActualFireTimeUtc: null);
+        return new ScheduledJobRunInput(scheduledJobId,
+            "tpl-test",
+            null,
+            ScheduledRunTrigger.Schedule,
+            status,
+            null,
+            null);
     }
 
     private sealed class MutableTimeProvider(long initialMilliseconds) : TimeProvider

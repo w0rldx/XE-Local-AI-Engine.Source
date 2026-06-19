@@ -42,7 +42,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     public void AddNodeScheduler_WhenDisabled_DoesNotRegisterISchedulerFactory()
     {
         var services = new ServiceCollection();
-        var config = BuildConfig(enabled: false, connectionString: "Data Source=:memory:");
+        var config = BuildConfig(false, "Data Source=:memory:");
 
         new MinimalHostApplicationBuilder(services).AddNodeScheduler(config);
 
@@ -57,7 +57,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
     public void AddNodeScheduler_WhenDisabled_DoesNotRegisterSchedulerApplicationServices()
     {
         var services = new ServiceCollection();
-        var config = BuildConfig(enabled: false, connectionString: "Data Source=:memory:");
+        var config = BuildConfig(false, "Data Source=:memory:");
 
         new MinimalHostApplicationBuilder(services).AddNodeScheduler(config);
 
@@ -93,7 +93,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
         AssertEx.True(scheduler.IsStarted, "Scheduler must report IsStarted after Start().");
 
-        await scheduler.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Shutdown(false, CancellationToken.None).ConfigureAwait(false);
     }
 
     [Test]
@@ -149,7 +149,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
                                         .Build();
 
             await sched1.ScheduleJob(job, trigger, CancellationToken.None).ConfigureAwait(false);
-            await sched1.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+            await sched1.Shutdown(false, CancellationToken.None).ConfigureAwait(false);
         }
 
         // ── Second scheduler instance: open same DB, assert persistence ──
@@ -168,7 +168,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
             var triggers = await sched2.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
             AssertEx.True(triggers.Count > 0, "At least one trigger must persist across restart.");
 
-            await sched2.Shutdown(waitForJobsToComplete: false, CancellationToken.None).ConfigureAwait(false);
+            await sched2.Shutdown(false, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -194,7 +194,7 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         services.AddScoped<IScheduledJobRunEventStore>(_ => Substitute.For<IScheduledJobRunEventStore>());
         services.AddSingleton(TimeProvider.System);
 
-        var config = BuildConfig(enabled: true, connectionString: $"Data Source={dbPath}");
+        var config = BuildConfig(true, $"Data Source={dbPath}");
         // Quartz resolves the SQLite data source by connection-string NAME ("node-sqlite") from the
         // IConfiguration in the DI container at scheduler-start time (see NodeSchedulerServiceCollectionExtensions:
         // db.ConnectionStringName). The real application host always has IConfiguration registered, so this

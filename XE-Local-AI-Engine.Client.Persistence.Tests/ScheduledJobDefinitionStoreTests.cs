@@ -87,7 +87,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         _ = await store.SoftDeleteAsync(toDelete.Id);
 
         var defaultList = await store.ListAsync();
-        var includeDeleted = await store.ListAsync(includeDeleted: true);
+        var includeDeleted = await store.ListAsync(true);
 
         AssertEx.Equal(1, defaultList.Count);
         AssertEx.Equal(active.Id, defaultList[0].Id);
@@ -400,22 +400,22 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
     private static ScheduledJobDefinitionInput CreateCronInput(string templateId, string displayName)
     {
-        return new ScheduledJobDefinitionInput(TemplateId: templateId,
-            DisplayName: displayName,
-            Description: "Runs every hour",
-            Enabled: true,
-            ScheduleKind: ScheduleKind.Cron,
-            CronExpression: "0 * * * *",
-            IntervalSeconds: null,
-            RepeatCount: null,
-            StartAtUtc: null,
-            EndAtUtc: null,
-            TimeZoneId: "UTC",
-            MisfirePolicy: SchedulerMisfirePolicy.Smart,
-            PreventOverlap: false,
-            MaxRuntimeSeconds: null,
-            ParameterJson: null,
-            CreatedBy: ScheduledJobCreator.User);
+        return new ScheduledJobDefinitionInput(templateId,
+            displayName,
+            "Runs every hour",
+            true,
+            ScheduleKind.Cron,
+            "0 * * * *",
+            null,
+            null,
+            null,
+            null,
+            "UTC",
+            SchedulerMisfirePolicy.Smart,
+            false,
+            null,
+            null,
+            ScheduledJobCreator.User);
     }
 
     private sealed class MutableTimeProvider(long initialMilliseconds) : TimeProvider

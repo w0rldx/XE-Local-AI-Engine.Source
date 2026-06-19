@@ -61,7 +61,7 @@ public sealed class HandoffWorkflowSpikeTests
             "triage",
             TriageInstructions,
             "Triage agent.",
-            tools: null,
+            null,
             NullLoggerFactory.Instance,
             sp);
 
@@ -69,7 +69,7 @@ public sealed class HandoffWorkflowSpikeTests
             "specialist",
             SpecialistInstructions,
             "Specialist agent.",
-            tools: null,
+            null,
             NullLoggerFactory.Instance,
             sp);
 
@@ -91,7 +91,7 @@ public sealed class HandoffWorkflowSpikeTests
         // The HandoffStart executor (a ChatProtocolExecutor with AutoSendTurnToken=false) only ACCUMULATES
         // the List<ChatMessage> input; it takes its turn (and forwards to the initial agent) only on a
         // TurnToken. So we must enqueue a TurnToken to actually start the conversation.
-        var accepted = await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+        var accepted = await run.TrySendMessageAsync(new TurnToken(true));
         Console.WriteLine($"[P5][A] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
         var outputText = new StringBuilder();
@@ -148,8 +148,8 @@ public sealed class HandoffWorkflowSpikeTests
     [Test]
     public async Task Approval_InsideWorkflow_PausesAndResumes_ExecutesOnlyWhenApproved()
     {
-        await RunApprovalScenario(approve: true);
-        await RunApprovalScenario(approve: false);
+        await RunApprovalScenario(true);
+        await RunApprovalScenario(false);
     }
 
     private static async Task RunApprovalScenario(bool approve)
@@ -193,7 +193,7 @@ public sealed class HandoffWorkflowSpikeTests
         var run = await InProcessExecution.RunStreamingAsync(workflow, input, $"p5-approval-{approve}", CancellationToken.None);
 
         // HandoffStart only accumulates the messages; a TurnToken triggers the agent turn (same as scenario A).
-        var accepted = await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+        var accepted = await run.TrySendMessageAsync(new TurnToken(true));
         Console.WriteLine($"[P5][B approve={approve}] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
         // Drain until the workflow surfaces an approval request (a RequestInfoEvent carrying a
@@ -297,8 +297,8 @@ public sealed class HandoffWorkflowSpikeTests
     [Test]
     public async Task Combined_TriageWithOwnApprovalTool_BothApprovalAndHandoffWork()
     {
-        await RunCombinedScenario(approveFirst: true);
-        await RunCombinedScenario(approveFirst: false);
+        await RunCombinedScenario(true);
+        await RunCombinedScenario(false);
     }
 
     private static async Task RunCombinedScenario(bool approveFirst)
@@ -341,7 +341,7 @@ public sealed class HandoffWorkflowSpikeTests
             "specialist",
             SpecialistInstructions,
             "Specialist agent.",
-            tools: null,
+            null,
             NullLoggerFactory.Instance,
             sp);
 
@@ -359,7 +359,7 @@ public sealed class HandoffWorkflowSpikeTests
         };
 
         var run = await InProcessExecution.RunStreamingAsync(workflow, input, $"p5-combined-{approveFirst}", CancellationToken.None);
-        var accepted = await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+        var accepted = await run.TrySendMessageAsync(new TurnToken(true));
         Console.WriteLine($"[P5][C approveFirst={approveFirst}] TurnToken accepted={accepted}");
 
         // --- Step 1: drain until approval RequestInfoEvent appears ---
@@ -535,13 +535,13 @@ public sealed class HandoffWorkflowSpikeTests
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (response, _) = Build(messages.ToList(), options, streaming: false);
+            var (response, _) = Build(messages.ToList(), options, false);
             return Task.FromResult(response!);
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (_, update) = Build(messages.ToList(), options, streaming: true);
+            var (_, update) = Build(messages.ToList(), options, true);
             return Single(update!);
         }
 
@@ -711,13 +711,13 @@ public sealed class HandoffWorkflowSpikeTests
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (resp, _) = Build(messages.ToList(), options, streaming: false);
+            var (resp, _) = Build(messages.ToList(), options, false);
             return Task.FromResult(resp!);
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (_, upd) = Build(messages.ToList(), options, streaming: true);
+            var (_, upd) = Build(messages.ToList(), options, true);
             return Single(upd!);
         }
 

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -39,7 +40,7 @@ public sealed class LinuxProcessGroupTreeKillTests
             await AssertEx.EventuallyAsync(() => File.Exists(markerFile) && new FileInfo(markerFile).Length > 0,
                 TimeSpan.FromSeconds(5), "Grandchild PID marker was not written.");
 
-            var grandchildPid = int.Parse((await File.ReadAllTextAsync(markerFile)).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+            var grandchildPid = int.Parse((await File.ReadAllTextAsync(markerFile)).Trim(), CultureInfo.InvariantCulture);
             AssertEx.True(IsProcessAlive(grandchildPid), "Grandchild should be alive before tree-kill.");
 
             handle.TreeKill();

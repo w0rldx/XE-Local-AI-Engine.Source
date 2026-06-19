@@ -8,7 +8,6 @@ using System.Text.Json.Serialization;
 ///     serialized into the encrypted <c>CanvasWorkflowRecord.GraphJson</c> blob. It is mapped onto the
 ///     <c>PreviewWorkflowDefinition</c> (.AI.Agent) just before a run — three explicit serializations of one
 ///     contract: stored blob ↔ this model ↔ runner DTO.
-///
 ///     Field names are deliberately clean and stable; do not rename without updating the React zod schema and the
 ///     stored-blob format together.
 /// </summary>
