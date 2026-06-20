@@ -32,6 +32,12 @@ try
     {
         // Bind HTTP on a free loopback port (port 0 = OS picks); the real port is read post-bind for the browser launch.
         builder.WebHost.UseUrls(DesktopLaunch.LoopbackBindUrl);
+
+        // Desktop double-click launch supplies neither the node SQLite connection string nor the operator secret via
+        // env/Aspire, so fill them from a per-user data directory here — BEFORE AddServices reads configuration below.
+        // Each key is layered in only when absent, so any value already supplied wins and the off-flag (headless/Aspire/
+        // CI) path is byte-identical: this branch is never entered without the desktop flag.
+        DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
     }
 
     builder.Logging.ClearProviders();
