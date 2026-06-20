@@ -137,11 +137,28 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 services.RemoveAll<ILocalModelProvider>();
                 services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer!.BaseAddress));
                 services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
-                services.AddSingleton<IChatClient>(sp => sp.GetRequiredService<ILocalModelProvider>().CreateChatClient(new LocalModelSelection
+                // The provider resolver's default for unmapped models is now "llamacpp" (the shipped default model is a
+                // GGUF), so the resolver ctor validates that a llamacpp provider is registered. Production always
+                // registers it (AddLlamaServerLocalModelProvider); the test host strips the real provider set, so add a
+                // lightweight llamacpp stub that answers ProviderName only — unit tests route chat to the Ollama model
+                // and never actually dispatch to llama.cpp, so its other members stay unimplemented.
+                services.AddSingleton<ILocalModelProvider>(_ =>
                 {
-                    ModelName = "qwen3.5:0.8b",
-                    ProviderName = OllamaLocalModelProvider.OllamaProviderName
-                }));
+                    var llamacpp = Substitute.For<ILocalModelProvider>();
+                    llamacpp.ProviderName.Returns("llamacpp");
+                    return llamacpp;
+                });
+                // Resolve the IChatClient explicitly from the Ollama provider. GetRequiredService<ILocalModelProvider>()
+                // returns the LAST-registered provider (the llamacpp stub above), whose unconfigured CreateChatClient
+                // would hand back an NSubstitute default — so select the Ollama provider by name to guarantee the test
+                // chat client is the real Ollama-backed one the unit tests intend.
+                services.AddSingleton<IChatClient>(sp => sp.GetServices<ILocalModelProvider>()
+                    .First(provider => provider.ProviderName == OllamaLocalModelProvider.OllamaProviderName)
+                    .CreateChatClient(new LocalModelSelection
+                    {
+                        ModelName = "qwen3.5:0.8b",
+                        ProviderName = OllamaLocalModelProvider.OllamaProviderName
+                    }));
 
                 services.RemoveAll<IHttpClientFactory>();
                 services.AddSingleton<IHttpClientFactory>(_ =>

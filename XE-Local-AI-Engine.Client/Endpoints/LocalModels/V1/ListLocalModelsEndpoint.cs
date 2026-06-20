@@ -8,12 +8,15 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 public sealed class ListLocalModelsEndpoint(
     IOllamaModelService modelService,
     IModelClassificationService classificationService,
+    IGgufModelStore ggufModelStore,
     INodeSettingsStore nodeSettingsStore,
     IOptions<LocalChatAgentOptions> localChatOptions,
     ICodexTokenStore codexTokenStore,
@@ -24,6 +27,7 @@ public sealed class ListLocalModelsEndpoint(
     private readonly IModelClassificationService _classificationService = classificationService ?? throw new ArgumentNullException(nameof(classificationService));
     private readonly CodexOptions _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
     private readonly ICodexTokenStore _codexTokenStore = codexTokenStore ?? throw new ArgumentNullException(nameof(codexTokenStore));
+    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
     private readonly ILogger<ListLocalModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
@@ -46,6 +50,11 @@ public sealed class ListLocalModelsEndpoint(
         // unavailable below.
         var cloudModels = await ResolveCodexCloudModelsAsync(selectedModelName, ct).ConfigureAwait(false);
 
+        // Installed GGUF models are served by the bundled llama.cpp runtime, NOT Ollama — resolve them up front (like
+        // cloud models) so they are included even when Ollama is absent and the call below throws. A best-effort read:
+        // any failure enumerating the GGUF store yields no GGUF entries rather than failing the whole list.
+        var ggufModels = await ResolveInstalledGgufModelsAsync(ct).ConfigureAwait(false);
+
         try
         {
             var models = (await _modelService.ListLocalModelsAsync(ct).ConfigureAwait(false)).ToList();
@@ -56,7 +65,7 @@ public sealed class ListLocalModelsEndpoint(
                                         .ClassifyAsync(models.Select(static model => (model.ReadModelName(), (string?)model.Digest)), ct)
                                         .ConfigureAwait(false);
 
-            var response = LocalModelsMapper.ToListResponse(models, selectedModelName, _localChatOptions.Value.DefaultModel, classifications, cloudModels);
+            var response = LocalModelsMapper.ToListResponse(models, selectedModelName, _localChatOptions.Value.DefaultModel, classifications, cloudModels, ggufModels);
 
             await Send.OkAsync(response, ct).ConfigureAwait(false);
         }
@@ -70,8 +79,31 @@ public sealed class ListLocalModelsEndpoint(
             await Send.OkAsync(LocalModelsMapper.ToUnavailableListResponse(selectedModelName,
                     _localChatOptions.Value.DefaultModel,
                     "Local model provider is unavailable.",
-                    cloudModels),
+                    cloudModels,
+                    ggufModels),
                 ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Enumerates the installed GGUF models (served by the bundled llama.cpp runtime, independent of Ollama). A
+    ///     best-effort read: any failure (e.g. an unreadable registry) yields an empty list rather than failing the
+    ///     whole model list, so the Ollama path's availability is unaffected.
+    /// </summary>
+    private async Task<IReadOnlyList<LocalModelDescriptor>> ResolveInstalledGgufModelsAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Installed GGUF model list could not be resolved.");
+            return [];
         }
     }
 

@@ -6,6 +6,9 @@ public static class LocalModelProviders
     /// <summary>A node-local Ollama model (default; stays entirely on the node).</summary>
     public const string Ollama = "Ollama";
 
+    /// <summary>A node-local GGUF model served by the bundled llama.cpp runtime (stays entirely on the node).</summary>
+    public const string LlamaCpp = "llamacpp";
+
     /// <summary>A ChatGPT-subscription Codex cloud model (egress to the Codex backend).</summary>
     public const string CodexOAuth = "CodexOAuth";
 }

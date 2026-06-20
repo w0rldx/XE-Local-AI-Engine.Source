@@ -99,15 +99,21 @@ internal static class AddNodeModelRuntimeExtensions
 
         // The provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
         // unmapped → default) then ProviderName→ILocalModelProvider (over the registered set). Singleton; reads the
-        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "ollama" — the
-        // backfill keeps every existing model on its current runtime until it is explicitly re-pointed to llamacpp.
-        // The supervisor's loaded-cap is surfaced for the preview reject-at-start check.
+        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "llamacpp" — post-epic Ollama
+        // is an OPTIONAL secondary runtime and the shipped default model is a GGUF, so a name that somehow lacks a map
+        // row (a pre-existing GGUF install, or a registry/map divergence) still routes to llama.cpp. Genuine Ollama
+        // models are explicitly mapped to "ollama" at pull time (the symmetric upsert on the Ollama pull endpoints) going
+        // FORWARD, and any model pulled on an EARLIER build (before that upsert existed) is repaired once at startup by
+        // OllamaProviderMapBackfill, so the flipped default only ever governs truly-unmapped names — which on a fresh box
+        // are GGUFs. The resolver ctor
+        // validates the default is registered; llamacpp is always registered above, so the flip cannot throw. The
+        // supervisor's loaded-cap is surfaced for the preview reject-at-start check.
         builder.Services.AddSingleton<ILocalModelProviderResolver>(sp =>
         {
             var supervisorOptions = sp.GetRequiredService<LlamaServerSupervisorOptions>();
             return new LocalModelProviderResolver(sp.GetServices<ILocalModelProvider>(),
                 sp.GetRequiredService<IServiceScopeFactory>(),
-                OllamaLocalModelProvider.OllamaProviderName,
+                LlamaServerProviderConstants.ProviderName,
                 supervisorOptions.MaxLoadedProcesses);
         });
 

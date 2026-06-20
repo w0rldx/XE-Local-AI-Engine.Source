@@ -4,6 +4,7 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 
 internal static class LocalModelsMapper
@@ -12,29 +13,91 @@ internal static class LocalModelsMapper
         string? selectedModelName,
         string? configuredDefaultModelName,
         IReadOnlyDictionary<string, ModelClassificationResult> classifications,
-        IReadOnlyList<LocalModelResponse>? cloudModels = null)
+        IReadOnlyList<LocalModelResponse>? cloudModels = null,
+        IReadOnlyList<LocalModelDescriptor>? ggufModels = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(classifications);
 
-        var localItems = models
-                         .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
-                         .Select(model => model.ToResponse(selectedModelName, classifications))
-                         .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase);
+        var ollamaItems = models
+                          .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
+                          .Select(model => model.ToResponse(selectedModelName, classifications))
+                          .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
+                          .ToArray();
 
-        // Cloud (Codex) models are appended AFTER the sorted local models as a distinct group, in their catalog
-        // (strongest-first) order — the picker groups by Provider, so the two families stay separated in the UI.
+        // Order: local Ollama → local GGUF (llamacpp) → cloud. GGUF entries are deduped against the Ollama names so a
+        // name present under both runtimes is listed once (Ollama wins). The picker groups by Provider, so the families
+        // stay visually separated; cloud (Codex) stays last in its catalog (strongest-first) order.
+        var localItems = ConcatGgufModels(ollamaItems, ggufModels, selectedModelName);
+
         var items = cloudModels is { Count: > 0 }
             ? localItems.Concat(cloudModels).ToArray()
-            : localItems.ToArray();
+            : localItems;
 
         return new ListLocalModelsResponse
         {
+            // A no-Ollama box is still "available" when at least one node-local GGUF is installed — the operator can
+            // select and chat over it via llama.cpp without Ollama running.
             IsAvailable = true,
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
             Items = items
         };
+    }
+
+    /// <summary>
+    ///     Maps installed GGUF models (served by the bundled llama.cpp runtime) to model-list entries tagged
+    ///     <see cref="LocalModelProviders.LlamaCpp" />. GGUF chat models are classified <see cref="ModelKind.Chat" />
+    ///     WITHOUT an <c>/api/show</c> probe — a downloaded GGUF in the chat picker has a completion head by
+    ///     construction. Capabilities are empty (not probed at list time) and reasoning/tool support default to
+    ///     <see langword="false" /> (a safe default — a non-tool model is never offered tools). Embedding-role files
+    ///     would be filtered out of the chat picker, but the installed-model descriptor carries no role hint today, so
+    ///     every installed GGUF lists as Chat (note: an embedding-only GGUF would still appear).
+    /// </summary>
+    public static IReadOnlyList<LocalModelResponse> ToLlamaCppModelResponses(IReadOnlyList<LocalModelDescriptor> ggufModels,
+        string? selectedModelName)
+    {
+        ArgumentNullException.ThrowIfNull(ggufModels);
+
+        return ggufModels
+               .Where(static descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName))
+               .Select(descriptor => new LocalModelResponse
+               {
+                   ModelName = descriptor.ModelName,
+                   Provider = LocalModelProviders.LlamaCpp,
+                   SizeBytes = descriptor.SizeBytes,
+                   ModifiedAtUtc = descriptor.ModifiedAt?.ToUnixTimeMilliseconds(),
+                   IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
+                   Kind = ModelKind.Chat.ToString(),
+                   DetectedKind = ModelKind.Chat.ToString(),
+                   Capabilities = [],
+                   IsReasoningCapable = false,
+                   IsToolCapable = false,
+                   IsOverridden = false
+               })
+               .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
+               .ToArray();
+    }
+
+    // Appends GGUF entries after the Ollama group, deduping by ModelName (case-insensitive) so a name installed under
+    // both runtimes is listed once (the Ollama entry wins). Returns a single ordered array (Ollama first, then GGUF).
+    private static LocalModelResponse[] ConcatGgufModels(IReadOnlyList<LocalModelResponse> ollamaItems,
+        IReadOnlyList<LocalModelDescriptor>? ggufModels,
+        string? selectedModelName)
+    {
+        if (ggufModels is not { Count: > 0 })
+        {
+            return ollamaItems.ToArray();
+        }
+
+        var ollamaNames = ollamaItems
+                          .Select(static item => item.ModelName)
+                          .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ggufItems = ToLlamaCppModelResponses(ggufModels, selectedModelName)
+            .Where(item => !ollamaNames.Contains(item.ModelName));
+
+        return ollamaItems.Concat(ggufItems).ToArray();
     }
 
     /// <summary>
@@ -65,18 +128,30 @@ internal static class LocalModelsMapper
     public static ListLocalModelsResponse ToUnavailableListResponse(string? selectedModelName,
         string? configuredDefaultModelName,
         string error,
-        IReadOnlyList<LocalModelResponse>? cloudModels = null)
+        IReadOnlyList<LocalModelResponse>? cloudModels = null,
+        IReadOnlyList<LocalModelDescriptor>? ggufModels = null)
     {
+        // Ollama is unavailable, but node-local GGUFs (served by llama.cpp) do not depend on it — surface them so a
+        // no-Ollama box can still select and chat over an installed GGUF. A present Codex session likewise offers cloud
+        // models. Order mirrors the success path: GGUF (local) then cloud.
+        var ggufItems = ggufModels is { Count: > 0 }
+            ? ToLlamaCppModelResponses(ggufModels, selectedModelName)
+            : [];
+
+        var items = cloudModels is { Count: > 0 }
+            ? ggufItems.Concat(cloudModels).ToArray()
+            : ggufItems;
+
         return new ListLocalModelsResponse
         {
-            // The LOCAL provider is unavailable, but a present Codex session still offers cloud models — surface
-            // them so the operator can chat over Codex even when Ollama is down. IsAvailable reflects the local
-            // runtime; Items carries any cloud models.
-            IsAvailable = false,
+            // IsAvailable reflects whether a node-local runtime can serve a chat: true once at least one GGUF is
+            // installed (llama.cpp can serve it), even though Ollama itself is down. Cloud-only (no GGUF) keeps the
+            // local runtime reported unavailable.
+            IsAvailable = ggufItems.Count > 0,
             SelectedModelName = selectedModelName,
             ConfiguredDefaultModelName = configuredDefaultModelName,
             Error = error,
-            Items = cloudModels is { Count: > 0 } ? cloudModels : []
+            Items = items
         };
     }
 

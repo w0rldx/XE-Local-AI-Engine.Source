@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -214,6 +215,14 @@ public static class ConfigureServices
         // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
         // (migrations cannot access the node key; this service runs once per startup and is idempotent).
         builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();
+        // FRR-2 upgrade backfill: maps any Ollama model pulled on an EARLIER build (which never wrote a provider-map row)
+        // to the ollama provider so the flipped llamacpp default does not silently re-route it. Idempotent + offline-
+        // tolerant; not desktop-gated (a pre-existing Ollama install can exist on any launch mode).
+        builder.Services.AddHostedService<OllamaProviderMapBackfillService>();
+        // Desktop-only first-run model provisioning: ensures a small node-local GGUF chat model is installed (via the
+        // bundled llama.cpp runtime) and selected so a fresh double-click install can chat out of the box. Gated behind
+        // desktop launch mode and offline-tolerant — headless/Aspire/CI never auto-download (off-flag invariant).
+        builder.Services.AddHostedService<FirstRunModelProvisioningService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
                .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);

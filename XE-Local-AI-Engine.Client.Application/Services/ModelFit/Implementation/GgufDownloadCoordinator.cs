@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Default <see cref="IGgufDownloadCoordinator" />. Starts each download on a detached task wired to a per-model
@@ -25,11 +27,13 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<GgufDownloadCoordinator> _logger;
     private readonly IGgufModelStore _modelStore;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<string, GgufDownloadStatus> _status = new(StringComparer.OrdinalIgnoreCase);
 
-    public GgufDownloadCoordinator(IGgufModelStore modelStore, ILogger<GgufDownloadCoordinator> logger)
+    public GgufDownloadCoordinator(IGgufModelStore modelStore, IServiceScopeFactory scopeFactory, ILogger<GgufDownloadCoordinator> logger)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -83,6 +87,28 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
     }
 
+    // Writes the model_provider_map row pointing the canonical GGUF name at the llama.cpp provider. The coordinator is a
+    // SINGLETON and IModelProviderMapStore is SCOPED, so the write goes through a fresh DI scope (same pattern the
+    // provider resolver uses). Caller-cancellation propagates; any other failure is swallowed with a warning so a
+    // successful download is never reported as failed because the routing row could not be persisted.
+    private async Task MapModelToLlamaCppAsync(string modelName, CancellationToken token)
+    {
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var mapStore = scope.ServiceProvider.GetRequiredService<IModelProviderMapStore>();
+            await mapStore.UpsertAsync(modelName, LlamaServerProviderConstants.ProviderName, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Could not persist the llamacpp provider mapping for {ModelName}; the default-provider routing still applies.", modelName);
+        }
+    }
+
     public bool Cancel(string modelName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -122,6 +148,13 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         try
         {
             await _modelStore.EnsureModelAsync(request, progress, token).ConfigureAwait(false);
+
+            // Route this GGUF to the llama.cpp runtime: write the model_provider_map row so the provider resolver
+            // dispatches it to "llamacpp" regardless of the unmapped-routing default. The store registers the GGUF in
+            // its own registry (index.json) but does NOT touch the provider map, so this is the single production
+            // writer that makes a downloaded GGUF reachable. Best-effort: a map-write failure must not mark the
+            // (successful) download as Failed — the default-provider flip still routes it.
+            await MapModelToLlamaCppAsync(modelName, token).ConfigureAwait(false);
 
             var last = _status.TryGetValue(modelName, out var snapshot) ? snapshot : null;
             _status[modelName] = new GgufDownloadStatus(modelName,

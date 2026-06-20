@@ -4,9 +4,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 /// <summary>
 ///     Streams live pull-download progress as NDJSON (<c>application/x-ndjson</c>).  Each line is a sanitized JSON object
@@ -19,7 +21,9 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 /// </remarks>
 public sealed class PullStreamLocalModelEndpoint(
     IOllamaModelService modelService,
-    ModelNameValidator modelNameValidator) : Endpoint<PullLocalModelRequest>
+    IModelProviderMapStore modelProviderMapStore,
+    ModelNameValidator modelNameValidator,
+    ILogger<PullStreamLocalModelEndpoint> logger) : Endpoint<PullLocalModelRequest>
 {
     /// <summary>
     ///     Minimum gap between progress lines while the status is unchanged. Ollama emits many "downloading" updates
@@ -35,8 +39,10 @@ public sealed class PullStreamLocalModelEndpoint(
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private readonly IModelProviderMapStore _modelProviderMapStore = modelProviderMapStore ?? throw new ArgumentNullException(nameof(modelProviderMapStore));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
+    private readonly ILogger<PullStreamLocalModelEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public override void Configure()
     {
@@ -115,6 +121,29 @@ public sealed class PullStreamLocalModelEndpoint(
         if (pending is not null)
         {
             await WriteEventAsync(pending, ct).ConfigureAwait(false);
+        }
+
+        // Reaching here means the pull enumeration completed without throwing (the catch returns early on failure):
+        // explicitly route this Ollama model to the Ollama runtime. The unmapped-routing default is now "llamacpp", so a
+        // node-pulled Ollama model must persist a "ollama" map row or a later send would dial llama.cpp by default.
+        // Symmetric to the GGUF download coordinator's llamacpp map-write (and its best-effort swallow-and-log).
+        await RouteToOllamaAsync(modelName).ConfigureAwait(false);
+    }
+
+    // Persists the "ollama" routing row for a just-completed pull. The 200 + NDJSON stream are already committed by this
+    // point, so a throw here would tear the connection ("response has already started") AND leave the model unmapped.
+    // Mirror the GGUF coordinator's best-effort pattern: swallow-and-log so a successful download is never reported as a
+    // failure because the routing row could not be persisted. Use CancellationToken.None so a client disconnect at the
+    // very end of the stream (which cancels `ct`) does not drop the mapping for an otherwise-successful pull.
+    private async Task RouteToOllamaAsync(string modelName)
+    {
+        try
+        {
+            _ = await _modelProviderMapStore.UpsertAsync(modelName, OllamaLocalModelProvider.OllamaProviderName, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "Could not persist the ollama provider mapping for {ModelName}; the default-provider routing still applies.", modelName);
         }
     }
 

@@ -1,0 +1,209 @@
+namespace XE_Local_AI_Engine.Client.BackgroundServices;
+
+using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+
+/// <summary>
+///     First-run provisioning for the self-contained desktop launch: ensures a small node-local GGUF chat model is
+///     installed (via the bundled llama.cpp runtime) and selected, so a fresh double-click install can chat without the
+///     operator first downloading a model or running Ollama.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Desktop-gated.</b> The whole flow runs only when the process was launched in desktop mode
+///         (<c>XE_LAUNCH_MODE=desktop</c> / <c>--desktop</c>). Headless, Aspire, and CI runs are byte-behavior-unchanged
+///         — they never auto-download a model.
+///     </para>
+///     <para>
+///         <b>Non-blocking + offline-tolerant.</b> All work runs in <see cref="ExecuteAsync" /> off the startup path; a
+///         multi-GB binary/model download never blocks the host from coming up. Any transport failure (HF unreachable,
+///         binary acquisition failure) is caught and logged, leaving the empty-picker onboarding as the fallback — the
+///         service never crashes startup.
+///     </para>
+///     <para>
+///         <b>Idempotent.</b> It no-ops when a GGUF is already installed or a non-default <c>DefaultModelName</c> is set,
+///         so it provisions at most once and is safe to run on every boot.
+///     </para>
+/// </remarks>
+public sealed class FirstRunModelProvisioningService : BackgroundService
+{
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly IConfiguration _configuration;
+    private readonly IGgufDownloadCoordinator _downloadCoordinator;
+    private readonly IGgufModelStore _ggufModelStore;
+    private readonly bool _isDesktopMode;
+    private readonly ILogger<FirstRunModelProvisioningService> _logger;
+    private readonly INodeSettingsStore _nodeSettingsStore;
+    private readonly TimeSpan _pollInterval;
+    private readonly IGpuVariantSelector _variantSelector;
+
+    public FirstRunModelProvisioningService(IConfiguration configuration,
+        IGgufModelStore ggufModelStore,
+        IGgufDownloadCoordinator downloadCoordinator,
+        ILlamaCppBinaryManager binaryManager,
+        IGpuVariantSelector variantSelector,
+        INodeSettingsStore nodeSettingsStore,
+        ILogger<FirstRunModelProvisioningService> logger)
+        : this(configuration,
+            ggufModelStore,
+            downloadCoordinator,
+            binaryManager,
+            variantSelector,
+            nodeSettingsStore,
+            logger,
+            DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs()),
+            TimeSpan.FromSeconds(2))
+    {
+    }
+
+    // Test seam: injects the desktop-mode decision and the download-poll interval so the provisioning sequence is
+    // exercisable without mutating real process args/env and without a 2s/tick wait. Mirrors DesktopLaunch's
+    // injectable-reader pattern. Production uses the public ctor, which resolves the real desktop decision.
+    internal FirstRunModelProvisioningService(IConfiguration configuration,
+        IGgufModelStore ggufModelStore,
+        IGgufDownloadCoordinator downloadCoordinator,
+        ILlamaCppBinaryManager binaryManager,
+        IGpuVariantSelector variantSelector,
+        INodeSettingsStore nodeSettingsStore,
+        ILogger<FirstRunModelProvisioningService> logger,
+        bool isDesktopMode,
+        TimeSpan pollInterval)
+    {
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+        _downloadCoordinator = downloadCoordinator ?? throw new ArgumentNullException(nameof(downloadCoordinator));
+        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+        _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _isDesktopMode = isDesktopMode;
+        _pollInterval = pollInterval;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Desktop-only: headless / Aspire / CI must never auto-download a model (off-flag invariant).
+        if (!_isDesktopMode)
+        {
+            return;
+        }
+
+        if (!_configuration.GetValue("FirstRunModel:Enabled", true))
+        {
+            return;
+        }
+
+        try
+        {
+            await ProvisionAsync(stoppingToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Host is shutting down — nothing to provision.
+        }
+        catch (Exception exception)
+        {
+            // Offline-tolerant: never crash startup. The empty-picker onboarding remains the fallback.
+            _logger.LogWarning(exception, "First-run model provisioning failed; the operator can install a model manually.");
+        }
+    }
+
+    private async Task ProvisionAsync(CancellationToken ct)
+    {
+        // Idempotency: if any GGUF is already installed, or a non-default model is already selected, there is nothing to
+        // provision. This makes the service safe to run on every boot.
+        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
+        if (installed.Count > 0)
+        {
+            _logger.LogDebug("First-run provisioning skipped: {Count} GGUF model(s) already installed.", installed.Count);
+            return;
+        }
+
+        var settings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
+        var configuredDefault = _configuration.GetValue<string>("Agent:LocalChat:DefaultModel");
+        if (!string.IsNullOrWhiteSpace(settings.DefaultModelName)
+            && !string.Equals(settings.DefaultModelName, configuredDefault, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("First-run provisioning skipped: a non-default model '{Model}' is already selected.", settings.DefaultModelName);
+            return;
+        }
+
+        var repoId = _configuration.GetValue<string>("FirstRunModel:RepoId");
+        if (string.IsNullOrWhiteSpace(repoId))
+        {
+            _logger.LogInformation("First-run provisioning skipped: no FirstRunModel:RepoId is configured.");
+            return;
+        }
+
+        var quant = _configuration.GetValue<string>("FirstRunModel:Quant");
+
+        // Ensure the llama.cpp binary for this host BEFORE downloading the model so the model is immediately runnable.
+        // A binary acquisition failure surfaces a sanitized LlamaRuntimeException that the caller's catch turns into the
+        // empty-picker fallback.
+        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+        _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
+
+        // Download the default GGUF through the coordinator's detached path so progress/cancel AND the llamacpp
+        // model_provider_map write happen through the SAME code as an operator-initiated download (FRR-2). The ticket
+        // carries the canonical {repo:quant} identity the model is installed under.
+        var request = new GgufModelRequest
+        {
+            RepoId = repoId.Trim(),
+            Quant = string.IsNullOrWhiteSpace(quant) ? null : quant.Trim(),
+            Role = GgufRole.Chat
+        };
+        var ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
+
+        // The download runs detached; wait for it to reach a terminal phase so DefaultModelName is set only once the
+        // file is actually present (a half-downloaded model must not be selected).
+        var completed = await WaitForDownloadAsync(ticket.ModelName, ct).ConfigureAwait(false);
+        if (!completed)
+        {
+            _logger.LogWarning("First-run model '{Model}' did not finish downloading; leaving the picker empty for onboarding.", ticket.ModelName);
+            return;
+        }
+
+        // Select the freshly-installed GGUF as the node default so the chat composer opens on a ready model.
+        var updated = settings with
+        {
+            DefaultModelName = ticket.ModelName
+        };
+        await _nodeSettingsStore.SaveAsync(updated, ct).ConfigureAwait(false);
+        _logger.LogInformation("First-run provisioning installed and selected '{Model}'.", ticket.ModelName);
+    }
+
+    /// <summary>
+    ///     Polls the download coordinator's sanitized status until the named download reaches a terminal phase. Returns
+    ///     <see langword="true" /> only when it completed (the file is present); <see langword="false" /> on cancel or
+    ///     failure. Polls rather than blocks because the coordinator runs the download detached and exposes progress via
+    ///     a status registry.
+    /// </summary>
+    private async Task<bool> WaitForDownloadAsync(string modelName, CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(_pollInterval);
+
+        while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        {
+            var status = _downloadCoordinator.GetStatus(modelName);
+            switch (status?.Phase)
+            {
+                case GgufDownloadPhase.Completed:
+                    return true;
+                case GgufDownloadPhase.Failed:
+                    _logger.LogWarning("First-run model '{Model}' download failed: {Reason}", modelName, status.SanitizedError ?? "unknown reason");
+                    return false;
+                case GgufDownloadPhase.Cancelled:
+                    return false;
+                default:
+                    // Running or not-yet-reported — keep polling.
+                    break;
+            }
+        }
+
+        return false;
+    }
+}
