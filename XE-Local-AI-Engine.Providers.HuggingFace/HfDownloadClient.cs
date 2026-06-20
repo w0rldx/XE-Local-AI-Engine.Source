@@ -19,31 +19,38 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </remarks>
 internal sealed class HfDownloadClient
 {
-    // The LFS sha256 OID is surfaced on the resolve response via X-Linked-Etag (falls back to a weak ETag, which is
-    // NOT a sha256 for non-LFS blobs — so we only trust an unquoted 64-hex value here).
+    // The file sha256 is surfaced ONLY via the X-Linked-Etag on Hugging Face's resolve response. The plain ETag is NOT a
+    // trustworthy sha256: for Xet-backed repos (now HF's default storage) the post-redirect CDN ETag is a content-defined
+    // chunking hash that is also 64-hex, so trusting it would guarantee a false HashMismatch. We therefore read
+    // X-Linked-Etag from the pre-redirect (302) resolve response via a dedicated no-redirect client and never fall back
+    // to ETag.
     private const string LinkedEtagHeader = "X-Linked-Etag";
     private const string RepoCommitHeader = "X-Repo-Commit";
     private const int CopyBufferSize = 128 * 1024;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
 
     private readonly HttpClient _httpClient;
+    private readonly HttpClient _resolveHttpClient;
     private readonly ILogger<HfDownloadClient> _logger;
     private readonly HuggingFaceOptions _options;
     private readonly IHfTokenStore _tokenStore;
 
     public HfDownloadClient(HttpClient httpClient,
+        HttpClient resolveHttpClient,
         IHfTokenStore tokenStore,
         IFreeSpaceProbe freeSpaceProbe,
         HuggingFaceOptions options,
         ILogger<HfDownloadClient> logger)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(resolveHttpClient);
         ArgumentNullException.ThrowIfNull(tokenStore);
         ArgumentNullException.ThrowIfNull(freeSpaceProbe);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
         _httpClient = httpClient;
+        _resolveHttpClient = resolveHttpClient;
         _tokenStore = tokenStore;
         _freeSpaceProbe = freeSpaceProbe;
         _options = options;
@@ -83,13 +90,18 @@ internal sealed class HfDownloadClient
 
         var requestUri = BuildResolveUri(repoId, revision, fileName);
 
+        // Probe the resolve endpoint ONCE (no-redirect) to capture the true file sha256 from X-Linked-Etag before the
+        // CDN redirect hides it. Best-effort: a probe failure leaves expectedSha null (revision-pinned, unverified)
+        // rather than blocking the download — the byte GET below still classifies real HTTP failures.
+        var expectedSha = await ResolveLinkedShaAsync(requestUri, ct).ConfigureAwait(false);
+
         var attempt = 0;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                return await DownloadOnceAsync(requestUri, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
+                return await DownloadOnceAsync(requestUri, expectedSha, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
                     .ConfigureAwait(false);
             }
             catch (HuggingFaceDownloadException exception) when (IsTransient(exception.Reason) && attempt < _options.MaxDownloadRetries)
@@ -105,6 +117,7 @@ internal sealed class HfDownloadClient
     }
 
     private async Task<HfDownloadResult> DownloadOnceAsync(Uri requestUri,
+        string? expectedSha,
         string modelName,
         string partPath,
         string destinationPath,
@@ -157,7 +170,9 @@ internal sealed class HfDownloadClient
 
             // If the server ignored our Range and returned 200, restart the .part from scratch (truncate-append below).
             var appending = existingPartBytes > 0 && response.StatusCode == HttpStatusCode.PartialContent;
-            var expectedSha = ReadLinkedSha256(response);
+            // Prefer the sha256 captured from the pre-redirect resolve probe; fall back to a directly-served
+            // X-Linked-Etag (e.g. a non-redirecting inline response). Never the plain ETag (see ReadLinkedSha256).
+            expectedSha ??= ReadLinkedSha256(response);
             var resolvedRevision = ReadRepoCommit(response) ?? string.Empty;
             var totalBytes = ResolveTotalBytes(response, appending, existingPartBytes, expectedSizeBytes);
 
@@ -322,20 +337,44 @@ internal sealed class HfDownloadClient
         }
     }
 
+    /// <summary>
+    ///     Issues a no-redirect <c>HEAD</c> to the resolve URI and returns the file sha256 from <c>X-Linked-Etag</c> on the
+    ///     <c>302</c> (or a non-redirecting <c>2xx</c>). Best-effort: any failure — network, an unexpected status, a missing
+    ///     or non-sha header — yields <see langword="null" /> so the caller downloads revision-pinned-but-unverified rather
+    ///     than failing; real HTTP errors are still surfaced by the byte GET. The HF token rides this same-origin probe for
+    ///     gated repos but never reaches the CDN (no redirect is followed).
+    /// </summary>
+    private async Task<string?> ResolveLinkedShaAsync(Uri requestUri, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Head, requestUri);
+            await ApplyAuthorizationAsync(request, ct).ConfigureAwait(false);
+            using var response = await _resolveHttpClient
+                                       .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                                       .ConfigureAwait(false);
+            return ReadLinkedSha256(response);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogDebug(exception, "Could not probe the Hugging Face sha256 OID; the download will not be hash-verified.");
+            return null;
+        }
+    }
+
     private static string? ReadLinkedSha256(HttpResponseMessage response)
     {
-        if (response.Headers.TryGetValues(LinkedEtagHeader, out var linked))
+        if (!response.Headers.TryGetValues(LinkedEtagHeader, out var linked))
         {
-            var candidate = linked.FirstOrDefault()?.Trim('"');
-            if (IsSha256Hex(candidate))
-            {
-                return candidate!.ToUpperInvariant();
-            }
+            return null;
         }
 
-        // A plain ETag is a sha256 only for LFS blobs; non-LFS files expose a non-sha ETag we must not trust as a hash.
-        var etag = response.Headers.ETag?.Tag?.Trim('"');
-        return IsSha256Hex(etag) ? etag!.ToUpperInvariant() : null;
+        var candidate = linked.FirstOrDefault()?.Trim('"');
+        return IsSha256Hex(candidate) ? candidate!.ToUpperInvariant() : null;
     }
 
     private static string? ReadRepoCommit(HttpResponseMessage response)
