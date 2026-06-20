@@ -445,6 +445,79 @@ public sealed class GgufStoreTests
         AssertEx.False(exception.Message.Contains("hf_", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Test]
+    public async Task GgufStore_XetBacked_VerifiesAgainstLinkedEtagProbe_NotCdnEtag()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var correctSha = Infra.Sha256Upper(ModelBytes);
+        // A non-sha 64-hex value standing in for the Xet content-defined-chunking hash the CDN returns as ETag.
+        const string xetCdnHash = "72b4dc491f5f3256ee30377cfbc5b3134991f5e58906bb88a012786c09e1cca8";
+
+        // Resolve probe (no-redirect HEAD): the hf.co 302 carries the TRUE sha256 on X-Linked-Etag.
+        using var resolveHandler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+        {
+            var probe = new HttpResponseMessage(HttpStatusCode.Redirect);
+            probe.Headers.TryAddWithoutValidation("X-Linked-Etag", $"\"{correctSha}\"");
+            probe.Headers.TryAddWithoutValidation("X-Repo-Commit", "abc123def456");
+            return probe;
+        });
+        using var resolveHttp = new HttpClient(resolveHandler);
+
+        // Byte GET (post-redirect CDN): exposes ONLY the Xet ETag (a 64-hex non-sha) and NO X-Linked-Etag — trusting it
+        // would be a guaranteed false HashMismatch.
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+        {
+            var get = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(ModelBytes) };
+            get.Content.Headers.ContentLength = ModelBytes.Length;
+            get.Headers.ETag = new EntityTagHeaderValue($"\"{xetCdnHash}\"");
+            return get;
+        });
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, resolveHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var handle = await store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, null, CancellationToken.None);
+
+        // The download succeeds and records the sha from the probe's X-Linked-Etag — the CDN Xet ETag was ignored.
+        AssertEx.NotNull(handle.Sha256);
+        AssertEx.Equal(correctSha, handle.Sha256!, null);
+        AssertEx.True(File.Exists(handle.LocalPath));
+    }
+
+    [Test]
+    public async Task GgufStore_XetProbeShaMismatch_RejectsDownload()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        // The probe advertises a sha that does NOT match the streamed bytes → integrity failure from the probe OID.
+        var wrongSha = Infra.Sha256Upper(Encoding.UTF8.GetBytes("different-content"));
+        using var resolveHandler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+        {
+            var probe = new HttpResponseMessage(HttpStatusCode.Redirect);
+            probe.Headers.TryAddWithoutValidation("X-Linked-Etag", $"\"{wrongSha}\"");
+            return probe;
+        });
+        using var resolveHttp = new HttpClient(resolveHandler);
+        // The byte GET exposes no X-Linked-Etag (CDN), so the probe sha is the sole integrity source.
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, resolveHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.HashMismatch, exception.Reason);
+        AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
+    }
+
     // Builds a 200 OK full-file response, optionally advertising the LFS sha256 OID via X-Linked-Etag.
     private static HttpResponseMessage FullDownload(byte[] bytes, string? lfsSha256 = null)
     {

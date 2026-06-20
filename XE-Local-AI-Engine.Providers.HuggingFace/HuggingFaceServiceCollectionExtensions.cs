@@ -24,6 +24,13 @@ public static class HuggingFaceServiceCollectionExtensions
     /// <summary>Named <see cref="HttpClient" /> for file downloads + GGUF header range reads.</summary>
     public const string DownloadHttpClientName = "hf-download";
 
+    /// <summary>
+    ///     Named <see cref="HttpClient" /> for the pre-download metadata probe. Auto-redirect is DISABLED so the
+    ///     <c>X-Linked-Etag</c> (the true file sha256) on Hugging Face's <c>302</c> resolve response can be read before
+    ///     the redirect to the Xet/LFS CDN, whose own <c>ETag</c> is a content-defined-chunking hash, not the file sha256.
+    /// </summary>
+    public const string ResolveHttpClientName = "hf-resolve";
+
     /// <summary>Registers the Hugging Face GGUF store, registry, and discovery over the documented Hub REST endpoints.</summary>
     public static IServiceCollection AddHuggingFaceGgufStore(this IServiceCollection services, IConfiguration configuration)
     {
@@ -42,6 +49,8 @@ public static class HuggingFaceServiceCollectionExtensions
 
         services.AddHttpClient(HubHttpClientName);
         services.AddHttpClient(DownloadHttpClientName);
+        services.AddHttpClient(ResolveHttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(static () => new System.Net.Http.HttpClientHandler { AllowAutoRedirect = false });
 
         services.TryAddSingleton(static sp => new HfHubClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HubHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
@@ -57,6 +66,7 @@ public static class HuggingFaceServiceCollectionExtensions
             sp.GetRequiredService<ILogger<HuggingFaceGgufDiscovery>>()));
 
         services.TryAddSingleton(static sp => new HfDownloadClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(ResolveHttpClientName),
             sp.GetRequiredService<IHfTokenStore>(),
             sp.GetRequiredService<IFreeSpaceProbe>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
