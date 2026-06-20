@@ -175,6 +175,11 @@ internal sealed class FakeModelStore(
         return Task.FromResult(descriptors);
     }
 
+    public Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
+    {
+        throw new NotSupportedException("FakeModelStore does not resolve model names.");
+    }
+
     public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
     {
         throw new NotSupportedException("FakeModelStore does not download.");

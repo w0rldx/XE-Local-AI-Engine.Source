@@ -9,6 +9,7 @@ import {
 	getHfTokenStatusOptions,
 	getLatestRecommendationsOptions,
 	getLlamaCppVersionOptions,
+	inspectGgufRepositoryOptions,
 	listRunningModelsOptions,
 	refreshRecommendationsMutation,
 	setHfTokenMutation,
@@ -17,6 +18,7 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	toGgufRepository,
+	toGgufRepositoryDetail,
 	toHardwareProfile,
 	toLatestRecommendations,
 	toLlamaCppVersion,
@@ -46,6 +48,7 @@ export const modelFitQueryIds = {
 	llamaCppVersion: "getLlamaCppVersion",
 	hfTokenStatus: "getHfTokenStatus",
 	ggufBrowse: "browseGgufRepositories",
+	ggufInspect: "inspectGgufRepository",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one model-fit endpoint. */
@@ -110,6 +113,18 @@ export function useBrowseGgufRepositories(query: string, enabled: boolean) {
 	return useQuery({
 		...withResponseValidation(browseGgufRepositoriesOptions({ query: { query: trimmed } })),
 		select: (data) => (data.items ?? []).map(toGgufRepository),
+		enabled: enabled && trimmed.length > 0,
+	});
+}
+
+// Per-repo GGUF file inspection backing the quant picker. enabled gates the query so it only fires when a repo is
+// selected (the download dialog is open). The repo id scopes the cache key so each repo's quant list caches
+// independently. A discovery failure returns a 200 empty file list (handled by the dialog as "no files").
+export function useInspectGgufRepository(repoId: string, enabled: boolean) {
+	const trimmed = repoId.trim();
+	return useQuery({
+		...withResponseValidation(inspectGgufRepositoryOptions({ query: { repoId: trimmed } })),
+		select: toGgufRepositoryDetail,
 		enabled: enabled && trimmed.length > 0,
 	});
 }

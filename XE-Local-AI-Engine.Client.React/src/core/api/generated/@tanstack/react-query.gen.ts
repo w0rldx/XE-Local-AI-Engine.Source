@@ -74,6 +74,7 @@ import {
 	getToolCatalog,
 	harvestGoldenConversations,
 	importAgentTemplates,
+	inspectGgufRepository,
 	listAgentDefinitions,
 	listAgentPlaybookActions,
 	listAgentTemplates,
@@ -270,6 +271,8 @@ import type {
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesResponse,
+	InspectGgufRepositoryData,
+	InspectGgufRepositoryResponse,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsResponse,
 	ListAgentPlaybookActionsData,
@@ -1213,6 +1216,28 @@ export const getLatestRecommendationsOptions = (options?: Options<GetLatestRecom
 			return data;
 		},
 		queryKey: getLatestRecommendationsQueryKey(options),
+	});
+
+export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>
+	createQueryKey("inspectGgufRepository", options);
+
+export const inspectGgufRepositoryOptions = (options?: Options<InspectGgufRepositoryData>) =>
+	queryOptions<
+		InspectGgufRepositoryResponse,
+		AxiosError<DefaultError>,
+		InspectGgufRepositoryResponse,
+		ReturnType<typeof inspectGgufRepositoryQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await inspectGgufRepository({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: inspectGgufRepositoryQueryKey(options),
 	});
 
 export const listRunningModelsQueryKey = (options?: Options<ListRunningModelsData>) =>

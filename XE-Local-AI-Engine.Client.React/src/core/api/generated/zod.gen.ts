@@ -640,6 +640,24 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRe
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
+	fileName: z.string().optional(),
+	quant: z.string().optional(),
+	isDynamic: z.boolean().optional(),
+	sizeBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = z.object({
+	repoId: z.string().optional(),
+	files: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.object({
 	modelName: z.string().optional(),
 	role: z.string().optional(),
@@ -1127,7 +1145,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatSelectedPathRe
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatMessageFeedbackRequest = z.record(z.string(), z.never());
 
-export const zC0ReAiSharedContractsEnumsInvocationStatus = z.enum([
+export const zXeLocalAiEngineAiContractsEnumsInvocationStatus = z.enum([
 	"Pending",
 	"Assigned",
 	"Running",
@@ -1152,7 +1170,7 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({
 	invocationId: z.guid().optional(),
 	conversationId: z.guid().optional(),
-	status: zC0ReAiSharedContractsEnumsInvocationStatus.optional(),
+	status: zXeLocalAiEngineAiContractsEnumsInvocationStatus.optional(),
 	modelUsed: z.string().nullish(),
 	startedAt: z.iso.datetime({ offset: true }).optional(),
 	lastUpdatedAt: z.iso.datetime({ offset: true }).optional(),
@@ -1180,7 +1198,7 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentRespon
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = z.object({
 	invocationId: z.guid().optional(),
 	conversationId: z.guid().optional(),
-	status: zC0ReAiSharedContractsEnumsInvocationStatus.optional(),
+	status: zXeLocalAiEngineAiContractsEnumsInvocationStatus.optional(),
 	modelUsed: z.string().nullish(),
 	startedAt: z.iso.datetime({ offset: true }).optional(),
 	completedAt: z.iso.datetime({ offset: true }).optional(),
@@ -2066,6 +2084,15 @@ export const zGetLatestRecommendationsQuery = z.object({
  * Success
  */
 export const zGetLatestRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse;
+
+export const zInspectGgufRepositoryQuery = z.object({
+	repoId: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zInspectGgufRepositoryResponse = zXeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse;
 
 /**
  * Success

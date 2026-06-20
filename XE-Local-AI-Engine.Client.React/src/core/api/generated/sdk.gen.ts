@@ -212,6 +212,9 @@ import type {
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesErrors,
 	ImportAgentTemplatesResponses,
+	InspectGgufRepositoryData,
+	InspectGgufRepositoryErrors,
+	InspectGgufRepositoryResponses,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsErrors,
 	ListAgentDefinitionsResponses,
@@ -483,6 +486,8 @@ import {
 	zHarvestGoldenConversationsResponse,
 	zImportAgentTemplatesBody,
 	zImportAgentTemplatesResponse,
+	zInspectGgufRepositoryQuery,
+	zInspectGgufRepositoryResponse,
 	zListAgentDefinitionsResponse,
 	zListAgentPlaybookActionsPath,
 	zListAgentPlaybookActionsResponse,
@@ -1492,6 +1497,28 @@ export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/recommendations/latest",
+		...options,
+	});
+
+export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
+	options?: Options<InspectGgufRepositoryData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<InspectGgufRepositoryResponses, InspectGgufRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zInspectGgufRepositoryQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zInspectGgufRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/inspect",
 		...options,
 	});
 

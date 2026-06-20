@@ -40,6 +40,7 @@ const { hooksMock, schedulerMock, hubMock } = vi.hoisted(() => ({
 		useLlamaCppVersion: vi.fn(),
 		useHfTokenStatus: vi.fn(),
 		useBrowseGgufRepositories: vi.fn(),
+		useInspectGgufRepository: vi.fn(),
 		useStartGgufDownload: vi.fn(),
 		useCancelGgufDownload: vi.fn(),
 		useEjectRunningModel: vi.fn(),
@@ -203,6 +204,7 @@ describe("ModelRecommendationsPage", () => {
 		hooksMock.useLlamaCppVersion.mockReturnValue(makeQuery(llamaCppVersion));
 		hooksMock.useHfTokenStatus.mockReturnValue(makeQuery(false));
 		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([]));
+		hooksMock.useInspectGgufRepository.mockReturnValue(makeQuery(null));
 		hooksMock.useStartGgufDownload.mockReturnValue(makeMutation());
 		hooksMock.useCancelGgufDownload.mockReturnValue(makeMutation());
 		hooksMock.useEjectRunningModel.mockReturnValue(makeMutation());
@@ -371,15 +373,50 @@ describe("ModelRecommendationsPage", () => {
 		expect(useModelFitManagementStore.getState().browseQuery).toBe("llama 3.1");
 	});
 
-	it("downloads a GGUF repository from the browse results", () => {
+	it("downloads a chosen quant from the browse quant picker", async () => {
 		const download = makeMutation();
 		hooksMock.useStartGgufDownload.mockReturnValue(download);
 		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([ggufRepo]));
+		hooksMock.useInspectGgufRepository.mockReturnValue(
+			makeQuery({
+				repoId: "unsloth/llama-3.1-8b-gguf",
+				files: [
+					{ fileName: "llama-3.1-8b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 5_000_000_000 },
+					{ fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL", isDynamic: true, sizeBytes: 6_000_000_000 },
+				],
+			}),
+		);
+		useModelFitManagementStore.setState({ browseQuery: "llama" });
+
+		renderPage();
+
+		// Clicking a browse row opens the quant picker rather than downloading the default quant directly.
+		fireEvent.click(screen.getByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+
+		// Pick the Unsloth Dynamic quant, then confirm — the exact file name is sent so it resolves unambiguously.
+		fireEvent.click(await screen.findByLabelText("UD-Q4_K_XL"));
+		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
+
+		expect(download.mutate).toHaveBeenCalledWith(
+			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL" },
+			expect.any(Object),
+		);
+	});
+
+	it("falls back to the default quant when the picker has no files to offer", async () => {
+		const download = makeMutation();
+		hooksMock.useStartGgufDownload.mockReturnValue(download);
+		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([ggufRepo]));
+		// Degraded/empty inspection (e.g. HF unreachable → 200 empty list) must not strand the operator.
+		hooksMock.useInspectGgufRepository.mockReturnValue(
+			makeQuery({ repoId: "unsloth/llama-3.1-8b-gguf", files: [] }),
+		);
 		useModelFitManagementStore.setState({ browseQuery: "llama" });
 
 		renderPage();
 
 		fireEvent.click(screen.getByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+		fireEvent.click(await screen.findByTestId("gguf-download-default"));
 
 		expect(download.mutate).toHaveBeenCalledWith(
 			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q4_K_M" },

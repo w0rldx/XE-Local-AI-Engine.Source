@@ -57,9 +57,11 @@ public sealed class BrowseGgufRepositoriesEndpoint(
         {
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or TimeoutException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or TimeoutException or InvalidOperationException or OperationCanceledException)
         {
-            // A discovery/network failure must not 500 the browse panel — surface an empty list (no raw reason).
+            // A discovery/network failure must not 500 the browse panel — surface an empty list (no raw reason). The
+            // OperationCanceledException arm (after the ct-cancellation rethrow above) covers an HttpClient request
+            // TIMEOUT (TaskCanceledException, not caller cancellation), which would otherwise escape and 500.
             _logger.LogWarning(exception, "GGUF repo discovery failed for a browse request.");
             await Send.OkAsync(new BrowseGgufRepositoriesResponse
                 {

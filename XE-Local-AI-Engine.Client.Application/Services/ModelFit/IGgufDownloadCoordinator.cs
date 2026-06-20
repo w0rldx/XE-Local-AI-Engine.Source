@@ -18,11 +18,12 @@ public interface IGgufDownloadCoordinator
 {
     /// <summary>
     ///     Begins (or rejoins) a background download for <paramref name="request" />. The download runs detached on the
-    ///     application lifetime, reporting progress into the per-model status registry; the call returns immediately with
-    ///     the canonical model-name identity to track/cancel it by. A download already in flight for the same model name
-    ///     is rejoined (idempotent) rather than duplicated.
+    ///     application lifetime, reporting progress into the per-model status registry; the call returns once the
+    ///     canonical model-name identity is resolved (so the operator tracks/cancels by the SAME identity the model is
+    ///     installed under, even when a base-quant request resolves to an Unsloth Dynamic file). A download already in
+    ///     flight for the same model name is rejoined (idempotent) rather than duplicated.
     /// </summary>
-    GgufDownloadTicket Start(GgufModelRequest request);
+    Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct);
 
     /// <summary>
     ///     Requests cancellation of the in-flight download for <paramref name="modelName" />. Returns <c>true</c> when a

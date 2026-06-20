@@ -33,15 +33,15 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public GgufDownloadTicket Start(GgufModelRequest request)
+    public async Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Canonical identity the operator tracks/cancels by. A request may omit the quant (the store applies its
-        // default), so format from the request's repo + the effective quant label when present.
-        var modelName = string.IsNullOrWhiteSpace(request.Quant)
-            ? request.RepoId
-            : GgufModelName.Format(request.RepoId, request.Quant);
+        // Canonical identity the operator tracks/cancels by — resolved the SAME way the store registers it, so the
+        // track/cancel key matches the installed-model identity even when a base-quant request resolves to a different
+        // file (e.g. an Unsloth Dynamic variant). If resolution fails (discovery unreachable), fall back to the
+        // request-derived label so Start never throws — the detached download then surfaces the failure under that name.
+        var modelName = await ResolveModelNameAsync(request, ct).ConfigureAwait(false);
 
         var cts = new CancellationTokenSource();
 
@@ -59,6 +59,28 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         // task (CA2025), while Cancel can still signal it via the registry until then.
         _ = RunDownloadAsync(modelName, request, cts.Token);
         return new GgufDownloadTicket(modelName, false);
+    }
+
+    // Resolves the canonical model name via the store; on a discovery/transport failure (or HttpClient request TIMEOUT,
+    // which surfaces as a non-caller OperationCanceledException) falls back to the request-derived label so a download
+    // can still be started and surface its own failure. Genuine caller cancellation propagates.
+    private async Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
+    {
+        try
+        {
+            return await _modelStore.ResolveModelNameAsync(request, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or IOException or TimeoutException or InvalidOperationException or OperationCanceledException)
+        {
+            _logger.LogDebug(exception, "Could not pre-resolve the GGUF model name for {RepoId}; using the request-derived key.", request.RepoId);
+            return string.IsNullOrWhiteSpace(request.Quant)
+                ? request.RepoId
+                : GgufModelName.Format(request.RepoId, request.Quant);
+        }
     }
 
     public bool Cancel(string modelName)

@@ -1,0 +1,149 @@
+import { Alert, Badge, Button, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
+import { IconAlertTriangle, IconCloudDownload } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { formatBytesAsGb } from "@/features/model-fit/components/ModelFitFormatters";
+import type { GgufRepository, GgufRepositoryFile } from "@/features/model-fit/models/ModelFitModels";
+import { useInspectGgufRepository } from "@/features/model-fit/queries/useModelFit";
+
+interface GgufDownloadDialogProps {
+	// The repo whose quants are being picked; null closes the dialog (and gates the inspect query).
+	repository: GgufRepository | null;
+	onClose: () => void;
+	onConfirm: (repoId: string, file: GgufRepositoryFile) => void;
+	// Fallback when inspection returns no files (e.g. discovery degraded/unreachable): download the default quant by
+	// repo id only, preserving the pre-picker one-click capability so a degraded inspect never blocks downloading.
+	onConfirmDefault: (repoId: string) => void;
+	isDownloading: boolean;
+}
+
+// Quant picker dialog: on open it inspects the selected repo's .gguf files (quant + size, incl. Unsloth Dynamic UD-
+// quants) and lets the operator pick exactly one to download. The chosen file's exact name is passed up so the
+// backend resolves it verbatim — no re-matching, so a Dynamic quant like UD-Q4_K_XL downloads unambiguously.
+export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDefault, isDownloading }: GgufDownloadDialogProps) {
+	const { t } = useTranslation();
+	const opened = repository !== null;
+	const inspect = useInspectGgufRepository(repository?.repoId ?? "", opened);
+	const files = inspect.data?.files ?? [];
+	const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+
+	// Default the selection to the first (smallest) file whenever the list (re)loads; keep a still-present choice.
+	useEffect(() => {
+		setSelectedFileName((current) => {
+			const first = files[0];
+			if (first === undefined) {
+				return null;
+			}
+			return current !== null && files.some((file) => file.fileName === current) ? current : first.fileName;
+		});
+	}, [files]);
+
+	const selectedFile = files.find((file) => file.fileName === selectedFileName) ?? null;
+
+	const handleConfirm = (): void => {
+		if (repository !== null && selectedFile !== null) {
+			onConfirm(repository.repoId, selectedFile);
+		}
+	};
+
+	return (
+		<DialogShell
+			opened={opened}
+			onClose={onClose}
+			title={t("pages.modelFit.download.selectQuant", "Select a quant to download")}
+			size="min(42rem, 95vw)"
+			footer={
+				<>
+					<Button variant="default" onClick={onClose} data-testid="gguf-download-cancel">
+						{t("common.cancel", "Cancel")}
+					</Button>
+					<Button
+						leftSection={<IconCloudDownload size={16} />}
+						disabled={selectedFile === null}
+						loading={isDownloading}
+						onClick={handleConfirm}
+						data-testid="gguf-download-confirm"
+					>
+						{t("pages.modelFit.download.confirm", "Download")}
+					</Button>
+				</>
+			}
+		>
+			<Stack gap="md" data-testid="gguf-download-dialog">
+				<Text size="sm" c="dimmed">
+					{repository?.repoId}
+				</Text>
+
+				{inspect.isLoading ? (
+					<Group gap="sm">
+						<Loader size="sm" />
+						<Text c="dimmed">{t("pages.modelFit.download.inspecting", "Loading quants…")}</Text>
+					</Group>
+				) : null}
+
+				{inspect.error ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="gguf-download-error">
+						{t("pages.modelFit.download.inspectError", "Could not load this repository's files.")}
+					</Alert>
+				) : null}
+
+				{!inspect.isLoading && !inspect.error && files.length === 0 ? (
+					<Stack gap="sm" data-testid="gguf-download-empty">
+						<Text c="dimmed">
+							{t("pages.modelFit.download.noFiles", "No downloadable GGUF files found.")}
+						</Text>
+						{repository !== null ? (
+							<Button
+								variant="light"
+								leftSection={<IconCloudDownload size={16} />}
+								loading={isDownloading}
+								onClick={() => onConfirmDefault(repository.repoId)}
+								data-testid="gguf-download-default"
+							>
+								{t("pages.modelFit.download.defaultFallback", "Download default quant (Q4_K_M)")}
+							</Button>
+						) : null}
+					</Stack>
+				) : null}
+
+				{files.length > 0 ? (
+					<Radio.Group value={selectedFileName} onChange={setSelectedFileName}>
+						<Table verticalSpacing="sm" data-testid="gguf-download-table">
+							<Table.Thead>
+								<Table.Tr>
+									<Table.Th />
+									<Table.Th>{t("pages.modelFit.download.columns.quant", "Quant")}</Table.Th>
+									<Table.Th>{t("pages.modelFit.download.columns.size", "Size")}</Table.Th>
+								</Table.Tr>
+							</Table.Thead>
+							<Table.Tbody>
+								{files.map((file) => (
+									<Table.Tr key={file.fileName} data-testid={`gguf-download-row-${file.quant}`}>
+										<Table.Td>
+											<Radio value={file.fileName} aria-label={file.quant} />
+										</Table.Td>
+										<Table.Td>
+											<Group gap="xs" wrap="nowrap">
+												<Text size="sm" fw={500}>
+													{file.quant}
+												</Text>
+												{file.isDynamic ? (
+													<Badge color="grape" variant="light" size="sm">
+														{t("pages.modelFit.download.dynamic", "Dynamic")}
+													</Badge>
+												) : null}
+											</Group>
+										</Table.Td>
+										<Table.Td>{formatBytesAsGb(file.sizeBytes)}</Table.Td>
+									</Table.Tr>
+								))}
+							</Table.Tbody>
+						</Table>
+					</Radio.Group>
+				) : null}
+			</Stack>
+		</DialogShell>
+	);
+}

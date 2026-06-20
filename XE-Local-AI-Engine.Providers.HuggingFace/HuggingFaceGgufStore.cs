@@ -70,6 +70,17 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     }
 
     /// <inheritdoc />
+    public async Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RepoId);
+
+        // Same resolution EnsureModelAsync runs, so the returned identity matches what a download will register under.
+        var (_, quant, _, _, _) = await ResolveTargetAsync(request, ct).ConfigureAwait(false);
+        return GgufModelName.Format(request.RepoId, quant);
+    }
+
+    /// <inheritdoc />
     public async Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -161,7 +172,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     private async Task<(string FileName, string Quant, long SizeBytes, string? Sha256, string Revision)> ResolveTargetAsync(GgufModelRequest request,
         CancellationToken ct)
     {
-        var detail = await _discovery.InspectRepoAsync(request.RepoId, ct).ConfigureAwait(false);
+        // The header-free listing suffices — resolution only needs file name / quant / size / sha / revision, never the
+        // per-file GGUF header metadata, so this avoids N range reads before a download.
+        var detail = await _discovery.ListRepoFilesAsync(request.RepoId, ct).ConfigureAwait(false);
 
         if (request.FileName is not null)
         {
@@ -180,6 +193,16 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         var targetQuant = request.Quant ?? _options.DefaultQuant;
         var byQuant = detail.Files.FirstOrDefault(file =>
             string.Equals(file.Quant, targetQuant, StringComparison.OrdinalIgnoreCase));
+
+        // A bare base quant (e.g. the default Q4_K_M, or an explicit Q4_K_XL) also resolves to an Unsloth Dynamic
+        // file (UD-Q4_K_M) when no exact match exists, so default/base requests still succeed against UD-only repos.
+        // An explicit UD- request stays exact — it must not silently fall through to a plain quant.
+        if (byQuant is null && !GgufQuantParser.IsDynamic(targetQuant))
+        {
+            byQuant = detail.Files.FirstOrDefault(file =>
+                string.Equals(GgufQuantParser.StripDynamicPrefix(file.Quant), targetQuant, StringComparison.OrdinalIgnoreCase));
+        }
+
         if (byQuant is null)
         {
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,

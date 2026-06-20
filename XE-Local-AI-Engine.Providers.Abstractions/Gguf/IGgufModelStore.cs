@@ -27,6 +27,15 @@ public interface IGgufModelStore
     Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct);
 
     /// <summary>
+    ///     Resolves the canonical <c>{repoId}:{quant}</c> model name a request would be stored under — the SAME identity
+    ///     <see cref="EnsureModelAsync" /> registers — WITHOUT downloading. Lets a caller (e.g. the download coordinator)
+    ///     key its tracking/cancellation by the identity the model will actually be installed as, even when a base-quant
+    ///     request resolves to a different file (such as an Unsloth Dynamic variant). May perform a lightweight repo
+    ///     inspection to resolve the file; throws the same discovery/transport exceptions as a download's resolve step.
+    /// </summary>
+    Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct);
+
+    /// <summary>
     ///     Ensures the selected GGUF is present locally, downloading (resume-capable, retryable, cancellable) if
     ///     missing, and returns its local path + metadata. Reports byte/status progress via <paramref name="progress" />.
     /// </summary>

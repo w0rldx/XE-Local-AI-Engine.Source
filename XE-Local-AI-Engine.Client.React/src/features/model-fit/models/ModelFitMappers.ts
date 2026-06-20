@@ -1,13 +1,17 @@
 import type {
 	XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse,
 } from "@/core/api/generated";
 import {
 	type GgufRepository,
+	type GgufRepositoryDetail,
+	type GgufRepositoryFile,
 	type HardwareGpuVendor,
 	hardwareGpuVendors,
 	type HardwareProfile,
@@ -89,6 +93,27 @@ export function toGgufRepository(dto: XeLocalAiEngineClientEndpointsModelFitV1Gg
 		lastModifiedAtUtc: dto.lastModifiedAtUtc ?? null,
 		license: dto.license ?? null,
 		hasUsableGguf: dto.hasUsableGguf ?? false,
+	};
+}
+
+function toGgufRepositoryFile(
+	dto: XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse,
+): GgufRepositoryFile {
+	return {
+		fileName: dto.fileName ?? "",
+		quant: dto.quant ?? "",
+		isDynamic: dto.isDynamic ?? false,
+		sizeBytes: dto.sizeBytes ?? 0,
+	};
+}
+
+export function toGgufRepositoryDetail(
+	dto: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse,
+): GgufRepositoryDetail {
+	return {
+		repoId: dto.repoId ?? "",
+		// A discovery failure returns an empty file list (200); coalesce defensively in case it is omitted.
+		files: (dto.files ?? []).map(toGgufRepositoryFile),
 	};
 }
 

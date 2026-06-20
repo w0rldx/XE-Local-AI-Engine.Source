@@ -1616,7 +1616,18 @@
 				"alreadyInFlight": "Dieser Download läuft bereits.",
 				"error": "Der Download konnte nicht gestartet werden.",
 				"cancelled": "Download abgebrochen.",
-				"cancelError": "Der Download konnte nicht abgebrochen werden."
+				"cancelError": "Der Download konnte nicht abgebrochen werden.",
+				"selectQuant": "Quantisierung zum Herunterladen auswählen",
+				"confirm": "Herunterladen",
+				"inspecting": "Quantisierungen werden geladen…",
+				"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
+				"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
+				"dynamic": "Dynamisch",
+				"columns": {
+					"quant": "Quantisierung",
+					"size": "Größe"
+				},
+				"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)"
 			},
 			"running": {
 				"title": "Laufende Modelle",

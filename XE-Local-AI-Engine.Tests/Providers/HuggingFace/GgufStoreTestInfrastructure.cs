@@ -84,11 +84,16 @@ internal static class GgufStoreTestInfrastructure
     public static IHuggingFaceGgufDiscovery DiscoveryWith(params GgufRepoFile[] files)
     {
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
-        discovery.InspectRepoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(callInfo => Task.FromResult(new GgufRepoDetail(callInfo.ArgAt<string>(0),
-                     false,
-                     "apache-2.0",
-                     files)));
+
+        // The store resolves via the header-free ListRepoFilesAsync; older/other callers use InspectRepoAsync. Stub
+        // both with the same canned detail so either resolution path sees the seeded files.
+        Task<GgufRepoDetail> Detail(NSubstitute.Core.CallInfo callInfo)
+        {
+            return Task.FromResult(new GgufRepoDetail(callInfo.ArgAt<string>(0), false, "apache-2.0", files));
+        }
+
+        discovery.ListRepoFilesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Detail);
+        discovery.InspectRepoAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Detail);
         return discovery;
     }
 
