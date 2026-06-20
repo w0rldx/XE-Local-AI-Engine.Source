@@ -111,6 +111,33 @@ internal static class ModelFitMapper
     }
 
     // -----------------------------------------------------------------------
+    // GGUF repo inspection (per-file quants) → response
+    // -----------------------------------------------------------------------
+
+    public static InspectGgufRepositoryResponse ToResponse(this GgufRepoDetail detail)
+    {
+        ArgumentNullException.ThrowIfNull(detail);
+
+        return new InspectGgufRepositoryResponse
+        {
+            RepoId = detail.RepoId,
+            // Smallest-first so the picker leads with the lightest quant; the UI can re-sort.
+            Files = [.. detail.Files.OrderBy(static file => file.SizeBytes).Select(static file => file.ToFileResponse())]
+        };
+    }
+
+    private static GgufRepositoryFileResponse ToFileResponse(this GgufRepoFile file)
+    {
+        return new GgufRepositoryFileResponse
+        {
+            FileName = file.FileName,
+            Quant = file.Quant,
+            IsDynamic = GgufQuantParser.IsDynamic(file.Quant),
+            SizeBytes = file.SizeBytes
+        };
+    }
+
+    // -----------------------------------------------------------------------
     // Running process health → response
     // -----------------------------------------------------------------------
 

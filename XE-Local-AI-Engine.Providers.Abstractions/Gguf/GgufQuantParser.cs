@@ -8,16 +8,28 @@ using System.Text.RegularExpressions;
 ///     store (selecting a file by quant). Returns <see langword="null" /> when no recognizable quant token is present so
 ///     callers can skip an unparseable file rather than dropping the whole repo.
 /// </summary>
+/// <remarks>
+///     Unsloth "Dynamic" quants carry a <c>UD-</c> marker in the filename (e.g.
+///     <c>gemma-3-12b-it-UD-Q4_K_XL.gguf</c>). The marker is preserved as part of the canonical token
+///     (<c>UD-Q4_K_XL</c>) so a Dynamic quant is a distinct, selectable identity rather than silently collapsing onto
+///     its base token — a repo can ship both <c>Q4_K_M</c> and <c>UD-Q4_K_M</c>. Use <see cref="IsDynamic" /> /
+///     <see cref="StripDynamicPrefix" /> to compare a Dynamic quant against a base quant.
+/// </remarks>
 public static partial class GgufQuantParser
 {
-    // Matches the common llama.cpp quant tokens as a whole token (delimited by '-', '.', '_' or string bounds).
+    /// <summary>The canonical marker prefix for an Unsloth "Dynamic" (UD) quant (e.g. <c>UD-Q4_K_XL</c>).</summary>
+    public const string DynamicPrefix = "UD-";
+
+    // Matches the common llama.cpp quant tokens as a whole token (delimited by '-', '.', '_' or string bounds),
+    // with an optional Unsloth "Dynamic" UD- (or UD_) marker captured separately (group 1) so it can be preserved.
     // Alternatives are ordered longest-first so e.g. Q3_K_XL wins over Q3_K and Q4_0_4_4 (ARM) wins over Q4_0:
     //   K-quants: Q2_K, Q3_K_S/M/L/XL, Q4_K_S/M/L, Q5_K_S/M/L, Q6_K(_L), Q8_0
     //   legacy:   Q4_0, Q4_1, Q5_0, Q5_1 ; ARM: Q4_0_4_4/4_8/8_8
     //   IQ:       IQ1_S/M, IQ2_XXS/XS/S/M, IQ3_XXS/XS/S/M, IQ4_XS/NL
     //   floats:   F16/FP16, BF16, F32/FP32, F64
+    //   Unsloth:  an optional UD- prefix on any of the above (UD-Q4_K_XL, UD-IQ2_M, ...)
     // Verified live 2026-06-18 against bartowski/unsloth GGUF filenames (incl. multi-part -00001-of-00002 suffixes).
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(IQ[1-4]_(?:XXS|XS|S|M|NL)|Q[2-8]_K_(?:XL|S|M|L)|Q[2-8]_K|Q4_0_(?:4_4|4_8|8_8)|Q[2-8]_[01]|BF16|FP16|FP32|F16|F32|F64)(?![A-Za-z0-9])",
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(UD[-_])?(IQ[1-4]_(?:XXS|XS|S|M|NL)|Q[2-8]_K_(?:XL|S|M|L)|Q[2-8]_K|Q4_0_(?:4_4|4_8|8_8)|Q[2-8]_[01]|BF16|FP16|FP32|F16|F32|F64)(?![A-Za-z0-9])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex QuantRegex();
 
@@ -36,7 +48,30 @@ public static partial class GgufQuantParser
             last = match;
         }
 
-        return last is not null ? NormalizeCasing(last.Groups[1].Value) : null;
+        if (last is null)
+        {
+            return null;
+        }
+
+        // Group 2 is the base quant token; group 1 is the optional Unsloth Dynamic marker — preserve it so the
+        // Dynamic quant stays a distinct identity (UD-Q4_K_XL), normalized to the canonical UD- form.
+        var quant = NormalizeCasing(last.Groups[2].Value);
+        return last.Groups[1].Success ? DynamicPrefix + quant : quant;
+    }
+
+    /// <summary>Whether <paramref name="quant" /> carries the Unsloth Dynamic (UD) marker (e.g. <c>UD-Q4_K_XL</c>).</summary>
+    public static bool IsDynamic(string quant)
+    {
+        ArgumentNullException.ThrowIfNull(quant);
+        return quant.StartsWith("UD-", StringComparison.OrdinalIgnoreCase)
+               || quant.StartsWith("UD_", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Returns the base quant with any Unsloth Dynamic (UD) marker removed (e.g. <c>UD-Q4_K_XL</c> → <c>Q4_K_XL</c>).</summary>
+    public static string StripDynamicPrefix(string quant)
+    {
+        ArgumentNullException.ThrowIfNull(quant);
+        return IsDynamic(quant) ? quant[3..] : quant;
     }
 
     private static string NormalizeCasing(string token)

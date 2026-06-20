@@ -1616,7 +1616,18 @@
 				"alreadyInFlight": "That download is already in progress.",
 				"error": "Could not start the download.",
 				"cancelled": "Download cancelled.",
-				"cancelError": "Could not cancel the download."
+				"cancelError": "Could not cancel the download.",
+				"selectQuant": "Select a quant to download",
+				"confirm": "Download",
+				"inspecting": "Loading quants…",
+				"inspectError": "Could not load this repository's files.",
+				"noFiles": "No downloadable GGUF files found.",
+				"dynamic": "Dynamic",
+				"columns": {
+					"quant": "Quant",
+					"size": "Size"
+				},
+				"defaultFallback": "Download default quant (Q4_K_M)"
 			},
 			"running": {
 				"title": "Running models",

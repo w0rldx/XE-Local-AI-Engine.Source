@@ -242,6 +242,10 @@ public static class LocalApiRoutes
         // GGUF repo discovery (IHuggingFaceGgufDiscovery search). The literal "browse" segment keeps it distinct.
         public const string GgufBrowse = "model-fit/gguf/browse";
 
+        // Per-repo GGUF file inspection (IHuggingFaceGgufDiscovery inspect): the selectable quants + sizes for one
+        // repo, so the browse UI can offer a quant picker. The literal "inspect" segment keeps it distinct.
+        public const string GgufInspect = "model-fit/gguf/inspect";
+
         // Download a chosen GGUF file (IGgufModelStore) — starts a background, cancellable download keyed by
         // model name; the cancel action signals the in-flight download's token.
         public const string Download = "model-fit/download";

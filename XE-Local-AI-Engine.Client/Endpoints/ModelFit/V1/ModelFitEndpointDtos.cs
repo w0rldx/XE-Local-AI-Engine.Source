@@ -196,6 +196,39 @@ public sealed class BrowseGgufRepositoriesResponse
     public required IReadOnlyList<GgufRepositoryResponse> Items { get; init; }
 }
 
+/// <summary>
+///     Query-string request for <c>GET model-fit/gguf/inspect</c>. <see cref="RepoId" /> is the <c>org/name</c> repo to
+///     inspect for its selectable <c>.gguf</c> files (quants + sizes). No raw command or path is accepted.
+/// </summary>
+public sealed class InspectGgufRepositoryRequest
+{
+    public string? RepoId { get; init; }
+}
+
+/// <summary>
+///     Sanitized per-file row from a repo inspection: the quant a downloader selects plus its size. <see cref="IsDynamic" />
+///     flags an Unsloth "Dynamic" (<c>UD-</c>) quant so the picker can badge it. No token, no internal URL, no path.
+/// </summary>
+public sealed class GgufRepositoryFileResponse
+{
+    public required string FileName { get; init; }
+
+    public required string Quant { get; init; }
+
+    /// <summary>Whether the quant is an Unsloth Dynamic (<c>UD-</c>) quant (e.g. <c>UD-Q4_K_XL</c>).</summary>
+    public required bool IsDynamic { get; init; }
+
+    public required long SizeBytes { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET model-fit/gguf/inspect</c>: the repo id plus its selectable GGUF files.</summary>
+public sealed class InspectGgufRepositoryResponse
+{
+    public required string RepoId { get; init; }
+
+    public required IReadOnlyList<GgufRepositoryFileResponse> Files { get; init; }
+}
+
 // ---------------------------------------------------------------------------
 // Download request/response DTOs (GGUF store + cancel registry)
 // ---------------------------------------------------------------------------

@@ -133,6 +133,87 @@ public sealed class GgufDiscoveryTests
     }
 
     [Test]
+    public async Task GgufDiscovery_InspectsRepo_PreservesUnslothDynamicQuantMarker()
+    {
+        // An Unsloth repo shipping a Dynamic (UD-) file plus a plain file; the UD- marker is preserved as a distinct
+        // per-file quant so each is independently selectable.
+        var detail = $$"""
+                       {
+                         "id": "unsloth/gemma-3-12b-it-GGUF",
+                         "sha": "{{Commit}}",
+                         "gated": false,
+                         "siblings": [
+                           { "rfilename": "gemma-3-12b-it-UD-Q4_K_XL.gguf", "size": 7000000000,
+                             "lfs": { "sha256": "aaaa", "size": 7000000000 } },
+                           { "rfilename": "gemma-3-12b-it-Q4_K_M.gguf", "size": 6900000000,
+                             "lfs": { "sha256": "bbbb", "size": 6900000000 } }
+                         ]
+                       }
+                       """;
+
+        using var harness = BuildHarness(repoDetail: detail, headerBytes: MinimalHeaderBytes());
+
+        var result = await harness.Discovery.InspectRepoAsync("unsloth/gemma-3-12b-it-GGUF", CancellationToken.None);
+
+        AssertEx.Equal(2, result.Files.Count);
+        AssertEx.Equal("UD-Q4_K_XL", result.Files.Single(f => f.FileName.Contains("UD-Q4_K_XL", StringComparison.Ordinal)).Quant);
+        AssertEx.Equal("Q4_K_M", result.Files.Single(f => f.FileName.Contains("it-Q4_K_M", StringComparison.Ordinal)).Quant);
+    }
+
+    [Test]
+    public async Task GgufDiscovery_InspectsRepo_ExcludesProjectorFiles()
+    {
+        // A multimodal repo ships an mmproj projector companion alongside the real weights; the projector is not a
+        // selectable model file and must be excluded from inspection.
+        var detail = $$"""
+                       {
+                         "id": "{{RepoId}}",
+                         "sha": "{{Commit}}",
+                         "gated": false,
+                         "siblings": [
+                           { "rfilename": "model-Q4_K_M.gguf", "size": 100, "lfs": { "sha256": "aaaa", "size": 100 } },
+                           { "rfilename": "mmproj-F16.gguf", "size": 50, "lfs": { "sha256": "bbbb", "size": 50 } }
+                         ]
+                       }
+                       """;
+
+        using var harness = BuildHarness(repoDetail: detail, headerBytes: MinimalHeaderBytes());
+
+        var result = await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None);
+
+        AssertEx.Equal(1, result.Files.Count);
+        AssertEx.Equal("model-Q4_K_M.gguf", result.Files.Single().FileName);
+    }
+
+    [Test]
+    public async Task GgufDiscovery_ListRepoFiles_SkipsHeaderReads_AndExcludesProjectors()
+    {
+        var detail = $$"""
+                       {
+                         "id": "{{RepoId}}",
+                         "sha": "{{Commit}}",
+                         "gated": false,
+                         "siblings": [
+                           { "rfilename": "model-Q4_K_M.gguf", "size": 2048, "lfs": { "sha256": "aaaa", "size": 2048 } },
+                           { "rfilename": "mmproj-F16.gguf", "size": 50, "lfs": { "sha256": "bbbb", "size": 50 } }
+                         ]
+                       }
+                       """;
+
+        using var harness = BuildHarness(repoDetail: detail, headerBytes: MinimalHeaderBytes());
+
+        var result = await harness.Discovery.ListRepoFilesAsync(RepoId, CancellationToken.None);
+
+        // mmproj excluded; the real file is present with its quant + size but NO header metadata (the range read is skipped).
+        var file = result.Files.Single();
+        AssertEx.Equal("model-Q4_K_M.gguf", file.FileName);
+        AssertEx.Equal("Q4_K_M", file.Quant);
+        AssertEx.Equal(2048L, file.SizeBytes);
+        AssertEx.Null(file.Architecture);
+        AssertEx.Null(file.ContextLength);
+    }
+
+    [Test]
     public async Task GgufDiscovery_InspectsRepo_ReturnsGgufHeaderMetadata_ViaRangeRead()
     {
         var detail = $$"""

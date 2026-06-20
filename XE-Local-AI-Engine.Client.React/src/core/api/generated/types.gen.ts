@@ -441,6 +441,22 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequ
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
+	repoId?: string;
+	files?: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = {
+	fileName?: string;
+	quant?: string;
+	isDynamic?: boolean;
+	sizeBytes?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse>;
 };
@@ -857,7 +873,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = {
 	invocationId?: string;
 	conversationId?: string;
-	status?: C0ReAiSharedContractsEnumsInvocationStatus;
+	status?: XeLocalAiEngineAiContractsEnumsInvocationStatus;
 	modelUsed?: string | null;
 	startedAt?: string;
 	lastUpdatedAt?: string;
@@ -870,7 +886,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse
 	hasPendingApproval?: boolean;
 };
 
-export type C0ReAiSharedContractsEnumsInvocationStatus =
+export type XeLocalAiEngineAiContractsEnumsInvocationStatus =
 	| "Pending"
 	| "Assigned"
 	| "Running"
@@ -893,7 +909,7 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = {
 	invocationId?: string;
 	conversationId?: string;
-	status?: C0ReAiSharedContractsEnumsInvocationStatus;
+	status?: XeLocalAiEngineAiContractsEnumsInvocationStatus;
 	modelUsed?: string | null;
 	startedAt?: string;
 	completedAt?: string;
@@ -2427,6 +2443,35 @@ export type GetLatestRecommendationsResponses = {
 };
 
 export type GetLatestRecommendationsResponse = GetLatestRecommendationsResponses[keyof GetLatestRecommendationsResponses];
+
+export type InspectGgufRepositoryData = {
+	body?: never;
+	path?: never;
+	query?: {
+		repoId?: string | null;
+	};
+	url: "/api/local/v1/model-fit/gguf/inspect";
+};
+
+export type InspectGgufRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type InspectGgufRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse;
+};
+
+export type InspectGgufRepositoryResponse = InspectGgufRepositoryResponses[keyof InspectGgufRepositoryResponses];
 
 export type ListRunningModelsData = {
 	body?: never;

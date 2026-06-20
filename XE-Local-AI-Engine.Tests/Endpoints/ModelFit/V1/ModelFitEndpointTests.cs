@@ -38,6 +38,11 @@ public sealed class ModelFitEndpointTests
         return $"{ApiPrefix}/model-fit/gguf/browse";
     }
 
+    private static string GgufInspectRoute()
+    {
+        return $"{ApiPrefix}/model-fit/gguf/inspect";
+    }
+
     private static string RunningRoute()
     {
         return $"{ApiPrefix}/model-fit/running";
@@ -245,6 +250,49 @@ public sealed class ModelFitEndpointTests
         using var doc = JsonDocument.Parse(json);
         AssertEx.True(doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array,
             "Browse response must wrap results in an 'items' array.");
+    }
+
+    [Test]
+    public async Task GgufInspect_WhenNoBearerToken_ReturnsUnauthorized()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync($"{GgufInspectRoute()}?repoId=org/some-GGUF").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Test]
+    public async Task GgufInspect_WhenAuthorized_ReturnsFilesArray()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        // No network in the test host → inspection fails → the endpoint degrades to an OK-empty file list (never a 500).
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{GgufInspectRoute()}?repoId=unsloth/gemma-3-12b-it-GGUF");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        AssertEx.True(doc.RootElement.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array,
+            "Inspect response must wrap files in a 'files' array.");
+        AssertEx.Equal("unsloth/gemma-3-12b-it-GGUF", doc.RootElement.GetProperty("repoId").GetString());
+    }
+
+    [Test]
+    public async Task GgufInspect_WhenRepoIdMissing_ReturnsValidationError()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, GgufInspectRoute());
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Test]

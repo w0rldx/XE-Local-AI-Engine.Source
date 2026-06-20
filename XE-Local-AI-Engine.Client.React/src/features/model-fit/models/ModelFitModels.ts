@@ -92,6 +92,22 @@ export interface GgufRepository {
 	readonly hasUsableGguf: boolean;
 }
 
+// Domain view-model for one selectable .gguf file inside a repo (the quant picker rows). isDynamic flags an Unsloth
+// "Dynamic" (UD-) quant so the UI can badge it; sizeBytes drives the size column. fileName is the exact file the
+// download requests verbatim (so a chosen quant resolves unambiguously, including UD- quants).
+export interface GgufRepositoryFile {
+	readonly fileName: string;
+	readonly quant: string;
+	readonly isDynamic: boolean;
+	readonly sizeBytes: number;
+}
+
+// Domain view-model for one repo's inspected detail: its selectable GGUF files (quants) keyed by repo id.
+export interface GgufRepositoryDetail {
+	readonly repoId: string;
+	readonly files: readonly GgufRepositoryFile[];
+}
+
 // Domain view-model for one running (loaded) local model the supervisor reports. role distinguishes chat/embedding
 // roles; isResponsive + detail surface liveness for the eject UI.
 export interface RunningModel {

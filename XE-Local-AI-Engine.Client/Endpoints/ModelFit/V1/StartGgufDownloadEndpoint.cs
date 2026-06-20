@@ -40,7 +40,7 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
             Revision = string.IsNullOrWhiteSpace(req.Revision) ? null : req.Revision.Trim()
         };
 
-        var ticket = _downloadCoordinator.Start(request);
+        var ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
         await Send.OkAsync(new StartGgufDownloadResponse
             {
                 ModelName = ticket.ModelName,

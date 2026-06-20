@@ -8,6 +8,7 @@ import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/model-fit/components/DownloadProgressPanel";
 import { GgufBrowsePanel } from "@/features/model-fit/components/GgufBrowsePanel";
+import { GgufDownloadDialog } from "@/features/model-fit/components/GgufDownloadDialog";
 import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
 import { HfTokenPanel } from "@/features/model-fit/components/HfTokenPanel";
 import { LlamaCppVersionPanel } from "@/features/model-fit/components/LlamaCppVersionPanel";
@@ -18,6 +19,7 @@ import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelF
 import {
 	defaultGgufQuant,
 	type GgufRepository,
+	type GgufRepositoryFile,
 	type LlamaCppVariant,
 	type ModelFitRecommendation,
 	type ModelFitUseCase,
@@ -67,6 +69,9 @@ export function ModelRecommendationsPage() {
 	// The llama.cpp version GET may trigger the first prebuilt binary download backend-side, so it must not run on
 	// mount. Flipped on only when the operator explicitly clicks "Check version" in the llama.cpp panel.
 	const [versionChecked, setVersionChecked] = useState(false);
+	// The repo whose quant picker dialog is open (null = closed). Selecting a browse row opens the dialog so the
+	// operator picks the exact quant (incl. Unsloth Dynamic UD- quants) instead of always pulling the default Q4_K_M.
+	const [downloadRepo, setDownloadRepo] = useState<GgufRepository | null>(null);
 
 	const filters = useMemo(() => ({ useCase }), [useCase]);
 	const latestQuery = useLatestRecommendations(filters);
@@ -162,8 +167,23 @@ export function ModelRecommendationsPage() {
 		}
 	};
 
+	// Opens the quant picker for a browse row instead of immediately pulling the default quant.
 	const handleBrowseDownload = (repository: GgufRepository): void => {
-		startGgufDownload(repository.repoId, undefined, defaultGgufQuant);
+		setDownloadRepo(repository);
+	};
+
+	// Confirms a specific quant from the picker: downloads the exact chosen file (fileName is resolved verbatim by the
+	// backend, so a Dynamic UD- quant downloads unambiguously) and closes the dialog.
+	const handleConfirmQuantDownload = (repoId: string, file: GgufRepositoryFile): void => {
+		startGgufDownload(repoId, file.fileName, file.quant);
+		setDownloadRepo(null);
+	};
+
+	// Fallback used when the picker has no files to offer (degraded/unreachable inspection): download the default quant
+	// by repo id only, restoring the pre-picker one-click capability so a degraded inspect never blocks downloading.
+	const handleConfirmDefaultDownload = (repoId: string): void => {
+		startGgufDownload(repoId, undefined, defaultGgufQuant);
+		setDownloadRepo(null);
 	};
 
 	const handleCancelDownload = (modelName: string): void => {
@@ -407,6 +427,14 @@ export function ModelRecommendationsPage() {
 					onSearch={setBrowseQuery}
 					onDownload={handleBrowseDownload}
 					downloadingRepoId={downloadingModelName}
+				/>
+
+				<GgufDownloadDialog
+					repository={downloadRepo}
+					onClose={() => setDownloadRepo(null)}
+					onConfirm={handleConfirmQuantDownload}
+					onConfirmDefault={handleConfirmDefaultDownload}
+					isDownloading={startDownload.isPending}
 				/>
 
 				<RunningModelsPanel

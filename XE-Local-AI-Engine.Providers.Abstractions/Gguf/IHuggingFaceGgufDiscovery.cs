@@ -13,7 +13,16 @@ public interface IHuggingFaceGgufDiscovery
 
     /// <summary>
     ///     Inspects one repo's actual <c>.gguf</c> files: per-file quant, byte size, integrity, and GGUF header metadata
-    ///     read via HTTP range request (no full download). Unparseable files are skipped, not repo-dropping.
+    ///     read via HTTP range request (no full download). Unparseable files and <c>mmproj</c> projector companions are
+    ///     skipped, not repo-dropping.
     /// </summary>
     Task<GgufRepoDetail> InspectRepoAsync(string repoId, CancellationToken ct);
+
+    /// <summary>
+    ///     Lists one repo's selectable <c>.gguf</c> files (per-file quant + byte size + integrity) WITHOUT the per-file
+    ///     GGUF header range-read — a lighter, faster inspection for interactive surfaces (the download quant picker)
+    ///     that do not need the header metadata. <c>mmproj</c> projector companions are excluded. The header fields on
+    ///     each returned <see cref="GgufRepoFile" /> are <see langword="null" />.
+    /// </summary>
+    Task<GgufRepoDetail> ListRepoFilesAsync(string repoId, CancellationToken ct);
 }

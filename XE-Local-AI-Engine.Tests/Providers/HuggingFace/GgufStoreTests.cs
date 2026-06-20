@@ -114,6 +114,102 @@ public sealed class GgufStoreTests
     }
 
     [Test]
+    public async Task GgufStore_EnsureModel_ResolvesExplicitUnslothDynamicQuant()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        // A repo offering both a plain and a Dynamic quant; the request pins the Dynamic one.
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q4_K_M.gguf", "Q4_K_M", 10),
+            Infra.RepoFile("Demo-Model-UD-Q4_K_XL.gguf", "UD-Q4_K_XL", ModelBytes.Length));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = "UD-Q4_K_XL"
+        }, null, CancellationToken.None);
+
+        AssertEx.Equal("UD-Q4_K_XL", handle.Quant);
+        AssertEx.Equal("Demo-Model-UD-Q4_K_XL.gguf", Path.GetFileName(handle.LocalPath));
+        // The Dynamic marker round-trips into the canonical registry key (repo:UD-Q4_K_XL).
+        AssertEx.Equal(GgufModelName.Format(Infra.RepoId, "UD-Q4_K_XL"), handle.ModelName);
+    }
+
+    [Test]
+    public async Task GgufStore_EnsureModel_BaseQuantFallsBackToUnslothDynamic_WhenNoPlainFile()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        // A UD-only repo: the default quant (Q4_K_M) has no exact file and must fall back to the Dynamic variant.
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-UD-Q4_K_M.gguf", "UD-Q4_K_M", ModelBytes.Length));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
+
+        AssertEx.Equal("UD-Q4_K_M", handle.Quant);
+        AssertEx.Equal("Demo-Model-UD-Q4_K_M.gguf", Path.GetFileName(handle.LocalPath));
+    }
+
+    [Test]
+    public async Task GgufStore_EnsureModel_BaseQuantPrefersPlainOverDynamic_WhenBothExist()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        // Both a plain and a Dynamic Q4_K_M exist; a bare Q4_K_M request must pick the exact (plain) one.
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q4_K_M.gguf", "Q4_K_M", ModelBytes.Length),
+            Infra.RepoFile("Demo-Model-UD-Q4_K_M.gguf", "UD-Q4_K_M", 10));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = "Q4_K_M"
+        }, null, CancellationToken.None);
+
+        AssertEx.Equal("Q4_K_M", handle.Quant);
+        AssertEx.Equal("Demo-Model-Q4_K_M.gguf", Path.GetFileName(handle.LocalPath));
+    }
+
+    [Test]
+    public async Task GgufStore_EnsureModel_ExplicitDynamicQuant_DoesNotFallBackToPlain()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+            throw new InvalidOperationException("No download must occur when the Dynamic quant is absent."));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        // Only a plain Q4_K_M exists; an explicit UD- request must NOT silently resolve to it.
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q4_K_M.gguf", "Q4_K_M", ModelBytes.Length));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId,
+            Quant = "UD-Q4_K_M"
+        }, null, CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.NotFound, exception.Reason);
+        AssertEx.Equal(0, handler.CallCount);
+    }
+
+    [Test]
     public async Task GgufStore_Resume_ContinuesFromPartialPart_AcrossRuns()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
