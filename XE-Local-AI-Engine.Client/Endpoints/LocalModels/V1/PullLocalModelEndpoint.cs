@@ -3,14 +3,18 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 public sealed class PullLocalModelEndpoint(
     IOllamaModelService modelService,
+    IModelProviderMapStore modelProviderMapStore,
     ModelNameValidator modelNameValidator) : Endpoint<PullLocalModelRequest, PullLocalModelResponse>
 {
+    private readonly IModelProviderMapStore _modelProviderMapStore = modelProviderMapStore ?? throw new ArgumentNullException(nameof(modelProviderMapStore));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
 
@@ -38,6 +42,11 @@ public sealed class PullLocalModelEndpoint(
             totalBytes = progress.Total;
             completedBytes = progress.Completed;
         }
+
+        // Explicitly route this Ollama model to the Ollama runtime: the unmapped-routing default is now "llamacpp", so a
+        // node-pulled Ollama model must persist a "ollama" map row or a later send would dial llama.cpp by default.
+        // Symmetric to the GGUF download coordinator's llamacpp map-write.
+        await _modelProviderMapStore.UpsertAsync(modelName, OllamaLocalModelProvider.OllamaProviderName, ct).ConfigureAwait(false);
 
         await Send.OkAsync(LocalModelsMapper.ToPullResponse(modelName, status, totalBytes, completedBytes), ct).ConfigureAwait(false);
     }
