@@ -7,6 +7,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Persistence boundary for cloud credential data.
@@ -22,15 +23,15 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     private readonly IDataProtector _protector;
 
     public CloudCredentialStore(IDataProtectionProvider dataProtectionProvider,
-        IHostEnvironment hostEnvironment,
+        INodeDataDirectory dataDirectory,
         ILogger<CloudCredentialStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataProtectionProvider);
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(logger);
 
         _protector = dataProtectionProvider.CreateProtector("WorkerNode.CloudCredentialStore.v1");
-        _credentialsPath = Path.Combine(hostEnvironment.ContentRootPath, CredentialsFileName);
+        _credentialsPath = Path.Combine(dataDirectory.Root, CredentialsFileName);
         _logger = logger;
     }
 

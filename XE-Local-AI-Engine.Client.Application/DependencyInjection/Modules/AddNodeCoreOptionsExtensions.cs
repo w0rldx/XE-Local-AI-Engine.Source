@@ -4,7 +4,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using ClientSecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 internal static class AddNodeCoreOptionsExtensions
@@ -41,6 +43,13 @@ internal static class AddNodeCoreOptionsExtensions
                .Validate(static options => options.StartupLockPollInterval > TimeSpan.Zero, "Startup lock poll interval must be greater than zero.")
                .ValidateOnStart();
         builder.Services.AddOptions<WorkerShutdownDrainOptions>();
+
+        // The single source of truth for the per-node runtime-state directory. Registered first (foundational): the
+        // settings store, the encrypted credential stores, the cert-pin store, the AgentHome workspace, and the hardware
+        // profiler all root their files at INodeDataDirectory.Root instead of IHostEnvironment.ContentRootPath. In desktop
+        // mode DesktopBootstrap points it at the per-user data dir; everywhere else it falls back to the content root, so
+        // off the desktop flag every consumer reads/writes exactly where it did before.
+        builder.Services.AddSingleton<INodeDataDirectory, NodeDataDirectory>();
 
         builder.Services.AddSingleton<IValidateOptions<CentralPlatformOptions>, CentralPlatformOptionsValidator>();
         builder.Services.AddSingleton<IValidateOptions<WorkerNodeOptions>, WorkerNodeOptionsValidator>();

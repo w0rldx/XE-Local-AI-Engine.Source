@@ -90,6 +90,27 @@ public sealed class HfTokenStoreTests : IDisposable
     }
 
     [Test]
+    public async Task SetToken_WritesTokenUnderDataDirectory_NotContentRoot()
+    {
+        // The encrypted HF token must land in the per-user data dir, never in the shared/shipped content root.
+        var contentRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(contentRoot);
+        try
+        {
+            using var store = CreateStore();
+
+            await store.SetTokenAsync(Token, CancellationToken.None);
+
+            AssertEx.True(File.Exists(GetTokenPath()), "the token must be written under the data dir.");
+            AssertEx.False(File.Exists(Path.Combine(contentRoot, "hf-token.enc")), "no token may land in the content root.");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, true);
+        }
+    }
+
+    [Test]
     public async Task SetToken_RejectsBlankToken()
     {
         using var store = CreateStore();
@@ -101,11 +122,8 @@ public sealed class HfTokenStoreTests : IDisposable
     {
         Directory.CreateDirectory(_contentRootPath);
 
-        var hostEnvironment = Substitute.For<IHostEnvironment>();
-        hostEnvironment.ContentRootPath.Returns(_contentRootPath);
-
         return new HfTokenStore(dataProtectionProvider ?? new MockDataProtector(),
-            hostEnvironment,
+            new FakeNodeDataDirectory(_contentRootPath),
             NullLogger<HfTokenStore>.Instance);
     }
 

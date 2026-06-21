@@ -18,8 +18,14 @@
 
   <ItemGroup>
     <!-- IDataProtectionProvider / IDataProtector for the encrypted token store (mirrors CloudCredentialStore),
-         plus IHostEnvironment / ILogger from the shared framework. No NuGet pin needed. -->
+         plus ILogger from the shared framework. No NuGet pin needed. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- INodeDataDirectory: the shared per-node runtime-state root. Lives in the lowest shared layer so this provider
+         can co-locate codex-oauth-tokens.enc under the per-user data dir instead of the shipped install/ContentRoot dir. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

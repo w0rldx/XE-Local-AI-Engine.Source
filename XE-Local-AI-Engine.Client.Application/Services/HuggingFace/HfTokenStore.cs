@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// <summary>
 ///     Encrypted-at-rest store for the optional Hugging Face access token (third instance of the
 ///     <c>CloudCredentialStore</c> / <c>TokenStore</c> <see cref="IDataProtector" /> pattern). The token is protected
-///     with the <c>WorkerNode.HfTokenStore.v1</c> protector and written to <c>hf-token.enc</c> under the content root.
+///     with the <c>WorkerNode.HfTokenStore.v1</c> protector and written to <c>hf-token.enc</c> under the node data dir.
 ///     It is exposed only via <see cref="GetTokenAsync" /> to the download client and is never logged, never placed in
 ///     exceptions, and never indexed.
 /// </summary>
@@ -25,15 +25,15 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     private readonly string _tokenPath;
 
     public HfTokenStore(IDataProtectionProvider dataProtectionProvider,
-        IHostEnvironment hostEnvironment,
+        INodeDataDirectory dataDirectory,
         ILogger<HfTokenStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataProtectionProvider);
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(logger);
 
         _protector = dataProtectionProvider.CreateProtector("WorkerNode.HfTokenStore.v1");
-        _tokenPath = Path.Combine(hostEnvironment.ContentRootPath, TokenFileName);
+        _tokenPath = Path.Combine(dataDirectory.Root, TokenFileName);
         _logger = logger;
     }
 

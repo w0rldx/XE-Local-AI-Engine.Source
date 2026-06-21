@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Persistence boundary for node settings data.
@@ -18,11 +19,11 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     private readonly ILogger<NodeSettingsStore> _logger;
     private readonly string _settingsPath;
 
-    public NodeSettingsStore(IHostEnvironment hostEnvironment, ILogger<NodeSettingsStore> logger)
+    public NodeSettingsStore(INodeDataDirectory dataDirectory, ILogger<NodeSettingsStore> logger)
     {
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _settingsPath = Path.Combine(hostEnvironment.ContentRootPath, SettingsFileName);
+        _settingsPath = Path.Combine(dataDirectory.Root, SettingsFileName);
     }
 
     public void Dispose()
@@ -71,12 +72,28 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using var fileStream = File.Create(_settingsPath);
-            await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            await using (var fileStream = File.Create(_settingsPath))
+            {
+                await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            ApplyOwnerOnlyPermissions();
         }
         finally
         {
             _lock.Release();
+        }
+    }
+
+    /// <summary>
+    ///     On non-Windows restrict the settings file to owner read/write (0600), matching the key-file posture. Windows
+    ///     relies on the per-user data-directory ACL instead — <see cref="File.SetUnixFileMode" /> is unsupported there.
+    /// </summary>
+    private void ApplyOwnerOnlyPermissions()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(_settingsPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
     }
 

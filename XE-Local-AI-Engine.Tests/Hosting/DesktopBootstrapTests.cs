@@ -75,6 +75,30 @@ public sealed class DesktopBootstrapTests
     }
 
     [Test]
+    public void EnsureLocalDataConfiguration_SetsNodeDataDirectory_InDesktopMode()
+    {
+        using var temp = new TempDirectory();
+        using var configuration = new ConfigurationManager();
+
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        // The node-data-directory abstraction reads this key; in desktop mode it must point at the per-user data dir so
+        // every per-node runtime artifact (settings, the encrypted credential stores, cert pins, the AgentHome
+        // workspace, the hardware-profile cache) is co-located there instead of the shared install dir.
+        AssertEx.Equal(temp.DataDirectory, configuration[DesktopBootstrap.NodeDataDirectoryKey]);
+    }
+
+    [Test]
+    public void NodeDataDirectoryKey_IsUnset_WhenBootstrapNotInvoked()
+    {
+        // Off the desktop flag DesktopBootstrap is never reached, so the key stays unset and INodeDataDirectory falls
+        // back to ContentRootPath — the off-flag byte-behavior invariant.
+        using var configuration = new ConfigurationManager();
+
+        AssertEx.Null(configuration[DesktopBootstrap.NodeDataDirectoryKey]);
+    }
+
+    [Test]
     public void EnsureLocalDataConfiguration_PopulatesModelsDirectoryUnderDataDirectory()
     {
         using var temp = new TempDirectory();

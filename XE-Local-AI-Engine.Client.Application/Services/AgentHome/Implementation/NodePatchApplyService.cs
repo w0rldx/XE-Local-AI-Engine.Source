@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Applies exported <c>changes.patch</c> files onto trusted host selected folders. Each sandbox-relative
@@ -34,7 +35,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     private const string DiffHeaderPrefix = "diff --git ";
     private const string ProviderName = "host-patch-apply";
 
-    private readonly string _contentRootPath;
+    private readonly string _dataDirectoryRoot;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILogger<NodePatchApplyService> _logger;
     private readonly AgentHomeOptions _options;
@@ -43,16 +44,16 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
 
     public NodePatchApplyService(ISelectedFolderResolver resolver,
         IOptions<AgentHomeOptions> options,
-        IHostEnvironment hostEnvironment,
+        INodeDataDirectory dataDirectory,
         IAgentHomeIdentityProvider identityProvider,
         IServiceScopeFactory scopeFactory,
         ILogger<NodePatchApplyService> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _options = options.Value;
-        _contentRootPath = hostEnvironment.ContentRootPath;
+        _dataDirectoryRoot = dataDirectory.Root;
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -455,7 +456,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     private string ResolveAgentHomeRoot()
     {
         var baseRoot = string.IsNullOrWhiteSpace(_options.RootPath)
-            ? Path.Combine(_contentRootPath, DefaultRootDirectoryName)
+            ? Path.Combine(_dataDirectoryRoot, DefaultRootDirectoryName)
             : _options.RootPath;
         return Path.Combine(baseRoot, AgentHomeDirectoryName);
     }

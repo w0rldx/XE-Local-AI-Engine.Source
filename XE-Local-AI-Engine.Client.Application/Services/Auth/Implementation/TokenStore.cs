@@ -7,6 +7,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Persistence boundary for token data.
@@ -26,16 +27,16 @@ public sealed class TokenStore : ITokenStore, IDisposable
     private StoredWorkerCredentials? _credentials;
 
     public TokenStore(IDataProtectionProvider dataProtectionProvider,
-        IHostEnvironment hostEnvironment,
+        INodeDataDirectory dataDirectory,
         ILogger<TokenStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataProtectionProvider);
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(logger);
 
         _protector = dataProtectionProvider.CreateProtector("WorkerNode.TokenStore.v1");
         _logger = logger;
-        _credentialsPath = Path.Combine(hostEnvironment.ContentRootPath, CredentialsFileName);
+        _credentialsPath = Path.Combine(dataDirectory.Root, CredentialsFileName);
 
         _credentials = LoadCredentialsFromDisk();
     }

@@ -24,6 +24,14 @@ internal static class DesktopBootstrap
     /// <summary>Configuration key the EF connection-string consumers read via <c>GetConnectionString("node-sqlite")</c>.</summary>
     internal const string NodeSqliteConnectionStringKey = "ConnectionStrings:node-sqlite";
 
+    /// <summary>
+    ///     Configuration key the node-data-directory abstraction (<c>INodeDataDirectory</c>) reads. Set to the per-user
+    ///     data dir so every per-node runtime artifact (settings, the encrypted credential stores, cert pins, the
+    ///     AgentHome workspace, the hardware-profile cache) lands beside <c>node.sqlite</c>/<c>node.key</c> rather than in
+    ///     the shared/shipped install directory.
+    /// </summary>
+    internal const string NodeDataDirectoryKey = "NodeData:Directory";
+
     /// <summary>The per-user application data sub-directory that holds the desktop database, key, and models.</summary>
     internal const string ApplicationDataFolderName = "XE-Local-AI-Engine";
 
@@ -69,6 +77,12 @@ internal static class DesktopBootstrap
         EnsureDirectory(dataDirectory);
 
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+        // Point the node-data-directory abstraction at the same per-user data dir the DB/key/models already use, so all
+        // per-node runtime state is co-located there instead of the shared install/ContentRoot dir. Desktop-only and
+        // unconditional: this in-memory layer is only reached behind the desktop flag, so headless/Aspire/CI never set it
+        // and INodeDataDirectory falls back to ContentRootPath (the off-flag byte-behavior invariant).
+        overrides[NodeDataDirectoryKey] = dataDirectory;
 
         if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("node-sqlite")))
         {

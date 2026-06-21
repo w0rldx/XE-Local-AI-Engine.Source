@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
@@ -52,9 +53,13 @@ internal static class AddNodeModelFitExtensions
         // The cross-platform hardware profiler (RAM/VRAM/GPU-vendor/CPU/free-disk), extracted out of the removed
         // HostAgent.Linux CapabilityDetector into the surviving Providers.Capabilities project so it compiles with ZERO
         // HostAgent.* references. Singleton — the profile is cached in-memory and re-probed only on forceRefresh:true.
-        // The free-disk figure is reported for the models volume, resolved here from the host content root (no
-        // Linux-specific default leaks in, unlike the old detector).
-        builder.Services.AddHardwareProfiler(builder.Environment.ContentRootPath);
+        // The free-disk figure is reported for the models volume, resolved here from the node data dir (the same root the
+        // INodeDataDirectory abstraction resolves: the per-user data dir in desktop mode, ContentRootPath otherwise — the
+        // profiler is registered with a plain string at config time, so it reads the NodeData:Directory key directly).
+        var dataDirectoryRoot = configuration[NodeDataDirectory.ConfigurationKey];
+        builder.Services.AddHardwareProfiler(string.IsNullOrWhiteSpace(dataDirectoryRoot)
+            ? builder.Environment.ContentRootPath
+            : dataDirectoryRoot);
 
         return builder;
     }

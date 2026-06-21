@@ -147,15 +147,11 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         var serviceProvider = new ServiceCollection()
                               .AddScoped(_ => resolver)
                               .BuildServiceProvider();
-        // RootPath is set on the options, so ContentRootPath is unused by ResolveAgentHomeRoot — the apply service and
+        // RootPath is set on the options, so the data-dir root is unused by ResolveAgentHomeRoot — the apply service and
         // the run service both resolve <RootPath>/agent-home, so the exported changes.patch is found.
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ContentRootPath = options.Value.RootPath ?? string.Empty
-        };
         return new NodePatchApplyService(resolver,
             options,
-            hostEnvironment,
+            new FakeNodeDataDirectory(options.Value.RootPath ?? string.Empty),
             new StaticIdentityProvider("owner-a", "node-1"),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -196,11 +192,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             RootPath = root,
             CommandTimeoutSeconds = 120
         });
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ContentRootPath = root
-        };
-        var manifestService = new AgentHomeManifestService(hostEnvironment, options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()
                               .AddScoped(_ => resolver)
@@ -322,14 +314,4 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         }
     }
 
-    private sealed class TestHostEnvironment : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "tests";
-
-        public string EnvironmentName { get; set; } = "Development";
-
-        public string ContentRootPath { get; set; } = string.Empty;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
 }
