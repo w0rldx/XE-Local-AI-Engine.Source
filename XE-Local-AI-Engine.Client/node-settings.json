@@ -1,4 +1,0 @@
-{
-  "maxMessageRequestTimeoutSeconds": 300,
-  "defaultModelName": "qwen3:0.6b"
-}

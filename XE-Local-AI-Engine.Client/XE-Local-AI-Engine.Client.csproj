@@ -23,6 +23,18 @@
     <NodeReactWebRootDir>$(MSBuildProjectDirectory)\wwwroot\</NodeReactWebRootDir>
   </PropertyGroup>
 
+  <!--
+    node-settings.json is RUNTIME state: NodeSettingsStore writes it to ContentRootPath at runtime (e.g. the selected
+    default model). The Web SDK's default content globbing would otherwise pick up a dev-created copy and PUBLISH it,
+    shipping a stale "defaultModelName" into the bundle — which makes first-run model provisioning think a model is
+    already selected and skip the GGUF download (empty model store). Exclude it from content/publish so it can never
+    ship; a fresh install must start with no settings file. (It is also .gitignored.)
+  -->
+  <ItemGroup>
+    <Content Remove="node-settings.json"/>
+    <None Remove="node-settings.json"/>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>

@@ -14,6 +14,12 @@ using System.Runtime.InteropServices;
 /// </remarks>
 public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 {
+    // Hard cap per probe tool. Without it a hung tool blocks forever: nvidia-smi can stall indefinitely under some
+    // Windows driver/WMI states, and the deprecated wmic can be very slow or absent. A hung GPU probe would otherwise
+    // freeze first-run model provisioning (SelectVariantAsync never returns) and the model is never downloaded. On
+    // timeout we kill the tool and treat the vendor as undetected — degrading to the CPU runtime, which always works.
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(8);
+
     /// <inheritdoc />
     public async Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct)
     {
@@ -83,9 +89,22 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
                 return null;
             }
 
-            var stdout = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
-            return process.ExitCode == 0 ? stdout : null;
+            // Bound the read+exit on a timeout linked to the caller's token so a hung tool can't block forever.
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(ProbeTimeout);
+            try
+            {
+                var stdout = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token).ConfigureAwait(false);
+                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+                return process.ExitCode == 0 ? stdout : null;
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                // The tool overran ProbeTimeout (e.g. nvidia-smi hanging). Kill it and report "vendor not detected"
+                // so detection degrades to the CPU floor instead of freezing provisioning.
+                TryKill(process);
+                return null;
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -95,6 +114,22 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         {
             // Tool missing / not on PATH / permission denied — treat as "vendor not detected", never fatal.
             return null;
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception)
+        {
+            // Best-effort: the process may have exited between the check and the kill, or be unkillable; either way
+            // the probe result (undetected) stands.
         }
     }
 }

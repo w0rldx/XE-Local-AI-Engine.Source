@@ -393,3 +393,6 @@ cloud-credentials.enc
 
 # Packaged RC bundles (build output, not source)
 /publish/dist/
+
+# Runtime node settings (written to ContentRootPath at runtime; must never be committed or shipped)
+node-settings.json

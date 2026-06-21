@@ -96,6 +96,10 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             return;
         }
 
+        // Visible entry marker so an operator log shows the service ran (and reached desktop mode) even when a later
+        // phase stalls. The desktop gate above stays silent to preserve the headless/CI off-flag invariant.
+        _logger.LogInformation("First-run model provisioning starting (desktop mode).");
+
         try
         {
             await ProvisionAsync(stoppingToken).ConfigureAwait(false);
@@ -116,9 +120,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         // Idempotency: if any GGUF is already installed, or a non-default model is already selected, there is nothing to
         // provision. This makes the service safe to run on every boot.
         var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
+        _logger.LogInformation("First-run provisioning: {Count} GGUF model(s) already installed.", installed.Count);
         if (installed.Count > 0)
         {
-            _logger.LogDebug("First-run provisioning skipped: {Count} GGUF model(s) already installed.", installed.Count);
             return;
         }
 
@@ -127,7 +131,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         if (!string.IsNullOrWhiteSpace(settings.DefaultModelName)
             && !string.Equals(settings.DefaultModelName, configuredDefault, StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogDebug("First-run provisioning skipped: a non-default model '{Model}' is already selected.", settings.DefaultModelName);
+            _logger.LogInformation("First-run provisioning skipped: a non-default model '{Model}' is already selected.", settings.DefaultModelName);
             return;
         }
 
@@ -143,7 +147,30 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         // Ensure the llama.cpp binary for this host BEFORE downloading the model so the model is immediately runnable.
         // A binary acquisition failure surfaces a sanitized LlamaRuntimeException that the caller's catch turns into the
         // empty-picker fallback.
-        var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        //
+        // GPU-variant detection shells out to vendor tools (nvidia-smi / wmic) that can hang on some Windows hosts.
+        // The probe has its own per-tool timeout, but wrap the whole selection in a hard ceiling here too so a stuck
+        // probe can NEVER block first-run provisioning indefinitely: on timeout we fall back to the CPU runtime, which
+        // always works (just slower). Belt-and-suspenders — provisioning reaching the download is the priority.
+        _logger.LogInformation("First-run provisioning detecting the GPU runtime variant.");
+        // Race the detection against a wall-clock timer with Task.WhenAny rather than relying on token cancellation:
+        // a wedged vendor tool (nvidia-smi) can leave its stdout pipe read stuck in a state that does NOT observe
+        // cancellation, so a CancelAfter token alone could still hang forever. If the timer wins we abandon the probe
+        // task (it harmlessly lingers; the host's Job Object reaps the child on exit) and proceed with the CPU runtime.
+        var variantTask = _variantSelector.SelectVariantAsync(ct);
+        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(25), ct);
+        GpuVariant variant;
+        if (await Task.WhenAny(variantTask, timeoutTask).ConfigureAwait(false) == variantTask)
+        {
+            variant = await variantTask.ConfigureAwait(false);
+        }
+        else
+        {
+            _logger.LogWarning("First-run provisioning: GPU runtime detection did not complete within the timeout; falling back to the CPU runtime.");
+            variant = GpuVariant.Cpu;
+        }
+
+        _logger.LogInformation("First-run provisioning acquiring the llama.cpp runtime ({Variant}) for first-run model '{RepoId}' — this downloads the runtime on first run and can take a few minutes.", variant, repoId.Trim());
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
         _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
 
@@ -156,7 +183,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             Quant = string.IsNullOrWhiteSpace(quant) ? null : quant.Trim(),
             Role = GgufRole.Chat
         };
+        _logger.LogInformation("First-run provisioning starting model download '{RepoId}' (quant {Quant}).", request.RepoId, request.Quant ?? "(none)");
         var ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
+        _logger.LogInformation("First-run provisioning download started for '{Model}'; waiting for completion.", ticket.ModelName);
 
         // The download runs detached; wait for it to reach a terminal phase so DefaultModelName is set only once the
         // file is actually present (a half-downloaded model must not be selected).
