@@ -30,10 +30,16 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </remarks>
 public sealed class FirstRunModelProvisioningService : BackgroundService
 {
+    // Whole-probe ceiling: the single wall-clock bound on GPU-variant detection. The probe itself enforces a shorter
+    // per-tool timeout (ProcessGpuVendorProbe.ProbeTimeout, 8s) and reaps its child; this ceiling covers the rare case
+    // where the fast path + both shelling probes chain. Generous so a slow-but-working detection still succeeds.
+    private static readonly TimeSpan DefaultGpuProbeCeiling = TimeSpan.FromSeconds(25);
+
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly IConfiguration _configuration;
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
     private readonly IGgufModelStore _ggufModelStore;
+    private readonly TimeSpan _gpuProbeCeiling;
     private readonly bool _isDesktopMode;
     private readonly ILogger<FirstRunModelProvisioningService> _logger;
     private readonly INodeSettingsStore _nodeSettingsStore;
@@ -55,13 +61,15 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             nodeSettingsStore,
             logger,
             DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs()),
-            TimeSpan.FromSeconds(2))
+            TimeSpan.FromSeconds(2),
+            DefaultGpuProbeCeiling)
     {
     }
 
-    // Test seam: injects the desktop-mode decision and the download-poll interval so the provisioning sequence is
-    // exercisable without mutating real process args/env and without a 2s/tick wait. Mirrors DesktopLaunch's
-    // injectable-reader pattern. Production uses the public ctor, which resolves the real desktop decision.
+    // Test seam: injects the desktop-mode decision, the download-poll interval, and the GPU-probe ceiling so the
+    // provisioning sequence (including the probe-overrun fallback) is exercisable without mutating real process
+    // args/env, without a 2s/tick wait, and without a 25s ceiling wait. Mirrors DesktopLaunch's injectable-reader
+    // pattern. Production uses the public ctor, which resolves the real desktop decision.
     internal FirstRunModelProvisioningService(IConfiguration configuration,
         IGgufModelStore ggufModelStore,
         IGgufDownloadCoordinator downloadCoordinator,
@@ -70,7 +78,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         INodeSettingsStore nodeSettingsStore,
         ILogger<FirstRunModelProvisioningService> logger,
         bool isDesktopMode,
-        TimeSpan pollInterval)
+        TimeSpan pollInterval,
+        TimeSpan gpuProbeCeiling)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
@@ -81,6 +90,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _isDesktopMode = isDesktopMode;
         _pollInterval = pollInterval;
+        _gpuProbeCeiling = gpuProbeCeiling;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -148,25 +158,25 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         // A binary acquisition failure surfaces a sanitized LlamaRuntimeException that the caller's catch turns into the
         // empty-picker fallback.
         //
-        // GPU-variant detection shells out to vendor tools (nvidia-smi / wmic) that can hang on some Windows hosts.
-        // The probe has its own per-tool timeout, but wrap the whole selection in a hard ceiling here too so a stuck
-        // probe can NEVER block first-run provisioning indefinitely: on timeout we fall back to the CPU runtime, which
-        // always works (just slower). Belt-and-suspenders — provisioning reaching the download is the priority.
+        // GPU-variant detection prefers a non-shelling NVML driver-presence signal and only shells out to vendor tools
+        // (nvidia-smi / wmic) as a fallback; those can hang on some Windows hosts. ONE timeout governs the whole
+        // selection: a linked CancellationTokenSource with a hard ceiling. The probe is cancellation-linked and reaps
+        // any child process it spawned in a finally block, so cancelling it here can NEVER leave an orphaned process —
+        // there is no second wall-clock race and no abandoned probe task. On timeout/failure we fall back to the CPU
+        // runtime, which always works (just slower) — provisioning reaching the download is the priority.
         _logger.LogInformation("First-run provisioning detecting the GPU runtime variant.");
-        // Race the detection against a wall-clock timer with Task.WhenAny rather than relying on token cancellation:
-        // a wedged vendor tool (nvidia-smi) can leave its stdout pipe read stuck in a state that does NOT observe
-        // cancellation, so a CancelAfter token alone could still hang forever. If the timer wins we abandon the probe
-        // task (it harmlessly lingers; the host's Job Object reaps the child on exit) and proceed with the CPU runtime.
-        var variantTask = _variantSelector.SelectVariantAsync(ct);
-        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(25), ct);
         GpuVariant variant;
-        if (await Task.WhenAny(variantTask, timeoutTask).ConfigureAwait(false) == variantTask)
+        using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        probeCts.CancelAfter(_gpuProbeCeiling);
+        try
         {
-            variant = await variantTask.ConfigureAwait(false);
+            variant = await _variantSelector.SelectVariantAsync(probeCts.Token).ConfigureAwait(false);
         }
-        else
+        catch (OperationCanceledException) when (probeCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            _logger.LogWarning("First-run provisioning: GPU runtime detection did not complete within the timeout; falling back to the CPU runtime.");
+            // The probe overran the ceiling (a wedged vendor tool); the probe's own finally reaped its child. Fall back
+            // to the CPU runtime so a stuck probe never blocks first-run provisioning beyond the ceiling.
+            _logger.LogWarning("First-run provisioning: GPU runtime detection did not complete within {Ceiling}; falling back to the CPU runtime.", _gpuProbeCeiling);
             variant = GpuVariant.Cpu;
         }
 

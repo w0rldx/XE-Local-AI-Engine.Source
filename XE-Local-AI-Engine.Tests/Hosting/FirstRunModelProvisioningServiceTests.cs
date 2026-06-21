@@ -134,11 +134,39 @@ public sealed class FirstRunModelProvisioningServiceTests
         AssertEx.Null(settingsStore.Saved);
     }
 
+    [Test]
+    public async Task GpuProbeOverrunsCeiling_FallsBackToCpu_AndStillProvisions()
+    {
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var binaryManager = new RecordingBinaryManager();
+        // A selector that hangs until cancelled — it observes the provisioning ceiling (linked CTS) and throws
+        // OperationCanceledException, exactly as the real cancellation-linked probe does when its child overruns.
+        var hangingSelector = new HangingVariantSelector();
+        using var service = BuildService(isDesktop: true,
+            installed: [],
+            binaryManager: binaryManager,
+            coordinator: coordinator,
+            settingsStore: settingsStore,
+            variantSelector: hangingSelector,
+            gpuProbeCeiling: TimeSpan.FromMilliseconds(20));
+
+        await RunAsync(service);
+
+        // The ceiling fired, detection fell back to CPU, and provisioning still reached the download + selection.
+        AssertEx.True(binaryManager.EnsureCalled, "provisioning must continue to the download after the probe ceiling");
+        AssertEx.Equal(GpuVariant.Cpu, binaryManager.LastVariant);
+        AssertEx.Equal(1, coordinator.StartCalls.Count);
+        AssertEx.Equal(DefaultGguf, settingsStore.Saved?.DefaultModelName);
+    }
+
     private static FirstRunModelProvisioningService BuildService(bool isDesktop,
         IReadOnlyList<string> installed,
         RecordingBinaryManager binaryManager,
         FakeDownloadCoordinator coordinator,
-        FakeNodeSettingsStore settingsStore)
+        FakeNodeSettingsStore settingsStore,
+        IGpuVariantSelector? variantSelector = null,
+        TimeSpan? gpuProbeCeiling = null)
     {
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -154,11 +182,12 @@ public sealed class FirstRunModelProvisioningServiceTests
             new FakeGgufModelStore(installed),
             coordinator,
             binaryManager,
-            new FakeVariantSelector(),
+            variantSelector ?? new FakeVariantSelector(),
             settingsStore,
             NullLogger<FirstRunModelProvisioningService>.Instance,
             isDesktop,
-            TimeSpan.FromMilliseconds(5));
+            TimeSpan.FromMilliseconds(5),
+            gpuProbeCeiling ?? TimeSpan.FromSeconds(25));
     }
 
     private static async Task RunAsync(FirstRunModelProvisioningService service)
@@ -178,11 +207,14 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         public bool EnsureCalled { get; private set; }
 
+        public GpuVariant? LastVariant { get; private set; }
+
         public bool ThrowOnEnsure { get; init; }
 
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
         {
             EnsureCalled = true;
+            LastVariant = variant;
             if (ThrowOnEnsure)
             {
                 throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available.");
@@ -195,6 +227,17 @@ public sealed class FirstRunModelProvisioningServiceTests
     private sealed class FakeVariantSelector : IGpuVariantSelector
     {
         public Task<GpuVariant> SelectVariantAsync(CancellationToken ct) => Task.FromResult(GpuVariant.Cpu);
+    }
+
+    /// <summary>A selector that never completes on its own — it waits on the supplied token, mirroring how the real
+    /// cancellation-linked probe blocks until the provisioning ceiling cancels it (then throws).</summary>
+    private sealed class HangingVariantSelector : IGpuVariantSelector
+    {
+        public async Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+            return GpuVariant.Cpu;
+        }
     }
 
     private sealed class FakeGgufModelStore(IReadOnlyList<string> installed) : IGgufModelStore
