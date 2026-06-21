@@ -8,10 +8,12 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 public sealed class NodeChatStreamService(
     INodeChatPersistenceService persistence,
@@ -29,6 +31,7 @@ public sealed class NodeChatStreamService(
     IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
     IModelClassificationService modelClassificationService,
+    ILocalModelProviderResolver localModelProviderResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -510,6 +513,19 @@ public sealed class NodeChatStreamService(
         if (CodexModelCatalog.IsCodexModel(activeModel))
         {
             return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
+        }
+
+        // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
+        // entry, so probing the local runtime would always fail — and in desktop mode there is no Ollama daemon at all,
+        // so the probe would stall (up to the connect timeout) on every send. GGUF chat models are chat-capable by
+        // construction; reasoning and tool support default off here, matching the model-list classification
+        // (LocalModelsMapper.ToLlamaCppModelResponses). Skip the doomed probe for any non-Ollama provider.
+        var providerName = await localModelProviderResolver
+                                 .ResolveProviderNameForModelAsync(activeModel, cancellationToken)
+                                 .ConfigureAwait(false);
+        if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            return (SupportsThinking: false, SupportsTools: false);
         }
 
         var classifications = await modelClassificationService
