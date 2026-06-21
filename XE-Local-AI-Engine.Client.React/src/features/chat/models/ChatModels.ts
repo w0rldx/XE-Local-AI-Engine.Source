@@ -210,6 +210,10 @@ export interface ModelOption {
 	// True for cloud-provider models (e.g. Codex/OpenAI). Drives the "Cloud (Codex)" section in the picker
 	// and the egress cue badge. Local models never set this; absence is equivalent to false.
 	isCloud?: boolean;
+	// The runtime that serves this local model ("Ollama" / "llamacpp"), straight from the list entry's Provider.
+	// Used to gate which selections poll the model-details endpoint. Undefined on the local-default sentinel option
+	// (the runtime resolves a concrete model later) and on cloud options (gated by isCloud instead).
+	provider?: string;
 }
 
 export interface ContextUsageModel {
