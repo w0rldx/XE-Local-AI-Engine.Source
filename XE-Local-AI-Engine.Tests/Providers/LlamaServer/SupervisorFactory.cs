@@ -10,10 +10,11 @@ internal static class SupervisorFactory
         FakeModelStore? modelStore = null,
         LlamaServerSupervisorOptions? options = null,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
-        AdvanceableTimeProvider? timeProvider = null)
+        AdvanceableTimeProvider? timeProvider = null,
+        IGpuVariantSelector? variantSelector = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
-            new FakeVariantSelector(),
+            variantSelector ?? new FakeVariantSelector(),
             modelStore ?? new FakeModelStore(),
             launcher ?? new FakeProcessLauncher(),
             healthProbe ?? new FakeHealthProbe(),
