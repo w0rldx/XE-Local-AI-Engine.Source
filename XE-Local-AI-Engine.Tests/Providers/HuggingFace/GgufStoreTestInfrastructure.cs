@@ -64,7 +64,23 @@ internal static class GgufStoreTestInfrastructure
         GgufModelRegistry registry,
         HuggingFaceOptions options)
     {
-        return new HuggingFaceGgufStore(downloadClient, discovery, registry, options, NullLogger<HuggingFaceGgufStore>.Instance);
+        return new HuggingFaceGgufStore(downloadClient,
+            discovery,
+            registry,
+            HeaderReader(options),
+            options,
+            NullLogger<HuggingFaceGgufStore>.Instance);
+    }
+
+    // The store only ever calls the reader's local-file path (ReadHeaderFromFileAsync), which never touches the HTTP
+    // client — so a bare client over a throwing handler is safe and asserts no network read sneaks into the list path.
+    public static GgufHeaderReader HeaderReader(HuggingFaceOptions options)
+    {
+#pragma warning disable CA2000
+        var http = new HttpClient(new ScriptedHandler(static (_, _) =>
+            throw new InvalidOperationException("The installed-model list must read headers from disk, never over HTTP.")));
+#pragma warning restore CA2000
+        return new GgufHeaderReader(http, options, NullLogger<GgufHeaderReader>.Instance);
     }
 
     public static IHfTokenStore NoTokenStore()
