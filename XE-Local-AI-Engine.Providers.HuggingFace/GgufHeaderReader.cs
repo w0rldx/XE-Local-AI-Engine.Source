@@ -55,24 +55,8 @@ internal sealed class GgufHeaderReader
 
         try
         {
-            var requested = probe;
-            while (true)
-            {
-                var bytes = await FetchRangeAsync(url, requested, ct).ConfigureAwait(false);
-                if (bytes is null || bytes.Length == 0)
-                {
-                    return GgufHeaderMetadata.Empty;
-                }
-
-                var (metadata, truncated) = TryParse(bytes);
-                if (!truncated || requested >= hardCap || bytes.Length < requested)
-                {
-                    // Parsed fully, hit the cap, or the server returned the whole (short) file — accept what we have.
-                    return metadata;
-                }
-
-                requested = Math.Min(requested * 2, hardCap);
-            }
+            return await ReadGrowingAsync((requested, token) => FetchRangeAsync(url, requested, token), probe, hardCap, ct)
+                .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
@@ -84,6 +68,97 @@ internal sealed class GgufHeaderReader
             _logger.LogWarning("GGUF header range read timed out; returning empty header metadata.");
             return GgufHeaderMetadata.Empty;
         }
+    }
+
+    /// <summary>
+    ///     Reads the GGUF header from a local <paramref name="filePath" /> and extracts the standardized metadata, using
+    ///     the same grow-on-truncation probe loop as the remote path. <c>context_length</c> sits early in the header (before
+    ///     the large tokenizer arrays) for llama.cpp-written GGUFs, so the first modest read virtually always suffices.
+    ///     Fully tolerant: a missing file / non-GGUF content / short read / IO error / parse failure returns an all-null
+    ///     <see cref="GgufHeaderMetadata" /> and never throws (cancellation excepted).
+    /// </summary>
+    public async Task<GgufHeaderMetadata> ReadHeaderFromFileAsync(string filePath, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+        const long initialProbe = 1L * 1024 * 1024; // 1 MiB — context_length lives near the start of the header.
+        const long hardCap = 16L * 1024 * 1024; // doubling ceiling for the local read.
+
+        try
+        {
+            await using var stream = new FileStream(filePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 1,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+            return await ReadGrowingAsync((requested, token) => ReadPrefixAsync(stream, requested, token), initialProbe, hardCap, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "GGUF local header read failed for a model file; returning empty header metadata.");
+            return GgufHeaderMetadata.Empty;
+        }
+    }
+
+    /// <summary>
+    ///     Runs the shared grow-on-truncation probe loop over a byte source that returns the first <c>count</c> bytes of
+    ///     the file. Doubles the probe up to <paramref name="hardCap" /> while parsing reports it ran out of bytes
+    ///     mid-block, stopping early when the source returns fewer bytes than requested (the whole short file was read).
+    /// </summary>
+    private static async Task<GgufHeaderMetadata> ReadGrowingAsync(Func<long, CancellationToken, Task<byte[]?>> fetch,
+        long initialProbe,
+        long hardCap,
+        CancellationToken ct)
+    {
+        var requested = initialProbe;
+        while (true)
+        {
+            var bytes = await fetch(requested, ct).ConfigureAwait(false);
+            if (bytes is null || bytes.Length == 0)
+            {
+                return GgufHeaderMetadata.Empty;
+            }
+
+            var (metadata, truncated) = TryParse(bytes);
+            if (!truncated || requested >= hardCap || bytes.Length < requested)
+            {
+                // Parsed fully, hit the cap, or the source returned the whole (short) file — accept what we have.
+                return metadata;
+            }
+
+            requested = Math.Min(requested * 2, hardCap);
+        }
+    }
+
+    // Reads up to count bytes from the start of the open stream. Returns null when the file is empty.
+    private static async Task<byte[]?> ReadPrefixAsync(FileStream stream, long count, CancellationToken ct)
+    {
+        var length = stream.Length;
+        if (length == 0)
+        {
+            return null;
+        }
+
+        var toRead = (int)Math.Min(count, length);
+        var buffer = new byte[toRead];
+        stream.Seek(0, SeekOrigin.Begin);
+
+        var read = 0;
+        while (read < toRead)
+        {
+            var n = await stream.ReadAsync(buffer.AsMemory(read, toRead - read), ct).ConfigureAwait(false);
+            if (n == 0)
+            {
+                break;
+            }
+
+            read += n;
+        }
+
+        return read == toRead ? buffer : buffer[..read];
     }
 
     private async Task<byte[]?> FetchRangeAsync(string url, long count, CancellationToken ct)

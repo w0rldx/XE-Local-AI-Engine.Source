@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
@@ -516,6 +517,111 @@ public sealed class GgufStoreTests
 
         AssertEx.Equal(HuggingFaceDownloadFailure.HashMismatch, exception.Reason);
         AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
+    }
+
+    [Test]
+    public async Task GgufStore_ListInstalled_PopulatesMaxContextTokens_FromLocalHeader()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var registry = Infra.Registry(options);
+
+        // A real installed GGUF on disk whose header advertises qwen2.context_length = 32768.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen2")
+                     .WithUint32("qwen2.context_length", 32768)
+                     .Build();
+        var entry = await SeedInstalledModel(dir, registry, "qwen2-Q4_K_M.gguf", header);
+
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+            throw new InvalidOperationException("Listing installed models must not download."));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(download, Infra.DiscoveryWith(), registry, options);
+
+        var descriptors = await store.ListInstalledModelsAsync(CancellationToken.None);
+
+        var descriptor = descriptors.Single(d => d.ModelName == entry.ModelName);
+        AssertEx.Equal(32768, descriptor.MaxContextTokens!.Value);
+        AssertEx.True(descriptor.IsAvailable);
+        AssertEx.Equal(entry.SizeBytes, descriptor.SizeBytes);
+    }
+
+    [Test]
+    public async Task GgufStore_ListInstalled_GarbageFile_YieldsNullContext_StillLists()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var registry = Infra.Registry(options);
+
+        // A present-but-not-GGUF file → no context_length; the model must still appear with a null context window.
+        var entry = await SeedInstalledModel(dir, registry, "garbage-Q4_K_M.gguf", "not a gguf header at all"u8.ToArray());
+
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+            throw new InvalidOperationException("Listing installed models must not download."));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(download, Infra.DiscoveryWith(), registry, options);
+
+        var descriptors = await store.ListInstalledModelsAsync(CancellationToken.None);
+
+        var descriptor = descriptors.Single(d => d.ModelName == entry.ModelName);
+        AssertEx.Null(descriptor.MaxContextTokens);
+        AssertEx.True(descriptor.IsAvailable);
+    }
+
+    [Test]
+    public async Task GgufStore_ListInstalled_CachesHeaderRead_AcrossCalls()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var registry = Infra.Registry(options);
+
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen2")
+                     .WithUint32("qwen2.context_length", 32768)
+                     .Build();
+        var entry = await SeedInstalledModel(dir, registry, "cached-Q4_K_M.gguf", header);
+
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+            throw new InvalidOperationException("Listing installed models must not download."));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(download, Infra.DiscoveryWith(), registry, options);
+
+        var first = await store.ListInstalledModelsAsync(CancellationToken.None);
+        AssertEx.Equal(32768, first.Single(d => d.ModelName == entry.ModelName).MaxContextTokens!.Value);
+
+        // Corrupt the on-disk header AFTER the first read; the (size+mtime-keyed) cache must serve the prior result
+        // because the registry size/timestamp are unchanged — proving the file was not re-read on the second call.
+        await File.WriteAllBytesAsync(entry.LocalPath, "corrupted after first read"u8.ToArray());
+
+        var second = await store.ListInstalledModelsAsync(CancellationToken.None);
+        AssertEx.Equal(32768, second.Single(d => d.ModelName == entry.ModelName).MaxContextTokens!.Value);
+    }
+
+    // Writes a GGUF file to the temp models dir and registers it so ListInstalledModelsAsync returns it.
+    private static async Task<GgufModelRegistryEntry> SeedInstalledModel(GgufStoreTestInfrastructure.TempModelsDir dir,
+        GgufModelRegistry registry,
+        string fileName,
+        byte[] fileBytes)
+    {
+        var localPath = dir.FilePath(fileName);
+        await File.WriteAllBytesAsync(localPath, fileBytes);
+        var entry = new GgufModelRegistryEntry
+        {
+            ModelName = GgufModelName.Format(Infra.RepoId, "Q4_K_M"),
+            RepoId = Infra.RepoId,
+            FileName = fileName,
+            Quant = "Q4_K_M",
+            LocalPath = localPath,
+            SizeBytes = fileBytes.Length,
+            Sha256 = null,
+            SourceRevision = Infra.Revision,
+            DownloadedAtUtc = DateTimeOffset.UtcNow
+        };
+        await registry.UpsertAsync(entry, CancellationToken.None);
+        return entry;
     }
 
     // Builds a 200 OK full-file response, optionally advertising the LFS sha256 OID via X-Linked-Etag.

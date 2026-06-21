@@ -79,6 +79,7 @@ public static class HuggingFaceServiceCollectionExtensions
         services.TryAddSingleton<IGgufModelStore>(static sp => new HuggingFaceGgufStore(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),
             sp.GetRequiredService<GgufModelRegistry>(),
+            sp.GetRequiredService<GgufHeaderReader>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<HuggingFaceGgufStore>>()));
 
