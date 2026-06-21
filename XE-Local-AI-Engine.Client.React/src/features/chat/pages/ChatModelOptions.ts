@@ -24,6 +24,8 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		isToolCapable: model.isToolCapable ?? false,
 		isAvailable: nodeAvailable,
 		statusLabel: statusLabel.length > 0 ? statusLabel : undefined,
+		// Carry the serving runtime so the page can gate the model-details poll per provider.
+		provider: model.provider ?? undefined,
 	};
 }
 

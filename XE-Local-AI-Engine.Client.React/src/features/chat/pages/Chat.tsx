@@ -36,6 +36,7 @@ import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
+import { shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
@@ -296,12 +297,14 @@ export function Chat() {
 		return requestModel ?? localModelsQuery.data?.selectedModelName ?? localModelsQuery.data?.configuredDefaultModelName ?? "";
 	}, [localModelsQuery.data?.configuredDefaultModelName, localModelsQuery.data?.selectedModelName, selectedModel]);
 
-	// getLocalModelDetails is Ollama-only — cloud (CodexOAuth) model ids are not in Ollama
-	// and the endpoint 500s for them. Guard with !isCloud so we never fire the request for
-	// a cloud selection. worker-be also short-circuits it server-side, but belt-and-suspenders.
+	// Only poll model-details when the selection can actually return them: a non-empty local (non-cloud) name whose
+	// list option, if known, is available. Cloud (Codex) ids have no LOCAL details (the endpoint 404s for them) and an
+	// unavailable model just retries a guaranteed failure. GGUF (llamacpp) selections ARE polled — CL-4 serves their
+	// details as a 200 carrying maxContextTokens, which the context meter needs.
+	const selectedModelDetailsEnabled = shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, selectedModelIsCloud);
 	const selectedModelDetailsQuery = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
-		enabled: selectedConcreteModelName.length > 0 && !selectedModelIsCloud,
+		enabled: selectedModelDetailsEnabled,
 	});
 
 	const createConversationMutation = useMutation({
