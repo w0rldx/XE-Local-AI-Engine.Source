@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
+using System.Net.Http;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
@@ -43,8 +44,19 @@ public sealed class GetLocalModelDetailsEndpoint(
             return;
         }
 
-        var details = await _modelService.ShowModelDetailsAsync(modelName, ct).ConfigureAwait(false);
-        await Send.OkAsync(details.ToResponse(modelName), ct).ConfigureAwait(false);
+        try
+        {
+            var details = await _modelService.ShowModelDetailsAsync(modelName, ct).ConfigureAwait(false);
+            await Send.OkAsync(details.ToResponse(modelName), ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            // Details come from the Ollama daemon's /api/show. A GGUF served by llama.cpp has no Ollama entry, and in
+            // desktop mode the Ollama endpoint isn't running at all — so the probe throws a connection error. That is
+            // an absence of local details, not a server fault: degrade to a clean 404 instead of bubbling a 500.
+            Logger.LogWarning(exception, "Model details unavailable for '{ModelName}': the local Ollama runtime is unreachable.", modelName);
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)
