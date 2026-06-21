@@ -474,7 +474,18 @@ export function Chat() {
 				assistantMessageId: createId(),
 				requestId: createId(),
 			};
-			const requestModel = toNodeChatRequestModel(model);
+			// Only honor a concrete model id that is still an available option. A stale persisted selection — e.g. an
+			// Ollama model id left in localStorage from before the node switched to the bundled llama.cpp runtime —
+			// must NOT be sent: it would route to a model that isn't installed and fail with "model is not installed".
+			// Falling back to undefined makes the node resolve its configured default (the provisioned GGUF). This
+			// guards the fast first-send case before the reconciliation effect (which resets the store) has run.
+			const requestedConcreteModel = toNodeChatRequestModel(model);
+			const requestModel =
+				requestedConcreteModel !== undefined &&
+				(modelOptions.some((option) => option.value === requestedConcreteModel) ||
+					cloudModelOptions.some((option) => option.value === requestedConcreteModel))
+					? requestedConcreteModel
+					: undefined;
 			const startedAt = new Date().toISOString();
 			// Compute effective agentDefinitionId: only stamp when mode is on, an agent is selected, AND the
 			// selected agent still exists in the live list (stale/deleted ids fall back to Default Assistant).
@@ -580,7 +591,9 @@ export function Chat() {
 			agentModeEnabled,
 			agentOptions,
 			cacheConversation,
+			cloudModelOptions,
 			developerMode,
+			modelOptions,
 			queryClient,
 			refreshConversation,
 			resolveSendConversation,
