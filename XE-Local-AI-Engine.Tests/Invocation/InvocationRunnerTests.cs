@@ -22,12 +22,14 @@ using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -1063,7 +1065,8 @@ public sealed class InvocationRunnerTests
         WorkerNodeOptions? workerOptions = null,
         IWorkerEventDispatcher? eventDispatcher = null,
         IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null,
-        IOrchestrationAgentFactory? orchestrationAgentFactory = null)
+        IOrchestrationAgentFactory? orchestrationAgentFactory = null,
+        ILocalModelProviderResolver? providerResolver = null)
     {
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
         var resolvedOrchestrationFactory = orchestrationAgentFactory ?? Substitute.For<IOrchestrationAgentFactory>();
@@ -1076,6 +1079,16 @@ public sealed class InvocationRunnerTests
 
         var resolvedCapabilityReporter = capabilityReporter ?? Substitute.For<ICapabilityReporter>();
         resolvedCapabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+
+        // Default to the Ollama provider so the existing tests keep exercising the VerifyOllamaAndModelAsync preflight
+        // path (a non-Ollama provider intentionally bypasses it). Tests can pass their own resolver to cover routing.
+        var resolvedProviderResolver = providerResolver ?? Substitute.For<ILocalModelProviderResolver>();
+        if (providerResolver is null)
+        {
+            resolvedProviderResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
+        }
+
         var resolvedEventDispatcher = eventDispatcher ?? Substitute.For<IWorkerEventDispatcher>();
 
         var configuration = new ConfigurationBuilder()
@@ -1092,6 +1105,7 @@ public sealed class InvocationRunnerTests
             new EnvelopeCryptoService(new AesGcmNodeAeadCipher()),
             resolvedValidator,
             resolvedCapabilityReporter,
+            resolvedProviderResolver,
             Substitute.For<IDeadLetterStore>(),
             configuration,
             Options.Create(workerOptions ?? new WorkerNodeOptions
