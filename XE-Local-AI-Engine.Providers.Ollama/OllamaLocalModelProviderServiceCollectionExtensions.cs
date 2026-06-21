@@ -10,12 +10,23 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public static class OllamaLocalModelProviderServiceCollectionExtensions
 {
     /// <summary>
+    ///     The maximum time to wait for the TCP connection to the Ollama endpoint to establish before failing fast.
+    ///     This bounds ONLY the connect phase (<see cref="SocketsHttpHandler.ConnectTimeout" />), not the overall
+    ///     request: a long model pull still runs to the five-minute <see cref="HttpClient.Timeout" />. The short value
+    ///     is the lever that kills the multi-second stall when no Ollama daemon is listening (desktop mode): a refused
+    ///     or absent <c>127.0.0.1:11434</c> surfaces an <see cref="HttpRequestException" /> in well under a second
+    ///     instead of waiting out the OS connect timeout. It does not shorten any genuine Ollama call once connected.
+    /// </summary>
+    private static readonly TimeSpan OllamaConnectTimeout = TimeSpan.FromMilliseconds(750);
+
+    /// <summary>
     ///     Registers a singleton Ollama API client plus the provider-neutral local-model and capability abstractions.
     /// </summary>
     /// <remarks>
     ///     The created <see cref="HttpClient" /> is intentionally owned by the singleton Ollama client. The five-minute
     ///     timeout covers model-management calls such as pulls and show/probe requests without forcing every caller to
-    ///     allocate its own transport.
+    ///     allocate its own transport. A short <see cref="SocketsHttpHandler.ConnectTimeout" /> bounds the connect phase
+    ///     so a probe against an absent Ollama daemon fails fast (see <see cref="OllamaConnectTimeout" />).
     /// </remarks>
     public static IServiceCollection AddOllamaLocalModelProvider(this IServiceCollection services,
         Func<IServiceProvider, OllamaLocalModelProviderRegistration> resolveRegistration)
@@ -27,8 +38,16 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
         {
             var registration = resolveRegistration(serviceProvider);
 
-#pragma warning disable CA2000 // HttpClient lifetime is owned by the registered Ollama client.
-            var httpClient = new HttpClient
+#pragma warning disable CA2000 // The handler and HttpClient lifetimes are owned by the registered singleton Ollama client.
+            // SocketsHttpHandler.ConnectTimeout bounds only TCP connection establishment, so a refused/absent endpoint
+            // fails fast while the 5-minute HttpClient.Timeout still covers genuine long pulls once connected. The
+            // handler is owned by the HttpClient (disposeHandler: true), which the singleton OllamaApiClient owns.
+            var handler = new SocketsHttpHandler
+            {
+                ConnectTimeout = OllamaConnectTimeout
+            };
+
+            var httpClient = new HttpClient(handler, disposeHandler: true)
             {
                 BaseAddress = registration.Endpoint,
                 Timeout = TimeSpan.FromMinutes(5)
