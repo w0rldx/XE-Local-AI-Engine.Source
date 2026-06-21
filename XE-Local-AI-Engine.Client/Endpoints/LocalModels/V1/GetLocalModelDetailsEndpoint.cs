@@ -54,7 +54,10 @@ public sealed class GetLocalModelDetailsEndpoint(
             // Details come from the Ollama daemon's /api/show. A GGUF served by llama.cpp has no Ollama entry, and in
             // desktop mode the Ollama endpoint isn't running at all — so the probe throws a connection error. That is
             // an absence of local details, not a server fault: degrade to a clean 404 instead of bubbling a 500.
-            Logger.LogWarning(exception, "Model details unavailable for '{ModelName}': the local Ollama runtime is unreachable.", modelName);
+            // Debug, not Warning: a GGUF model (and desktop mode generally) has no Ollama /api/show entry, and the chat
+            // UI polls this per selected model — logging a Warning + stack trace here would flood the console. The 404
+            // is the intended graceful degradation.
+            Logger.LogDebug(exception, "Model details unavailable for '{ModelName}': the local Ollama runtime is unreachable.", modelName);
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
     }

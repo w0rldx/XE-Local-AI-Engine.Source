@@ -75,7 +75,18 @@ public sealed class ListLocalModelsEndpoint(
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Local model list could not be loaded.");
+            // An unreachable Ollama endpoint (HttpRequestException) is expected in desktop mode and degrades cleanly to
+            // the installed-GGUF + cloud list below — log it at Debug so it doesn't flood the console. Any OTHER failure
+            // is unexpected and stays at Warning.
+            if (exception is HttpRequestException)
+            {
+                _logger.LogDebug(exception, "Ollama not reachable while loading the model list; returning installed GGUF/cloud models only.");
+            }
+            else
+            {
+                _logger.LogWarning(exception, "Local model list could not be loaded.");
+            }
+
             await Send.OkAsync(LocalModelsMapper.ToUnavailableListResponse(selectedModelName,
                     _localChatOptions.Value.DefaultModel,
                     "Local model provider is unavailable.",

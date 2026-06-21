@@ -738,7 +738,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to report capabilities after invocation {InvocationId} completed.", invocationId);
+            // Best-effort, post-invocation telemetry. In standalone desktop mode there is no remote worker hub to
+            // report to (the connection is never active), so this fires benignly after every chat — log at Debug to
+            // keep the operator console clean. Genuine worker-mode reporting issues surface elsewhere.
+            _logger.LogDebug(exception, "Could not report capabilities after invocation {InvocationId} (no active worker hub in desktop mode).", invocationId);
         }
     }
 
