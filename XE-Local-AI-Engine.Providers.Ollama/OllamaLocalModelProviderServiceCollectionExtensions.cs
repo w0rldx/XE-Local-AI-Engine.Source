@@ -14,8 +14,11 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
     ///     This bounds ONLY the connect phase (<see cref="SocketsHttpHandler.ConnectTimeout" />), not the overall
     ///     request: a long model pull still runs to the five-minute <see cref="HttpClient.Timeout" />. The short value
     ///     is the lever that kills the multi-second stall when no Ollama daemon is listening (desktop mode): a refused
-    ///     or absent <c>127.0.0.1:11434</c> surfaces an <see cref="HttpRequestException" /> in well under a second
-    ///     instead of waiting out the OS connect timeout. It does not shorten any genuine Ollama call once connected.
+    ///     or absent endpoint fails in well under a second instead of waiting out the OS connect timeout. A fired
+    ///     connect timeout surfaces as an <see cref="OperationCanceledException" />, which
+    ///     <see cref="OllamaConnectFailureHandler" /> translates to <see cref="HttpRequestException" /> so the
+    ///     "Ollama unreachable" handling is uniform whether the host refuses (RST) or silently drops the SYN. It does not
+    ///     shorten any genuine Ollama call once connected.
     /// </summary>
     private static readonly TimeSpan OllamaConnectTimeout = TimeSpan.FromMilliseconds(750);
 
@@ -47,7 +50,12 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
                 ConnectTimeout = OllamaConnectTimeout
             };
 
-            var httpClient = new HttpClient(handler, disposeHandler: true)
+            // Wrap the connect-timeout handler so a fired ConnectTimeout (an OperationCanceledException) presents as an
+            // HttpRequestException — the shape every "Ollama unreachable" catch in the codebase expects. The outer
+            // handler is disposed by the HttpClient (disposeHandler: true) and disposes the inner one in turn.
+            var connectFailureHandler = new OllamaConnectFailureHandler(handler);
+
+            var httpClient = new HttpClient(connectFailureHandler, disposeHandler: true)
             {
                 BaseAddress = registration.Endpoint,
                 Timeout = TimeSpan.FromMinutes(5)
