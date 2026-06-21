@@ -136,7 +136,7 @@ public sealed class OrchestrationResolverTests
                 ["GetCurrentTime"] = true
             });
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
-        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime", false), OfferTool("Calculate"));
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("Calculate"));
         SeedParticipants(store, triage, specialist);
 
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);

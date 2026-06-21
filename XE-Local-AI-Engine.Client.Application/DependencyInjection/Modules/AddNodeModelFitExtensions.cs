@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Capabilities;
 
 internal static class AddNodeModelFitExtensions

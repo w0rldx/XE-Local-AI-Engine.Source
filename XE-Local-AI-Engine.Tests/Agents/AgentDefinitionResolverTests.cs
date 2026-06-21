@@ -185,8 +185,8 @@ public sealed class AgentDefinitionResolverTests
         // The offer ships both tools as non-approval. The definition overrides one to require approval and leaves the
         // other to its descriptor default.
         var resolver = CreateResolver(out var store,
-            OfferTool("GetCurrentTime", false),
-            OfferTool("Calculate", false));
+            OfferTool("GetCurrentTime"),
+            OfferTool("Calculate"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime", "Calculate"],
             toolApprovals: new Dictionary<string, bool>
             {
@@ -291,7 +291,7 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, null, true).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
         AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "GetCurrentTime");

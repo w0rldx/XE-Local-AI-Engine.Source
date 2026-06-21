@@ -23,7 +23,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
     {
         if (Directory.Exists(_root))
         {
-            Directory.Delete(_root, recursive: true);
+            Directory.Delete(_root, true);
         }
     }
 
@@ -32,7 +32,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
     {
         var configuredRoot = Path.Combine(_root, "data");
         Directory.CreateDirectory(configuredRoot);
-        var sut = CreateSut(configuredRoot, contentRoot: Path.Combine(_root, "content"));
+        var sut = CreateSut(configuredRoot, Path.Combine(_root, "content"));
 
         AssertEx.Equal(configuredRoot, sut.Root);
     }
@@ -43,7 +43,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
         var contentRoot = Path.Combine(_root, "content");
         Directory.CreateDirectory(contentRoot);
 
-        var sut = CreateSut(configuredRoot: null, contentRoot);
+        var sut = CreateSut(null, contentRoot);
 
         AssertEx.Equal(contentRoot, sut.Root);
     }
@@ -93,7 +93,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
         Directory.CreateDirectory(contentRoot);
         File.WriteAllText(Path.Combine(contentRoot, "node-settings.json"), "{}");
 
-        var sut = CreateSut(configuredRoot: null, contentRoot);
+        var sut = CreateSut(null, contentRoot);
 
         AssertEx.Equal(contentRoot, sut.Root);
         AssertEx.True(File.Exists(Path.Combine(contentRoot, "node-settings.json")), "the headless file must stay in place.");

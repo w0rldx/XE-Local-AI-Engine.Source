@@ -30,9 +30,9 @@ internal sealed class HfDownloadClient
     private readonly IFreeSpaceProbe _freeSpaceProbe;
 
     private readonly HttpClient _httpClient;
-    private readonly HttpClient _resolveHttpClient;
     private readonly ILogger<HfDownloadClient> _logger;
     private readonly HuggingFaceOptions _options;
+    private readonly HttpClient _resolveHttpClient;
     private readonly IHfTokenStore _tokenStore;
 
     public HfDownloadClient(HttpClient httpClient,

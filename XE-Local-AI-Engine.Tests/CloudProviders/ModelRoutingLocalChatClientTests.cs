@@ -89,7 +89,7 @@ public sealed class ModelRoutingLocalChatClientTests
         var resolver = BuildResolver([ollama], OllamaProvider, new Dictionary<string, string>());
         using var router = new ModelRoutingLocalChatClient(resolver, DefaultModel);
 
-        await router.GetResponseAsync(Message, null);
+        await router.GetResponseAsync(Message);
 
         AssertEx.Equal(1, ollama.CreatedClients.Count);
         AssertEx.Equal(DefaultModel, ollama.CreatedClients[0].ModelName);
@@ -217,7 +217,8 @@ public sealed class ModelRoutingLocalChatClientTests
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             CallCount++;
             yield return new ChatResponseUpdate(ChatRole.Assistant, "ok");

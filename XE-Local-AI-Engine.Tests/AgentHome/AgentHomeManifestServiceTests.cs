@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;

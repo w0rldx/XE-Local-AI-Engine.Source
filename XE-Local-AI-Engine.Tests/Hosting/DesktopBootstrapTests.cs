@@ -217,25 +217,25 @@ public sealed class DesktopBootstrapTests
 
         public string DataDirectory => Path.Combine(_root, DesktopBootstrap.ApplicationDataFolderName);
 
-        public string ResolveFolder(Environment.SpecialFolder folder)
-        {
-            _ = folder;
-            return _root;
-        }
-
         public void Dispose()
         {
             try
             {
                 if (Directory.Exists(_root))
                 {
-                    Directory.Delete(_root, recursive: true);
+                    Directory.Delete(_root, true);
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // Best-effort cleanup of the temp directory.
             }
+        }
+
+        public string ResolveFolder(Environment.SpecialFolder folder)
+        {
+            _ = folder;
+            return _root;
         }
     }
 }

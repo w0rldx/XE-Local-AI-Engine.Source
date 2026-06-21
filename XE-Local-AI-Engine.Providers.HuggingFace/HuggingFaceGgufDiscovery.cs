@@ -63,13 +63,13 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
     /// <inheritdoc />
     public Task<GgufRepoDetail> InspectRepoAsync(string repoId, CancellationToken ct)
     {
-        return InspectCoreAsync(repoId, includeHeaderMetadata: true, ct);
+        return InspectCoreAsync(repoId, true, ct);
     }
 
     /// <inheritdoc />
     public Task<GgufRepoDetail> ListRepoFilesAsync(string repoId, CancellationToken ct)
     {
-        return InspectCoreAsync(repoId, includeHeaderMetadata: false, ct);
+        return InspectCoreAsync(repoId, false, ct);
     }
 
     // Shared enumeration: lists a repo's usable, non-projector .gguf files; reads each file's GGUF header (a per-file

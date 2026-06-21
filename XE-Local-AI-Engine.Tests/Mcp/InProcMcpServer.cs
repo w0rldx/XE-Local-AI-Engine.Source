@@ -114,7 +114,7 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         };
 
         var serverTransport = new StreamServerTransport(serverInput, serverOutput, uniqueName, NullLoggerFactory.Instance);
-        var server = McpServer.Create(serverTransport, serverOptions, NullLoggerFactory.Instance, null);
+        var server = McpServer.Create(serverTransport, serverOptions, NullLoggerFactory.Instance);
 
         var serverCts = new CancellationTokenSource();
         var serverLoop = server.RunAsync(serverCts.Token);

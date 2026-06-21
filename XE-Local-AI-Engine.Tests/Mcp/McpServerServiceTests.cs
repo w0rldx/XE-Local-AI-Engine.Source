@@ -102,7 +102,7 @@ public sealed class McpServerServiceTests
     public async Task CreateAsync_WithDuplicateName_ThrowsValidation()
     {
         var service = CreateService(out var store, out _);
-        var input = CreateStdioInput("Filesystem");
+        var input = CreateStdioInput();
         // A registration with the same name (case-insensitive) already exists.
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord(CreateStdioInput("filesystem"), false)]);
 
@@ -173,7 +173,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput("Filesystem"), true) with
+        var existing = CreateRecord(CreateStdioInput(), true) with
         {
             Id = id
         };
@@ -204,7 +204,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput("Filesystem"), false) with
+        var existing = CreateRecord(CreateStdioInput(), false) with
         {
             Id = id
         };
@@ -252,7 +252,7 @@ public sealed class McpServerServiceTests
         {
             Enabled = true
         });
-        manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new InvalidOperationException("connect failed"));
+        manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new InvalidOperationException("connect failed"));
 
         var result = await service.SetEnabledAsync(id, true).ConfigureAwait(false);
 
@@ -275,7 +275,7 @@ public sealed class McpServerServiceTests
         {
             Enabled = true
         });
-        manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new OperationCanceledException());
+        manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new OperationCanceledException());
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.SetEnabledAsync(id, true)).ConfigureAwait(false);
     }

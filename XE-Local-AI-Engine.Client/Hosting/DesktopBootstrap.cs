@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
 using System.Security.Cryptography;
-using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
@@ -52,6 +51,7 @@ internal static class DesktopBootstrap
 
     /// <summary>Configuration keys describing the GGUF starter model desktop mode provisions on first run.</summary>
     internal const string FirstRunModelEnabledKey = "FirstRunModel:Enabled";
+
     internal const string FirstRunModelRepoIdKey = "FirstRunModel:RepoId";
     internal const string FirstRunModelQuantKey = "FirstRunModel:Quant";
 
@@ -166,8 +166,7 @@ internal static class DesktopBootstrap
         {
             // Fail loudly: a desktop user whose data directory cannot be created must see a clear startup error rather
             // than silently fall back to a volatile location that would lose their database.
-            throw new InvalidOperationException(
-                $"The desktop data directory '{dataDirectory}' could not be created. Check filesystem permissions.",
+            throw new InvalidOperationException($"The desktop data directory '{dataDirectory}' could not be created. Check filesystem permissions.",
                 exception);
         }
     }
@@ -210,8 +209,7 @@ internal static class DesktopBootstrap
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw new InvalidOperationException(
-                $"The desktop operator key file '{keyPath}' exists but could not be read. Check filesystem permissions.",
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' exists but could not be read. Check filesystem permissions.",
                 exception);
         }
 
@@ -224,20 +222,18 @@ internal static class DesktopBootstrap
         }
         catch (FormatException exception)
         {
-            throw new InvalidOperationException(
-                $"The desktop operator key file '{keyPath}' is corrupt (not valid base64). Restore the original key or "
-                + "delete the encrypted database to start fresh; the file will not be regenerated automatically to avoid "
-                + "silently losing data.",
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' is corrupt (not valid base64). Restore the original key or "
+                                                + "delete the encrypted database to start fresh; the file will not be regenerated automatically to avoid "
+                                                + "silently losing data.",
                 exception);
         }
 
         if (decoded.Length != NodeOperatorSecretProvider.ExpectedSecretLength)
         {
-            throw new InvalidOperationException(
-                $"The desktop operator key file '{keyPath}' does not contain exactly "
-                + $"{NodeOperatorSecretProvider.ExpectedSecretLength} bytes. Restore the original key or delete the "
-                + "encrypted database to start fresh; the file will not be regenerated automatically to avoid silently "
-                + "losing data.");
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' does not contain exactly "
+                                                + $"{NodeOperatorSecretProvider.ExpectedSecretLength} bytes. Restore the original key or delete the "
+                                                + "encrypted database to start fresh; the file will not be regenerated automatically to avoid silently "
+                                                + "losing data.");
         }
 
         return base64;
@@ -254,13 +250,12 @@ internal static class DesktopBootstrap
         {
             File.WriteAllText(tempPath, base64);
             ProtectKeyFile(tempPath);
-            File.Move(tempPath, keyPath, overwrite: true);
+            File.Move(tempPath, keyPath, true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             TryDeleteTemp(tempPath);
-            throw new InvalidOperationException(
-                $"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
                 exception);
         }
 

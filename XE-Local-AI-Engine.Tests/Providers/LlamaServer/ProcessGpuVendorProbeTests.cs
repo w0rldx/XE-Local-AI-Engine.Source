@@ -17,8 +17,7 @@ public sealed class ProcessGpuVendorProbeTests
         var shellAttempts = 0;
         // NVML driver-presence signal is "present" — the probe must short-circuit to NVIDIA and never spawn a tool.
         // The factory throws if invoked so any shelling attempt fails the test loudly.
-        var probe = new ProcessGpuVendorProbe(
-            () => true,
+        var probe = new ProcessGpuVendorProbe(() => true,
             TimeSpan.FromSeconds(8),
             (_, _) =>
             {
@@ -40,8 +39,7 @@ public sealed class ProcessGpuVendorProbeTests
         // The test owns the fake's lifetime; the probe is responsible for killing+disposing it on the timeout path.
         using var hangingProcess = new HangingProbeProcess();
         var shellAttempts = 0;
-        var probe = new ProcessGpuVendorProbe(
-            () => false,
+        var probe = new ProcessGpuVendorProbe(() => false,
             TimeSpan.FromMilliseconds(20),
             (_, _) =>
             {
@@ -68,7 +66,10 @@ public sealed class ProcessGpuVendorProbeTests
 
         public int ExitCode => 0;
 
-        public bool Start() => true;
+        public bool Start()
+        {
+            return true;
+        }
 
         public async Task<string> ReadStandardOutputAsync(CancellationToken ct)
         {
@@ -76,7 +77,10 @@ public sealed class ProcessGpuVendorProbeTests
             return string.Empty;
         }
 
-        public Task WaitForExitAsync(CancellationToken ct) => Task.Delay(Timeout.Infinite, ct);
+        public Task WaitForExitAsync(CancellationToken ct)
+        {
+            return Task.Delay(Timeout.Infinite, ct);
+        }
 
         public void Kill()
         {
@@ -84,6 +88,9 @@ public sealed class ProcessGpuVendorProbeTests
             HasExited = true;
         }
 
-        public void Dispose() => WasDisposed = true;
+        public void Dispose()
+        {
+            WasDisposed = true;
+        }
     }
 }

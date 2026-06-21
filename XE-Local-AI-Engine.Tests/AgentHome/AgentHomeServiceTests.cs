@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -821,5 +819,4 @@ public sealed class AgentHomeServiceTests : IDisposable
             return _utcNow;
         }
     }
-
 }

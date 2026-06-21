@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -411,7 +410,8 @@ public sealed class CapabilityReporterTests
         var tokenStore = paired
             ? MockTokenStore.Paired("test-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1))
             : MockTokenStore.Unpaired();
-        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, tokenStore, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, tokenStore, timeProvider,
+            NullLogger<CapabilityReporter>.Instance);
         return new CapabilityReporterTestContext(server, chatClient, capabilityClient, hubConnection, reporter, timeProvider);
     }
 

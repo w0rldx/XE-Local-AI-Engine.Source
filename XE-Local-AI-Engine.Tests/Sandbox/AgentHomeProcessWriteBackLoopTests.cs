@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -313,5 +311,4 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             return _utcNow;
         }
     }
-
 }

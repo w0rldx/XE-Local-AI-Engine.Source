@@ -563,7 +563,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             "Quartz job must be removed after DeleteJobAsync.");
 
         // Store: definition excluded from default list (soft-deleted).
-        var jobs = await service.ListJobsAsync(false).ConfigureAwait(false);
+        var jobs = await service.ListJobsAsync().ConfigureAwait(false);
         AssertEx.False(jobs.Any(j => j.Id == created.Id),
             "Soft-deleted definition must not appear in default ListJobsAsync.");
 
@@ -959,7 +959,6 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             ScheduleKind.SimpleInterval,
             SchedulerMisfirePolicy.Smart,
             null,
-            false,
             false);
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)

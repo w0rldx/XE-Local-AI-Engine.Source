@@ -67,8 +67,10 @@ public sealed class OllamaProviderMapBackfillTests
         AssertEx.Empty(mapStore.Mappings);
     }
 
-    private static Task Backfill(ServiceProvider provider) =>
-        OllamaProviderMapBackfillService.BackfillAsync(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger.Instance);
+    private static Task Backfill(ServiceProvider provider)
+    {
+        return OllamaProviderMapBackfillService.BackfillAsync(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger.Instance);
+    }
 
     private static ServiceProvider BuildProvider(IOllamaModelService ollamaModelService, IModelProviderMapStore mapStore)
     {
@@ -80,14 +82,21 @@ public sealed class OllamaProviderMapBackfillTests
 
     private sealed class FakeOllamaModelService(IReadOnlyList<string> installedNames) : StubOllamaModelService
     {
-        public override Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default) =>
-            Task.FromResult<IEnumerable<Model>>(installedNames.Select(name => new Model { Name = name }).ToArray());
+        public override Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+        {
+            return Task.FromResult<IEnumerable<Model>>(installedNames.Select(name => new Model
+            {
+                Name = name
+            }).ToArray());
+        }
     }
 
     private sealed class ThrowingOllamaModelService : StubOllamaModelService
     {
-        public override Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default) =>
+        public override Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+        {
             throw new HttpRequestException("Ollama is not running.");
+        }
     }
 
     // Base stub: only ListLocalModelsAsync is exercised by the backfill; the rest throw so an accidental call is loud.
@@ -95,19 +104,40 @@ public sealed class OllamaProviderMapBackfillTests
     {
         public abstract Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default);
 
-        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<bool> IsAvailableAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class FakeModelProviderMapStore : IModelProviderMapStore
@@ -116,20 +146,26 @@ public sealed class OllamaProviderMapBackfillTests
 
         public int UpsertCount { get; private set; }
 
-        public void ResetUpsertCount() => UpsertCount = 0;
+        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        }
 
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Mappings.TryGetValue(modelName, out var provider) ? provider : null);
-
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(
-                Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
             UpsertCount++;
             Mappings[modelName] = providerName;
             return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+        }
+
+        public void ResetUpsertCount()
+        {
+            UpsertCount = 0;
         }
     }
 }

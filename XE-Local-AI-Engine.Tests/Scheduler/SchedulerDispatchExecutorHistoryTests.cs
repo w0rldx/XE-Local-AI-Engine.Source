@@ -168,7 +168,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
         var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
         // No cancellation requested → the only token-cancel source is the auto-interrupt max-runtime plugin.
         runStore.GetByIdAsync(RunId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running, null)));
+                .Returns(Task.FromResult<ScheduledJobRunRecord?>(RunRecord(ScheduledRunStatus.Running)));
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-timeout", null, Now, cts.Token));
 
@@ -373,8 +373,7 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             ScheduleKind.OneShot,
             SchedulerMisfirePolicy.SkipMissed,
             null,
-            true,
-            false);
+            true);
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

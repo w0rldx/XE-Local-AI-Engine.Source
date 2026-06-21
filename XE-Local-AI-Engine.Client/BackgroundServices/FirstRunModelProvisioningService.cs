@@ -180,7 +180,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             variant = GpuVariant.Cpu;
         }
 
-        _logger.LogInformation("First-run provisioning acquiring the llama.cpp runtime ({Variant}) for first-run model '{RepoId}' — this downloads the runtime on first run and can take a few minutes.", variant, repoId.Trim());
+        _logger.LogInformation(
+            "First-run provisioning acquiring the llama.cpp runtime ({Variant}) for first-run model '{RepoId}' — this downloads the runtime on first run and can take a few minutes.", variant,
+            repoId.Trim());
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
         _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
 
@@ -237,9 +239,6 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
                     return false;
                 case GgufDownloadPhase.Cancelled:
                     return false;
-                default:
-                    // Running or not-yet-reported — keep polling.
-                    break;
             }
         }
 

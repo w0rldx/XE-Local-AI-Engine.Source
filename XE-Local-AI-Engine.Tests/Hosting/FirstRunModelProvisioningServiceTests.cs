@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -26,11 +25,11 @@ public sealed class FirstRunModelProvisioningServiceTests
         var binaryManager = new RecordingBinaryManager();
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(isDesktop: true,
-            installed: [],
-            binaryManager: binaryManager,
-            coordinator: coordinator,
-            settingsStore: settingsStore);
+        using var service = BuildService(true,
+            [],
+            binaryManager,
+            coordinator,
+            settingsStore);
 
         await RunAsync(service);
 
@@ -47,11 +46,11 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(isDesktop: false,
-            installed: [],
-            binaryManager: new RecordingBinaryManager(),
-            coordinator: coordinator,
-            settingsStore: settingsStore);
+        using var service = BuildService(false,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
 
         await RunAsync(service);
 
@@ -64,11 +63,11 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(isDesktop: true,
-            installed: ["already/installed:Q4_K_M"],
-            binaryManager: new RecordingBinaryManager(),
-            coordinator: coordinator,
-            settingsStore: settingsStore);
+        using var service = BuildService(true,
+            ["already/installed:Q4_K_M"],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
 
         await RunAsync(service);
 
@@ -84,11 +83,11 @@ public sealed class FirstRunModelProvisioningServiceTests
         {
             DefaultModelName = "operator/picked:Q8_0"
         });
-        using var service = BuildService(isDesktop: true,
-            installed: [],
-            binaryManager: new RecordingBinaryManager(),
-            coordinator: coordinator,
-            settingsStore: settingsStore);
+        using var service = BuildService(true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
 
         await RunAsync(service);
 
@@ -101,11 +100,11 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Failed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(isDesktop: true,
-            installed: [],
-            binaryManager: new RecordingBinaryManager(),
-            coordinator: coordinator,
-            settingsStore: settingsStore);
+        using var service = BuildService(true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore);
 
         // Must not throw — offline-tolerance keeps startup alive with the empty-picker onboarding fallback.
         await RunAsync(service);
@@ -119,14 +118,14 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(isDesktop: true,
-            installed: [],
-            binaryManager: new RecordingBinaryManager
+        using var service = BuildService(true,
+            [],
+            new RecordingBinaryManager
             {
                 ThrowOnEnsure = true
             },
-            coordinator: coordinator,
-            settingsStore: settingsStore);
+            coordinator,
+            settingsStore);
 
         await RunAsync(service);
 
@@ -143,13 +142,13 @@ public sealed class FirstRunModelProvisioningServiceTests
         // A selector that hangs until cancelled — it observes the provisioning ceiling (linked CTS) and throws
         // OperationCanceledException, exactly as the real cancellation-linked probe does when its child overruns.
         var hangingSelector = new HangingVariantSelector();
-        using var service = BuildService(isDesktop: true,
-            installed: [],
-            binaryManager: binaryManager,
-            coordinator: coordinator,
-            settingsStore: settingsStore,
-            variantSelector: hangingSelector,
-            gpuProbeCeiling: TimeSpan.FromMilliseconds(20));
+        using var service = BuildService(true,
+            [],
+            binaryManager,
+            coordinator,
+            settingsStore,
+            hangingSelector,
+            TimeSpan.FromMilliseconds(20));
 
         await RunAsync(service);
 
@@ -226,11 +225,16 @@ public sealed class FirstRunModelProvisioningServiceTests
 
     private sealed class FakeVariantSelector : IGpuVariantSelector
     {
-        public Task<GpuVariant> SelectVariantAsync(CancellationToken ct) => Task.FromResult(GpuVariant.Cpu);
+        public Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
+        {
+            return Task.FromResult(GpuVariant.Cpu);
+        }
     }
 
-    /// <summary>A selector that never completes on its own — it waits on the supplied token, mirroring how the real
-    /// cancellation-linked probe blocks until the provisioning ceiling cancels it (then throws).</summary>
+    /// <summary>
+    ///     A selector that never completes on its own — it waits on the supplied token, mirroring how the real
+    ///     cancellation-linked probe blocks until the provisioning ceiling cancels it (then throws).
+    /// </summary>
     private sealed class HangingVariantSelector : IGpuVariantSelector
     {
         public async Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
@@ -242,31 +246,46 @@ public sealed class FirstRunModelProvisioningServiceTests
 
     private sealed class FakeGgufModelStore(IReadOnlyList<string> installed) : IGgufModelStore
     {
-        public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct) => Task.FromResult<string?>(null);
+        public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<string?>(null);
+        }
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
         {
             IReadOnlyList<LocalModelDescriptor> descriptors = installed
-                .Select(static name => new LocalModelDescriptor
-                {
-                    ModelName = name,
-                    ProviderName = LlamaServerProviderConstants.ProviderName,
-                    IsAvailable = true,
-                    SizeBytes = null,
-                    ModifiedAt = null,
-                    MaxContextTokens = null
-                })
-                .ToList();
+                                                              .Select(static name => new LocalModelDescriptor
+                                                              {
+                                                                  ModelName = name,
+                                                                  ProviderName = LlamaServerProviderConstants.ProviderName,
+                                                                  IsAvailable = true,
+                                                                  SizeBytes = null,
+                                                                  ModifiedAt = null,
+                                                                  MaxContextTokens = null
+                                                              })
+                                                              .ToList();
             return Task.FromResult(descriptors);
         }
 
-        public Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct) => throw new NotSupportedException();
+        public Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => Task.CompletedTask;
+        public Task DeleteModelAsync(string modelName, CancellationToken ct)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task<bool> ExistsAsync(string modelName, CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> ExistsAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     /// <summary>A coordinator that records Start requests and reports a fixed terminal phase for any model name.</summary>
@@ -281,10 +300,15 @@ public sealed class FirstRunModelProvisioningServiceTests
             return Task.FromResult(new GgufDownloadTicket(modelName, false));
         }
 
-        public bool Cancel(string modelName) => false;
+        public bool Cancel(string modelName)
+        {
+            return false;
+        }
 
-        public GgufDownloadStatus? GetStatus(string modelName) =>
-            new(modelName, terminalPhase, null, null, terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
+        public GgufDownloadStatus? GetStatus(string modelName)
+        {
+            return new GgufDownloadStatus(modelName, terminalPhase, null, null, terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
+        }
     }
 
     private sealed class FakeNodeSettingsStore(StoredNodeSettings initial) : INodeSettingsStore
@@ -293,7 +317,10 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public StoredNodeSettings? Saved { get; private set; }
 
-        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(_current);
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_current);
+        }
 
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
         {

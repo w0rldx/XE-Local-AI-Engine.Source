@@ -50,7 +50,10 @@ public static class HuggingFaceServiceCollectionExtensions
         services.AddHttpClient(HubHttpClientName);
         services.AddHttpClient(DownloadHttpClientName);
         services.AddHttpClient(ResolveHttpClientName)
-                .ConfigurePrimaryHttpMessageHandler(static () => new System.Net.Http.HttpClientHandler { AllowAutoRedirect = false });
+                .ConfigurePrimaryHttpMessageHandler(static () => new HttpClientHandler
+                {
+                    AllowAutoRedirect = false
+                });
 
         services.TryAddSingleton(static sp => new HfHubClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HubHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),

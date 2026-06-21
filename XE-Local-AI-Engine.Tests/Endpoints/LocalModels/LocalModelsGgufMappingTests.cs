@@ -16,21 +16,23 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class LocalModelsGgufMappingTests
 {
-    private static LocalModelDescriptor Gguf(string modelName, long? sizeBytes = 1024) => new()
+    private static LocalModelDescriptor Gguf(string modelName, long? sizeBytes = 1024)
     {
-        ModelName = modelName,
-        ProviderName = LocalModelProviders.LlamaCpp,
-        IsAvailable = true,
-        SizeBytes = sizeBytes,
-        ModifiedAt = DateTimeOffset.UnixEpoch,
-        MaxContextTokens = null
-    };
+        return new LocalModelDescriptor
+        {
+            ModelName = modelName,
+            ProviderName = LocalModelProviders.LlamaCpp,
+            IsAvailable = true,
+            SizeBytes = sizeBytes,
+            ModifiedAt = DateTimeOffset.UnixEpoch,
+            MaxContextTokens = null
+        };
+    }
 
     [Test]
     public void ToLlamaCppModelResponses_TagsLlamaCpp_AndClassifiesChat()
     {
-        var gguf = LocalModelsMapper.ToLlamaCppModelResponses(
-            [Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
             null);
 
         AssertEx.Equal(1, gguf.Count);
@@ -47,8 +49,7 @@ public sealed class LocalModelsGgufMappingTests
     [Test]
     public void ToLlamaCppModelResponses_MarksTheSelectedModel()
     {
-        var gguf = LocalModelsMapper.ToLlamaCppModelResponses(
-            [Gguf("repo-a:Q4_K_M"), Gguf("repo-b:Q4_K_M")],
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("repo-a:Q4_K_M"), Gguf("repo-b:Q4_K_M")],
             "repo-b:Q4_K_M");
 
         AssertEx.ContainsSingle(gguf, static m => m.IsSelected);

@@ -65,6 +65,34 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         return new GgufDownloadTicket(modelName, false);
     }
 
+    public bool Cancel(string modelName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        if (!_inFlight.TryGetValue(modelName, out var cts))
+        {
+            return false;
+        }
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The download finished and disposed its CTS between the lookup and the cancel — treat as nothing to cancel.
+            return false;
+        }
+
+        return true;
+    }
+
+    public GgufDownloadStatus? GetStatus(string modelName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        return _status.TryGetValue(modelName, out var status) ? status : null;
+    }
+
     // Resolves the canonical model name via the store; on a discovery/transport failure (or HttpClient request TIMEOUT,
     // which surfaces as a non-caller OperationCanceledException) falls back to the request-derived label so a download
     // can still be started and surface its own failure. Genuine caller cancellation propagates.
@@ -78,7 +106,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or IOException or TimeoutException or InvalidOperationException or OperationCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or HuggingFaceDownloadException or IOException or TimeoutException or InvalidOperationException
+                                              or OperationCanceledException)
         {
             _logger.LogDebug(exception, "Could not pre-resolve the GGUF model name for {RepoId}; using the request-derived key.", request.RepoId);
             return string.IsNullOrWhiteSpace(request.Quant)
@@ -107,34 +136,6 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             _logger.LogWarning(exception, "Could not persist the llamacpp provider mapping for {ModelName}; the default-provider routing still applies.", modelName);
         }
-    }
-
-    public bool Cancel(string modelName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-
-        if (!_inFlight.TryGetValue(modelName, out var cts))
-        {
-            return false;
-        }
-
-        try
-        {
-            cts.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // The download finished and disposed its CTS between the lookup and the cancel — treat as nothing to cancel.
-            return false;
-        }
-
-        return true;
-    }
-
-    public GgufDownloadStatus? GetStatus(string modelName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        return _status.TryGetValue(modelName, out var status) ? status : null;
     }
 
     private async Task RunDownloadAsync(string modelName, GgufModelRequest request, CancellationToken token)

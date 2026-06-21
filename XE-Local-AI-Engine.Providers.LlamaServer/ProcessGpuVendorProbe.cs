@@ -246,7 +246,10 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
         }
     }
 
-    private static IProbeProcess CreateRealProcess(string fileName, string arguments) => new RealProbeProcess(fileName, arguments);
+    private static IProbeProcess CreateRealProcess(string fileName, string arguments)
+    {
+        return new RealProbeProcess(fileName, arguments);
+    }
 
     /// <summary>
     ///     Minimal seam over a spawned probe tool process. Production wraps <see cref="Process" />; tests supply a fake
@@ -292,14 +295,29 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 
         public int ExitCode => _process.ExitCode;
 
-        public bool Start() => _process.Start();
+        public bool Start()
+        {
+            return _process.Start();
+        }
 
-        public Task<string> ReadStandardOutputAsync(CancellationToken ct) => _process.StandardOutput.ReadToEndAsync(ct);
+        public Task<string> ReadStandardOutputAsync(CancellationToken ct)
+        {
+            return _process.StandardOutput.ReadToEndAsync(ct);
+        }
 
-        public Task WaitForExitAsync(CancellationToken ct) => _process.WaitForExitAsync(ct);
+        public Task WaitForExitAsync(CancellationToken ct)
+        {
+            return _process.WaitForExitAsync(ct);
+        }
 
-        public void Kill() => _process.Kill(entireProcessTree: true);
+        public void Kill()
+        {
+            _process.Kill(true);
+        }
 
-        public void Dispose() => _process.Dispose();
+        public void Dispose()
+        {
+            _process.Dispose();
+        }
     }
 }

@@ -14,8 +14,8 @@ public sealed class PullLocalModelEndpoint(
     IModelProviderMapStore modelProviderMapStore,
     ModelNameValidator modelNameValidator) : Endpoint<PullLocalModelRequest, PullLocalModelResponse>
 {
-    private readonly IModelProviderMapStore _modelProviderMapStore = modelProviderMapStore ?? throw new ArgumentNullException(nameof(modelProviderMapStore));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+    private readonly IModelProviderMapStore _modelProviderMapStore = modelProviderMapStore ?? throw new ArgumentNullException(nameof(modelProviderMapStore));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
 
     public override void Configure()

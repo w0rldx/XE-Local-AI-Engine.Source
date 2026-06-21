@@ -344,7 +344,7 @@ public sealed class GgufStoreTests
         }, null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!, null);
+        AssertEx.Equal(correctSha, handle.Sha256!);
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 
@@ -418,8 +418,8 @@ public sealed class GgufStoreTests
             RepoId = Infra.RepoId
         }, null, CancellationToken.None);
 
-        AssertEx.Equal("Bearer", handler.Requests[0].AuthScheme!, null);
-        AssertEx.Equal(token, handler.Requests[0].AuthParameter!, null);
+        AssertEx.Equal("Bearer", handler.Requests[0].AuthScheme!);
+        AssertEx.Equal(token, handler.Requests[0].AuthParameter!);
     }
 
     [Test]
@@ -469,7 +469,10 @@ public sealed class GgufStoreTests
         // would be a guaranteed false HashMismatch.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
         {
-            var get = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(ModelBytes) };
+            var get = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(ModelBytes)
+            };
             get.Content.Headers.ContentLength = ModelBytes.Length;
             get.Headers.ETag = new EntityTagHeaderValue($"\"{xetCdnHash}\"");
             return get;
@@ -480,11 +483,14 @@ public sealed class GgufStoreTests
         var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
-        var handle = await store.EnsureModelAsync(new GgufModelRequest { RepoId = Infra.RepoId }, null, CancellationToken.None);
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, null, CancellationToken.None);
 
         // The download succeeds and records the sha from the probe's X-Linked-Etag — the CDN Xet ETag was ignored.
         AssertEx.NotNull(handle.Sha256);
-        AssertEx.Equal(correctSha, handle.Sha256!, null);
+        AssertEx.Equal(correctSha, handle.Sha256!);
         AssertEx.True(File.Exists(handle.LocalPath));
     }
 

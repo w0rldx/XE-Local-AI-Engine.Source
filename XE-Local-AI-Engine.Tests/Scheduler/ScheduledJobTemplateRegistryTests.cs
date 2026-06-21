@@ -148,7 +148,6 @@ public sealed class ScheduledJobTemplateRegistryTests
             ScheduleKind.OneShot,
             SchedulerMisfirePolicy.Smart,
             null,
-            false,
             false);
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)

@@ -177,8 +177,7 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            "high",
-            true);
+            "high");
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -211,8 +210,7 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            effort,
-            true);
+            effort);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -233,9 +231,7 @@ public sealed class InvocationAgentFactoryTests
         var definition = new InvocationAgentDefinition("qwen3:8b",
             "Be helpful.",
             [],
-            [],
-            null,
-            true);
+            []);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);

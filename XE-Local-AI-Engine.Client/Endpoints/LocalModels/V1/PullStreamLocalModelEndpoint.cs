@@ -39,10 +39,11 @@ public sealed class PullStreamLocalModelEndpoint(
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private readonly IModelProviderMapStore _modelProviderMapStore = modelProviderMapStore ?? throw new ArgumentNullException(nameof(modelProviderMapStore));
-    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
     private readonly ILogger<PullStreamLocalModelEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+
+    private readonly IModelProviderMapStore _modelProviderMapStore = modelProviderMapStore ?? throw new ArgumentNullException(nameof(modelProviderMapStore));
+    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
 
     public override void Configure()
     {
