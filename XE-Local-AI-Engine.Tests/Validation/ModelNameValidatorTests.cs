@@ -55,14 +55,18 @@ public sealed class ModelNameValidatorTests
     [Arguments("hf.co/unsloth/gemma-3-12b-it-GGUF:Q8_0")]
     [Arguments("huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M")]
     [Arguments("hf.co/org/repo")]
+    // Bare org/repo[:quant] — what first-run provisioning and GGUF pulls produce (the hf.co/ prefix is optional).
+    [Arguments("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")]
+    [Arguments("foo/bar")]
+    [Arguments("org/repo:Q4_K_M")]
     public void IsValid_WhenNameIsHuggingFaceGgufReference_ReturnsTrue(string modelName)
     {
         AssertEx.True(_validator.IsValid(modelName));
     }
 
     [Test]
-    [Arguments("foo/bar")]
     [Arguments("hf.co/a/b/c")]
+    [Arguments("a/b/c")]
     [Arguments("hf.co/../secret")]
     public void IsValid_WhenNameContainsDisallowedSlashForm_ReturnsFalse(string modelName)
     {
