@@ -12,13 +12,19 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class LocalModelEndpointTests
 {
+    // The resolver provider keys the details endpoint routes by (lowercase, matching the registered providers).
+    private const string LlamaCppProviderName = LocalModelProviders.LlamaCpp;
+    private const string OllamaProviderName = "ollama";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
@@ -189,8 +195,11 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
-    public async Task GetLocalModelDetails_WhenModelExists_ReturnsSecretSafeDetails()
+    public async Task GetLocalModelDetails_WhenOllamaModel_ProbesOllamaForSecretSafeDetails()
     {
+        // The test host stubs the provider resolver to route every model to "ollama" (StubNoCodexSession), so this
+        // exercises the Ollama /api/show branch. The real resolver's default is now "llamacpp"; the GGUF test below
+        // overrides the resolver to assert the no-Ollama GGUF branch.
         await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
         context.Server!.State.ModelInfo["llama3:8b"] = new Dictionary<string, object?>
         {
@@ -359,6 +368,7 @@ public sealed class LocalModelEndpointTests
     [Test]
     public async Task GetLocalModelDetails_WhenNameHasEncodedSlashes_DecodesBeforeProbing()
     {
+        // Ollama branch (default-stubbed resolver): the decoded canonical name is the one probed via /api/show.
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                     .Returns(new OllamaModelDetails(new ShowModelResponse(), 4096, []));
@@ -375,6 +385,94 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
         await modelService.Received(1)
                           .ShowModelDetailsAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenGgufModel_ReturnsGgufMetadata_WithoutProbingOllama()
+    {
+        // A llamacpp-routed model's details come from the installed-GGUF registry, NOT Ollama /api/show. Assert the
+        // Ollama model service is never touched (desktop mode has no Ollama daemon) and the descriptor's context
+        // length surfaces as MaxContextTokens on the shared details response.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                      .Returns<IReadOnlyList<LocalModelDescriptor>>(_ =>
+                      [
+                          new LocalModelDescriptor
+                          {
+                              ModelName = "Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
+                              ProviderName = LlamaCppProviderName,
+                              IsAvailable = true,
+                              SizeBytes = 491_000_000,
+                              ModifiedAt = DateTimeOffset.UnixEpoch,
+                              MaxContextTokens = 32768
+                          }
+                      ]);
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", details.ModelName);
+        AssertEx.Equal(32768, details.MaxContextTokens);
+        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenGgufModelNotInstalled_Returns404_WithoutProbingOllama()
+    {
+        // A name that routes to llamacpp but has no installed descriptor (stale map row / removed file) has no details:
+        // a clean 404 that still never touches Ollama.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                      .Returns<IReadOnlyList<LocalModelDescriptor>>(_ => []);
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/ghost-gguf:Q4_K_M/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenGgufNameHasEncodedSlashes_DecodesBeforeResolving()
+    {
+        // Decode must precede provider resolution AND the GGUF lookup: the resolver and the registry are both keyed by
+        // the decoded canonical name, so an encoded HF reference resolves and matches the installed descriptor.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
+                      .Returns<IReadOnlyList<LocalModelDescriptor>>(_ =>
+                      [
+                          new LocalModelDescriptor
+                          {
+                              ModelName = "hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL",
+                              ProviderName = LlamaCppProviderName,
+                              IsAvailable = true,
+                              SizeBytes = 1,
+                              ModifiedAt = DateTimeOffset.UnixEpoch,
+                              MaxContextTokens = 8192
+                          }
+                      ]);
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory,
+            HttpMethod.Get,
+            "/api/local/v1/models/hf.co%2Funsloth%2Fgemma-4-12b-it-GGUF%3AUD-Q4_K_XL/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
+        AssertEx.Equal(8192, details.MaxContextTokens);
+        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -449,6 +547,16 @@ public sealed class LocalModelEndpointTests
         return new LocalModelEndpointTestContext(modelService, settingsStore);
     }
 
+    // Overload for the GGUF (llamacpp) details branch: routes every model to the given provider and supplies the
+    // installed-GGUF store the branch reads. Used to assert the no-Ollama GGUF path.
+    private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
+        StubNodeSettingsStore settingsStore,
+        string providerName,
+        IGgufModelStore ggufModelStore)
+    {
+        return new LocalModelEndpointTestContext(modelService, settingsStore, providerName, ggufModelStore);
+    }
+
     private static LocalModelEndpointTestContext CreateContextWithClassification(IModelClassificationService classificationService)
     {
         return new LocalModelEndpointTestContext(classificationService);
@@ -511,6 +619,19 @@ public sealed class LocalModelEndpointTests
             Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)), SettingsStore);
         }
 
+        public LocalModelEndpointTestContext(IOllamaModelService modelService,
+            StubNodeSettingsStore settingsStore,
+            string providerName,
+            IGgufModelStore ggufModelStore)
+        {
+            SettingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+            ArgumentNullException.ThrowIfNull(ggufModelStore);
+            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)),
+                SettingsStore,
+                providerName,
+                ggufModelStore);
+        }
+
         public LocalModelEndpointTestContext(IModelClassificationService classificationService)
         {
             ArgumentNullException.ThrowIfNull(classificationService);
@@ -552,6 +673,29 @@ public sealed class LocalModelEndpointTests
             };
         }
 
+        private static TestingWebAppFactory CreateFactory(IOllamaModelService modelService,
+            StubNodeSettingsStore settingsStore,
+            string providerName,
+            IGgufModelStore ggufModelStore)
+        {
+            return new TestingWebAppFactory
+            {
+                ConfigureAdditionalTestServices = services =>
+                {
+                    services.RemoveAll<IOllamaModelService>();
+                    services.AddSingleton(modelService);
+                    services.RemoveAll<INodeSettingsStore>();
+                    services.AddSingleton<INodeSettingsStore>(settingsStore);
+                    services.RemoveAll<IGgufModelStore>();
+                    services.AddSingleton(ggufModelStore);
+                    StubNoCodexSession(services);
+                    // Override the default (ollama) resolver from StubNoCodexSession so this context routes the details
+                    // endpoint to the requested provider (llamacpp for the GGUF branch).
+                    StubProviderResolver(services, providerName);
+                }
+            };
+        }
+
         private static TestingWebAppFactory CreateFactory(IModelClassificationService classificationService, StubNodeSettingsStore settingsStore)
         {
             return new TestingWebAppFactory
@@ -576,6 +720,23 @@ public sealed class LocalModelEndpointTests
             codexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
             services.RemoveAll<ICodexTokenStore>();
             services.AddSingleton(codexTokenStore);
+
+            // Default the details endpoint's provider routing to "ollama" so the Ollama-branch detail tests probe
+            // /api/show. The real resolver's default for an unmapped model is now "llamacpp" (which would route the
+            // GGUF branch and skip Ollama) — the GGUF test overrides this resolver to assert that branch explicitly.
+            StubProviderResolver(services, OllamaProviderName);
+        }
+
+        // Replaces the real ILocalModelProviderResolver with a substitute that routes EVERY model to a single provider
+        // name. The details endpoint only calls ResolveProviderNameForModelAsync, so the other members stay
+        // unimplemented (an NSubstitute default), keeping these endpoint tests deterministic and provider-stack-free.
+        private static void StubProviderResolver(IServiceCollection services, string providerName)
+        {
+            var resolver = Substitute.For<ILocalModelProviderResolver>();
+            resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                    .Returns(_ => Task.FromResult(providerName));
+            services.RemoveAll<ILocalModelProviderResolver>();
+            services.AddSingleton(resolver);
         }
     }
 }
