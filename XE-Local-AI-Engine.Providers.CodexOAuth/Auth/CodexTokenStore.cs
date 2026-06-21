@@ -6,8 +6,8 @@ using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Contract for persisting the encrypted Codex OAuth session.
@@ -42,15 +42,15 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
     private readonly string _tokensPath;
 
     public CodexTokenStore(IDataProtectionProvider dataProtectionProvider,
-        IHostEnvironment hostEnvironment,
+        INodeDataDirectory dataDirectory,
         ILogger<CodexTokenStore> logger)
     {
         ArgumentNullException.ThrowIfNull(dataProtectionProvider);
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(logger);
 
         _protector = dataProtectionProvider.CreateProtector(ProtectorPurpose);
-        _tokensPath = Path.Combine(hostEnvironment.ContentRootPath, TokensFileName);
+        _tokensPath = Path.Combine(dataDirectory.Root, TokensFileName);
         _logger = logger;
     }
 

@@ -44,6 +44,31 @@ public sealed class TokenStoreTests : IDisposable
     }
 
     [Test]
+    public async Task StoreTokensAsync_WritesCredentialsUnderDataDirectory_NotContentRoot()
+    {
+        // The encrypted credential must land in the per-user data dir the node-data-directory abstraction resolves,
+        // never in the shared/shipped install (content-root) directory.
+        var contentRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(contentRoot);
+        Directory.CreateDirectory(_contentRootPath);
+        try
+        {
+            using var tokenStore = new TokenStore(new MockDataProtector(),
+                new FakeNodeDataDirectory(_contentRootPath),
+                NullLogger<TokenStore>.Instance);
+
+            await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
+
+            AssertEx.True(File.Exists(GetCredentialsPath()), "the credential must be written under the data dir.");
+            AssertEx.False(File.Exists(Path.Combine(contentRoot, "worker-credentials.enc")), "no credential may land in the content root.");
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, true);
+        }
+    }
+
+    [Test]
     public async Task GetAccessTokenAsync_AfterStore_ReturnsStoredToken()
     {
         using var tokenStore = CreateTokenStore();
@@ -216,11 +241,8 @@ public sealed class TokenStoreTests : IDisposable
     {
         Directory.CreateDirectory(_contentRootPath);
 
-        var hostEnvironment = Substitute.For<IHostEnvironment>();
-        hostEnvironment.ContentRootPath.Returns(_contentRootPath);
-
         return new TokenStore(dataProtectionProvider ?? new MockDataProtector(),
-            hostEnvironment,
+            new FakeNodeDataDirectory(_contentRootPath),
             NullLogger<TokenStore>.Instance);
     }
 

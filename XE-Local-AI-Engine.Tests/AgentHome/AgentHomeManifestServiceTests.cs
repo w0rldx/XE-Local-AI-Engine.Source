@@ -214,10 +214,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         var clock = new MutableTimeProvider(FixedNow);
         var contentRoot = NewTempRoot();
         Directory.CreateDirectory(contentRoot);
-        using var service = new AgentHomeManifestService(new TestHostEnvironment
-            {
-                ContentRootPath = contentRoot
-            },
+        using var service = new AgentHomeManifestService(new FakeNodeDataDirectory(contentRoot),
             Options.Create(new AgentHomeOptions
             {
                 RootPath = null
@@ -273,11 +270,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
             RootPath = rootPath,
             PrepareStaleAfterSeconds = staleSeconds
         });
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ContentRootPath = rootPath
-        };
-        return new AgentHomeManifestService(hostEnvironment, options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        return new AgentHomeManifestService(new FakeNodeDataDirectory(rootPath), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
     }
 
     private static SandboxAttachKey Key(string owner = "owner-a")
@@ -337,16 +330,5 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         {
             return _utcNow;
         }
-    }
-
-    private sealed class TestHostEnvironment : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "tests";
-
-        public string EnvironmentName { get; set; } = "Development";
-
-        public string ContentRootPath { get; set; } = string.Empty;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }

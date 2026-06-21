@@ -18,7 +18,7 @@ public sealed class AgentHomeOptions
 
     /// <summary>
     ///     Override for the worker-local AgentHome root. When <see langword="null" />, the root is
-    ///     <c>Path.Combine(IHostEnvironment.ContentRootPath, "agent-home-state")</c>.
+    ///     <c>Path.Combine(INodeDataDirectory.Root, "agent-home-state")</c>.
     /// </summary>
     public string? RootPath { get; set; }
 

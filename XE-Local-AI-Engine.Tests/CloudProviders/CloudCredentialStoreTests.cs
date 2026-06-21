@@ -115,11 +115,8 @@ public sealed class CloudCredentialStoreTests : IDisposable
     {
         Directory.CreateDirectory(_contentRootPath);
 
-        var hostEnvironment = Substitute.For<IHostEnvironment>();
-        hostEnvironment.ContentRootPath.Returns(_contentRootPath);
-
         return new CloudCredentialStore(dataProtectionProvider ?? new MockDataProtector(),
-            hostEnvironment,
+            new FakeNodeDataDirectory(_contentRootPath),
             NullLogger<CloudCredentialStore>.Instance);
     }
 

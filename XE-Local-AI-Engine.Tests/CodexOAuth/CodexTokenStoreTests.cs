@@ -102,11 +102,8 @@ public sealed class CodexTokenStoreTests : IDisposable
     {
         Directory.CreateDirectory(_contentRootPath);
 
-        var hostEnvironment = Substitute.For<IHostEnvironment>();
-        hostEnvironment.ContentRootPath.Returns(_contentRootPath);
-
         return new CodexTokenStore(dataProtectionProvider ?? new MockDataProtector(),
-            hostEnvironment,
+            new FakeNodeDataDirectory(_contentRootPath),
             NullLogger<CodexTokenStore>.Instance);
     }
 

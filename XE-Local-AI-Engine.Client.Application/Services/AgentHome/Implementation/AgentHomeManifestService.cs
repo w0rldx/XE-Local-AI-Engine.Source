@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Writes and recovers the worker-local <c>agent-home</c> layout on the deterministic host root. The sandbox provider
@@ -41,22 +42,22 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         }
     };
 
-    private readonly string _contentRootPath;
+    private readonly string _dataDirectoryRoot;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly ILogger<AgentHomeManifestService> _logger;
     private readonly AgentHomeOptions _options;
     private readonly ISandboxRuntimeProvider _sandboxProvider;
     private readonly TimeProvider _timeProvider;
 
-    public AgentHomeManifestService(IHostEnvironment hostEnvironment,
+    public AgentHomeManifestService(INodeDataDirectory dataDirectory,
         IOptions<AgentHomeOptions> options,
         ISandboxRuntimeProvider sandboxProvider,
         TimeProvider timeProvider,
         ILogger<AgentHomeManifestService> logger)
     {
-        ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(options);
-        _contentRootPath = hostEnvironment.ContentRootPath;
+        _dataDirectoryRoot = dataDirectory.Root;
         _options = options.Value;
         _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -187,7 +188,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     private string ResolveAgentHomeRoot()
     {
         var baseRoot = string.IsNullOrWhiteSpace(_options.RootPath)
-            ? Path.Combine(_contentRootPath, DefaultRootDirectoryName)
+            ? Path.Combine(_dataDirectoryRoot, DefaultRootDirectoryName)
             : _options.RootPath;
         return Path.Combine(baseRoot, AgentHomeDirectoryName);
     }

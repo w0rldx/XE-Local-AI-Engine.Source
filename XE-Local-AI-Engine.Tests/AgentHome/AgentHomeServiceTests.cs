@@ -644,11 +644,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             RootPath = root,
             CommandTimeoutSeconds = commandTimeoutSeconds
         });
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ContentRootPath = root
-        };
-        var manifestService = new AgentHomeManifestService(hostEnvironment, options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()
                               .AddScoped(_ => resolver)
@@ -826,14 +822,4 @@ public sealed class AgentHomeServiceTests : IDisposable
         }
     }
 
-    private sealed class TestHostEnvironment : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "tests";
-
-        public string EnvironmentName { get; set; } = "Development";
-
-        public string ContentRootPath { get; set; } = string.Empty;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
 }

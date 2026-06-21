@@ -474,10 +474,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
                            .BuildServiceProvider();
         var service = new NodePatchApplyService(resolver,
             options,
-            new TestHostEnvironment
-            {
-                ContentRootPath = agentHomeStateRoot
-            },
+            new FakeNodeDataDirectory(agentHomeStateRoot),
             new StubIdentityProvider(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -588,17 +585,13 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             AllowBinaryPatchApply = allowBinary,
             PatchApplyTimeoutSeconds = 120
         });
-        var hostEnvironment = new TestHostEnvironment
-        {
-            ContentRootPath = agentHomeStateRoot
-        };
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
 
         var service = new NodePatchApplyService(resolver,
             options,
-            hostEnvironment,
+            new FakeNodeDataDirectory(agentHomeStateRoot),
             new StubIdentityProvider(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<NodePatchApplyService>.Instance);
@@ -828,14 +821,4 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         }
     }
 
-    private sealed class TestHostEnvironment : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "tests";
-
-        public string EnvironmentName { get; set; } = "Development";
-
-        public string ContentRootPath { get; set; } = string.Empty;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
 }
