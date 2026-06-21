@@ -245,8 +245,7 @@ internal sealed class PlaybookActionService(
             input.Scope,
             input.Priority,
             pending.SourceFeedbackIds,
-            pending.Confidence,
-            null);
+            pending.Confidence);
 
         return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken).ConfigureAwait(false);
     }

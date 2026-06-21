@@ -43,8 +43,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             publisher,
             Options.Create(options ?? DefaultOptions()),
             TimeProvider.System,
-            NullLoggerFactory.Instance,
-            null);
+            NullLoggerFactory.Instance);
     }
 
     private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout)

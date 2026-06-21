@@ -161,7 +161,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         using var secondClient = new StubChatClient();
         var harness = new Harness();
         // First resolution: an early expiry. Second: a refreshed session (later expiry) → fingerprint changes.
-        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030, 0),
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030),
             SessionExpiringAt(2030, 1, "acct2"));
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(firstClient, secondClient);
         using var factory = harness.Factory;
@@ -234,7 +234,7 @@ public sealed class ActiveCloudChatClientFactoryTests
             await resumeStream.WaitAsync(); // wait until the test has flipped + resolved the new selection
         });
         var harness = new Harness();
-        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030, 0),
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030),
             SessionExpiringAt(2030, 1, "acct2"));
         harness.CodexFactory.Create(Arg.Any<string?>())
                .Returns(_ => Interlocked.Increment(ref createdCount) == 1 ? firstClient : new StubChatClient());

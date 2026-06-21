@@ -31,8 +31,8 @@ public sealed class OllamaProviderMapBackfillService(
     IServiceScopeFactory scopeFactory,
     ILogger<OllamaProviderMapBackfillService> logger) : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     private readonly ILogger<OllamaProviderMapBackfillService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

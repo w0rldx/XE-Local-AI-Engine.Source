@@ -391,7 +391,7 @@ public sealed class PlaybookActionServiceTests
     {
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, true, 1);
-        var input = CreateInput(agentId, PlaybookActionState.Enabled);
+        var input = CreateInput(agentId);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
 
@@ -430,7 +430,7 @@ public sealed class PlaybookActionServiceTests
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
-        var input = CreateInput(agentId, PlaybookActionState.Enabled);
+        var input = CreateInput(agentId);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateAsync(actionId, input)).ConfigureAwait(false);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -444,14 +444,14 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         // The action is ALREADY Enabled and stays Enabled (an edit, not a transition into Enabled). Even at the cap it
         // must not be blocked — the cap guard fires only on a non-Enabled -> Enabled transition.
-        var existing = CreateRecord(CreateInput(agentId, PlaybookActionState.Enabled)) with
+        var existing = CreateRecord(CreateInput(agentId)) with
         {
             Id = actionId
         };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(existing);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([existing]));
-        var input = CreateInput(agentId, PlaybookActionState.Enabled, behavior: "An edited behavior.");
+        var input = CreateInput(agentId, behavior: "An edited behavior.");
         store.UpdateAsync(actionId, input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input) with
         {
             Id = actionId

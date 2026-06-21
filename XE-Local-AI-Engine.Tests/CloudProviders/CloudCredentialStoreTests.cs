@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;

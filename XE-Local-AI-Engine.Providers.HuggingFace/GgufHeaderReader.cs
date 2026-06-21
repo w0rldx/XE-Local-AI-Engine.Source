@@ -90,7 +90,7 @@ internal sealed class GgufHeaderReader
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.Read,
-                bufferSize: 1,
+                1,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
 
             return await ReadGrowingAsync((requested, token) => ReadPrefixAsync(stream, requested, token), initialProbe, hardCap, ct)

@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Tests.AgentHome;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -220,7 +218,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     [Test]
     public async Task ApplyApprovedAsync_WithBinaryBlock_RejectsByDefaultButAppliesWhenAllowed()
     {
-        var rejectingHarness = NewHarness(false);
+        var rejectingHarness = NewHarness();
         var rejectingRoot = rejectingHarness.AddFolder("repo-01");
         await SeedHostBinaryAsync(rejectingRoot, "blob.bin", [0x00, 0x01, 0x02, 0x03]);
 
@@ -820,5 +818,4 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             return Task.FromResult(new AgentHomeOwnerIdentity("owner-a", "node-1"));
         }
     }
-
 }

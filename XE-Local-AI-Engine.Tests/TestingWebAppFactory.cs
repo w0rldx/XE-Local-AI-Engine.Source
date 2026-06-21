@@ -153,12 +153,12 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 // would hand back an NSubstitute default — so select the Ollama provider by name to guarantee the test
                 // chat client is the real Ollama-backed one the unit tests intend.
                 services.AddSingleton<IChatClient>(sp => sp.GetServices<ILocalModelProvider>()
-                    .First(provider => provider.ProviderName == OllamaLocalModelProvider.OllamaProviderName)
-                    .CreateChatClient(new LocalModelSelection
-                    {
-                        ModelName = "qwen3.5:0.8b",
-                        ProviderName = OllamaLocalModelProvider.OllamaProviderName
-                    }));
+                                                           .First(provider => provider.ProviderName == OllamaLocalModelProvider.OllamaProviderName)
+                                                           .CreateChatClient(new LocalModelSelection
+                                                           {
+                                                               ModelName = "qwen3.5:0.8b",
+                                                               ProviderName = OllamaLocalModelProvider.OllamaProviderName
+                                                           }));
 
                 services.RemoveAll<IHttpClientFactory>();
                 services.AddSingleton<IHttpClientFactory>(_ =>

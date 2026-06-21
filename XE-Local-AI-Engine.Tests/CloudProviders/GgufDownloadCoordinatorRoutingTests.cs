@@ -93,13 +93,20 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     {
         public bool FailDownload { get; init; }
 
-        public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct) => Task.FromResult<string?>("/fake/m.gguf");
+        public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<string?>("/fake/m.gguf");
+        }
 
-        public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]);
+        public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)
+        {
+            return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]);
+        }
 
-        public Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct) =>
-            Task.FromResult(GgufModelName.Format(request.RepoId, request.Quant ?? Quant));
+        public Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
+        {
+            return Task.FromResult(GgufModelName.Format(request.RepoId, request.Quant ?? Quant));
+        }
 
         public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
         {
@@ -113,9 +120,15 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             return Task.FromResult(new GgufModelHandle(name, "/fake/m.gguf", quant, 1, null, "rev", GgufRole.Chat));
         }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => Task.CompletedTask;
+        public Task DeleteModelAsync(string modelName, CancellationToken ct)
+        {
+            return Task.CompletedTask;
+        }
 
-        public Task<bool> ExistsAsync(string modelName, CancellationToken ct) => Task.FromResult(true);
+        public Task<bool> ExistsAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult(true);
+        }
     }
 
     /// <summary>An in-memory map store that records upserts (case-insensitive).</summary>
@@ -123,11 +136,15 @@ public sealed class GgufDownloadCoordinatorRoutingTests
     {
         public Dictionary<string, string> Mappings { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        }
 
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {

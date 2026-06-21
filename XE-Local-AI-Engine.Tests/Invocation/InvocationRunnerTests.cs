@@ -1086,7 +1086,7 @@ public sealed class InvocationRunnerTests
         if (providerResolver is null)
         {
             resolvedProviderResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
+                                    .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
         }
 
         var resolvedEventDispatcher = eventDispatcher ?? Substitute.For<IWorkerEventDispatcher>();

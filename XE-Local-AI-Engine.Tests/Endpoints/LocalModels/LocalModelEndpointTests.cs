@@ -396,7 +396,7 @@ public sealed class LocalModelEndpointTests
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns<IReadOnlyList<LocalModelDescriptor>>(_ =>
+                      .Returns(_ =>
                       [
                           new LocalModelDescriptor
                           {
@@ -429,7 +429,7 @@ public sealed class LocalModelEndpointTests
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns<IReadOnlyList<LocalModelDescriptor>>(_ => []);
+                      .Returns(_ => []);
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
@@ -448,7 +448,7 @@ public sealed class LocalModelEndpointTests
         var modelService = Substitute.For<IOllamaModelService>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
         ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
-                      .Returns<IReadOnlyList<LocalModelDescriptor>>(_ =>
+                      .Returns(_ =>
                       [
                           new LocalModelDescriptor
                           {

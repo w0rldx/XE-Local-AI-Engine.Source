@@ -33,8 +33,7 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
         ScheduleKind.OneShot,
         SchedulerMisfirePolicy.SkipMissed,
         null,
-        true,
-        false);
+        true);
 
     public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {

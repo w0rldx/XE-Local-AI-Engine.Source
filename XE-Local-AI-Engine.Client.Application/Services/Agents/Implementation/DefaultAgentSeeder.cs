@@ -93,8 +93,7 @@ public sealed class DefaultAgentSeeder : IHostedService
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            false);
+            null);
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -59,11 +60,15 @@ public sealed class LocalModelProviderResolverDefaultTests
     {
         private readonly Dictionary<string, string> _mappings = new(mappings, StringComparer.OrdinalIgnoreCase);
 
-        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        public Task<string?> GetProviderForModelAsync(string modelName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_mappings.TryGetValue(modelName, out var provider) ? provider : null);
+        }
 
-        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+        }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
@@ -77,20 +82,44 @@ public sealed class LocalModelProviderResolverDefaultTests
     {
         public string ProviderName => providerName;
 
-        public Microsoft.Extensions.AI.IChatClient CreateChatClient(LocalModelSelection selection) => throw new NotSupportedException();
+        public IChatClient CreateChatClient(LocalModelSelection selection)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) => throw new NotSupportedException();
+        public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task WarmModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

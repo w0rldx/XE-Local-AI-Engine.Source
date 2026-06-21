@@ -55,7 +55,7 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
             // handler is disposed by the HttpClient (disposeHandler: true) and disposes the inner one in turn.
             var connectFailureHandler = new OllamaConnectFailureHandler(handler);
 
-            var httpClient = new HttpClient(connectFailureHandler, disposeHandler: true)
+            var httpClient = new HttpClient(connectFailureHandler, true)
             {
                 BaseAddress = registration.Endpoint,
                 Timeout = TimeSpan.FromMinutes(5)

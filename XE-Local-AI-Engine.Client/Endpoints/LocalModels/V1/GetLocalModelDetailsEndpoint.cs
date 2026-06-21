@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
-using System.Net.Http;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;

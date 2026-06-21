@@ -272,12 +272,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         });
 
         var updated = AssertEx.NotNull(await store.UpdateLifecycleAsync(added.Id,
-                ScheduledRunStatus.Running,
-                null,
-                null,
-                null, // not supplied → should remain "initial-summary"
-                null,
-                null),
+                ScheduledRunStatus.Running),
             "UpdateLifecycle should return the updated record.");
 
         AssertEx.Equal(ScheduledRunStatus.Running, updated.Status);
@@ -305,9 +300,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
                 9_999,
                 1_234,
                 "all done",
-                """{"output":"ok"}""",
-                null,
-                null),
+                """{"output":"ok"}"""),
             "UpdateLifecycle should return the updated record.");
 
         AssertEx.Equal(ScheduledRunStatus.Succeeded, updated.Status);
@@ -680,7 +673,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var eventStore = new ScheduledJobRunEventStore(context, TimeProvider.System);
 
         var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Info, "msg", null));
+        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Info, "msg"));
 
         AssertEx.Null(added.DataJson, "Null DataJson should round-trip as null.");
     }
