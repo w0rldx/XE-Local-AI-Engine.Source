@@ -14,4 +14,8 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
 </Project>
