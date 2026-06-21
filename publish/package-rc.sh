@@ -115,6 +115,30 @@ TXT
   fi
 }
 
+# Fail the build if any per-node runtime/state artifact leaked into the staged bundle. CL-1 relocated all of these out
+# of ContentRoot into the per-user data dir, so a clean publish never produces them; this guard codifies that and stops
+# a regression (e.g. a re-committed dev node-settings.json, or a *.enc credential file) from ever shipping.
+#
+# Intended publish allowlist (everything else under the stage is one of these, by design):
+#   - appsettings*.json            (app configuration; carries no secrets — validated in the CL-2 audit)
+#   - *.runtimeconfig.json         (the .NET runtime host config)
+#   - *.deps.json                  (the .NET dependency manifest)
+#   - manifest.json                (AgentHome layout manifests are runtime-only; the app's own manifest.json is an asset)
+#   - wwwroot/**                   (the React SPA build, incl. hashed node-settings-*.js chunks — NOT node-settings.json)
+#   - the single-file binary + launcher + READ-ME-FIRST.txt
+assert_no_runtime_state() {
+  local stage="$1" leak
+  # node-settings.json (dev/runtime state), any encrypted credential (*.enc), any cert pin (*.pin). The React build
+  # emits node-settings-<hash>.js chunks — those are assets and must NOT match, so the name pattern is exact.
+  leak="$(cd "${stage}" && find . \( -name 'node-settings.json' -o -name '*.enc' -o -name '*.pin' \) -print)"
+  if [[ -n "${leak}" ]]; then
+    echo "Error: runtime/state files leaked into the published bundle (must never ship):" >&2
+    echo "${leak}" >&2
+    echo "These belong under the per-user data dir at runtime (CL-1). Check the csproj Content items / a stray committed file." >&2
+    exit 1
+  fi
+}
+
 make_zip() {
   local stage_parent="$1" base="$2" zip_path="$3"
   rm -f "${zip_path}"
@@ -152,6 +176,9 @@ package_rid() {
     chmod +x "${stage}/start-xe-local-ai-engine.sh" "${stage}/${exe}"
   fi
   write_readme "${os}" "${stage}/READ-ME-FIRST.txt"
+
+  # Refuse to ship a bundle carrying any per-node runtime/state artifact (node-settings.json / *.enc / *.pin).
+  assert_no_runtime_state "${stage}"
 
   zip_path="${DIST_DIR}/${base}.zip"
   make_zip "${DIST_DIR}/stage" "${base}" "${zip_path}"
