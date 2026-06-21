@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -55,6 +56,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly int _maxResponseSizeBytes;
     private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
+    private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
     private readonly object _syncRoot = new();
 
@@ -71,6 +73,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IEnvelopeCryptoService envelopeCryptoService,
         IRuntimePackageValidator runtimePackageValidator,
         ICapabilityReporter capabilityReporter,
+        ILocalModelProviderResolver providerResolver,
         IDeadLetterStore deadLetterStore,
         IConfiguration configuration,
         IOptions<WorkerNodeOptions> workerOptions,
@@ -83,6 +86,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _envelopeCryptoService = envelopeCryptoService ?? throw new ArgumentNullException(nameof(envelopeCryptoService));
         _runtimePackageValidator = runtimePackageValidator ?? throw new ArgumentNullException(nameof(runtimePackageValidator));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
+        _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(workerOptions);

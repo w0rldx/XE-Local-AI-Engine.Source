@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Providers.Ollama;
 
 public sealed partial class InvocationRunner
 {
@@ -89,18 +90,36 @@ public sealed partial class InvocationRunner
 
     private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
     {
-        if (await _capabilityReporter.VerifyOllamaAndModelAsync(requestedModel, cancellationToken).ConfigureAwait(false))
+        var trimmedModel = requestedModel?.Trim();
+
+        // The "preflight" (runtime reachable + model installed) and its fallback-to-default are Ollama-specific:
+        // VerifyOllamaAndModelAsync probes the Ollama daemon and matches against Ollama's installed list. A model
+        // served by llama.cpp (a GGUF, e.g. the first-run-provisioned bartowski/...:Q4_K_M) never appears there, so
+        // running it would always "fail" and wrongly fall back to the Ollama default model — which the llama.cpp
+        // supervisor can't serve ("model is not installed"). Route the preflight by the model's resolved provider:
+        // for any non-Ollama provider, trust the provider/supervisor to validate installation and cold-start the
+        // process downstream (LlamaServerProcessSupervisor throws a clean NonRetryable if the GGUF is missing).
+        if (!string.IsNullOrWhiteSpace(trimmedModel))
         {
-            return string.IsNullOrWhiteSpace(requestedModel) ? _defaultModel : requestedModel.Trim();
+            var providerName = await _providerResolver.ResolveProviderNameForModelAsync(trimmedModel, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmedModel;
+            }
         }
 
-        if (string.IsNullOrWhiteSpace(requestedModel))
+        if (await _capabilityReporter.VerifyOllamaAndModelAsync(trimmedModel, cancellationToken).ConfigureAwait(false))
+        {
+            return string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmedModel))
         {
             throw new InvalidOperationException("Ollama is unavailable or the default model is not installed.");
         }
 
         _logger.LogWarning("Requested model '{RequestedModel}' could not be verified. Falling back to '{FallbackModel}'.",
-            requestedModel,
+            trimmedModel,
             _defaultModel);
 
         return _defaultModel;
