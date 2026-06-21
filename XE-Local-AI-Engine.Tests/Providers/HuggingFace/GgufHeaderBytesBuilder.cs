@@ -12,9 +12,16 @@ internal sealed class GgufHeaderBytesBuilder
     private const uint GgufMagic = 0x4655_4747; // "GGUF" little-endian.
     private const uint TypeUint32 = 4;
     private const uint TypeString = 8;
+    private const uint TypeArray = 9;
     private const uint TypeUint64 = 10;
 
     private readonly List<(string Key, uint Type, object Value)> _kv = [];
+
+    public GgufHeaderBytesBuilder WithStringArray(string key, string[] values)
+    {
+        _kv.Add((key, TypeArray, values));
+        return this;
+    }
 
     public GgufHeaderBytesBuilder WithString(string key, string value)
     {
@@ -57,6 +64,9 @@ internal sealed class GgufHeaderBytesBuilder
                 case TypeUint64:
                     WriteUint64(stream, (ulong)value);
                     break;
+                case TypeArray:
+                    WriteStringArray(stream, (string[])value);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unsupported test KV type {type}.");
             }
@@ -84,5 +94,16 @@ internal sealed class GgufHeaderBytesBuilder
         var bytes = Encoding.UTF8.GetBytes(value);
         WriteUint64(stream, (ulong)bytes.Length);
         stream.Write(bytes);
+    }
+
+    // GGUF array layout the reader parses: uint32 elementType, uint64 length, then each element (a GGUF string here).
+    private static void WriteStringArray(Stream stream, string[] values)
+    {
+        WriteUint32(stream, TypeString);
+        WriteUint64(stream, (ulong)values.Length);
+        foreach (var value in values)
+        {
+            WriteGgufString(stream, value);
+        }
     }
 }

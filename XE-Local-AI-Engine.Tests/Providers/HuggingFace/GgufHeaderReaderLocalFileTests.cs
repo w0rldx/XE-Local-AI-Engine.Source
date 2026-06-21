@@ -31,6 +31,39 @@ public sealed class GgufHeaderReaderLocalFileTests
     }
 
     [Test]
+    public async Task ReadHeaderFromFile_ExtractsChatTemplate_AfterTheVocabArray()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen2-0.5b-tooltemplate.gguf");
+        // tokenizer.chat_template usually lands AFTER the large tokenizer.ggml.tokens vocab array, so emit a
+        // representative array between the early metadata and the template to prove the grow loop reaches it.
+        const string template = "{% for tool in tools %}{{ tool }}{% endfor %}<|im_start|>";
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen2")
+                     .WithUint32("qwen2.context_length", 32768)
+                     .WithStringArray("tokenizer.ggml.tokens", BuildVocab(2048))
+                     .WithString("tokenizer.chat_template", template)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(template, metadata.ChatTemplate!);
+    }
+
+    private static string[] BuildVocab(int count)
+    {
+        var tokens = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            tokens[i] = $"token_{i}";
+        }
+
+        return tokens;
+    }
+
+    [Test]
     public async Task ReadHeaderFromFile_NonGgufFile_ReturnsEmpty()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
