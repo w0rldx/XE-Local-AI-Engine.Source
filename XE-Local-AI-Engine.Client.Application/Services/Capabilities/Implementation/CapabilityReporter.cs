@@ -115,7 +115,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogWarning(exception, "Ollama preflight failed because the local endpoint is unreachable.");
+            _logger.LogDebug(exception, "Ollama preflight: local endpoint not reachable (expected in desktop mode without an Ollama daemon).");
             return false;
         }
 

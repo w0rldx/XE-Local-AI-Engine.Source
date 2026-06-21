@@ -101,7 +101,10 @@ internal sealed class ModelCapabilityProber
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogWarning(exception, "Failed to query installed Ollama models. Reporting {ConfiguredModelCount} configured model fallback(s): {ConfiguredModels}.",
+            // Debug, not Warning: an unreachable Ollama endpoint is the expected/benign case in desktop mode (no Ollama
+            // daemon). The graceful configured-fallback below keeps the node functional; full stack traces here would
+            // just flood the operator console on every capability report.
+            _logger.LogDebug(exception, "Ollama not reachable while querying installed models; reporting {ConfiguredModelCount} configured fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
             var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false)).ToArray();
@@ -149,7 +152,7 @@ internal sealed class ModelCapabilityProber
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogWarning(exception, "Ollama runtime detection failed because the endpoint is unreachable.");
+            _logger.LogDebug(exception, "Ollama runtime not reachable (expected in desktop mode without an Ollama daemon).");
             diagnostics.Add(DiagnosticOllamaUnreachable);
             return new OllamaRuntimeStatus(false, null, diagnostics);
         }
@@ -179,7 +182,7 @@ internal sealed class ModelCapabilityProber
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogWarning(exception, "Failed to query running Ollama models.");
+            _logger.LogDebug(exception, "Ollama not reachable while querying running models (expected in desktop mode).");
             return ActiveModelInfo.None;
         }
     }
@@ -213,7 +216,7 @@ internal sealed class ModelCapabilityProber
         }
         catch (HttpRequestException exception)
         {
-            _logger.LogWarning(exception, "Failed to query Ollama /api/show for model '{ModelName}'. Reporting unknown max context tokens.", installedModel.Name);
+            _logger.LogDebug(exception, "Ollama /api/show not reachable for model '{ModelName}'; reporting unknown max context tokens.", installedModel.Name);
             return null;
         }
     }
