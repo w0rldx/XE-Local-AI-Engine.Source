@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -24,6 +25,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     private readonly ModelCapabilityProber _prober;
     private readonly SemaphoreSlim _reportSync = new(1, 1);
     private readonly TimeProvider _timeProvider;
+    private readonly ITokenStore _tokenStore;
     private DateTimeOffset? _lastReportStartedAt;
 
     public CapabilityReporter(ModelCapabilityProber prober,
@@ -32,6 +34,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         INodeSettingsStore nodeSettingsStore,
         IConfiguration configuration,
         IWorkerHubConnection hubConnection,
+        ITokenStore tokenStore,
         TimeProvider timeProvider,
         ILogger<CapabilityReporter> logger)
     {
@@ -41,6 +44,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         ArgumentNullException.ThrowIfNull(configuration);
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
+        _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -74,6 +78,17 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
 
     public async Task ReportToApiAsync(CancellationToken cancellationToken = default)
     {
+        // Standalone/desktop mode has no remote worker hub to report to (and no Ollama daemon to probe). IsPaired is the
+        // canonical standalone-vs-paired signal — the same one IWorkerHubConnection.SendCapabilitiesAsync gates on — so
+        // short-circuit BEFORE the capability probe: this skips both the Ollama capability probe and the hub send (which
+        // would otherwise probe Ollama, then throw "hub not active" and be swallowed at Debug). No probe, no caught
+        // exception, no latency.
+        if (!_tokenStore.IsPaired)
+        {
+            _logger.LogDebug("Skipping capability report because the node is not paired (standalone/desktop mode — no worker hub).");
+            return;
+        }
+
         if (!await _reportSync.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
             _logger.LogDebug("Skipping capability report because another report is already in progress.");
