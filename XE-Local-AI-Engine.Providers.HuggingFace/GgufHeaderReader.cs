@@ -82,7 +82,10 @@ internal sealed class GgufHeaderReader
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         const long initialProbe = 1L * 1024 * 1024; // 1 MiB — context_length lives near the start of the header.
-        const long hardCap = 16L * 1024 * 1024; // doubling ceiling for the local read.
+        // tokenizer.chat_template typically sits AFTER the large tokenizer.ggml.tokens vocab array, so it can land
+        // several MiB into the header. The grow loop doubles up to this ceiling to capture it for capability detection;
+        // it is a local file read, so the larger ceiling costs only a one-time read of an already-installed file.
+        const long hardCap = 64L * 1024 * 1024; // doubling ceiling for the local read.
 
         try
         {
@@ -249,6 +252,10 @@ internal sealed class GgufHeaderReader
         var embeddingLength = TryGetLong(values, Arch("embedding_length"));
         var contextLength = TryGetLong(values, Arch("context_length"));
 
+        // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
+        // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
+        var chatTemplate = GetString(values, "tokenizer.chat_template");
+
         return new GgufHeaderMetadata(architecture,
             quantType,
             paramCount,
@@ -256,7 +263,8 @@ internal sealed class GgufHeaderReader
             headCount,
             headCountKv,
             embeddingLength,
-            contextLength);
+            contextLength,
+            chatTemplate);
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
@@ -571,7 +579,8 @@ internal sealed record GgufHeaderMetadata(
     long? AttentionHeadCount,
     long? AttentionHeadCountKV,
     long? EmbeddingLength,
-    long? ContextLength)
+    long? ContextLength,
+    string? ChatTemplate)
 {
-    public static GgufHeaderMetadata Empty { get; } = new(null, null, null, null, null, null, null, null);
+    public static GgufHeaderMetadata Empty { get; } = new(null, null, null, null, null, null, null, null, null);
 }

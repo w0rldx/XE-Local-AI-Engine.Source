@@ -16,7 +16,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class LocalModelsGgufMappingTests
 {
-    private static LocalModelDescriptor Gguf(string modelName, long? sizeBytes = 1024)
+    private static LocalModelDescriptor Gguf(string modelName,
+        long? sizeBytes = 1024,
+        bool isToolCapable = false,
+        bool isReasoningCapable = false,
+        IReadOnlyList<string>? capabilities = null)
     {
         return new LocalModelDescriptor
         {
@@ -25,7 +29,10 @@ public sealed class LocalModelsGgufMappingTests
             IsAvailable = true,
             SizeBytes = sizeBytes,
             ModifiedAt = DateTimeOffset.UnixEpoch,
-            MaxContextTokens = null
+            MaxContextTokens = null,
+            IsToolCapable = isToolCapable,
+            IsReasoningCapable = isReasoningCapable,
+            Capabilities = capabilities ?? []
         };
     }
 
@@ -40,10 +47,29 @@ public sealed class LocalModelsGgufMappingTests
         // Chat WITHOUT a capability probe — this is the crux for the React `kind === "Chat"` picker filter.
         AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].Kind);
         AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].DetectedKind);
-        AssertEx.True(gguf[0].Capabilities.Count == 0, "GGUF entries carry no Ollama capabilities");
-        AssertEx.False(gguf[0].IsReasoningCapable, "caps are not probed at list time → safe default false");
-        AssertEx.False(gguf[0].IsToolCapable, "caps are not probed at list time → safe default false");
+        // A descriptor with no detected capabilities (unreadable / no chat template) stays the safe default.
+        AssertEx.True(gguf[0].Capabilities.Count == 0, "no detected capabilities → empty");
+        AssertEx.False(gguf[0].IsReasoningCapable, "no detected template → safe default false");
+        AssertEx.False(gguf[0].IsToolCapable, "no detected template → safe default false");
         AssertEx.Equal(1024, gguf[0].SizeBytes);
+    }
+
+    [Test]
+    public void ToLlamaCppModelResponses_SurfacesDetectedCapabilities()
+    {
+        // A descriptor whose chat template was classified tool- and reasoning-capable must surface those flags + tokens
+        // so the React chat UI enables the tools toggle and the graded reasoning-effort menu for the GGUF model.
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses(
+            [Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
+                isToolCapable: true,
+                isReasoningCapable: true,
+                capabilities: ["completion", "tools", "thinking"])],
+            null);
+
+        AssertEx.True(gguf[0].IsToolCapable, "detected tool capability must surface");
+        AssertEx.True(gguf[0].IsReasoningCapable, "detected reasoning capability must surface");
+        AssertEx.Contains(gguf[0].Capabilities, static c => c == "tools");
+        AssertEx.Contains(gguf[0].Capabilities, static c => c == "thinking");
     }
 
     [Test]

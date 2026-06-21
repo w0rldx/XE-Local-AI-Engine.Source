@@ -28,11 +28,11 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     private readonly GgufHeaderReader _headerReader;
     private readonly ILogger<HuggingFaceGgufStore> _logger;
 
-    // Caches the per-file context length read from each installed GGUF header so the model-list endpoint (which hits
-    // ListInstalledModelsAsync often) never re-reads the file. Keyed by (LocalPath, SizeBytes, DownloadedAtUtc) so a
-    // re-download (new size/timestamp) naturally invalidates the entry. A null context length is cached too — a model
-    // whose header carries no context_length must not be re-read on every list.
-    private readonly ConcurrentDictionary<MaxContextCacheKey, int?> _maxContextCache = new();
+    // Caches the per-file header facts (context length + detected capabilities) read from each installed GGUF header so
+    // the model-list endpoint (which hits ListInstalledModelsAsync often) never re-reads the file. Keyed by
+    // (LocalPath, SizeBytes, DownloadedAtUtc) so a re-download (new size/timestamp) naturally invalidates the entry. A
+    // null/empty result is cached too — a model whose header carries no metadata must not be re-read on every list.
+    private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFacts> _headerFactsCache = new();
     private readonly HuggingFaceOptions _options;
     private readonly GgufModelRegistry _registry;
 
@@ -232,6 +232,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     private async Task<LocalModelDescriptor> ToDescriptorAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
+        var facts = await ResolveHeaderFactsAsync(entry, ct).ConfigureAwait(false);
+
         return new LocalModelDescriptor
         {
             ModelName = entry.ModelName,
@@ -239,39 +241,47 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             IsAvailable = File.Exists(entry.LocalPath),
             SizeBytes = entry.SizeBytes,
             ModifiedAt = entry.DownloadedAtUtc,
-            MaxContextTokens = await ResolveMaxContextTokensAsync(entry, ct).ConfigureAwait(false)
+            MaxContextTokens = facts.MaxContextTokens,
+            IsToolCapable = facts.IsToolCapable,
+            IsReasoningCapable = facts.IsReasoningCapable,
+            Capabilities = facts.Capabilities
         };
     }
 
-    // Reads (and caches) the GGUF header's context_length for one installed model, clamped to a valid int? token count.
-    // A read failure for one model must never fail the whole list — any error yields a null (unknown) context window.
-    private async Task<int?> ResolveMaxContextTokensAsync(GgufModelRegistryEntry entry, CancellationToken ct)
+    // Reads (and caches) the GGUF header facts (context_length + chat-template-derived capabilities) for one installed
+    // model in a SINGLE header read. A read failure for one model must never fail the whole list — any error yields the
+    // empty facts (unknown context window, no extra capabilities).
+    private async Task<GgufHeaderFacts> ResolveHeaderFactsAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
         if (!File.Exists(entry.LocalPath))
         {
-            return null;
+            return GgufHeaderFacts.Empty;
         }
 
-        var key = new MaxContextCacheKey(entry.LocalPath, entry.SizeBytes, entry.DownloadedAtUtc);
-        if (_maxContextCache.TryGetValue(key, out var cached))
+        var key = new HeaderFactsCacheKey(entry.LocalPath, entry.SizeBytes, entry.DownloadedAtUtc);
+        if (_headerFactsCache.TryGetValue(key, out var cached))
         {
             return cached;
         }
 
-        int? resolved;
+        GgufHeaderFacts resolved;
         try
         {
             var metadata = await _headerReader.ReadHeaderFromFileAsync(entry.LocalPath, ct).ConfigureAwait(false);
-            resolved = ClampContextLength(metadata.ContextLength);
+            var capabilities = GgufCapabilityDetector.Detect(metadata.ChatTemplate);
+            resolved = new GgufHeaderFacts(ClampContextLength(metadata.ContextLength),
+                capabilities.IsToolCapable,
+                capabilities.IsReasoningCapable,
+                capabilities.Capabilities);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Defense in depth — the reader is already tolerant, but never let one model's header sink the list.
-            _logger.LogDebug(ex, "Failed to read GGUF context length for an installed model; reporting unknown context window.");
-            resolved = null;
+            _logger.LogDebug(ex, "Failed to read GGUF header for an installed model; reporting unknown context window and no extra capabilities.");
+            resolved = GgufHeaderFacts.Empty;
         }
 
-        _maxContextCache[key] = resolved;
+        _headerFactsCache[key] = resolved;
         return resolved;
     }
 
@@ -319,5 +329,14 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
     // Identity for a downloaded GGUF file: a re-download changes the size and/or download timestamp, so a stale header
     // result (e.g. for a replaced quant at the same path) can never be served from the cache.
-    private readonly record struct MaxContextCacheKey(string LocalPath, long SizeBytes, DateTimeOffset DownloadedAtUtc);
+    private readonly record struct HeaderFactsCacheKey(string LocalPath, long SizeBytes, DateTimeOffset DownloadedAtUtc);
+
+    // The per-file header facts surfaced onto the descriptor, derived from one tolerant header read.
+    private readonly record struct GgufHeaderFacts(int? MaxContextTokens,
+        bool IsToolCapable,
+        bool IsReasoningCapable,
+        IReadOnlyList<string> Capabilities)
+    {
+        public static GgufHeaderFacts Empty { get; } = new(null, false, false, []);
+    }
 }

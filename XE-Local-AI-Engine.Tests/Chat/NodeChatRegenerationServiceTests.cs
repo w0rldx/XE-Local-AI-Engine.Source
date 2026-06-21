@@ -65,6 +65,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -145,6 +146,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -219,6 +221,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -286,6 +289,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             orchestrationResolver,
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -340,6 +344,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -388,6 +393,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -454,6 +460,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -511,6 +518,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -559,6 +567,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -625,6 +634,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -670,6 +680,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -709,6 +720,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -767,6 +779,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             classificationService,
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -847,6 +860,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                    return Task.FromResult<IReadOnlyDictionary<string, ModelClassificationResult>>(map);
                });
         return service;
+    }
+
+    // The default resolver reports every model as not-a-GGUF (null), so these Ollama-routed regen tests keep their
+    // /api/show classification behavior. A llama.cpp-capability test overrides TryResolveAsync explicitly.
+    private static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities? capabilities = null)
+    {
+        var resolver = Substitute.For<IGgufModelCapabilityResolver>();
+        resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
+        return resolver;
     }
 
     // The default (unbound) resolver: ResolveAsync returns null, so the regeneration path keeps today's literals —

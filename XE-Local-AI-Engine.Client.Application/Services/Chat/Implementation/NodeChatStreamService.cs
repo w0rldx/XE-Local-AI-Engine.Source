@@ -32,6 +32,7 @@ public sealed class NodeChatStreamService(
     INodeSettingsStore nodeSettingsStore,
     IModelClassificationService modelClassificationService,
     ILocalModelProviderResolver localModelProviderResolver,
+    IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -517,15 +518,22 @@ public sealed class NodeChatStreamService(
 
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
         // entry, so probing the local runtime would always fail — and in desktop mode there is no Ollama daemon at all,
-        // so the probe would stall (up to the connect timeout) on every send. GGUF chat models are chat-capable by
-        // construction; reasoning and tool support default off here, matching the model-list classification
-        // (LocalModelsMapper.ToLlamaCppModelResponses). Skip the doomed probe for any non-Ollama provider.
+        // so the probe would stall (up to the connect timeout) on every send. Instead, read the GGUF's capabilities
+        // detected offline from its chat template (cheap, cached per file — no Ollama probe, no network), matching the
+        // model-list classification (LocalModelsMapper.ToLlamaCppModelResponses). Skip the doomed probe for any
+        // non-Ollama provider; for a llama.cpp model the GGUF detection supplies thinking/tools, otherwise the safe
+        // default applies.
         var providerName = await localModelProviderResolver
                                  .ResolveProviderNameForModelAsync(activeModel, cancellationToken)
                                  .ConfigureAwait(false);
         if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
         {
-            return (SupportsThinking: false, SupportsTools: false);
+            var ggufCapabilities = await ggufModelCapabilityResolver
+                                         .TryResolveAsync(activeModel, cancellationToken)
+                                         .ConfigureAwait(false);
+            return ggufCapabilities is { } caps
+                ? (caps.SupportsThinking, caps.SupportsTools)
+                : (SupportsThinking: false, SupportsTools: false);
         }
 
         var classifications = await modelClassificationService

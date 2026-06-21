@@ -48,6 +48,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -94,6 +95,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -143,6 +145,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -200,6 +203,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -242,6 +246,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -284,6 +289,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -336,6 +342,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -383,6 +390,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -437,6 +445,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -446,6 +455,111 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            UseLocalTools: false)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Empty(runner.LastAllowedTools);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenGgufModelIsToolCapable_OffersTools()
+    {
+        // A llama.cpp (non-Ollama) model whose chat template was detected tool-capable must be offered tools — the GGUF
+        // capability resolver supplies the caps, NOT an /api/show probe (which would fail / stall in desktop mode).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns("llamacpp");
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            providerResolver,
+            CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true)),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(1, runner.LastAllowedTools.Count);
+        AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenGgufModelIsNotToolCapable_OffersNoTools()
+    {
+        // A llama.cpp model whose template carries no tool support stays the safe default — no tools offered — even with
+        // local tools enabled on the request.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns("llamacpp");
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            providerResolver,
+            CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false)),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
         {
             drained++;
         }
@@ -481,6 +595,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -537,6 +652,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -611,6 +727,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -672,6 +789,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -719,6 +837,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -770,6 +889,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -820,6 +940,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -869,6 +990,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -921,6 +1043,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1008,6 +1131,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1108,6 +1232,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1202,6 +1327,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore("qwen3:8b"),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1252,6 +1378,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1303,6 +1430,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             classificationService,
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1359,6 +1487,15 @@ public sealed class NodeChatStreamServiceTests
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(OllamaLocalModelProvider.OllamaProviderName);
+        return resolver;
+    }
+
+    // The default resolver reports every model as not-a-GGUF (null), so the existing Ollama-routed tests keep their
+    // /api/show classification behavior. A llama.cpp-capability test overrides TryResolveAsync explicitly.
+    private static IGgufModelCapabilityResolver CreateGgufModelCapabilityResolver(GgufModelCapabilities? capabilities = null)
+    {
+        var resolver = Substitute.For<IGgufModelCapabilityResolver>();
+        resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
         return resolver;
     }
 
@@ -1599,6 +1736,7 @@ public sealed class NodeChatStreamServiceTests
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 

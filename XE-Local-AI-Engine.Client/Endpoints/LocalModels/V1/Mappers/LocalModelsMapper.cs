@@ -49,8 +49,9 @@ internal static class LocalModelsMapper
     ///     Maps installed GGUF models (served by the bundled llama.cpp runtime) to model-list entries tagged
     ///     <see cref="LocalModelProviders.LlamaCpp" />. GGUF chat models are classified <see cref="ModelKind.Chat" />
     ///     WITHOUT an <c>/api/show</c> probe — a downloaded GGUF in the chat picker has a completion head by
-    ///     construction. Capabilities are empty (not probed at list time) and reasoning/tool support default to
-    ///     <see langword="false" /> (a safe default — a non-tool model is never offered tools). Embedding-role files
+    ///     construction. Reasoning/tool support and the capability tokens are detected offline from the model's GGUF
+    ///     chat template (carried on the descriptor by the store); a model whose template could not be read defaults to
+    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). Embedding-role files
     ///     would be filtered out of the chat picker, but the installed-model descriptor carries no role hint today, so
     ///     every installed GGUF lists as Chat (note: an embedding-only GGUF would still appear).
     /// </summary>
@@ -70,9 +71,9 @@ internal static class LocalModelsMapper
                    IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
                    Kind = ModelKind.Chat.ToString(),
                    DetectedKind = ModelKind.Chat.ToString(),
-                   Capabilities = [],
-                   IsReasoningCapable = false,
-                   IsToolCapable = false,
+                   Capabilities = descriptor.Capabilities,
+                   IsReasoningCapable = descriptor.IsReasoningCapable,
+                   IsToolCapable = descriptor.IsToolCapable,
                    IsOverridden = false
                })
                .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)

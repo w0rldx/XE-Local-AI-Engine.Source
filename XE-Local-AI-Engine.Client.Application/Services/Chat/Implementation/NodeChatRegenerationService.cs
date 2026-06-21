@@ -36,6 +36,7 @@ public sealed class NodeChatRegenerationService(
     IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
     IModelClassificationService modelClassificationService,
+    IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -508,6 +509,19 @@ public sealed class NodeChatRegenerationService(
         if (CodexModelCatalog.IsCodexModel(activeModel))
         {
             return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
+        }
+
+        // A llama.cpp (GGUF) model has no Ollama entry — and in desktop mode there is no Ollama daemon — so an
+        // /api/show classification would fail or stall. When the active model is an installed GGUF, read the
+        // capabilities detected offline from its chat template (cheap, cached) instead of probing Ollama, mirroring the
+        // send path (NodeChatStreamService.ResolveModelCapabilitiesAsync). A non-GGUF model returns null here and falls
+        // through to the Ollama classification below.
+        var ggufCapabilities = await ggufModelCapabilityResolver
+                                     .TryResolveAsync(activeModel, cancellationToken)
+                                     .ConfigureAwait(false);
+        if (ggufCapabilities is { } caps)
+        {
+            return (caps.SupportsThinking, caps.SupportsTools);
         }
 
         var classifications = await modelClassificationService

@@ -21,4 +21,23 @@ public sealed record LocalModelDescriptor
 
     [JsonRequired]
     public required int? MaxContextTokens { get; init; }
+
+    /// <summary>
+    ///     Whether the model's chat template advertises tool / function calling. Detected offline from the GGUF chat
+    ///     template (no Ollama probe). Defaults to <see langword="false" /> — the safe default that offers no tools to a
+    ///     model whose capability could not be determined.
+    /// </summary>
+    public bool IsToolCapable { get; init; }
+
+    /// <summary>
+    ///     Whether the model's chat template advertises a reasoning / thinking channel. Detected offline from the GGUF
+    ///     chat template. Defaults to <see langword="false" /> so a non-reasoning model is never offered a graded effort.
+    /// </summary>
+    public bool IsReasoningCapable { get; init; }
+
+    /// <summary>
+    ///     The Ollama-style capability tokens (for example <c>completion</c>, <c>tools</c>, <c>thinking</c>) detected for
+    ///     the model. Empty when no capabilities could be determined.
+    /// </summary>
+    public IReadOnlyList<string> Capabilities { get; init; } = [];
 }
