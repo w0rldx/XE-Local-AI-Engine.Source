@@ -39,6 +39,14 @@ internal static class DesktopBootstrap
     /// <summary>Configuration key the HuggingFace options bind for the GGUF models directory.</summary>
     internal const string HuggingFaceModelsDirectoryKey = "HuggingFace:ModelsDirectory";
 
+    /// <summary>Configuration key for the node's default chat model (<c>LocalChatAgentOptions.DefaultModel</c>).</summary>
+    internal const string LocalChatDefaultModelKey = "Agent:LocalChat:DefaultModel";
+
+    /// <summary>Configuration keys describing the GGUF starter model desktop mode provisions on first run.</summary>
+    internal const string FirstRunModelEnabledKey = "FirstRunModel:Enabled";
+    internal const string FirstRunModelRepoIdKey = "FirstRunModel:RepoId";
+    internal const string FirstRunModelQuantKey = "FirstRunModel:Quant";
+
     /// <summary>
     ///     Ensures the desktop data directory, connection string, operator secret, and models directory are present in
     ///     configuration. Each value is filled only when absent, so an env/Aspire-supplied value always wins. The folder
@@ -79,10 +87,47 @@ internal static class DesktopBootstrap
             overrides[HuggingFaceModelsDirectoryKey] = Path.Combine(dataDirectory, ModelsFolderName);
         }
 
+        // Point the default chat model at the GGUF starter model desktop mode actually provisions. The stock
+        // Agent:LocalChat:DefaultModel ("qwen3:0.6b") is an Ollama-era id that desktop mode never installs; until
+        // first-run provisioning persists the selected model (only AFTER the multi-hundred-MB download completes), the
+        // chat composer falls back to this default — and a first send against the uninstalled Ollama id fails with
+        // "the requested model is not installed". The override is derived from FirstRunModel:{RepoId,Quant} so it stays
+        // in lockstep with the exact identity provisioning installs ("repo:quant"). Desktop-only and unconditional: this
+        // in-memory layer (added last) intentionally wins over appsettings, but is only reached behind the desktop flag,
+        // so headless/Aspire keep the Ollama default untouched.
+        var firstRunModel = ResolveFirstRunModelIdentity(configuration);
+        if (!string.IsNullOrWhiteSpace(firstRunModel))
+        {
+            overrides[LocalChatDefaultModelKey] = firstRunModel;
+        }
+
         if (overrides.Count > 0)
         {
             configuration.AddInMemoryCollection(overrides);
         }
+    }
+
+    /// <summary>
+    ///     The canonical identity of the first-run GGUF starter model (<c>repo:quant</c>, or just <c>repo</c> when no
+    ///     quant is configured), matching what <c>FirstRunModelProvisioningService</c> installs and selects. Returns
+    ///     <c>null</c> when first-run provisioning is disabled or no repo id is configured, in which case the stock
+    ///     default chat model is left in place.
+    /// </summary>
+    private static string? ResolveFirstRunModelIdentity(IConfiguration configuration)
+    {
+        if (!configuration.GetValue(FirstRunModelEnabledKey, true))
+        {
+            return null;
+        }
+
+        var repoId = configuration[FirstRunModelRepoIdKey]?.Trim();
+        if (string.IsNullOrWhiteSpace(repoId))
+        {
+            return null;
+        }
+
+        var quant = configuration[FirstRunModelQuantKey]?.Trim();
+        return string.IsNullOrWhiteSpace(quant) ? repoId : $"{repoId}:{quant}";
     }
 
     /// <summary>Convenience overload reading from the real process environment. Used by <c>Program.cs</c>.</summary>

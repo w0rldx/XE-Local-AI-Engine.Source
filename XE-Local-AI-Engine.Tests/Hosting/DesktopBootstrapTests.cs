@@ -39,6 +39,42 @@ public sealed class DesktopBootstrapTests
     }
 
     [Test]
+    public void EnsureLocalDataConfiguration_PointsDefaultChatModelAtTheFirstRunGguf()
+    {
+        using var temp = new TempDirectory();
+        using var configuration = new ConfigurationManager();
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            // The stock Ollama-era default that desktop mode never installs.
+            [DesktopBootstrap.LocalChatDefaultModelKey] = "qwen3:0.6b",
+            [DesktopBootstrap.FirstRunModelRepoIdKey] = "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
+            [DesktopBootstrap.FirstRunModelQuantKey] = "Q4_K_M"
+        });
+
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        // The desktop default must become the exact "repo:quant" identity first-run provisioning installs and selects,
+        // overriding the stock Ollama id so the chat composer never opens on an uninstalled model.
+        AssertEx.Equal("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", configuration[DesktopBootstrap.LocalChatDefaultModelKey]);
+    }
+
+    [Test]
+    public void EnsureLocalDataConfiguration_LeavesDefaultChatModelUntouched_WhenNoFirstRunModelConfigured()
+    {
+        using var temp = new TempDirectory();
+        using var configuration = new ConfigurationManager();
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [DesktopBootstrap.LocalChatDefaultModelKey] = "qwen3:0.6b"
+        });
+
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        // With no FirstRunModel:RepoId configured there is nothing to provision, so the stock default is left in place.
+        AssertEx.Equal("qwen3:0.6b", configuration[DesktopBootstrap.LocalChatDefaultModelKey]);
+    }
+
+    [Test]
     public void EnsureLocalDataConfiguration_PopulatesModelsDirectoryUnderDataDirectory()
     {
         using var temp = new TempDirectory();
