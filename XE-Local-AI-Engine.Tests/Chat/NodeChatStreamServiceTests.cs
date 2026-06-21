@@ -13,9 +13,11 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatStreamServiceTests
@@ -45,6 +47,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -90,6 +93,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -138,6 +142,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -194,6 +199,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -235,6 +241,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -276,6 +283,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -327,6 +335,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -373,6 +382,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -426,6 +436,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -469,6 +480,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -524,6 +536,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -597,6 +610,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -657,6 +671,7 @@ public sealed class NodeChatStreamServiceTests
             orchestrationResolver,
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -703,6 +718,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -753,6 +769,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -802,6 +819,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -850,6 +868,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -901,6 +920,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -987,6 +1007,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1086,6 +1107,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1179,6 +1201,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore("qwen3:8b"),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1228,6 +1251,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1278,6 +1302,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             classificationService,
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1327,6 +1352,16 @@ public sealed class NodeChatStreamServiceTests
     // The default classification service: every model resolves to BOTH thinking- and tools-capable, so the existing
     // think/tool-offer assertions stay byte-identical (these tests pre-date per-model capability gating). The dedicated
     // capability-gate tests substitute an incapable classification.
+    // These tests exercise the Ollama /api/show classification path, so route every model to the Ollama provider; the
+    // chat service only skips classification for non-Ollama (e.g. llama.cpp/GGUF) providers.
+    private static ILocalModelProviderResolver CreateLocalModelProviderResolver()
+    {
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(OllamaLocalModelProvider.OllamaProviderName);
+        return resolver;
+    }
+
     private static IModelClassificationService CreateModelClassificationService(params string[] capabilities)
     {
         var resolved = capabilities.Length > 0 ? capabilities : ["completion", "tools", "thinking"];
@@ -1563,6 +1598,7 @@ public sealed class NodeChatStreamServiceTests
             CreateOrchestrationResolver(),
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
