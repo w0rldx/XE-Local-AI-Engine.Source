@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -12,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class CapabilityReporterTests
 {
@@ -309,6 +311,20 @@ public sealed class CapabilityReporterTests
     }
 
     [Test]
+    public async Task CapabilityReporter_WhenNotPaired_SkipsOllamaProbeAndHubSend()
+    {
+        // Standalone/desktop mode (unpaired): ReportToApiAsync must short-circuit BEFORE the capability probe, so it
+        // neither probes Ollama (no /api/tags request) nor attempts the hub send. This is the CL-6 latency/noise fix.
+        await using var context = await CreateContextAsync(paired: false);
+        context.SetModelsResponse("qwen3.5:0.8b");
+
+        await context.Reporter.ReportToApiAsync();
+
+        AssertEx.Equal(0, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(0, context.TagsRequestCount);
+    }
+
+    [Test]
     public async Task ReportToApiAsync_WhenCalledRepeatedly_ThrottlesDuplicateReports()
     {
         await using var context = await CreateContextAsync();
@@ -360,7 +376,8 @@ public sealed class CapabilityReporterTests
 
     private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null,
         StoredNodeSettings? nodeSettings = null,
-        Dictionary<string, string?>? configurationOverrides = null)
+        Dictionary<string, string?>? configurationOverrides = null,
+        bool paired = true)
     {
         var configurationValues = new Dictionary<string, string?>
         {
@@ -389,7 +406,12 @@ public sealed class CapabilityReporterTests
         var timeProvider = new FakeTimeProvider();
         var prober = new ModelCapabilityProber(capabilityClient, configuration, timeProvider, NullLogger<ModelCapabilityProber>.Instance);
         var composer = new CapabilityReportComposer(configuration, NullLogger<CapabilityReportComposer>.Instance);
-        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, timeProvider, NullLogger<CapabilityReporter>.Instance);
+        // Default to a paired token store so the existing report tests exercise the real probe-and-send path. The
+        // standalone short-circuit test requests the unpaired store to assert no probe and no hub send.
+        var tokenStore = paired
+            ? MockTokenStore.Paired("test-token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1))
+            : MockTokenStore.Unpaired();
+        var reporter = new CapabilityReporter(prober, composer, cloudCredentialStore, nodeSettingsStore, configuration, hubConnection, tokenStore, timeProvider, NullLogger<CapabilityReporter>.Instance);
         return new CapabilityReporterTestContext(server, chatClient, capabilityClient, hubConnection, reporter, timeProvider);
     }
 
