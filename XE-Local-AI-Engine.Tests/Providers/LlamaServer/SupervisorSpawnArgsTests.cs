@@ -49,6 +49,33 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(string.Equals(poolingValue, "none", StringComparison.OrdinalIgnoreCase), "Pooling must not be none.");
     }
 
+    [Test]
+    public async Task EnsureRunning_GpuVariant_LaunchArgsOffloadAllLayersToGpu()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector(GpuVariant.Cuda));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        // A GPU variant must offload layers to the GPU; without --n-gpu-layers llama-server keeps everything on the CPU.
+        AssertEx.Contains(spec!.Arguments, "--n-gpu-layers");
+        var index = IndexOf(spec.Arguments, "--n-gpu-layers");
+        AssertEx.Equal("999", spec.Arguments[index + 1]);
+    }
+
+    [Test]
+    public async Task EnsureRunning_CpuVariant_LaunchArgsOmitGpuLayers()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector(GpuVariant.Cpu));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.False(spec!.Arguments.Contains("--n-gpu-layers"), "The CPU variant must not request GPU layer offload.");
+    }
+
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
     {
         var hostIndex = IndexOf(spec.Arguments, "--host");

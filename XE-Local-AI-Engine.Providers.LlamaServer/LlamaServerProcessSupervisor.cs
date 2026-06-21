@@ -255,7 +255,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerProcessHandle? handle = null;
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port);
+            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant);
             handle = _launcher.Launch(spec);
 
             var ready = await _healthProbe
@@ -314,8 +314,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
+    // Offload every model layer to the GPU. llama.cpp clamps this to the model's actual layer count, so a value above
+    // any real model's layer count means "all layers on the GPU". Only applied for a GPU runtime variant.
+    private const string OffloadAllGpuLayers = "999";
+
     /// <summary>Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.</summary>
-    internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key, string executablePath, string modelFilePath, int port)
+    internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key, string executablePath, string modelFilePath, int port, GpuVariant variant)
     {
         var args = new List<string>
         {
@@ -326,6 +330,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             "--port",
             port.ToString(CultureInfo.InvariantCulture)
         };
+
+        // The variant only selects the GPU-enabled llama.cpp BUILD (Cuda/Vulkan). llama-server's default n-gpu-layers
+        // is 0, so without this flag every layer stays in system RAM and inference runs on the CPU even though CUDA is
+        // present and reported by llama.cpp — exactly the "model loaded in RAM, CUDA detected" symptom. Passing
+        // --n-gpu-layers offloads the layers to the GPU. Omitted for the CPU variant so it stays a pure CPU run.
+        if (variant != GpuVariant.Cpu)
+        {
+            args.Add("--n-gpu-layers");
+            args.Add(OffloadAllGpuLayers);
+        }
 
         if (key.Role == ModelRole.Chat)
         {
