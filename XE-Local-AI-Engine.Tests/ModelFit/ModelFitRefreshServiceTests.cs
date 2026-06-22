@@ -115,6 +115,108 @@ public sealed class ModelFitRefreshServiceTests
     }
 
     [Test]
+    public async Task Advisor_Recommend_SkipsFailingRepoButKeepsOthers()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary("org/good-GGUF"),
+                     Summary("org/bad-GGUF")
+                 ]));
+        // The good repo inspects fine; the bad repo throws a network failure mid-inspect — it must be skipped, not fail the run.
+        discovery.InspectRepoAsync("org/good-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/good-GGUF", File("Q4_K_M", 1_000_000_000L))));
+        discovery.InspectRepoAsync("org/bad-GGUF", Arg.Any<CancellationToken>())
+                 .Returns<Task<GgufRepoDetail>>(_ => throw new HttpRequestException("simulated HF failure"));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), null, CancellationToken.None);
+
+        // One bad repo must NOT fail the run — it succeeds with the good candidate only.
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        AssertEx.Equal(1, result.RecommendationCount);
+
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.ContainsSingle(rows, row => row.ModelName == "org/good-GGUF:Q4_K_M");
+        AssertEx.False(rows.Any(row => row.ModelName.StartsWith("org/bad", StringComparison.Ordinal)),
+            "the failing repo must be skipped, not surfaced.");
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_RankingIsDeterministicRegardlessOfCompletionOrder()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // Three repos with IDENTICAL fit (same headroom) so the deterministic tie-break is purely repo-id ordinal.
+        // The "first" repo by id (org/a) is made to complete LAST via a delay, proving completion order does not change ranking.
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary("org/c-GGUF"),
+                     Summary("org/a-GGUF"),
+                     Summary("org/b-GGUF")
+                 ]));
+        discovery.InspectRepoAsync("org/a-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(async call =>
+                 {
+                     await Task.Delay(120, call.Arg<CancellationToken>());
+                     return Detail("org/a-GGUF", File("Q4_K_M", 1_000_000_000L));
+                 });
+        discovery.InspectRepoAsync("org/b-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/b-GGUF", File("Q4_K_M", 1_000_000_000L))));
+        discovery.InspectRepoAsync("org/c-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/c-GGUF", File("Q4_K_M", 1_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        AssertEx.Equal(3, result.RecommendationCount);
+
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        // Equal headroom → ordered by repo id ordinal: a, b, c — independent of which inspect finished first.
+        AssertEx.Equal("org/a-GGUF:Q4_K_M", rows[0].ModelName);
+        AssertEx.Equal("org/b-GGUF:Q4_K_M", rows[1].ModelName);
+        AssertEx.Equal("org/c-GGUF:Q4_K_M", rows[2].ModelName);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_OuterCancellationCancelsTheRun()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        using var cts = new CancellationTokenSource();
+
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/slow-GGUF")]));
+        // The repo inspect honors the (linked) token; cancelling the outer token while it waits must cancel the whole run.
+        discovery.InspectRepoAsync("org/slow-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(async call =>
+                 {
+                     // ReSharper disable once AccessToDisposedClosure
+                     await cts.CancelAsync();
+                     await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>());
+                     return Detail("org/slow-GGUF", File("Q4_K_M", 1_000_000_000L));
+                 });
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
+            advisor.RefreshAsync(Request(), null, cts.Token));
+
+        // The snapshot must be recorded Cancelled (not Failed/Succeeded) by the outer OperationCanceledException catch.
+        var snapshot = snapshotStore.Snapshots.Values.Single();
+        AssertEx.Equal(ModelFitRunStatus.Cancelled, snapshot.Status);
+    }
+
+    [Test]
     public async Task Advisor_DownloadThenStart_CallsStoreThenSupervisor()
     {
         var snapshotStore = new InMemoryModelFitSnapshotStore();

@@ -310,7 +310,7 @@ describe("ModelRecommendationsPage", () => {
 		fireEvent.click(button);
 
 		expect(refreshMutation.mutate).toHaveBeenCalledWith(
-			{ scheduledJobId: "job-mf", useCase: "coding", limit: 500 },
+			{ scheduledJobId: "job-mf", useCase: "coding", limit: 50 },
 			{ onError: expect.any(Function) },
 		);
 	});

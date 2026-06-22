@@ -42,6 +42,19 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <summary>How many GGUF repos to inspect per refresh (each inspect is an HTTP range read, not a download).</summary>
     private const int DefaultRepoSearchLimit = 12;
 
+    /// <summary>
+    ///     Max concurrent HF inspections per refresh. Bounded so a refresh is fast (the repos are inspected in parallel
+    ///     rather than one-at-a-time) yet polite to HuggingFace (we never open more than this many range reads at once).
+    /// </summary>
+    private const int MaxConcurrentRepoInspections = 5;
+
+    /// <summary>
+    ///     Per-HF-call timeout. A single stalled repo inspection (or the initial search) must not block the whole refresh,
+    ///     so each call is wrapped in a linked CTS cancelled after this budget. A repo that times out is skipped (the
+    ///     refresh still succeeds with the other candidates); a search timeout surfaces as a clean Failed run.
+    /// </summary>
+    private static readonly TimeSpan PerHuggingFaceCallTimeout = TimeSpan.FromSeconds(20);
+
     private readonly IHuggingFaceGgufDiscovery _discovery;
     private readonly MemoryFitEstimator _estimator;
 
@@ -254,30 +267,99 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             Sort = GgufSearchSort.Downloads
         };
 
-        var repos = await _discovery.SearchAsync(query, cancellationToken).ConfigureAwait(false);
+        // Wrap the discovery search in a per-call timeout: a stalled search must not hang the whole refresh. A timeout
+        // (or any search failure) reaches the method caller's outer catch and is recorded as a clean Failed run —
+        // SurfaceSearchTimeout maps the timeout-CTS OperationCanceledException to a TimeoutException the outer catch
+        // already handles, while genuine outer-token cancellation is re-thrown unchanged so the run records Cancelled.
+        IReadOnlyList<GgufRepoSummary> repos;
+        using (var searchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            searchCts.CancelAfter(PerHuggingFaceCallTimeout);
+            try
+            {
+                repos = await _discovery.SearchAsync(query, searchCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The timeout CTS fired, not the node token: surface as a TimeoutException so the caller's outer catch
+                // records a clean Failed run instead of letting an OperationCanceledException become a Cancelled run.
+                throw new TimeoutException("GGUF discovery search timed out.");
+            }
+        }
 
         // Which models are already downloaded (best-effort: a registry failure just marks all as not-installed).
         var installedKeys = await ListInstalledKeysAsync(cancellationToken).ConfigureAwait(false);
 
-        var candidates = new List<AdvisorRecommendation>();
-        foreach (var repo in repos)
+        // Inspect the repos in parallel with bounded concurrency. Each inspection is independent; a stalled or failing
+        // repo is skipped (null candidate) inside the body so it never reaches the caller's outer catch and never fails
+        // the whole run. The semaphore caps concurrent HF range reads. The tasks are materialized (ToList) and awaited
+        // before the gate is disposed so every inspection completes while the gate is still alive.
+        var inspectionGate = new SemaphoreSlim(MaxConcurrentRepoInspections, MaxConcurrentRepoInspections);
+        AdvisorRecommendation?[] candidates;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var candidate = await EvaluateRepoAsync(repo.RepoId, quant, ctxTarget, profile, installedKeys, cancellationToken)
-                .ConfigureAwait(false);
-            if (candidate is not null)
-            {
-                candidates.Add(candidate);
-            }
+            var evaluations = repos
+                              .Select(repo => EvaluateRepoWithGuardAsync(repo.RepoId, quant, ctxTarget, profile, installedKeys, inspectionGate, cancellationToken))
+                              .ToList();
+            candidates = await Task.WhenAll(evaluations).ConfigureAwait(false);
+        }
+        finally
+        {
+            inspectionGate.Dispose();
         }
 
-        // Rank by best fit (largest headroom first), break ties by repo id for determinism, then cap to the limit.
+        // Rank by best fit (largest headroom first), break ties by repo id for determinism, then cap to the limit. The
+        // OrderBy makes the result deterministic regardless of which inspection finished first.
         return candidates
+               .Where(candidate => candidate is not null)
+               .Select(candidate => candidate!)
                .OrderByDescending(candidate => candidate.Estimate.HeadroomBytes)
                .ThenBy(candidate => candidate.RepoId, StringComparer.Ordinal)
                .Take(request.Limit)
                .ToList();
+    }
+
+    /// <summary>
+    ///     Bounded-concurrency, fault-isolated wrapper around <see cref="EvaluateRepoAsync" />: acquires the inspection
+    ///     gate, applies a per-repo timeout via a linked CTS, and swallows any single-repo failure (network/IO/timeout/
+    ///     parse) into a <see langword="null" /> candidate so one bad repo never fails the whole refresh. Outer-token
+    ///     cancellation (node shutdown) is re-thrown so the run records Cancelled.
+    /// </summary>
+    private async Task<AdvisorRecommendation?> EvaluateRepoWithGuardAsync(string repoId,
+        string quant,
+        int ctxTarget,
+        HardwareProfile profile,
+        HashSet<string> installedKeys,
+        SemaphoreSlim inspectionGate,
+        CancellationToken cancellationToken)
+    {
+        await inspectionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var repoCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            repoCts.CancelAfter(PerHuggingFaceCallTimeout);
+
+            return await EvaluateRepoAsync(repoId, quant, ctxTarget, profile, installedKeys, repoCts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Node shutdown: propagate so the refresh records Cancelled (not a silently-skipped repo).
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException
+                                              or OperationCanceledException or HuggingFaceDownloadException
+                                              or JsonException or FormatException or InvalidOperationException)
+        {
+            // A single repo timed out or failed (its per-repo CTS fired, or the inspect/parse threw): skip it. The refresh
+            // still succeeds with the other candidates — this must never bubble to the caller's outer Failed/Cancelled catch.
+            _logger.LogDebug(exception, "Skipping GGUF repo during advisor refresh (inspection failed or timed out).");
+            return null;
+        }
+        finally
+        {
+            inspectionGate.Release();
+        }
     }
 
     /// <summary>

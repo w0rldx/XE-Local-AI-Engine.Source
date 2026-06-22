@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Scheduler;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -415,6 +416,106 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // Self-heal — a persisted JobDetail whose class name no longer resolves is
+    // re-stamped with the current dispatch-job type so it loads/fires again.
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task TriggerNowAsync_WhenPersistedJobClassNameIsStale_HealsAndSucceeds()
+    {
+        var dbPath = GetDatabasePath("heal-trigger-stale-class.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ManualInput()).ConfigureAwait(false);
+        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
+
+        // Simulate the namespace-move regression: rewrite the persisted JOB_CLASS_NAME to a type that no longer exists,
+        // exactly as an install upgraded across the dispatch-job move would have on disk.
+        await CorruptJobClassNameAsync(dbPath, record.Id,
+            "XE_Local_AI_Engine.Client.Services.Scheduler.NonOverlappingSchedulerDispatchJob, XE-Local-AI-Engine.Client.Application")
+            .ConfigureAwait(false);
+
+        // Before the heal, Quartz cannot materialize the job detail because its stored type does not resolve.
+        _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
+            scheduler.GetJobDetail(jobKey, CancellationToken.None)).ConfigureAwait(false);
+
+        // TriggerNowAsync re-adds the durable detail with the current type, then fires — it must NOT throw a type-load error.
+        await service.TriggerNowAsync(record.Id).ConfigureAwait(false);
+
+        // After the heal the detail resolves again and the durable job remains registered.
+        var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(healedDetail.Durable, "The healed Manual job detail must remain durable.");
+        AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
+            "The job must remain registered after healing.");
+
+        await scheduler.Shutdown(false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task ReconcileDurableJobsAsync_RefreshesStaleClassNameWithoutFiring()
+    {
+        var dbPath = GetDatabasePath("heal-reconcile-stale-class.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
+
+        await CorruptJobClassNameAsync(dbPath, record.Id,
+            "XE_Local_AI_Engine.Client.Services.Scheduler.SchedulerDispatchJob, XE-Local-AI-Engine.Client.Application")
+            .ConfigureAwait(false);
+
+        // Stale detail does not resolve before reconciliation.
+        _ = await AssertEx.ThrowsAsync<JobPersistenceException>(() =>
+            scheduler.GetJobDetail(jobKey, CancellationToken.None)).ConfigureAwait(false);
+
+        var healed = await service.ReconcileDurableJobsAsync().ConfigureAwait(false);
+        AssertEx.Equal(1, healed, "Exactly one stale durable job detail must be reconciled.");
+
+        // The detail resolves again, the job is still registered, and its trigger schedule is untouched (still present).
+        var healedDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(healedDetail.Durable, "The healed job detail must be durable.");
+
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(triggers.Count > 0, "Reconciliation must not remove the existing trigger.");
+
+        await scheduler.Shutdown(false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task ReconcileDurableJobsAsync_SkipsDisabledDefinitions()
+    {
+        var dbPath = GetDatabasePath("heal-reconcile-skips-disabled.sqlite");
+        await MigrateAsync(dbPath).ConfigureAwait(false);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
+        var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None).ConfigureAwait(false);
+        await scheduler.Start(CancellationToken.None).ConfigureAwait(false);
+
+        var record = await service.CreateJobAsync(ValidCronInput()).ConfigureAwait(false);
+        // Disabling removes the Quartz job entirely, so reconciliation has nothing to refresh for it.
+        await service.SetEnabledAsync(record.Id, false).ConfigureAwait(false);
+
+        var healed = await service.ReconcileDurableJobsAsync().ConfigureAwait(false);
+        AssertEx.Equal(0, healed, "A disabled definition has no durable Quartz job and must not be reconciled.");
+
+        await scheduler.Shutdown(false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Update — re-maps schedule; definition updated in store + Quartz
     // ──────────────────────────────────────────────────────────────────────
 
@@ -794,6 +895,24 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
+    }
+
+    // Rewrites the persisted Quartz JOB_CLASS_NAME for a definition to an arbitrary (here: non-resolvable) type name,
+    // reproducing the on-disk state of a node that stored the job before the dispatch job moved namespaces.
+    private static async Task CorruptJobClassNameAsync(string dbPath, Guid definitionId, string staleClassName)
+    {
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "UPDATE QRTZ_JOB_DETAILS SET JOB_CLASS_NAME = $className WHERE JOB_NAME = $jobName AND JOB_GROUP = $jobGroup;";
+        command.Parameters.AddWithValue("$className", staleClassName);
+        command.Parameters.AddWithValue("$jobName", definitionId.ToString("N"));
+        command.Parameters.AddWithValue("$jobGroup", SchedulerJobKeys.Group);
+
+        var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        AssertEx.Equal(1, affected, "The job-detail row to corrupt must exist before the heal test.");
     }
 
     private async Task MigrateAsync(string dbPath)

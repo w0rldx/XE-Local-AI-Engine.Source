@@ -69,6 +69,15 @@ public interface IScheduledJobManagementService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Re-adds the durable Quartz <c>JobDetail</c> (with <c>replace=true</c>) for every persisted, enabled,
+    ///     non-deleted definition that already has a Quartz job, so a stale persisted <c>JOB_CLASS_NAME</c> — e.g. one
+    ///     written before the dispatch job moved namespaces — heals to the current type. It never changes a trigger's
+    ///     schedule and never fires a job; definitions whose template is no longer registered are skipped. Intended to run
+    ///     once at startup. Returns the number of job details refreshed.
+    /// </summary>
+    Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Returns run-history records matching the supplied filters (each <c>null</c> filter is ignored), ordered by
     ///     actual fire time descending.
     /// </summary>
