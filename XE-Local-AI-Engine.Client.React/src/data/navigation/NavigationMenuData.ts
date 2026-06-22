@@ -16,7 +16,16 @@ import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilitie
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
 // capability is always shown; a link with a capability is shown only when that node capability is on.
-type NavigationCapabilityKey = "agentManagement" | "mcpServers" | "scheduler" | "modelFit" | "loadedModels" | "preview" | "cloudSettings";
+type NavigationCapabilityKey =
+	| "agentManagement"
+	| "mcpServers"
+	| "scheduler"
+	| "modelFit"
+	| "loadedModels"
+	| "preview"
+	| "cloudSettings"
+	| "dashboard"
+	| "binding";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -46,6 +55,8 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconDashboard,
 		translationKey: "navigation.dashboard",
 		to: nodeRoutePaths.dashboard,
+		// Central-Platform surface — hidden in local-only builds (see nodeCapabilities.dashboard).
+		capability: "dashboard",
 	},
 	{
 		id: "chat",
@@ -58,6 +69,8 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconPlugConnected,
 		translationKey: "navigation.binding",
 		to: nodeRoutePaths.binding,
+		// Central-Platform surface — hidden in local-only builds (see nodeCapabilities.binding).
+		capability: "binding",
 	},
 	// Models group: installed models (always) plus the model-fit recommendations page, which is gated on the
 	// static modelFit capability. With modelFit off the group keeps just Installed.
