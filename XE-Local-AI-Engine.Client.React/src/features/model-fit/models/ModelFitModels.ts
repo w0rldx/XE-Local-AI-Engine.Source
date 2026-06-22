@@ -10,10 +10,11 @@ export const modelFitUseCases: readonly ModelFitUseCase[] = ["general", "coding"
 // Default use case the page opens on (matches the scheduler template default).
 export const defaultModelFitUseCase: ModelFitUseCase = "coding";
 
-// Breadth (--limit) the manual "Refresh now" sends per run. Set high enough to fetch the whole use-case catalog
-// (the advisor caps at the candidate-list size regardless of a larger value), so the table can show the full
-// selection with client-side pagination. Validated server-side against the 1..500 allowlist.
-export const recommendationRefreshLimit = 500;
+// Breadth (--limit) the manual "Refresh now" sends per run. Bounded to the backend's authoritative 1..50 ceiling
+// (ModelFitRequestValidator.MaxLimit, mirrored by the endpoint + handler JSON schema); sending more 400s with
+// "Limit is out of range." The advisor caps at the candidate-list size anyway, so 50 covers a node's use-case
+// catalog, and the table paginates client-side.
+export const recommendationRefreshLimit = 50;
 
 // Default quant the advisor recommends when the operator does not override it (HF policy, Q4_K_M). Surfaced here so
 // the GGUF download flow can default the requested quant without re-deriving it from a recommendation row.

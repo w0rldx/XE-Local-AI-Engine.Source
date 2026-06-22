@@ -203,6 +203,11 @@ public static class ConfigureServices
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
         builder.Services.AddHostedService<RetentionSweeperService>();
         builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
+        // Startup self-heal: re-stamps every enabled definition's durable Quartz JobDetail with the current dispatch-job
+        // type name, so jobs persisted by an older build (whose stored JOB_CLASS_NAME no longer resolves after the
+        // dispatch job moved namespaces) load again. Never changes schedules or fires jobs. Registered AFTER
+        // AddNodeScheduler so the scheduler factory/job store are available when its StartAsync runs.
+        builder.Services.AddHostedService<SchedulerJobDetailReconciliationService>();
         // Seeds the enabled, on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button
         // works out of the box. Registered AFTER AddNodeScheduler so the scheduler factory/job store are available when
         // the seeder's StartAsync runs (it calls IScheduledJobManagementService, which AddNodeScheduler registers).

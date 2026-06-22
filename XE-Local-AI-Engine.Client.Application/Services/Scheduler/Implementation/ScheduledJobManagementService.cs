@@ -210,6 +210,25 @@ public sealed class ScheduledJobManagementService(
             throw new ScheduledJobValidationException("This job is not currently scheduled and cannot be triggered.");
         }
 
+        // Self-heal a persisted JobDetail whose stored class name no longer resolves: re-add the durable detail with
+        // replace=true so its JOB_CLASS_NAME refreshes to the current typeof(...) value. A JobDetail stored before the
+        // dispatch job moved namespaces would otherwise fail TriggerJob with "Could not load type ...". BuildJobDetail
+        // produces an identical detail for an already-current job, so this is a no-op in the common case. AddJob with a
+        // durable detail and no trigger never fires the job — TriggerJob below performs the actual fire.
+        // Best-effort: a transient AddJob failure (e.g. a momentary DB hiccup) must not surface as a raw 500 from the
+        // heal that exists to remove that very symptom. Log and continue to TriggerJob, which then either succeeds or
+        // surfaces the real, actionable error.
+        try
+        {
+            await scheduler.AddJob(BuildJobDetail(definition), true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (SchedulerException ex)
+        {
+            _logger.LogWarning(ex,
+                "Self-heal re-add of durable job detail for scheduled job {ScheduledJobId} failed; attempting to trigger the existing job anyway.",
+                definition.Id);
+        }
+
         // Per-fire overrides ride the firing trigger's JobDataMap (never the stored definition). The dispatcher decides
         // which keys may override stored parameters; an empty/absent map fires the stored definition unchanged.
         // Quartz honors [DisallowConcurrentExecution] on the non-overlapping dispatch job, so an overlapping manual fire
@@ -233,6 +252,50 @@ public sealed class ScheduledJobManagementService(
             definition.Id,
             definition.TemplateId,
             parameterOverrides?.Count ?? 0);
+    }
+
+    public async Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default)
+    {
+        // Startup self-heal: every persisted, enabled, non-deleted definition re-adds its Quartz JobDetail with
+        // replace=true so a stale JOB_CLASS_NAME (e.g. written before the dispatch job moved namespaces) refreshes to the
+        // current typeof(...) value. This covers recurring jobs that are never manually triggered. It NEVER changes a
+        // trigger's schedule and NEVER fires a job: AddJob with a durable, trigger-less detail only rewrites the stored
+        // detail, leaving any existing trigger intact. Definitions whose template is no longer registered are skipped
+        // (they cannot be rebuilt) rather than faulting the whole sweep.
+        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
+        var definitions = await _definitionStore.ListAsync(false, cancellationToken).ConfigureAwait(false);
+
+        var healedCount = 0;
+        foreach (var definition in definitions)
+        {
+            if (!definition.Enabled || definition.DeletedAtUtc is not null)
+            {
+                continue;
+            }
+
+            if (_templateRegistry.GetTemplate(definition.TemplateId) is null)
+            {
+                _logger.LogWarning("Skipped JobDetail reconciliation for scheduled job {ScheduledJobId}: template {TemplateId} is not registered.",
+                    definition.Id,
+                    definition.TemplateId);
+                continue;
+            }
+
+            var jobKey = BuildJobKey(definition.Id);
+            if (!await scheduler.CheckExists(jobKey, cancellationToken).ConfigureAwait(false))
+            {
+                // No persisted JobDetail yet (e.g. the scheduler is enabling for the first time after the definition was
+                // stored). Leave creation to CreateJobAsync/SetEnabledAsync — reconciliation only refreshes existing rows.
+                continue;
+            }
+
+            await scheduler.AddJob(BuildJobDetail(definition), true, cancellationToken).ConfigureAwait(false);
+            healedCount++;
+        }
+
+        _logger.LogInformation("Reconciled {HealedCount} durable scheduler job detail(s) at startup.", healedCount);
+
+        return healedCount;
     }
 
     public Task<IReadOnlyList<ScheduledJobRunRecord>> ListRunsAsync(ScheduledRunStatus? status = null,
