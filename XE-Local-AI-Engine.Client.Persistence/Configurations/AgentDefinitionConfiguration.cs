@@ -52,6 +52,20 @@ internal sealed class AgentDefinitionConfiguration : IEntityTypeConfiguration<Ag
                .HasColumnName("playbook_enabled")
                .HasDefaultValue(false);
 
+        // Per-agent default-temporary-chat flag — additive structural column. Plaintext (a bool); default and backfill
+        // false so a pre-feature definition reads as non-temporary. Non-config-affecting (like playbook_enabled): gates
+        // post-run memory extraction only, never the runtime config hash.
+        builder.Property(entity => entity.DefaultTemporaryChat)
+               .HasColumnName("default_temporary_chat")
+               .HasDefaultValue(false);
+
+        // Per-agent memory-extraction toggle — additive structural column. Plaintext (a bool); default and backfill
+        // true so a pre-feature definition keeps learning from its runs. Non-config-affecting (like playbook_enabled):
+        // gates post-run extraction only (false = retrieval-only memory), never the runtime config hash.
+        builder.Property(entity => entity.MemoryExtractionEnabled)
+               .HasColumnName("memory_extraction_enabled")
+               .HasDefaultValue(true);
+
         // Provenance — additive structural columns. Plaintext (an int + a slug), not encrypted; the seeded import path
         // is the only writer that sets Source=Seeded / SeedSlug, keeping provenance forge-proof.
         builder.Property(entity => entity.Source)

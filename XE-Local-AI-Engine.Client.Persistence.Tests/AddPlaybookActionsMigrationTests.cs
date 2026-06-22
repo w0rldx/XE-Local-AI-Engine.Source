@@ -49,8 +49,9 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
 
         var actionColumns = await GetPlaybookActionColumnsAsync(connection).ConfigureAwait(false);
         // A full MigrateAsync() also applies the later AddPlaybookActionAnalysisColumns migration (analysis columns
-        // source_feedback_ids, confidence), AddPlaybookEvalAndGoldenConversations (eval_result) and
-        // AddPlaybookActionEnabledAtUtc (enabled_at_utc) — hence they are part of the expected set here.
+        // source_feedback_ids, confidence), AddPlaybookEvalAndGoldenConversations (eval_result),
+        // AddPlaybookActionEnabledAtUtc (enabled_at_utc) and AddAdaptiveAgentMemory (memory_scope) — hence they are
+        // part of the expected set here.
         AssertEx.True(actionColumns.SetEquals(new[]
         {
             "id",
@@ -67,7 +68,8 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
             "source_feedback_ids",
             "confidence",
             "eval_result",
-            "enabled_at_utc"
+            "enabled_at_utc",
+            "memory_scope"
         }), "playbook_actions should expose the mapped columns.");
 
         var agentColumns = await GetAgentDefinitionColumnsAsync(connection).ConfigureAwait(false);

@@ -61,6 +61,12 @@ public interface INodeChatPersistenceService
     Task<NodeChatConversationDto?> SetConversationArchivedAsync(NodeChatSetConversationArchivedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Sets the conversation's temporary-chat (<c>memory_excluded</c>) flag — the per-conversation override of the
+    ///     bound agent's default (adaptive memory). Returns the updated conversation, or null if not found.
+    /// </summary>
+    Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Branches a conversation: clones every message up to and including the target message into a
     ///     NEW Origin=Local conversation that records <c>branch_of_conversation_id</c> = source. Returns null when the
     ///     source conversation or target message does not exist.

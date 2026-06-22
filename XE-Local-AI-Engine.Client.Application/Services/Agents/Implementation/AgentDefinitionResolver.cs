@@ -66,7 +66,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             definition.Version,
             definition.Id,
             definition.Name,
-            skills);
+            skills,
+            definition.PlaybookEnabled,
+            definition.MemoryExtractionEnabled);
     }
 
     /// <summary>
@@ -123,7 +125,10 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             enabled,
             _retrievalOptions.RetrievalThreshold,
             _retrievalOptions.TopK,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            _retrievalOptions.MaxInjectedMemoryTokens,
+            _retrievalOptions.MaxInjectedFailureMemoryTokens,
+            _logger).ConfigureAwait(false);
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 

@@ -41,6 +41,13 @@ public interface IAgentDefinitionResolver
 ///     <see cref="Skills" /> is likewise trailing (defaults to null/empty): the enabled+assigned skill set used for MAF
 ///     progressive disclosure. It is NOT folded into <see cref="ResolvedSystemPrompt" /> (bodies load on demand), so the
 ///     runtime-package builder folds it into the config hash separately and threads it to the invocation factory.
+///     <see cref="PlaybookEnabled" /> is a trailing attribution snapshot too: it lets the post-run memory-extraction
+///     seam gate without re-fetching the definition. Like the other trailing members it does NOT participate in the
+///     config hash (the builder reads only the leading five fields) and never affects positional construction.
+///     <see cref="MemoryExtractionEnabled" /> is the companion gate: extraction fires only when BOTH it and
+///     <see cref="PlaybookEnabled" /> are true; retrieval/injection stays gated on <see cref="PlaybookEnabled" /> alone,
+///     so a retrieval-only agent (<see cref="MemoryExtractionEnabled" /> false) still injects existing memory but mines
+///     no new candidates. It is trailing/non-config-affecting for the same reason as <see cref="PlaybookEnabled" />.
 /// </summary>
 public sealed record ResolvedAgentRuntime(
     string ResolvedSystemPrompt,
@@ -50,4 +57,6 @@ public sealed record ResolvedAgentRuntime(
     int AgentDefinitionVersion,
     Guid AgentDefinitionId = default,
     string AgentName = "",
-    IReadOnlyList<ResolvedSkill>? Skills = null);
+    IReadOnlyList<ResolvedSkill>? Skills = null,
+    bool PlaybookEnabled = false,
+    bool MemoryExtractionEnabled = true);

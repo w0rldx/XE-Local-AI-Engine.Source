@@ -40,6 +40,10 @@ public static class LocalApiRoutes
         public const string RenameConversation = "chat/conversations/{conversationId}/rename";
         public const string PinConversation = "chat/conversations/{conversationId}/pin";
         public const string ArchiveConversation = "chat/conversations/{conversationId}/archive";
+
+        // Per-conversation temporary-chat (memory-excluded) override (adaptive memory). Literal "memory-excluded"
+        // segment keeps it distinct from the other conversation action routes.
+        public const string MemoryExcludedConversation = "chat/conversations/{conversationId}/memory-excluded";
         public const string BranchConversation = "chat/conversations/{conversationId}/branch/{messageId}";
         public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";
@@ -175,6 +179,10 @@ public static class LocalApiRoutes
 
         // Read-only cohort monitoring for enabled playbook actions.
         public const string PlaybookMonitor = "agents/{agentDefinitionId}/playbook/monitor";
+
+        // Read-only adaptive-memory execution-log diagnostics (metadata only — no message content). Literal
+        // "execution-logs" segment keeps it distinct from the {agentDefinitionId} route param.
+        public const string ExecutionLogs = "agents/{agentDefinitionId}/execution-logs";
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ import {
 	Loader,
 	NumberInput,
 	Paper,
+	SegmentedControl,
 	Select,
 	Stack,
 	Switch,
@@ -46,8 +47,10 @@ import {
 	comparePlaybookActions,
 	type EvalResult,
 	emptyPlaybookActionForm,
+	type MemoryScope,
 	type PlaybookAction,
 	type PlaybookActionFormValues,
+	type PlaybookActionSource,
 	playbookActionFormSchema,
 	toPlaybookActionFormValues,
 } from "@/features/agents/models/PlaybookActionModels";
@@ -81,6 +84,38 @@ function errorMessage(error: unknown, fallback: string): string {
 // Editor target: "create" a new action or "edit" an existing one by id. null = editor closed.
 type EditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
 
+// The scope-filter value: "all" lists every scope; otherwise a single MemoryScope filtered server-side via `?scope=`.
+type ScopeFilter = "all" | MemoryScope;
+
+// Adaptive-memory scopes in display order for the filter + badge. Kept in one place so the SegmentedControl options,
+// the badge color map, and the i18n keys all stay in sync.
+const MEMORY_SCOPES: readonly MemoryScope[] = ["Procedural", "Failure", "UserPreference", "Project"];
+
+// Mantine badge color per memory scope. Failure is rendered red (negative guidance — "don't do X"); the others use
+// distinct neutral/positive hues so the scope reads at a glance.
+const memoryScopeColors: Record<MemoryScope, string> = {
+	Procedural: "blue",
+	Failure: "red",
+	UserPreference: "violet",
+	Project: "cyan",
+};
+
+// English fallback copy per scope (the i18n key carries the localized text).
+const memoryScopeFallbacks: Record<MemoryScope, string> = {
+	Procedural: "Procedural",
+	Failure: "Failure",
+	UserPreference: "User preference",
+	Project: "Project",
+};
+
+// English fallback copy per provenance source. "Extracted" reads as "Extracted from run" so the operator knows the
+// candidate was harvested from a completed conversation by the adaptive-memory extractor (not hand-authored).
+const sourceFallbacks: Record<PlaybookActionSource, string> = {
+	Manual: "Manual",
+	Analysis: "Analysis",
+	Extracted: "Extracted from run",
+};
+
 // Per-agent playbook governance panel. Lists the agent's playbook actions in injection order
 // (ascending Priority), shows each action's provenance (e.g. "Manual" for hand-authored actions), and offers a per-action
 // enable/disable toggle plus add/edit/delete and reorder-by-priority. Capability-gated under agentManagement —
@@ -90,8 +125,11 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const { confirm } = useConfirm();
 
 	const [editorTarget, setEditorTarget] = useState<EditorTarget>(null);
+	// Adaptive-memory scope filter. "all" lists every scope; a single scope rides the server `?scope=` param so the
+	// list is filtered at the source (the Suggested/manual split below still applies to the filtered set).
+	const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
 
-	const actionsQuery = usePlaybookActions(enabled ? agentDefinitionId : null);
+	const actionsQuery = usePlaybookActions(enabled ? agentDefinitionId : null, scopeFilter === "all" ? null : scopeFilter);
 	// Read-only cohort-monitoring signals per Enabled action + the relevance-retrieval config. Joined
 	// to the rows below by actionId; the read is independent of the action list (its own loading/error path) so a
 	// monitor failure degrades to "no signal" rather than blanking the governance panel.
@@ -318,11 +356,11 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 			<Stack gap="sm">
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={2}>
-						<Text fw={600}>{t("pages.agents.playbook.title", "Operating playbook")}</Text>
+						<Text fw={600}>{t("pages.agents.playbook.title", "Adaptive memory")}</Text>
 						<Text size="xs" c="dimmed">
 							{t(
 								"pages.agents.playbook.subtitle",
-								"Manual playbook actions appended to {{name}}'s instructions when its playbook is enabled.",
+								"Playbook actions — manual, analysis-proposed, or learned from runs — appended to {{name}}'s instructions when its memory is enabled.",
 								{ name: agentName },
 							)}
 						</Text>
@@ -364,6 +402,22 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 						})}
 					</Text>
 				</Group>
+
+				{/* Adaptive-memory scope filter. "All" lists every scope; selecting a single scope filters the list at
+				    the source (server `?scope=`). Failure surfaces negative-guidance ("don't do X") memories distinctly. */}
+				<SegmentedControl
+					size="xs"
+					value={scopeFilter}
+					onChange={(value) => setScopeFilter(value as ScopeFilter)}
+					data={[
+						{ value: "all", label: t("pages.agents.playbook.scopeFilter.all", "All") },
+						...MEMORY_SCOPES.map((scope) => ({
+							value: scope,
+							label: t(`pages.agents.playbook.scope.${scope}`, memoryScopeFallbacks[scope]),
+						})),
+					]}
+					data-testid="playbook-scope-filter"
+				/>
 
 				{/* Relevance-gated banner: once more actions are Enabled than the retrieval threshold,
 				    only the top-K most relevant are injected per turn (not all of them). Rendered only in that regime so
@@ -452,15 +506,34 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 					// carry no live signal; an Enabled action with no monitor item yet (no enable clock) renders the
 					// neutral placeholder inside MonitorSignal.
 					const monitorItem = isEnabled ? (monitorByActionId.get(action.id) ?? null) : null;
+					// A Failure-scope memory is negative guidance ("don't do X"); flag the row with a red border so it
+					// reads distinctly from positive/procedural memories.
+					const isFailureScope = action.memoryScope === "Failure";
 					return (
-						<Paper withBorder={true} p="xs" key={action.id} data-testid={`playbook-action-${action.id}`}>
+						<Paper
+							withBorder={true}
+							p="xs"
+							key={action.id}
+							style={isFailureScope ? { borderColor: "var(--mantine-color-red-4)" } : undefined}
+							data-testid={`playbook-action-${action.id}`}
+						>
 							<Stack gap={6}>
 								<Group justify="space-between" align="flex-start" wrap="nowrap">
 									<Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
 										<Group gap="xs" align="center" wrap="wrap">
 											<Badge size="xs" variant="light" color="grape" data-testid={`playbook-source-${action.id}`}>
-												{t(`pages.agents.playbook.source.${action.source}`, action.source)}
+												{t(`pages.agents.playbook.source.${action.source}`, sourceFallbacks[action.source])}
 											</Badge>
+											{action.memoryScope ? (
+												<Badge
+													size="xs"
+													variant="light"
+													color={memoryScopeColors[action.memoryScope]}
+													data-testid={`playbook-scope-${action.id}`}
+												>
+													{t(`pages.agents.playbook.scope.${action.memoryScope}`, memoryScopeFallbacks[action.memoryScope])}
+												</Badge>
+											) : null}
 											{action.scope ? (
 												<Badge size="xs" variant="outline" color="gray">
 													{action.scope}
@@ -699,15 +772,35 @@ function SuggestedActionRow({ action, disabled, isEvaluating, onApprove, onEdit,
 	const canPromote = gateReason === "passed";
 	const promoteTooltip = canPromote ? null : t(`pages.agents.playbook.eval.gate.${gateReason}`, gateReasonFallback(gateReason));
 
+	// A Suggested candidate may be Analysis-proposed OR Extracted from a run; surface its real provenance + scope.
+	// A Failure-scope candidate (negative guidance) gets the red-border treatment like its enabled counterpart.
+	const isFailureScope = action.memoryScope === "Failure";
+
 	return (
-		<Paper withBorder={true} p="xs" key={action.id} data-testid={`playbook-suggested-${action.id}`}>
+		<Paper
+			withBorder={true}
+			p="xs"
+			key={action.id}
+			style={isFailureScope ? { borderColor: "var(--mantine-color-red-4)" } : undefined}
+			data-testid={`playbook-suggested-${action.id}`}
+		>
 			<Stack gap={6}>
 				<Group justify="space-between" align="flex-start" wrap="nowrap">
 					<Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
 						<Group gap="xs" align="center" wrap="wrap">
 							<Badge size="xs" variant="light" color="grape" data-testid={`playbook-suggested-source-${action.id}`}>
-								{t("pages.agents.playbook.source.Analysis", "Analysis")}
+								{t(`pages.agents.playbook.source.${action.source}`, sourceFallbacks[action.source])}
 							</Badge>
+							{action.memoryScope ? (
+								<Badge
+									size="xs"
+									variant="light"
+									color={memoryScopeColors[action.memoryScope]}
+									data-testid={`playbook-suggested-scope-${action.id}`}
+								>
+									{t(`pages.agents.playbook.scope.${action.memoryScope}`, memoryScopeFallbacks[action.memoryScope])}
+								</Badge>
+							) : null}
 							{action.confidence !== null ? (
 								<Badge size="xs" variant="outline" color="blue" data-testid={`playbook-suggested-confidence-${action.id}`}>
 									{t("pages.agents.playbook.confidenceLabel", "Confidence {{value}}", {

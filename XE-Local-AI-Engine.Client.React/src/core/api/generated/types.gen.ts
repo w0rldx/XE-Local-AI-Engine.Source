@@ -716,6 +716,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespons
 	selectedPath?: {
 		[key: string]: string;
 	} | null;
+	memoryExcluded?: boolean;
 	messages?: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse>;
 };
 
@@ -811,6 +812,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRequ
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = {
 	archived?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = {
+	memoryExcluded?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse = {
@@ -1008,6 +1013,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = {
 	agentDefinitionId?: string;
 	state?: XeLocalAiEngineClientPersistencePlaybookActionState;
 	source?: XeLocalAiEngineClientPersistencePlaybookActionSource;
+	memoryScope?: XeLocalAiEngineClientPersistenceMemoryScope | null;
 	triggerCondition?: string | null;
 	behavior?: string;
 	scope?: string | null;
@@ -1022,7 +1028,9 @@ export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = {
 
 export type XeLocalAiEngineClientPersistencePlaybookActionState = "Suggested" | "Enabled" | "Disabled" | "Archived";
 
-export type XeLocalAiEngineClientPersistencePlaybookActionSource = "Manual" | "Analysis";
+export type XeLocalAiEngineClientPersistencePlaybookActionSource = "Manual" | "Analysis" | "Extracted";
+
+export type XeLocalAiEngineClientPersistenceMemoryScope = "Procedural" | "Failure" | "UserPreference" | "Project";
 
 export type XeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse = {
 	passed?: boolean;
@@ -1093,6 +1101,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	};
 	orchestrationTopologyJson?: string | null;
 	playbookEnabled?: boolean;
+	defaultTemporaryChat?: boolean;
+	memoryExtractionEnabled?: boolean;
 	allowedSkillIds?: Array<string>;
 	version?: number;
 	createdAtUtc?: number;
@@ -1114,6 +1124,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	} | null;
 	orchestrationTopologyJson?: string | null;
 	playbookEnabled?: boolean;
+	defaultTemporaryChat?: boolean;
+	memoryExtractionEnabled?: boolean;
 	allowedSkillIds?: Array<string> | null;
 };
 
@@ -1247,6 +1259,29 @@ export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse =
 	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse>;
 };
 
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = {
+	id?: string;
+	agentDefinitionId?: string;
+	conversationId?: string | null;
+	messageId?: string | null;
+	modelName?: string;
+	configHash?: string;
+	latencyMs?: number;
+	promptTokens?: number | null;
+	completionTokens?: number | null;
+	success?: boolean;
+	errorClass?: string | null;
+	createdAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = {
 	[key: string]: never;
 };
@@ -1290,6 +1325,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	} | null;
 	orchestrationTopologyJson?: string | null;
 	playbookEnabled?: boolean;
+	defaultTemporaryChat?: boolean;
+	memoryExtractionEnabled?: boolean;
 	allowedSkillIds?: Array<string> | null;
 };
 
@@ -3324,6 +3361,36 @@ export type ArchiveNodeChatConversationResponses = {
 export type ArchiveNodeChatConversationResponse =
 	ArchiveNodeChatConversationResponses[keyof ArchiveNodeChatConversationResponses];
 
+export type SetNodeChatConversationMemoryExcludedData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/memory-excluded";
+};
+
+export type SetNodeChatConversationMemoryExcludedErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetNodeChatConversationMemoryExcludedResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+};
+
+export type SetNodeChatConversationMemoryExcludedResponse =
+	SetNodeChatConversationMemoryExcludedResponses[keyof SetNodeChatConversationMemoryExcludedResponses];
+
 export type BranchNodeChatConversationData = {
 	body?: never;
 	path: {
@@ -4219,7 +4286,9 @@ export type ListAgentPlaybookActionsData = {
 	path: {
 		agentDefinitionId: string;
 	};
-	query?: never;
+	query?: {
+		scope?: XeLocalAiEngineClientPersistenceMemoryScope | null;
+	};
 	url: "/api/local/v1/agents/{agentDefinitionId}/playbook";
 };
 
@@ -4589,6 +4658,38 @@ export type ImportAgentTemplatesResponses = {
 };
 
 export type ImportAgentTemplatesResponse = ImportAgentTemplatesResponses[keyof ImportAgentTemplatesResponses];
+
+export type ListAgentExecutionLogsData = {
+	body?: never;
+	path: {
+		agentDefinitionId: string;
+	};
+	query?: {
+		limit?: number | null;
+		offset?: number | null;
+	};
+	url: "/api/local/v1/agents/{agentDefinitionId}/execution-logs";
+};
+
+export type ListAgentExecutionLogsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListAgentExecutionLogsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse;
+};
+
+export type ListAgentExecutionLogsResponse = ListAgentExecutionLogsResponses[keyof ListAgentExecutionLogsResponses];
 
 export type ListAgentTemplatesData = {
 	body?: never;

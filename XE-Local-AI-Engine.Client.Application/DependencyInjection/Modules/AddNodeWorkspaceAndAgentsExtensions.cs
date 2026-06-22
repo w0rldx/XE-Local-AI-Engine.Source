@@ -34,6 +34,9 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Node-local playbook actions. Behavior and advisory trigger conditions are encrypted at rest; enabled actions
         // are folded into the agent prompt by the resolver, while the CRUD service owns operator authoring.
         builder.Services.AddScoped<IPlaybookActionStore, PlaybookActionStore>();
+        // Append-only agent execution telemetry (adaptive memory diagnostics). Metadata only — no message content — so
+        // rows are unencrypted; the run path writes latency/token/success rows linked to the chat message by id.
+        builder.Services.AddScoped<IAgentExecutionLogStore, AgentExecutionLogStore>();
         // Node-local MCP registrations. Secret-bearing args/env/description columns are encrypted at rest; the
         // connection manager reads enabled rows and the CRUD service owns registration changes.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();

@@ -14,6 +14,7 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toPlaybookAction, toPlaybookActionRequestBody, toPromoteError } from "@/features/agents/models/PlaybookActionMappers";
 import type {
+	MemoryScope,
 	PlaybookAction,
 	SavePlaybookActionRequestDto,
 	SaveSuggestedActionRequestDto,
@@ -47,9 +48,17 @@ function invalidateActions(queryClient: ReturnType<typeof useQueryClient>): Prom
 	});
 }
 
-export function usePlaybookActions(agentDefinitionId: string | null) {
+// Reads an agent's playbook, optionally filtered to a single adaptive-memory scope (Procedural | Failure |
+// UserPreference | Project). The scope rides the generated `?scope=` query param; passing null lists every scope.
+// The scope is part of the generated query key, so switching the filter fetches+caches per scope independently.
+export function usePlaybookActions(agentDefinitionId: string | null, scope: MemoryScope | null = null) {
 	return useQuery({
-		...withResponseValidation(listAgentPlaybookActionsOptions({ path: { agentDefinitionId: agentDefinitionId ?? "" } })),
+		...withResponseValidation(
+			listAgentPlaybookActionsOptions({
+				path: { agentDefinitionId: agentDefinitionId ?? "" },
+				query: scope !== null ? { scope } : undefined,
+			}),
+		),
 		enabled: agentDefinitionId !== null && agentDefinitionId.length > 0,
 		select: (data) => (data.items ?? []).map(toPlaybookAction),
 	});

@@ -61,6 +61,109 @@ public sealed class PlaybookRetrievalSelectorTests
         AssertEx.Equal(low.Id, result[2].Id, "Newer CreatedAtUtc sorts last on a Priority tie.");
     }
 
+    [Test]
+    public async Task SelectAsync_WhenOverTokenBudget_TrimsLowestRanked()
+    {
+        // Three enabled actions above the threshold with a query => retrieval engages. The ranker returns them in
+        // relevance order (most relevant first). With a 2-token budget and each behaviour estimating 1 token (4 chars),
+        // only the top-two-ranked survive; the lowest-ranked is dropped. The selector then re-imposes Priority order on the
+        // survivors, so the assertion checks BOTH that the lowest-ranked was dropped and the survivors are store-ordered.
+        var mostRelevant = Scoped("aaaa", priority: 30, createdAtUtc: 1, scope: null);
+        var secondRelevant = Scoped("bbbb", priority: 10, createdAtUtc: 2, scope: null);
+        var leastRelevant = Scoped("cccc", priority: 20, createdAtUtc: 3, scope: null);
+
+        var ranker = new RecordingRanker([mostRelevant, secondRelevant, leastRelevant]);
+
+        var result = await PlaybookRetrievalSelector.SelectAsync(ranker,
+            "deploy",
+            [mostRelevant, secondRelevant, leastRelevant],
+            2,
+            3,
+            CancellationToken.None,
+            2);
+
+        AssertEx.Equal(2, result.Count, "The 2-token budget keeps only the two highest-ranked memories.");
+        AssertEx.False(result.Any(action => action.Id == leastRelevant.Id), "The lowest-ranked memory is dropped first.");
+        AssertEx.Equal(secondRelevant.Id, result[0].Id, "Survivors are re-ordered by Priority ascending (10 before 30).");
+        AssertEx.Equal(mostRelevant.Id, result[1].Id);
+    }
+
+    [Test]
+    public async Task SelectAsync_TokenEstimateIsDeterministic_SameBudgetTrimsSameSet()
+    {
+        // The trim is a pure function of the stored behaviour text and the budget, so two identical inputs must trim to
+        // the identical surviving set every time (resume-safety: a fixed memory set always composes the same prompt).
+        var first = Scoped("aaaaaaaa", priority: 1, createdAtUtc: 1, scope: null); // 8 chars => 2 tokens
+        var second = Scoped("bbbbbbbb", priority: 2, createdAtUtc: 2, scope: null); // 8 chars => 2 tokens
+        var third = Scoped("cccccccc", priority: 3, createdAtUtc: 3, scope: null); // 8 chars => 2 tokens
+        IReadOnlyList<PlaybookActionRecord> ordered = [first, second, third];
+
+        var runA = await PlaybookRetrievalSelector.SelectAsync(new RecordingRanker(ordered), "deploy", ordered, 0, 3, CancellationToken.None, 4);
+        var runB = await PlaybookRetrievalSelector.SelectAsync(new RecordingRanker(ordered), "deploy", ordered, 0, 3, CancellationToken.None, 4);
+
+        // 4-token budget over 2-token items => exactly the first two ranked survive, both runs.
+        AssertEx.Equal(2, runA.Count);
+        AssertEx.True(runA.Select(action => action.Id).SequenceEqual(runB.Select(action => action.Id)),
+            "The deterministic trim must produce the identical surviving set across runs.");
+        AssertEx.False(runA.Any(action => action.Id == third.Id), "The third (lowest-ranked) item exceeds the 4-token budget and is dropped.");
+    }
+
+    [Test]
+    public async Task SelectAsync_FailureSubBudget_CapsFailureWithoutDroppingPositive()
+    {
+        // A Failure sub-budget of 1 token keeps only the single highest-ranked Failure item; positive items always pass
+        // through (they do not count against the Failure sub-budget) so negative guidance cannot crowd them out.
+        var failureHigh = Scoped("ffff", priority: 5, createdAtUtc: 1, scope: MemoryScope.Failure);
+        var failureLow = Scoped("gggg", priority: 6, createdAtUtc: 2, scope: MemoryScope.Failure);
+        var procedural = Scoped("pppp", priority: 1, createdAtUtc: 3, scope: MemoryScope.Procedural);
+
+        var ranker = new RecordingRanker([failureHigh, failureLow, procedural]);
+
+        var result = await PlaybookRetrievalSelector.SelectAsync(ranker,
+            "deploy",
+            [failureHigh, failureLow, procedural],
+            2,
+            3,
+            CancellationToken.None,
+            100,
+            1);
+
+        AssertEx.Equal(2, result.Count, "One Failure item dropped by the sub-budget; the second Failure and the procedural survive.");
+        AssertEx.True(result.Any(action => action.Id == procedural.Id), "Positive guidance is never dropped by the Failure sub-budget.");
+        AssertEx.True(result.Any(action => action.Id == failureHigh.Id), "The highest-ranked Failure item survives.");
+        AssertEx.False(result.Any(action => action.Id == failureLow.Id), "The lower-ranked Failure item is dropped by the sub-budget.");
+    }
+
+    [Test]
+    public async Task SelectAsync_WhenBudgetUnbounded_KeepsAllRankedTopK()
+    {
+        // A zero (unbounded) budget is the legacy behaviour: no trimming, every top-k item survives.
+        var first = Scoped("aaaa", priority: 1, createdAtUtc: 1, scope: null);
+        var second = Scoped("bbbb", priority: 2, createdAtUtc: 2, scope: null);
+        var third = Scoped("cccc", priority: 3, createdAtUtc: 3, scope: null);
+        IReadOnlyList<PlaybookActionRecord> ordered = [first, second, third];
+
+        var result = await PlaybookRetrievalSelector.SelectAsync(new RecordingRanker(ordered), "deploy", ordered, 2, 3, CancellationToken.None);
+
+        AssertEx.Equal(3, result.Count, "An unbounded (0) budget trims nothing.");
+    }
+
+    private static PlaybookActionRecord Scoped(string behavior, int priority, long createdAtUtc, MemoryScope? scope)
+    {
+        return new PlaybookActionRecord(Guid.NewGuid(),
+            Guid.NewGuid(),
+            PlaybookActionState.Enabled,
+            PlaybookActionSource.Manual,
+            null,
+            behavior,
+            null,
+            priority,
+            1,
+            createdAtUtc,
+            createdAtUtc,
+            MemoryScope: scope);
+    }
+
     private static IReadOnlyList<PlaybookActionRecord> Candidates(int count)
     {
         var actions = new List<PlaybookActionRecord>(count);

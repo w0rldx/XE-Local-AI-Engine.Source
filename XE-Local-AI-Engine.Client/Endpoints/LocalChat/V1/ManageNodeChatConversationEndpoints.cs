@@ -125,3 +125,48 @@ public sealed class ArchiveNodeChatConversationEndpoint(
         await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
     }
 }
+
+/// <summary>
+///     Sets the per-conversation temporary-chat (<c>memory_excluded</c>) override (adaptive memory). Stays on the chat
+///     auth path (Operator policy, same as the other conversation mutations) — NOT the agent-management surface — and
+///     honors the read-only mutation guard like rename/pin/archive.
+/// </summary>
+public sealed class SetNodeChatConversationMemoryExcludedEndpoint(
+    INodeChatPersistenceService chatPersistence,
+    INodeChatMutationGuard mutationGuard,
+    TimeProvider timeProvider) : Endpoint<SetNodeChatConversationMemoryExcludedRequest, NodeChatConversationResponse>
+{
+    private readonly INodeChatPersistenceService _chatPersistence = chatPersistence ?? throw new ArgumentNullException(nameof(chatPersistence));
+    private readonly INodeChatMutationGuard _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    public override void Configure()
+    {
+        Patch(LocalApiRoutes.LocalChat.MemoryExcludedConversation);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(SetNodeChatConversationMemoryExcludedRequest req, CancellationToken ct)
+    {
+        try
+        {
+            await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
+        }
+        catch (NodeChatReadOnlyConversationException)
+        {
+            await Send.ResultAsync(Results.Conflict(NodeChatConflictResponse.ReadOnly)).ConfigureAwait(false);
+            return;
+        }
+
+        var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest(req.ConversationId, req.MemoryExcluded, updatedAtUtc), ct).ConfigureAwait(false);
+
+        if (updated is null)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        await Send.OkAsync(updated.ToResponse(), ct).ConfigureAwait(false);
+    }
+}

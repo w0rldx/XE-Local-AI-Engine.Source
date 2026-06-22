@@ -109,13 +109,15 @@ describe("usePlaybookActions read hook", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		expect(listOptionsMock).toHaveBeenCalledWith({ path: { agentDefinitionId: "agent-1" } });
+		// No scope filter (default) → the optional `query` is omitted (undefined).
+		expect(listOptionsMock).toHaveBeenCalledWith({ path: { agentDefinitionId: "agent-1" }, query: undefined });
 		expect(result.current.data).toEqual([
 			{
 				id: "action-1",
 				agentDefinitionId: "agent-1",
 				state: "Enabled",
 				source: "Manual",
+				memoryScope: null,
 				triggerCondition: null,
 				behavior: "Always cite your sources",
 				scope: null,
@@ -128,6 +130,18 @@ describe("usePlaybookActions read hook", () => {
 				evalResult: null,
 			},
 		]);
+	});
+
+	it("wires the memory-scope filter into the server query param", async () => {
+		const { Wrapper } = makeWrapper();
+		const { result } = renderHook(() => usePlaybookActions("agent-1", "Failure"), { wrapper: Wrapper });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+		expect(listOptionsMock).toHaveBeenCalledWith({
+			path: { agentDefinitionId: "agent-1" },
+			query: { scope: "Failure" },
+		});
 	});
 
 	it("is disabled (does not fetch) when no agent is selected", () => {

@@ -14,6 +14,13 @@ internal sealed record class PlaybookAction
     public int Source { get; set; }
 
     /// <summary>
+    ///     Backing int for <see cref="Persistence.MemoryScope" /> (adaptive-memory typed scope), or <c>null</c> for an
+    ///     untyped legacy action. Plaintext (structural). Non-injected metadata — like <see cref="Scope" />/
+    ///     <see cref="Source" /> it does NOT enter the runtime package config hash.
+    /// </summary>
+    public int? MemoryScope { get; set; }
+
+    /// <summary>
     ///     Optional retrieval/trigger hint as UTF-8 bytes. Plaintext while tracked in memory; encrypted at rest by
     ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> and decrypted by
     ///     <see cref="NodeEncryptionMaterializationInterceptor" /> using AAD column name <c>trigger_condition</c>.

@@ -25,4 +25,6 @@ public sealed record AgentDefinitionRecord(
     bool PlaybookEnabled = false,
     AgentDefinitionSource Source = AgentDefinitionSource.Manual,
     string? SeedSlug = null,
-    IReadOnlyList<Guid>? AllowedSkillIds = null);
+    IReadOnlyList<Guid>? AllowedSkillIds = null,
+    bool DefaultTemporaryChat = false,
+    bool MemoryExtractionEnabled = true);

@@ -38,6 +38,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<PlaybookAction> PlaybookActions => Set<PlaybookAction>();
 
+    internal DbSet<AgentExecutionLog> AgentExecutionLogs => Set<AgentExecutionLog>();
+
     internal DbSet<GoldenConversation> GoldenConversations => Set<GoldenConversation>();
 
     internal DbSet<McpServerRegistration> McpServers => Set<McpServerRegistration>();
@@ -118,6 +120,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new CanvasWorkflowConfiguration());
         modelBuilder.ApplyConfiguration(new AgentSkillConfiguration());
         modelBuilder.ApplyConfiguration(new PlaybookActionConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentExecutionLogConfiguration());
         modelBuilder.ApplyConfiguration(new GoldenConversationConfiguration());
         modelBuilder.ApplyConfiguration(new McpServerRegistrationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelClassificationConfiguration());

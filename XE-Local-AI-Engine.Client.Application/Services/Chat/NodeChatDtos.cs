@@ -89,7 +89,8 @@ public sealed record NodeChatConversationDto(
     bool Archived = false,
     Guid? BranchOfConversationId = null,
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,
-    Guid? AgentDefinitionId = null);
+    Guid? AgentDefinitionId = null,
+    bool MemoryExcluded = false);
 
 public sealed record NodeChatPersistUserMessageRequest(
     Guid ConversationId,
@@ -169,6 +170,15 @@ public sealed record NodeChatSetConversationPinnedRequest(
 public sealed record NodeChatSetConversationArchivedRequest(
     Guid ConversationId,
     bool Archived,
+    long UpdatedAtUtc);
+
+/// <summary>
+///     Sets the conversation's temporary-chat (<c>memory_excluded</c>) flag — the per-conversation override of the
+///     bound agent's default (adaptive memory, write-only extraction suppression).
+/// </summary>
+public sealed record NodeChatSetConversationMemoryExcludedRequest(
+    Guid ConversationId,
+    bool MemoryExcluded,
     long UpdatedAtUtc);
 
 /// <summary>

@@ -21,6 +21,8 @@ internal static class AgentDefinitionMapper
             ToolApprovals = record.ToolApprovals,
             OrchestrationTopologyJson = record.OrchestrationTopologyJson,
             PlaybookEnabled = record.PlaybookEnabled,
+            DefaultTemporaryChat = record.DefaultTemporaryChat,
+            MemoryExtractionEnabled = record.MemoryExtractionEnabled,
             AllowedSkillIds = record.AllowedSkillIds ?? [],
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
@@ -42,7 +44,9 @@ internal static class AgentDefinitionMapper
             request.ToolApprovals ?? new Dictionary<string, bool>(),
             request.OrchestrationTopologyJson,
             request.PlaybookEnabled,
-            request.AllowedSkillIds ?? []);
+            request.AllowedSkillIds ?? [],
+            request.DefaultTemporaryChat,
+            request.MemoryExtractionEnabled);
     }
 
     public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request)
@@ -59,6 +63,8 @@ internal static class AgentDefinitionMapper
             request.ToolApprovals ?? new Dictionary<string, bool>(),
             request.OrchestrationTopologyJson,
             request.PlaybookEnabled,
-            request.AllowedSkillIds ?? []);
+            request.AllowedSkillIds ?? [],
+            request.DefaultTemporaryChat,
+            request.MemoryExtractionEnabled);
     }
 }

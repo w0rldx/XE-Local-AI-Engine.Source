@@ -203,6 +203,9 @@ public static class ConfigureServices
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
         builder.Services.AddHostedService<RetentionSweeperService>();
         builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
+        // Ages out the append-only agent_execution_logs telemetry (adaptive-memory diagnostics) so it cannot grow
+        // unbounded; reads its policy from AgentExecutionLogRetentionOptions (bound in AddNodeAdaptiveMemory).
+        builder.Services.AddHostedService<AgentExecutionLogRetentionService>();
         // Startup self-heal: re-stamps every enabled definition's durable Quartz JobDetail with the current dispatch-job
         // type name, so jobs persisted by an older build (whose stored JOB_CLASS_NAME no longer resolves after the
         // dispatch job moved namespaces) load again. Never changes schedules or fires jobs. Registered AFTER

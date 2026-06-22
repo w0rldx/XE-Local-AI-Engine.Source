@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.Ollama;
@@ -34,6 +35,7 @@ public sealed class NodeChatStreamService(
     ILocalModelProviderResolver localModelProviderResolver,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+    IMemoryExtractionDispatcher memoryExtractionDispatcher,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -189,12 +191,25 @@ public sealed class NodeChatStreamService(
             SamplingOptions: request.SamplingOptions,
             Skills: resolved?.Skills));
 
+        // Post-run adaptive-memory hook: fired once when the pump persists a Completed/Failed terminal, but ONLY when the
+        // resolved agent has the playbook enabled AND opts into extraction. Retrieval/injection rides PlaybookEnabled
+        // alone (already baked into the resolved prompt above); MemoryExtractionEnabled additionally gates whether this
+        // run mines NEW candidates, so a retrieval-only agent (extraction off) still uses its memory but learns nothing
+        // new — and skips the extraction round-trip entirely. Built here (not inside the pump) so it closes over the run
+        // context the stream service already holds (resolved agent, conversation temp flag, user turns, package config
+        // hash); the pump stays content-free. The dispatch is fire-and-forget (its own scope + fresh CT) so it never
+        // delays the SSE.
+        var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
+            ? BuildMemoryExtractionHook(memoryAgent, conversation, userMessage, selectedPath, package, request.Model)
+            : null;
+
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
             request.Model,
             sequence,
             parts,
+            onTerminal,
             runCancellation.Token);
         var runTask = RunInvocationAsync(package,
             assistantMessageId,
@@ -322,6 +337,7 @@ public sealed class NodeChatStreamService(
         string? requestedModel,
         NodeChatStreamSequence sequence,
         NodeChatPartAccumulator parts,
+        Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
         CancellationToken cancellationToken)
     {
         // The shared pump (invocationPump) owns all persistence; this front door only fans the persisted
@@ -360,6 +376,11 @@ public sealed class NodeChatStreamService(
                     var snapshot = parts.HasParts ? parts.Snapshot() : null;
                     var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel, snapshot).ConfigureAwait(false);
                     terminalPersisted = true;
+
+                    // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
+                    // extraction hook before the SSE write so the run context is captured immediately. The hook never
+                    // blocks or throws into the pump (it only schedules work on its own scope).
+                    onTerminal?.Invoke(state, terminal);
 
                     await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
                             correlation,
@@ -406,6 +427,78 @@ public sealed class NodeChatStreamService(
         var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled).ConfigureAwait(false);
 
         await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType, correlation, terminal.Persisted, sequence), CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Builds the post-run memory-extraction hook fired by the pump on a Completed/Failed terminal. It closes over the
+    ///     resolved agent (provenance + config-hash inputs), the loaded conversation (temp-chat flag + prior user turns),
+    ///     the just-sent user turn, and the runtime package (config hash). On invoke it assembles the metadata-only
+    ///     execution-log telemetry plus the content-bearing run input and hands both to the background dispatcher; the
+    ///     dispatcher owns scope/CT/error isolation, so this delegate never blocks or throws into the pump.
+    /// </summary>
+    private Action<InvocationState, NodeChatPumpTerminalResult> BuildMemoryExtractionHook(ResolvedAgentRuntime resolved,
+        NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto userMessage,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath,
+        RuntimePackage package,
+        string? requestedModel)
+    {
+        return (state, terminal) =>
+        {
+            // Only Completed/Failed terminals carry a real run to learn from; a Cancelled/Interrupted terminal is not a
+            // finished answer, so skip it (no exec-log either — nothing meaningful ran).
+            var failed = state.Status == InvocationStatus.Failed;
+            if (state.Status != InvocationStatus.Completed && !failed)
+            {
+                return;
+            }
+
+            var modelName = state.ModelUsed ?? requestedModel ?? package.ModelProfile ?? string.Empty;
+            var telemetry = new MemoryExtractionDispatchContext(resolved.AgentDefinitionId,
+                conversation.ConversationId,
+                terminal.Persisted.MessageId,
+                modelName,
+                package.ConfigHash,
+                state.GenerationDurationMs ?? 0,
+                Success: !failed,
+                state.InputTokens,
+                state.OutputTokens,
+                // Exception TYPE NAME only when present — never the sanitized message text. FailureCategory is the only
+                // type-shaped signal at this seam; the sanitized state.Error string is NOT logged.
+                failed ? state.FailureCategory?.ToString() : null);
+
+            var run = new MemoryExtractionRunInput(resolved.AgentDefinitionId,
+                conversation.ConversationId,
+                terminal.Persisted.MessageId,
+                CollectUserTurns(conversation, userMessage, selectedPath),
+                state.StreamedContent,
+                failed,
+                state.Error,
+                conversation.MemoryExcluded);
+
+            memoryExtractionDispatcher.Dispatch(telemetry, run);
+        };
+    }
+
+    /// <summary>
+    ///     Collects the user turns for extraction: the prior completed user turns on the selected path plus the just-sent
+    ///     user turn, ordered. Assistant turns are excluded — the agent's own answer is supplied separately as the run's
+    ///     <c>AssistantResponse</c>. Content is held only for the in-scope model call/dedup; it is never persisted here.
+    /// </summary>
+    private static IReadOnlyList<MemoryExtractionTurn> CollectUserTurns(NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto userMessage,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath)
+    {
+        var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
+
+        return selected
+               .Where(static message => string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase)
+                                        && !string.IsNullOrWhiteSpace(message.Content)
+                                        && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+               .Concat([userMessage])
+               .OrderBy(static message => message.Sequence)
+               .Select(static message => new MemoryExtractionTurn(message.Content))
+               .ToArray();
     }
 
     private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(NodeChatConversationDto conversation,

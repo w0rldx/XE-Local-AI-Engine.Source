@@ -2,10 +2,17 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 using XE_Local_AI_Engine.Client.Persistence;
 
-/// <summary>List request for one agent's playbook actions. The agent id travels in the route.</summary>
+/// <summary>
+///     List request for one agent's playbook actions. The agent id travels in the route. The optional
+///     <see cref="Scope" /> query filter (<c>?scope=</c>) narrows the result to one adaptive-memory scope; when omitted
+///     the full list is returned (byte-identical to the pre-filter behavior).
+/// </summary>
 public sealed class ListAgentPlaybookActionsRequest
 {
     public Guid AgentDefinitionId { get; init; }
+
+    /// <summary>Optional adaptive-memory scope filter (<c>?scope=Procedural|Failure|UserPreference|Project</c>). Null = no filter.</summary>
+    public MemoryScope? Scope { get; init; }
 }
 
 /// <summary>
@@ -68,6 +75,12 @@ public sealed class PlaybookActionResponse
     public required PlaybookActionState State { get; init; }
 
     public required PlaybookActionSource Source { get; init; }
+
+    /// <summary>
+    ///     Typed adaptive-memory scope for an extracted action (Procedural/Failure/UserPreference/Project); serializes as
+    ///     its string name via the global <c>JsonStringEnumConverter</c>. Null for untyped legacy/manual/analysis actions.
+    /// </summary>
+    public MemoryScope? MemoryScope { get; init; }
 
     public string? TriggerCondition { get; init; }
 

@@ -1032,6 +1032,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationRespo
 	archived: z.boolean().optional(),
 	branchOfConversationId: z.guid().nullish(),
 	selectedPath: z.record(z.string(), z.guid()).nullish(),
+	memoryExcluded: z.boolean().optional(),
 	messages: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse).optional(),
 });
 
@@ -1090,6 +1091,10 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1PinNodeChatConversationRe
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = z.object({
 	archived: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest = z.object({
+	memoryExcluded: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse = z.object({
@@ -1321,7 +1326,9 @@ export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProb
 
 export const zXeLocalAiEngineClientPersistencePlaybookActionState = z.enum(["Suggested", "Enabled", "Disabled", "Archived"]);
 
-export const zXeLocalAiEngineClientPersistencePlaybookActionSource = z.enum(["Manual", "Analysis"]);
+export const zXeLocalAiEngineClientPersistencePlaybookActionSource = z.enum(["Manual", "Analysis", "Extracted"]);
+
+export const zXeLocalAiEngineClientPersistenceMemoryScope = z.enum(["Procedural", "Failure", "UserPreference", "Project"]);
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultResponse = z.object({
 	goldenCaseId: z.guid().optional(),
@@ -1382,6 +1389,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = z.o
 	agentDefinitionId: z.guid().optional(),
 	state: zXeLocalAiEngineClientPersistencePlaybookActionState.optional(),
 	source: zXeLocalAiEngineClientPersistencePlaybookActionSource.optional(),
+	memoryScope: zXeLocalAiEngineClientPersistenceMemoryScope.nullish(),
 	triggerCondition: z.string().nullish(),
 	behavior: z.string().optional(),
 	scope: z.string().nullish(),
@@ -1465,6 +1473,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 	toolApprovals: z.record(z.string(), z.boolean()).optional(),
 	orchestrationTopologyJson: z.string().nullish(),
 	playbookEnabled: z.boolean().optional(),
+	defaultTemporaryChat: z.boolean().optional(),
+	memoryExtractionEnabled: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).optional(),
 	version: z
 		.int()
@@ -1494,6 +1504,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
 	orchestrationTopologyJson: z.string().nullish(),
 	playbookEnabled: z.boolean().optional(),
+	defaultTemporaryChat: z.boolean().optional(),
+	memoryExtractionEnabled: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
 });
 
@@ -1690,6 +1702,43 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentDefinitionsResponse
 	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse).optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = z.object({
+	id: z.guid().optional(),
+	agentDefinitionId: z.guid().optional(),
+	conversationId: z.guid().nullish(),
+	messageId: z.guid().nullish(),
+	modelName: z.string().optional(),
+	configHash: z.string().optional(),
+	latencyMs: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	completionTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	success: z.boolean().optional(),
+	errorClass: z.string().nullish(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentPlaybookActionsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1AgentTemplateSummary = z.object({
@@ -1729,6 +1778,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest
 	toolApprovals: z.record(z.string(), z.boolean()).nullish(),
 	orchestrationTopologyJson: z.string().nullish(),
 	playbookEnabled: z.boolean().optional(),
+	defaultTemporaryChat: z.boolean().optional(),
+	memoryExtractionEnabled: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
 });
 
@@ -2332,6 +2383,19 @@ export const zArchiveNodeChatConversationPath = z.object({
  */
 export const zArchiveNodeChatConversationResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
 
+export const zSetNodeChatConversationMemoryExcludedBody =
+	zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatConversationMemoryExcludedRequest;
+
+export const zSetNodeChatConversationMemoryExcludedPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zSetNodeChatConversationMemoryExcludedResponse =
+	zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse;
+
 export const zBranchNodeChatConversationPath = z.object({
 	conversationId: z.guid(),
 	messageId: z.guid(),
@@ -2560,6 +2624,10 @@ export const zListAgentPlaybookActionsPath = z.object({
 	agentDefinitionId: z.guid(),
 });
 
+export const zListAgentPlaybookActionsQuery = z.object({
+	scope: zXeLocalAiEngineClientPersistenceMemoryScope.nullish(),
+});
+
 /**
  * Success
  */
@@ -2675,6 +2743,28 @@ export const zImportAgentTemplatesBody = zXeLocalAiEngineClientEndpointsAgentsV1
  * Success
  */
 export const zImportAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ImportAgentTemplatesResponse;
+
+export const zListAgentExecutionLogsPath = z.object({
+	agentDefinitionId: z.guid(),
+});
+
+export const zListAgentExecutionLogsQuery = z.object({
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListAgentExecutionLogsResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse;
 
 /**
  * Success

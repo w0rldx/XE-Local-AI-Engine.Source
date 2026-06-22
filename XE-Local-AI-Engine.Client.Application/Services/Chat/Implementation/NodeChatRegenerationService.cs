@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 
@@ -38,6 +39,7 @@ public sealed class NodeChatRegenerationService(
     IModelClassificationService modelClassificationService,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+    IMemoryExtractionDispatcher memoryExtractionDispatcher,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -195,12 +197,22 @@ public sealed class NodeChatRegenerationService(
             SupportsThinking: resolution.SupportsThinking,
             Skills: resolved?.Skills));
 
+        // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
+        // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A
+        // regenerated turn is still a completed assistant turn worth learning from — but a retrieval-only agent
+        // (extraction off) still uses its memory while mining no new candidates. Built here so it closes over the run
+        // context this service holds.
+        var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
+            ? BuildMemoryExtractionHook(memoryAgent, conversation, original, selectedPath, package, original.Model)
+            : null;
+
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
             original.Model,
             sequence,
             parts,
+            onTerminal,
             linkedCancellation.Token);
         var runTask = RunInvocationAsync(package,
             placeholder.MessageId,
@@ -306,6 +318,7 @@ public sealed class NodeChatRegenerationService(
         string? requestedModel,
         NodeChatStreamSequence sequence,
         NodeChatPartAccumulator parts,
+        Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
         CancellationToken cancellationToken)
     {
         // The shared pump owns all persistence (INTO the variant row, by correlation); this only fans the
@@ -343,6 +356,10 @@ public sealed class NodeChatRegenerationService(
                     var snapshot = parts.HasParts ? parts.Snapshot() : null;
                     var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel, snapshot).ConfigureAwait(false);
                     terminalPersisted = true;
+
+                    // Post-run adaptive memory: hand the just-persisted terminal to the background extraction hook before
+                    // the SSE write. The hook only schedules work on its own scope — it never blocks or throws here.
+                    onTerminal?.Invoke(state, terminal);
 
                     await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
                             correlation,
@@ -455,6 +472,69 @@ public sealed class NodeChatRegenerationService(
                                             .FirstOrDefault();
 
         return precedingUserTurn?.Sequence ?? earliestGroupSequence - 1;
+    }
+
+    /// <summary>
+    ///     Builds the post-run memory-extraction hook for a regenerated turn (symmetric with the send path). It closes
+    ///     over the resolved agent, the loaded conversation (temp-chat flag + pre-cutoff user turns), the original turn,
+    ///     and the runtime package (config hash). On a Completed/Failed terminal it assembles the metadata-only
+    ///     execution-log telemetry plus the content-bearing run input and hands both to the background dispatcher.
+    /// </summary>
+    private Action<InvocationState, NodeChatPumpTerminalResult> BuildMemoryExtractionHook(ResolvedAgentRuntime resolved,
+        NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto original,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath,
+        RuntimePackage package,
+        string? requestedModel)
+    {
+        return (state, terminal) =>
+        {
+            var failed = state.Status == InvocationStatus.Failed;
+            if (state.Status != InvocationStatus.Completed && !failed)
+            {
+                return;
+            }
+
+            var modelName = state.ModelUsed ?? requestedModel ?? package.ModelProfile ?? string.Empty;
+            var telemetry = new MemoryExtractionDispatchContext(resolved.AgentDefinitionId,
+                conversation.ConversationId,
+                terminal.Persisted.MessageId,
+                modelName,
+                package.ConfigHash,
+                state.GenerationDurationMs ?? 0,
+                Success: !failed,
+                state.InputTokens,
+                state.OutputTokens,
+                // Exception TYPE NAME only when present — never the sanitized message text.
+                failed ? state.FailureCategory?.ToString() : null);
+
+            var run = new MemoryExtractionRunInput(resolved.AgentDefinitionId,
+                conversation.ConversationId,
+                terminal.Persisted.MessageId,
+                CollectUserTurns(conversation, original, selectedPath),
+                state.StreamedContent,
+                failed,
+                state.Error,
+                conversation.MemoryExcluded);
+
+            memoryExtractionDispatcher.Dispatch(telemetry, run);
+        };
+    }
+
+    /// <summary>
+    ///     Collects the user turns for extraction from the regeneration context (pre-cutoff, selected-path collapsed,
+    ///     excluding the original answer and its sibling variants), filtered to user-role turns. The agent's regenerated
+    ///     answer is supplied separately as the run's <c>AssistantResponse</c>. Content is held only for the in-scope
+    ///     model call/dedup; it is never persisted here.
+    /// </summary>
+    private static IReadOnlyList<MemoryExtractionTurn> CollectUserTurns(NodeChatConversationDto conversation,
+        NodeChatPersistedMessageDto original,
+        IReadOnlyDictionary<Guid, Guid>? selectedPath)
+    {
+        return BuildRegenerationContext(conversation, original, selectedPath)
+               .Where(static message => message.Role == MessageRole.User && !string.IsNullOrWhiteSpace(message.Content))
+               .Select(static message => new MemoryExtractionTurn(message.Content))
+               .ToArray();
     }
 
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)

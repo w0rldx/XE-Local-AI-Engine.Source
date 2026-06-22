@@ -53,6 +53,23 @@ internal sealed record class AgentDefinition
     public bool PlaybookEnabled { get; set; }
 
     /// <summary>
+    ///     Per-agent default for the temporary-chat (memory write-only-suppression) flag a new conversation inherits.
+    ///     Plaintext (structural). Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates post-run
+    ///     memory extraction only and must NOT enter the runtime package config hash or bump the agent's own version.
+    /// </summary>
+    public bool DefaultTemporaryChat { get; set; }
+
+    /// <summary>
+    ///     Whether this agent mines its completed runs into NEW candidate memories (post-run extraction). Default
+    ///     <c>true</c> so opting into <see cref="PlaybookEnabled" /> preserves today's learn-from-runs behaviour. When
+    ///     <c>false</c> the agent is RETRIEVAL-ONLY: it still injects its existing enabled memory (gated on
+    ///     <see cref="PlaybookEnabled" />) but its runs never trigger the extraction round-trip. Plaintext (structural).
+    ///     Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates extraction only and must NOT enter
+    ///     the runtime package config hash or bump the agent's own version.
+    /// </summary>
+    public bool MemoryExtractionEnabled { get; set; } = true;
+
+    /// <summary>
     ///     Backing int for <see cref="AgentDefinitionSource" />; provenance of the row. Default <c>0</c> (Manual).
     ///     Plaintext (structural) — like <see cref="Name" />, not part of the encrypted surface and never set by the
     ///     operator create/update contract (only the import path stamps Seeded).

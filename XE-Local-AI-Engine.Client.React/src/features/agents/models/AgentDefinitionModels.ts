@@ -37,6 +37,14 @@ export interface AgentDefinition {
 	// time. Gates injection only — it is NOT a config-affecting field for the agent's own version bump (the
 	// injected content drives the runtime config hash directly).
 	readonly playbookEnabled: boolean;
+	// When true, conversations created with this agent bound default to "temporary" (memory-excluded): the run will
+	// not teach the agent new adaptive memory, though existing memory is still used. Per-conversation override lives
+	// on the conversation itself. Not a config-affecting field (mirrors playbookEnabled).
+	readonly defaultTemporaryChat: boolean;
+	// When true (default) this agent mines its completed runs into new candidate memories. When false it is
+	// retrieval-only: existing enabled memory is still injected (gated on playbookEnabled), but no new memory is
+	// learned and no per-run extraction round-trip happens. Not a config-affecting field (mirrors playbookEnabled).
+	readonly memoryExtractionEnabled: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
@@ -61,6 +69,10 @@ export interface AgentDefinitionFormValues {
 	orchestration: OrchestrationTopology;
 	// Toggles whether this agent's enabled playbook actions are injected into its instructions.
 	playbookEnabled: boolean;
+	// Default new conversations bound to this agent to temporary (memory-excluded) — no new memory learned from them.
+	defaultTemporaryChat: boolean;
+	// When false the agent uses existing memory only (retrieval-only): it mines no new memory from its runs.
+	memoryExtractionEnabled: boolean;
 }
 
 const reasoningEffortSchema = z.enum(["none", "low", "medium", "high"]);
@@ -83,6 +95,8 @@ export const agentDefinitionFormSchema = z
 		allowedSkillIds: z.array(z.string()),
 		orchestration: orchestrationTopologyShapeSchema,
 		playbookEnabled: z.boolean(),
+		defaultTemporaryChat: z.boolean(),
+		memoryExtractionEnabled: z.boolean(),
 	})
 	.refine((value) => Object.keys(value.toolApprovals).every((toolName) => value.allowedToolNames.includes(toolName)), {
 		message: "toolApprovals keys must be a subset of allowedToolNames",

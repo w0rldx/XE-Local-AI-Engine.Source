@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", b =>
                 {
@@ -40,6 +40,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<bool>("DefaultTemporaryChat")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("default_temporary_chat");
+
                     b.Property<byte[]>("Description")
                         .HasColumnType("BLOB")
                         .HasColumnName("description");
@@ -54,6 +60,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0)
                         .HasColumnName("kind");
+
+                    b.Property<bool>("MemoryExtractionEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("memory_extraction_enabled");
 
                     b.Property<string>("ModelProfile")
                         .HasColumnType("TEXT")
@@ -110,6 +122,66 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasFilter("\"seed_slug\" IS NOT NULL");
 
                     b.ToTable("agent_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentExecutionLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<int?>("CompletionTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completion_tokens");
+
+                    b.Property<string>("ConfigHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("config_hash");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ErrorClass")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_class");
+
+                    b.Property<long>("LatencyMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("latency_ms");
+
+                    b.Property<Guid?>("MessageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("message_id");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<int?>("PromptTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("prompt_tokens");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("success");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentDefinitionId", "CreatedAtUtc");
+
+                    b.ToTable("agent_execution_logs", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkill", b =>
@@ -695,6 +767,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("last_seen_utc");
 
+                    b.Property<bool>("MemoryExcluded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("memory_excluded");
+
                     b.Property<string>("Origin")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -969,6 +1047,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("EvalResult")
                         .HasColumnType("TEXT")
                         .HasColumnName("eval_result");
+
+                    b.Property<int?>("MemoryScope")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("memory_scope");
 
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER")

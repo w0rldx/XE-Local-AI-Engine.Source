@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
@@ -175,5 +175,93 @@ describe("ChatDisplayShell tool-call parts pass-through", () => {
 
 		expect(screen.getByText(/Code Reviewer/)).toBeTruthy();
 		expect(screen.queryByText(/Default Assistant/)).toBeNull();
+	});
+});
+
+describe("ChatDisplayShell temporary-chat toggle", () => {
+	beforeEach(() => {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn().mockImplementation((query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn(),
+			})),
+		});
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class ResizeObserverMock {
+				observe = vi.fn();
+
+				unobserve = vi.fn();
+
+				disconnect = vi.fn();
+			},
+		});
+		Object.defineProperty(document, "fonts", {
+			configurable: true,
+			value: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
+		});
+		window.HTMLElement.prototype.scrollIntoView = vi.fn();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("hides the toggle when the bound agent does not have adaptive memory enabled", () => {
+		renderWithProviders(
+			<ChatDisplayShell {...shellProps({ boundAgentMemoryEnabled: false, onToggleConversationMemoryExcluded: vi.fn() })} />,
+		);
+
+		expect(screen.queryByTestId("chat-temporary-toggle")).toBeNull();
+	});
+
+	it("hides the toggle when no memory-excluded handler is wired", () => {
+		renderWithProviders(<ChatDisplayShell {...shellProps({ boundAgentMemoryEnabled: true })} />);
+
+		expect(screen.queryByTestId("chat-temporary-toggle")).toBeNull();
+	});
+
+	it("renders the toggle when the bound agent has adaptive memory enabled", () => {
+		renderWithProviders(
+			<ChatDisplayShell {...shellProps({ boundAgentMemoryEnabled: true, onToggleConversationMemoryExcluded: vi.fn() })} />,
+		);
+
+		expect(screen.getByTestId("chat-temporary-toggle")).toBeTruthy();
+		expect(screen.getByText("Temporary chat")).toBeTruthy();
+	});
+
+	it("reflects the conversation's memoryExcluded state", () => {
+		const temporaryConversation: ChatConversationModel = { ...conversation, memoryExcluded: true };
+
+		renderWithProviders(
+			<ChatDisplayShell
+				{...shellProps({
+					conversations: [temporaryConversation],
+					boundAgentMemoryEnabled: true,
+					onToggleConversationMemoryExcluded: vi.fn(),
+				})}
+			/>,
+		);
+
+		const input = screen.getByTestId("chat-temporary-toggle") as HTMLInputElement;
+		expect(input.checked).toBe(true);
+	});
+
+	it("PATCHes the conversation memory-excluded flag when toggled on", () => {
+		const onToggle = vi.fn();
+
+		renderWithProviders(
+			<ChatDisplayShell
+				{...shellProps({ boundAgentMemoryEnabled: true, onToggleConversationMemoryExcluded: onToggle })} />,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-temporary-toggle"));
+
+		expect(onToggle).toHaveBeenCalledWith("conversation-1", true);
 	});
 });

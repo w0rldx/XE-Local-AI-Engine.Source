@@ -456,6 +456,27 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task Retrieval_WhenConversationMemoryExcluded_StillInjects()
+    {
+        // §3.4a write-only suppression invariant: the memory-excluded (temporary-chat) flag suppresses EXTRACTION only,
+        // never retrieval. The resolver — the injection path — has NO conversation/temp parameter at all (its signature
+        // is agentId/model/query/supportsTools), so it structurally cannot be gated on conversation state: a temp chat
+        // still gets the agent's existing Enabled memory composed into the resolved prompt exactly like a normal chat.
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
+                         EnabledAction(definition.Id, "Always cite the source.", 1)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Contains(resolved!.ResolvedSystemPrompt, "Always cite the source.");
+    }
+
+    [Test]
     public async Task ResolveAsync_EnablingPlaybook_ChangesConfigHashVersusDisabled()
     {
         var builder = new LocalChatRuntimePackageBuilder();
@@ -475,6 +496,60 @@ public sealed class AgentDefinitionResolverTests
         var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabled).ConfigureAwait(false);
 
         AssertEx.True(disabledHash != enabledHash, "Enabling a playbook with an action must change the config hash.");
+    }
+
+    [Test]
+    public async Task ConfigHash_WhenInjectedMemoryChanges_ChangesDigest()
+    {
+        // Resume-safety: injected memory rides ResolvedSystemPrompt, which is a config-hash input. Changing WHICH memory
+        // is injected (different behaviour text) must move the digest — that is the intended, correct behaviour and proves
+        // memory is genuinely in the hashed prompt (not bypassing it via a per-invocation provider).
+        var builder = new LocalChatRuntimePackageBuilder();
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 1, playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", 1)]));
+        var firstHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
+
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Prefer small commits.", 1)]));
+        var secondHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
+
+        AssertEx.True(firstHash != secondHash, "Changing the injected memory text must change the config hash (memory rides the hashed prompt).");
+    }
+
+    [Test]
+    public async Task ResolvedPrompt_NoMemory_ByteIdenticalToPreFeaturePath()
+    {
+        // A no-memory resolve (playbook disabled, AND playbook enabled but no actions) must produce a ResolvedSystemPrompt
+        // and config hash byte-identical to the disabled/pre-feature path — scope routing and the token budget must have
+        // ZERO effect when there is no memory to inject.
+        var builder = new LocalChatRuntimePackageBuilder();
+        var resolver = CreateResolverWithPlaybook(out var store, out var playbookStore, OfferTool("GetCurrentTime"));
+
+        var disabled = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 1, playbookEnabled: false);
+        var enabledNoActions = disabled with
+        {
+            PlaybookEnabled = true
+        };
+        playbookStore.ListEnabledByAgentAsync(enabledNoActions.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+
+        store.GetByIdAsync(disabled.Id, Arg.Any<CancellationToken>()).Returns(disabled);
+        var disabledResolved = await resolver.ResolveAsync(disabled.Id, "qwen3:8b").ConfigureAwait(false);
+        var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled).ConfigureAwait(false);
+
+        var enabledResolved = await resolver.ResolveAsync(enabledNoActions.Id, "qwen3:8b").ConfigureAwait(false);
+        var enabledHash = await ResolveAndHashAsync(resolver, store, builder, enabledNoActions).ConfigureAwait(false);
+
+        AssertEx.NotNull(disabledResolved);
+        AssertEx.NotNull(enabledResolved);
+        AssertEx.Equal(SystemPrompt, disabledResolved!.ResolvedSystemPrompt);
+        AssertEx.Equal(SystemPrompt, enabledResolved!.ResolvedSystemPrompt);
+        AssertEx.Equal(disabledHash, enabledHash, "A no-memory resolve must hash identically to the pre-feature path.");
     }
 
     [Test]

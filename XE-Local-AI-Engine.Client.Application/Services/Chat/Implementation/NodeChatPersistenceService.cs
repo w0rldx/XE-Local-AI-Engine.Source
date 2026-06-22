@@ -115,6 +115,11 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
         return _conversations.SetConversationArchivedAsync(request, cancellationToken);
     }
 
+    public Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
+    {
+        return _conversations.SetConversationMemoryExcludedAsync(request, cancellationToken);
+    }
+
     public Task<NodeChatBranchResultDto?> BranchConversationAsync(NodeChatBranchConversationRequest request, CancellationToken cancellationToken = default)
     {
         return _variants.BranchConversationAsync(request, cancellationToken);

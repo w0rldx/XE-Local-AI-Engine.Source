@@ -246,11 +246,21 @@ export function Chat() {
 				description: agent.description,
 				kind: agent.kind,
 				modelProfile: agent.modelProfile,
+				playbookEnabled: agent.playbookEnabled,
 			}))
 			.sort((a, b) => a.name.localeCompare(b.name));
 	}, [agentDefinitionsQuery.data]);
 	// agentControlsAvailable: capability gate AND at least one agent in the live list.
 	const agentControlsAvailable = chatUiCapabilities.showAgentControls && agentOptions.length > 0;
+	// Whether the currently bound agent (agent mode on + a selected agent that still exists) has adaptive memory
+	// enabled. Gates the temporary-chat toggle in the chat header — there is nothing to suppress unless the agent
+	// learns memory at all. Default Assistant / mode-off => no bound agent => false.
+	const boundAgentMemoryEnabled = useMemo(() => {
+		if (!agentModeEnabled || !selectedAgentId) {
+			return false;
+		}
+		return agentOptions.find((agent) => agent.id === selectedAgentId)?.playbookEnabled ?? false;
+	}, [agentModeEnabled, agentOptions, selectedAgentId]);
 	// Single merged agent control wiring: picking an agent enables agent mode and stamps it; picking the Default
 	// Assistant row (empty id) disables agent mode and clears the selection. Replaces the old separate toggle.
 	const handleSelectAgent = useCallback(
@@ -797,6 +807,18 @@ export function Chat() {
 		[runConversationMutation],
 	);
 
+	// Toggle a conversation "temporary" (memory-excluded). A temporary conversation still USES existing memory; it
+	// just won't teach the agent new memory from this thread. PATCHes the conversation via the same mutation path as
+	// pin/archive so the cache + selected-conversation query refresh from authoritative server state.
+	const handleToggleConversationMemoryExcluded = useCallback(
+		(conversationId: string, memoryExcluded: boolean): void => {
+			runConversationMutation(conversationId, () =>
+				nodeChatAdapter.setConversationMemoryExcluded(conversationId, memoryExcluded),
+			).catch((error: unknown) => setStreamError(errorMessage(error)));
+		},
+		[runConversationMutation],
+	);
+
 	const deleteConversationMutation = useMutation({
 		mutationFn: (conversationId: string) => nodeChatAdapter.deleteConversation(conversationId),
 		onSuccess: async (_result, conversationId) => {
@@ -1074,6 +1096,8 @@ export function Chat() {
 				onRenameConversation={handleRenameConversation}
 				onToggleConversationPinned={handleToggleConversationPinned}
 				onToggleConversationArchived={handleToggleConversationArchived}
+				boundAgentMemoryEnabled={boundAgentMemoryEnabled}
+				onToggleConversationMemoryExcluded={handleToggleConversationMemoryExcluded}
 				onDeleteConversation={handleDeleteConversation}
 				onBranchFromMessage={isRemoteConversation ? undefined : handleBranch}
 				activeRevisionByGroup={activeRevisionByGroup}

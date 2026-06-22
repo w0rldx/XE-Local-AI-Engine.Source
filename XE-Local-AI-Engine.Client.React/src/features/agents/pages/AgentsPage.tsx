@@ -17,6 +17,7 @@ import {
 	type AgentModelOption,
 } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
+import { AgentExecutionLogPanel } from "@/features/agents/components/AgentExecutionLogPanel";
 import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
@@ -52,6 +53,9 @@ const emptyFormValues: AgentDefinitionFormValues = {
 	allowedSkillIds: [],
 	orchestration: emptyOrchestrationTopology(),
 	playbookEnabled: false,
+	defaultTemporaryChat: false,
+	// Extraction defaults ON (matches the backend default) so opting into memory learns from runs unless turned off.
+	memoryExtractionEnabled: true,
 };
 
 function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
@@ -68,6 +72,8 @@ function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
 		// Round-trip the persisted topology back into the editor (strips the triage from the specialist list).
 		orchestration: deserializeOrchestrationTopology(definition.orchestrationTopologyJson).topology,
 		playbookEnabled: definition.playbookEnabled,
+		defaultTemporaryChat: definition.defaultTemporaryChat,
+		memoryExtractionEnabled: definition.memoryExtractionEnabled,
 	};
 }
 
@@ -320,6 +326,15 @@ export function AgentsPage() {
 						    Capability-gated under agentManagement. */}
 						{editingDefinition ? (
 							<GoldenConversationPanel
+								agentDefinitionId={editingDefinition.id}
+								agentName={editingDefinition.name}
+								enabled={nodeCapabilities.agentManagement}
+							/>
+						) : null}
+						{/* Per-agent run diagnostics (adaptive-memory observability). Metadata-only table;
+						    only meaningful for a persisted agent. Capability-gated under agentManagement. */}
+						{editingDefinition ? (
+							<AgentExecutionLogPanel
 								agentDefinitionId={editingDefinition.id}
 								agentName={editingDefinition.name}
 								enabled={nodeCapabilities.agentManagement}

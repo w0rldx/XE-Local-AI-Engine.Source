@@ -46,6 +46,16 @@ internal sealed record class NodeConversation
     /// </summary>
     public Guid? AgentDefinitionId { get; set; }
 
+    /// <summary>
+    ///     Temporary-chat (adaptive-memory write-only-suppression) flag. When true, the post-run memory-extraction seam
+    ///     skips this conversation entirely; it does NOT affect retrieval/injection (a temp chat still reads existing
+    ///     memory) or chat persistence (the conversation is still saved). Plaintext (a bool); default/backfill false.
+    ///     The conversation read/write paths use raw ADO SQL, so this property exists mainly so the EF model snapshot and
+    ///     EnsureCreated() track the column; the raw column-lists in NodeChatConversationCommands/NodeChatPersistenceSql
+    ///     are the actual reader/writer.
+    /// </summary>
+    public bool MemoryExcluded { get; set; }
+
     public List<NodeMessage> Messages { get; } = [];
 
     public List<NodeToolEvent> ToolEvents { get; } = [];

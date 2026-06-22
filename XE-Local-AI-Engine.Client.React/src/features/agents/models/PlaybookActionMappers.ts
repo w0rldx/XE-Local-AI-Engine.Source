@@ -11,6 +11,7 @@ import type {
 	EvalCase,
 	EvalResult,
 	EvalScoredBy,
+	MemoryScope,
 	PlaybookAction,
 	PlaybookActionFormValues,
 	PlaybookActionSource,
@@ -32,7 +33,8 @@ import type {
 
 // The known wire values, mirrored from the domain unions, so a string-widened field can be narrowed with a guard.
 const KNOWN_STATES: readonly PlaybookActionState[] = ["Suggested", "Enabled", "Disabled", "Archived"];
-const KNOWN_SOURCES: readonly PlaybookActionSource[] = ["Manual", "Analysis"];
+const KNOWN_SOURCES: readonly PlaybookActionSource[] = ["Manual", "Analysis", "Extracted"];
+const KNOWN_SCOPES: readonly MemoryScope[] = ["Procedural", "Failure", "UserPreference", "Project"];
 
 // Map a wire state to a known state, defaulting to Disabled (the safe non-injecting state) for an absent/unknown
 // value rather than throwing — the panel keeps working if the backend grows the enum.
@@ -46,6 +48,12 @@ function toSource(value: string | undefined): PlaybookActionSource {
 	return value !== undefined && KNOWN_SOURCES.includes(value as PlaybookActionSource)
 		? (value as PlaybookActionSource)
 		: "Manual";
+}
+
+// Map a wire memory scope to a known scope, or null for an absent/unknown value (a plain manual action carries no
+// adaptive-memory scope, so null is the correct "no badge" default rather than a fabricated scope).
+function toMemoryScope(value: string | null | undefined): MemoryScope | null {
+	return value !== null && value !== undefined && KNOWN_SCOPES.includes(value as MemoryScope) ? (value as MemoryScope) : null;
 }
 
 // Normalize a wire confidence to a [0,1] number or null. An absent/null/out-of-range value degrades to null so the
@@ -103,6 +111,7 @@ export function toPlaybookAction(dto: XeLocalAiEngineClientEndpointsAgentsV1Play
 		agentDefinitionId: dto.agentDefinitionId ?? "",
 		state: toState(dto.state),
 		source: toSource(dto.source),
+		memoryScope: toMemoryScope(dto.memoryScope),
 		triggerCondition: dto.triggerCondition ?? null,
 		behavior: dto.behavior ?? "",
 		scope: dto.scope ?? null,

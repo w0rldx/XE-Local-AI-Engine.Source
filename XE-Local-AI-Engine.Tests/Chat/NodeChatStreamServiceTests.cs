@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -50,6 +51,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -98,6 +100,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -149,6 +152,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -208,6 +212,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -252,6 +257,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -296,6 +302,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -350,6 +357,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -399,6 +407,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -455,6 +464,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -508,6 +518,7 @@ public sealed class NodeChatStreamServiceTests
             providerResolver,
             CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true)),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -562,6 +573,7 @@ public sealed class NodeChatStreamServiceTests
             providerResolver,
             CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false)),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -608,6 +620,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -666,6 +679,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -742,6 +756,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -765,6 +780,117 @@ public sealed class NodeChatStreamServiceTests
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
         await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenMemoryExtractionEnabled_DispatchesExtractionOnCompletion()
+    {
+        // Positive control for the extraction gate: a playbook-enabled agent that ALSO opts into extraction mines the
+        // completed run — the dispatcher receives one Dispatch when the run completes.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", null, 9, agentDefinitionId, "Memory Agent", PlaybookEnabled: true, MemoryExtractionEnabled: true));
+        var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            extractionDispatcher,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        extractionDispatcher.Received(1).Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Any<MemoryExtractionRunInput>());
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenMemoryExtractionDisabled_SkipsExtractionButStillResolvesMemory()
+    {
+        // The MED-2 gate: a retrieval-only agent (PlaybookEnabled=true, MemoryExtractionEnabled=false) still resolves
+        // its definition (so its existing enabled memory is injected via the resolved prompt) but its completed run is
+        // NOT mined — the dispatcher is never called, so no extraction round-trip happens.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", null, 9, agentDefinitionId, "Retrieval Only", PlaybookEnabled: true, MemoryExtractionEnabled: false));
+        var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            extractionDispatcher,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        // Retrieval still happens — the definition was resolved with the user turn as the relevance query, so existing
+        // memory rides the resolved prompt.
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        // …but no NEW candidates are mined: extraction is never dispatched.
+        extractionDispatcher.DidNotReceive().Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Any<MemoryExtractionRunInput>());
     }
 
     [Test]
@@ -805,6 +931,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -854,6 +981,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -907,6 +1035,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -959,6 +1088,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1010,6 +1140,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1064,6 +1195,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1153,6 +1285,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1255,6 +1388,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1351,6 +1485,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1401,6 +1536,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             // Resolver reports no installed GGUF chat model (null), regardless of the persisted node default.
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1454,6 +1590,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(resolved: "phi-4:Q4_K_M", echoPersistedDefault: false),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1510,6 +1647,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1599,6 +1737,13 @@ public sealed class NodeChatStreamServiceTests
                     return Task.FromResult<string?>(string.IsNullOrWhiteSpace(persistedDefault) ? fallback : persistedDefault);
                 });
         return resolver;
+    }
+
+    // No-op extraction dispatcher: these tests are not about post-run memory (the playbook-disabled default agent never
+    // fires the hook anyway). A substitute's void Dispatch is a no-op, keeping the send/regenerate SSE assertions intact.
+    private static IMemoryExtractionDispatcher CreateMemoryExtractionDispatcher()
+    {
+        return Substitute.For<IMemoryExtractionDispatcher>();
     }
 
     private static IModelClassificationService CreateModelClassificationService(params string[] capabilities)
@@ -1840,6 +1985,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
