@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { formatBytesAsGb } from "@/features/model-fit/components/ModelFitFormatters";
-import type { GgufRepository, GgufRepositoryFile } from "@/features/model-fit/models/ModelFitModels";
-import { useInspectGgufRepository } from "@/features/model-fit/queries/useModelFit";
+import { formatBytesAsGb } from "@/features/models/models/GgufFormatters";
+import type { GgufRepository, GgufRepositoryFile } from "@/features/models/models/GgufModels";
+import { useInspectGgufRepository } from "@/features/models/queries/useGgufDownload";
 
 interface GgufDownloadDialogProps {
 	// The repo whose quants are being picked; null closes the dialog (and gates the inspect query).
@@ -52,7 +52,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 		<DialogShell
 			opened={opened}
 			onClose={onClose}
-			title={t("pages.modelFit.download.selectQuant", "Select a quant to download")}
+			title={t("pages.models.gguf.download.selectQuant", "Select a quant to download")}
 			size="min(42rem, 95vw)"
 			footer={
 				<>
@@ -66,7 +66,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 						onClick={handleConfirm}
 						data-testid="gguf-download-confirm"
 					>
-						{t("pages.modelFit.download.confirm", "Download")}
+						{t("pages.models.gguf.download.confirm", "Download")}
 					</Button>
 				</>
 			}
@@ -79,21 +79,19 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 				{inspect.isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">{t("pages.modelFit.download.inspecting", "Loading quants…")}</Text>
+						<Text c="dimmed">{t("pages.models.gguf.download.inspecting", "Loading quants…")}</Text>
 					</Group>
 				) : null}
 
 				{inspect.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="gguf-download-error">
-						{t("pages.modelFit.download.inspectError", "Could not load this repository's files.")}
+						{t("pages.models.gguf.download.inspectError", "Could not load this repository's files.")}
 					</Alert>
 				) : null}
 
 				{!inspect.isLoading && !inspect.error && files.length === 0 ? (
 					<Stack gap="sm" data-testid="gguf-download-empty">
-						<Text c="dimmed">
-							{t("pages.modelFit.download.noFiles", "No downloadable GGUF files found.")}
-						</Text>
+						<Text c="dimmed">{t("pages.models.gguf.download.noFiles", "No downloadable GGUF files found.")}</Text>
 						{repository !== null ? (
 							<Button
 								variant="light"
@@ -102,7 +100,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 								onClick={() => onConfirmDefault(repository.repoId)}
 								data-testid="gguf-download-default"
 							>
-								{t("pages.modelFit.download.defaultFallback", "Download default quant (Q4_K_M)")}
+								{t("pages.models.gguf.download.defaultFallback", "Download default quant (Q4_K_M)")}
 							</Button>
 						) : null}
 					</Stack>
@@ -114,8 +112,8 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 							<Table.Thead>
 								<Table.Tr>
 									<Table.Th />
-									<Table.Th>{t("pages.modelFit.download.columns.quant", "Quant")}</Table.Th>
-									<Table.Th>{t("pages.modelFit.download.columns.size", "Size")}</Table.Th>
+									<Table.Th>{t("pages.models.gguf.download.columns.quant", "Quant")}</Table.Th>
+									<Table.Th>{t("pages.models.gguf.download.columns.size", "Size")}</Table.Th>
 								</Table.Tr>
 							</Table.Thead>
 							<Table.Tbody>
@@ -131,7 +129,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 												</Text>
 												{file.isDynamic ? (
 													<Badge color="grape" variant="light" size="sm">
-														{t("pages.modelFit.download.dynamic", "Dynamic")}
+														{t("pages.models.gguf.download.dynamic", "Dynamic")}
 													</Badge>
 												) : null}
 											</Group>

@@ -858,6 +858,39 @@
 				"title": "Entwicklereinstellungen",
 				"label": "Entwicklermodus",
 				"description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen). Wird nur in diesem Browser gespeichert."
+			},
+			"llamaCpp": {
+				"title": "llama.cpp-Laufzeit",
+				"loading": "llama.cpp-Binärdatei wird ermittelt…",
+				"error": "Die llama.cpp-Binärdatei konnte nicht ermittelt werden.",
+				"version": "Version",
+				"variant": "Variante",
+				"selectVariant": "Variante",
+				"pinned": "Gepinnter Fallback",
+				"check": "Version prüfen",
+				"idle": "Noch nicht geprüft. Beim Prüfen wird die llama.cpp-Binärdatei ermittelt und bei der ersten Verwendung ggf. heruntergeladen.",
+				"ensure": "Bereitstellen / auswählen",
+				"ensured": "llama.cpp-Binärdatei bereit.",
+				"ensureError": "Die llama.cpp-Binärdatei konnte nicht bereitgestellt werden.",
+				"variants": {
+					"cpu": "CPU",
+					"cuda": "CUDA",
+					"vulkan": "Vulkan"
+				}
+			},
+			"hfToken": {
+				"title": "Hugging-Face-Token",
+				"configured": "Token konfiguriert",
+				"none": "Kein Token",
+				"description": "Für den Download gesperrter GGUF-Repositories ist ein Hugging-Face-Zugriffstoken erforderlich. Das Token wird verschlüsselt gespeichert und niemals angezeigt.",
+				"inputLabel": "Zugriffstoken",
+				"placeholder": "hf_…",
+				"save": "Token speichern",
+				"clear": "Token löschen",
+				"saved": "Token gespeichert.",
+				"saveError": "Das Token konnte nicht gespeichert werden.",
+				"cleared": "Token gelöscht.",
+				"clearError": "Das Token konnte nicht gelöscht werden."
 			}
 		},
 		"cloudSettings": {
@@ -936,6 +969,49 @@
 					"success": "{{model}} ist bereit.",
 					"errorTitle": "Download fehlgeschlagen",
 					"error": "{{model}} konnte nicht heruntergeladen werden."
+				}
+			},
+			"gguf": {
+				"browse": {
+					"title": "Hugging Face GGUF durchsuchen",
+					"searchLabel": "Repositories durchsuchen",
+					"searchPlaceholder": "z. B. llama 3.1 8b",
+					"search": "Suchen",
+					"loading": "Wird gesucht…",
+					"error": "Repositories konnten nicht durchsucht werden.",
+					"empty": "Keine GGUF-Repositories entsprachen der Suche.",
+					"gated": "Gesperrt",
+					"download": "Herunterladen",
+					"noGguf": "Kein GGUF",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Aktualisiert",
+						"license": "Lizenz",
+						"action": "Aktion"
+					}
+				},
+				"download": {
+					"title": "Laufende Downloads",
+					"inProgress": "Wird heruntergeladen…",
+					"cancel": "Abbrechen",
+					"started": "Download gestartet.",
+					"alreadyInFlight": "Dieser Download läuft bereits.",
+					"error": "Der Download konnte nicht gestartet werden.",
+					"cancelled": "Download abgebrochen.",
+					"cancelError": "Der Download konnte nicht abgebrochen werden.",
+					"selectQuant": "Quantisierung zum Herunterladen auswählen",
+					"confirm": "Herunterladen",
+					"inspecting": "Quantisierungen werden geladen…",
+					"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
+					"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
+					"dynamic": "Dynamisch",
+					"columns": {
+						"quant": "Quantisierung",
+						"size": "Größe"
+					},
+					"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)"
 				}
 			}
 		},
@@ -1532,8 +1608,9 @@
 			"eyebrow": "Worker Node",
 			"recommendations": {
 				"title": "Lokaler Modell-Advisor",
-				"subtitle": "Hardwarebewusste Empfehlungen für lokale Modelle auf diesem Node. Hardware erkennen, GGUF-Modelle durchsuchen und herunterladen, die llama.cpp-Laufzeit verwalten und laufende Modelle entladen.",
+				"subtitle": "Hardware-bewusste lokale Modellempfehlungen für diesen Node. Hardware erkennen und Anwendungsfall auswählen, um bewertete, auf Eignung geprüfte Modellempfehlungen zu sehen.",
 				"refreshButton": "Jetzt aktualisieren",
+				"downloadHandoff": "Download gestartet. Auf der Seite Modellverwaltung verfolgen oder abbrechen.",
 				"schedulerLink": "Planer",
 				"modelsLink": "Modellverwaltung",
 				"openScheduler": "Planer öffnen",
@@ -1607,97 +1684,6 @@
 					"none": "Keine",
 					"unknown": "Unbekannt"
 				}
-			},
-			"download": {
-				"title": "Laufende Downloads",
-				"inProgress": "Wird heruntergeladen…",
-				"cancel": "Abbrechen",
-				"started": "Download gestartet.",
-				"alreadyInFlight": "Dieser Download läuft bereits.",
-				"error": "Der Download konnte nicht gestartet werden.",
-				"cancelled": "Download abgebrochen.",
-				"cancelError": "Der Download konnte nicht abgebrochen werden.",
-				"selectQuant": "Quantisierung zum Herunterladen auswählen",
-				"confirm": "Herunterladen",
-				"inspecting": "Quantisierungen werden geladen…",
-				"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
-				"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
-				"dynamic": "Dynamisch",
-				"columns": {
-					"quant": "Quantisierung",
-					"size": "Größe"
-				},
-				"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)"
-			},
-			"running": {
-				"title": "Laufende Modelle",
-				"loading": "Laufende Modelle werden geladen…",
-				"error": "Laufende Modelle konnten nicht geladen werden.",
-				"empty": "Derzeit laufen keine Modelle.",
-				"responsive": "Reagiert",
-				"unresponsive": "Startet / reagiert nicht",
-				"eject": "Entladen",
-				"ejected": "Modell entladen.",
-				"ejectError": "Das Modell konnte nicht entladen werden.",
-				"columns": {
-					"model": "Modell",
-					"role": "Rolle",
-					"status": "Status",
-					"action": "Aktion"
-				}
-			},
-			"llamaCpp": {
-				"title": "llama.cpp-Laufzeit",
-				"loading": "llama.cpp-Binärdatei wird ermittelt…",
-				"error": "Die llama.cpp-Binärdatei konnte nicht ermittelt werden.",
-				"version": "Version",
-				"variant": "Variante",
-				"selectVariant": "Variante",
-				"pinned": "Gepinnter Fallback",
-				"check": "Version prüfen",
-				"idle": "Noch nicht geprüft. Beim Prüfen wird die llama.cpp-Binärdatei ermittelt und bei der ersten Verwendung ggf. heruntergeladen.",
-				"ensure": "Bereitstellen / auswählen",
-				"ensured": "llama.cpp-Binärdatei bereit.",
-				"ensureError": "Die llama.cpp-Binärdatei konnte nicht bereitgestellt werden.",
-				"variants": {
-					"cpu": "CPU",
-					"cuda": "CUDA",
-					"vulkan": "Vulkan"
-				}
-			},
-			"browse": {
-				"title": "Hugging Face GGUF durchsuchen",
-				"searchLabel": "Repositories durchsuchen",
-				"searchPlaceholder": "z. B. llama 3.1 8b",
-				"search": "Suchen",
-				"loading": "Wird gesucht…",
-				"error": "Repositories konnten nicht durchsucht werden.",
-				"empty": "Keine GGUF-Repositories entsprachen der Suche.",
-				"gated": "Gesperrt",
-				"download": "Herunterladen",
-				"noGguf": "Kein GGUF",
-				"columns": {
-					"repo": "Repository",
-					"downloads": "Downloads",
-					"likes": "Likes",
-					"updated": "Aktualisiert",
-					"license": "Lizenz",
-					"action": "Aktion"
-				}
-			},
-			"hfToken": {
-				"title": "Hugging-Face-Token",
-				"configured": "Token konfiguriert",
-				"none": "Kein Token",
-				"description": "Für den Download gesperrter GGUF-Repositories ist ein Hugging-Face-Zugriffstoken erforderlich. Das Token wird verschlüsselt gespeichert und niemals angezeigt.",
-				"inputLabel": "Zugriffstoken",
-				"placeholder": "hf_…",
-				"save": "Token speichern",
-				"clear": "Token löschen",
-				"saved": "Token gespeichert.",
-				"saveError": "Das Token konnte nicht gespeichert werden.",
-				"cleared": "Token gelöscht.",
-				"clearError": "Das Token konnte nicht gelöscht werden."
 			}
 		},
 		"loadedModels": {
@@ -1728,6 +1714,26 @@
 				"confirmAction": "Auswerfen",
 				"success": "'{{modelName}}' wird ausgeworfen — Speicher wird nach der laufenden Generierung frei.",
 				"error": "Das Modell konnte nicht ausgeworfen werden."
+			},
+			"ollama": {
+				"title": "Ollama (im Arbeitsspeicher)"
+			},
+			"llamaCpp": {
+				"title": "llama.cpp-Laufzeit",
+				"loading": "Laufende Modelle werden geladen…",
+				"error": "Laufende Modelle konnten nicht geladen werden.",
+				"empty": "Derzeit laufen keine Modelle.",
+				"responsive": "Reagiert",
+				"unresponsive": "Startet / reagiert nicht",
+				"eject": "Entladen",
+				"ejected": "Modell entladen.",
+				"ejectError": "Das Modell konnte nicht entladen werden.",
+				"columns": {
+					"model": "Modell",
+					"role": "Rolle",
+					"status": "Status",
+					"action": "Aktion"
+				}
 			}
 		},
 		"schedule": {

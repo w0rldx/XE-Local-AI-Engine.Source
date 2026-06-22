@@ -1,48 +1,33 @@
 import { Alert, Anchor, Badge, Button, Card, Container, Group, Loader, Select, Stack, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCpu, IconExternalLink, IconInfoCircle, IconRefresh } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { toast } from "@/core/ui/notifications/Toast";
-import { DownloadProgressPanel } from "@/features/model-fit/components/DownloadProgressPanel";
-import { GgufBrowsePanel } from "@/features/model-fit/components/GgufBrowsePanel";
-import { GgufDownloadDialog } from "@/features/model-fit/components/GgufDownloadDialog";
 import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
-import { HfTokenPanel } from "@/features/model-fit/components/HfTokenPanel";
-import { LlamaCppVersionPanel } from "@/features/model-fit/components/LlamaCppVersionPanel";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
-import { RunningModelsPanel } from "@/features/model-fit/components/RunningModelsPanel";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
 import {
 	defaultGgufQuant,
-	type GgufRepository,
-	type GgufRepositoryFile,
-	type LlamaCppVariant,
 	type ModelFitRecommendation,
 	type ModelFitUseCase,
 	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 	recommendationRefreshLimit,
-	type RunningModel,
 } from "@/features/model-fit/models/ModelFitModels";
 import {
-	useBrowseGgufRepositories,
-	useCancelGgufDownload,
-	useEjectRunningModel,
-	useEnsureLlamaCppBinary,
 	useHardwareProfile,
-	useHfTokenStatus,
 	useLatestRecommendations,
-	useLlamaCppVersion,
 	useRefreshRecommendations,
-	useRunningModels,
-	useSetHfToken,
-	useStartGgufDownload,
 } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
+// Cross-feature hand-off (operator-approved): a download started from a recommendation row is owned by the Model
+// Management feature so it surfaces — with progress + cancel — on that page's download panel via the shared store.
+import { useStartGgufDownload } from "@/features/models/queries/useGgufDownload";
+import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { useScheduledJobs } from "@/features/scheduler/queries/useScheduler";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -55,23 +40,9 @@ export function ModelRecommendationsPage() {
 
 	const useCase = useModelFitManagementStore((state) => state.useCase);
 	const setUseCase = useModelFitManagementStore((state) => state.actions.setUseCase);
-	const browseQuery = useModelFitManagementStore((state) => state.browseQuery);
-	const setBrowseQuery = useModelFitManagementStore((state) => state.actions.setBrowseQuery);
-	const tokenDraft = useModelFitManagementStore((state) => state.tokenDraft);
-	const setTokenDraft = useModelFitManagementStore((state) => state.actions.setTokenDraft);
-	const clearTokenDraft = useModelFitManagementStore((state) => state.actions.clearTokenDraft);
 
 	// Forced hardware re-probe flag — flipped on by the refresh action so the next profile query re-detects the box.
 	const [hardwareRefresh, setHardwareRefresh] = useState(false);
-	// Names of GGUF downloads started this session — there is no byte-level progress from the backend, so the page
-	// tracks which downloads it kicked off to surface them (indeterminate + cancel) in the download panel.
-	const [inFlightDownloads, setInFlightDownloads] = useState<readonly string[]>([]);
-	// The llama.cpp version GET may trigger the first prebuilt binary download backend-side, so it must not run on
-	// mount. Flipped on only when the operator explicitly clicks "Check version" in the llama.cpp panel.
-	const [versionChecked, setVersionChecked] = useState(false);
-	// The repo whose quant picker dialog is open (null = closed). Selecting a browse row opens the dialog so the
-	// operator picks the exact quant (incl. Unsloth Dynamic UD- quants) instead of always pulling the default Q4_K_M.
-	const [downloadRepo, setDownloadRepo] = useState<GgufRepository | null>(null);
 
 	const filters = useMemo(() => ({ useCase }), [useCase]);
 	const latestQuery = useLatestRecommendations(filters);
@@ -79,16 +50,10 @@ export function ModelRecommendationsPage() {
 	const refreshMutation = useRefreshRecommendations();
 
 	const hardwareQuery = useHardwareProfile(hardwareRefresh);
-	const runningQuery = useRunningModels();
-	const versionQuery = useLlamaCppVersion(versionChecked);
-	const hfTokenQuery = useHfTokenStatus();
-	const browseQueryResult = useBrowseGgufRepositories(browseQuery, true);
-
 	const startDownload = useStartGgufDownload();
-	const cancelDownload = useCancelGgufDownload();
-	const ejectModel = useEjectRunningModel();
-	const ensureBinary = useEnsureLlamaCppBinary();
-	const setHfToken = useSetHfToken();
+	// The advisor hands the download off to the Model Management feature: marking the started model in the shared store
+	// makes it appear (with progress + cancel) on that page's download-progress panel.
+	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
 
 	const latest = latestQuery.data;
 
@@ -127,125 +92,36 @@ export function ModelRecommendationsPage() {
 		hardwareQuery.refetch().catch(() => undefined);
 	};
 
-	// Marks a model as in-flight (deduped) so the download panel surfaces it.
-	const markInFlight = useCallback((modelName: string): void => {
-		setInFlightDownloads((current) => (current.includes(modelName) ? current : [...current, modelName]));
-	}, []);
-
-	const removeInFlight = useCallback((modelName: string): void => {
-		setInFlightDownloads((current) => current.filter((name) => name !== modelName));
-	}, []);
-
-	// Starts a GGUF download by repo id (the model name the backend resolves rides the response). On success the model
-	// is tracked as in-flight; alreadyInFlight responses are surfaced too (the download was already running).
-	const startGgufDownload = useCallback(
-		(repoId: string, fileName?: string, quant?: string): void => {
-			startDownload.mutate(
-				{ repoId, fileName, quant },
-				{
-					onSuccess: (response) => {
-						const modelName = response?.modelName ?? repoId;
-						markInFlight(modelName);
-						if (response?.alreadyInFlight) {
-							toast.info(t("pages.modelFit.download.alreadyInFlight", "That download is already in progress."));
-						} else {
-							toast.success(t("pages.modelFit.download.started", "Download started."));
-						}
-					},
-					onError: (error) =>
-						toast.error(errorMessage(error, t("pages.modelFit.download.error", "Could not start the download."))),
-				},
-			);
-		},
-		[startDownload, markInFlight, t],
-	);
-
 	const handleRecommendationDownload = (recommendation: ModelFitRecommendation): void => {
-		// The recommendation row carries the pullable model name (the repo/model the advisor chose) + its quant.
-		if (recommendation.pullModelName) {
-			startGgufDownload(recommendation.pullModelName, undefined, recommendation.quantization ?? defaultGgufQuant);
-		}
-	};
-
-	// Opens the quant picker for a browse row instead of immediately pulling the default quant.
-	const handleBrowseDownload = (repository: GgufRepository): void => {
-		setDownloadRepo(repository);
-	};
-
-	// Confirms a specific quant from the picker: downloads the exact chosen file (fileName is resolved verbatim by the
-	// backend, so a Dynamic UD- quant downloads unambiguously) and closes the dialog.
-	const handleConfirmQuantDownload = (repoId: string, file: GgufRepositoryFile): void => {
-		startGgufDownload(repoId, file.fileName, file.quant);
-		setDownloadRepo(null);
-	};
-
-	// Fallback used when the picker has no files to offer (degraded/unreachable inspection): download the default quant
-	// by repo id only, restoring the pre-picker one-click capability so a degraded inspect never blocks downloading.
-	const handleConfirmDefaultDownload = (repoId: string): void => {
-		startGgufDownload(repoId, undefined, defaultGgufQuant);
-		setDownloadRepo(null);
-	};
-
-	const handleCancelDownload = (modelName: string): void => {
-		cancelDownload.mutate(modelName, {
-			onSuccess: () => {
-				removeInFlight(modelName);
-				toast.success(t("pages.modelFit.download.cancelled", "Download cancelled."));
-			},
-			onError: (error) =>
-				toast.error(errorMessage(error, t("pages.modelFit.download.cancelError", "Could not cancel the download."))),
-		});
-	};
-
-	const handleEject = (model: RunningModel): void => {
-		ejectModel.mutate(
-			{ modelName: model.modelName, role: model.role || undefined },
-			{
-				onSuccess: () => {
-					removeInFlight(model.modelName);
-					toast.success(t("pages.modelFit.running.ejected", "Model ejected."));
-				},
-				onError: (error) => toast.error(errorMessage(error, t("pages.modelFit.running.ejectError", "Could not eject the model."))),
-			},
-		);
-	};
-
-	// Operator-initiated llama.cpp version probe. Latches the flag so the (possibly download-triggering) GET fires
-	// once on demand; a subsequent click re-fetches the now-enabled query.
-	const handleCheckVersion = (): void => {
-		if (!versionChecked) {
-			setVersionChecked(true);
+		// The recommendation row carries the pullable model name (the repo/model the advisor chose) + its quant. The
+		// download is OWNED by the Model Management feature: on success we mark the resolved model name in the shared
+		// in-flight store so it appears — with progress + cancel — on that page's download-progress panel, then point
+		// the operator there (there is no in-flight UI on the advisor itself).
+		if (!recommendation.pullModelName) {
 			return;
 		}
-		versionQuery.refetch().catch(() => undefined);
-	};
-
-	const handleEnsureBinary = (variant: LlamaCppVariant): void => {
-		ensureBinary.mutate(variant, {
-			onSuccess: () => toast.success(t("pages.modelFit.llamaCpp.ensured", "llama.cpp binary ready.")),
-			onError: (error) =>
-				toast.error(errorMessage(error, t("pages.modelFit.llamaCpp.ensureError", "Could not ensure the llama.cpp binary."))),
-		});
-	};
-
-	const handleSaveToken = (): void => {
-		setHfToken.mutate(tokenDraft.trim(), {
-			onSuccess: () => {
-				clearTokenDraft();
-				toast.success(t("pages.modelFit.hfToken.saved", "Token saved."));
+		startDownload.mutate(
+			{ repoId: recommendation.pullModelName, fileName: undefined, quant: recommendation.quantization ?? defaultGgufQuant },
+			{
+				onSuccess: (response) => {
+					const modelName = response?.modelName ?? recommendation.pullModelName ?? "";
+					markInFlight(modelName);
+					if (response?.alreadyInFlight) {
+						toast.info(t("pages.models.gguf.download.alreadyInFlight", "That download is already in progress."));
+					} else {
+						// Direct the operator to Model Management to watch progress / cancel (this page has no in-flight UI).
+						toast.success(
+							t(
+								"pages.modelFit.recommendations.downloadHandoff",
+								"Download started. Track or cancel it on the Model management page.",
+							),
+						);
+					}
+				},
+				onError: (error) =>
+					toast.error(errorMessage(error, t("pages.models.gguf.download.error", "Could not start the download."))),
 			},
-			onError: (error) => toast.error(errorMessage(error, t("pages.modelFit.hfToken.saveError", "Could not save the token."))),
-		});
-	};
-
-	const handleClearToken = (): void => {
-		setHfToken.mutate(undefined, {
-			onSuccess: () => {
-				clearTokenDraft();
-				toast.success(t("pages.modelFit.hfToken.cleared", "Token cleared."));
-			},
-			onError: (error) => toast.error(errorMessage(error, t("pages.modelFit.hfToken.clearError", "Could not clear the token."))),
-		});
+		);
 	};
 
 	const useCaseData = modelFitUseCases.map((value) => ({
@@ -271,7 +147,7 @@ export function ModelRecommendationsPage() {
 						<Text c="dimmed">
 							{t(
 								"pages.modelFit.recommendations.subtitle",
-								"Hardware-aware local model guidance for this node. Detect hardware, browse and download GGUF models, manage the llama.cpp runtime, and eject running models.",
+								"Hardware-aware local model guidance for this node. Detect hardware and pick the use case to see ranked, fit-checked model recommendations.",
 							)}
 						</Text>
 					</Stack>
@@ -310,12 +186,6 @@ export function ModelRecommendationsPage() {
 					isFetching={hardwareQuery.isFetching}
 					error={hardwareQuery.error}
 					onRefresh={handleHardwareRefresh}
-				/>
-
-				<DownloadProgressPanel
-					inFlight={inFlightDownloads}
-					onCancel={handleCancelDownload}
-					cancellingModelName={cancelDownload.isPending ? (cancelDownload.variables ?? null) : null}
 				/>
 
 				{refreshJob === undefined && !jobsQuery.isLoading ? (
@@ -418,54 +288,6 @@ export function ModelRecommendationsPage() {
 						) : null}
 					</Stack>
 				</Card>
-
-				<GgufBrowsePanel
-					repositories={browseQueryResult.data ?? []}
-					isLoading={browseQueryResult.isLoading && browseQuery.trim().length > 0}
-					error={browseQueryResult.error}
-					hasSearched={browseQuery.trim().length > 0}
-					onSearch={setBrowseQuery}
-					onDownload={handleBrowseDownload}
-					downloadingRepoId={downloadingModelName}
-				/>
-
-				<GgufDownloadDialog
-					repository={downloadRepo}
-					onClose={() => setDownloadRepo(null)}
-					onConfirm={handleConfirmQuantDownload}
-					onConfirmDefault={handleConfirmDefaultDownload}
-					isDownloading={startDownload.isPending}
-				/>
-
-				<RunningModelsPanel
-					runningModels={runningQuery.data ?? []}
-					isLoading={runningQuery.isLoading}
-					error={runningQuery.error}
-					onEject={handleEject}
-					ejectingModelName={ejectModel.isPending ? (ejectModel.variables?.modelName ?? null) : null}
-				/>
-
-				<LlamaCppVersionPanel
-					version={versionQuery.data}
-					// `isLoading` is true while a DISABLED query idles, so gate the spinner on an actual in-flight fetch — the
-					// panel shows its idle "not checked yet" state until the operator triggers the (download-capable) probe.
-					isLoading={versionChecked && versionQuery.isFetching}
-					error={versionChecked ? versionQuery.error : null}
-					hasChecked={versionChecked}
-					onCheck={handleCheckVersion}
-					onEnsure={handleEnsureBinary}
-					isEnsuring={ensureBinary.isPending}
-				/>
-
-				<HfTokenPanel
-					hasToken={hfTokenQuery.data ?? false}
-					isLoading={hfTokenQuery.isLoading}
-					tokenDraft={tokenDraft}
-					onTokenDraftChange={setTokenDraft}
-					onSave={handleSaveToken}
-					onClear={handleClearToken}
-					isSaving={setHfToken.isPending}
-				/>
 			</Stack>
 		</Container>
 	);

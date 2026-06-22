@@ -858,6 +858,39 @@
 				"title": "Developer settings",
 				"label": "Developer mode",
 				"description": "Enables advanced, experimental controls in the app (e.g. chat sampling options). Stored in this browser only."
+			},
+			"llamaCpp": {
+				"title": "llama.cpp runtime",
+				"loading": "Resolving llama.cpp binary…",
+				"error": "Could not resolve the llama.cpp binary.",
+				"version": "Version",
+				"variant": "Variant",
+				"selectVariant": "Variant",
+				"pinned": "Pinned fallback",
+				"check": "Check version",
+				"idle": "Not checked yet. Checking resolves the llama.cpp binary and may download it on first use.",
+				"ensure": "Ensure / select",
+				"ensured": "llama.cpp binary ready.",
+				"ensureError": "Could not ensure the llama.cpp binary.",
+				"variants": {
+					"cpu": "CPU",
+					"cuda": "CUDA",
+					"vulkan": "Vulkan"
+				}
+			},
+			"hfToken": {
+				"title": "Hugging Face token",
+				"configured": "Token configured",
+				"none": "No token",
+				"description": "A Hugging Face access token is required to download gated GGUF repositories. The token is stored encrypted and never displayed.",
+				"inputLabel": "Access token",
+				"placeholder": "hf_…",
+				"save": "Save token",
+				"clear": "Clear token",
+				"saved": "Token saved.",
+				"saveError": "Could not save the token.",
+				"cleared": "Token cleared.",
+				"clearError": "Could not clear the token."
 			}
 		},
 		"cloudSettings": {
@@ -936,6 +969,49 @@
 					"success": "{{model}} is ready.",
 					"errorTitle": "Pull failed",
 					"error": "Could not pull {{model}}."
+				}
+			},
+			"gguf": {
+				"browse": {
+					"title": "Browse Hugging Face GGUF",
+					"searchLabel": "Search repositories",
+					"searchPlaceholder": "e.g. llama 3.1 8b",
+					"search": "Search",
+					"loading": "Searching…",
+					"error": "Could not search repositories.",
+					"empty": "No GGUF repositories matched that search.",
+					"gated": "Gated",
+					"download": "Download",
+					"noGguf": "No GGUF",
+					"columns": {
+						"repo": "Repository",
+						"downloads": "Downloads",
+						"likes": "Likes",
+						"updated": "Updated",
+						"license": "License",
+						"action": "Action"
+					}
+				},
+				"download": {
+					"title": "Downloads in progress",
+					"inProgress": "Downloading…",
+					"cancel": "Cancel",
+					"started": "Download started.",
+					"alreadyInFlight": "That download is already in progress.",
+					"error": "Could not start the download.",
+					"cancelled": "Download cancelled.",
+					"cancelError": "Could not cancel the download.",
+					"selectQuant": "Select a quant to download",
+					"confirm": "Download",
+					"inspecting": "Loading quants…",
+					"inspectError": "Could not load this repository's files.",
+					"noFiles": "No downloadable GGUF files found.",
+					"dynamic": "Dynamic",
+					"columns": {
+						"quant": "Quant",
+						"size": "Size"
+					},
+					"defaultFallback": "Download default quant (Q4_K_M)"
 				}
 			}
 		},
@@ -1532,8 +1608,9 @@
 			"eyebrow": "Worker Node",
 			"recommendations": {
 				"title": "Local model advisor",
-				"subtitle": "Hardware-aware local model guidance for this node. Detect hardware, browse and download GGUF models, manage the llama.cpp runtime, and eject running models.",
+				"subtitle": "Hardware-aware local model guidance for this node. Detect hardware and pick the use case to see ranked, fit-checked model recommendations.",
 				"refreshButton": "Refresh now",
+				"downloadHandoff": "Download started. Track or cancel it on the Model management page.",
 				"schedulerLink": "Scheduler",
 				"modelsLink": "Model management",
 				"openScheduler": "Open Scheduler",
@@ -1607,97 +1684,6 @@
 					"none": "None",
 					"unknown": "Unknown"
 				}
-			},
-			"download": {
-				"title": "Downloads in progress",
-				"inProgress": "Downloading…",
-				"cancel": "Cancel",
-				"started": "Download started.",
-				"alreadyInFlight": "That download is already in progress.",
-				"error": "Could not start the download.",
-				"cancelled": "Download cancelled.",
-				"cancelError": "Could not cancel the download.",
-				"selectQuant": "Select a quant to download",
-				"confirm": "Download",
-				"inspecting": "Loading quants…",
-				"inspectError": "Could not load this repository's files.",
-				"noFiles": "No downloadable GGUF files found.",
-				"dynamic": "Dynamic",
-				"columns": {
-					"quant": "Quant",
-					"size": "Size"
-				},
-				"defaultFallback": "Download default quant (Q4_K_M)"
-			},
-			"running": {
-				"title": "Running models",
-				"loading": "Loading running models…",
-				"error": "Could not load running models.",
-				"empty": "No models are currently running.",
-				"responsive": "Responsive",
-				"unresponsive": "Starting / unresponsive",
-				"eject": "Eject",
-				"ejected": "Model ejected.",
-				"ejectError": "Could not eject the model.",
-				"columns": {
-					"model": "Model",
-					"role": "Role",
-					"status": "Status",
-					"action": "Action"
-				}
-			},
-			"llamaCpp": {
-				"title": "llama.cpp runtime",
-				"loading": "Resolving llama.cpp binary…",
-				"error": "Could not resolve the llama.cpp binary.",
-				"version": "Version",
-				"variant": "Variant",
-				"selectVariant": "Variant",
-				"pinned": "Pinned fallback",
-				"check": "Check version",
-				"idle": "Not checked yet. Checking resolves the llama.cpp binary and may download it on first use.",
-				"ensure": "Ensure / select",
-				"ensured": "llama.cpp binary ready.",
-				"ensureError": "Could not ensure the llama.cpp binary.",
-				"variants": {
-					"cpu": "CPU",
-					"cuda": "CUDA",
-					"vulkan": "Vulkan"
-				}
-			},
-			"browse": {
-				"title": "Browse Hugging Face GGUF",
-				"searchLabel": "Search repositories",
-				"searchPlaceholder": "e.g. llama 3.1 8b",
-				"search": "Search",
-				"loading": "Searching…",
-				"error": "Could not search repositories.",
-				"empty": "No GGUF repositories matched that search.",
-				"gated": "Gated",
-				"download": "Download",
-				"noGguf": "No GGUF",
-				"columns": {
-					"repo": "Repository",
-					"downloads": "Downloads",
-					"likes": "Likes",
-					"updated": "Updated",
-					"license": "License",
-					"action": "Action"
-				}
-			},
-			"hfToken": {
-				"title": "Hugging Face token",
-				"configured": "Token configured",
-				"none": "No token",
-				"description": "A Hugging Face access token is required to download gated GGUF repositories. The token is stored encrypted and never displayed.",
-				"inputLabel": "Access token",
-				"placeholder": "hf_…",
-				"save": "Save token",
-				"clear": "Clear token",
-				"saved": "Token saved.",
-				"saveError": "Could not save the token.",
-				"cleared": "Token cleared.",
-				"clearError": "Could not clear the token."
 			}
 		},
 		"loadedModels": {
@@ -1728,6 +1714,26 @@
 				"confirmAction": "Eject",
 				"success": "Ejecting '{{modelName}}' — memory frees after the current generation.",
 				"error": "Could not eject the model."
+			},
+			"ollama": {
+				"title": "Ollama (in-memory)"
+			},
+			"llamaCpp": {
+				"title": "llama.cpp runtime",
+				"loading": "Loading running models…",
+				"error": "Could not load running models.",
+				"empty": "No models are currently running.",
+				"responsive": "Responsive",
+				"unresponsive": "Starting / unresponsive",
+				"eject": "Eject",
+				"ejected": "Model ejected.",
+				"ejectError": "Could not eject the model.",
+				"columns": {
+					"model": "Model",
+					"role": "Role",
+					"status": "Status",
+					"action": "Action"
+				}
 			}
 		},
 		"schedule": {

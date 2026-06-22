@@ -40,16 +40,16 @@ export function HfTokenPanel({
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconKey size={20} />
-						<Title order={4}>{t("pages.modelFit.hfToken.title", "Hugging Face token")}</Title>
+						<Title order={4}>{t("pages.nodeSettings.hfToken.title", "Hugging Face token")}</Title>
 					</Group>
 					{!isLoading ? (
 						hasToken ? (
 							<Badge color="green" variant="light" data-testid="model-fit-hf-token-status">
-								{t("pages.modelFit.hfToken.configured", "Token configured")}
+								{t("pages.nodeSettings.hfToken.configured", "Token configured")}
 							</Badge>
 						) : (
 							<Badge color="gray" variant="light" data-testid="model-fit-hf-token-status">
-								{t("pages.modelFit.hfToken.none", "No token")}
+								{t("pages.nodeSettings.hfToken.none", "No token")}
 							</Badge>
 						)
 					) : null}
@@ -57,7 +57,7 @@ export function HfTokenPanel({
 
 				<Text size="sm" c="dimmed">
 					{t(
-						"pages.modelFit.hfToken.description",
+						"pages.nodeSettings.hfToken.description",
 						"A Hugging Face access token is required to download gated GGUF repositories. The token is stored encrypted and never displayed.",
 					)}
 				</Text>
@@ -65,8 +65,8 @@ export function HfTokenPanel({
 				<form onSubmit={handleSubmit}>
 					<Stack gap="sm">
 						<PasswordInput
-							label={t("pages.modelFit.hfToken.inputLabel", "Access token")}
-							placeholder={t("pages.modelFit.hfToken.placeholder", "hf_…")}
+							label={t("pages.nodeSettings.hfToken.inputLabel", "Access token")}
+							placeholder={t("pages.nodeSettings.hfToken.placeholder", "hf_…")}
 							value={tokenDraft}
 							onChange={(event) => onTokenDraftChange(event.currentTarget.value)}
 							autoComplete="off"
@@ -79,7 +79,7 @@ export function HfTokenPanel({
 								disabled={tokenDraft.trim().length === 0}
 								data-testid="model-fit-hf-token-save"
 							>
-								{t("pages.modelFit.hfToken.save", "Save token")}
+								{t("pages.nodeSettings.hfToken.save", "Save token")}
 							</Button>
 							<Button
 								variant="default"
@@ -90,7 +90,7 @@ export function HfTokenPanel({
 								onClick={onClear}
 								data-testid="model-fit-hf-token-clear"
 							>
-								{t("pages.modelFit.hfToken.clear", "Clear token")}
+								{t("pages.nodeSettings.hfToken.clear", "Clear token")}
 							</Button>
 						</Group>
 					</Stack>
