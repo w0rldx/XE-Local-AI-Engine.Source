@@ -34,6 +34,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
+            DefaultTemporaryChat = input.DefaultTemporaryChat,
+            MemoryExtractionEnabled = input.MemoryExtractionEnabled,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -65,6 +67,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
+            DefaultTemporaryChat = input.DefaultTemporaryChat,
+            MemoryExtractionEnabled = input.MemoryExtractionEnabled,
             // The only place a seeded provenance is stamped — the manual AddAsync leaves Source at the entity default
             // (Manual), keeping the operator create/update contract unable to forge a seeded row.
             Source = (int)AgentDefinitionSource.Seeded,
@@ -130,6 +134,12 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         // PlaybookEnabled only gates injection; the injected playbook content drives the config hash directly, so it is
         // deliberately excluded from the configChanged comparison above and never bumps the agent's own Version.
         entity.PlaybookEnabled = input.PlaybookEnabled;
+        // DefaultTemporaryChat gates post-run memory extraction only (not the prompt), so like PlaybookEnabled it is
+        // excluded from configChanged and never bumps Version.
+        entity.DefaultTemporaryChat = input.DefaultTemporaryChat;
+        // MemoryExtractionEnabled gates post-run extraction only (retrieval/injection stays gated on PlaybookEnabled),
+        // so like PlaybookEnabled it is excluded from configChanged and never bumps Version.
+        entity.MemoryExtractionEnabled = input.MemoryExtractionEnabled;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (configChanged)
@@ -224,7 +234,9 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.PlaybookEnabled,
             (AgentDefinitionSource)entity.Source,
             entity.SeedSlug,
-            DeserializeSkillIds(entity.AllowedSkillIdsJson));
+            DeserializeSkillIds(entity.AllowedSkillIdsJson),
+            entity.DefaultTemporaryChat,
+            entity.MemoryExtractionEnabled);
     }
 
     private static byte[]? EncodeOptional(string? value)

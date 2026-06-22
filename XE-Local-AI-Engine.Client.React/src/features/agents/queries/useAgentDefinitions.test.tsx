@@ -52,6 +52,7 @@ const generatedDefinition = {
 	toolApprovals: { GetCurrentTime: true },
 	orchestrationTopologyJson: null,
 	playbookEnabled: false,
+	defaultTemporaryChat: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,
@@ -71,6 +72,9 @@ const domainDefinition = {
 	allowedSkillIds: [],
 	orchestrationTopologyJson: null,
 	playbookEnabled: false,
+	defaultTemporaryChat: false,
+	// The wire fixture omits memoryExtractionEnabled; the mapper degrades an absent value to true (backend default).
+	memoryExtractionEnabled: true,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,
@@ -89,6 +93,8 @@ const saveRequest = {
 	toolApprovals: { GetCurrentTime: true },
 	orchestrationTopologyJson: null,
 	playbookEnabled: false,
+	defaultTemporaryChat: false,
+	memoryExtractionEnabled: true,
 };
 
 // Captures the queryKey of every invalidateQueries call so a test can assert which caches a mutation touched.

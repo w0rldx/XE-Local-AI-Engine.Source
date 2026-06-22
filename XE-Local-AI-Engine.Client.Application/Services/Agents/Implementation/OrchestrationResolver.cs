@@ -187,7 +187,10 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             enabled,
             _retrievalOptions.RetrievalThreshold,
             _retrievalOptions.TopK,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            _retrievalOptions.MaxInjectedMemoryTokens,
+            _retrievalOptions.MaxInjectedFailureMemoryTokens,
+            _logger).ConfigureAwait(false);
         return PlaybookPromptComposer.Compose(participant.Instructions, selected);
     }
 

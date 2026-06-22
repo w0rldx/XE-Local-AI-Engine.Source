@@ -68,7 +68,11 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             "updated_at_utc",
             "playbook_enabled",
             "source",
-            "seed_slug"
+            "seed_slug",
+            // Added by the later AddAdaptiveAgentMemory migration; a full MigrateAsync() applies it, so they are part of
+            // the expected set here.
+            "default_temporary_chat",
+            "memory_extraction_enabled"
         }), "agent_definitions should expose the mapped columns.");
 
         var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);

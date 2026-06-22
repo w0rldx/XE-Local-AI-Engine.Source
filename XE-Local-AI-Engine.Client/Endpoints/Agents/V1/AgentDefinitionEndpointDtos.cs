@@ -25,6 +25,19 @@ public sealed class CreateAgentDefinitionRequest
 
     public bool PlaybookEnabled { get; init; }
 
+    /// <summary>
+    ///     Per-agent default for the temporary-chat (memory-excluded) flag new conversations inherit (adaptive memory).
+    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
+    /// </summary>
+    public bool DefaultTemporaryChat { get; init; }
+
+    /// <summary>
+    ///     Whether this agent mines its completed runs into new candidate memories (adaptive memory). Defaults to
+    ///     <c>true</c>; set <c>false</c> for a retrieval-only agent that uses existing memory but learns nothing new.
+    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
+    /// </summary>
+    public bool MemoryExtractionEnabled { get; init; } = true;
+
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
 }
@@ -53,6 +66,19 @@ public sealed class UpdateAgentDefinitionRequest
     public string? OrchestrationTopologyJson { get; init; }
 
     public bool PlaybookEnabled { get; init; }
+
+    /// <summary>
+    ///     Per-agent default for the temporary-chat (memory-excluded) flag new conversations inherit (adaptive memory).
+    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
+    /// </summary>
+    public bool DefaultTemporaryChat { get; init; }
+
+    /// <summary>
+    ///     Whether this agent mines its completed runs into new candidate memories (adaptive memory). Defaults to
+    ///     <c>true</c>; set <c>false</c> for a retrieval-only agent that uses existing memory but learns nothing new.
+    ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
+    /// </summary>
+    public bool MemoryExtractionEnabled { get; init; } = true;
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
@@ -95,6 +121,12 @@ public sealed class AgentDefinitionResponse
     public string? OrchestrationTopologyJson { get; init; }
 
     public required bool PlaybookEnabled { get; init; }
+
+    /// <summary>Per-agent default for the temporary-chat (memory-excluded) flag new conversations inherit (adaptive memory).</summary>
+    public required bool DefaultTemporaryChat { get; init; }
+
+    /// <summary>Whether this agent mines its completed runs into new candidate memories; false = retrieval-only (adaptive memory).</summary>
+    public required bool MemoryExtractionEnabled { get; init; }
 
     /// <summary>The per-agent skill picklist (skill ids). Always present; empty when no skills are assigned.</summary>
     public required IReadOnlyList<Guid> AllowedSkillIds { get; init; }

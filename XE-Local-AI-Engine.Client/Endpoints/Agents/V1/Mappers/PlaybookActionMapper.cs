@@ -18,6 +18,7 @@ internal static class PlaybookActionMapper
             AgentDefinitionId = record.AgentDefinitionId,
             State = record.State,
             Source = record.Source,
+            MemoryScope = record.MemoryScope,
             TriggerCondition = record.TriggerCondition,
             Behavior = record.Behavior,
             Scope = record.Scope,

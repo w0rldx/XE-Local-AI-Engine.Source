@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -23,10 +24,15 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
         return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
             async (dbContext, token) =>
             {
+                // A new conversation inherits the bound agent's default-temporary-chat flag (adaptive-memory write-only
+                // suppression). Read it inline from agent_definitions on the same connection so the seam is self-
+                // contained (no store injected into the raw-SQL write path); an unbound conversation defaults to false.
+                var memoryExcluded = await ReadAgentDefaultTemporaryChatAsync(dbContext, request.AgentDefinitionId, token).ConfigureAwait(false);
+
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
-                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, agent_definition_id)
-                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id);
+                                      INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, agent_definition_id, memory_excluded)
+                                      VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, $agent_definition_id, $memory_excluded);
                                       """;
                 AddParameter(command, "$conversation_id", conversationId);
                 AddParameter(command, "$title", EncryptTitle(request.Title, dbContext, conversationId));
@@ -35,12 +41,36 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                 AddParameter(command, "$last_seen_utc", createdAtUtc);
                 AddParameter(command, "$origin", request.Origin);
                 AddParameter(command, "$agent_definition_id", request.AgentDefinitionId);
+                AddParameter(command, "$memory_excluded", memoryExcluded ? 1 : 0);
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, false, [], request.Origin, AgentDefinitionId: request.AgentDefinitionId);
+                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, false, [], request.Origin, AgentDefinitionId: request.AgentDefinitionId,
+                    MemoryExcluded: memoryExcluded);
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Reads the bound agent's <c>default_temporary_chat</c> flag on the supplied connection so a new conversation
+    ///     can inherit it. Returns false when there is no binding or the bound definition no longer exists (degrades to
+    ///     non-temporary, matching the resolver's deleted-definition fallback). Raw SELECT to keep the create path
+    ///     self-contained — no agent store is injected into the serialized raw-SQL writer.
+    /// </summary>
+    private static async Task<bool> ReadAgentDefaultTemporaryChatAsync(NodeChatDbContext dbContext, Guid? agentDefinitionId, CancellationToken cancellationToken)
+    {
+        if (agentDefinitionId is not { } definitionId)
+        {
+            return false;
+        }
+
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT default_temporary_chat FROM agent_definitions WHERE id = $id;";
+        AddParameter(command, "$id", definitionId);
+        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        // SQLite stores the bool as 0/1; a missing row returns null → non-temporary.
+        return result is not null and not DBNull && Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0L;
     }
 
     public async Task<NodeChatConversationDto> EnsureConversationAsync(NodeChatEnsureConversationRequest request, CancellationToken cancellationToken = default)
@@ -242,6 +272,23 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
             {
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
                     [request.Archived, request.UpdatedAtUtc, request.ConversationId],
+                    token).ConfigureAwait(false);
+
+                return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<NodeChatConversationDto?> SetConversationMemoryExcludedAsync(NodeChatSetConversationMemoryExcludedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+            async (dbContext, token) =>
+            {
+                // Plaintext non-nullable bool column → ExecuteSqlRawAsync is sufficient (mirrors SetConversationPinnedAsync).
+                var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET memory_excluded = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
+                    [request.MemoryExcluded, request.UpdatedAtUtc, request.ConversationId],
                     token).ConfigureAwait(false);
 
                 return updated == 0 ? null : await ReadConversationWithMessagesAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);

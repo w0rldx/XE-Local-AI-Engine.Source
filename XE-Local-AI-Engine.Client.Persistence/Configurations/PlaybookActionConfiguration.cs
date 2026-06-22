@@ -23,6 +23,11 @@ internal sealed class PlaybookActionConfiguration : IEntityTypeConfiguration<Pla
         builder.Property(entity => entity.Source)
                .HasColumnName("source");
 
+        // Adaptive-memory typed scope — additive nullable column. Plaintext (an int), not encrypted; null = untyped
+        // legacy action. Non-injected metadata (like scope/source), so it never enters the runtime config hash.
+        builder.Property(entity => entity.MemoryScope)
+               .HasColumnName("memory_scope");
+
         builder.Property(entity => entity.TriggerCondition)
                .HasColumnName("trigger_condition");
 

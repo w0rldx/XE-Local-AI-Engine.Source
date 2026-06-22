@@ -55,6 +55,8 @@ function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefiniti
 		allowedSkillIds: [],
 		orchestrationTopologyJson: null,
 		playbookEnabled: false,
+		defaultTemporaryChat: false,
+		memoryExtractionEnabled: true,
 		version: 1,
 		createdAtUtc: 0,
 		updatedAtUtc: 0,
@@ -121,6 +123,8 @@ const baseValues: AgentDefinitionFormValues = {
 	allowedSkillIds: [],
 	orchestration: { participantAgentDefinitionIds: [], handoffs: [], maxTurnsPerAgent: 8, returnToPrevious: false },
 	playbookEnabled: false,
+	defaultTemporaryChat: false,
+	memoryExtractionEnabled: true,
 };
 
 function renderForm(overrides: {
@@ -274,6 +278,52 @@ describe("AgentDefinitionForm", () => {
 		fireEvent.click(screen.getByTestId("agent-form-submit"));
 
 		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ playbookEnabled: true }));
+	});
+
+	it("hides the default-temporary-chat toggle until adaptive memory is enabled", () => {
+		renderForm({ initialValues: { name: "Helper", instructions: "Be helpful", playbookEnabled: false } });
+
+		expect(screen.queryByTestId("agent-form-default-temporary-chat")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("agent-form-playbook-enabled"));
+
+		expect(screen.getByTestId("agent-form-default-temporary-chat")).toBeTruthy();
+	});
+
+	it("round-trips defaultTemporaryChat through the form", () => {
+		const { onSubmit } = renderForm({
+			initialValues: { name: "Helper", instructions: "Be helpful", playbookEnabled: true },
+		});
+
+		const toggle = screen.getByTestId("agent-form-default-temporary-chat") as HTMLInputElement;
+		expect(toggle.checked).toBe(false);
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ defaultTemporaryChat: true }));
+	});
+
+	it("hides the memory-extraction toggle until adaptive memory is enabled", () => {
+		renderForm({ initialValues: { name: "Helper", instructions: "Be helpful", playbookEnabled: false } });
+
+		expect(screen.queryByTestId("agent-form-memory-extraction-enabled")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("agent-form-playbook-enabled"));
+
+		expect(screen.getByTestId("agent-form-memory-extraction-enabled")).toBeTruthy();
+	});
+
+	it("round-trips memoryExtractionEnabled through the form (toggling to retrieval-only)", () => {
+		const { onSubmit } = renderForm({
+			initialValues: { name: "Helper", instructions: "Be helpful", playbookEnabled: true, memoryExtractionEnabled: true },
+		});
+
+		const toggle = screen.getByTestId("agent-form-memory-extraction-enabled") as HTMLInputElement;
+		expect(toggle.checked).toBe(true);
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ memoryExtractionEnabled: false }));
 	});
 
 	it("hides the orchestration section for a Single definition", () => {

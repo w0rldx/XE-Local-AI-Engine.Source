@@ -23,6 +23,7 @@ function makeOption(overrides: Partial<AgentOption> = {}): AgentOption {
 		description: "A test agent",
 		kind: "Single",
 		modelProfile: null,
+		playbookEnabled: false,
 		...overrides,
 	};
 }

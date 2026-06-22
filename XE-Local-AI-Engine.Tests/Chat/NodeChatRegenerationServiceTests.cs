@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -67,6 +68,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -140,6 +142,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateGgufModelCapabilityResolver(),
             // Resolver reports no installed GGUF chat model (null).
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -203,6 +206,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -279,6 +283,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -348,6 +353,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -404,6 +410,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -454,6 +461,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -522,6 +530,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -581,6 +590,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -631,6 +641,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -699,6 +710,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -746,6 +758,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -787,6 +800,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -847,6 +861,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             classificationService,
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -936,6 +951,13 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
         resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
         return resolver;
+    }
+
+    // No-op extraction dispatcher: these tests are not about post-run memory (the playbook-disabled default agent never
+    // fires the hook). A substitute's void Dispatch is a no-op, keeping the regenerate SSE assertions intact.
+    private static IMemoryExtractionDispatcher CreateMemoryExtractionDispatcher()
+    {
+        return Substitute.For<IMemoryExtractionDispatcher>();
     }
 
     // The default local-default resolver resolves to an installed GGUF chat model so a regenerate of a "Local runtime

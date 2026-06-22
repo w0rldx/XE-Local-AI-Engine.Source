@@ -11,6 +11,7 @@ import {
 	listNodeChatMessageRevisions,
 	pinNodeChatConversation,
 	renameNodeChatConversation,
+	setNodeChatConversationMemoryExcluded,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse,
@@ -79,6 +80,11 @@ export interface NodeChatAdapter {
 	renameConversation(conversationId: string, title: string, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationPinned(conversationId: string, isPinned: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationArchived(conversationId: string, archived: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
+	setConversationMemoryExcluded(
+		conversationId: string,
+		memoryExcluded: boolean,
+		options?: RequestOptions,
+	): Promise<ChatConversationModel>;
 	branchConversation(
 		conversationId: string,
 		messageId: string,
@@ -342,6 +348,17 @@ export const nodeChatAdapter: NodeChatAdapter = {
 	async setConversationArchived(conversationId, archived, options) {
 		const { data } = await callWithResponseValidation(
 			archiveNodeChatConversation({ path: { conversationId }, body: { archived }, signal: options?.signal, throwOnError: true }),
+		);
+		return mapConversation(data);
+	},
+	async setConversationMemoryExcluded(conversationId, memoryExcluded, options) {
+		const { data } = await callWithResponseValidation(
+			setNodeChatConversationMemoryExcluded({
+				path: { conversationId },
+				body: { memoryExcluded },
+				signal: options?.signal,
+				throwOnError: true,
+			}),
 		);
 		return mapConversation(data);
 	},

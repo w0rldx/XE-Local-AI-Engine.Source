@@ -135,6 +135,9 @@ export interface ChatConversationModel {
 	lastMessagePreview?: string;
 	isPinned?: boolean;
 	isArchived?: boolean;
+	// When true this conversation is "temporary" — it won't teach the bound agent new adaptive memory (existing
+	// memory is still used). Toggled per-conversation in the chat header; defaults from the agent's defaultTemporaryChat.
+	memoryExcluded?: boolean;
 	origin?: ChatOrigin;
 	branchOfConversationId?: string;
 	// Persisted selected-path map {variantGroupId -> selectedMessageId} for the conversation tree. Seeds the
@@ -239,6 +242,9 @@ export interface AgentOption {
 	readonly description: string;
 	readonly kind: "Single" | "Orchestrator";
 	readonly modelProfile: string | null;
+	// Whether this agent has adaptive memory enabled. Gates the temporary-chat toggle in the chat header — the toggle
+	// only renders when the bound agent learns memory at all.
+	readonly playbookEnabled: boolean;
 }
 
 // Matches the backend AgentDefaults.DefaultAgentName seeded slug. Used to exclude the Default Assistant from
@@ -302,6 +308,12 @@ export interface ChatDisplayShellProps {
 	onRenameConversation?: (conversationId: string, title: string) => void;
 	onToggleConversationPinned?: (conversationId: string, isPinned: boolean) => void;
 	onToggleConversationArchived?: (conversationId: string, archived: boolean) => void;
+	// Whether the bound agent has adaptive memory enabled. When true (and the handler is present) the header renders
+	// the per-conversation temporary-chat toggle; otherwise the toggle is hidden (nothing to suppress).
+	boundAgentMemoryEnabled?: boolean;
+	// Toggle the selected conversation "temporary" (memory-excluded). Only wired/rendered when the bound agent has
+	// adaptive memory enabled.
+	onToggleConversationMemoryExcluded?: (conversationId: string, memoryExcluded: boolean) => void;
 	onDeleteConversation?: (conversationId: string, skipConfirm: boolean) => void;
 	onBranchFromMessage?: (messageId: string) => void;
 	activeRevisionByGroup?: Readonly<Record<string, string>>;

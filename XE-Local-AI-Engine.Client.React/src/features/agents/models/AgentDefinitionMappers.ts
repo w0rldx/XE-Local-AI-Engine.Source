@@ -46,6 +46,9 @@ export function toAgentDefinition(dto: XeLocalAiEngineClientEndpointsAgentsV1Age
 		allowedSkillIds: [...(dto.allowedSkillIds ?? [])],
 		orchestrationTopologyJson: dto.orchestrationTopologyJson ?? null,
 		playbookEnabled: dto.playbookEnabled ?? false,
+		defaultTemporaryChat: dto.defaultTemporaryChat ?? false,
+		// Backend default is ON; an absent wire value degrades to true so a pre-feature row keeps learning from runs.
+		memoryExtractionEnabled: dto.memoryExtractionEnabled ?? true,
 		version: dto.version ?? 0,
 		createdAtUtc: dto.createdAtUtc ?? 0,
 		updatedAtUtc: dto.updatedAtUtc ?? 0,
@@ -84,5 +87,7 @@ export function toSaveAgentDefinitionRequest(
 		orchestrationTopologyJson:
 			form.kind === "Orchestrator" ? serializeOrchestrationTopology(form.orchestration, triageAgentDefinitionId) : null,
 		playbookEnabled: form.playbookEnabled,
+		defaultTemporaryChat: form.defaultTemporaryChat,
+		memoryExtractionEnabled: form.memoryExtractionEnabled,
 	};
 }

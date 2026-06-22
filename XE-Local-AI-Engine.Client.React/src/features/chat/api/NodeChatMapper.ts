@@ -231,6 +231,7 @@ export function mapConversation(dto: NodeChatConversationResponseDto): ChatConve
 		lastMessagePreview: previewFromMessages(messages),
 		isPinned: dto.isPinned ?? false,
 		isArchived: dto.archived ?? false,
+		memoryExcluded: dto.memoryExcluded ?? false,
 		origin: toOrigin(dto.origin),
 		branchOfConversationId: dto.branchOfConversationId ?? undefined,
 		selectedPath: dto.selectedPath ?? undefined,

@@ -56,6 +56,7 @@ function makeAction(overrides: Partial<PlaybookAction> = {}): PlaybookAction {
 		agentDefinitionId: "agent-1",
 		state: "Enabled",
 		source: "Manual",
+		memoryScope: null,
 		triggerCondition: null,
 		behavior: "Always cite your sources",
 		scope: null,
@@ -199,8 +200,8 @@ describe("PlaybookPanel", () => {
 		// No panel surface is rendered (the component returns null behind the gate).
 		expect(screen.queryByTestId("playbook-panel-agent-1")).toBeNull();
 		expect(screen.queryByTestId("playbook-add-button")).toBeNull();
-		// The query is disabled (null agent id) when the panel is gated off.
-		expect(hooksMock.usePlaybookActions).toHaveBeenCalledWith(null);
+		// The query is disabled (null agent id) when the panel is gated off; the scope filter defaults to null ("all").
+		expect(hooksMock.usePlaybookActions).toHaveBeenCalledWith(null, null);
 	});
 
 	it("lists actions and renders the Manual provenance badge", () => {
@@ -697,5 +698,70 @@ describe("PlaybookPanel", () => {
 
 		// The typed CapReached conflict maps to a localized cap reason in the error toast.
 		expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining("cap"));
+	});
+
+	it("renders the adaptive-memory scope filter with all scopes", () => {
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		const filter = screen.getByTestId("playbook-scope-filter");
+		expect(filter).toBeTruthy();
+		// The segmented control offers "All" plus every memory scope.
+		expect(filter.textContent).toContain("All");
+		expect(filter.textContent).toContain("Procedural");
+		expect(filter.textContent).toContain("Failure");
+		expect(filter.textContent).toContain("User preference");
+		expect(filter.textContent).toContain("Project");
+	});
+
+	it("filters the list by scope through the server query param when a scope is selected", () => {
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// Default: list every scope (null).
+		expect(hooksMock.usePlaybookActions).toHaveBeenLastCalledWith("agent-1", null);
+
+		// Selecting Failure re-reads with the scope wired to the server `?scope=` param.
+		fireEvent.click(screen.getByText("Failure"));
+
+		expect(hooksMock.usePlaybookActions).toHaveBeenLastCalledWith("agent-1", "Failure");
+	});
+
+	it("renders the memory-scope badge on an action", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeAction({ memoryScope: "Procedural" })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-scope-action-1").textContent).toBe("Procedural");
+	});
+
+	it("renders the Extracted-from-run provenance on a suggested candidate harvested from a run", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeSuggestedAction({ id: "extracted-1", source: "Extracted", memoryScope: "UserPreference" })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		expect(screen.getByTestId("playbook-suggested-source-extracted-1").textContent).toBe("Extracted from run");
+		expect(screen.getByTestId("playbook-suggested-scope-extracted-1").textContent).toBe("User preference");
+	});
+
+	it("styles a Failure-scope action distinctly (negative guidance)", () => {
+		hooksMock.usePlaybookActions.mockReturnValue({
+			data: [makeAction({ memoryScope: "Failure" })],
+			isLoading: false,
+			error: null,
+		});
+
+		renderPanel(<PlaybookPanel agentDefinitionId="agent-1" agentName="Researcher" enabled={true} />);
+
+		// The Failure row carries a red border to read as negative guidance; the scope badge names the scope.
+		const row = screen.getByTestId("playbook-action-action-1");
+		expect(row.style.borderColor).toContain("red");
+		expect(screen.getByTestId("playbook-scope-action-1").textContent).toBe("Failure");
 	});
 });

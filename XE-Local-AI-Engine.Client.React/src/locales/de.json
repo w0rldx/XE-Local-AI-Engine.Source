@@ -509,6 +509,10 @@
 			},
 			"composer": {
 				"samplingOptions": "Erweiterte Sampling-Optionen"
+			},
+			"temporaryChat": {
+				"label": "Temporärer Chat",
+				"tooltip": "Dieser Chat bringt dem Agenten kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt."
 			}
 		},
 		"clientNodes": {
@@ -1138,7 +1142,7 @@
 					}
 				},
 				"playbookEnabled": {
-					"label": "Operating-Playbook aktivieren",
+					"label": "Adaptives Gedächtnis aktivieren",
 					"description": "Hängt die aktivierten Playbook-Aktionen dieses Agenten zur Laufzeit an seine Anweisungen an."
 				},
 				"skills": {
@@ -1148,11 +1152,19 @@
 					"loadError": "Die Skill-Bibliothek konnte nicht geladen werden.",
 					"empty": "Noch keine Skills. Erstellen Sie Skills auf der Skills-Seite, um sie hier zuzuweisen.",
 					"disabledBadge": "deaktiviert"
+				},
+				"defaultTemporaryChat": {
+					"label": "Neue Chats standardmäßig temporär",
+					"description": "Neue Konversationen mit diesem Agenten bringen ihm standardmäßig kein neues Gedächtnis bei; vorhandenes Gedächtnis wird weiterhin genutzt. Jeder Chat kann dies überschreiben."
+				},
+				"memoryExtractionEnabled": {
+					"label": "Neues Gedächtnis aus Läufen lernen",
+					"description": "Lässt diesen Agenten neues Gedächtnis aus seinen Läufen lernen. Aus = nur vorhandenes Gedächtnis nutzen (kein neues Gedächtnis wird gewonnen)."
 				}
 			},
 			"playbook": {
-				"title": "Operating-Playbook",
-				"subtitle": "Manuelle Playbook-Aktionen, die an die Anweisungen von {{name}} angehängt werden, wenn dessen Playbook aktiviert ist.",
+				"title": "Adaptives Gedächtnis",
+				"subtitle": "Playbook-Aktionen – manuell, analysevorgeschlagen oder aus Läufen gelernt – werden an die Anweisungen von {{name}} angehängt, wenn dessen Gedächtnis aktiviert ist.",
 				"addButton": "Aktion hinzufügen",
 				"analyzeButton": "Feedback analysieren",
 				"noSuggestions": "Keine neuen Vorschläge aus der letzten Analyse.",
@@ -1173,7 +1185,8 @@
 				"deleteAria": "Aktion löschen",
 				"source": {
 					"Manual": "Manuell",
-					"Analysis": "Analyse"
+					"Analysis": "Analyse",
+					"Extracted": "Aus Lauf extrahiert"
 				},
 				"state": {
 					"enabled": "aktiviert",
@@ -1257,6 +1270,15 @@
 						"Regressed": "Verschlechtert",
 						"InsufficientData": "Unzureichende Daten"
 					}
+				},
+				"scope": {
+					"Procedural": "Prozedural",
+					"Failure": "Fehler",
+					"UserPreference": "Benutzervorliebe",
+					"Project": "Projekt"
+				},
+				"scopeFilter": {
+					"all": "Alle"
 				}
 			},
 			"golden": {
@@ -1361,6 +1383,29 @@
 				"load": "Agent-Definitionen konnten nicht geladen werden.",
 				"save": "Die Agent-Definition konnte nicht gespeichert werden.",
 				"delete": "Der Agent konnte nicht gelöscht werden."
+			},
+			"executionLog": {
+				"title": "Laufdiagnose",
+				"subtitle": "Letzte Läufe für {{name}} (nur Metadaten – kein Nachrichten- oder Fehlertext wird gespeichert).",
+				"loading": "Laufdiagnose wird geladen…",
+				"empty": "Noch keine Läufe aufgezeichnet.",
+				"latencyValue": "{{ms}} ms",
+				"errors": {
+					"load": "Laufdiagnose konnte nicht geladen werden."
+				},
+				"outcome": {
+					"success": "Erfolg",
+					"failed": "Fehlgeschlagen"
+				},
+				"columns": {
+					"outcome": "Ergebnis",
+					"when": "Wann",
+					"model": "Modell",
+					"latency": "Latenz",
+					"promptTokens": "Prompt",
+					"completionTokens": "Antwort",
+					"error": "Fehlerklasse"
+				}
 			}
 		},
 		"mcp": {

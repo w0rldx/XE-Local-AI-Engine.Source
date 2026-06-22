@@ -218,6 +218,9 @@ import type {
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsErrors,
 	ListAgentDefinitionsResponses,
+	ListAgentExecutionLogsData,
+	ListAgentExecutionLogsErrors,
+	ListAgentExecutionLogsResponses,
 	ListAgentPlaybookActionsData,
 	ListAgentPlaybookActionsErrors,
 	ListAgentPlaybookActionsResponses,
@@ -318,6 +321,9 @@ import type {
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledErrors,
 	SetMcpServerEnabledResponses,
+	SetNodeChatConversationMemoryExcludedData,
+	SetNodeChatConversationMemoryExcludedErrors,
+	SetNodeChatConversationMemoryExcludedResponses,
 	SetNodeChatMessageFeedbackData,
 	SetNodeChatMessageFeedbackErrors,
 	SetNodeChatMessageFeedbackResponses,
@@ -489,7 +495,11 @@ import {
 	zInspectGgufRepositoryQuery,
 	zInspectGgufRepositoryResponse,
 	zListAgentDefinitionsResponse,
+	zListAgentExecutionLogsPath,
+	zListAgentExecutionLogsQuery,
+	zListAgentExecutionLogsResponse,
 	zListAgentPlaybookActionsPath,
+	zListAgentPlaybookActionsQuery,
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
 	zListGoldenConversationsPath,
@@ -550,6 +560,9 @@ import {
 	zSetMcpServerEnabledBody,
 	zSetMcpServerEnabledPath,
 	zSetMcpServerEnabledResponse,
+	zSetNodeChatConversationMemoryExcludedBody,
+	zSetNodeChatConversationMemoryExcludedPath,
+	zSetNodeChatConversationMemoryExcludedResponse,
 	zSetNodeChatMessageFeedbackBody,
 	zSetNodeChatMessageFeedbackPath,
 	zSetNodeChatMessageFeedbackResponse,
@@ -2161,6 +2174,36 @@ export const archiveNodeChatConversation = <ThrowOnError extends boolean = false
 		},
 	});
 
+export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boolean = false>(
+	options: Options<SetNodeChatConversationMemoryExcludedData, ThrowOnError>,
+) =>
+	(options.client ?? client).patch<
+		SetNodeChatConversationMemoryExcludedResponses,
+		SetNodeChatConversationMemoryExcludedErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSetNodeChatConversationMemoryExcludedBody,
+					path: zSetNodeChatConversationMemoryExcludedPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSetNodeChatConversationMemoryExcludedResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/memory-excluded",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const branchNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<BranchNodeChatConversationData, ThrowOnError>,
 ) =>
@@ -2863,7 +2906,7 @@ export const listAgentPlaybookActions = <ThrowOnError extends boolean = false>(
 				.object({
 					body: z.never().optional(),
 					path: zListAgentPlaybookActionsPath,
-					query: z.never().optional(),
+					query: zListAgentPlaybookActionsQuery.optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",
@@ -3151,6 +3194,28 @@ export const importAgentTemplates = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const listAgentExecutionLogs = <ThrowOnError extends boolean = false>(
+	options: Options<ListAgentExecutionLogsData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListAgentExecutionLogsResponses, ListAgentExecutionLogsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListAgentExecutionLogsPath,
+					query: zListAgentExecutionLogsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListAgentExecutionLogsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/{agentDefinitionId}/execution-logs",
+		...options,
 	});
 
 export const listAgentTemplates = <ThrowOnError extends boolean = false>(

@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Drawer, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -53,6 +53,8 @@ export function ChatDisplayShell({
 	onRenameConversation,
 	onToggleConversationPinned,
 	onToggleConversationArchived,
+	boundAgentMemoryEnabled = false,
+	onToggleConversationMemoryExcluded,
 	onDeleteConversation,
 	onBranchFromMessage,
 	activeRevisionByGroup,
@@ -119,6 +121,29 @@ export function ChatDisplayShell({
 				<Text fw={700} data-testid="chat-window-title" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
 					{conversation?.title?.trim() || t("pages.chat.windowTitle", "Local chat")}
 				</Text>
+				{/* Temporary-chat toggle: shown only when the bound agent has adaptive memory enabled. A temporary chat
+				    still USES existing memory; it just won't teach the agent new memory from this thread. The toggle
+				    needs a persisted conversation to PATCH, so it is suppressed until one is selected. */}
+				{boundAgentMemoryEnabled && onToggleConversationMemoryExcluded && conversation ? (
+					<Tooltip
+						label={t(
+							"pages.chat.temporaryChat.tooltip",
+							"This chat won't teach the agent new memory; it still uses existing memory.",
+						)}
+						withArrow={true}
+						multiline={true}
+						w={240}
+					>
+						<Switch
+							size="xs"
+							labelPosition="left"
+							label={t("pages.chat.temporaryChat.label", "Temporary chat")}
+							checked={conversation.memoryExcluded ?? false}
+							onChange={(event) => onToggleConversationMemoryExcluded(conversation.id, event.currentTarget.checked)}
+							data-testid="chat-temporary-toggle"
+						/>
+					</Tooltip>
+				) : null}
 			</Group>
 		</Stack>
 	);

@@ -509,6 +509,10 @@
 			},
 			"composer": {
 				"samplingOptions": "Advanced sampling options"
+			},
+			"temporaryChat": {
+				"label": "Temporary chat",
+				"tooltip": "This chat won't teach the agent new memory; it still uses existing memory."
 			}
 		},
 		"clientNodes": {
@@ -1138,7 +1142,7 @@
 					}
 				},
 				"playbookEnabled": {
-					"label": "Enable operating playbook",
+					"label": "Enable adaptive memory",
 					"description": "Append this agent's enabled playbook actions to its instructions at run time."
 				},
 				"skills": {
@@ -1148,11 +1152,19 @@
 					"loadError": "Could not load the skill library.",
 					"empty": "No skills yet. Create skills on the Skills page to assign them here.",
 					"disabledBadge": "disabled"
+				},
+				"defaultTemporaryChat": {
+					"label": "Default new chats to temporary",
+					"description": "New conversations with this agent won't teach it new memory by default; they still use existing memory. Each chat can override this."
+				},
+				"memoryExtractionEnabled": {
+					"label": "Learn new memory from runs",
+					"description": "Let this agent learn new memory from its runs. Off = use existing memory only (no new memory is mined)."
 				}
 			},
 			"playbook": {
-				"title": "Operating playbook",
-				"subtitle": "Manual playbook actions appended to {{name}}'s instructions when its playbook is enabled.",
+				"title": "Adaptive memory",
+				"subtitle": "Playbook actions — manual, analysis-proposed, or learned from runs — appended to {{name}}'s instructions when its memory is enabled.",
 				"addButton": "Add action",
 				"analyzeButton": "Analyze feedback",
 				"noSuggestions": "No new suggestions from the latest analysis.",
@@ -1173,7 +1185,8 @@
 				"deleteAria": "Delete action",
 				"source": {
 					"Manual": "Manual",
-					"Analysis": "Analysis"
+					"Analysis": "Analysis",
+					"Extracted": "Extracted from run"
 				},
 				"state": {
 					"enabled": "enabled",
@@ -1257,6 +1270,15 @@
 						"Regressed": "Regressed",
 						"InsufficientData": "Insufficient data"
 					}
+				},
+				"scope": {
+					"Procedural": "Procedural",
+					"Failure": "Failure",
+					"UserPreference": "User preference",
+					"Project": "Project"
+				},
+				"scopeFilter": {
+					"all": "All"
 				}
 			},
 			"golden": {
@@ -1361,6 +1383,29 @@
 				"load": "Could not load agent definitions.",
 				"save": "Could not save the agent definition.",
 				"delete": "Could not delete the agent."
+			},
+			"executionLog": {
+				"title": "Run diagnostics",
+				"subtitle": "Recent runs for {{name}} (metadata only — no message or error text is stored).",
+				"loading": "Loading run diagnostics…",
+				"empty": "No runs recorded yet.",
+				"latencyValue": "{{ms}} ms",
+				"errors": {
+					"load": "Could not load run diagnostics."
+				},
+				"outcome": {
+					"success": "Success",
+					"failed": "Failed"
+				},
+				"columns": {
+					"outcome": "Outcome",
+					"when": "When",
+					"model": "Model",
+					"latency": "Latency",
+					"promptTokens": "Prompt",
+					"completionTokens": "Completion",
+					"error": "Error class"
+				}
 			}
 		},
 		"mcp": {

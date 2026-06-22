@@ -98,6 +98,8 @@ const sampleDefinition: AgentDefinition = {
 	allowedSkillIds: [],
 	orchestrationTopologyJson: null,
 	playbookEnabled: false,
+	defaultTemporaryChat: false,
+	memoryExtractionEnabled: true,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,

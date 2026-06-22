@@ -24,6 +24,7 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             AgentDefinitionId = input.AgentDefinitionId,
             State = (int)input.State,
             Source = (int)input.Source,
+            MemoryScope = (int?)input.MemoryScope,
             TriggerCondition = EncodeOptional(input.TriggerCondition),
             Behavior = Encoding.UTF8.GetBytes(input.Behavior),
             Scope = input.Scope,
@@ -80,6 +81,9 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         // future caller bypasses that guard.
         entity.State = (int)input.State;
         entity.Source = (int)input.Source;
+        // MemoryScope is non-injected metadata (like Scope/Source/Confidence), so it is excluded from configChanged
+        // above and never bumps Version on its own; it is simply carried through.
+        entity.MemoryScope = (int?)input.MemoryScope;
         entity.TriggerCondition = EncodeOptional(input.TriggerCondition);
         entity.Behavior = Encoding.UTF8.GetBytes(input.Behavior);
         entity.Scope = input.Scope;
@@ -180,7 +184,8 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
             DecodeFeedbackIds(entity.SourceFeedbackIds),
             entity.Confidence,
             entity.EvalResult,
-            entity.EnabledAtUtc);
+            entity.EnabledAtUtc,
+            (MemoryScope?)entity.MemoryScope);
     }
 
     private static byte[]? EncodeOptional(string? value)

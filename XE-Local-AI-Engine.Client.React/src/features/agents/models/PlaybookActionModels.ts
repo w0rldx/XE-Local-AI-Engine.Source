@@ -2,20 +2,31 @@ import { z } from "zod";
 
 // Manual playbook actions. Each action carries an injected behavior (the instruction text appended
 // to the owning agent's system prompt when its playbook is enabled), an enable/disable state, a provenance
-// source ("Manual" for hand-authored actions; "Analysis" for analysis-proposed ones), an
-// optional trigger condition + scope tag (advisory/display only), and a Priority that orders injection.
+// source ("Manual" for hand-authored actions; "Analysis" for analysis-proposed ones; "Extracted" for
+// adaptive-memory candidates harvested from a completed run), an optional trigger condition + scope tag
+// (advisory/display only), and a Priority that orders injection.
 //
 // Mirrors the backend PlaybookActionState (Suggested=0, Enabled=1, Disabled=2, Archived=3) and
-// PlaybookActionSource (Manual=0, Analysis=1) enums; the wire contract carries the string form. The hand-authored
-// create/edit form only ever shows/authors Enabled|Disabled state and Manual source — the other enum slots
-// (Suggested/Archived state, Analysis source) are produced by the analysis flow, not this form.
+// PlaybookActionSource (Manual=0, Analysis=1, Extracted=2) enums; the wire contract carries the string form. The
+// hand-authored create/edit form only ever shows/authors Enabled|Disabled state and Manual source — the other enum
+// slots (Suggested/Archived state, Analysis/Extracted source) are produced by the analysis / adaptive-memory flows,
+// not this form.
 //
 // Boundary validation + wire→domain mapping live in PlaybookActionMappers.ts (the generated zod validator owns the
 // response shape). This module is the domain view-models + the create/edit FORM schemas only.
 
 export type PlaybookActionState = "Suggested" | "Enabled" | "Disabled" | "Archived";
 
-export type PlaybookActionSource = "Manual" | "Analysis";
+// Provenance of a playbook action: hand-authored (Manual), proposed by the analysis agent (Analysis), or
+// harvested from a completed run by the adaptive-memory extractor (Extracted). Extracted candidates flow through
+// the SAME Suggested → eval-gate → approve governance as Analysis proposals; only the badge differs.
+export type PlaybookActionSource = "Manual" | "Analysis" | "Extracted";
+
+// Adaptive-memory scope of an extracted/analysis action. Mirrors the backend MemoryScope enum
+// (Procedural | Failure | UserPreference | Project). Procedural = a learned how-to; Failure = negative guidance
+// ("don't do X" — shown distinctly); UserPreference = a remembered user choice; Project = project-specific fact.
+// Null for plain manual actions that carry no adaptive-memory scope.
+export type MemoryScope = "Procedural" | "Failure" | "UserPreference" | "Project";
 
 // Eval gate. How a single golden case was scored: a deterministic required/forbidden-phrase
 // assertion or a node-local LLM judge against the case rubric.
@@ -63,6 +74,9 @@ export interface PlaybookAction {
 	readonly agentDefinitionId: string;
 	readonly state: PlaybookActionState;
 	readonly source: PlaybookActionSource;
+	// Adaptive-memory scope of an extracted/analysis action (Procedural | Failure | UserPreference | Project),
+	// or null for a plain manual action. Drives the scope badge + the Failure negative-guidance styling.
+	readonly memoryScope: MemoryScope | null;
 	readonly triggerCondition: string | null;
 	readonly behavior: string;
 	readonly scope: string | null;

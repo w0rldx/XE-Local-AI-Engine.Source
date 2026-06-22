@@ -60,6 +60,17 @@ public sealed class ArchiveNodeChatConversationRequest
     public bool Archived { get; init; }
 }
 
+/// <summary>
+///     Sets the per-conversation temporary-chat (<c>memory_excluded</c>) override (adaptive memory). The conversation id
+///     travels in the route; the body carries the new flag.
+/// </summary>
+public sealed class SetNodeChatConversationMemoryExcludedRequest
+{
+    public Guid ConversationId { get; init; }
+
+    public bool MemoryExcluded { get; init; }
+}
+
 public sealed class CancelNodeChatMessageRequest
 {
     public Guid ConversationId { get; init; }
@@ -154,6 +165,13 @@ public sealed class NodeChatConversationResponse
     public Guid? BranchOfConversationId { get; init; }
 
     public IReadOnlyDictionary<Guid, Guid>? SelectedPath { get; init; }
+
+    /// <summary>
+    ///     Temporary-chat flag (adaptive memory): when true this conversation's completed runs are NOT mined into new
+    ///     memory candidates (write-only suppression — it still reads existing enabled memory). New conversations inherit
+    ///     the bound agent's <c>DefaultTemporaryChat</c>; the operator can override it per-conversation.
+    /// </summary>
+    public required bool MemoryExcluded { get; init; }
 
     public required IReadOnlyList<NodeChatMessageResponse> Messages { get; init; }
 }

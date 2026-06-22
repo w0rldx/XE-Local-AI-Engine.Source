@@ -50,6 +50,12 @@ internal sealed class NodeConversationConfiguration : IEntityTypeConfiguration<N
         builder.Property(entity => entity.AgentDefinitionId)
                .HasColumnName("agent_definition_id");
 
+        // Temporary-chat flag that suppresses post-run adaptive-memory extraction — additive structural column.
+        // Plaintext (a bool); default and backfill false so a pre-feature conversation reads as non-temporary.
+        builder.Property(entity => entity.MemoryExcluded)
+               .HasColumnName("memory_excluded")
+               .HasDefaultValue(false);
+
         builder.HasMany(entity => entity.Messages)
                .WithOne(entity => entity.Conversation)
                .HasForeignKey(entity => entity.ConversationId)

@@ -196,18 +196,20 @@ internal sealed class PlaybookActionService(
             return null;
         }
 
-        // Record the eval JSON only — the action stays Suggested/Analysis with every injected field (Behavior, Priority,
-        // State) unchanged, so the store leaves Version alone (EvalResult is excluded from its config-affecting rule).
+        // Record the eval JSON only — the action stays Suggested with every injected field (Behavior, Priority, State)
+        // and its staging provenance (Analysis/Extracted) unchanged, so the store leaves Version alone (EvalResult is
+        // excluded from its config-affecting rule).
         var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
             PlaybookActionState.Suggested,
-            PlaybookActionSource.Analysis,
+            pending.Source,
             pending.TriggerCondition,
             pending.Behavior,
             pending.Scope,
             pending.Priority,
             pending.SourceFeedbackIds,
             pending.Confidence,
-            evalResultJson);
+            evalResultJson,
+            MemoryScope: pending.MemoryScope);
 
         return await _store.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
     }
@@ -234,18 +236,20 @@ internal sealed class PlaybookActionService(
             return null;
         }
 
-        // The action stays Suggested/Analysis and keeps its evidence + confidence; only the operator-editable fields
-        // change. Editing clears any recorded EvalResult (the trailing argument is left null) so a stale pass cannot
-        // promote an edited action — the operator must re-run the eval. Promotion remains a separate, explicit step.
+        // The action stays Suggested and keeps its staging provenance (Analysis/Extracted) + evidence + confidence; only
+        // the operator-editable fields change. Editing clears any recorded EvalResult (the trailing argument is left
+        // null) so a stale pass cannot promote an edited action — the operator must re-run the eval. Promotion remains a
+        // separate, explicit step.
         var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
             PlaybookActionState.Suggested,
-            PlaybookActionSource.Analysis,
+            pending.Source,
             input.TriggerCondition,
             input.Behavior,
             input.Scope,
             input.Priority,
             pending.SourceFeedbackIds,
-            pending.Confidence);
+            pending.Confidence,
+            MemoryScope: pending.MemoryScope);
 
         return await _store.UpdateAsync(input.ActionId, storeInput, cancellationToken).ConfigureAwait(false);
     }
@@ -253,18 +257,30 @@ internal sealed class PlaybookActionService(
     public async Task<PlaybookActionRecord?> LoadPendingSuggestionAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)
     {
         // A review action applies only to a pending suggestion owned by the route agent: enforce ownership (IDOR),
-        // the Suggested state, and the Analysis provenance. Anything else (missing, wrong agent, already enabled,
-        // manual) returns null → 404.
+        // the Suggested state, and a staging provenance. Both Analysis (feedback-proposed) and Extracted (adaptive-memory
+        // post-run mined) candidates are staged suggestions that the SAME governance gate (eval + approve) reviews —
+        // anything else (missing, wrong agent, already enabled, manual) returns null → 404.
         var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
         if (existing is null
             || existing.AgentDefinitionId != agentDefinitionId
             || existing.State != PlaybookActionState.Suggested
-            || existing.Source != PlaybookActionSource.Analysis)
+            || !IsStagedSuggestionSource(existing.Source))
         {
             return null;
         }
 
         return existing;
+    }
+
+    /// <summary>
+    ///     A staged suggestion is any non-manual candidate awaiting the eval gate + approval. Both feedback-driven
+    ///     (<see cref="PlaybookActionSource.Analysis" />) and adaptive-memory extraction
+    ///     (<see cref="PlaybookActionSource.Extracted" />) candidates share the same governance lifecycle; the review
+    ///     paths preserve whichever provenance the candidate carries rather than rewriting it.
+    /// </summary>
+    private static bool IsStagedSuggestionSource(PlaybookActionSource source)
+    {
+        return source is PlaybookActionSource.Analysis or PlaybookActionSource.Extracted;
     }
 
     private async Task<PlaybookActionRecord?> TransitionSuggestedAsync(Guid agentDefinitionId, Guid id, PlaybookActionState target, string? evalResult, CancellationToken cancellationToken)
@@ -275,16 +291,19 @@ internal sealed class PlaybookActionService(
             return null;
         }
 
+        // Preserve the candidate's staging provenance (Analysis/Extracted) and typed scope through the transition; only
+        // the lifecycle State changes (Enabled on promote, Archived on reject).
         var storeInput = new PlaybookActionInput(pending.AgentDefinitionId,
             target,
-            PlaybookActionSource.Analysis,
+            pending.Source,
             pending.TriggerCondition,
             pending.Behavior,
             pending.Scope,
             pending.Priority,
             pending.SourceFeedbackIds,
             pending.Confidence,
-            evalResult);
+            evalResult,
+            MemoryScope: pending.MemoryScope);
 
         return await _store.UpdateAsync(id, storeInput, cancellationToken).ConfigureAwait(false);
     }

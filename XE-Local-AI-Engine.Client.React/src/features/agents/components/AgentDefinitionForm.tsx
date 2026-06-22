@@ -263,7 +263,7 @@ export function AgentDefinitionForm({
 				/>
 			</Group>
 			<Switch
-				label={t("pages.agents.form.playbookEnabled.label", "Enable operating playbook")}
+				label={t("pages.agents.form.playbookEnabled.label", "Enable adaptive memory")}
 				description={t(
 					"pages.agents.form.playbookEnabled.description",
 					"Append this agent's enabled playbook actions to its instructions at run time.",
@@ -275,6 +275,40 @@ export function AgentDefinitionForm({
 				}}
 				data-testid="agent-form-playbook-enabled"
 			/>
+			{/* Only meaningful when adaptive memory is enabled — defaulting conversations to temporary suppresses
+			    learning new memory from them. Shown alongside the memory toggle so the pairing is obvious. */}
+			{values.playbookEnabled ? (
+				<Switch
+					label={t("pages.agents.form.defaultTemporaryChat.label", "Default new chats to temporary")}
+					description={t(
+						"pages.agents.form.defaultTemporaryChat.description",
+						"New conversations with this agent won't teach it new memory by default; they still use existing memory. Each chat can override this.",
+					)}
+					checked={values.defaultTemporaryChat}
+					onChange={(event) => {
+						const checked = event.currentTarget.checked;
+						setValues((current) => ({ ...current, defaultTemporaryChat: checked }));
+					}}
+					data-testid="agent-form-default-temporary-chat"
+				/>
+			) : null}
+			{/* Distinct from the toggle above: this controls whether the agent LEARNS new memory from its runs. Off =
+			    retrieval-only — it still uses existing memory but skips the post-run extraction round-trip. */}
+			{values.playbookEnabled ? (
+				<Switch
+					label={t("pages.agents.form.memoryExtractionEnabled.label", "Learn new memory from runs")}
+					description={t(
+						"pages.agents.form.memoryExtractionEnabled.description",
+						"Let this agent learn new memory from its runs. Off = use existing memory only (no new memory is mined).",
+					)}
+					checked={values.memoryExtractionEnabled}
+					onChange={(event) => {
+						const checked = event.currentTarget.checked;
+						setValues((current) => ({ ...current, memoryExtractionEnabled: checked }));
+					}}
+					data-testid="agent-form-memory-extraction-enabled"
+				/>
+			) : null}
 			{values.kind === "Orchestrator" ? (
 				<OrchestrationTopologyEditor
 					topology={values.orchestration}

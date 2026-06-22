@@ -50,7 +50,68 @@ public sealed class PlaybookPromptComposerTests
         AssertEx.Equal(expected, composed);
     }
 
+    [Test]
+    public void Compose_WithFailureScope_RendersFailuresInSeparateNegativeSection()
+    {
+        // A mix of positive and Failure-scope items: positive items go to the Operating Playbook section in supplied
+        // order; Failure items go to a distinct negative-guidance section emitted AFTER it.
+        IReadOnlyList<PlaybookActionRecord> actions =
+        [
+            Scoped("Run the tests first.", 1, 10, null),
+            Scoped("Never force-push to main.", 2, 20, MemoryScope.Failure)
+        ];
+
+        var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
+
+        var expected = BaseInstructions
+                       + "\n\n## Operating Playbook\n- Run the tests first."
+                       + "\n\n## Avoid (lessons from past failures)\nDo NOT repeat these mistakes:\n- Never force-push to main.";
+        AssertEx.Equal(expected, composed);
+    }
+
+    [Test]
+    public void Compose_FailureSection_IsDeterministicallyOrdered_ByPriorityThenCreatedAt()
+    {
+        // Failure items are re-ordered (Priority asc, then CreatedAtUtc asc) independent of the supplied/relevance order,
+        // so the composed text — and the config hash — is stable per send for a fixed memory set (resume-safety).
+        IReadOnlyList<PlaybookActionRecord> actions =
+        [
+            Scoped("Higher priority value, emitted later.", priority: 9, createdAtUtc: 5, scope: MemoryScope.Failure),
+            Scoped("Lower priority value, emitted first.", priority: 2, createdAtUtc: 50, scope: MemoryScope.Failure),
+            Scoped("Same priority as previous, older timestamp.", priority: 2, createdAtUtc: 10, scope: MemoryScope.Failure)
+        ];
+
+        var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
+
+        var expected = BaseInstructions
+                       + "\n\n## Avoid (lessons from past failures)\nDo NOT repeat these mistakes:\n"
+                       + "- Same priority as previous, older timestamp.\n"
+                       + "- Lower priority value, emitted first.\n"
+                       + "- Higher priority value, emitted later.";
+        AssertEx.Equal(expected, composed);
+    }
+
+    [Test]
+    public void Compose_WithOnlyFailureScope_OmitsTheOperatingPlaybookSection()
+    {
+        IReadOnlyList<PlaybookActionRecord> actions =
+        [
+            Scoped("Never delete the prod database.", 1, 10, MemoryScope.Failure)
+        ];
+
+        var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
+
+        var expected = BaseInstructions
+                       + "\n\n## Avoid (lessons from past failures)\nDo NOT repeat these mistakes:\n- Never delete the prod database.";
+        AssertEx.Equal(expected, composed);
+    }
+
     private static PlaybookActionRecord Action(string behavior, int priority)
+    {
+        return Scoped(behavior, priority, 10, null);
+    }
+
+    private static PlaybookActionRecord Scoped(string behavior, int priority, long createdAtUtc, MemoryScope? scope)
     {
         return new PlaybookActionRecord(Guid.NewGuid(),
             Guid.NewGuid(),
@@ -61,7 +122,8 @@ public sealed class PlaybookPromptComposerTests
             null,
             priority,
             1,
-            10,
-            10);
+            createdAtUtc,
+            createdAtUtc,
+            MemoryScope: scope);
     }
 }

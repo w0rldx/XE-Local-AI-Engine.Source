@@ -29,7 +29,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 conversationCommand.CommandText = """
-                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json, agent_definition_id
+                                                  SELECT conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id, selected_path_json, agent_definition_id, memory_excluded
                                                   FROM conversations
                                                   WHERE conversation_id = $conversation_id AND purged = 0;
                                                   """;
@@ -60,7 +60,8 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     conversationReader.GetBoolean(8),
                     await conversationReader.IsDBNullAsync(9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)),
                     DeserializeSelectedPath(await conversationReader.IsDBNullAsync(10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)),
-                    await conversationReader.IsDBNullAsync(11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)));
+                    await conversationReader.IsDBNullAsync(11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)),
+                    conversationReader.GetBoolean(12));
 
                 return dto;
             },
