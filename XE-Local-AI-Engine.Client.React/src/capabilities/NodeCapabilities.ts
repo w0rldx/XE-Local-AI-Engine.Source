@@ -52,11 +52,13 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		// without a cross-capability dependency.
 		agentManagement: true,
 	},
-	binding: true,
-	dashboard: true,
+	// Central-Platform surfaces (Node Binding + Dashboard + Cloud Settings) are the trio that only make sense once
+	// the node is paired to a Central Platform. In the local-only (LocalTester) profile — no CentralPlatform:BaseUrl
+	// configured — they are all hidden so the menu does not show dead "disconnected / not paired" pages. Flip all
+	// three to true together when the node is paired to a central platform instance.
+	binding: false,
+	dashboard: false,
 	nodeSettings: true,
-	// false = local-only (LocalTester) profile: no CentralPlatform:BaseUrl configured, Cloud Settings hidden.
-	// Set to true when the node is paired to a central platform instance.
 	cloudSettings: false,
 	modelManagement: true,
 	invocationMonitor: true,
