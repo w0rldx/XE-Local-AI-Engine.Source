@@ -66,6 +66,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -98,6 +99,60 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var original = variants.Single(v => v.MessageId == originalId);
         AssertEx.Equal("four", original.Content);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, original.Status);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenLocalDefaultOriginalAndNoChatModelInstalled_TerminalizesAsModelNotInstalled()
+    {
+        // Regenerating a "Local runtime default" turn (the original carried no explicit model) where the resolver finds
+        // NO installed GGUF chat model must fail with FailureCategory.ModelNotInstalled — mirroring the send path — not
+        // the generic Unexpected/ProviderUnreachable. Covers plan §B(3): the regenerate path is guarded too.
+        await using var provider = await BuildProviderAsync("regeneration-no-chat-model.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        // Seed a completed local-default original turn: the placeholder + terminal carry NO model (request.Model null).
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, 12))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, 13, "four"))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenCompletingRunner(dispatcher);
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
+            // Resolver reports no installed GGUF chat model (null).
+            CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
+        AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(FailureCategory.ModelNotInstalled, dispatcher.CurrentInvocation!.FailureCategory);
+        AssertEx.Equal(InvocationStatus.Failed, dispatcher.CurrentInvocation.Status);
     }
 
     [Test]
@@ -147,6 +202,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -222,6 +278,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -290,6 +347,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -345,6 +403,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -394,6 +453,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -461,6 +521,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -519,6 +580,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -568,6 +630,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -635,6 +698,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -681,6 +745,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -721,6 +786,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -780,6 +846,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             classificationService,
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
 
@@ -868,6 +935,29 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
         resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
+        return resolver;
+    }
+
+    // The default local-default resolver resolves to an installed GGUF chat model so a regenerate of a "Local runtime
+    // default" turn proceeds. Regenerate only consults it when the ORIGINAL turn carried no explicit model; the
+    // existing regen tests seed an explicit original model, so this is inert for them. It echoes the persisted node
+    // default when set and otherwise falls back to the static config model. The no-model test passes resolved=null +
+    // echoPersistedDefault=false to force the empty result.
+    private static ILocalDefaultChatModelResolver CreateLocalDefaultChatModelResolver(string? resolved = null, bool echoPersistedDefault = true)
+    {
+        var fallback = resolved ?? new LocalChatAgentOptions().DefaultModel;
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    if (!echoPersistedDefault)
+                    {
+                        return Task.FromResult<string?>(resolved);
+                    }
+
+                    var persistedDefault = callInfo.Arg<string?>();
+                    return Task.FromResult<string?>(string.IsNullOrWhiteSpace(persistedDefault) ? fallback : persistedDefault);
+                });
         return resolver;
     }
 

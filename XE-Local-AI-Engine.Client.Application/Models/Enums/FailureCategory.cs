@@ -26,5 +26,12 @@ public enum FailureCategory
     ///     blob load). Surfaced instead of the generic <see cref="ProviderUnreachable" />; the sanitized message carries
     ///     no filesystem paths.
     /// </summary>
-    ModelLoadFailed = 9
+    ModelLoadFailed = 9,
+
+    /// <summary>
+    ///     A "Local runtime default" send could not resolve an installed GGUF (llama.cpp) chat-capable model — no chat
+    ///     model is installed on the node. Surfaced instead of the generic <see cref="ProviderUnreachable" /> so the
+    ///     frontend can show a clear "pull a GGUF model" call to action rather than reporting an unreachable provider.
+    /// </summary>
+    ModelNotInstalled = 10
 }

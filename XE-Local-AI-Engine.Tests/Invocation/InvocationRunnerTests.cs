@@ -289,6 +289,29 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_NoChatModelInstalledThrows_ClassifiesModelNotInstalled()
+    {
+        // MapFailure must classify NoChatModelInstalledException as ModelNotInstalled with the actionable, path-free
+        // constant — NOT the generic Unexpected/ProviderUnreachable — so a local-default send with no installed GGUF
+        // surfaces a "pull a model" CTA instead of a dead-end provider error.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new NoChatModelInstalledException()));
+
+        var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Is<string>(message => message.Contains("No chat model installed", StringComparison.Ordinal)),
+            FailureCategory.ModelNotInstalled);
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelNotInstalled));
+    }
+
+    [Test]
     public async Task RunAsync_RespectsCancellationToken_StopsStreaming()
     {
         var sender = new MockHubMessageSender();

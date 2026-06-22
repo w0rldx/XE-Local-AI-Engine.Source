@@ -39,6 +39,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // model defect, while still being far more actionable than the generic "Provider unreachable.".
     private const string ModelLoadFailedMessage = "The model could not be loaded or run on the provider.";
 
+    // A "Local runtime default" send found no installed GGUF chat model to route to. Surfaced instead of the generic
+    // "Provider unreachable." so the operator gets an actionable next step (pull a GGUF model) rather than a dead-end.
+    private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
+
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant);
 

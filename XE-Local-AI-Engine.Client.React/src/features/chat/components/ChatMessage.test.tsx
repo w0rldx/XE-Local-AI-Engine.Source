@@ -2,8 +2,22 @@
 
 import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// The ModelNotInstalled error renders a TanStack-router Link to /models. Stub the router module so the component
+// mounts without a RouterProvider in these unit tests (mirrors ModelManagement.test.tsx).
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+	return {
+		...actual,
+		Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
+			<a href={to} {...props}>
+				{children}
+			</a>
+		),
+	};
+});
 
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
@@ -309,6 +323,23 @@ describe("ChatMessage actions", () => {
 		);
 
 		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toContain("inter-chunk-stall");
+	});
+
+	it("renders the friendly ModelNotInstalled message and a Models link for the no-chat-model failure", () => {
+		// A "Local runtime default" send with no installed GGUF chat model surfaces FailureCategory ModelNotInstalled.
+		// The alert must render the friendly i18n message + a "Go to Models" CTA, not just the raw backend string.
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "failed", error: "No chat model installed. Pull a GGUF model to start chatting." })}
+				failureCategory="ModelNotInstalled"
+			/>,
+		);
+
+		const errorBlock = screen.getByTestId("chat-message-error-assistant-1");
+		expect(errorBlock.textContent).toContain("No chat model installed. Pull a GGUF model to start chatting.");
+
+		const modelsLink = screen.getByTestId("chat-message-error-models-link-assistant-1");
+		expect(modelsLink.getAttribute("href")).toBe("/models");
 	});
 
 	it("renders the error block alongside partial content when a turn streamed text before failing", () => {

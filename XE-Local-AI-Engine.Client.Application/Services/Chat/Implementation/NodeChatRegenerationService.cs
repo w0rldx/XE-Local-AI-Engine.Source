@@ -37,6 +37,7 @@ public sealed class NodeChatRegenerationService(
     INodeSettingsStore nodeSettingsStore,
     IModelClassificationService modelClassificationService,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
+    ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
@@ -208,6 +209,7 @@ public sealed class NodeChatRegenerationService(
             correlation,
             requestId,
             sequence,
+            resolution.RequiresInstalledChatModel,
             linkedCancellation.Token);
 
         try
@@ -241,6 +243,7 @@ public sealed class NodeChatRegenerationService(
         NodeChatMessageCorrelation correlation,
         Guid requestId,
         NodeChatStreamSequence sequence,
+        bool requiresInstalledChatModel,
         CancellationToken cancellationToken)
     {
         // Queue behind any in-flight invocation (local or platform) under the shared lease, rather than failing
@@ -255,6 +258,13 @@ public sealed class NodeChatRegenerationService(
             var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
             await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
 
+            // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
+            // GGUF chat model fails BEFORE any provider invocation with the dedicated ModelNotInstalled category.
+            if (requiresInstalledChatModel)
+            {
+                throw new NoChatModelInstalledException();
+            }
+
             using var context = InvocationExecutionContext.CreatePlain(package, messageId);
             await invocationRunner.RunAsync(context, cancellationToken).ConfigureAwait(false);
         }
@@ -263,6 +273,14 @@ public sealed class NodeChatRegenerationService(
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
                 "Invocation timed out or was cancelled",
                 FailureCategory.Cancelled).ConfigureAwait(false);
+        }
+        catch (NoChatModelInstalledException exception)
+        {
+            // Classified separately so the terminal SSE carries ModelNotInstalled (not Unexpected/ProviderUnreachable).
+            logger.LogWarning(exception, "Local node chat regeneration had no installed GGUF chat model for the local default. RequestId={RequestId}", requestId);
+            await eventDispatcher.ReportInvocationFailedAsync(requestId,
+                exception.Message,
+                FailureCategory.ModelNotInstalled).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -464,10 +482,22 @@ public sealed class NodeChatRegenerationService(
         NodeChatPersistedMessageDto original,
         CancellationToken cancellationToken)
     {
-        // Mirror the send path's model precedence (ListLocalModelsEndpoint): the original turn's model first, then the
-        // operator's node-default selection, then the static config fallback.
-        var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        var activeModel = original.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
+        // Mirror the send path. An explicit original-turn model (the operator picked a specific model, incl. an Ollama
+        // model) is reused unchanged. A regenerate of a "Local runtime default" turn (original.Model null/blank)
+        // re-resolves through the installed-GGUF resolver — never Ollama — so a stale config/node-settings id is never
+        // routed to a dead provider; a null result flags the turn for a clear ModelNotInstalled terminal below.
+        string? activeModel;
+        var requiresInstalledChatModel = false;
+        if (!string.IsNullOrWhiteSpace(original.Model))
+        {
+            activeModel = original.Model;
+        }
+        else
+        {
+            var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+            activeModel = await localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+            requiresInstalledChatModel = activeModel is null;
+        }
 
         // A regenerate reuses the ORIGINAL turn's agent so the rerun stays on the same persona; fall back to the
         // conversation binding, then the seeded Default Assistant (process-memoized id).
@@ -485,7 +515,7 @@ public sealed class NodeChatRegenerationService(
         var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
         var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
 
-        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools);
+        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
     }
 
     /// <summary>
@@ -656,9 +686,10 @@ public sealed class NodeChatRegenerationService(
 
     /// <summary>The up-front per-turn resolution shared by variant stamping and runtime-package construction.</summary>
     private sealed record ResolvedTurn(
-        string ActiveModel,
+        string? ActiveModel,
         ResolvedAgentRuntime? Resolved,
         ResolvedOrchestration? Orchestration,
         bool SupportsThinking,
-        bool SupportsTools);
+        bool SupportsTools,
+        bool RequiresInstalledChatModel);
 }

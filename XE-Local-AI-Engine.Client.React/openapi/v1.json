@@ -8027,7 +8027,8 @@
           "HashMismatch",
           "ModelUnavailable",
           "ModelCapabilityUnsupported",
-          "ModelLoadFailed"
+          "ModelLoadFailed",
+          "ModelNotInstalled"
         ],
         "enum": [
           "Cancelled",
@@ -8039,7 +8040,8 @@
           "HashMismatch",
           "ModelUnavailable",
           "ModelCapabilityUnsupported",
-          "ModelLoadFailed"
+          "ModelLoadFailed",
+          "ModelNotInstalled"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationHistoryResponse": {
