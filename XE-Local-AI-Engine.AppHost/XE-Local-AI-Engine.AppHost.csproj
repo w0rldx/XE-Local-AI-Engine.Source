@@ -20,7 +20,6 @@
     <PackageReference Include="Aspire.Hosting.AppHost"/>
     <PackageReference Include="Aspire.Hosting.Browsers"/>
     <PackageReference Include="Aspire.Hosting.JavaScript"/>
-    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Ollama"/>
     <PackageReference Include="CommunityToolkit.Aspire.Hosting.Sqlite"/>
   </ItemGroup>
 </Project>

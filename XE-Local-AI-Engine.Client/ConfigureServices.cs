@@ -8,7 +8,6 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -224,8 +223,7 @@ public static class ConfigureServices
         // desktop launch mode and offline-tolerant — headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();
         builder.Services.AddHealthChecks()
-               .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
-               .AddCheck<OllamaHealthCheck>("ollama_health", HealthStatus.Unhealthy, ["ready"]);
+               .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"]);
     }
 
     public static void ConfigureJsonSerializerOptions(JsonSerializerOptions options)
