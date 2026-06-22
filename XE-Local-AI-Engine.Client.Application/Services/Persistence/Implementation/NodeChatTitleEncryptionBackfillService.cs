@@ -66,9 +66,10 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(ex,
-                        "NodeChatTitleEncryptionBackfillService: could not decrypt message content for conversation {ConversationId}; skipping.",
-                        conversationId);
+                    logger.LogWarning(
+                        "NodeChatTitleEncryptionBackfillService: could not decrypt message content for conversation {ConversationId}; skipping (row likely encrypted under a previous node key). [{ErrorType}]",
+                        conversationId,
+                        ex.GetType().Name);
                     continue;
                 }
 

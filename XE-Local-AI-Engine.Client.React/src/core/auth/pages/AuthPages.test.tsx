@@ -68,19 +68,36 @@ describe("node auth pages", () => {
 	it("sets up the first admin and immediately logs in", async () => {
 		renderWithProviders(<Setup />);
 
+		// Password satisfies the client-side policy mirrored from ASP.NET Identity:
+		// 12+ chars, upper, lower, digit, and a symbol.
+		const password = "Long-Enough-Password1";
 		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
-		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "long-enough-password" } });
-		fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: "long-enough-password" } });
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: password } });
+		fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: password } });
 		fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
 
 		await waitFor(() =>
 			expect(authApiMock.setupNodeAuth).toHaveBeenCalledWith({
 				email: "admin@example.test",
-				password: "long-enough-password",
+				password,
 			}),
 		);
-		expect(authApiMock.loginNodeAuth).toHaveBeenCalledWith({ email: "admin@example.test", password: "long-enough-password" });
+		expect(authApiMock.loginNodeAuth).toHaveBeenCalledWith({ email: "admin@example.test", password });
 		expect(useNodeAuthStore.getState().accessToken).toBe("access-token");
 		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+	});
+
+	it("blocks setup and surfaces the policy when the password is too weak", async () => {
+		renderWithProviders(<Setup />);
+
+		// Missing an uppercase letter and a digit, so the client-side policy must reject it.
+		const weakPassword = "weak-password";
+		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: weakPassword } });
+		fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: weakPassword } });
+		fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
+
+		expect(await screen.findByText(/Password needs/)).toBeTruthy();
+		expect(authApiMock.setupNodeAuth).not.toHaveBeenCalled();
 	});
 });
