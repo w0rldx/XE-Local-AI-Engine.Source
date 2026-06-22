@@ -23,8 +23,8 @@ public sealed class PlaybookRetrievalOptions
     /// </summary>
     public string? EmbeddingModelName { get; set; }
 
-    /// <summary>Provider key for the embedding model; must match a registered node-local provider (default "ollama").</summary>
-    public string EmbeddingProviderName { get; set; } = "ollama";
+    /// <summary>Provider key for the embedding model; must match a registered node-local provider (default "llamacpp").</summary>
+    public string EmbeddingProviderName { get; set; } = "llamacpp";
 
     /// <summary>Upper bound on the in-memory candidate-embedding cache (RAM-only, never persisted). Floored at 1.</summary>
     public int EmbeddingCacheMaxEntries { get; set; } = 512;

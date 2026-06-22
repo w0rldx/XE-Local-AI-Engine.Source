@@ -3,16 +3,6 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Pin a concrete Ollama version (>= 0.30.3) instead of "latest": the floating tag drifted to a cached
-// 0.24.0 image that cannot load the gemma-4-12b ("gemma4") architecture, surfacing as an opaque 500.
-// Bump this deliberately when adopting a newer Ollama. WithDataVolume keeps pulled models across recreation.
-var ollama = builder.AddOllama("ollama")
-                    .WithImageTag("0.30.5")
-                    .WithDataVolume();
-
-var chatModel = ollama.AddModel("chat", "qwen3:0.6b");
-var embeddingsModel = ollama.AddModel("embeddings", "qwen3-embedding:0.6b");
-
 var nodeSqliteKey = builder.AddParameter("node-sqlite-key", true);
 var nodeSqlitePath = Path.Combine(builder.AppHostDirectory, ".data", "node-sqlite");
 
@@ -36,11 +26,7 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithEnvironment("XE_NODE_SQLITE_KEY", nodeSqliteKey)
                  .WithEnvironment("NodeAuth__Jwt__Issuer", "xe-local-ai-engine")
                  .WithEnvironment("NodeAuth__Jwt__Audience", "xe-local-ai-engine")
-                 .WithReference(chatModel)
-                 .WithReference(embeddingsModel)
                  .WithReference(nodeSqlite)
-                 .WaitFor(chatModel)
-                 .WaitFor(embeddingsModel)
                  .WaitFor(nodeSqlite)
                  .WithHttpHealthCheck("/health/live")
                  .WithHttpHealthCheck("/health/ready")
