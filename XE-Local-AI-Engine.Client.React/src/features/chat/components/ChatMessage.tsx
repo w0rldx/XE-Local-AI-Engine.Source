@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Avatar, Badge, Box, CopyButton, Group, Menu, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Avatar, Badge, Box, CopyButton, Group, Menu, Paper, Stack, Text, Tooltip } from "@mantine/core";
 import {
 	IconAlertTriangle,
 	IconCheck,
@@ -11,6 +11,7 @@ import {
 	IconRefresh,
 	IconSparkles,
 } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -386,7 +387,7 @@ export function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
-				{errorText ? (
+				{(errorText || failureCategory === "ModelNotInstalled") ? (
 					<Alert
 						color="red"
 						variant="light"
@@ -396,7 +397,24 @@ export function ChatMessage({
 						style={{ borderRadius: "4px 14px 14px 14px" }}
 					>
 						<Stack gap={6}>
-							<Text size="sm">{errorText}</Text>
+							{/* A "Local runtime default" send with no installed GGUF chat model is surfaced as a friendly,
+							    actionable message (with a Models CTA) rather than the raw backend error string. Every other
+							    category keeps the backend-provided message. */}
+							<Text size="sm">
+								{failureCategory === "ModelNotInstalled"
+									? t("pages.chat.error.modelNotInstalled", "No chat model installed. Pull a GGUF model to start chatting.")
+									: errorText}
+							</Text>
+							{failureCategory === "ModelNotInstalled" ? (
+								<Anchor
+									component={Link}
+									to="/models"
+									size="sm"
+									data-testid={`chat-message-error-models-link-${message.id}`}
+								>
+									{t("pages.chat.error.goToModels", "Go to Models")}
+								</Anchor>
+							) : null}
 							{hasText(failureCategory) ? (
 								<Badge color="red" size="sm" variant="light" data-testid={`chat-message-error-category-${message.id}`}>
 									{failureCategory}

@@ -49,6 +49,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -96,6 +97,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -146,6 +148,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -204,6 +207,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -247,6 +251,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -290,6 +295,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -343,6 +349,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -391,6 +398,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -446,6 +454,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -498,6 +507,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             providerResolver,
             CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true)),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -551,6 +561,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             providerResolver,
             CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false)),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -596,6 +607,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -653,6 +665,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -728,6 +741,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -790,6 +804,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -838,6 +853,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -890,6 +906,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -941,6 +958,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -991,6 +1009,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1044,6 +1063,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1132,6 +1152,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1233,6 +1254,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1328,6 +1350,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1347,10 +1370,61 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenRequestModelNullAndNoNodeDefault_ResolvesOfferWithStaticConfigDefault()
+    public async Task SendMessageAsync_WhenLocalDefaultAndNoChatModelInstalled_TerminalizesAsModelNotInstalled()
     {
-        // Lower-bound guard: with no operator node default the offer-time active model falls through to the static
-        // config fallback, so the pre-fix behaviour is preserved for a node that never set a default model.
+        // A "Local runtime default" send (request.Model null) where the resolver finds NO installed GGUF chat model
+        // must fail BEFORE any provider invocation with FailureCategory.ModelNotInstalled — never the generic
+        // ProviderUnreachable/Unexpected (the stale-id "Provider unreachable." regression this plan fixes).
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            // Resolver reports no installed GGUF chat model (null), regardless of the persisted node default.
+            CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(FailureCategory.ModelNotInstalled, dispatcher.CurrentInvocation!.FailureCategory);
+        AssertEx.Equal(InvocationStatus.Failed, dispatcher.CurrentInvocation.Status);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenLocalDefaultResolvesInstalledGgufModel_RoutesThatModel()
+    {
+        // A "Local runtime default" send where the resolver returns an installed GGUF chat model routes the turn on
+        // that model — the offer-time active model is the resolved GGUF, NOT the static config fallback or Ollama.
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -1379,6 +1453,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(resolved: "phi-4:Q4_K_M", echoPersistedDefault: false),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1393,7 +1468,10 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        offerProvider.Received().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
+        // The resolved installed GGUF — not the static config default — drives the offer-time active model.
+        offerProvider.Received().GetOfferedTools("phi-4:Q4_K_M");
+        offerProvider.DidNotReceive().GetOfferedTools(new LocalChatAgentOptions().DefaultModel);
+        AssertEx.Equal(InvocationStatus.Completed, dispatcher.CurrentInvocation!.Status);
     }
 
     [Test]
@@ -1431,6 +1509,7 @@ public sealed class NodeChatStreamServiceTests
             classificationService,
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1496,6 +1575,29 @@ public sealed class NodeChatStreamServiceTests
     {
         var resolver = Substitute.For<IGgufModelCapabilityResolver>();
         resolver.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(capabilities);
+        return resolver;
+    }
+
+    // The default local-default resolver resolves to an installed GGUF chat model so a "Local runtime default" send
+    // proceeds (these tests are not about the no-model path): it ECHOES the persisted node default when one is set
+    // (so the operator-node-default offer assertion stays green) and otherwise falls back to the static config model
+    // (a stand-in installed GGUF). The dedicated no-model test passes resolved=null + echoPersistedDefault=false to
+    // force the empty result; the routes-installed-GGUF test passes a specific resolved name.
+    private static ILocalDefaultChatModelResolver CreateLocalDefaultChatModelResolver(string? resolved = null, bool echoPersistedDefault = true)
+    {
+        var fallback = resolved ?? new LocalChatAgentOptions().DefaultModel;
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    if (!echoPersistedDefault)
+                    {
+                        return Task.FromResult<string?>(resolved);
+                    }
+
+                    var persistedDefault = callInfo.Arg<string?>();
+                    return Task.FromResult<string?>(string.IsNullOrWhiteSpace(persistedDefault) ? fallback : persistedDefault);
+                });
         return resolver;
     }
 
@@ -1737,6 +1839,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 

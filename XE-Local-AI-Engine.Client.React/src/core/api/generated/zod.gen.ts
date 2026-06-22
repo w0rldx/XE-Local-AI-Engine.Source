@@ -1165,6 +1165,7 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"ModelUnavailable",
 	"ModelCapabilityUnsupported",
 	"ModelLoadFailed",
+	"ModelNotInstalled",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({

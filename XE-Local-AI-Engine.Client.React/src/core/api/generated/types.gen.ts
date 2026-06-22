@@ -904,7 +904,8 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "HashMismatch"
 	| "ModelUnavailable"
 	| "ModelCapabilityUnsupported"
-	| "ModelLoadFailed";
+	| "ModelLoadFailed"
+	| "ModelNotInstalled";
 
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = {
 	invocationId?: string;

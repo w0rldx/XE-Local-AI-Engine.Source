@@ -12,6 +12,9 @@ public sealed partial class InvocationRunner
     {
         return exception switch
         {
+            // Matches BEFORE the generic InvalidOperationException arms below (it derives from InvalidOperationException):
+            // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
+            NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
             TimeoutException timeoutException => (FailureCategory.Timeout, timeoutException.Message),
             WorkerToolCallException => (FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
             NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),

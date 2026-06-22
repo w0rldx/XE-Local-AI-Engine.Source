@@ -452,7 +452,9 @@
 			},
 			"nodeReply": "Knoten-Antwort",
 			"error": {
-				"title": "Antwort fehlgeschlagen"
+				"title": "Antwort fehlgeschlagen",
+				"modelNotInstalled": "Kein Chat-Modell installiert. Lade ein GGUF-Modell herunter, um zu chatten.",
+				"goToModels": "Zu Modelle"
 			},
 			"reasoning": {
 				"label": "Denken: {{effort}}",

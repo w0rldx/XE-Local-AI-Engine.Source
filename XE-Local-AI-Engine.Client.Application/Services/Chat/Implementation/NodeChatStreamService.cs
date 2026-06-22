@@ -33,6 +33,7 @@ public sealed class NodeChatStreamService(
     IModelClassificationService modelClassificationService,
     ILocalModelProviderResolver localModelProviderResolver,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
+    ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -202,6 +203,7 @@ public sealed class NodeChatStreamService(
             correlation,
             requestId,
             sequence,
+            resolution.RequiresInstalledChatModel,
             runCancellation.Token);
 
         try
@@ -253,6 +255,7 @@ public sealed class NodeChatStreamService(
         NodeChatMessageCorrelation correlation,
         Guid requestId,
         NodeChatStreamSequence sequence,
+        bool requiresInstalledChatModel,
         CancellationToken cancellationToken)
     {
         // Queue behind any in-flight invocation (local or platform) before assigning, rather than failing the
@@ -269,6 +272,14 @@ public sealed class NodeChatStreamService(
             var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
             await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
 
+            // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider
+            // invocation with a dedicated category, so the client sees an actionable "pull a model" terminal rather
+            // than the stale-id "Provider unreachable.".
+            if (requiresInstalledChatModel)
+            {
+                throw new NoChatModelInstalledException();
+            }
+
             using var context = InvocationExecutionContext.CreatePlain(package, messageId);
             await invocationRunner.RunAsync(context, cancellationToken).ConfigureAwait(false);
         }
@@ -277,6 +288,15 @@ public sealed class NodeChatStreamService(
             await eventDispatcher.ReportInvocationFailedAsync(requestId,
                 "Invocation timed out or was cancelled",
                 FailureCategory.Cancelled).ConfigureAwait(false);
+        }
+        catch (NoChatModelInstalledException exception)
+        {
+            // Classified separately from the generic catch so the terminal SSE carries ModelNotInstalled (not
+            // Unexpected/ProviderUnreachable) and the message is the actionable, path-free constant.
+            logger.LogWarning(exception, "Local node chat stream had no installed GGUF chat model for the local default. RequestId={RequestId}", requestId);
+            await eventDispatcher.ReportInvocationFailedAsync(requestId,
+                exception.Message,
+                FailureCategory.ModelNotInstalled).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -452,15 +472,27 @@ public sealed class NodeChatStreamService(
         // "Local default" send (request.Model is null) would resolve the static fallback instead of the model the
         // operator set as the node default, so a tool-capable node default would never satisfy the capability gate
         // and run_in_agent_home would be withheld even with a tool-capable model selected.
-        string activeModel;
+        string? activeModel;
+        var requiresInstalledChatModel = false;
         if (activeModelOverride is not null)
         {
             activeModel = activeModelOverride;
         }
+        else if (!string.IsNullOrWhiteSpace(request.Model))
+        {
+            // An explicitly picked model (incl. an Ollama model) is honored unchanged — only the local-default path
+            // (request.Model null/blank) reroutes through the installed-GGUF resolver below.
+            activeModel = request.Model;
+        }
         else
         {
+            // "Local runtime default": resolve to an installed GGUF (llama.cpp) chat-capable model — never Ollama. The
+            // operator's persisted node default is honored only when it is itself an installed GGUF chat model. When no
+            // GGUF chat model is installed the resolver returns null; flag the turn so RunInvocationAsync surfaces a
+            // clear ModelNotInstalled terminal instead of routing the stale config/node-settings id to a dead provider.
             var nodeSettings = await nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-            activeModel = request.Model ?? nodeSettings.DefaultModelName ?? localChatOptions.Value.DefaultModel;
+            activeModel = await localDefaultChatModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+            requiresInstalledChatModel = activeModel is null;
         }
 
         // Effective-agent precedence: the just-clicked per-send selection wins, then the legacy conversation binding,
@@ -490,7 +522,7 @@ public sealed class NodeChatStreamService(
         // keeping the unbound/single-agent path byte-identical. The same user turn drives per-participant retrieval.
         var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, cancellationToken).ConfigureAwait(false);
 
-        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools);
+        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
     }
 
     /// <summary>
@@ -644,9 +676,10 @@ public sealed class NodeChatStreamService(
 
     /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
     private sealed record ResolvedTurn(
-        string ActiveModel,
+        string? ActiveModel,
         ResolvedAgentRuntime? Resolved,
         ResolvedOrchestration? Orchestration,
         bool SupportsThinking,
-        bool SupportsTools);
+        bool SupportsTools,
+        bool RequiresInstalledChatModel);
 }
