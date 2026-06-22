@@ -25,7 +25,7 @@ export function DownloadProgressPanel({ inFlight, onCancel, cancellingModelName 
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconCloudDownload size={20} />
-					<Title order={4}>{t("pages.modelFit.download.title", "Downloads in progress")}</Title>
+					<Title order={4}>{t("pages.models.gguf.download.title", "Downloads in progress")}</Title>
 				</Group>
 
 				<Stack gap="sm">
@@ -38,7 +38,7 @@ export function DownloadProgressPanel({ inFlight, onCancel, cancellingModelName 
 										{modelName}
 									</Text>
 									<Text size="xs" c="dimmed">
-										{t("pages.modelFit.download.inProgress", "Downloading…")}
+										{t("pages.models.gguf.download.inProgress", "Downloading…")}
 									</Text>
 								</Stack>
 							</Group>
@@ -52,7 +52,7 @@ export function DownloadProgressPanel({ inFlight, onCancel, cancellingModelName 
 								onClick={() => onCancel(modelName)}
 								data-testid={`model-fit-download-cancel-${modelName}`}
 							>
-								{t("pages.modelFit.download.cancel", "Cancel")}
+								{t("pages.models.gguf.download.cancel", "Cancel")}
 							</Button>
 						</Group>
 					))}

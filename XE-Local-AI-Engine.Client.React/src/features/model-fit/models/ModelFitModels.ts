@@ -80,57 +80,6 @@ export interface HardwareProfile {
 	readonly freeDiskBytes: number;
 }
 
-// Domain view-model for one HF GGUF repository candidate the browse search returns. Sanitized metadata only — no
-// download URL or token. hasUsableGguf flags whether the repo actually exposes a downloadable GGUF file.
-export interface GgufRepository {
-	readonly repoId: string;
-	readonly isGated: boolean;
-	readonly downloads: number;
-	readonly likes: number;
-	readonly lastModifiedAtUtc: number | null;
-	readonly license: string | null;
-	readonly hasUsableGguf: boolean;
-}
-
-// Domain view-model for one selectable .gguf file inside a repo (the quant picker rows). isDynamic flags an Unsloth
-// "Dynamic" (UD-) quant so the UI can badge it; sizeBytes drives the size column. fileName is the exact file the
-// download requests verbatim (so a chosen quant resolves unambiguously, including UD- quants).
-export interface GgufRepositoryFile {
-	readonly fileName: string;
-	readonly quant: string;
-	readonly isDynamic: boolean;
-	readonly sizeBytes: number;
-}
-
-// Domain view-model for one repo's inspected detail: its selectable GGUF files (quants) keyed by repo id.
-export interface GgufRepositoryDetail {
-	readonly repoId: string;
-	readonly files: readonly GgufRepositoryFile[];
-}
-
-// Domain view-model for one running (loaded) local model the supervisor reports. role distinguishes chat/embedding
-// roles; isResponsive + detail surface liveness for the eject UI.
-export interface RunningModel {
-	readonly modelName: string;
-	readonly role: string;
-	readonly isResponsive: boolean;
-	readonly detail: string;
-}
-
-// Known llama.cpp binary variants. cpu is the always-available fallback; cuda/vulkan are GPU-accelerated.
-export type LlamaCppVariant = "cpu" | "cuda" | "vulkan";
-
-export const llamaCppVariants: readonly LlamaCppVariant[] = ["cpu", "cuda", "vulkan"];
-
-// Domain view-model for the resolved llama.cpp binary. isPinnedFallback flags that the active binary is the pinned
-// fallback tag rather than a freshly resolved upstream release.
-export interface LlamaCppVersion {
-	readonly version: string;
-	readonly variant: LlamaCppVariant | string;
-	readonly isPinnedFallback: boolean;
-	readonly pinnedTag: string;
-}
-
 // Reserved scheduler template id the refresh-now action fires. The refresh endpoint triggers an EXISTING
 // model-recommendation-check job (it does not create one), so the page filters the scheduler job list by this
 // template id to decide whether "Refresh now" is enabled.

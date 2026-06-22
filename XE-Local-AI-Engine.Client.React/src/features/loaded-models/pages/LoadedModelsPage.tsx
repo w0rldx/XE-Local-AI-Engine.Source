@@ -6,8 +6,11 @@ import { useTranslation } from "react-i18next";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { formatExpiresIn, formatLoadedModelSize } from "@/features/loaded-models/components/LoadedModelsFormatters";
+import { RunningModelsPanel } from "@/features/loaded-models/components/RunningModelsPanel";
 import type { LoadedModel } from "@/features/loaded-models/models/LoadedModelsModels";
+import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 import { useEjectModel, useLoadedModels } from "@/features/loaded-models/queries/useLoadedModels";
+import { useEjectRunningModel, useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
 
 // The "Expires in" countdown is derived against the current time, but the list only refetches on the poll cadence
 // (several seconds). A lightweight 1s tick keeps the countdown visibly live between polls without refetching.
@@ -23,6 +26,11 @@ export function LoadedModelsPage() {
 
 	const loadedModelsQuery = useLoadedModels();
 	const ejectMutation = useEjectModel();
+
+	// llama.cpp running models — a DIFFERENT runtime from the Ollama in-memory list above. Relocated from the model-fit
+	// advisor so both runtimes show side by side.
+	const runningModelsQuery = useRunningModels();
+	const ejectRunningMutation = useEjectRunningModel();
 
 	const snapshot = loadedModelsQuery.data;
 	const models = snapshot?.models ?? [];
@@ -66,6 +74,18 @@ export function LoadedModelsPage() {
 		});
 	};
 
+	// Ejects a llama.cpp running model (separate runtime / endpoint from the Ollama eject above).
+	const handleEjectRunning = (model: RunningModel): void => {
+		ejectRunningMutation.mutate(
+			{ modelName: model.modelName, role: model.role || undefined },
+			{
+				onSuccess: () => toast.success(t("pages.loadedModels.llamaCpp.ejected", "Model ejected.")),
+				onError: (error) =>
+					toast.error(errorMessage(error, t("pages.loadedModels.llamaCpp.ejectError", "Could not eject the model."))),
+			},
+		);
+	};
+
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
@@ -87,6 +107,11 @@ export function LoadedModelsPage() {
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
+						<Group gap="xs" align="center">
+							<IconServer size={20} />
+							<Title order={4}>{t("pages.loadedModels.ollama.title", "Ollama (in-memory)")}</Title>
+						</Group>
+
 						{loadedModelsQuery.isLoading ? (
 							<Group gap="sm" data-testid="loaded-models-loading">
 								<Loader size="sm" />
@@ -181,6 +206,14 @@ export function LoadedModelsPage() {
 						) : null}
 					</Stack>
 				</Card>
+
+				<RunningModelsPanel
+					runningModels={runningModelsQuery.data ?? []}
+					isLoading={runningModelsQuery.isLoading}
+					error={runningModelsQuery.error}
+					onEject={handleEjectRunning}
+					ejectingModelName={ejectRunningMutation.isPending ? (ejectRunningMutation.variables?.modelName ?? null) : null}
+				/>
 			</Stack>
 		</Container>
 	);

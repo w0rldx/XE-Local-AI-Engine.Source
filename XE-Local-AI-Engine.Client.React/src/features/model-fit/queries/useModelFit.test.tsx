@@ -14,18 +14,11 @@ const { mutationMock } = vi.hoisted(() => ({
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	refreshRecommendationsMutation: vi.fn(() => ({ mutationFn: mutationMock.mutationFn })),
-	// Read/mutation options are imported by the module under test but unused in these refresh-mutation tests.
+	// Read/mutation options are imported by the module under test but unused in these refresh-mutation tests. The
+	// GGUF browse/runtime/token factories moved out with their hooks; only the advisor's reads + download remain.
 	getLatestRecommendationsOptions: vi.fn(),
 	getHardwareProfileOptions: vi.fn(),
-	listRunningModelsOptions: vi.fn(),
-	getLlamaCppVersionOptions: vi.fn(),
-	getHfTokenStatusOptions: vi.fn(),
-	browseGgufRepositoriesOptions: vi.fn(),
 	startGgufDownloadMutation: vi.fn(),
-	cancelGgufDownloadMutation: vi.fn(),
-	ejectRunningModelMutation: vi.fn(),
-	ensureLlamaCppBinaryMutation: vi.fn(),
-	setHfTokenMutation: vi.fn(),
 }));
 
 import { modelFitInvalidationKey, modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";

@@ -3,11 +3,7 @@ import { IconAlertTriangle, IconBinary, IconDownload, IconSearch } from "@tabler
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-	type LlamaCppVariant,
-	type LlamaCppVersion,
-	llamaCppVariants,
-} from "@/features/model-fit/models/ModelFitModels";
+import { type LlamaCppVariant, type LlamaCppVersion, llamaCppVariants } from "@/features/node-settings/models/LocalRuntimeModels";
 
 interface LlamaCppVersionPanelProps {
 	version: LlamaCppVersion | undefined;
@@ -47,7 +43,7 @@ export function LlamaCppVersionPanel({
 
 	const variantData = llamaCppVariants.map((value) => ({
 		value,
-		label: t(`pages.modelFit.llamaCpp.variants.${value}`, value),
+		label: t(`pages.nodeSettings.llamaCpp.variants.${value}`, value),
 	}));
 
 	const handleVariantChange = (value: string | null): void => {
@@ -62,7 +58,7 @@ export function LlamaCppVersionPanel({
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconBinary size={20} />
-						<Title order={4}>{t("pages.modelFit.llamaCpp.title", "llama.cpp runtime")}</Title>
+						<Title order={4}>{t("pages.nodeSettings.llamaCpp.title", "llama.cpp runtime")}</Title>
 					</Group>
 					<Button
 						variant="default"
@@ -71,14 +67,14 @@ export function LlamaCppVersionPanel({
 						onClick={onCheck}
 						data-testid="model-fit-llamacpp-check-button"
 					>
-						{t("pages.modelFit.llamaCpp.check", "Check version")}
+						{t("pages.nodeSettings.llamaCpp.check", "Check version")}
 					</Button>
 				</Group>
 
 				{!hasChecked && !isLoading ? (
 					<Text c="dimmed" size="sm" data-testid="model-fit-llamacpp-idle">
 						{t(
-							"pages.modelFit.llamaCpp.idle",
+							"pages.nodeSettings.llamaCpp.idle",
 							"Not checked yet. Checking resolves the llama.cpp binary and may download it on first use.",
 						)}
 					</Text>
@@ -87,13 +83,13 @@ export function LlamaCppVersionPanel({
 				{isLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">{t("pages.modelFit.llamaCpp.loading", "Resolving llama.cpp binary…")}</Text>
+						<Text c="dimmed">{t("pages.nodeSettings.llamaCpp.loading", "Resolving llama.cpp binary…")}</Text>
 					</Group>
 				) : null}
 
 				{error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-llamacpp-error">
-						{errorMessage(error, t("pages.modelFit.llamaCpp.error", "Could not resolve the llama.cpp binary."))}
+						{errorMessage(error, t("pages.nodeSettings.llamaCpp.error", "Could not resolve the llama.cpp binary."))}
 					</Alert>
 				) : null}
 
@@ -101,7 +97,7 @@ export function LlamaCppVersionPanel({
 					<Group gap="xl" align="flex-end">
 						<Stack gap={0}>
 							<Text size="xs" c="dimmed">
-								{t("pages.modelFit.llamaCpp.version", "Version")}
+								{t("pages.nodeSettings.llamaCpp.version", "Version")}
 							</Text>
 							<Group gap="xs">
 								<Text size="sm" fw={500} ff="monospace" data-testid="model-fit-llamacpp-version">
@@ -109,17 +105,17 @@ export function LlamaCppVersionPanel({
 								</Text>
 								{version.isPinnedFallback ? (
 									<Badge color="yellow" variant="light" data-testid="model-fit-llamacpp-pinned-badge">
-										{t("pages.modelFit.llamaCpp.pinned", "Pinned fallback")}
+										{t("pages.nodeSettings.llamaCpp.pinned", "Pinned fallback")}
 									</Badge>
 								) : null}
 							</Group>
 						</Stack>
 						<Stack gap={0}>
 							<Text size="xs" c="dimmed">
-								{t("pages.modelFit.llamaCpp.variant", "Variant")}
+								{t("pages.nodeSettings.llamaCpp.variant", "Variant")}
 							</Text>
 							<Badge variant="outline" data-testid="model-fit-llamacpp-variant">
-								{t(`pages.modelFit.llamaCpp.variants.${version.variant}`, version.variant)}
+								{t(`pages.nodeSettings.llamaCpp.variants.${version.variant}`, version.variant)}
 							</Badge>
 						</Stack>
 					</Group>
@@ -127,7 +123,7 @@ export function LlamaCppVersionPanel({
 
 				<Group gap="sm" align="flex-end">
 					<Select
-						label={t("pages.modelFit.llamaCpp.selectVariant", "Variant")}
+						label={t("pages.nodeSettings.llamaCpp.selectVariant", "Variant")}
 						data={variantData}
 						value={selectedVariant}
 						onChange={handleVariantChange}
@@ -140,7 +136,7 @@ export function LlamaCppVersionPanel({
 						onClick={() => onEnsure(selectedVariant)}
 						data-testid="model-fit-llamacpp-ensure-button"
 					>
-						{t("pages.modelFit.llamaCpp.ensure", "Ensure / select")}
+						{t("pages.nodeSettings.llamaCpp.ensure", "Ensure / select")}
 					</Button>
 				</Group>
 			</Stack>

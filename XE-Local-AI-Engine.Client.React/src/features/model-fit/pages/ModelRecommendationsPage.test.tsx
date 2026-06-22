@@ -31,21 +31,18 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 	};
 });
 
-const { hooksMock, schedulerMock, hubMock } = vi.hoisted(() => ({
+// The advisor consumes the recommendation/hardware/refresh hooks. A recommendation-row download is handed off to the
+// Model Management feature: it calls that feature's useStartGgufDownload and marks the model in the SHARED GGUF store
+// (the real store is used here — not mocked — so the test can assert the in-flight set the progress panel reads). The
+// browse/llama.cpp/HF-token/running-models hooks were relocated and are no longer referenced by this page.
+const { hooksMock, ggufMock, schedulerMock, hubMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useLatestRecommendations: vi.fn(),
 		useRefreshRecommendations: vi.fn(),
 		useHardwareProfile: vi.fn(),
-		useRunningModels: vi.fn(),
-		useLlamaCppVersion: vi.fn(),
-		useHfTokenStatus: vi.fn(),
-		useBrowseGgufRepositories: vi.fn(),
-		useInspectGgufRepository: vi.fn(),
+	},
+	ggufMock: {
 		useStartGgufDownload: vi.fn(),
-		useCancelGgufDownload: vi.fn(),
-		useEjectRunningModel: vi.fn(),
-		useEnsureLlamaCppBinary: vi.fn(),
-		useSetHfToken: vi.fn(),
 	},
 	schedulerMock: {
 		useScheduledJobs: vi.fn(),
@@ -54,10 +51,12 @@ const { hooksMock, schedulerMock, hubMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/features/model-fit/queries/useModelFit", () => hooksMock);
+vi.mock("@/features/models/queries/useGgufDownload", () => ggufMock);
 vi.mock("@/features/scheduler/queries/useScheduler", () => schedulerMock);
 vi.mock("@/features/model-fit/hooks/useModelFitSchedulerEvents", () => ({ useModelFitSchedulerEvents: hubMock }));
 
 import { ModelRecommendationsPage } from "@/features/model-fit/pages/ModelRecommendationsPage";
+import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 function modelFitJob(overrides: Partial<ScheduledJob> = {}): ScheduledJob {
 	return {
@@ -181,35 +180,16 @@ const hardwareProfile = {
 	freeDiskBytes: 500_000_000_000,
 };
 
-const runningModel = { modelName: "running-a", role: "chat", isResponsive: true, detail: "" };
-const llamaCppVersion = { version: "b1234", variant: "cuda" as const, isPinnedFallback: false, pinnedTag: "b1000" };
-const ggufRepo = {
-	repoId: "unsloth/llama-3.1-8b-gguf",
-	isGated: false,
-	downloads: 1000,
-	likes: 50,
-	lastModifiedAtUtc: 1_700_000_000_000,
-	license: "apache-2.0",
-	hasUsableGguf: true,
-};
-
 describe("ModelRecommendationsPage", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
-		useModelFitManagementStore.setState({ useCase: "coding", browseQuery: "", tokenDraft: "" });
+		useModelFitManagementStore.setState({ useCase: "coding" });
+		// Reset the shared GGUF in-flight set so the hand-off assertion starts from empty.
+		useGgufBrowseStore.setState({ browseQuery: "", inFlightDownloads: [] });
 		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(noCacheView));
 		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation());
 		hooksMock.useHardwareProfile.mockReturnValue(makeQuery(hardwareProfile));
-		hooksMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
-		hooksMock.useLlamaCppVersion.mockReturnValue(makeQuery(llamaCppVersion));
-		hooksMock.useHfTokenStatus.mockReturnValue(makeQuery(false));
-		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([]));
-		hooksMock.useInspectGgufRepository.mockReturnValue(makeQuery(null));
-		hooksMock.useStartGgufDownload.mockReturnValue(makeMutation());
-		hooksMock.useCancelGgufDownload.mockReturnValue(makeMutation());
-		hooksMock.useEjectRunningModel.mockReturnValue(makeMutation());
-		hooksMock.useEnsureLlamaCppBinary.mockReturnValue(makeMutation());
-		hooksMock.useSetHfToken.mockReturnValue(makeMutation());
+		ggufMock.useStartGgufDownload.mockReturnValue(makeMutation());
 		schedulerMock.useScheduledJobs.mockReturnValue(makeQuery([modelFitJob()]));
 	});
 
@@ -273,9 +253,9 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
 	});
 
-	it("triggers a GGUF download from a recommendation row", () => {
+	it("triggers a GGUF download from a recommendation row via the Model Management feature's hook", () => {
 		const download = makeMutation();
-		hooksMock.useStartGgufDownload.mockReturnValue(download);
+		ggufMock.useStartGgufDownload.mockReturnValue(download);
 		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(populatedView));
 
 		renderPage();
@@ -286,6 +266,28 @@ describe("ModelRecommendationsPage", () => {
 			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q5_K_M" },
 			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
 		);
+	});
+
+	it("hands the download off to Model Management by marking the resolved model in the shared in-flight store", () => {
+		// A mutate that resolves with the backend-resolved model name (distinct from the repo id) so the test proves the
+		// store is keyed on the RESPONSE model name — exactly what the Model Management download-progress panel reads.
+		const download = makeMutation({
+			mutate: vi.fn((_variables, options?: { onSuccess?: (response: unknown) => void }) =>
+				options?.onSuccess?.({ modelName: "hf.co/unsloth/llama-3.1-8b-gguf:Q5_K_M", alreadyInFlight: false }),
+			),
+		});
+		ggufMock.useStartGgufDownload.mockReturnValue(download);
+		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(populatedView));
+
+		renderPage();
+
+		// The shared in-flight set starts empty (reset in beforeEach).
+		expect(useGgufBrowseStore.getState().inFlightDownloads).toEqual([]);
+
+		fireEvent.click(screen.getByTestId("model-fit-download-button-1"));
+
+		// On success the resolved model name is marked in the shared store, so the Model Management panel would show it.
+		expect(useGgufBrowseStore.getState().inFlightDownloads).toEqual(["hf.co/unsloth/llama-3.1-8b-gguf:Q5_K_M"]);
 	});
 
 	it("surfaces a load error for the recommendations list", () => {
@@ -323,127 +325,16 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.getByTestId("model-fit-no-job-guidance")).toBeTruthy();
 	});
 
-	it("ejects a running model from the running-models panel", () => {
-		const eject = makeMutation();
-		hooksMock.useEjectRunningModel.mockReturnValue(eject);
+	it("no longer renders the relocated GGUF browse, llama.cpp, HF token, or running-models panels", () => {
+		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(populatedView));
 
 		renderPage();
 
-		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
-
-		expect(eject.mutate).toHaveBeenCalledWith(
-			{ modelName: "running-a", role: "chat" },
-			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
-		);
-	});
-
-	it("does not show the llama.cpp version until the operator explicitly checks it (avoids a mount-time download)", () => {
-		renderPage();
-
-		// On mount the version probe is idle: the panel shows its idle hint and renders no version.
-		expect(screen.getByTestId("model-fit-llamacpp-idle")).toBeTruthy();
-		expect(screen.queryByTestId("model-fit-llamacpp-version")).toBeNull();
-
-		// Triggering the probe reveals the resolved version.
-		fireEvent.click(screen.getByTestId("model-fit-llamacpp-check-button"));
-		expect(screen.getByTestId("model-fit-llamacpp-version").textContent).toContain("b1234");
-	});
-
-	it("renders the llama.cpp version panel and ensures the selected variant", () => {
-		const ensure = makeMutation();
-		hooksMock.useEnsureLlamaCppBinary.mockReturnValue(ensure);
-
-		renderPage();
-
-		// The version block is gated behind an explicit check (the GET can trigger the first binary download).
-		fireEvent.click(screen.getByTestId("model-fit-llamacpp-check-button"));
-		expect(screen.getByTestId("model-fit-llamacpp-version").textContent).toContain("b1234");
-		fireEvent.click(screen.getByTestId("model-fit-llamacpp-ensure-button"));
-
-		// The select defaults to "cpu" until the operator changes it.
-		expect(ensure.mutate).toHaveBeenCalledWith("cpu", expect.any(Object));
-	});
-
-	it("commits a GGUF browse search term to the store", () => {
-		renderPage();
-
-		fireEvent.change(screen.getByTestId("model-fit-browse-input"), { target: { value: "llama 3.1" } });
-		fireEvent.click(screen.getByTestId("model-fit-browse-search-button"));
-
-		expect(useModelFitManagementStore.getState().browseQuery).toBe("llama 3.1");
-	});
-
-	it("downloads a chosen quant from the browse quant picker", async () => {
-		const download = makeMutation();
-		hooksMock.useStartGgufDownload.mockReturnValue(download);
-		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([ggufRepo]));
-		hooksMock.useInspectGgufRepository.mockReturnValue(
-			makeQuery({
-				repoId: "unsloth/llama-3.1-8b-gguf",
-				files: [
-					{ fileName: "llama-3.1-8b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 5_000_000_000 },
-					{ fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL", isDynamic: true, sizeBytes: 6_000_000_000 },
-				],
-			}),
-		);
-		useModelFitManagementStore.setState({ browseQuery: "llama" });
-
-		renderPage();
-
-		// Clicking a browse row opens the quant picker rather than downloading the default quant directly.
-		fireEvent.click(screen.getByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
-
-		// Pick the Unsloth Dynamic quant, then confirm — the exact file name is sent so it resolves unambiguously.
-		fireEvent.click(await screen.findByLabelText("UD-Q4_K_XL"));
-		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
-
-		expect(download.mutate).toHaveBeenCalledWith(
-			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL" },
-			expect.any(Object),
-		);
-	});
-
-	it("falls back to the default quant when the picker has no files to offer", async () => {
-		const download = makeMutation();
-		hooksMock.useStartGgufDownload.mockReturnValue(download);
-		hooksMock.useBrowseGgufRepositories.mockReturnValue(makeQuery([ggufRepo]));
-		// Degraded/empty inspection (e.g. HF unreachable → 200 empty list) must not strand the operator.
-		hooksMock.useInspectGgufRepository.mockReturnValue(
-			makeQuery({ repoId: "unsloth/llama-3.1-8b-gguf", files: [] }),
-		);
-		useModelFitManagementStore.setState({ browseQuery: "llama" });
-
-		renderPage();
-
-		fireEvent.click(screen.getByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
-		fireEvent.click(await screen.findByTestId("gguf-download-default"));
-
-		expect(download.mutate).toHaveBeenCalledWith(
-			{ repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q4_K_M" },
-			expect.any(Object),
-		);
-	});
-
-	it("renders the HF token panel with a masked input and never the token value", () => {
-		hooksMock.useHfTokenStatus.mockReturnValue(makeQuery(true));
-
-		renderPage();
-
-		const input = screen.getByTestId("model-fit-hf-token-input") as HTMLInputElement;
-		// PasswordInput renders a type=password field — the value is masked, never plain text.
-		expect(input.type).toBe("password");
-		expect(screen.getByTestId("model-fit-hf-token-status").textContent).toContain("Token configured");
-	});
-
-	it("saves the HF token draft and clears it", () => {
-		const setToken = makeMutation();
-		hooksMock.useSetHfToken.mockReturnValue(setToken);
-		useModelFitManagementStore.setState({ tokenDraft: "hf_secret" });
-
-		renderPage();
-
-		fireEvent.click(screen.getByTestId("model-fit-hf-token-save"));
-
-		expect(setToken.mutate).toHaveBeenCalledWith("hf_secret", expect.any(Object));
+		// These panels moved to Model Management / Node Settings / Loaded Models — the advisor is now slim.
+		expect(screen.queryByTestId("model-fit-browse-card")).toBeNull();
+		expect(screen.queryByTestId("model-fit-download-card")).toBeNull();
+		expect(screen.queryByTestId("model-fit-running-card")).toBeNull();
+		expect(screen.queryByTestId("model-fit-llamacpp-card")).toBeNull();
+		expect(screen.queryByTestId("model-fit-hf-token-card")).toBeNull();
 	});
 });

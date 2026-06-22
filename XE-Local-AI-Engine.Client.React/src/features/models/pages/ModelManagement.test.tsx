@@ -19,6 +19,8 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 		listLocalModels: vi.fn(),
 		getLocalModelDetails: vi.fn(),
 		getLatestRecommendations: vi.fn(),
+		browseGgufRepositories: vi.fn(),
+		inspectGgufRepository: vi.fn(),
 	},
 	mutationFns: {
 		selectLocalModel: vi.fn(),
@@ -26,6 +28,8 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 		deleteLocalModel: vi.fn(),
 		putModelKind: vi.fn(),
 		deleteModelKind: vi.fn(),
+		startGgufDownload: vi.fn(),
+		cancelGgufDownload: vi.fn(),
 	},
 }));
 
@@ -54,6 +58,19 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryFn: queryFns.getLatestRecommendations,
 	}),
 	refreshRecommendationsMutation: () => ({ mutationFn: vi.fn() }),
+	// GGUF browse + download factories — the GGUF section relocated to this page from the model-fit advisor.
+	browseGgufRepositoriesQueryKey: () => fakeQueryKey("browseGgufRepositories"),
+	browseGgufRepositoriesOptions: () => ({
+		queryKey: fakeQueryKey("browseGgufRepositories"),
+		queryFn: queryFns.browseGgufRepositories,
+	}),
+	inspectGgufRepositoryQueryKey: () => fakeQueryKey("inspectGgufRepository"),
+	inspectGgufRepositoryOptions: () => ({
+		queryKey: fakeQueryKey("inspectGgufRepository"),
+		queryFn: queryFns.inspectGgufRepository,
+	}),
+	startGgufDownloadMutation: () => ({ mutationFn: mutationFns.startGgufDownload }),
+	cancelGgufDownloadMutation: () => ({ mutationFn: mutationFns.cancelGgufDownload }),
 }));
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
@@ -84,6 +101,7 @@ vi.mock("@/features/models/hooks/useModelPull", () => ({
 
 import { PullModelDialog } from "@/features/models/components/PullModelDialog";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
+import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -178,6 +196,14 @@ describe("ModelManagement", () => {
 			capabilities: ["completion", "tools"],
 			isOverridden: false,
 		});
+		// GGUF browse + download defaults. The browse query is gated until the operator submits a search term.
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [] });
+		queryFns.inspectGgufRepository.mockResolvedValue({ repoId: "", files: [] });
+		mutationFns.startGgufDownload.mockResolvedValue({ modelName: "unsloth/llama-3.1-8b-gguf", alreadyInFlight: false });
+		mutationFns.cancelGgufDownload.mockResolvedValue({ cancelled: true });
+		// The committed GGUF browse term + the shared in-flight download set survive a remount — reset both so each test
+		// starts blank (the in-flight set is now shared, since the advisor hands recommendation-row downloads off here).
+		useGgufBrowseStore.setState({ browseQuery: "", inFlightDownloads: [] });
 		confirmMock.mockResolvedValue(true);
 	});
 
@@ -472,5 +498,76 @@ describe("ModelManagement", () => {
 		);
 
 		await waitFor(() => expect(screen.queryByRole("button", { name: "close" })).toBeNull());
+	});
+
+	// GGUF browse + download flow (relocated from the model-fit advisor; it lives alongside "Pull model" now).
+	const ggufRepo = {
+		repoId: "unsloth/llama-3.1-8b-gguf",
+		isGated: false,
+		downloads: 1000,
+		likes: 50,
+		lastModifiedAtUtc: 1_700_000_000_000,
+		license: "apache-2.0",
+		hasUsableGguf: true,
+	};
+
+	it("renders the GGUF browse panel on the Model Management page", async () => {
+		renderWithProviders(<ModelManagement />);
+
+		expect(await screen.findByTestId("model-fit-browse-card")).toBeTruthy();
+	});
+
+	it("commits a GGUF browse search term to the store", async () => {
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.change(await screen.findByTestId("model-fit-browse-input"), { target: { value: "llama 3.1" } });
+		fireEvent.click(screen.getByTestId("model-fit-browse-search-button"));
+
+		await waitFor(() => expect(useGgufBrowseStore.getState().browseQuery).toBe("llama 3.1"));
+	});
+
+	it("downloads a chosen quant from the browse quant picker", async () => {
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/llama-3.1-8b-gguf",
+			files: [
+				{ fileName: "llama-3.1-8b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 5_000_000_000 },
+				{ fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL", isDynamic: true, sizeBytes: 6_000_000_000 },
+			],
+		});
+		useGgufBrowseStore.setState({ browseQuery: "llama" });
+
+		renderWithProviders(<ModelManagement />);
+
+		// Clicking a browse row opens the quant picker rather than downloading the default quant directly.
+		fireEvent.click(await screen.findByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+
+		// Pick the Unsloth Dynamic quant, then confirm — the exact file name is sent so it resolves unambiguously.
+		fireEvent.click(await screen.findByLabelText("UD-Q4_K_XL"));
+		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
+
+		await waitFor(() =>
+			expect(mutationFns.startGgufDownload.mock.calls[0]?.[0]).toEqual({
+				body: { repoId: "unsloth/llama-3.1-8b-gguf", fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL" },
+			}),
+		);
+	});
+
+	it("falls back to the default quant when the picker has no files to offer", async () => {
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
+		// Degraded/empty inspection (e.g. HF unreachable → 200 empty list) must not strand the operator.
+		queryFns.inspectGgufRepository.mockResolvedValue({ repoId: "unsloth/llama-3.1-8b-gguf", files: [] });
+		useGgufBrowseStore.setState({ browseQuery: "llama" });
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.click(await screen.findByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+		fireEvent.click(await screen.findByTestId("gguf-download-default"));
+
+		await waitFor(() =>
+			expect(mutationFns.startGgufDownload.mock.calls[0]?.[0]).toEqual({
+				body: { repoId: "unsloth/llama-3.1-8b-gguf", fileName: undefined, quant: "Q4_K_M" },
+			}),
+		);
 	});
 });

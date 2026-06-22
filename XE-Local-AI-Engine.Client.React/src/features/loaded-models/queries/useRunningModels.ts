@@ -1,0 +1,49 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { ejectRunningModelMutation, listRunningModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toRunningModel } from "@/features/loaded-models/models/RunningModelsModels";
+
+// Server state for the llama.cpp running-models section on the Loaded Models page (relocated from the model-fit
+// advisor). This is a DIFFERENT runtime from the Ollama in-memory list (useLoadedModels): it lists llama.cpp server
+// processes. Reads use the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
+// AbortSignal automatically) wrapped in withResponseValidation so a zod response-shape failure surfaces as an
+// ApiError. The eject mutation invalidates the running-models list so the ejected entry disappears.
+
+// The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
+// `_id` partial object matches every cached variant of that endpoint. Centralized here (and shared with the GGUF
+// download mutations on the Model Management page, which also touch this list) via the literal operationId.
+const runningModelsOperationId = "listRunningModels";
+
+/** Builds the partial generated-query-key filter that matches every cached variant of the running-models endpoint. */
+function runningModelsInvalidationKey(): readonly [{ _id: string }] {
+	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+	return [{ _id: runningModelsOperationId }];
+}
+
+// Live running-models list backing the eject UI. enabled lets the page mount it lazily (e.g. only when the section is shown).
+export function useRunningModels(enabled = true) {
+	return useQuery({
+		...withResponseValidation(listRunningModelsOptions()),
+		select: (data) => (data.items ?? []).map(toRunningModel),
+		enabled,
+	});
+}
+
+export interface EjectRunningModelVariables {
+	modelName: string;
+	role?: string;
+}
+
+// Ejects a running model from the llama.cpp runtime. Invalidates the running-models list so the ejected entry disappears.
+export function useEjectRunningModel() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (variables: EjectRunningModelVariables) => {
+			const options = withResponseValidation(ejectRunningModelMutation());
+			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
+		},
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: runningModelsInvalidationKey() }),
+	});
+}

@@ -19,16 +19,22 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-const { hooksMock, confirmMock, toastMock } = vi.hoisted(() => ({
+const { hooksMock, runningMock, confirmMock, toastMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useLoadedModels: vi.fn(),
 		useEjectModel: vi.fn(),
 	},
+	// The llama.cpp running-models section is a DIFFERENT runtime, backed by its own query module.
+	runningMock: {
+		useRunningModels: vi.fn(),
+		useEjectRunningModel: vi.fn(),
+	},
 	confirmMock: vi.fn(),
-	toastMock: { success: vi.fn(), error: vi.fn() },
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("@/features/loaded-models/queries/useLoadedModels", () => hooksMock);
+vi.mock("@/features/loaded-models/queries/useRunningModels", () => runningMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
@@ -93,6 +99,8 @@ describe("LoadedModelsPage", () => {
 		installJsdomEnvironmentMocks();
 		hooksMock.useLoadedModels.mockReturnValue(makeQuery(availableSnapshot));
 		hooksMock.useEjectModel.mockReturnValue(makeEjectMutation());
+		runningMock.useRunningModels.mockReturnValue(makeQuery([]));
+		runningMock.useEjectRunningModel.mockReturnValue(makeEjectMutation());
 		confirmMock.mockResolvedValue(true);
 	});
 
@@ -120,9 +128,7 @@ describe("LoadedModelsPage", () => {
 	});
 
 	it("shows the unavailable state (and its sanitized reason) when the runtime is unreachable", () => {
-		hooksMock.useLoadedModels.mockReturnValue(
-			makeQuery({ isAvailable: false, error: "Provider unreachable", models: [] }),
-		);
+		hooksMock.useLoadedModels.mockReturnValue(makeQuery({ isAvailable: false, error: "Provider unreachable", models: [] }));
 
 		renderPage();
 
@@ -162,5 +168,41 @@ describe("LoadedModelsPage", () => {
 
 		await waitFor(() => expect(confirmMock).toHaveBeenCalled());
 		expect(ejectMutation.mutate).not.toHaveBeenCalled();
+	});
+
+	// llama.cpp running-models section (relocated from the model-fit advisor) — a DIFFERENT runtime rendered as its
+	// own labeled section alongside the Ollama in-memory table.
+	const runningModel = { modelName: "running-a", role: "chat", isResponsive: true, detail: "" };
+
+	it("renders the llama.cpp running-models section as a second runtime table", () => {
+		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+
+		renderPage();
+
+		// Both runtimes show: the Ollama in-memory table and the llama.cpp running-models table.
+		expect(screen.getByTestId("loaded-models-table")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-running-table")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-running-row-running-a")).toBeTruthy();
+	});
+
+	it("shows the empty state for the llama.cpp section when no processes are running", () => {
+		renderPage();
+
+		expect(screen.getByTestId("model-fit-running-empty")).toBeTruthy();
+	});
+
+	it("ejects a llama.cpp running model through its own eject mutation", () => {
+		const ejectRunning = makeEjectMutation();
+		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
+
+		expect(ejectRunning.mutate).toHaveBeenCalledWith(
+			{ modelName: "running-a", role: "chat" },
+			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+		);
 	});
 });
