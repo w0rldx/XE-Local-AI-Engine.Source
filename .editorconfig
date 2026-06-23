@@ -475,6 +475,26 @@ dotnet_diagnostic.S2068.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
 dotnet_diagnostic.S4487.severity = suggestion
 
+# Meziantou.Analyzer (MA####) calibration.
+# All Meziantou rules NOT listed here keep their default severity (warning) and are promoted to
+# build errors by TreatWarningsAsErrors — i.e. correctness/security/quality rules (e.g. MA0009 regex
+# ReDoS, MA0002 StringComparer, MA0015, MA0158, MA0144, MA0023, MA0099, MA0132, MA0008) are ENFORCED.
+# The rules below are deliberately turned off because they are stylistic or duplicate an existing,
+# already-made repo decision — NOT to make the build pass:
+# MA0048: file name must match type name — repo intentionally groups related contracts/DTOs per file.
+dotnet_diagnostic.MA0048.severity = none
+# MA0051: method too long — already governed by SonarAnalyzer S138 and the repo <100-line standard.
+dotnet_diagnostic.MA0051.severity = none
+# MA0006: string.Equals vs ==/!= — == / != on strings is idiomatic C#; ordinal intent is covered by MA0002.
+dotnet_diagnostic.MA0006.severity = none
+# MA0004: ConfigureAwait(false) — consistent with the existing CA2007=none decision above. This is an
+#         application (ASP.NET Core + Avalonia desktop), not a published library.
+dotnet_diagnostic.MA0004.severity = none
+# MA0016: prefer collection abstraction over implementation — consistent with the existing CA1002=none.
+dotnet_diagnostic.MA0016.severity = none
+# MA0011: IFormatProvider on TryParse — consistent with the existing CA1305=none decision above.
+dotnet_diagnostic.MA0011.severity = none
+
 # Ignore paths
 [**/Migrations/*.cs]
 generated_code = true

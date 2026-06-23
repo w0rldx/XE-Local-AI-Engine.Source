@@ -103,7 +103,7 @@ internal static class HostPathSafety
     public static bool IsReparsePoint(FileSystemInfo info)
     {
         ArgumentNullException.ThrowIfNull(info);
-        return (info.Attributes & FileAttributes.ReparsePoint) != 0;
+        return (info.Attributes & FileAttributes.ReparsePoint) != FileAttributes.None;
     }
 
     private static string Normalize(string path)

@@ -9,7 +9,7 @@ internal sealed class InvocationHistory : IInvocationHistory
     private readonly LinkedList<InvocationHistoryEntry> _entries = new();
     private readonly ILogger<InvocationHistory> _logger;
     private readonly HashSet<Guid> _recordedInvocationIds = [];
-    private readonly object _syncRoot = new();
+    private readonly System.Threading.Lock _syncRoot = new();
 
     public InvocationHistory(ILogger<InvocationHistory> logger)
     {

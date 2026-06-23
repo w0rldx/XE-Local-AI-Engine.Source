@@ -35,7 +35,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly IServiceScopeFactory _scopeFactory;
 
     // Guards _connections and _statuses (mutated only under the refresh gate, but GetStatuses reads concurrently).
-    private readonly object _stateLock = new();
+    private readonly System.Threading.Lock _stateLock = new();
 
     private bool _disposed;
     private ImmutableArray<McpServerConnectionStatus> _statuses = [];

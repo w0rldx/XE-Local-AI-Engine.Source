@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 public sealed class NodeChatPartAccumulator
 {
     private readonly List<MutablePart> _parts = [];
-    private readonly object _syncRoot = new();
+    private readonly System.Threading.Lock _syncRoot = new();
     private readonly Dictionary<string, MutablePart> _toolPartsByCallId = new(StringComparer.Ordinal);
 
     /// <summary>

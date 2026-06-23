@@ -44,7 +44,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
 
     private static readonly Regex FrameworkExceptionNamePattern =
-        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant);
+        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
 
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
@@ -62,7 +62,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
-    private readonly object _syncRoot = new();
+    private readonly System.Threading.Lock _syncRoot = new();
 
     private Guid? _currentInvocationId;
 
@@ -162,7 +162,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             if (sendEncrypted)
             {
-                var tokenCounts = stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>();
+                var tokenCounts = stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(StringComparer.Ordinal);
                 tokenCounts["generationDurationMs"] = generationDurationMs;
                 await sender.SendEncryptedCompletedAsync(_envelopeCryptoService.EncryptCompleted(package.ConversationId,
                         context.MessageId,
@@ -901,7 +901,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private void ClearActiveInvocation(Guid invocationId)
     {
-        CancellationTokenSource? invocationCancellationTokenSource = null;
+        CancellationTokenSource? invocationCancellationTokenSource;
 
         lock (_syncRoot)
         {

@@ -45,7 +45,10 @@ public sealed class NodeChatStreamService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Content);
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            throw new ArgumentException("Message content must be provided.", nameof(request));
+        }
 
         return SendMessageCoreAsync(request, cancellationToken);
     }
@@ -532,7 +535,10 @@ public sealed class NodeChatStreamService(
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.InstructionsResource);
+        if (string.IsNullOrWhiteSpace(options.InstructionsResource))
+        {
+            throw new ArgumentException("Instructions resource must be provided.", nameof(options));
+        }
 
         var assembly = typeof(LocalChatAgentOptions).Assembly;
         using var stream = assembly.GetManifestResourceStream(options.InstructionsResource)

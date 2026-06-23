@@ -17,9 +17,21 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     public IChatClient Create(StoredCloudCredentials credentials)
     {
         ArgumentNullException.ThrowIfNull(credentials);
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.Endpoint);
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.ApiKey);
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.DeploymentName);
+
+        if (string.IsNullOrWhiteSpace(credentials.Endpoint))
+        {
+            throw new ArgumentException("Cloud credential endpoint must be provided.", nameof(credentials));
+        }
+
+        if (string.IsNullOrWhiteSpace(credentials.ApiKey))
+        {
+            throw new ArgumentException("Cloud credential API key must be provided.", nameof(credentials));
+        }
+
+        if (string.IsNullOrWhiteSpace(credentials.DeploymentName))
+        {
+            throw new ArgumentException("Cloud credential deployment name must be provided.", nameof(credentials));
+        }
 
         var endpoint = new Uri(credentials.Endpoint, UriKind.Absolute);
         var azureClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(credentials.ApiKey));

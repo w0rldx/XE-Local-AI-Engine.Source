@@ -113,6 +113,6 @@ internal static partial class AgentHomeRunToolRequestValidator
         }
     }
 
-    [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,63}$|^[0-9a-fA-F-]{36}$")]
+    [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,63}$|^[0-9a-fA-F-]{36}$", RegexOptions.None, 2000)]
     private static partial Regex SelectedFolderIdRegex();
 }

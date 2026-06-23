@@ -102,12 +102,12 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
     {
         try
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (OperatingSystem.IsWindows())
             {
                 return WindowsNvmlPaths().Any(File.Exists);
             }
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            if (OperatingSystem.IsLinux())
             {
                 return LinuxNvmlPaths().Any(File.Exists);
             }
@@ -160,12 +160,12 @@ public sealed class ProcessGpuVendorProbe : IGpuVendorProbe
 
     private async Task<string> ReadAdapterListAsync(CancellationToken ct)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (OperatingSystem.IsWindows())
         {
             return await TryRunAsync("wmic", "path win32_VideoController get name", ct).ConfigureAwait(false) ?? string.Empty;
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (OperatingSystem.IsLinux())
         {
             return await TryRunAsync("lspci", string.Empty, ct).ConfigureAwait(false) ?? string.Empty;
         }

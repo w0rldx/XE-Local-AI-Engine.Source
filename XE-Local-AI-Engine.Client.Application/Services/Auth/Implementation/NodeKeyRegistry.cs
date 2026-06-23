@@ -10,7 +10,7 @@ public sealed class NodeKeyRegistry : INodeKeyRegistry
     private static readonly TimeSpan RetiredKeyGraceWindow = TimeSpan.FromMinutes(5);
 
     private readonly Dictionary<string, RetiredNodeKey> _retiredKeys = new(StringComparer.Ordinal);
-    private readonly object _syncRoot = new();
+    private readonly System.Threading.Lock _syncRoot = new();
     private readonly TimeProvider _timeProvider;
 
     private ActiveNodeKey? _activeKey;

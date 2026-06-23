@@ -191,7 +191,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
                 SizeBytes = info.Length,
                 Sha256 = null,
                 SourceRevision = string.Empty,
-                DownloadedAtUtc = info.LastWriteTimeUtc,
+                DownloadedAtUtc = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),
                 Role = GgufRole.Unknown
             });
         }

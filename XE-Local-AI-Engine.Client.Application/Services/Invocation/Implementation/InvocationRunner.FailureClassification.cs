@@ -91,7 +91,7 @@ public sealed partial class InvocationRunner
     private static string RedactAgentRuntimeMessage(string message)
     {
         var sanitizedMessage = FrameworkExceptionNamePattern.Replace(message, string.Empty);
-        sanitizedMessage = Regex.Replace(sanitizedMessage, @"\s{2,}", " ").Trim(' ', ':', '-', ',', ';');
+        sanitizedMessage = Regex.Replace(sanitizedMessage, @"\s{2,}", " ", RegexOptions.None, TimeSpan.FromSeconds(2)).Trim(' ', ':', '-', ',', ';');
 
         return string.IsNullOrWhiteSpace(sanitizedMessage)
             ? "Agent runtime error."

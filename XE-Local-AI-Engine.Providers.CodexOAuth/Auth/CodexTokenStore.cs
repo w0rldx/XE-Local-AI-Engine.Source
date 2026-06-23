@@ -143,9 +143,20 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
 
     private static void ValidateTokens(CodexTokens tokens)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(tokens.AccessToken);
-        ArgumentException.ThrowIfNullOrWhiteSpace(tokens.RefreshToken);
-        ArgumentException.ThrowIfNullOrWhiteSpace(tokens.AccountId);
+        if (string.IsNullOrWhiteSpace(tokens.AccessToken))
+        {
+            throw new ArgumentException("Stored Codex tokens are missing an access token.", nameof(tokens));
+        }
+
+        if (string.IsNullOrWhiteSpace(tokens.RefreshToken))
+        {
+            throw new ArgumentException("Stored Codex tokens are missing a refresh token.", nameof(tokens));
+        }
+
+        if (string.IsNullOrWhiteSpace(tokens.AccountId))
+        {
+            throw new ArgumentException("Stored Codex tokens are missing an account id.", nameof(tokens));
+        }
     }
 
     private void ApplyPlatformFileSecurity()

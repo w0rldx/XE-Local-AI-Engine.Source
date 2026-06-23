@@ -90,7 +90,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     public async Task<string> ResolveModelNameAsync(GgufModelRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.RepoId);
+        if (string.IsNullOrWhiteSpace(request.RepoId))
+        {
+            throw new ArgumentException("Model request must include a repo id.", nameof(request));
+        }
 
         // Same resolution EnsureModelAsync runs, so the returned identity matches what a download will register under.
         var (_, quant, _, _, _) = await ResolveTargetAsync(request, ct).ConfigureAwait(false);
@@ -101,7 +104,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     public async Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.RepoId);
+        if (string.IsNullOrWhiteSpace(request.RepoId))
+        {
+            throw new ArgumentException("Model request must include a repo id.", nameof(request));
+        }
 
         // Resolve the target file + quant BEFORE keying the gate so the ModelName (repo:quant) is stable.
         var (fileName, quant, fileSizeBytes, fileSha, revision) = await ResolveTargetAsync(request, ct).ConfigureAwait(false);

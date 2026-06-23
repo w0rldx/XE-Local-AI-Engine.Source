@@ -102,9 +102,9 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
         return !segments.Any(segment => segment is "." or "..");
     }
 
-    [GeneratedRegex("[^a-z0-9]+")]
+    [GeneratedRegex("[^a-z0-9]+", RegexOptions.None, 2000)]
     private static partial Regex NonAliasCharactersRegex();
 
-    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$")]
+    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex AliasShapeRegex();
 }

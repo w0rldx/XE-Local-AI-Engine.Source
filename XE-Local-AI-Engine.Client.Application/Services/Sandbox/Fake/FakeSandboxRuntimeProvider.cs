@@ -18,7 +18,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
     private readonly Dictionary<string, string> _hostFiles = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SandboxState> _sandboxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ScriptedCommand> _scripts = new(StringComparer.Ordinal);
-    private readonly object _sync = new();
+    private readonly System.Threading.Lock _sync = new();
     private readonly TimeProvider _timeProvider;
     private int _sandboxCounter;
 

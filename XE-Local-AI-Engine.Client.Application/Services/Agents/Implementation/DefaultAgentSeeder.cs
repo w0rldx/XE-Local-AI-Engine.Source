@@ -92,7 +92,7 @@ public sealed class DefaultAgentSeeder : IHostedService
             null,
             AgentDefinitionKind.Single,
             [],
-            new Dictionary<string, bool>(),
+            new Dictionary<string, bool>(StringComparer.Ordinal),
             null);
     }
 
@@ -102,7 +102,10 @@ public sealed class DefaultAgentSeeder : IHostedService
     /// </summary>
     private string LoadEmbeddedInstructions()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(_options.InstructionsResource);
+        if (string.IsNullOrWhiteSpace(_options.InstructionsResource))
+        {
+            throw new InvalidOperationException($"{nameof(LocalChatAgentOptions.InstructionsResource)} must be configured.");
+        }
 
         var assembly = typeof(LocalChatAgentOptions).Assembly;
         using var stream = assembly.GetManifestResourceStream(_options.InstructionsResource)

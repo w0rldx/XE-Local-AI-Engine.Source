@@ -540,7 +540,10 @@ public sealed class NodeChatRegenerationService(
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.InstructionsResource);
+        if (string.IsNullOrWhiteSpace(options.InstructionsResource))
+        {
+            throw new ArgumentException("Instructions resource must be provided.", nameof(options));
+        }
 
         var assembly = typeof(LocalChatAgentOptions).Assembly;
         using var stream = assembly.GetManifestResourceStream(options.InstructionsResource)

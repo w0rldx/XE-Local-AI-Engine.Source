@@ -17,7 +17,7 @@ internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
 {
     private readonly SemaphoreSlim _commandGate = new(1, 1);
     private readonly ILogger _logger;
-    private readonly object _stateGate = new();
+    private readonly System.Threading.Lock _stateGate = new();
 
     private long _accumulatedOutputBytes;
     private bool _disposed;

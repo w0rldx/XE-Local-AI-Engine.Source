@@ -157,7 +157,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 if (HostPathSafety.IsReparsePoint(info))
                 {
                     HandleReparseEntry(info, root, alias);
-                    if ((info.Attributes & FileAttributes.Directory) != 0)
+                    if ((info.Attributes & FileAttributes.Directory) != FileAttributes.None)
                     {
                         excludedDirectories++;
                     }
@@ -169,7 +169,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                     continue;
                 }
 
-                var isDirectory = (info.Attributes & FileAttributes.Directory) != 0;
+                var isDirectory = (info.Attributes & FileAttributes.Directory) != FileAttributes.None;
                 if (_exclusionService.IsExcluded(info.Name, isDirectory))
                 {
                     if (isDirectory)

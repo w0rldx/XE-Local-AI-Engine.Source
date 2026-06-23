@@ -93,14 +93,14 @@ public static class RuntimePackageHistoryHash
             {
                 if (i + 1 >= value.Length || !char.IsLowSurrogate(value[i + 1]))
                 {
-                    throw new ArgumentException($"Field '{fieldName}' contains an unpaired high surrogate at index {i}.");
+                    throw new ArgumentException($"Field '{fieldName}' contains an unpaired high surrogate at index {i}.", nameof(value));
                 }
 
                 i += 2;
             }
             else if (char.IsLowSurrogate(c))
             {
-                throw new ArgumentException($"Field '{fieldName}' contains an unpaired low surrogate at index {i}.");
+                throw new ArgumentException($"Field '{fieldName}' contains an unpaired low surrogate at index {i}.", nameof(value));
             }
             else
             {
